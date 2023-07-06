@@ -1,0 +1,9 @@
+pytest
+uiautomator
+uiautomator2
+telnetlib3
+selenium
+PyYAML
+matplotlib
+pandas
+openpyxl

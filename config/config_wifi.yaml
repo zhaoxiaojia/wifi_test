@@ -1,0 +1,76 @@
+# This is yaml for wifi product
+# 待测产品的adb  number SN号
+connect_type:
+  type: usb
+  usb:
+    device: 'ap2226cf6a2516052d6aa'
+  telnet:
+    ip: '192.168.50.254'
+
+
+# 测试路由的路由器
+router:
+  # pls write down the router name .We can use asusac88u or asusax86u
+  name: asusax86u
+
+# test env control , should be rf , corner
+# rvr 衰减  或者是 转台 测试类别
+env_control: rf
+
+# test list config , such as if you wanna test base function use "wifi_base" , or use "wifi" test rvr
+# wifi 测试用例 类别
+test_config:
+  config: wifi_full
+
+# 衰减
+rf_solution:
+  #  support RC4DAT-8G-95 ,RADIORACK-4-220
+  model: RC4DAT-8G-95
+  RC4DAT-8G-95:
+    idVendor: 0x20ce
+    idProduct: 0x0023
+    ip_address: 192.168.50.10
+  RADIORACK-4-220:
+    ip_address: 192.168.50.100
+  # reduction step for rf signal, can be configured according to test requirements
+  step: [ 42 ]
+#  step: [ 0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44,46,48 ]
+
+# 转角
+corner_angle:
+  # angle step for corner, can be configured according to test requirements
+  ip_address: 192.168.50.200
+  step: [ 0, 15, 30, 45, 60 ]
+
+# 测试前配置参数
+env_command: [ "pwd" ]
+#env_command: [ "iwpriv wlan0 set_rate_ofdm 9","iwpriv wlan0 set_rate_ofdm 8","iwpriv wlan0 set_rate_ofdm 3" ]
+test_wifi:
+  ssid: i-test
+  passwd: "@12345678"
+
+# 打流通道数
+pair_num:
+  # db 区间 < 40, 40-50, 50, > 60
+  ax:
+    '2': { 'tx': [ 15,10,6,4 ],'rx': [ 15,10,6,4 ] }
+    '5': { 'tx': [ 35,35,10,4 ],'rx': [ 35,35,10,4 ] }
+  ac:
+    '5': { 'tx': [ 10,8,6,2 ],'rx': [ 10,8,6,2 ] }
+  'auto':
+    '2': { 'tx': [ 15,10,8,6 ],'rx': [ 15,10,8,6 ] }
+    '5': { 'tx': [ 35,35,15,6 ],'rx': [ 35,35,15,6 ] }
+  # db 区间  < 60 , 60-75  ,> 75
+  n:
+    '2': { 'tx': [ 6,4,2 ],'rx': [ 6,4,2 ] }
+    '5': { 'tx': [ 10,8,6 ],'rx': [ 10,8,6 ] }
+
+# wifi func 004 repeat times
+times_004: 3
+
+# wifi func 063 repeat times
+times_063: 20
+
+# wifi func 081 repeat times
+times_081: 20
+accompanying_dut: aq2224ca272516052e671
