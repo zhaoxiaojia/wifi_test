@@ -22,7 +22,7 @@ import time
 from xml.dom import minidom
 
 import _io
-from Executer import  Executer
+from Executer import Executer
 from UiautomatorTool import UiautomatorTool
 from collections import Counter
 
@@ -64,7 +64,7 @@ class ADB(Executer):
         self.serialnumber = serialnumber
         logging.info("get devices number %s" % serialnumber)
         self.unlock_code = unlock_code
-        self.logdir = logdir or os.path.join(os.getcwd(), 'result')
+        self.logdir = logdir or os.path.join(os.getcwd(), 'results')
         self.timer = None
         self.live = False
         self.lock = threading.Lock()
@@ -157,7 +157,7 @@ class ADB(Executer):
         '''
         if isinstance(keycode, int):
             keycode = str(keycode)
-        os.system(self.ADB_S + self.serialnumber +
+        self.checkoutput_term(self.ADB_S + self.serialnumber +
                   " shell input keyevent " + keycode)
 
     def home(self):
@@ -217,7 +217,7 @@ class ADB(Executer):
         @return:
         '''
         logging.debug("Stop app(%s)" % app_name)
-        self.shell("am force-stop %s" % app_name)
+        self.checkoutput("am force-stop %s" % app_name)
         if self.timer is not None:
             logging.debug("Cancel stay focus timer")
             self.timer.stop()
@@ -251,7 +251,7 @@ class ADB(Executer):
         @param y: y index
         @return: None
         '''
-        os.system(self.ADB_S + self.serialnumber + " shell input tap " + str(x) + " " + str(y))
+        self.checkoutput_term(self.ADB_S + self.serialnumber + " shell input tap " + str(x) + " " + str(y))
 
     def swipe(self, x_start, y_start, x_end, y_end, duration):
         '''
@@ -263,7 +263,7 @@ class ADB(Executer):
         @param duration: action time duration
         @return: None
         '''
-        os.system(self.ADB_S + self.serialnumber + " shell input swipe " + str(x_start) +
+        self.checkoutput_term(self.ADB_S + self.serialnumber + " shell input swipe " + str(x_start) +
                   " " + str(y_start) + " " + str(x_end) + " " + str(y_end) + " " + str(duration))
 
     def text(self, text):
@@ -274,14 +274,14 @@ class ADB(Executer):
         '''
         if isinstance(text, int):
             text = str(text)
-        os.system(self.ADB_S + self.serialnumber + " shell input text " + text)
+        self.checkoutput_term(self.ADB_S + self.serialnumber + " shell input text " + text)
 
     def clear_logcat(self):
         '''
         clear logcat
         @return: None
         '''
-        os.system(self.ADB_S + self.serialnumber + " logcat -b all -c")
+        self.checkoutput_term(self.ADB_S + self.serialnumber + " logcat -b all -c")
 
     def save_logcat(self, filepath, tag=''):
         '''
@@ -345,14 +345,10 @@ class ADB(Executer):
         @return: None
         '''
         logging.debug("Start activity %s/%s" % (packageName, activityName))
-        return_code = os.system(self.ADB_S + self.serialnumber +
-                                " shell am start -a " + intentname + " -n " + packageName + "/" + activityName)
-        time.sleep(1)
-
-        if self.timer is not None:
-            logging.debug("Start stay focus timer")
-            self.timer.start()
-        return return_code
+        command = self.ADB_S + self.serialnumber + " shell am start -a " + intentname + " -n " + packageName + "/" + activityName
+        logging.info(command)
+        self.checkoutput_term(self.ADB_S + self.serialnumber +
+                              " shell am start -a " + intentname + " -n " + packageName + "/" + activityName)
 
     def pull(self, filepath, destination):
         '''
@@ -361,7 +357,7 @@ class ADB(Executer):
         @param destination: target path
         @return: None
         '''
-        os.system(self.ADB_S + self.serialnumber +
+        self.checkoutput_term(self.ADB_S + self.serialnumber +
                   " pull " + filepath + " " + destination)
 
     def push(self, filepath, destination):
@@ -380,7 +376,7 @@ class ADB(Executer):
         @param cmd: command
         @return: None
         '''
-        os.system(self.ADB_S + self.serialnumber + " shell " + cmd)
+        self.checkoutput_term(self.ADB_S + self.serialnumber + " shell " + cmd)
 
     def ping(self, interface=None, hostname="www.baidu.com",
              interval_in_seconds=1, ping_time_in_seconds=5,
@@ -539,7 +535,7 @@ class ADB(Executer):
         @param path: file path
         @return: None
         '''
-        os.system(self.ADB_S + self.serialnumber + " shell rm " + flags + " " + path)
+        self.checkoutput_term(self.ADB_S + self.serialnumber + " shell rm " + flags + " " + path)
 
     def uiautomator_dump(self, filepath='', uiautomator_type='u2'):
         '''
@@ -556,9 +552,9 @@ class ADB(Executer):
             uiautomator_type = 'u1'
             xml = self.u(type=uiautomator_type).d1.dump()
         if not filepath.endswith('view.xml'):
-            filepath += self.DUMP_FILE
+            filepath +=self.DUMP_FILE
         logging.debug(filepath)
-        with open(filepath, 'w') as f:
+        with open(filepath, 'w+') as f:
             f.write(xml)
         logging.debug('uiautomator dump done')
 
@@ -568,7 +564,7 @@ class ADB(Executer):
         @return: dumo info : str
         '''
         path = self.logdir + self.DUMP_FILE if os.path.exists(
-            self.logdir + self.DUMP_FILE) else self.logdir + '/window_dump.xml'
+            self.logdir + self.DUMP_FILE) else self.logdir + '/view.xml'
         with open(path, 'r') as f:
             temp = f.read()
         return temp
@@ -578,7 +574,7 @@ class ADB(Executer):
         expand android notification bar
         @return: None
         '''
-        os.system(self.ADB_S + self.serialnumber + " shell cmd statusbar expand-notifications")
+        self.checkoutput_term(self.ADB_S + self.serialnumber + " shell cmd statusbar expand-notifications")
 
     def _screencap(self, filepath, layer="osd", app_level=28):
         '''
@@ -593,7 +589,7 @@ class ADB(Executer):
         '''
 
         if layer == "osd":
-            os.system(self.ADB_S + self.serialnumber + " shell screencap -p " + filepath)
+            self.checkoutput_term(self.ADB_S + self.serialnumber + " shell screencap -p " + filepath)
         else:
             png_type = 1
             if layer == "video" or layer == self.OSD_VIDEO_LAYER:
@@ -905,7 +901,7 @@ class ADB(Executer):
         kill all logcat in pc
         @return: None
         '''
-        self.checkoutput("killall logcat")
+        self.subprocess_run("killall logcat")
 
     # @connect_again
     def popen(self, command):
@@ -1082,10 +1078,10 @@ class ADB(Executer):
         self.app_stop(self.WIFI_CONNECT_PACKAGE)
 
     def run_vtscts(self, sh_name, case_filename, file_directory, tools_directory):
-        os.system("chmod +x " + sh_name)
+        self.checkoutput_term("chmod +x " + sh_name)
         cmd = "./" + sh_name + " " + case_filename + " " + file_directory + " " + tools_directory
         logging.info(cmd)
-        os.system(cmd)
+        self.checkoutput_term(cmd)
 
     def check_wifi_driver(self):
         self.clear_logcat()
@@ -1224,6 +1220,7 @@ class ADB(Executer):
         log.send_signal(signal.SIGINT)
 
     def enter_wifi_activity(self) -> None:
+        logging.info('Enter wifi activity')
         self.start_activity(*self.SETTING_ACTIVITY_TUPLE)
         self.wait_and_tap('Network & Internet', 'text')
         self.wait_element('Wi-Fi', 'text')
@@ -1291,6 +1288,7 @@ class ADB(Executer):
 
     def find_ssid(self, ssid) -> bool:
         self.enter_wifi_activity()
+        logging.info('enter activity done')
         time.sleep(1)
         self.wait_and_tap('See all', 'text')
         count = 0
@@ -1303,15 +1301,27 @@ class ADB(Executer):
                 self.keyevent(19)
         else:
             raise EnvironmentError("Can't find ssid")
-
         self.wait_and_tap(ssid, 'text')
         time.sleep(1)
         return True
 
+    def wait_keyboard(self):
+        self.uiautomator_dump()
+        if 'keyboard_area' not in self.get_dump_info():
+            self.keyevent(23)
+            time.sleep(2)
+
     def connect_ssid(self, ssid, passwd='') -> bool:
         self.find_ssid(ssid)
+        logging.info('find done')
+        self.uiautomator_dump()
+        logging.info('dump done')
+        if 'Connected' in self.get_dump_info():
+            return True
+        logging.info('check status done')
         if passwd != '':
             for _ in range(5):
+                self.wait_keyboard()
                 logging.info('try to input passwd')
                 self.u().d2(resourceId="com.android.tv.settings:id/guidedactions_item_title").clear_text()
                 time.sleep(1)

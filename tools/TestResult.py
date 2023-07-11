@@ -17,11 +17,11 @@ import csv
 from Decorators import singleton
 import numpy as np
 
-plt.rcParams['font.family']=['SimHei']
+plt.rcParams['font.family'] = ['SimHei']
+
 
 @singleton
 class TestResult():
-
     '''
     Singleton class,should not be inherited
     handle rvr text result
@@ -41,19 +41,22 @@ class TestResult():
         self.current_number = 0
         self.x_path = step
         self.x_length = len(self.x_path)
-        self.rvr_excelfile = os.path.join(self.logdir,'RvrCheckExcel.xlsx')
+
+    def init_rvr_result(self):
+        self.rvr_excelfile = os.path.join(self.logdir, 'RvrCheckExcel.xlsx')
         if not hasattr(self, 'logFile'):
-            self.log_file = os.path.join(self.logdir,'Rvr' + time.asctime().replace(' ','_').replace(':','_') + '.csv')
+            self.log_file = os.path.join(self.logdir,
+                                         'Rvr' + time.asctime().replace(' ', '_').replace(':', '_') + '.csv')
         if not hasattr(self, 'detialFile'):
-            self.detail_file = os.path.join(self.logdir,'Rvr_Detial.log')
-            with open(self.detail_file, 'a',encoding='gbk') as f:
+            self.detail_file = os.path.join(self.logdir, 'Rvr_Detial.log')
+            with open(self.detail_file, 'a', encoding='gbk') as f:
                 f.write("This is rvr test detial data\n")
-        with open(self.log_file, 'a',encoding='gbk') as f:
+        with open(self.log_file, 'a', encoding='gbk') as f:
             title = 'Priority	Test_Category	Sub_Category	Coex_Method	BT_WF_Isolation	Standard	Freq_Band	BW	Data_Rate	CH_Freq_MHz	Protocol	Direction	Total_Path_Loss	RxP	Beacon_RSSI Angel	Data_RSSI	Throughput	MCS_Rate'
             logging.info(title.split())
             f.write(','.join(title.split()))
             f.write('\n')
-        with open(os.path.join(os.getcwd(),'config\\asusax88u.csv'), 'r',encoding='gbk') as f:
+        with open(os.path.join(os.getcwd(), 'config\\asusax88u.csv'), 'r', encoding='gbk') as f:
             reader = csv.reader(f)
             self.results_length = []
             for i in [j for j in reader][1:]:
@@ -85,7 +88,7 @@ class TestResult():
         '''
         logging.info('Write to excel')
 
-        df = pd.read_csv(self.log_file,encoding='gbk')
+        df = pd.read_csv(self.log_file, encoding='gbk')
         # 转置数据
         # df = pd.DataFrame(df.values.T, index=df.columns, columns=df.index)
         if not os.path.exists(self.rvr_excelfile):
@@ -118,8 +121,8 @@ class TestResult():
             temp = 0
             chart_date = []
             for i in self.results_length:
-                chart_date.append(all_data[temp:temp+i])
-                temp = temp+i
+                chart_date.append(all_data[temp:temp + i])
+                temp = temp + i
             # for i in chart_date:
             #     print(i)
             #     print(len(i))
@@ -180,9 +183,9 @@ class TestResult():
             temp = 0
             chart_date = []
             for i in self.results_length:
-                chart_date.append(all_data[temp:temp+i])
-                temp = temp+i
-            fig = plt.figure(figsize=(20, 20),dpi=100)
+                chart_date.append(all_data[temp:temp + i])
+                temp = temp + i
+            fig = plt.figure(figsize=(20, 20), dpi=100)
             fig.tight_layout()
             plt.suptitle("Rvr test report summary")
             plt.subplots_adjust(wspace=0, hspace=0.3)
@@ -190,11 +193,11 @@ class TestResult():
             angles = np.concatenate((angles, [angles[0]]))
             feature = np.concatenate((self.x_path, [self.x_path[0]]))
             for i in chart_date:
-                ax = fig.add_subplot(2,3,1 + chart_date.index(i),polar=True)
+                ax = fig.add_subplot(2, 3, 1 + chart_date.index(i), polar=True)
                 # print(i)
                 # [0, 'P0', 'RvR', 'Standalone', nan, 'Null', '11AX', 5.0, 80, 'Rate_Adaptation', 149, 'TCP', 'UL', nan, nan, -21, nan, 90, 'msc_tx']
                 ax.set_title(f'{i[0][7]}_{i[0][6]}_{i[0][8]}_{i[0][10]}')
-                tx_results,rx_results = [],[]
+                tx_results, rx_results = [], []
                 for j in i:
                     if 'UL' in j[-8]:
                         if j[-2] == 'False':
@@ -210,15 +213,15 @@ class TestResult():
                             rx_results.append(int(j[-2]))
                 if tx_results:
                     tx_results = np.concatenate((tx_results, [tx_results[0]]))
-                    ax.plot(angles, tx_results , lw=0.5,label='tx')
+                    ax.plot(angles, tx_results, lw=0.5, label='tx')
                 if rx_results:
                     rx_results = np.concatenate((rx_results, [rx_results[0]]))
-                    ax.plot(angles, rx_results, lw=0.5,label='rx')
-                ax.set_thetagrids(angles * 180 / np.pi,feature )
+                    ax.plot(angles, rx_results, lw=0.5, label='rx')
+                ax.set_thetagrids(angles * 180 / np.pi, feature)
                 ax.set_theta_zero_location('N')
                 # ax.set_ylim(0,400)
                 ax.set_rlabel_position(0)
-                plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=1, frameon=False,)
+                plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=1, frameon=False, )
             # plt.show()
             rvr_pdffile.savefig()
 

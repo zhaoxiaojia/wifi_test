@@ -99,7 +99,7 @@ if test_type == 'both':
 
 # 配置 测试报告
 pytest.testResult.x_path = [] if test_type == 'both' else step_list
-
+pytest.testResult.init_rvr_result()
 tx_result_list, rx_result_list = [], []
 rx_result, tx_result = '', ''
 
@@ -236,6 +236,7 @@ def wifi_setup_teardown(request):
     tx_result_list, rx_result_list = [], []
     # if not router_debug:
     #     router.router_control.driver.quit()
+
 
 @pytest.fixture(scope='session', autouse=True, params=command_data)
 def session_setup_teardown(request):

@@ -20,21 +20,6 @@ def router_str(self):
     # return '_'.join(info)
     return f'{self.serial}_{self.band} {self.ssid} {self.wireless_mode} {self.channel} {self.bandwidth} {self.authentication_method}'
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 RUN_SETTING_ACTIVITY = 'am start -n com.android.tv.settings/.MainSettings'
 
 fields = ['serial', 'band', 'ssid', 'wireless_mode', 'channel', 'bandwidth', 'authentication_method',
