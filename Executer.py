@@ -1,18 +1,18 @@
 # !/usr/bin/env python
-# -*-coding:utf-8 -*-
+
 
 """
 # File       : Executer.py
 # Time       ：2023/7/4 15:51
 # Author     ：chao.li
-# version    ：python 3.6
+# version    ：python 3.9
 # Description：
 """
 import logging
 import subprocess
 
-class Executer():
 
+class Executer():
     DMESG_COMMAND = 'dmesg -S'
     CLEAR_DMESG_COMMAND = 'dmesg -c'
 
@@ -62,6 +62,21 @@ class Executer():
 
     OPEN_INFO = '<node index="0" text="Hotspot name" resource-id="android:id/title" class="android.widget.TextView" package="com.droidlogic.tv.settings" content-desc="" checkable="false" checked="false" clickable="false" enabled="true"'
     CLOSE_INFO = '<node index="0" text="Hotspot name" resource-id="android:id/title" class="android.widget.TextView" package="com.droidlogic.tv.settings" content-desc="" checkable="false" checked="false" clickable="false" enabled="false"'
+
+    PLAYERACTIVITY_REGU = 'am start -n com.google.android.youtube.tv/com.google.android.apps.youtube.tv.activity.ShellActivity -d https://www.youtube.com/watch?v={}'
+    VIDEO_TAG_LIST = [
+        {'link': 'vX2vsvdq8nw', 'name': '4K HDR 60FPS Sniper Will Smith'},  # 4k hrd 60 fps
+        # {'link': '9Auq9mYxFEE', 'name': 'Sky Live'},
+        {'link': '-ZMVjKT3-5A', 'name': 'NBC News (vp9)'},  # vp9
+        {'link': 'LXb3EKWsInQ', 'name': 'COSTA RICA IN 4K 60fps HDR (ULTRA HD) (vp9)'},  # vp9
+        {'link': 'b6fzbyPoNXY', 'name': 'Las Vegas Strip at Night in 4k UHD HLG HDR (vp9)'},  # vp9
+        {'link': 'AtZrf_TWmSc', 'name': 'How to Convert,Import,and Edit AVCHD Files for Premiere (H264)'},  # H264
+        {'link': 'LXb3EKWsInQ', 'name': 'COSTA RICA IN 4K 60fps HDR(ultra hd) (4k 60fps)'},  # 4k 60fps
+        {'link': 'NVhmq-pB_cs', 'name': 'Mr Bean 720 25fps (720 25fps)'},
+        {'link': 'bcOgjyHb_5Y', 'name': 'paid video'},
+        {'link': 'rf7ft8-nUQQ', 'name': 'stress video'}
+        # {'link': 'hNAbQYU0wpg', 'name': 'VR 360 Video of Top 5 Roller (360)'}  # 360
+    ]
 
     def __init__(self):
         self.serialnumber = 'executer'

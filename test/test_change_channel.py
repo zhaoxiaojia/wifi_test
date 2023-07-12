@@ -1,11 +1,11 @@
 # !/usr/bin/env python
-# -*-coding:utf-8 -*-
+
 
 """
 # File       : test_change_channel.py
 # Time       ：2023/7/11 16:08
 # Author     ：chao.li
-# version    ：python 3.6
+# version    ：python 3.9
 # Description：
 """
 

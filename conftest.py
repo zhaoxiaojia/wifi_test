@@ -1,11 +1,11 @@
 # !/usr/bin/env python
-# -*-coding:utf-8 -*-
+
 
 """
 # File       : conftest.py
 # Time       ：2023/6/29 13:36
 # Author     ：chao.li
-# version    ：python 3.6
+# version    ：python 3.9
 # Description：
 """
 

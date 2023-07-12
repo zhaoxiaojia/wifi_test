@@ -1,11 +1,11 @@
 # !/usr/bin/env python
-# -*-coding:utf-8 -*-
+
 
 """
 # File       : test_ui_forget_reconnect.py
 # Time       ：2023/7/11 15:55
 # Author     ：chao.li
-# version    ：python 3.6
+# version    ：python 3.9
 # Description：
 """
 
