@@ -60,18 +60,16 @@ class ADB(Executer):
     DUMP_FILE = '\\view.xml'
     OSD_VIDEO_LAYER = 'osd+video'
 
-    def __init__(self, unlock_code="", logdir="", serialnumber=""):
+    def __init__(self, serialnumber="", logdir=""):
         super().__init__()
         self.serialnumber = serialnumber
         logging.info("get devices number %s" % serialnumber)
-        self.unlock_code = unlock_code
         self.logdir = logdir or os.path.join(os.getcwd(), 'results')
         self.timer = None
         self.live = False
         self.lock = threading.Lock()
         self.wait_devices()
         self.p_config_wifi = ''
-        self.accompanyiny_dut = pytest.config_yaml.get_note('accompanying_dut')
 
     def set_status_on(self):
         '''
@@ -399,31 +397,13 @@ class ADB(Executer):
             logging.error("Must supply a hostname(non-empty str)")
             return False
         p_conf_wifi_ping_count = 5
-        try:
-            # ping_time_in_seconds = pytest.config.get("wifi")['ping_count']
-            p_conf_wifi_ping_count = self.p_config_wifi['wifi']['ping_count']
-        except Exception as e:
-            logging.debug("Failed.Reason: " + repr(e) +
-                          " in config doesn't exist, so use the default value " + str(p_conf_wifi_ping_count))
         count = int(p_conf_wifi_ping_count / interval_in_seconds)
         timeout_in_seconds += p_conf_wifi_ping_count
         # Changing count based on the interval, so that it always finishes
         # in ping_time seconds
 
-        try:
-            # ping_percentge = pytest.config.get("wifi")['ping_pass_percentage']
-            p_conf_wifi_ping_pass_percentage = self.p_config_wifi['wifi']['ping_pass_percentage']
-        except Exception as e:
-            p_conf_wifi_ping_pass_percentage = 0
-            logging.debug("Failed.Reason: " + repr(e) +
-                          " in config doesn't exist, so use the default value " +
-                          str(p_conf_wifi_ping_pass_percentage))
+        p_conf_wifi_ping_pass_percentage = 0
         ping_pass_percentage = int(count * p_conf_wifi_ping_pass_percentage * 0.01)
-        # if "rtos" in pytest.device.get_platform():
-        #     hostname = "8.8.8.8"
-        #     cmd = "%s %s %s" % (pytest.wifi.ACE_CLI_PING_RTOS, hostname,
-        #                         count)
-        # else:
         if interface:
             if size_in_bytes:
                 cmd = "ping -i %s -I %s -c %s -s %s %s" % (
@@ -437,7 +417,10 @@ class ADB(Executer):
             else:
                 cmd = "ping -i %s -c %s %s" % (interval_in_seconds, count, hostname)
         logging.debug("Ping command: %s" % cmd)
-        output = self.checkoutput(cmd)
+        try:
+            output = self.checkoutput(cmd)
+        except Exception as e:
+            output = str(e)
         # rc, result = self.run_shell_cmd(cmd,  timeout=timeout_in_seconds)
         RE_PING_STATUS = re.compile(
             r".*(---.+ping statistics ---\s+\d+ packets transmitted, \d+ received, "
@@ -462,6 +445,8 @@ class ADB(Executer):
                                      count) * 100)
             if ping_output['packet_loss'] <= expected_pkt_loss:
                 return True
+        else:
+            return False
 
     def check_apk_exist(self, package_name):
         return True if package_name in self.checkoutput('pm list packages') else False
@@ -547,7 +532,7 @@ class ADB(Executer):
         if not filepath.endswith('view.xml'):
             filepath += self.DUMP_FILE
         logging.debug(filepath)
-        with open(filepath, 'w+') as f:
+        with open(filepath, 'w+', encoding='utf-8') as f:
             f.write(xml)
         logging.debug('uiautomator dump done')
 
@@ -558,7 +543,7 @@ class ADB(Executer):
         '''
         path = self.logdir + self.DUMP_FILE if os.path.exists(
             self.logdir + self.DUMP_FILE) else self.logdir + '/view.xml'
-        with open(path, 'r') as f:
+        with open(path, 'r', encoding='utf-8') as f:
             temp = f.read()
         return temp
 
@@ -932,8 +917,9 @@ class ADB(Executer):
         @param command: command
         @return: subprocess.CompletedProcess
         '''
-        return subprocess.run(self.ADB_S + self.serialnumber + ' shell ' + command,
-                              shell=True, check=False)
+        if not isinstance(command,list):
+            command = (self.ADB_S + self.serialnumber + ' shell ' + command).split()
+        return subprocess.run(command,stdout=subprocess.PIPE,encoding='utf-8').stdout
 
     def open_omx_info(self):
         '''
@@ -1172,25 +1158,23 @@ class ADB(Executer):
         self.checkoutput(self.WIFI_DISCONNECT_COMMAND)
 
     def forget_wifi(self, accompanying=False) -> None:
-        self.serialnumber, temp = self.accompanyiny_dut, self.serialnumber
-        self.checkoutput(self.WIFI_CONNECT_ACTIVITY + self.WIFI_FORGET_WIFI_STR)
-        self.home()
-        self.app_stop(self.WIFI_CONNECT_PACKAGE)
-        self.serialnumber = temp
+        dut = accompanyiny_dut if accompanying else self
+        dut.checkoutput(dut.WIFI_CONNECT_ACTIVITY + dut.WIFI_FORGET_WIFI_STR)
+        dut.home()
+        dut.app_stop(dut.WIFI_CONNECT_PACKAGE)
         time.sleep(3)
 
     def forget_network_cmd(self, target_ip, accompanying=False) -> None:
-        self.serialnumber, temp = self.accompanyiny_dut, self.serialnumber
-        if 'No networks' not in self.checkoutput('cmd wifi list-networks'):
-            networkid = self.checkoutput(self.CMD_WIFI_LIST_NETWORK)
+        dut = accompanyiny_dut if accompanying else self
+        if 'No networks' not in dut.checkoutput('cmd wifi list-networks'):
+            networkid = dut.checkoutput(dut.CMD_WIFI_LIST_NETWORK)
             for i in networkid.split():
-                self.checkoutput(self.CMD_WIFI_FORGET_NETWORK.format(i))
+                dut.checkoutput(dut.CMD_WIFI_FORGET_NETWORK.format(i))
                 start = time.time()
-                while self.ping(hostname=target_ip):
+                while dut.ping(hostname=target_ip):
                     time.sleep(5)
                     if time.time() - start > 30:
                         assert False, 'still connected'
-        self.serialnumber = temp
 
     def wait_for_wifi_service(self, type='wlan0') -> None:
         count = 0
@@ -1264,22 +1248,21 @@ class ADB(Executer):
             self.keyevent(4)
 
     def wait_for_wifi_address(self, cmd: str = '', accompanying=False):
-        self.serialnumber, temp = self.accompanyiny_dut, self.serialnumber
-        ip_address = self.subprocess_run('ifconfig wlan0 |egrep -o "inet [^ ]*"|cut -f 2 -d :')
+        dut = accompanyiny_dut if accompanying else self
+        ip_address = dut.subprocess_run('ifconfig wlan0 |egrep -o "inet [^ ]*"|cut -f 2 -d :')
         # logging.info(ip_address)
         step = 0
         while not ip_address:
             time.sleep(5)
             step += 1
-            ip_address = self.checkoutput('ifconfig wlan0 |egrep -o "inet [^ ]*"|cut -f 2 -d :')
+            ip_address = dut.subprocess_run('ifconfig wlan0 |egrep -o "inet [^ ]*"|cut -f 2 -d :')
             if step == 2:
                 logging.info('repeat command')
                 if cmd:
-                    self.checkoutput(cmd)
+                    dut.checkoutput(cmd)
             if step > 10:
                 # if pytest.reruns_count == rerun_times + 1:
                 assert False, 'connected fail'
-        self.serialnumber = temp
         logging.info(ip_address)
         return True, ip_address
 
@@ -1303,10 +1286,13 @@ class ADB(Executer):
         return True
 
     def wait_keyboard(self):
-        self.uiautomator_dump()
-        if 'keyboard_area' not in self.get_dump_info():
-            self.keyevent(23)
-            time.sleep(2)
+        for i in range(5):
+            self.uiautomator_dump()
+            if 'keyboard_area' not in self.get_dump_info():
+                self.keyevent(23)
+                time.sleep(2)
+            else:
+                break
 
     def connect_ssid(self, ssid, passwd='') -> bool:
         self.find_ssid(ssid)
@@ -1336,42 +1322,44 @@ class ADB(Executer):
         return True
 
     def connect_save_ssid(self, ssid, str='', accompanying=False, target=''):
-        self.find_ssid(ssid)
-        self.wait_and_tap('Connect', 'text')
-        self.wait_for_wifi_address(target)
+        dut = accompanyiny_dut if accompanying else self
+        dut.find_ssid(ssid)
+        dut.wait_and_tap('Connect', 'text')
+        dut.wait_for_wifi_address(target)
         return True
 
+    def forget_ssid(self, ssid):
+        self.find_ssid(ssid)
+        self.wait_and_tap('Forget network', 'text')
+        self.kill_tvsetting()
+
     def accompanying_dut_wait_ssid(self, ssid: str) -> None:
-        self.serialnumber, temp = self.accompanyiny_dut, self.serialnumber
-        self.checkoutput('cmd wifi start-scan')
-        scan_list = self.run_shell_cmd(f'cmd wifi list-scan-results |grep "{ssid}"')[1]
+        accompanyiny_dut.checkoutput('cmd wifi start-scan')
+        scan_list = accompanyiny_dut.run_shell_cmd(f'cmd wifi list-scan-results |grep "{ssid}"')[1]
         step = 0
         while ' ' + ssid + ' ' not in scan_list:
             time.sleep(5)
             step += 1
             logging.info('re scan')
-            self.checkoutput('cmd wifi start-scan')
-            scan_list = self.run_shell_cmd(f'cmd wifi list-scan-results |grep "{ssid}"')[1]
+            accompanyiny_dut.checkoutput('cmd wifi start-scan')
+            scan_list = accompanyiny_dut.checkoutput(f'cmd wifi list-scan-results |grep "{ssid}"')[1]
             logging.info(f'scan_list {scan_list}')
             if step > 3:
                 assert False, "hotspot can't be found"
-        self.serialnumber = temp
 
     def accompanying_dut_wait_ssid_disapper(self, ssid: str) -> None:
-        self.serialnumber, temp = self.accompanyiny_dut, self.serialnumber
-        self.checkoutput('cmd wifi start-scan')
-        scan_list = self.run_shell_cmd(f'cmd wifi list-scan-results |grep "{ssid}"')[1]
+        accompanyiny_dut.checkoutput('cmd wifi start-scan')
+        scan_list = accompanyiny_dut.checkoutput(f'cmd wifi list-scan-results |grep "{ssid}"')
         step = 0
         while ' ' + ssid + ' ' in scan_list:
             time.sleep(5)
             step += 1
             logging.info('re scan')
-            self.checkoutput('cmd wifi start-scan')
-            scan_list = self.run_shell_cmd(f'cmd wifi list-scan-results |grep "{ssid}"')[1]
+            accompanyiny_dut.checkoutput('cmd wifi start-scan')
+            scan_list = accompanyiny_dut.checkoutput(f'cmd wifi list-scan-results |grep "{ssid}"')
             logging.info(f'scan_list {scan_list}')
             if step > 3:
                 assert False, "hotspot still can be found"
-        self.serialnumber = temp
 
     def change_keyboard_language(self) -> None:
         '''
@@ -1458,3 +1446,9 @@ class ADB(Executer):
     def playback_youtube(self):
         self.checkoutput(self.PLAYERACTIVITY_REGU.format(self.VIDEO_TAG_LIST[0]['link']))
         time.sleep(30)
+
+try:
+    accompanyiny_dut = ADB(pytest.config_yaml.get_note('accompanying_dut'))
+except Exception as e:
+    logging.info('未连接配测产品')
+    accompanyiny_dut = None

@@ -1,4 +1,5 @@
-# !/usr/bin/env python
+#!/usr/bin/env python 
+# -*- coding: utf-8 -*- 
 
 
 """
@@ -78,6 +79,7 @@ class Executer():
         # {'link': 'hNAbQYU0wpg', 'name': 'VR 360 Video of Top 5 Roller (360)'}  # 360
     ]
 
+    WIFI_BUTTON_TAG = 'Available networks'
     def __init__(self):
         self.serialnumber = 'executer'
 

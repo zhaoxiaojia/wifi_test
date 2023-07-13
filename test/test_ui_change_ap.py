@@ -1,4 +1,5 @@
-# !/usr/bin/env python
+#!/usr/bin/env python 
+# -*- coding: utf-8 -*- 
 
 
 """
@@ -24,7 +25,7 @@ ssid1 = 'sunshine'
 ssid2 = 'galaxy'
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture(autouse=True,scope='session')
 def setup():
     logging.info('start setup')
     pytest.executer.connect_ssid(ssid1, 'Home1357')

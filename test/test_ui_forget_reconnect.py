@@ -1,4 +1,5 @@
-# !/usr/bin/env python
+#!/usr/bin/env python 
+# -*- coding: utf-8 -*- 
 
 
 """
@@ -29,7 +30,7 @@ import pytest
 ssid = 'sunshine'
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture(autouse=True,scope='session')
 def setup_teardown():
     ...
     yield

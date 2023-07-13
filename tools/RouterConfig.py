@@ -1,4 +1,5 @@
-#!/usr/bin/env python
+#!/usr/bin/env python 
+# -*- coding: utf-8 -*-
 # @Time    : 2022/10/26 14:30
 # @Author  : chao.li
 # @Site    :
