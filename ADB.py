@@ -917,9 +917,9 @@ class ADB(Executer):
         @param command: command
         @return: subprocess.CompletedProcess
         '''
-        if not isinstance(command,list):
+        if not isinstance(command, list):
             command = (self.ADB_S + self.serialnumber + ' shell ' + command).split()
-        return subprocess.run(command,stdout=subprocess.PIPE,encoding='utf-8').stdout
+        return subprocess.run(command, stdout=subprocess.PIPE, encoding='utf-8').stdout
 
     def open_omx_info(self):
         '''
@@ -1261,9 +1261,8 @@ class ADB(Executer):
                 if cmd:
                     dut.checkoutput(cmd)
             if step > 10:
-                # if pytest.reruns_count == rerun_times + 1:
                 assert False, 'connected fail'
-        logging.info(ip_address)
+        logging.info(f'ip address {ip_address}')
         return True, ip_address
 
     def find_ssid(self, ssid) -> bool:
@@ -1296,11 +1295,10 @@ class ADB(Executer):
 
     def connect_ssid(self, ssid, passwd='') -> bool:
         self.find_ssid(ssid)
-        logging.info('find done')
         self.uiautomator_dump()
-        logging.info('dump done')
-        if 'Connected' in self.get_dump_info() or 'Connect' in self.get_dump_info():
+        if ('Connected' in self.get_dump_info() or 'Connect' in self.get_dump_info()) and passwd != '':
             self.keyevent(4)
+            logging.info('already connected')
             return True
         logging.info('check status done')
         if passwd != '':
@@ -1446,6 +1444,7 @@ class ADB(Executer):
     def playback_youtube(self):
         self.checkoutput(self.PLAYERACTIVITY_REGU.format(self.VIDEO_TAG_LIST[0]['link']))
         time.sleep(30)
+
 
 try:
     accompanyiny_dut = ADB(pytest.config_yaml.get_note('accompanying_dut'))
