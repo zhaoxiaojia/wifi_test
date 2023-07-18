@@ -45,6 +45,8 @@ def pytest_sessionstart(session):
         raise EnvironmentError("Not support connect type %s" % pytest.connect_type)
     pytest.executer.root()
     pytest.executer.remount()
+
+
     # 创建 测试结果文件夹
     result_path = os.path.join(os.getcwd(), 'results\\' + time.asctime().replace(' ', '_').replace(':', '_'))
     os.mkdir(result_path)

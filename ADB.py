@@ -458,9 +458,9 @@ class ADB(Executer):
         @return: install status : boolean
         '''
         apk_path = os.path.join(os.getcwd(), 'res\\' + apk_path)
-        cmd = ['install', '-r', '-t', apk_path]
+        cmd = f'install -r -t {apk_path}'
         logging.info(cmd)
-        return self.checkoutput(cmd)
+        return self.checkoutput_shell(cmd)
 
     def uninstall_apk(self, apk_name):
         '''
@@ -468,9 +468,9 @@ class ADB(Executer):
         @param apk_name: apk name
         @return: uninstall status : boolean
         '''
-        cmd = ['uninstall', apk_name]
+        cmd = f'uninstall {apk_name}'
         logging.info(cmd)
-        output = self.checkoutput(cmd)
+        output = self.checkoutput_shell(cmd)
         time.sleep(5)
         logging.info(output)
         if 'Success' in output:
@@ -1158,14 +1158,14 @@ class ADB(Executer):
         self.checkoutput(self.WIFI_DISCONNECT_COMMAND)
 
     def forget_wifi(self, accompanying=False) -> None:
-        dut = accompanyiny_dut if accompanying else self
+        dut = accompanying_dut if accompanying else self
         dut.checkoutput(dut.WIFI_CONNECT_ACTIVITY + dut.WIFI_FORGET_WIFI_STR)
         dut.home()
         dut.app_stop(dut.WIFI_CONNECT_PACKAGE)
         time.sleep(3)
 
     def forget_network_cmd(self, target_ip, accompanying=False) -> None:
-        dut = accompanyiny_dut if accompanying else self
+        dut = accompanying_dut if accompanying else self
         if 'No networks' not in dut.checkoutput('cmd wifi list-networks'):
             networkid = dut.checkoutput(dut.CMD_WIFI_LIST_NETWORK)
             for i in networkid.split():
@@ -1248,7 +1248,7 @@ class ADB(Executer):
             self.keyevent(4)
 
     def wait_for_wifi_address(self, cmd: str = '', accompanying=False):
-        dut = accompanyiny_dut if accompanying else self
+        dut = accompanying_dut if accompanying else self
         ip_address = dut.subprocess_run('ifconfig wlan0 |egrep -o "inet [^ ]*"|cut -f 2 -d :')
         # logging.info(ip_address)
         step = 0
@@ -1320,7 +1320,7 @@ class ADB(Executer):
         return True
 
     def connect_save_ssid(self, ssid, str='', accompanying=False, target=''):
-        dut = accompanyiny_dut if accompanying else self
+        dut = accompanying_dut if accompanying else self
         dut.find_ssid(ssid)
         dut.wait_and_tap('Connect', 'text')
         dut.wait_for_wifi_address(target)
@@ -1332,29 +1332,29 @@ class ADB(Executer):
         self.kill_tvsetting()
 
     def accompanying_dut_wait_ssid(self, ssid: str) -> None:
-        accompanyiny_dut.checkoutput('cmd wifi start-scan')
-        scan_list = accompanyiny_dut.run_shell_cmd(f'cmd wifi list-scan-results |grep "{ssid}"')[1]
+        accompanying_dut.checkoutput('cmd wifi start-scan')
+        scan_list = accompanying_dut.subprocess_run(f'cmd wifi list-scan-results |grep "{ssid}"')
         step = 0
         while ' ' + ssid + ' ' not in scan_list:
             time.sleep(5)
             step += 1
             logging.info('re scan')
-            accompanyiny_dut.checkoutput('cmd wifi start-scan')
-            scan_list = accompanyiny_dut.checkoutput(f'cmd wifi list-scan-results |grep "{ssid}"')[1]
+            accompanying_dut.subprocess_run('cmd wifi start-scan')
+            scan_list = accompanying_dut.subprocess_run(f'cmd wifi list-scan-results |grep "{ssid}"')
             logging.info(f'scan_list {scan_list}')
-            if step > 3:
+            if step > 5:
                 assert False, "hotspot can't be found"
 
     def accompanying_dut_wait_ssid_disapper(self, ssid: str) -> None:
-        accompanyiny_dut.checkoutput('cmd wifi start-scan')
-        scan_list = accompanyiny_dut.checkoutput(f'cmd wifi list-scan-results |grep "{ssid}"')
+        accompanying_dut.checkoutput('cmd wifi start-scan')
+        scan_list = accompanying_dut.subprocess_run(f'cmd wifi list-scan-results |grep "{ssid}"')
         step = 0
         while ' ' + ssid + ' ' in scan_list:
             time.sleep(5)
             step += 1
             logging.info('re scan')
-            accompanyiny_dut.checkoutput('cmd wifi start-scan')
-            scan_list = accompanyiny_dut.checkoutput(f'cmd wifi list-scan-results |grep "{ssid}"')
+            accompanying_dut.subprocess_run('cmd wifi start-scan')
+            scan_list = accompanying_dut.subprocess_run(f'cmd wifi list-scan-results |grep "{ssid}"')
             logging.info(f'scan_list {scan_list}')
             if step > 3:
                 assert False, "hotspot still can be found"
@@ -1364,7 +1364,7 @@ class ADB(Executer):
         set chinese type keyboard
         @return:
         '''
-        self.install_apk('apk/ADBKeyboard.apk')
+        self.install_apk('ADBKeyboard.apk')
         self.start_activity(*self.SETTING_ACTIVITY_TUPLE)
         self.wait_and_tap('Device Preferences', 'text')
         self.wait_and_tap('Keyboard', 'text')
@@ -1445,9 +1445,42 @@ class ADB(Executer):
         self.checkoutput(self.PLAYERACTIVITY_REGU.format(self.VIDEO_TAG_LIST[0]['link']))
         time.sleep(30)
 
+    def set_hotspot(self, ssid='', passwd='', type='', encrypt=''):
+        if ssid:
+            self.wait_and_tap('Hotspot name', 'text')
+            self.u().d2(resourceId="android:id/edit").clear_text()
+            self.checkoutput(f'input text {ssid}')
+            self.keyevent(66)
+            self.wait_element('Hotspot name', 'text')
+            assert ssid == pytest.executer.u().d2(
+                resourceId="android:id/summary").get_text(), "ssid can't be set currently"
+        if passwd:
+            self.wait_and_tap('Hotspot password', 'text')
+            self.u().d2(resourceId="android:id/edit").clear_text()
+            self.checkoutput(f'input text {passwd}')
+            self.uiautomator_dump()
+            assert passwd in self.get_dump_info(), "passwd doesn't currently"
+            self.keyevent(66)
+        if encrypt:
+            pytest.executer.wait_and_tap('Security', 'text')
+            pytest.executer.wait_element(encrypt, 'text')
+            pytest.executer.wait_and_tap(encrypt, 'text')
+            pytest.executer.wait_element('Security', 'text')
+        if type:
+            self.wait_and_tap('AP Band', 'text')
+            self.wait_element(type, 'text')
+            self.wait_and_tap(type, 'text')
+            self.wait_element('AP Band', 'text')
+
+
+from tools.yamlTool import yamlTool
 
 try:
-    accompanyiny_dut = ADB(pytest.config_yaml.get_note('accompanying_dut'))
+    accompanying_dut = ADB(yamlTool(os.getcwd() + '/config/config_wifi.yaml').get_note('accompanying_dut'))
+    accompanying_dut.root()
+    accompanying_dut.remount()
+    logging.info('Try to init accompanyiny_dut')
+    logging.info(accompanying_dut.serialnumber)
 except Exception as e:
     logging.info('未连接配测产品')
     accompanyiny_dut = None

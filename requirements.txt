@@ -8,3 +8,4 @@ matplotlib
 pandas
 openpyxl
 pytest-repeat
+allure-pytest
