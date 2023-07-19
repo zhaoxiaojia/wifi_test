@@ -26,10 +26,11 @@ from Router import Router
 
 ssid_2g = 'ATC_ASUS_AX88U_2G'
 ssid_5g = 'ATC_ASUS_AX88U_5G'
+passwd = '12345678'
 router_2g = Router(band='2.4 GHz', ssid=ssid_2g, wireless_mode='N only', channel='1', bandwidth='40 MHz',
-                   authentication_method='WPA2-Personal', wpa_passwd='12345678')
+                   authentication_method='WPA2-Personal', wpa_passwd=passwd)
 router_5g = Router(band='5 GHz', ssid=ssid_5g, wireless_mode='N/AC/AX mixed', channel='36', bandwidth='40 MHz',
-                   authentication_method='WPA2-Personal', wpa_passwd='12345678')
+                   authentication_method='WPA2-Personal', wpa_passwd=passwd)
 
 
 @pytest.fixture(autouse=True)
@@ -44,7 +45,7 @@ def setup_teardown():
 
 
 def test_switch_band():
-    pytest.executer.connect_ssid(ssid_2g)
+    pytest.executer.connect_ssid(ssid_2g,passwd=passwd)
+    pytest.executer.kill_tvsetting()
     pytest.executer.forget_network_cmd(target_ip='192.168.50.1')
-
-    pytest.executer.connect_ssid(ssid_5g)
+    pytest.executer.connect_ssid(ssid_5g,passwd=passwd)

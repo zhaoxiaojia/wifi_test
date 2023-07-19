@@ -9,3 +9,4 @@ pandas
 openpyxl
 pytest-repeat
 allure-pytest
+pytest-html

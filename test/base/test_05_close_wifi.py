@@ -27,13 +27,15 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def setup_teardown():
-    pytest.executer.close_wifi()
+    pytest.executer.open_wifi()
     yield
     pytest.executer.open_wifi()
 
 
 def test_close_wifi():
     pytest.executer.close_wifi()
-    pytest.executer.enter_wifi_activity()
+    pytest.executer.start_activity(*pytest.executer.SETTING_ACTIVITY_TUPLE)
+    pytest.executer.wait_element('Network & Internet', 'text')
+    pytest.executer.wait_and_tap('Network & Internet', 'text')
     pytest.executer.uiautomator_dump()
     assert pytest.executer.WIFI_BUTTON_TAG not in pytest.executer.get_dump_info(), "Can't close wifi"

@@ -38,5 +38,5 @@ def setup_teardown():
 
 
 def test_connect_wpa_wpa2():
-    pytest.executer.connect_ssid(ssid)
+    pytest.executer.connect_ssid(ssid,passwd)
 

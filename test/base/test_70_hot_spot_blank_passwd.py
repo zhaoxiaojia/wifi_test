@@ -28,7 +28,10 @@ def setup_teardown():
     pytest.executer.open_hotspot()
     yield
     pytest.executer.close_hotspot()
-    pytest.executer.reset_keyboard_language()
+    try:
+        pytest.executer.reset_keyboard_language()
+    except Exception as e:
+        ...
 
 @pytest.mark.hot_spot
 def test_hotspot_blank_passwd():

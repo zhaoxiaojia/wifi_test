@@ -31,7 +31,7 @@ router = Router(band='5 GHz', ssid='ATC_ASUS_AX88U_5G', wireless_mode='N/AC/AX m
 TARGET_IP = "192.168.50.1"
 
 
-@pytest.fixture(autouse=True,scope='session')
+@pytest.fixture(autouse=True)
 def setup_teardown():
     ax88uControl = Asusax88uControl()
     ax88uControl.change_setting(router)

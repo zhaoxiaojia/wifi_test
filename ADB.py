@@ -216,9 +216,9 @@ class ADB(Executer):
         @param app_name:
         @return:
         '''
-        logging.debug("Stop app(%s)" % app_name)
+        logging.info("Stop app(%s)" % app_name)
         self.checkoutput("am force-stop %s" % app_name)
-        self.kill_logcat_pid()
+        # self.kill_logcat_pid()
 
     def clear_app_data(self, app_name):
         self.checkoutput(f"pm clear {app_name}")
@@ -797,7 +797,7 @@ class ADB(Executer):
         x_start, y_start = bounds[0]
         x_end, y_end = bounds[1]
         x_midpoint, y_midpoint = (int(x_start) + int(x_end)) / 2, (int(y_start) + int(y_end)) / 2
-        logging.debug(f'{x_midpoint} {y_midpoint}')
+        logging.info(f'{x_midpoint} {y_midpoint}')
         return (x_midpoint, y_midpoint)
 
     def find_and_tap(self, searchKey, attribute):
@@ -1203,6 +1203,9 @@ class ADB(Executer):
         self.start_activity(*self.SETTING_ACTIVITY_TUPLE)
         self.wait_element('Network & Internet', 'text')
         self.wait_and_tap('Network & Internet', 'text')
+        self.uiautomator_dump()
+        if 'Available networks' not in self.get_dump_info():
+            self.wait_and_tap('Wi-Fi', 'text')
         self.wait_element('Wi-Fi', 'text')
 
     def enter_hotspot_android_s(self) -> None:
@@ -1394,8 +1397,13 @@ class ADB(Executer):
         if type != 'None':
             if passwd == '':
                 raise Exception("Passwd can't be empty")
+            self.wait_keyboard()
             time.sleep(2)
+            self.uiautomator_dump()
+            if 'android.widget.EditText' not in self.get_dump_info():
+                self.enter()
             self.text(passwd)
+            self.wait_and_tap('12345678','text')
             self.keyevent(66)
         self.wait_for_wifi_address()
 

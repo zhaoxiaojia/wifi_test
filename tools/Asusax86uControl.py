@@ -28,7 +28,7 @@ class Asusax86uControl():
     '''
 
     def __init__(self):
-        self.router_control = RouterTools('asus_86u',display=True)
+        self.router_control = RouterTools('asus_86u')
 
     def change_setting(self, router):
         '''

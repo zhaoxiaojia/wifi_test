@@ -28,8 +28,9 @@ from Router import Router
 '''
 
 ssid = 'ATC_ASUS_AX88U_2G'
+passwd = '12345678'
 router_2g = Router(band='2.4 GHz', ssid=ssid, wireless_mode='N only', channel='1', bandwidth='40 MHz',
-                   authentication_method='WPA2-Personal', wpa_passwd='12345678')
+                   authentication_method='WPA2-Personal', wpa_passwd=passwd)
 
 
 @pytest.fixture(scope='function', autouse=True)
@@ -38,13 +39,14 @@ def setup():
     ax88uControl = Asusax88uControl()
     ax88uControl.change_setting(router_2g)
     ax88uControl.router_control.driver.quit()
-    # connect wifi
-    pytest.executer.connect_ssid(ssid)
     yield
     pytest.executer.kill_tvsetting()
 
 
 def test_forget_wifi():
+    # connect wifi
+    pytest.executer.connect_ssid(ssid,passwd)
+    pytest.executer.kill_tvsetting()
     pytest.executer.find_ssid('ATC_ASUS_AX88U_2G')
     pytest.executer.wait_and_tap('Forget network', 'text')
     for _ in range(3):
