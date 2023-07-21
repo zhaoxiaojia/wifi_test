@@ -1208,19 +1208,27 @@ class ADB(Executer):
             self.wait_and_tap('Wi-Fi', 'text')
         self.wait_element('Wi-Fi', 'text')
 
-    def enter_hotspot_android_s(self) -> None:
-        self.start_activity(*self.MORE_SETTING_ACTIVITY_TUPLE)
+    def enter_hotspot(self) -> None:
+        if 'com.droidlogic.tv.settings' in self.checkoutput('ls -l /data/data'):
+            self.start_activity(self.MORE_SETTING_ACTIVITY_TUPLE)
+        else:
+            logging.info('No more setting')
+            self.start_activity(*self.SETTING_ACTIVITY_TUPLE)
+            self.wait_element('Network & Internet', 'text')
+            self.wait_and_tap('Network & Internet', 'text')
+            for i in range(8):
+                self.keyevent(20)
         self.wait_and_tap('HotSpot', 'text')
 
     def open_hotspot(self) -> None:
-        self.enter_hotspot_android_s()
+        self.enter_hotspot()
         self.wait_element('Portable HotSpot Enabled', 'text')
         self.uiautomator_dump()
-        if self.OPEN_INFO not in self.get_dump_info():
+        if not re.findall(self.OPEN_INFO,self.get_dump_info(),re.S):
             self.wait_and_tap('Portable HotSpot Enabled', 'text')
             self.get_dump_info()
         times = 0
-        while self.OPEN_INFO not in self.get_dump_info():
+        while not re.findall(self.OPEN_INFO,self.get_dump_info(),re.S):
             time.sleep(1)
             self.uiautomator_dump()
             times += 1
@@ -1228,19 +1236,21 @@ class ADB(Executer):
                 raise EnvironmentError("Can't open hotspot")
 
     def close_hotspot(self) -> None:
-        self.enter_hotspot_android_s()
+        self.kill_moresetting()
+        time.sleep(1)
+        self.enter_hotspot()
         self.wait_element('Portable HotSpot Enabled', 'text')
         self.uiautomator_dump()
-        if self.CLOSE_INFO not in self.get_dump_info():
+        if re.findall(self.OPEN_INFO,self.get_dump_info(),re.S):
             self.wait_and_tap('Portable HotSpot Enabled', 'text')
             self.get_dump_info()
         times = 0
-        while self.OPEN_INFO in self.get_dump_info():
+        while re.findall(self.OPEN_INFO,self.get_dump_info(),re.S):
             time.sleep(1)
             self.uiautomator_dump()
             times += 1
             if times > 5:
-                raise EnvironmentError("Can't open hotspot")
+                raise EnvironmentError("Can't close hotspot")
         self.kill_moresetting()
 
     def kill_tvsetting(self) -> None:
@@ -1249,7 +1259,7 @@ class ADB(Executer):
     def kill_moresetting(self) -> None:
         for i in range(5):
             self.keyevent(4)
-
+        self.kill_tvsetting()
     def wait_for_wifi_address(self, cmd: str = '', accompanying=False):
         dut = accompanying_dut if accompanying else self
         ip_address = dut.subprocess_run('ifconfig wlan0 |egrep -o "inet [^ ]*"|cut -f 2 -d :')
@@ -1403,7 +1413,7 @@ class ADB(Executer):
             if 'android.widget.EditText' not in self.get_dump_info():
                 self.enter()
             self.text(passwd)
-            self.wait_and_tap('12345678','text')
+            self.wait_and_tap('12345678', 'text')
             self.keyevent(66)
         self.wait_for_wifi_address()
 

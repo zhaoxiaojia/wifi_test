@@ -12,7 +12,7 @@
 
 import logging
 import time
-
+import re
 import pytest
 
 '''
@@ -32,4 +32,4 @@ def setup_teardown():
 def test_hotspot_auto_close():
     time.sleep(60*10)
     pytest.executer.uiautomator_dump()
-    assert pytest.executer.CLOSE_INFO in pytest.executer.get_dump_info(),"hotspot doesn't be closed"
+    assert re.findall(pytest.executer.CLOSE_INFO,pytest.executer.get_dump_info(),re.S),"hotspot doesn't be closed"

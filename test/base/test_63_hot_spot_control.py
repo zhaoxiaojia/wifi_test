@@ -30,14 +30,15 @@ times = pytest.config_yaml.get_note('times_063')
 def setup_teardown():
     pytest.executer.open_hotspot()
     yield
-    pytest.executer.close_hotspot()
+    pytest.executer.kill_moresetting()
 
 @pytest.mark.hot_spot
 # @pytest.mark.repeat(times)
 def test_hotspot_control():
-    dumpinfo = pytest.executer.get_dump_info()
-    ssid = re.findall(r'text="(.*?)" resource-id="android:id/summary"', dumpinfo)[0]
+    pytest.executer.get_dump_info()
+    ssid = re.findall(r'text="(.*?)" resource-id="android:id/summary"', pytest.executer.get_dump_info())[0]
     logging.info(f'ssid {ssid}')
     accompanying_dut.accompanying_dut_wait_ssid(ssid)
     pytest.executer.wait_and_tap('Portable HotSpot Enabled', 'text')
     accompanying_dut.accompanying_dut_wait_ssid_disapper(ssid)
+    pytest.executer.wait_and_tap('Portable HotSpot Enabled', 'text')

@@ -28,10 +28,9 @@ def setup_teardown():
     pytest.executer.open_hotspot()
     yield
     pytest.executer.close_hotspot()
-    try:
-        pytest.executer.reset_keyboard_language()
-    except Exception as e:
-        ...
+    pytest.executer.reset_keyboard_language()
+
+
 
 @pytest.mark.hot_spot
 def test_hotspot_blank_passwd():
@@ -39,12 +38,7 @@ def test_hotspot_blank_passwd():
     pytest.executer.wait_element("android:id/edit", "resource-id")
     pytest.executer.u().d2(resourceId="android:id/edit").clear_text()
     pytest.executer.checkoutput(f'am broadcast -a ADB_INPUT_TEXT --es msg "{passwd}"')
-    pytest.executer.wait_and_tap('GO', 'text')
-    pytest.executer.reset_keyboard_language()
-    pytest.executer.wait_and_tap('Hotspot password', 'text')
-    pytest.executer.wait_element('Hotspot password', 'text')
     pytest.executer.uiautomator_dump()
     assert passwd in pytest.executer.get_dump_info(), "passwd doesn't currently"
-    pytest.executer.keyevent(66)
-    for i in range(5):
-        pytest.executer.keyevent(4)
+    pytest.executer.wait_and_tap('GO', 'text')
+

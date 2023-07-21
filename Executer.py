@@ -61,8 +61,8 @@ class Executer():
     GET_COUNTRY_CODE = 'iw reg get'
     SET_COUNTRY_CODE_FORMAT = 'iw reg set {}'
 
-    OPEN_INFO = '<node index="0" text="Hotspot name" resource-id="android:id/title" class="android.widget.TextView" package="com.droidlogic.tv.settings" content-desc="" checkable="false" checked="false" clickable="false" enabled="true"'
-    CLOSE_INFO = '<node index="0" text="Hotspot name" resource-id="android:id/title" class="android.widget.TextView" package="com.droidlogic.tv.settings" content-desc="" checkable="false" checked="false" clickable="false" enabled="false"'
+    OPEN_INFO = r'<node index="0" text="Hotspot name" resource-id="android:id/title" class="android.widget.TextView" package="com.(.*?).tv.settings" content-desc="" checkable="false" checked="false" clickable="false" enabled="true"'
+    CLOSE_INFO = r'<node index="0" text="Hotspot name" resource-id="android:id/title" class="android.widget.TextView" package="com.(.*?).tv.settings" content-desc="" checkable="false" checked="false" clickable="false" enabled="false"'
 
     PLAYERACTIVITY_REGU = 'am start -n com.google.android.youtube.tv/com.google.android.apps.youtube.tv.activity.ShellActivity -d https://www.youtube.com/watch?v={}'
     VIDEO_TAG_LIST = [
