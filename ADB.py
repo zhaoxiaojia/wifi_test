@@ -340,7 +340,10 @@ class ADB(Executer):
         @param intentname: intent name
         @return: None
         '''
-        logging.debug("Start activity %s/%s" % (packageName, activityName))
+        try:
+            self.app_stop(packageName)
+        except Exception as e:
+            ...
         command = self.ADB_S + self.serialnumber + " shell am start -a " + intentname + " -n " + packageName + "/" + activityName
         logging.info(command)
         self.checkoutput_term(self.ADB_S + self.serialnumber +
@@ -893,8 +896,8 @@ class ADB(Executer):
         return self.popen_term(cmd)
 
     def popen_term(self, command):
-        return subprocess.Popen(command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                preexec_fn=os.setsid)
+        return subprocess.Popen(command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                                # preexec_fn=os.setsid)
 
     def checkoutput(self, command):
         '''
@@ -1164,21 +1167,21 @@ class ADB(Executer):
         dut.app_stop(dut.WIFI_CONNECT_PACKAGE)
         time.sleep(3)
 
-    def forget_network_cmd(self, target_ip, accompanying=False) -> None:
+    def forget_network_cmd(self, target_ip="192.168.50.1", accompanying=False) -> None:
         dut = accompanying_dut if accompanying else self
         if 'No networks' not in dut.checkoutput('cmd wifi list-networks'):
             networkid = dut.checkoutput(dut.CMD_WIFI_LIST_NETWORK)
             for i in networkid.split():
                 dut.checkoutput(dut.CMD_WIFI_FORGET_NETWORK.format(i))
-                start = time.time()
-                while dut.ping(hostname=target_ip):
-                    time.sleep(5)
-                    if time.time() - start > 30:
-                        assert False, 'still connected'
+            start = time.time()
+            while dut.ping(hostname=target_ip):
+                time.sleep(5)
+                if time.time() - start > 30:
+                    assert False, 'still connected'
 
     def wait_for_wifi_service(self, type='wlan0') -> None:
         count = 0
-        while self.subprocess_run(f'ifconfig {type}').returncode != 0:
+        while not self.subprocess_run(f'ifconfig {type}'):
             time.sleep(10)
             count += 1
             if count > 6:
@@ -1199,6 +1202,7 @@ class ADB(Executer):
         log.send_signal(signal.SIGINT)
 
     def enter_wifi_activity(self) -> None:
+        self.app_stop(self.SETTING_ACTIVITY_TUPLE[0])
         logging.info('Enter wifi activity')
         self.start_activity(*self.SETTING_ACTIVITY_TUPLE)
         self.wait_element('Network & Internet', 'text')
@@ -1379,6 +1383,8 @@ class ADB(Executer):
         '''
         self.install_apk('ADBKeyboard.apk')
         self.start_activity(*self.SETTING_ACTIVITY_TUPLE)
+        for i in range(5):
+            self.keyevent(20)
         self.wait_and_tap('Device Preferences', 'text')
         self.wait_and_tap('Keyboard', 'text')
         self.wait_and_tap('Manage keyboards', 'text')
@@ -1416,6 +1422,7 @@ class ADB(Executer):
             self.wait_and_tap('12345678', 'text')
             self.keyevent(66)
         self.wait_for_wifi_address()
+        return True
 
     def open_wifi(self) -> None:
         self.enter_wifi_activity()
@@ -1467,7 +1474,10 @@ class ADB(Executer):
         if ssid:
             self.wait_and_tap('Hotspot name', 'text')
             self.u().d2(resourceId="android:id/edit").clear_text()
-            self.checkoutput(f'input text {ssid}')
+            if ' ' in ssid:
+                self.checkoutput(f'input text $(echo "{ssid}" | sed -e "s/ /\%s/g")')
+            else:
+                self.checkoutput(f'input text {ssid}')
             self.keyevent(66)
             self.wait_element('Hotspot name', 'text')
             assert ssid == pytest.executer.u().d2(
@@ -1490,6 +1500,8 @@ class ADB(Executer):
             self.wait_and_tap(type, 'text')
             self.wait_element('AP Band', 'text')
 
+    def get_hotspot_config(self):
+        return self.checkoutput('cat /data/vendor/wifi/hostapd/hostapd_*.conf')
 
 from tools.yamlTool import yamlTool
 
