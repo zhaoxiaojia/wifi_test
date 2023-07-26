@@ -40,6 +40,7 @@ class Executer():
     CMD_WIFI_CONNECT = 'cmd wifi connect-network {} {} {}'
     CMD_WIFI_CONNECT_OPEN = 'cmd wifi connect-network {} open'
     CMD_WIFI_HIDE = ' -h'
+    CMD_WIFI_STATUS = 'cmd wifi status'
 
     WIFI_CONNECT_PACKAGE = 'com.example.wifiConnect'
     WIFI_CONNECT_ACTIVITY = f'am start -n {WIFI_CONNECT_PACKAGE}/.MainActivity'

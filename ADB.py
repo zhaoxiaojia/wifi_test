@@ -762,7 +762,7 @@ class ADB(Executer):
         @param extractKey:
         @return:
         '''
-        logging.debug('find_element')
+        logging.info(f'find {searchKey}')
         filepath = os.path.join(self.logdir, self.DUMP_FILE)
         self.uiautomator_dump(filepath)
         xml_file = minidom.parse(filepath)
@@ -897,7 +897,7 @@ class ADB(Executer):
 
     def popen_term(self, command):
         return subprocess.Popen(command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                                # preexec_fn=os.setsid)
+        # preexec_fn=os.setsid)
 
     def checkoutput(self, command):
         '''
@@ -1228,11 +1228,11 @@ class ADB(Executer):
         self.enter_hotspot()
         self.wait_element('Portable HotSpot Enabled', 'text')
         self.uiautomator_dump()
-        if not re.findall(self.OPEN_INFO,self.get_dump_info(),re.S):
+        if not re.findall(self.OPEN_INFO, self.get_dump_info(), re.S):
             self.wait_and_tap('Portable HotSpot Enabled', 'text')
             self.get_dump_info()
         times = 0
-        while not re.findall(self.OPEN_INFO,self.get_dump_info(),re.S):
+        while not re.findall(self.OPEN_INFO, self.get_dump_info(), re.S):
             time.sleep(1)
             self.uiautomator_dump()
             times += 1
@@ -1245,11 +1245,11 @@ class ADB(Executer):
         self.enter_hotspot()
         self.wait_element('Portable HotSpot Enabled', 'text')
         self.uiautomator_dump()
-        if re.findall(self.OPEN_INFO,self.get_dump_info(),re.S):
+        if re.findall(self.OPEN_INFO, self.get_dump_info(), re.S):
             self.wait_and_tap('Portable HotSpot Enabled', 'text')
             self.get_dump_info()
         times = 0
-        while re.findall(self.OPEN_INFO,self.get_dump_info(),re.S):
+        while re.findall(self.OPEN_INFO, self.get_dump_info(), re.S):
             time.sleep(1)
             self.uiautomator_dump()
             times += 1
@@ -1264,15 +1264,18 @@ class ADB(Executer):
         for i in range(5):
             self.keyevent(4)
         self.kill_tvsetting()
-    def wait_for_wifi_address(self, cmd: str = '', accompanying=False):
+
+    def wait_for_wifi_address(self, cmd: str = '', target='192.168.50', accompanying=False):
         dut = accompanying_dut if accompanying else self
         ip_address = dut.subprocess_run('ifconfig wlan0 |egrep -o "inet [^ ]*"|cut -f 2 -d :')
         # logging.info(ip_address)
         step = 0
-        while not ip_address:
+        while True:
             time.sleep(5)
             step += 1
             ip_address = dut.subprocess_run('ifconfig wlan0 |egrep -o "inet [^ ]*"|cut -f 2 -d :')
+            if target in ip_address:
+                break
             if step == 2:
                 logging.info('repeat command')
                 if cmd:
@@ -1310,7 +1313,7 @@ class ADB(Executer):
             else:
                 break
 
-    def connect_ssid(self, ssid, passwd='') -> bool:
+    def connect_ssid(self, ssid, passwd='',target="192.168.50") -> bool:
         self.find_ssid(ssid)
         self.uiautomator_dump()
         if ('Connected' in self.get_dump_info() or 'Connect' in self.get_dump_info()) and passwd != '':
@@ -1333,7 +1336,7 @@ class ADB(Executer):
                     break
             else:
                 assert passwd in self.get_dump_info(), "passwd not currently"
-        self.wait_for_wifi_address()
+        self.wait_for_wifi_address(target=target)
         return True
 
     def connect_save_ssid(self, ssid, str='', accompanying=False, target=''):
@@ -1467,8 +1470,12 @@ class ADB(Executer):
         logging.info('Router is power on')
 
     def playback_youtube(self):
-        self.checkoutput(self.PLAYERACTIVITY_REGU.format(self.VIDEO_TAG_LIST[0]['link']))
-        time.sleep(30)
+        try:
+            self.checkoutput(self.PLAYERACTIVITY_REGU.format(self.VIDEO_TAG_LIST[0]['link']))
+            time.sleep(30)
+            self.home()
+        except Exception as e:
+            ...
 
     def set_hotspot(self, ssid='', passwd='', type='', encrypt=''):
         if ssid:
@@ -1502,6 +1509,7 @@ class ADB(Executer):
 
     def get_hotspot_config(self):
         return self.checkoutput('cat /data/vendor/wifi/hostapd/hostapd_*.conf')
+
 
 from tools.yamlTool import yamlTool
 

@@ -47,6 +47,8 @@ def pytest_sessionstart(session):
     pytest.executer.remount()
 
     # 创建 测试结果文件夹
+    if not os.path.exists('results'):
+        os.mkdir('results')
     result_path = os.path.join(os.getcwd(), 'results\\' + time.asctime().replace(' ', '_').replace(':', '_'))
     os.mkdir(result_path)
     pytest.testResult = TestResult(result_path, [])
