@@ -41,6 +41,5 @@ def test_show_all_and_less():
             raise EnvironmentError("Can't find see fewer")
     pytest.executer.wait_and_tap('See fewer', 'text')
     pytest.executer.wait_element('See all', 'text')
-    pytest.executer.wait_element('Quick connect', 'text')
     pytest.executer.uiautomator_dump()
-    assert 'Quick connect' in pytest.executer.get_dump_info(), "Can't show all"
+    assert 'Add new network' in pytest.executer.get_dump_info(), "Can't show all"

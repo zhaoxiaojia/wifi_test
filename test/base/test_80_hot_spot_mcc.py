@@ -49,8 +49,6 @@ def test_hotspot_scc():
     pytest.executer.wait_for_wifi_address(cmd)
     # dut playback youtube content
     pytest.executer.playback_youtube()
-    pytest.executer.wait_and_tap('amlogictest1@gmail.com','text')
-    # assert youtube.check_playback_status(), 'playback status with error'
     pytest.executer.home()
     # dut open hotspot
     pytest.executer.open_hotspot()
@@ -74,15 +72,10 @@ def test_hotspot_scc():
     logging.info(cmd)
     # accompanying connect hotspot
     accompanying_dut.checkoutput(cmd)
-    ipaddress = pytest.executer.wait_for_wifi_address(cmd, accompanying=True)[1]
+    ipaddress = pytest.executer.wait_for_wifi_address(cmd, accompanying=True,target="192.168")[1]
     # accompanying playback youtube content
-    try:
-        accompanying_dut.playback_youtube()
-        # accompanying_dut.wait_and_tap('amlogictest1@gmail.com', 'text')
-        # assert youtube.check_playback_status(), 'playback status with error'
-        accompanying_dut.home()
-    except Exception as e:
-        ...
+    accompanying_dut.playback_youtube()
+    accompanying_dut.home()
     assert 'freq: 2' in accompanying_dut.checkoutput(pytest.executer.IW_LINNK_COMMAND), "Doesn't conect 2g "
     ipaddress = '.'.join(ipaddress.split('.')[:3] + ['1'])
     pytest.executer.forget_network_cmd(ipaddress, accompanying=True)

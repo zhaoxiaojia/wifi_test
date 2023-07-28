@@ -36,7 +36,7 @@ def setup_teardown():
     ax88uControl.change_setting(router_2g)
     ax88uControl.router_control.driver.quit()
     yield
-    pytest.executer.forget_network_cmd(target_ip='192.168.50.1')
+    pytest.executer.forget_network_cmd()
     pytest.executer.kill_tvsetting()
 
 @pytest.mark.wifi_connect

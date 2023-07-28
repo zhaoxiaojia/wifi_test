@@ -85,13 +85,13 @@ class Asusax88uControl():
                     assert router.wireless_mode in Asus88uConfig.WIRELESS_5_MODE
             except ConfigError:
                 raise ConfigError('channel element error')
-            self.router_control.change_wireless_mode(router.wireless_mode)
             if router.wireless_mode == 'AX only':
                 index = '1'
                 if router.band == '2.4 GHz':
                     router = router._replace(wireless_mode='自动')
             else:
                 index = '2'
+            self.router_control.change_wireless_mode(router.wireless_mode)
             if router.wireless_mode == 'AX only':
                 self.router_control.driver.find_element(
                     By.XPATH,

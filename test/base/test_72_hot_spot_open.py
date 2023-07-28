@@ -35,6 +35,6 @@ def test_hotspot_open():
     cmd = pytest.executer.CMD_WIFI_CONNECT_OPEN.format(ssid)
     logging.info(cmd)
     accompanying_dut.checkoutput(cmd)
-    ipaddress = pytest.executer.wait_for_wifi_address(cmd, accompanying=True)[1]
+    ipaddress = pytest.executer.wait_for_wifi_address(cmd, accompanying=True,target="192.168")[1]
     ipaddress = '.'.join(ipaddress.split('.')[:3] + ['1'])
     pytest.executer.forget_network_cmd(ipaddress, accompanying=True)

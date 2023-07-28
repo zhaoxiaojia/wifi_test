@@ -43,7 +43,6 @@ def test_hotspot_wap2():
     cmd = pytest.executer.CMD_WIFI_CONNECT.format(ssid, 'wpa2', passwd)
     logging.info(cmd)
     accompanying_dut.checkoutput(cmd)
-    pytest.executer.wait_for_wifi_address(cmd, accompanying=True)
-    ipaddress = pytest.executer.wait_for_wifi_address(cmd, accompanying=True)[1]
+    ipaddress = pytest.executer.wait_for_wifi_address(cmd, accompanying=True,target="192.168")[1]
     ipaddress = '.'.join(ipaddress.split('.')[:3] + ['1'])
     pytest.executer.forget_network_cmd(ipaddress, accompanying=True)

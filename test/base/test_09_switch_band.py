@@ -40,12 +40,12 @@ def setup_teardown():
     ax88uControl.change_setting(router_5g)
     ax88uControl.router_control.driver.quit()
     yield
-    pytest.executer.forget_network_cmd(target_ip='192.168.50.1')
+    pytest.executer.forget_network_cmd()
     pytest.executer.kill_tvsetting()
 
 
 def test_switch_band():
     pytest.executer.connect_ssid(ssid_2g,passwd=passwd)
     pytest.executer.kill_tvsetting()
-    pytest.executer.forget_network_cmd(target_ip='192.168.50.1')
+    pytest.executer.forget_network_cmd()
     pytest.executer.connect_ssid(ssid_5g,passwd=passwd)

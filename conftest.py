@@ -57,8 +57,8 @@ def pytest_sessionstart(session):
 def pytest_sessionfinish(session):
     shutil.copy("pytest.debug.log", "debug.log")
     shutil.move("debug.log", pytest.testResult.logdir)
-    shutil.copy("report_temp.html", "report.html")
-    shutil.move("report.html", pytest.testResult.logdir)
+    shutil.copy("report_temp.html", "all_test_report.html")
+    shutil.move("all_test_report.html", pytest.testResult.logdir)
     if os.path.exists('temp.txt'):
         os.remove('temp.txt')
     if os.path.exists('report_temp.html'):

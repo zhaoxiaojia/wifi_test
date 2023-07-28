@@ -770,6 +770,8 @@ class ADB(Executer):
         for item in itemlist:
             # print(item.attributes[attribute].value)
             if searchKey == item.attributes[attribute].value:
+                logging.info(
+                    item.attributes[attribute].value if extractKey is None else item.attributes[extractKey].value)
                 return item.attributes[attribute].value if extractKey is None else item.attributes[extractKey].value
         return None
 
@@ -1291,51 +1293,73 @@ class ADB(Executer):
         time.sleep(1)
         self.wait_and_tap('See all', 'text')
         count = 0
-        for i in range(200):
-            if self.find_element(ssid, 'text'):
-                break
-            if i < 100:
+        for _ in range(3):
+            self.keyevent(20)
+        for i in range(50):
+            for _ in range(3):
                 self.keyevent(20)
-            else:
-                self.keyevent(19)
+            if self.find_element(ssid, 'text'):
+                logging.info('find done')
+                result = True
+                break
+            if self.find_element('See fewer', 'text'):
+                break;
         else:
-            raise EnvironmentError("Can't find ssid")
+            result = False
+        for i in range(50):
+            if result:
+                break
+            for _ in range(3):
+                self.keyevent(19)
+            if self.find_element(ssid, 'text'):
+                logging.info('find done')
+                result = True
+                break
+            if self.find_element('Available networks', 'text'):
+                break;
+        else:
+            result = False
         self.wait_and_tap(ssid, 'text')
         time.sleep(1)
-        return True
+        assert result, "Can't find ssid"
+        return result
 
     def wait_keyboard(self):
         for i in range(5):
             self.uiautomator_dump()
-            if 'keyboard_area' not in self.get_dump_info():
+            if 'keyboard_area' in self.get_dump_info() or \
+                    '"com.android.tv.settings:id/guidedactions_item_title" class="android.widget.EditText"' in self.get_dump_info():
+                break
+            else:
                 self.keyevent(23)
                 time.sleep(2)
-            else:
-                break
 
-    def connect_ssid(self, ssid, passwd='',target="192.168.50") -> bool:
+    def connect_ssid(self, ssid, passwd='', target="192.168.50") -> bool:
         self.find_ssid(ssid)
         self.uiautomator_dump()
-        if ('Connected' in self.get_dump_info() or 'Connect' in self.get_dump_info()) and passwd != '':
+        if ('keyboard_area' in self.get_dump_info() or \
+                '"com.android.tv.settings:id/guidedactions_item_title" class="android.widget.EditText"' in self.get_dump_info()):
+            if passwd != '':
+                for _ in range(5):
+                    self.wait_keyboard()
+                    logging.info('try to input passwd')
+                    self.u().d2(resourceId="com.android.tv.settings:id/guidedactions_item_title").clear_text()
+                    time.sleep(1)
+                    # wifi.u().d2(resourceId="com.android.tv.settings:id/guidedactions_item_title").click()
+                    self.checkoutput(f'input text {passwd}')
+                    time.sleep(1)
+                    self.uiautomator_dump()
+                    if passwd in self.get_dump_info():
+                        self.keyevent(66)
+                        break
+                else:
+                    assert passwd in self.get_dump_info(), "passwd not currently"
+        elif passwd == '':
+            time.sleep(1)
+        else:
             self.keyevent(4)
             logging.info('already connected')
-            return True
         logging.info('check status done')
-        if passwd != '':
-            for _ in range(5):
-                self.wait_keyboard()
-                logging.info('try to input passwd')
-                self.u().d2(resourceId="com.android.tv.settings:id/guidedactions_item_title").clear_text()
-                time.sleep(1)
-                # wifi.u().d2(resourceId="com.android.tv.settings:id/guidedactions_item_title").click()
-                self.checkoutput(f'input text {passwd}')
-                time.sleep(1)
-                self.uiautomator_dump()
-                if passwd in self.get_dump_info():
-                    self.keyevent(66)
-                    break
-            else:
-                assert passwd in self.get_dump_info(), "passwd not currently"
         self.wait_for_wifi_address(target=target)
         return True
 

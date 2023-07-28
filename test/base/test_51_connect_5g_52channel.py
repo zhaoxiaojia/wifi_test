@@ -34,7 +34,7 @@ def setup_teardown():
     ax88uControl = Asusax88uControl()
     ax88uControl.change_setting(router_5g)
     ax88uControl.router_control.driver.quit()
-    time.sleep(80)
+    # time.sleep(80)
     yield
     pytest.executer.forget_network_cmd(target_ip='192.168.50.1')
     pytest.executer.kill_tvsetting()

@@ -308,13 +308,13 @@ def set_pair_count(router_info, rssi_num, type, dire):
     else:
         band = '5'
 
-    n_list = [60, 75]
-    ac_list = [40, 50, 60]
+    _2g = [40,50,60,70 ]
+    _5g = [40,50,60,70,80]
 
-    if type == 'n':
-        target_list = n_list
+    if band == '2':
+        target_list = _2g
     else:
-        target_list = ac_list
+        target_list = _5g
     logging.info(f'rssi_num {rssi_num}')
     pair = pair_count[type][band][dire][bisect.bisect(target_list, rssi_num)]
     logging.info(f'pair {pair}')

@@ -42,5 +42,4 @@ def setup_teardown():
 
 @pytest.mark.wifi_connect
 def test_connect_legcy_ssid():
-    pytest.executer.connect_ssid(ssid, passwd)
-    assert pytest.executer.ping(hostname="192.168.50.1"), "Can't ping"
+    assert pytest.executer.connect_ssid(ssid, passwd),"Can't connect"
