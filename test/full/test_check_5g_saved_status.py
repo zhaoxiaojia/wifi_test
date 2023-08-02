@@ -56,7 +56,7 @@ def setup_teardown():
 @pytest.mark.mul_router
 def test_check_5g_saved_status():
     pytest.executer.connect_ssid(asus_ssid, passwd)
-    pytest.executer.connect_ssid(zte_ssid, passwd,target="192,168.2")
+    pytest.executer.connect_ssid(zte_ssid, passwd,target="192.168.2")
     pytest.executer.enter_wifi_activity()
     pytest.executer.uiautomator_dump()
     assert 'saved' in pytest.executer.get_dump_info() or 'Saved' in pytest.executer.get_dump_info(), "connected ssid not saved"

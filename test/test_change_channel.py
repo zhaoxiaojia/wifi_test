@@ -15,7 +15,7 @@ import time
 
 import pytest
 
-from .. import Router
+from Router import Router
 from tools.Asusax88uControl import Asusax88uControl
 
 '''
@@ -40,9 +40,9 @@ ax88uControl = Asusax88uControl()
 
 @pytest.fixture(autouse=True, scope='session')
 def setup():
-    ax88uControl.change_setting(router_ch11)
-    pytest.executer.connect_ssid(ssid, passwd)
-    pytest.executer.wait_for_wifi_address()
+    # ax88uControl.change_setting(router_ch11)
+    # pytest.executer.connect_ssid(ssid, passwd)
+    # pytest.executer.wait_for_wifi_address()
     yield
     ax88uControl.router_control.driver.quit()
     pytest.executer.forget_network_ssid(ssid)
@@ -56,8 +56,8 @@ def test_change_ap():
         try:
             logging.info(f"测试第 {count} 轮 。。。")
             ax88uControl.change_setting(i)
-            pytest.executer.wait_for_wifi_address(count=20)
-            time.sleep(60)
+            # pytest.executer.connect_save_ssid(ssid, passwd)
+            pytest.executer.wait_for_wifi_address()
         except Exception as e:
             ...
         # playback_youtube()

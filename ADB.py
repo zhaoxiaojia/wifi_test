@@ -1183,10 +1183,14 @@ class ADB(Executer):
 
     def wait_for_wifi_service(self, type='wlan0') -> None:
         count = 0
-        while not self.subprocess_run(f'ifconfig {type}'):
+        # time.sleep(10)
+        while True:
+            if 'Link encap:Ethernet' in self.subprocess_run(f'ifconfig {type}'):
+                logging.info(self.subprocess_run(f'ifconfig {type}'))
+                break
             time.sleep(10)
             count += 1
-            if count > 6:
+            if count > 10:
                 raise EnvironmentError('Lost device')
 
     def wait_for_launcher(self) -> None:
@@ -1293,8 +1297,9 @@ class ADB(Executer):
         time.sleep(1)
         self.wait_and_tap('See all', 'text')
         count = 0
-        for _ in range(3):
-            self.keyevent(20)
+        result = False
+        # for _ in range(3):
+        #     self.keyevent(20)
         for i in range(50):
             for _ in range(3):
                 self.keyevent(20)
@@ -1367,7 +1372,7 @@ class ADB(Executer):
         dut = accompanying_dut if accompanying else self
         dut.find_ssid(ssid)
         dut.wait_and_tap('Connect', 'text')
-        dut.wait_for_wifi_address(target)
+        dut.wait_for_wifi_address(target=target)
         return True
 
     def forget_ssid(self, ssid):
@@ -1446,7 +1451,6 @@ class ADB(Executer):
             if 'android.widget.EditText' not in self.get_dump_info():
                 self.enter()
             self.text(passwd)
-            self.wait_and_tap('12345678', 'text')
             self.keyevent(66)
         self.wait_for_wifi_address()
         return True
@@ -1534,9 +1538,28 @@ class ADB(Executer):
     def get_hotspot_config(self):
         return self.checkoutput('cat /data/vendor/wifi/hostapd/hostapd_*.conf')
 
+    def get_factory_reset(self):
+        self.start_activity(*self.SETTING_ACTIVITY_TUPLE)
+        self.wait_and_tap('Device Preferences', 'text')
+        self.wait_and_tap('About', 'text')
+        self.wait_and_tap('Factory reset', 'text')
+        time.sleep(1)
+        self.keyevent(20)
+        self.keyevent(20)
+        self.keyevent(23)
+        time.sleep(1)
+        self.keyevent(20)
+        self.keyevent(20)
+        self.keyevent(23)
+        time.sleep(5)
+        assert self.serialnumber not in self.checkoutput_term('adb devices'), 'Factory reset fail'
+        self.wait_devices()
+        logging.info('device done')
+
 
 from tools.yamlTool import yamlTool
 
+accompanying_dut = ''
 try:
     accompanying_dut = ADB(yamlTool(os.getcwd() + '/config/config_wifi.yaml').get_note('accompanying_dut'))
     accompanying_dut.root()

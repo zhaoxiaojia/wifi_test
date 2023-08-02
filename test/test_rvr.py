@@ -29,7 +29,7 @@ with open(os.getcwd() + '/config/asusax88u.csv', 'r') as f:
 logging.info(test_data)
 
 # 设置为True 时跳过 衰减 相关操作
-rf_debug = True
+rf_debug = False
 # 设置为True 时跳过 路由 相关操作
 router_debug = False
 
@@ -84,7 +84,7 @@ if test_type == 'rf' or test_type == 'both':
     else:
         raise EnvironmentError("Doesn't support this model")
     rf_step_list = wifi_yaml.get_note('rf_solution')['step']
-    step_list = rf_step_list
+    step_list = [i for i in range(*rf_step_list)][::2]
 if test_type == 'corner' or test_type == 'both':
     # 配置衰减
     logging.info('test corner')
@@ -93,7 +93,7 @@ if test_type == 'corner' or test_type == 'both':
         rf = TelnetInterface(rf_ip)
     corner_step_list = wifi_yaml.get_note('corner_angle')['step']
     logging.info(f'rf_ip {rf_ip}')
-    step_list = corner_step_list
+    step_list = [i for i in range(*corner_step_list)][::15]
 if test_type == 'both':
     step_list = itertools.product(corner_step_list, rf_step_list)
 
@@ -513,7 +513,7 @@ def test_wifi_rvr(wifi_setup_teardown, rf_value):
     else:
         logging.info('Start test')
         try:
-            rssi_num = int(re.findall(r'signal:\s+(-?\d+)\s+dBm', rssi_info, re.S)[0])
+            rssi_num = int(re.findall(r'signal:\s+-?(\d+)\s+dBm', rssi_info, re.S)[0])
             freq_num = int(re.findall(r'freq:\s+(\d+)\s+', rssi_info, re.S)[0])
             with open(pytest.testResult.detail_file, 'a') as f:
                 f.write(f'Rssi : {rssi_num}\n')

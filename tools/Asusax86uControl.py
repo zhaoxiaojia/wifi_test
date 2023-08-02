@@ -86,6 +86,13 @@ class Asusax86uControl():
             else:
                 self.router_control.driver.find_element(By.XPATH, ".//input[@type='radio' and @value='0']").click()
 
+            # 修改 bandwidth
+            if (router.bandwidth):
+                if router.bandwidth not in \
+                        {'2.4 GHz': Asus86uConfig.BANDWIDTH_2_LIST, '5 GHz': Asus86uConfig.BANDWIDTH_5_LIST}[
+                            router.band]: raise ConfigError('bandwidth element error')
+                self.router_control.change_bandwidth(router.bandwidth)
+
             # 修改 channel //*[@id="WLgeneral"]/tbody/tr[11]/td/select
             # //*[@id="WLgeneral"]/tbody/tr[11]/td/select/option[1] 2.4G Auto
             # //*[@id="WLgeneral"]/tbody/tr[11]/td/select/option[14] 2.4G 13
@@ -102,13 +109,6 @@ class Asusax86uControl():
                 #     raise ConfigError('channel element error')
                 # //*[@id="WLgeneral"]/tbody/tr[11]/td/select/option[22]
                 self.router_control.change_channel(channel)
-
-            # 修改 bandwidth
-            if (router.bandwidth):
-                if router.bandwidth not in \
-                        {'2.4 GHz': Asus86uConfig.BANDWIDTH_2_LIST, '5 GHz': Asus86uConfig.BANDWIDTH_5_LIST}[
-                            router.band]: raise ConfigError('bandwidth element error')
-                self.router_control.change_bandwidth(router.bandwidth)
 
             # 修改 authentication_method
             # //*[@id="WLgeneral"]/tbody/tr[13]/td/div[1]/select/option[1]

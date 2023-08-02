@@ -52,8 +52,9 @@ class AsusRouterConfig(RouterConfig):
     }
 
     WEP_ENCRYPT = {
-        'WEP-64bits': '1',
-        'WEP-128bits': '2'
+        'None': '1',
+        'WEP-64bits': '2',
+        'WEP-128bits': '3'
     }
 
     WPA_ENCRYPT = {
@@ -120,6 +121,7 @@ class AsusRouterConfig(RouterConfig):
         '澳大利亚': '8'
     }
 
+
 class Asus86uConfig(AsusRouterConfig):
     '''
     asus 86u router setting config
@@ -170,12 +172,12 @@ class Asus88uConfig(AsusRouterConfig):
         '161': '13',
     }
 
+
 class Asus5400Config(AsusRouterConfig):
     def __init__(self):
         super(Asus5400Config, self).__init__()
 
     BANDWIDTH_5_LIST = ['20/40/80 MHz', '20 MHz', '40 MHz', '80 MHz', '160 MHz']
-
 
     CHANNEL_5_DICT = {
         '自动': '1',

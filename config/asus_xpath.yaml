@@ -7,7 +7,7 @@ asus:
     88u: http://192.168.50.1/
     '6700': http://192.168.8.1/
   account: admin
-  passwd: 12345678
+  passwd: 123456
   username_element: login_username
   password_element: login_passwd
   signin_element:
@@ -59,8 +59,8 @@ asus:
 
   wep_encrypt_regu_element:
     asus_5400: //*[@id="WLgeneral"]/tbody/tr[16]/td/select/option[{}]
-    asus_86u: //*[@id="WLgeneral"]/tbody/tr[16]/td/select/option[{}]
-    asus_88u: //*[@id="WLgeneral"]/tbody/tr[16]/td/select/option[{}]
+    asus_86u: //*[@id="WLgeneral"]/tbody/tr[16]/td/select
+    asus_88u: //*[@id="WLgeneral"]/tbody/tr[16]/td/select
     asus_6700: //*[@id="WLgeneral"]/tbody/tr[14]/td/select/option[{}]
 
   wpa_encrypt_regu_element: //*[@id="WLgeneral"]/tbody/tr[14]/td/select/option[{}]

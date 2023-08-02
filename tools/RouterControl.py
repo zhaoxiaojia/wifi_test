@@ -223,15 +223,15 @@ class RouterTools(RouterControl):
         self.driver.find_element(
             By.XPATH, self.xpath['authentication_method_regu_element'][self.router_info].format(index)).click()
 
-    def change_wep_encrypt(self, index):
+    def change_wep_encrypt(self, text):
         '''
         change wep encrypt
         @param index:
         @return:
         '''
-
-        self.driver.find_element(
-            By.XPATH, self.xpath['wep_encrypt_regu_element'][self.router_info].format(index)).click()
+        select = Select(self.driver.find_element(
+            By.XPATH, self.xpath['wep_encrypt_regu_element'][self.router_info].format(text)))
+        select.select_by_visible_text(text)
 
     def change_wpa_encrypt(self, index):
         '''
@@ -275,7 +275,9 @@ class RouterTools(RouterControl):
         @param frame: should be html source code
         @return:
         '''
-        bind_select = Select(self.driver.find_element(By.XPATH, self.xpath['protect_frame_regu_element'][self.router_info].split('/option[{}]')[0]))
+        bind_select = Select(self.driver.find_element(By.XPATH,
+                                                      self.xpath['protect_frame_regu_element'][self.router_info].split(
+                                                          '/option[{}]')[0]))
         bind_select.select_by_visible_text(frame)
         # select = self.driver.find_element(
         #     By.XPATH,
@@ -319,8 +321,6 @@ class RouterTools(RouterControl):
             return True
         else:
             return False
-
-
 
     # def __del__(self):
     #     self.driver.quit()
