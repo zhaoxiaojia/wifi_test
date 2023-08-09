@@ -285,6 +285,11 @@ pair_count = {
     'ac': {
         '5': wifi_yaml.get_note('pair_num')['ac']['5']
     },
+    'auto': {
+        '2': wifi_yaml.get_note('pair_num')['auto']['2'],
+        '5': wifi_yaml.get_note('pair_num')['auto']['5'],
+    },
+
     'ax': {
         '2': wifi_yaml.get_note('pair_num')['ax']['2'],
         '5': wifi_yaml.get_note('pair_num')['ax']['5'],
@@ -300,6 +305,8 @@ def set_pair_count(router_info, rssi_num, type, dire):
         type = 'ax'
     elif 'AC' in router_info.wireless_mode:
         type = 'ac'
+    elif '自动' in router_info.wireless_mode:
+        type = 'auto'
     else:
         type = 'n'
 
@@ -308,8 +315,8 @@ def set_pair_count(router_info, rssi_num, type, dire):
     else:
         band = '5'
 
-    _2g = [40,50,60,70 ]
-    _5g = [40,50,60,70,80]
+    _2g = [40, 50, 60, 70]
+    _5g = [40, 50, 60, 70, 80]
 
     if band == '2':
         target_list = _2g

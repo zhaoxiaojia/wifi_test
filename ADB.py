@@ -1560,12 +1560,12 @@ class ADB(Executer):
 from tools.yamlTool import yamlTool
 
 accompanying_dut = ''
-try:
-    accompanying_dut = ADB(yamlTool(os.getcwd() + '/config/config_wifi.yaml').get_note('accompanying_dut'))
-    accompanying_dut.root()
-    accompanying_dut.remount()
-    logging.info('Try to init accompanyiny_dut')
-    logging.info(accompanying_dut.serialnumber)
-except Exception as e:
-    logging.info('未连接配测产品')
-    accompanyiny_dut = None
+# try:
+#     accompanying_dut = ADB(yamlTool(os.getcwd() + '/config/config_wifi.yaml').get_note('accompanying_dut'))
+#     accompanying_dut.root()
+#     accompanying_dut.remount()
+#     logging.info('Try to init accompanyiny_dut')
+#     logging.info(accompanying_dut.serialnumber)
+# except Exception as e:
+#     logging.info('未连接配测产品')
+#     accompanyiny_dut = None
