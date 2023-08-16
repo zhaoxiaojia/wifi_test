@@ -21,11 +21,9 @@ from Router import Router
 from Iperf import Iperf
 '''
 测试配置
-Auto 2.4G
-
-Connect an AP which wireless mode is Auto+2.4G
-
-Platform connect the AP successful
+1.连接2.4Gwifi;
+2.切换不同信道进行打流，1-6-11
+3.循环20次。
 '''
 
 ssid = 'ATC_ASUS_AX88U_2G'

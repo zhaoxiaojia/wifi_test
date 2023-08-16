@@ -13,7 +13,7 @@ import _io
 import pytest
 import bisect
 
-from .. import Router
+from Router import Router
 from tools.TelnetInterface import TelnetInterface
 # from tools.UsbControl import UsbControl
 from tools.yamlTool import yamlTool
@@ -59,6 +59,7 @@ if 'rf' in env_control:
 if 'corner' in env_control:
     test_type = 'corner'
 if 'rf' in env_control and 'corner' in env_control:
+    logging.info('coco')
     test_type = 'both'
 
 if test_type == '':
@@ -66,34 +67,44 @@ if test_type == '':
 
 # 初始化 衰减 & 转台 对象
 if test_type == 'rf' or test_type == 'both':
+
     logging.info('test rf')
     # 读取衰减 配置
     model = wifi_yaml.get_note('rf_solution')['model']
     if model == 'RADIORACK-4-220':
         rf_ip = wifi_yaml.get_note('rf_solution')[model]['ip_address']
         if not rf_debug:
-            rf = TelnetInterface(rf_ip)
+            rf_tool = TelnetInterface(rf_ip)
         logging.info(f'rf_ip {rf_ip}')
     elif model == 'RC4DAT-8G-95':
         # idVendor = wifi_yaml.get_note('rf_solution')[model]['idVendor']
         # idProduct = wifi_yaml.get_note('rf_solution')[model]['idProduct']
         if not rf_debug:
-            rf = TelnetInterface('192.168.50.19')
-            rf.tn.read_some()
+            rf_tool = TelnetInterface('192.168.50.19')
+            rf_tool.tn.read_some()
         logging.info('rf_ip 192.168.50.19')
     else:
         raise EnvironmentError("Doesn't support this model")
     rf_step_list = wifi_yaml.get_note('rf_solution')['step']
-    step_list = [i for i in range(*rf_step_list)][::2]
+    rf_step_list = [i for i in range(*rf_step_list)][::2]
+    logging.info(f'rf_step_list {rf_step_list}')
 if test_type == 'corner' or test_type == 'both':
+    # or test_type == 'both'
     # 配置衰减
     logging.info('test corner')
     rf_ip = wifi_yaml.get_note('corner_angle')['ip_address']
     if not rf_debug:
-        rf = TelnetInterface(rf_ip)
+        corner_tool = TelnetInterface(rf_ip)
     corner_step_list = wifi_yaml.get_note('corner_angle')['step']
-    logging.info(f'rf_ip {rf_ip}')
-    step_list = [i for i in range(*corner_step_list)][::15]
+    logging.info(f'corner_ip {rf_ip}')
+    corner_step_list = [i for i in range(*corner_step_list)][::45]
+    logging.info(f'corner step_list {corner_step_list}')
+
+# step_list_rf = wifi_yaml.get_note('rf_solution')['step']
+# rf_step_list = [i for i in range(*step_list_rf)][::]
+#
+# step_list_corner = wifi_yaml.get_note('corner_angle')['step']
+# corner_step_list = [i for i in range(*step_list_corner)][::45]
 if test_type == 'both':
     step_list = itertools.product(corner_step_list, rf_step_list)
 
@@ -166,15 +177,15 @@ def wifi_setup_teardown(request):
         # 衰减器置0
         if not rf_debug:
             logging.info('Reset rf value')
-            rf.execute_rf_cmd(0)
-            logging.info(rf.get_rf_current_value())
+            rf_tool.execute_rf_cmd(0)
+            logging.info(rf_tool.get_rf_current_value())
             time.sleep(10)
     if 'corner' in env_control:
         # 转台置0
         if not rf_debug:
             logging.info('Reset corner')
-            rf.set_turntable_zero()
-            logging.info(rf.get_turntanle_current_angle())
+            corner_tool.set_turntable_zero()
+            logging.info(corner_tool.get_turntanle_current_angle())
             time.sleep(3)
 
     if third_dut:
@@ -243,7 +254,7 @@ def session_setup_teardown(request):
     logging.info('==== session setup start')
     # iperf2 配置
     if pytest.connect_type == 'usb' and (
-            pytest.executer.checkoutput('[ -e /system/bin/iperf ] && echo yes || echo no').strip() != 'yes'):
+            pytest.executer.checkoutput('[ -e /system.bin/iperf ] && echo yes || echo no').strip() != 'yes'):
         path = os.path.join(os.getcwd(), 'res/iperf')
         pytest.executer.push(path, '/system/bin')
         pytest.executer.checkoutput('chmod a+x /system/bin/iperf')
@@ -264,13 +275,13 @@ def session_setup_teardown(request):
     if test_type == 'rf':
         # 重置衰减
         if not rf_debug:
-            rf.execute_rf_cmd(0)
+            rf_tool.execute_rf_cmd(0)
         # 生成折线图
         pytest.testResult.write_attenuation_data_to_pdf()
     elif test_type == 'corner':
         # 转台重置
         if not rf_debug:
-            rf.set_turntable_zero()
+            corner_tool.set_turntable_zero()
         # 生成雷达图
         pytest.testResult.write_corner_data_to_pdf()
     else:
@@ -285,14 +296,13 @@ pair_count = {
     'ac': {
         '5': wifi_yaml.get_note('pair_num')['ac']['5']
     },
-    'auto': {
-        '2': wifi_yaml.get_note('pair_num')['auto']['2'],
-        '5': wifi_yaml.get_note('pair_num')['auto']['5'],
-    },
-
     'ax': {
         '2': wifi_yaml.get_note('pair_num')['ax']['2'],
         '5': wifi_yaml.get_note('pair_num')['ax']['5'],
+    },
+    'auto':{
+        '2': wifi_yaml.get_note('pair_num')['auto']['2'],
+        '5': wifi_yaml.get_note('pair_num')['auto']['5'],
     }
 }
 
@@ -315,14 +325,14 @@ def set_pair_count(router_info, rssi_num, type, dire):
     else:
         band = '5'
 
-    _2g = [40, 50, 60, 70]
-    _5g = [40, 50, 60, 70, 80]
+    _2g = [10,20,30,40 ]
+    _5g = [10,20,30,40,50]
 
     if band == '2':
         target_list = _2g
     else:
         target_list = _5g
-    logging.info(f'rssi_num {rssi_num}')
+    logging.info(f'rf current db {rssi_num}')
     pair = pair_count[type][band][dire][bisect.bisect(target_list, rssi_num)]
     logging.info(f'pair {pair}')
     return pair
@@ -376,12 +386,18 @@ def get_tx_rate(router_info, pair, freq_num, rssi_num, type, corner_set=''):
 
     if 'corner' in env_control:
         if not rf_debug:
-            corner = rf.get_turntanle_current_angle()
+            corner = corner_tool.get_turntanle_current_angle()
         else:
             corner = corner_set
     # logging.info(f'{router_info.wireless_mode.split()[0]}')
     # logging.info(f'{router_info.band.split()[0]}')
     # logging.info(f'{router_info.bandwidth.split()[0]}')
+    for i in range(3):
+        rssi_info = pytest.executer.checkoutput(pytest.executer.IW_LINNK_COMMAND)
+        time.sleep(1)
+        if 'signal' in rssi_info:
+            break
+    rssi_num = int(re.findall(r'signal:\s+-?(\d+)\s+dBm', rssi_info, re.S)[0])
     tx_result_info = (
         f'P0 RvR Standalone NULL Null {router_info.wireless_mode.split()[0]} {router_info.band.split()[0]} '
         f'{router_info.bandwidth.split()[0]} Rate_Adaptation {router_info.channel} {type} UL NULL NULL {rssi_num} {corner} NULL {tx_result} {mcs_tx if mcs_tx else "NULL"}')
@@ -437,9 +453,15 @@ def get_rx_rate(router_info, pair, freq_num, rssi_num, type, corner_set=''):
     corner = 'None'
     if 'corner' in env_control:
         if not rf_debug:
-            corner = rf.get_turntanle_current_angle()
+            corner = corner_tool.get_turntanle_current_angle()
         else:
             corner = corner_set
+    for i in range(3):
+        rssi_info = pytest.executer.checkoutput(pytest.executer.IW_LINNK_COMMAND)
+        time.sleep(1)
+        if 'signal' in rssi_info:
+            break
+    rssi_num = int(re.findall(r'signal:\s+-?(\d+)\s+dBm', rssi_info, re.S)[0])
     rx_result_info = (
         f'P0 RvR Standalone NULL Null {router_info.wireless_mode.split()[0]} {router_info.band.split()[0]} '
         f'{router_info.bandwidth.split()[0]} Rate_Adaptation {router_info.channel} {type} DL NULL NULL {rssi_num} {corner} NULL {rx_result} {mcs_rx if mcs_rx else "NULL"}')
@@ -472,23 +494,24 @@ def test_wifi_rvr(wifi_setup_teardown, rf_value):
         if not rf_debug:
             logging.info('set rf value')
             logging.info(rf_value)
-            rf.execute_rf_cmd(rf_value)
+            rf_tool.execute_rf_cmd(rf_value)
             # 获取当前衰减值
-            logging.info(rf.get_rf_current_value())
+            logging.info(rf_tool.get_rf_current_value())
     elif test_type == 'corner':
         if not rf_debug:
             logging.info('set corner value')
             logging.info(rf_value)
-            rf.execute_turntable_cmd('rt', angle=rf_value * 10)
+            corner_tool.execute_turntable_cmd('rt', angle=rf_value * 10)
             # 获取转台角度
-            logging.info(rf.get_turntanle_current_angle())
+            logging.info(corner_tool.get_turntanle_current_angle())
     elif test_type == 'both':
         if not rf_debug:
             logging.info('set rf value')
             logging.info('set corner value')
             logging.info(rf_value)
-            rf.execute_turntable_cmd('rt', angle=rf_value[0] * 10)
-            rf.execute_rf_cmd(rf_value[1])
+            corner_tool.execute_turntable_cmd('rt', angle=rf_value[0] * 10)
+            rf_tool.execute_rf_cmd(rf_value[1])
+            logging.info(rf_tool.get_rf_current_value())
     else:
         raise Exception("Doesn't support this type")
     with open(pytest.testResult.detail_file, 'a') as f:
@@ -534,7 +557,7 @@ def test_wifi_rvr(wifi_setup_teardown, rf_value):
             logging.info(router_info)
             if 'TCP' in router_info.protocol_type:
                 # 动态匹配 打流通道数
-                pair = set_pair_count(router_info, rssi_num, 'TCP', 'tx')
+                pair = set_pair_count(router_info, db_set, 'TCP', 'tx')
                 logging.info(f'rssi : {rssi_num} pair : {pair}')
                 # iperf  打流
                 get_tx_rate(router_info, pair, freq_num, rssi_num, 'TCP', corner_set=corner_set)
@@ -542,11 +565,13 @@ def test_wifi_rvr(wifi_setup_teardown, rf_value):
             #     pair = set_pair_count(router_info, rssi_num, 'UDP', 'tx')
             #     logging.info(f'rssi : {rssi_num} pair : {pair}')
             #     get_tx_rate(router_info, pair, freq_num, rssi_num, 'UDP')
+            else:
+                logging.info('没有获取到router_info.protocol_type')
         if 'rx' in router_info.test_type:
             # rx text
             logging.info(router_info)
             if 'TCP' in router_info.protocol_type:
-                pair = set_pair_count(router_info, rssi_num, 'TCP', 'rx')
+                pair = set_pair_count(router_info, db_set, 'TCP', 'rx')
                 logging.info(f'rssi : {rssi_num} pair : {pair}')
                 get_rx_rate(router_info, pair, freq_num, rssi_num, 'TCP', corner_set=corner_set)
             # if 'UDP' in router_info.protocol_type:

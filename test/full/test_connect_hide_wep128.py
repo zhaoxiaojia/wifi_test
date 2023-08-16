@@ -19,9 +19,9 @@ from tools.Asusax88uControl import Asusax88uControl
 from Router import Router
 '''
 测试配置
-1.配置一个WEP-64bits加密关闭SSID广播的AP
-2.DUT新建一个连接SSID与加密与测试AP一致
-3.WiFi扫描（网络中需要没有其他连接成功过的AP
+1.配置一个WEP-128bits加密关闭SSID广播的AP 
+2.DUT新建一个连接 SSID与加密与测试AP一致
+3.WiFi扫描（网络中需要没有其他连接成功过的AP）
 
 channel 157
 
