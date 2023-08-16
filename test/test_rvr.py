@@ -307,7 +307,7 @@ pair_count = {
 }
 
 
-def set_pair_count(router_info, db_set, type, dire):
+def set_pair_count(router_info, rssi_num, type, dire):
     '''
     匹配 打流通道数
     '''
@@ -332,8 +332,8 @@ def set_pair_count(router_info, db_set, type, dire):
         target_list = _2g
     else:
         target_list = _5g
-    logging.info(f'rf current db {db_set}')
-    pair = pair_count[type][band][dire][bisect.bisect(target_list, db_set)]
+    logging.info(f'rf current db {rssi_num}')
+    pair = pair_count[type][band][dire][bisect.bisect(target_list, rssi_num)]
     logging.info(f'pair {pair}')
     return pair
 
