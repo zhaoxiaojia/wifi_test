@@ -3,7 +3,7 @@
 connect_type:
   type: usb
   usb:
-    device: '12345678901234'
+    device: 'HQ2023DVT3'
   telnet:
     ip: '192.168.50.254'
 

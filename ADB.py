@@ -911,11 +911,12 @@ class ADB(Executer):
         command = ' shell ' + command
         return self.checkoutput_shell(command)
 
+    @connect_again
     def checkoutput_shell(self, command):
         command = self.ADB_S + self.serialnumber + ' ' + command
         return self.checkoutput_term(command)
 
-    # @connect_again
+    @connect_again
     def subprocess_run(self, command):
         '''
         run adb command over subporcess.run
@@ -1332,8 +1333,8 @@ class ADB(Executer):
     def wait_keyboard(self):
         for i in range(5):
             self.uiautomator_dump()
-            if 'keyboard_area' in self.get_dump_info() or \
-                    '"com.android.tv.settings:id/guidedactions_item_title" class="android.widget.EditText"' in self.get_dump_info():
+            if 'keyboard_area' in self.get_dump_info(): # or \
+                    # '"com.android.tv.settings:id/guidedactions_item_title" class="android.widget.EditText"' in self.get_dump_info():
                 break
             else:
                 self.keyevent(23)
@@ -1342,8 +1343,12 @@ class ADB(Executer):
     def connect_ssid(self, ssid, passwd='', target="192.168.50") -> bool:
         self.find_ssid(ssid)
         self.uiautomator_dump()
-        if ('keyboard_area' in self.get_dump_info() or \
-                '"com.android.tv.settings:id/guidedactions_item_title" class="android.widget.EditText"' in self.get_dump_info()):
+        if 'IP address' in self.get_dump_info():
+            self.keyevent(4)
+            logging.info('already connected')
+        elif 'Forget network' in self.get_dump_info() :
+            self.wait_and_tap('Connect', 'text')
+        else:
             if passwd != '':
                 for _ in range(5):
                     self.wait_keyboard()
@@ -1359,16 +1364,11 @@ class ADB(Executer):
                         break
                 else:
                     assert passwd in self.get_dump_info(), "passwd not currently"
-        elif passwd == '':
-            time.sleep(1)
-        else:
-            self.keyevent(4)
-            logging.info('already connected')
         logging.info('check status done')
         self.wait_for_wifi_address(target=target)
         return True
 
-    def connect_save_ssid(self, ssid, str='', accompanying=False, target=''):
+    def connect_save_ssid(self, ssid, accompanying=False, target=''):
         dut = accompanying_dut if accompanying else self
         dut.find_ssid(ssid)
         dut.wait_and_tap('Connect', 'text')
@@ -1500,7 +1500,7 @@ class ADB(Executer):
     def playback_youtube(self):
         try:
             self.checkoutput(self.PLAYERACTIVITY_REGU.format(self.VIDEO_TAG_LIST[0]['link']))
-            time.sleep(30)
+            time.sleep(60)
             self.home()
         except Exception as e:
             ...
