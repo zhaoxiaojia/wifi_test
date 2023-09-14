@@ -41,7 +41,9 @@ def setup():
     zte5400Control.router_control.driver.quit()
     pytest.executer.connect_ssid(zte_ssid_name, passwd)
     yield
-    pytest.executer.kill_moresetting()
+    pytest.executer.home()
+    pytest.executer.forget_ssid(asus_ssid_name)
+    pytest.executer.forget_ssid(zte_ssid_name)
 
 @pytest.mark.repeat(10000)
 def test_2g_swtich_5g():

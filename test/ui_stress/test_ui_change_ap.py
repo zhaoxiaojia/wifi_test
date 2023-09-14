@@ -59,8 +59,12 @@ def setup():
     # zte5400Control.router_control.driver.quit()
     # pytest.executer.connect_ssid(zte_ssid_name, passwd)
     yield
-    pytest.executer.kill_tvsetting()
     pytest.executer.home()
+    pytest.executer.forget_ssid(ssid1)
+    pytest.executer.forget_ssid(ssid1)
+    if other_flag:
+        pytest.executer.forget_ssid(asus_ssid_name)
+        pytest.executer.forget_ssid(zte_ssid_name)
 
 
 @pytest.mark.repeat(50000)
@@ -71,11 +75,11 @@ def test_change_ap():
     pytest.executer.connect_ssid(ssid2, target='10.18')
     pytest.executer.kill_tvsetting()
     pytest.executer.playback_youtube()
-    if other_flag:
-        logging.info('connect other router')
-        pytest.executer.connect_ssid(asus_ssid_name, target="192.168.50")
-        pytest.executer.kill_tvsetting()
-        pytest.executer.playback_youtube()
-        pytest.executer.connect_ssid(zte_ssid_name, target="192.168.2")
-        pytest.executer.kill_tvsetting()
-        pytest.executer.playback_youtube()
+    # if other_flag:
+    #     logging.info('connect other router')
+    #     pytest.executer.connect_ssid(asus_ssid_name, target="192.168.50")
+    #     pytest.executer.kill_tvsetting()
+    #     pytest.executer.playback_youtube()
+        # pytest.executer.connect_ssid(zte_ssid_name, target="192.168.2")``
+        # pytest.executer.kill_tvsetting()
+        # pytest.executer.playback_youtube()

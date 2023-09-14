@@ -86,18 +86,19 @@ class Asusax88uControl():
                 except ConfigError:
                     raise ConfigError('channel element error')
                 if router.wireless_mode == 'AX only':
+                    logging.info('aaaaaa')
                     index = '1'
                     if router.band == '2.4 GHz':
                         router = router._replace(wireless_mode='自动')
                 else:
                     index = '2'
                 self.router_control.change_wireless_mode(router.wireless_mode)
-                if router.wireless_mode == 'AX only':
-                    self.router_control.driver.find_element(
-                        By.XPATH,
-                        self.router_control.xpath['wireless_ax_element'][self.router_control.router_info].format(
-                            index),
-                    ).click()
+                # if router.wireless_mode == 'AX only':
+                self.router_control.driver.find_element(
+                    By.XPATH,
+                    self.router_control.xpath['wireless_ax_element'][self.router_control.router_info].format(
+                        index),
+                ).click()
 
             # 修改 ssid
             if (router.ssid):

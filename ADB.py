@@ -160,6 +160,14 @@ class ADB(Executer):
         self.checkoutput_term(self.ADB_S + self.serialnumber +
                               " shell input keyevent " + keycode)
 
+    def sendevent(self, key, hold=3):
+        # /dev/input/event5: 0004 0004 000c0045
+        self.checkoutput(
+            f'sendevent /dev/input/event5 4 4 786501;sendevent /dev/input/event5 1 {key} 1;sendevent  /dev/input/event5 0 0 0;')
+        time.sleep(hold)
+        self.checkoutput(
+            f'sendevent /dev/input/event5 4 4 786501;sendevent /dev/input/event5 1 {key} 0;sendevent  /dev/input/event5 0 0 0;')
+
     def home(self):
         '''
         ui home button
@@ -867,8 +875,10 @@ class ADB(Executer):
         '''
         count = 0
         logging.info(self.serialnumber)
+        flag = False
         while subprocess.run(f'adb -s {self.serialnumber} shell getprop sys.boot_completed'.split(),
                              stdout=subprocess.PIPE).returncode != 0:
+            flag = True
             if count % 10 == 0:
                 logging.info('devices not exists')
             self.set_status_off()
@@ -878,6 +888,10 @@ class ADB(Executer):
             if count > 20:
                 raise EnvironmentError('Lost Device')
         self.set_status_on()
+        if flag:
+            subprocess.run(f'adb -s {self.serialnumber} root'.split())
+            subprocess.run(f'adb -s {self.serialnumber} shell iw wlan0 vendor send 0xc3 0xc4 0xac 0x01'.split())
+            flag = False
 
     def kill_logcat_pid(self):
         '''
@@ -1333,8 +1347,8 @@ class ADB(Executer):
     def wait_keyboard(self):
         for i in range(5):
             self.uiautomator_dump()
-            if 'keyboard_area' in self.get_dump_info(): # or \
-                    # '"com.android.tv.settings:id/guidedactions_item_title" class="android.widget.EditText"' in self.get_dump_info():
+            if 'keyboard_area' in self.get_dump_info():  # or \
+                # '"com.android.tv.settings:id/guidedactions_item_title" class="android.widget.EditText"' in self.get_dump_info():
                 break
             else:
                 self.keyevent(23)
@@ -1346,7 +1360,7 @@ class ADB(Executer):
         if 'IP address' in self.get_dump_info():
             self.keyevent(4)
             logging.info('already connected')
-        elif 'Forget network' in self.get_dump_info() :
+        elif 'Forget network' in self.get_dump_info():
             self.wait_and_tap('Connect', 'text')
         else:
             if passwd != '':
@@ -1497,10 +1511,24 @@ class ADB(Executer):
             time.sleep(3)
         logging.info('Router is power on')
 
-    def playback_youtube(self):
+    def playback_youtube(self, sleep_time=60, seek=False, seek_time=3):
         try:
             self.checkoutput(self.PLAYERACTIVITY_REGU.format(self.VIDEO_TAG_LIST[0]['link']))
-            time.sleep(60)
+            time.sleep(10)
+            if seek:
+                for _ in range(60*24):
+                    # 长按 右键
+                    self.keyevent(23)
+                    self.sendevent(106, seek_time)
+                    self.keyevent(23)
+                    time.sleep(30)
+                    # 长按 左键
+                    self.keyevent(23)
+                    self.sendevent(105, seek_time)
+                    self.keyevent(23)
+                    time.sleep(30)
+            else:
+                time.sleep(sleep_time)
             self.home()
         except Exception as e:
             ...
