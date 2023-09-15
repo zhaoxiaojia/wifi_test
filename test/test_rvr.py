@@ -1,3 +1,14 @@
+# !/usr/bin/env python
+# -*-coding:utf-8 -*-
+
+"""
+# File       : test_rvr.py
+# Time       ：2023/9/15 14:03
+# Author     ：chao.li
+# version    ：python 3.9
+# Description：
+"""
+
 import csv
 import logging
 import os
@@ -29,7 +40,7 @@ with open(os.getcwd() + '/config/asusax88u.csv', 'r') as f:
 logging.info(test_data)
 
 # 设置为True 时跳过 衰减 相关操作
-rf_debug = False
+rf_debug = True
 # 设置为True 时跳过 路由 相关操作
 router_debug = False
 
@@ -108,6 +119,8 @@ if test_type == 'corner' or test_type == 'both':
 if test_type == 'both':
     step_list = itertools.product(corner_step_list, rf_step_list)
 
+if not 'step_list' in globals().keys():
+    step_list  = []
 # 配置 测试报告
 pytest.testResult.x_path = [] if test_type == 'both' else step_list
 pytest.testResult.init_rvr_result()
@@ -300,7 +313,7 @@ pair_count = {
         '2': wifi_yaml.get_note('pair_num')['ax']['2'],
         '5': wifi_yaml.get_note('pair_num')['ax']['5'],
     },
-    'auto':{
+    'auto': {
         '2': wifi_yaml.get_note('pair_num')['auto']['2'],
         '5': wifi_yaml.get_note('pair_num')['auto']['5'],
     }
@@ -325,8 +338,8 @@ def set_pair_count(router_info, rssi_num, type, dire):
     else:
         band = '5'
 
-    _2g = [10,20,30,40 ]
-    _5g = [10,20,30,40,50]
+    _2g = [10, 20, 30, 40]
+    _5g = [10, 20, 30, 40, 50]
 
     if band == '2':
         target_list = _2g
@@ -351,9 +364,9 @@ def get_tx_rate(router_info, pair, freq_num, rssi_num, type, corner_set=''):
             iperf_on(pytest.executer.IPERF_KILL, pytest.executer.serialnumber)
             iperf_on(pytest.executer.IPERF_WIN_KILL, '')
             time.sleep(1)
-            server = iperf_on(pytest.executer.IPERF_SERVER, '')
+            server = iperf_on(pytest.executer.IPERF_SERVER[type], '')
             time.sleep(1)
-            client = iperf_on(pytest.executer.IPERF_CLIENT_REGU.format(
+            client = iperf_on(pytest.executer.IPERF_CLIENT_REGU[type].format(
                 pytest.executer.pc_ip,
                 pytest.executer.IPERF_TEST_TIME,
                 pair),
@@ -420,10 +433,10 @@ def get_rx_rate(router_info, pair, freq_num, rssi_num, type, corner_set=''):
             iperf_on(pytest.executer.IPERF_KILL, pytest.executer.serialnumber)
             iperf_on(pytest.executer.IPERF_WIN_KILL, '')
             time.sleep(1)
-            server = iperf_on(pytest.executer.IPERF_SERVER, pytest.executer.serialnumber)
+            server = iperf_on(pytest.executer.IPERF_SERVER[type], pytest.executer.serialnumber)
             time.sleep(1)
             client = iperf_on(
-                pytest.executer.IPERF_CLIENT_REGU.format(
+                pytest.executer.IPERF_CLIENT_REGU[type].format(
                     pytest.executer.dut_ip, pytest.executer.IPERF_TEST_TIME,
                     pair), '')
             time.sleep(pytest.executer.IPERF_WAIT_TIME)
@@ -563,10 +576,10 @@ def test_wifi_rvr(wifi_setup_teardown, rf_value):
                 logging.info(f'rssi : {rssi_num} pair : {pair}')
                 # iperf  打流
                 get_tx_rate(router_info, pair, freq_num, rssi_num, 'TCP', corner_set=corner_set)
-            # if 'UDP' in router_info.protocol_type:
-            #     pair = set_pair_count(router_info, rssi_num, 'UDP', 'tx')
-            #     logging.info(f'rssi : {rssi_num} pair : {pair}')
-            #     get_tx_rate(router_info, pair, freq_num, rssi_num, 'UDP')
+            if 'UDP' in router_info.protocol_type:
+                pair = set_pair_count(router_info, rssi_num, 'UDP', 'tx')
+                logging.info(f'rssi : {rssi_num} pair : {pair}')
+                get_tx_rate(router_info, pair, freq_num, rssi_num, 'UDP', corner_set=corner_set)
             else:
                 logging.info('没有获取到router_info.protocol_type')
         if 'rx' in router_info.test_type:
@@ -576,7 +589,7 @@ def test_wifi_rvr(wifi_setup_teardown, rf_value):
                 pair = set_pair_count(router_info, db_set, 'TCP', 'rx')
                 logging.info(f'rssi : {rssi_num} pair : {pair}')
                 get_rx_rate(router_info, pair, freq_num, rssi_num, 'TCP', corner_set=corner_set)
-            # if 'UDP' in router_info.protocol_type:
-            #     pair = set_pair_count(router_info, rssi_num, 'UDP', 'rx')
-            #     logging.info(f'rssi : {rssi_num} pair : {pair}')
-            #     get_rx_rate(router_info, pair, freq_num, rssi_num, 'UDP')
+            if 'UDP' in router_info.protocol_type:
+                pair = set_pair_count(router_info, rssi_num, 'UDP', 'rx')
+                logging.info(f'rssi : {rssi_num} pair : {pair}')
+                get_rx_rate(router_info, pair, freq_num, rssi_num, 'UDP', corner_set=corner_set)

@@ -31,13 +31,13 @@ ssid2 = 'galaxy'
 other_flag = False
 try:
     asus_ssid_name = 'ATC_ASUS_AX88U_2G'
-    zte_ssid_name = 'ZTEax5400_5G'
+    # zte_ssid_name = 'ZTEax5400_5G'
     passwd = 'test1234'
     router_ausu = Router(band='2.4 GHz', ssid=asus_ssid_name, wireless_mode='自动', channel='自动', bandwidth='20 MHz',
                          authentication_method='WPA2-Personal', wpa_passwd=passwd)
-    router_zte = Router(band='5 GHz', ssid=zte_ssid_name, wireless_mode='802.11 a/n/ac', channel='161',
-                        bandwidth='20MHz/40MHz/80MHz',
-                        authentication_method='WPA2-PSK/WPA3-PSK', wpa_passwd=passwd)
+    # router_zte = Router(band='5 GHz', ssid=zte_ssid_name, wireless_mode='802.11 a/n/ac', channel='161',
+    #                     bandwidth='20MHz/40MHz/80MHz',
+    #                     authentication_method='WPA2-PSK/WPA3-PSK', wpa_passwd=passwd)
     other_flag = True
 except Exception as e:
     other_flag = False
@@ -64,7 +64,7 @@ def setup():
     pytest.executer.forget_ssid(ssid1)
     if other_flag:
         pytest.executer.forget_ssid(asus_ssid_name)
-        pytest.executer.forget_ssid(zte_ssid_name)
+        # pytest.executer.forget_ssid(zte_ssid_name)
 
 
 @pytest.mark.repeat(50000)
@@ -75,9 +75,9 @@ def test_change_ap():
     pytest.executer.connect_ssid(ssid2, target='10.18')
     pytest.executer.kill_tvsetting()
     pytest.executer.playback_youtube()
-    # if other_flag:
-    #     logging.info('connect other router')
-    #     pytest.executer.connect_ssid(asus_ssid_name, target="192.168.50")
+    if other_flag:
+        logging.info('connect other router')
+        pytest.executer.connect_ssid(asus_ssid_name, target="192.168.50")
     #     pytest.executer.kill_tvsetting()
     #     pytest.executer.playback_youtube()
         # pytest.executer.connect_ssid(zte_ssid_name, target="192.168.2")``
