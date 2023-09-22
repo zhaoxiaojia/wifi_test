@@ -3,7 +3,8 @@
 connect_type:
   type: usb
   usb:
-    device: 'HQ2023DVT3'
+#    device: 'HQ2023DVT3'
+    device: 'ohm56c019501b1a'
   telnet:
     ip: '192.168.50.254'
 
@@ -74,4 +75,4 @@ times_063: 20
 
 # wifi func 081 repeat times
 times_081: 20
-accompanying_dut: AMLS905X4AH212BT0318
+accompanying_dut: aq2228019431943b23a0d

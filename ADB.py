@@ -875,7 +875,6 @@ class ADB(Executer):
         '''
         count = 0
         logging.info(self.serialnumber)
-        flag = False
         while subprocess.run(f'adb -s {self.serialnumber} shell getprop sys.boot_completed'.split(),
                              stdout=subprocess.PIPE).returncode != 0:
             flag = True
@@ -888,10 +887,6 @@ class ADB(Executer):
             if count > 20:
                 raise EnvironmentError('Lost Device')
         self.set_status_on()
-        if flag:
-            subprocess.run(f'adb -s {self.serialnumber} root'.split())
-            subprocess.run(f'adb -s {self.serialnumber} shell iw wlan0 vendor send 0xc3 0xc4 0xac 0x01'.split())
-            flag = False
 
     def kill_logcat_pid(self):
         '''
@@ -1234,15 +1229,16 @@ class ADB(Executer):
         self.wait_element('Wi-Fi', 'text')
 
     def enter_hotspot(self) -> None:
-        if 'com.droidlogic.tv.settings' in self.checkoutput('ls -l /data/data'):
-            self.start_activity(self.MORE_SETTING_ACTIVITY_TUPLE)
-        else:
-            logging.info('No more setting')
-            self.start_activity(*self.SETTING_ACTIVITY_TUPLE)
-            self.wait_element('Network & Internet', 'text')
-            self.wait_and_tap('Network & Internet', 'text')
-            for i in range(8):
-                self.keyevent(20)
+        # if 'com.droidlogic.tv.settings' in self.checkoutput('ls -l /data/data'):
+        #     logging.info('coco is handsome ')
+        #     self.start_activity(*self.MORE_SETTING_ACTIVITY_TUPLE)
+        # else:
+        logging.info('No more setting')
+        self.start_activity(*self.SETTING_ACTIVITY_TUPLE)
+        self.wait_element('Network & Internet', 'text')
+        self.wait_and_tap('Network & Internet', 'text')
+        for i in range(8):
+            self.keyevent(20)
         self.wait_and_tap('HotSpot', 'text')
 
     def open_hotspot(self) -> None:
@@ -1261,8 +1257,7 @@ class ADB(Executer):
                 raise EnvironmentError("Can't open hotspot")
 
     def close_hotspot(self) -> None:
-        self.kill_moresetting()
-        time.sleep(1)
+        self.kill_tvsetting()
         self.enter_hotspot()
         self.wait_element('Portable HotSpot Enabled', 'text')
         self.uiautomator_dump()
@@ -1276,7 +1271,6 @@ class ADB(Executer):
             times += 1
             if times > 5:
                 raise EnvironmentError("Can't close hotspot")
-        self.kill_moresetting()
 
     def kill_tvsetting(self) -> None:
         self.app_stop(self.SETTING_ACTIVITY_TUPLE[0])
@@ -1516,7 +1510,7 @@ class ADB(Executer):
             self.checkoutput(self.PLAYERACTIVITY_REGU.format(self.VIDEO_TAG_LIST[0]['link']))
             time.sleep(10)
             if seek:
-                for _ in range(60*24):
+                for _ in range(60 * 24):
                     # 长按 右键
                     self.keyevent(23)
                     self.sendevent(106, seek_time)
@@ -1535,7 +1529,8 @@ class ADB(Executer):
 
     def set_hotspot(self, ssid='', passwd='', type='', encrypt=''):
         if ssid:
-            self.wait_and_tap('Hotspot name', 'text')
+            self.wait_and_tap("Hotspot name", "text")
+            self.wait_element("android:id/edit","resource-id")
             self.u().d2(resourceId="android:id/edit").clear_text()
             if ' ' in ssid:
                 self.checkoutput(f'input text $(echo "{ssid}" | sed -e "s/ /\%s/g")')
@@ -1553,10 +1548,10 @@ class ADB(Executer):
             assert passwd in self.get_dump_info(), "passwd doesn't currently"
             self.keyevent(66)
         if encrypt:
-            pytest.executer.wait_and_tap('Security', 'text')
-            pytest.executer.wait_element(encrypt, 'text')
-            pytest.executer.wait_and_tap(encrypt, 'text')
-            pytest.executer.wait_element('Security', 'text')
+            self.wait_and_tap('Security', 'text')
+            self.wait_element(encrypt, 'text')
+            self.wait_and_tap(encrypt, 'text')
+            self.wait_element('Security', 'text')
         if type:
             self.wait_and_tap('AP Band', 'text')
             self.wait_element(type, 'text')
@@ -1588,12 +1583,12 @@ class ADB(Executer):
 from tools.yamlTool import yamlTool
 
 accompanying_dut = ''
-# try:
-#     accompanying_dut = ADB(yamlTool(os.getcwd() + '/config/config_wifi.yaml').get_note('accompanying_dut'))
-#     accompanying_dut.root()
-#     accompanying_dut.remount()
-#     logging.info('Try to init accompanyiny_dut')
-#     logging.info(accompanying_dut.serialnumber)
-# except Exception as e:
-#     logging.info('未连接配测产品')
-#     accompanyiny_dut = None
+try:
+    accompanying_dut = ADB(yamlTool(os.getcwd() + '/config/config_wifi.yaml').get_note('accompanying_dut'))
+    accompanying_dut.root()
+    accompanying_dut.remount()
+    logging.info('Try to init accompanyiny_dut')
+    logging.info(accompanying_dut.serialnumber)
+except Exception as e:
+    logging.info('未连接配测产品')
+    accompanyiny_dut = None

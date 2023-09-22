@@ -46,7 +46,7 @@ def setup():
     pytest.executer.forget_ssid(zte_ssid_name)
 
 
-# @pytest.mark.repeat(10000)
-def test_2g_swtich_5g():
+@pytest.mark.repeat(10000)
+def test_2g_swtich_2g():
     pytest.executer.connect_ssid(asus_ssid_name,target="192.168.50")
     pytest.executer.connect_ssid(zte_ssid_name,target="192.168.2")

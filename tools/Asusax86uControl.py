@@ -171,7 +171,7 @@ class Asusax86uControl():
             return True
         except Exception as e:
             logging.info('Router change setting with error')
-        #     logging.info(e)
+            logging.info(e)
         #     return False
         # finally:
         #     self.router_control.driver.quit()

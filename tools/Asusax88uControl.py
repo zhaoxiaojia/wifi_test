@@ -18,6 +18,8 @@ from selenium.webdriver.support.ui import Select, WebDriverWait
 
 from .AsusRouterConfig import Asus88uConfig
 from .RouterControl import ConfigError, RouterTools
+import sys
+import os
 
 
 class Asusax88uControl():
@@ -29,7 +31,7 @@ class Asusax88uControl():
     '''
 
     def __init__(self):
-        self.router_control = RouterTools('asus_88u',display=True)
+        self.router_control = RouterTools('asus_88u', display=True)
 
     # def login(self):
     #     '''
@@ -58,6 +60,7 @@ class Asusax88uControl():
         try:
             self.router_control.login()
             self.router_control.driver.find_element(By.ID, 'Advanced_Wireless_Content_menu').click()
+
             # Wireless - General
             WebDriverWait(driver=self.router_control.driver, timeout=5, poll_frequency=0.5).until(
                 EC.presence_of_element_located((By.ID, 'FormTitle')))
@@ -75,7 +78,6 @@ class Asusax88uControl():
             if router.band and not router.smart_connect:
                 if router.band not in Asus88uConfig.BAND_LIST: raise ConfigError('band element error')
                 self.router_control.change_band(router.band)
-
             # 修改 wireless_mode
             if (router.wireless_mode and not router.smart_connect):
                 try:
@@ -86,7 +88,6 @@ class Asusax88uControl():
                 except ConfigError:
                     raise ConfigError('channel element error')
                 if router.wireless_mode == 'AX only':
-                    logging.info('aaaaaa')
                     index = '1'
                     if router.band == '2.4 GHz':
                         router = router._replace(wireless_mode='自动')
@@ -94,11 +95,14 @@ class Asusax88uControl():
                     index = '2'
                 self.router_control.change_wireless_mode(router.wireless_mode)
                 # if router.wireless_mode == 'AX only':
-                self.router_control.driver.find_element(
-                    By.XPATH,
-                    self.router_control.xpath['wireless_ax_element'][self.router_control.router_info].format(
-                        index),
-                ).click()
+                try:
+                    self.router_control.driver.find_element(
+                        By.XPATH,
+                        self.router_control.xpath['wireless_ax_element'][self.router_control.router_info].format(
+                            index),
+                    ).click()
+                except Exception as e:
+                    ...
 
             # 修改 ssid
             if (router.ssid):
@@ -204,9 +208,16 @@ class Asusax88uControl():
             logging.info('Router setting done')
             return True
         except Exception as e:
-            logging.info('Router change setting with error')
-            logging.info(e)
-            return False
+            except_type, except_value, except_traceback = sys.exc_info()
+            except_file = os.path.split(except_traceback.tb_frame.f_code.co_filename)[1]
+            exc_dict = {
+                "报错类型": except_type,
+                "报错信息": except_value,
+                "报错文件": except_file,
+                "报错行数": except_traceback.tb_lineno,
+            }
+            logging.info(f'{exc_dict}')
+        #     return False
 
     def change_country(self, router):
         try:
@@ -240,14 +251,17 @@ class Asusax88uControl():
                     EC.presence_of_element_located((By.XPATH, '/html/body/form/div/div/div[1]/div[2]')))
         except Exception as e:
             logging.info('country code set with error')
+
 # fields = ['serial', 'band', 'ssid', 'wireless_mode', 'channel', 'bandwidth', 'authentication_method',
 #           'wpa_passwd', 'test_type', 'protocol_type', 'wep_encrypt', 'wep_passwd',
 #           'hide_ssid', 'hide_type', 'wpa_encrypt', 'passwd_index', 'protect_frame',
 #           'smart_connect', 'country_code']
+# ssid = 'ATC_ASUS_AX88U_2G'
+# passwd = '12345678'
 # Router = namedtuple('Router', fields, defaults=[None, ] * len(fields))
-# router = Router(band='2.4 GHz', ssid='ATC_ASUS_AX88U_2G', wireless_mode='Legacy', channel='1', bandwidth='20 MHz',
-#                    authentication_method='Open System', wep_passwd='12345', wep_encrypt='WEP-64bits')
+# router = Router(band='2.4 GHz', ssid=ssid, wireless_mode='N only', channel='1', bandwidth='40 MHz',
+#                 authentication_method='WPA2-Personal', wpa_passwd=passwd)
 # control = Asusax88uControl()
-# control.change_country(router)
+# # control.change_country(router)
 # control.change_setting(router)
 # control.router_control.reboot_router()

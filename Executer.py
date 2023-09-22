@@ -24,10 +24,12 @@ class Executer():
     # iperf 相关命令
     IPERF_TEST_TIME = 30
     IPERF_WAIT_TIME = IPERF_TEST_TIME * 2
-    IPERF_SERVER = {'TCP':'iperf -s -w 4m -i 1',
-                    'UDP':'iperf -s -u -i 1 '}
-    IPERF_CLIENT_REGU = {'TCP':'iperf -c {} -w 4m -i 1 -t {} -P{}',
-                         'UDP':'iperf -c {} -u -b 400M -t {} -P{}'}
+    IPERF_SERVER = {'TCP': 'iperf -s -w 4m -i 1',
+                    'UDP': 'iperf -s -u -i 1 '}
+    IPERF_CLIENT_REGU = {'TCP': {'tx': 'iperf -c {} -w 4m -i 1 -t {} -P{}',
+                                 'rx': 'iperf -c {} -w 4m -i 1 -t {} -P{}'},
+                         'UDP': {'tx': 'iperf -c {} -u -i1 -b 800M -t {} -P{}',
+                                 'rx': 'iperf -c {} -u -i1 -b 300M -t {} -P{}'}}
     IPERF_MULTI_SERVER = 'iperf -s -w 4m -i 1 {}&'
     IPERF_MULTI_CLIENT_REGU = '.iperf -c {} -w 4m -i 1 -t 60 -p {}'
 

@@ -40,7 +40,7 @@ with open(os.getcwd() + '/config/asusax88u.csv', 'r') as f:
 logging.info(test_data)
 
 # 设置为True 时跳过 衰减 相关操作
-rf_debug = True
+rf_debug = False
 # 设置为True 时跳过 路由 相关操作
 router_debug = False
 
@@ -116,11 +116,14 @@ if test_type == 'corner' or test_type == 'both':
 #
 # step_list_corner = wifi_yaml.get_note('corner_angle')['step']
 # corner_step_list = [i for i in range(*step_list_corner)][::45]
+if test_type == 'rf':
+    step_list = rf_step_list
+if test_type == 'corner':
+    step_list = corner_step_list
 if test_type == 'both':
     step_list = itertools.product(corner_step_list, rf_step_list)
 
-if not 'step_list' in globals().keys():
-    step_list  = []
+
 # 配置 测试报告
 pytest.testResult.x_path = [] if test_type == 'both' else step_list
 pytest.testResult.init_rvr_result()
@@ -129,15 +132,17 @@ rx_result, tx_result = '', ''
 
 
 def iperf_on(command, adb, file_name=subprocess.PIPE):
-    logging.info(f'iperf_on {command}')
+    logging.info(f'iperf_on {command} ->{adb}<-')
     if adb == 'executer':
         pytest.executer.checkoutput(command)
     else:
         if adb:
             command = f'adb -s {adb} shell ' + command
-        if 'kill' not in command:
+        logging.info(f'{command} ->{adb}<-')
+        if 'iperf -s' in command:
             with open('temp.txt', 'w') as f:
                 popen = subprocess.Popen(command.split(), stdout=f, encoding='gbk')
+            logging.info('write done')
         else:
             popen = subprocess.Popen(command.split(), encoding='gbk')
         return popen
@@ -366,11 +371,12 @@ def get_tx_rate(router_info, pair, freq_num, rssi_num, type, corner_set=''):
             time.sleep(1)
             server = iperf_on(pytest.executer.IPERF_SERVER[type], '')
             time.sleep(1)
-            client = iperf_on(pytest.executer.IPERF_CLIENT_REGU[type].format(
+            logging.info('coco is so fucking handsome')
+            client = iperf_on(command = pytest.executer.IPERF_CLIENT_REGU[type]['tx'].format(
                 pytest.executer.pc_ip,
                 pytest.executer.IPERF_TEST_TIME,
-                pair),
-                pytest.executer.serialnumber)
+                pair if type == 'TCP' else 1 ,
+                pytest.executer.serialnumber))
             time.sleep(pytest.executer.IPERF_WAIT_TIME)
             if pytest.connect_type == 'telnet':
                 time.sleep(15)
@@ -436,9 +442,9 @@ def get_rx_rate(router_info, pair, freq_num, rssi_num, type, corner_set=''):
             server = iperf_on(pytest.executer.IPERF_SERVER[type], pytest.executer.serialnumber)
             time.sleep(1)
             client = iperf_on(
-                pytest.executer.IPERF_CLIENT_REGU[type].format(
+                pytest.executer.IPERF_CLIENT_REGU[type]['rx'].format(
                     pytest.executer.dut_ip, pytest.executer.IPERF_TEST_TIME,
-                    pair), '')
+                    pair if type == 'TCP' else 4 ), '')
             time.sleep(pytest.executer.IPERF_WAIT_TIME)
             if pytest.connect_type == 'telnet':
                 time.sleep(15)
