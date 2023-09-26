@@ -53,7 +53,7 @@ class TestResult():
             with open(self.detail_file, 'a', encoding='gbk') as f:
                 f.write("This is rvr test detial data\n")
         with open(self.log_file, 'a', encoding='gbk') as f:
-            title = 'Priority	Test_Category	Sub_Category	Coex_Method	BT_WF_Isolation	Standard	Freq_Band	BW	Data_Rate	CH_Freq_MHz	Protocol	Direction	Total_Path_Loss	RxP	Beacon_RSSI Angel	Data_RSSI	Throughput	MCS_Rate'
+            title = 'Priority	Test_Category	Sub_Category	Coex_Method	BT_WF_Isolation	Standard	Freq_Band	BW	Data_Rate	CH_Freq_MHz	Protocol	Direction	Total_Path_Loss	RxP DB	Beacon_RSSI Angel	Data_RSSI	Throughput	MCS_Rate'
             logging.info(title.split())
             f.write(','.join(title.split()))
             f.write('\n')
@@ -118,12 +118,14 @@ class TestResult():
 
             # title = all_data[0][:, 0].tolist()
             all_data = [i.tolist() for i in all_data][0]
-            print(all_data)
+            logging.info(f'all_data {all_data}')
+            logging.info(f'results_length {self.results_length}')
             temp = 0
             chart_date = []
             for i in self.results_length:
                 chart_date.append(all_data[temp:temp + i])
                 temp = temp + i
+            logging.info(f'chart_data {chart_date}')
             # for i in chart_date:
             #     print(i)
             #     print(len(i))
@@ -133,7 +135,7 @@ class TestResult():
 
             for i in chart_date:
                 ax = plt.subplot(5, 2, 1 + chart_date.index(i))
-                logging.info(i)
+                logging.info(f'i {i}')
                 # [0, 'P0', 'RvR', 'Standalone', nan, 'Null', '11AX', 5.0, 80, 'Rate_Adaptation', 149, 'TCP', 'UL', nan, nan, -21, nan, 90, 'msc_tx']
                 ax.set_title(f'{i[0][7]}_{i[0][6]}_{i[0][8]}_{i[0][10]}')
                 # print(i)

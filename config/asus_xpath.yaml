@@ -7,7 +7,7 @@ asus:
     88u: http://192.168.50.1/
     '6700': http://192.168.8.1/
   account: admin
-  passwd: 123456
+  passwd: 12345678
   username_element: login_username
   password_element: login_passwd
   signin_element:

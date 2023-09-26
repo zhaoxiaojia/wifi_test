@@ -123,7 +123,6 @@ if test_type == 'corner':
 if test_type == 'both':
     step_list = itertools.product(corner_step_list, rf_step_list)
 
-
 # 配置 测试报告
 pytest.testResult.x_path = [] if test_type == 'both' else step_list
 pytest.testResult.init_rvr_result()
@@ -159,16 +158,29 @@ def server_off(popen):
         pytest.executer.tn.close()
 
 
-def get_logcat():
+def get_logcat(pair):
     # 记录 iperf 测试结果
+    result_list = []
     with open('temp.txt', 'r') as f:
-        for line in f.readlines():
-            logging.info(f'line : {line.strip()}')
-            result = re.findall(r'\[SUM\]\s+0\.0-[3|4|5|6|7]\d\.\d+.*?\d+\s+Mbits/sec', line.strip(), re.S)
-            if result:
-                return line
+        if pair == 1:
+            for line in f.readlines():
+                if re.findall(r'.*?0\.0-\d+\.\d+.*?(\d+)\s+Mbits/sec.*?', line.strip(), re.S):
+                    result_list.append(
+                        int(re.findall(r'.*?0\.0-\d+\.\d+.*?(\d+)\s+Mbits/sec.*?', line.strip(), re.S)[0]))
         else:
-            return False
+            for line in f.readlines():
+                # logging.info(f'line : {line.strip()}')
+                if '[SUM]' in line:
+                    logging.info(f'line {line}')
+                    result = line.split()[-2]
+                    logging.info(f'catch result {result}')
+                    result_list.append(int(result))
+    if result_list:
+        logging.info(f'{sum(result_list) / len(result_list)}')
+        result = sum(result_list) / len(result_list)
+    else:
+        result = "Fail"
+    return result
 
 
 @pytest.fixture(scope='session', autouse=True, params=test_data)
@@ -289,21 +301,21 @@ def session_setup_teardown(request):
     # 后置动作
     pytest.testResult.write_to_excel()
     # 生成 pdf
-
-    if test_type == 'rf':
-        # 重置衰减
-        if not rf_debug:
-            rf_tool.execute_rf_cmd(0)
-        # 生成折线图
-        pytest.testResult.write_attenuation_data_to_pdf()
-    elif test_type == 'corner':
-        # 转台重置
-        if not rf_debug:
-            corner_tool.set_turntable_zero()
-        # 生成雷达图
-        pytest.testResult.write_corner_data_to_pdf()
-    else:
-        ...
+    if step_list != [0]:
+        if test_type == 'rf':
+            # 重置衰减
+            if not rf_debug:
+                rf_tool.execute_rf_cmd(0)
+            # 生成折线图
+            pytest.testResult.write_attenuation_data_to_pdf()
+        elif test_type == 'corner':
+            # 转台重置
+            if not rf_debug:
+                corner_tool.set_turntable_zero()
+            # 生成雷达图
+            pytest.testResult.write_corner_data_to_pdf()
+        else:
+            ...
 
 
 pair_count = {
@@ -353,10 +365,10 @@ def set_pair_count(router_info, rssi_num, type, dire):
     logging.info(f'rf current db {rssi_num}')
     pair = pair_count[type][band][dire][bisect.bisect(target_list, rssi_num)]
     logging.info(f'pair {pair}')
-    return pair
+    return int(pair)
 
 
-def get_tx_rate(router_info, pair, freq_num, rssi_num, type, corner_set=''):
+def get_tx_rate(router_info, pair, freq_num, rssi_num, type, corner_set='', db_set=''):
     if not rf_debug or not router_debug:
         # 最多三次 重试机会
         for _ in range(3):
@@ -371,27 +383,26 @@ def get_tx_rate(router_info, pair, freq_num, rssi_num, type, corner_set=''):
             time.sleep(1)
             server = iperf_on(pytest.executer.IPERF_SERVER[type], '')
             time.sleep(1)
-            logging.info('coco is so fucking handsome')
-            client = iperf_on(command = pytest.executer.IPERF_CLIENT_REGU[type]['tx'].format(
+            iperf_on(command=pytest.executer.IPERF_CLIENT_REGU[type]['tx'].format(
                 pytest.executer.pc_ip,
                 pytest.executer.IPERF_TEST_TIME,
-                pair if type == 'TCP' else 1 ,
+                pair if type == 'TCP' else 1,
                 pytest.executer.serialnumber))
             time.sleep(pytest.executer.IPERF_WAIT_TIME)
             if pytest.connect_type == 'telnet':
                 time.sleep(15)
-            tx_result = get_logcat()
+            tx_result = get_logcat(pair if type == 'TCP' else 1)
             logging.info(f'get result done : {tx_result}')
             if tx_result == False:
                 logging.info("Connect failed")
                 continue
             time.sleep(3)
             server_off(server)
-            if 'Kbit' in tx_result:
-                tx_result = tx_result.split()[-2]
-                tx_result = round(int(tx_result) / 1024, 2)
-            else:
-                tx_result = tx_result.split()[-2]
+            # if 'Kbit' in tx_result:
+            #     tx_result = tx_result.split()[-2]
+            #     tx_result = round(int(tx_result) / 1024, 2)
+            # else:
+            #     tx_result = tx_result.split()[-2]
             logging.info(f'tx_result {tx_result}')
             # tx_result = 70 + random.randrange(10, 30)
             mcs_tx = pytest.executer.get_mcs_tx()
@@ -408,18 +419,10 @@ def get_tx_rate(router_info, pair, freq_num, rssi_num, type, corner_set=''):
             corner = corner_tool.get_turntanle_current_angle()
         else:
             corner = corner_set
-    # logging.info(f'{router_info.wireless_mode.split()[0]}')
-    # logging.info(f'{router_info.band.split()[0]}')
-    # logging.info(f'{router_info.bandwidth.split()[0]}')
-    for i in range(3):
-        rssi_info = pytest.executer.checkoutput(pytest.executer.IW_LINNK_COMMAND)
-        time.sleep(1)
-        if 'signal' in rssi_info:
-            break
-    rssi_num = int(re.findall(r'signal:\s+-?(\d+)\s+dBm', rssi_info, re.S)[0])
+
     tx_result_info = (
         f'P0 RvR Standalone NULL Null {router_info.wireless_mode.split()[0]} {router_info.band.split()[0]} '
-        f'{router_info.bandwidth.split()[0]} Rate_Adaptation {router_info.channel} {type} UL NULL NULL {rssi_num} {corner} NULL {tx_result} {mcs_tx if mcs_tx else "NULL"}')
+        f'{router_info.bandwidth.split()[0]} Rate_Adaptation {router_info.channel} {type} UL NULL NULL {db_set} {rssi_num} {corner} NULL {tx_result} {mcs_tx if mcs_tx else "NULL"}')
     logging.info(tx_result_info)
     pytest.testResult.save_result(tx_result_info.replace(' ', ','))
     with open(pytest.testResult.detail_file, 'a') as f:
@@ -427,7 +430,7 @@ def get_tx_rate(router_info, pair, freq_num, rssi_num, type, corner_set=''):
         f.write('-' * 40 + '\n\n')
 
 
-def get_rx_rate(router_info, pair, freq_num, rssi_num, type, corner_set=''):
+def get_rx_rate(router_info, pair, freq_num, rssi_num, type, corner_set='', db_set=''):
     if not rf_debug or not router_debug:
         for _ in range(3):
             logging.info('run rx ')
@@ -441,25 +444,25 @@ def get_rx_rate(router_info, pair, freq_num, rssi_num, type, corner_set=''):
             time.sleep(1)
             server = iperf_on(pytest.executer.IPERF_SERVER[type], pytest.executer.serialnumber)
             time.sleep(1)
-            client = iperf_on(
+            iperf_on(
                 pytest.executer.IPERF_CLIENT_REGU[type]['rx'].format(
                     pytest.executer.dut_ip, pytest.executer.IPERF_TEST_TIME,
-                    pair if type == 'TCP' else 4 ), '')
+                    pair if type == 'TCP' else 4), '')
             time.sleep(pytest.executer.IPERF_WAIT_TIME)
             if pytest.connect_type == 'telnet':
                 time.sleep(15)
-            rx_result = get_logcat()
+            rx_result = get_logcat(pair if type == 'TCP' else 4)
             if rx_result == False:
                 logging.info("Connect failed")
                 continue
             time.sleep(3)
             server_off(server)
             # rx_result = sum_result_list[-1].split()[5]
-            if 'Kbit' in rx_result:
-                rx_result = rx_result.split()[-2]
-                rx_result = round(int(rx_result) / 1024, 2)
-            else:
-                rx_result = rx_result.split()[-2]
+            # if 'Kbit' in rx_result:
+            #     rx_result = rx_result.split()[-2]
+            #     rx_result = round(int(rx_result) / 1024, 2)
+            # else:
+            #     rx_result = rx_result.split()[-2]
             # rx_result = 70 + random.randrange(10, 30)
             # get mcs data
             mcs_rx = pytest.executer.get_mcs_rx()
@@ -475,15 +478,10 @@ def get_rx_rate(router_info, pair, freq_num, rssi_num, type, corner_set=''):
             corner = corner_tool.get_turntanle_current_angle()
         else:
             corner = corner_set
-    for i in range(3):
-        rssi_info = pytest.executer.checkoutput(pytest.executer.IW_LINNK_COMMAND)
-        time.sleep(1)
-        if 'signal' in rssi_info:
-            break
-    rssi_num = int(re.findall(r'signal:\s+-?(\d+)\s+dBm', rssi_info, re.S)[0])
+
     rx_result_info = (
         f'P0 RvR Standalone NULL Null {router_info.wireless_mode.split()[0]} {router_info.band.split()[0]} '
-        f'{router_info.bandwidth.split()[0]} Rate_Adaptation {router_info.channel} {type} DL NULL NULL {rssi_num} {corner} NULL {rx_result} {mcs_rx if mcs_rx else "NULL"}')
+        f'{router_info.bandwidth.split()[0]} Rate_Adaptation {router_info.channel} {type} DL NULL NULL {db_set} {rssi_num} {corner} NULL {rx_result} {mcs_rx if mcs_rx else "NULL"}')
     pytest.testResult.save_result(rx_result_info.replace(' ', ','))
     with open(pytest.testResult.detail_file, 'a', encoding='gbk') as f:
         logging.info('writing')
@@ -558,7 +556,7 @@ def test_wifi_rvr(wifi_setup_teardown, rf_value):
     logging.info(rssi_info)
     if 'Not connected' in rssi_info:
         logging.info('The signal strength is not enough ,input 0')
-        rx_result, tx_result = 0, 0
+        rx_result, tx_result, rssi_num = 0, 0, 0
         with open(pytest.testResult.detail_file, 'a') as f:
             f.write('signal strength is not enough no rssi \n')
     else:
@@ -581,11 +579,11 @@ def test_wifi_rvr(wifi_setup_teardown, rf_value):
                 pair = set_pair_count(router_info, db_set, 'TCP', 'tx')
                 logging.info(f'rssi : {rssi_num} pair : {pair}')
                 # iperf  打流
-                get_tx_rate(router_info, pair, freq_num, rssi_num, 'TCP', corner_set=corner_set)
+                get_tx_rate(router_info, pair, freq_num, rssi_num, 'TCP', corner_set=corner_set, db_set=db_set)
             if 'UDP' in router_info.protocol_type:
                 pair = set_pair_count(router_info, rssi_num, 'UDP', 'tx')
                 logging.info(f'rssi : {rssi_num} pair : {pair}')
-                get_tx_rate(router_info, pair, freq_num, rssi_num, 'UDP', corner_set=corner_set)
+                get_tx_rate(router_info, pair, freq_num, rssi_num, 'UDP', corner_set=corner_set, db_set=db_set)
             else:
                 logging.info('没有获取到router_info.protocol_type')
         if 'rx' in router_info.test_type:
@@ -594,8 +592,8 @@ def test_wifi_rvr(wifi_setup_teardown, rf_value):
             if 'TCP' in router_info.protocol_type:
                 pair = set_pair_count(router_info, db_set, 'TCP', 'rx')
                 logging.info(f'rssi : {rssi_num} pair : {pair}')
-                get_rx_rate(router_info, pair, freq_num, rssi_num, 'TCP', corner_set=corner_set)
+                get_rx_rate(router_info, pair, freq_num, rssi_num, 'TCP', corner_set=corner_set, db_set=db_set)
             if 'UDP' in router_info.protocol_type:
                 pair = set_pair_count(router_info, rssi_num, 'UDP', 'rx')
                 logging.info(f'rssi : {rssi_num} pair : {pair}')
-                get_rx_rate(router_info, pair, freq_num, rssi_num, 'UDP', corner_set=corner_set)
+                get_rx_rate(router_info, pair, freq_num, rssi_num, 'UDP', corner_set=corner_set, db_set=db_set)

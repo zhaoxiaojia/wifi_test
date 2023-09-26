@@ -19,7 +19,6 @@ from tools.Asusax88uControl import Asusax88uControl
 from tools.ZTEax5400Control import ZTEax5400Control
 from Router import Router
 
-
 '''
 测试步骤
 切换ap
@@ -42,16 +41,17 @@ try:
 except Exception as e:
     other_flag = False
 
-@pytest.fixture(autouse=True,scope='session')
+
+@pytest.fixture(autouse=True, scope='session')
 def setup():
     logging.info('start setup')
     # pytest.executer.connect_ssid(ssid1, 'Home1357')
     # pytest.executer.kill_tvsetting()
     # pytest.executer.connect_ssid(ssid2, 'Qatest123')
     # pytest.executer.kill_tvsetting()
-    # ax88uControl = Asusax88uControl()
-    # ax88uControl.change_setting(router_ausu)
-    # ax88uControl.router_control.driver.quit()
+    ax88uControl = Asusax88uControl()
+    ax88uControl.change_setting(router_ausu)
+    ax88uControl.router_control.driver.quit()
     # time.sleep(3)
     # pytest.executer.connect_ssid(asus_ssid_name,passwd)
     # zte5400Control = ZTEax5400Control()
@@ -69,17 +69,17 @@ def setup():
 
 @pytest.mark.repeat(50000)
 def test_change_ap():
-    pytest.executer.connect_ssid(ssid1, target='10.18')
+    pytest.executer.connect_ssid(ssid1, 'Home1357', target='10.18')
     pytest.executer.kill_tvsetting()
     pytest.executer.playback_youtube()
-    pytest.executer.connect_ssid(ssid2, target='10.18')
+    pytest.executer.connect_ssid(ssid2, 'Qatest123', target='10.18')
     pytest.executer.kill_tvsetting()
     pytest.executer.playback_youtube()
-    if other_flag:
-        logging.info('connect other router')
-        pytest.executer.connect_ssid(asus_ssid_name, target="192.168.50")
+    pytest.executer.connect_ssid(asus_ssid_name, 'test1234', target="192.168.50")
+    pytest.executer.kill_tvsetting()
+    pytest.executer.playback_youtube()
     #     pytest.executer.kill_tvsetting()
     #     pytest.executer.playback_youtube()
-        # pytest.executer.connect_ssid(zte_ssid_name, target="192.168.2")``
-        # pytest.executer.kill_tvsetting()
-        # pytest.executer.playback_youtube()
+    # pytest.executer.connect_ssid(zte_ssid_name, target="192.168.2")``
+    # pytest.executer.kill_tvsetting()
+    # pytest.executer.playback_youtube()
