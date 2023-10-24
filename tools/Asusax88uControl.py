@@ -31,7 +31,7 @@ class Asusax88uControl():
     '''
 
     def __init__(self):
-        self.router_control = RouterTools('asus_88u', display=True)
+        self.router_control = RouterTools('asus_88u', display=False)
 
     # def login(self):
     #     '''

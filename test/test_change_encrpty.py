@@ -9,7 +9,7 @@
 # version    ：python 3.9
 # Description：
 """
-
+import logging
 import time
 
 import pytest
@@ -54,13 +54,14 @@ def setup():
 
 
 def test_change_ap():
-    for i in [router_open, router_wpa, router_wpa2] * 2000:
-        try:
-            ax88uControl.change_setting(i)
-            time.sleep(1)
-            for j in devices_list:
-                pytest.execyter.serialnumber = j
-                pytest.executer.checkoutput(pytest.executer.CMD_WIFI_CONNECT.format(ssid, passwd, 'wpa2'))
-                pytest.executer.wait_for_wifi_address()
-        except Exception as e:
-            ...
+    for i in [router_open, router_wpa, router_wpa2] * 10000:
+        ax88uControl.change_setting(i)
+        time.sleep(1)
+        # for j in devices_list:
+        #     pytest.execyter.serialnumber = j
+        if i.authentication_method == 'Open System':
+            pytest.executer.checkoutput(pytest.executer.CMD_WIFI_CONNECT_OPEN.format(ssid))
+        else:
+            pytest.executer.checkoutput(pytest.executer.CMD_WIFI_CONNECT.format(ssid, 'wpa2', passwd))
+        logging.info('connect set')
+        pytest.executer.wait_for_wifi_address()

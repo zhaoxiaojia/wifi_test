@@ -38,52 +38,46 @@ class Iperf:
             logging.info('iperf rx running')
             logging.info(
                 f'adb -s {pytest.executer.serialnumber} shell ' + pytest.executer.IPERF_SERVER['TCP'])
-            server = subprocess.Popen(
-                (f'adb -s {pytest.executer.serialnumber} shell ' + pytest.executer.IPERF_SERVER['TCP']).split(),
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE, encoding='utf-8')
-            logging.info(
-                pytest.executer.IPERF_CLIENT_REGU['TCP']['rx'].format(dut_ip, pytest.executer.IPERF_TEST_TIME,
-                                                                      4))
+            with open('temp.txt', 'w') as f:
+                server = subprocess.Popen((f'adb -s {pytest.executer.serialnumber} shell ' +
+                                           pytest.executer.IPERF_SERVER['TCP']).split(), stdout=f,encoding='gbk')
             time.sleep(1)
+            logging.info(
+                pytest.executer.IPERF_CLIENT_REGU['TCP']['rx'].format(dut_ip, pytest.executer.IPERF_TEST_TIME, 4))
             subprocess.Popen(
                 pytest.executer.IPERF_CLIENT_REGU['TCP']['rx'].format(dut_ip, pytest.executer.IPERF_TEST_TIME,
-                                                                      4), shell=True)
+                                                                      4).split())
+
         else:
             logging.info('iperf tx running')
             logging.info(
                 pytest.executer.IPERF_SERVER['TCP'])
-            server = subprocess.Popen(pytest.executer.IPERF_SERVER['TCP'].split(), stdout=subprocess.PIPE,
-                                      stderr=subprocess.PIPE, encoding='utf-8')
+            with open('temp.txt', 'w') as f:
+                server = subprocess.Popen(pytest.executer.IPERF_SERVER['TCP'].split(), stdout=f, encoding='gbk')
             time.sleep(1)
-            logging.info(
-                pytest.executer.IPERF_CLIENT_REGU['TCP']['tx'].format(dut_ip, pytest.executer.IPERF_TEST_TIME, 4))
+            logging.info(f'adb -s {pytest.executer.serialnumber} shell ' +
+                         pytest.executer.IPERF_CLIENT_REGU['TCP']['tx'].format(dut_ip, pytest.executer.IPERF_TEST_TIME,
+                                                                               4))
             subprocess.Popen(
                 (f'adb -s {pytest.executer.serialnumber} shell ' +
                  pytest.executer.IPERF_CLIENT_REGU['TCP']['tx'].format(pc_ip,
                                                                        pytest.executer.IPERF_TEST_TIME,
                                                                        4)), shell=True)
 
-        start = time.time()
-        while time.time() - start < pytest.executer.IPERF_WAIT_TIME:
-            # if type == 'rx':
-            line = server.stdout.readline()
-            # else:
-            #     line = client.stdout.readline()
-            if not line:
-                # logging.info(f'get_readline {log}')
-                continue
-            if line is None:
-                break
-            logging.info(line.strip())
-            if re.findall(rf'\[SUM\]\s+0\.0-{pytest.executer.IPERF_TEST_TIME}\.\d+.*?\d+\s+Mbits/sec', line,
-                          re.S):  # and 'receiver' in line:
-                logging.info('*' * 50)
-                logging.info(line)
-                if not isinstance(server, subprocess.Popen):
-                    logging.warning('pls pass in the popen object')
-                    return 'pls pass in the popen object'
-                os.kill(server.pid, signal.SIGTERM)
-                server.terminate()
-                return True
+        time.sleep(pytest.executer.IPERF_WAIT_TIME)
+        logging.info(pytest.executer.IPERF_TEST_TIME)
+        logging.info(pytest.executer.IPERF_WAIT_TIME)
+        if not isinstance(server, subprocess.Popen):
+            logging.warning('pls pass in the popen object')
+            return 'pls pass in the popen object'
+        os.kill(server.pid, signal.SIGTERM)
+        server.terminate()
+        with open('temp.txt', 'r') as f:
+            for line in f.readlines():
+                logging.info(line.strip())
+                if re.findall(rf'\[SUM\]\s+0\.0-{pytest.executer.IPERF_TEST_TIME}\.\d+.*?\d+\s+Mbits/sec', line.strip(),
+                              re.S):  # and 'receiver' in line:
+                    logging.info('*' * 50)
+                    logging.info(line)
+                    return True
         return False

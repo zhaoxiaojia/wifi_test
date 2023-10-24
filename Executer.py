@@ -23,7 +23,7 @@ class Executer():
     SKIP_OOBE = "pm disable com.google.android.tungsten.setupwraith;settings put secure user_setup_complete 1;settings put global device_provisioned 1;settings put secure tv_user_setup_complete 1"
     # iperf 相关命令
     IPERF_TEST_TIME = 30
-    IPERF_WAIT_TIME = IPERF_TEST_TIME * 2
+    IPERF_WAIT_TIME = IPERF_TEST_TIME + 20
     IPERF_SERVER = {'TCP': 'iperf -s -w 4m -i 1',
                     'UDP': 'iperf -s -u -i 1 '}
     IPERF_CLIENT_REGU = {'TCP': {'tx': 'iperf -c {} -w 4m -i 1 -t {} -P{}',

@@ -27,8 +27,8 @@ import pytest
 忘记网络
 '''
 
-ssid = 'ATC_ASUS_AX88U_5G'
-
+ssid = 'sunshine'
+passwd = 'Home1357'
 
 @pytest.fixture(autouse=True,scope='session')
 def setup_teardown():
@@ -39,8 +39,7 @@ def setup_teardown():
 
 @pytest.mark.repeat(5000)
 def test_change_ap():
-    pytest.executer.connect_ssid(ssid, '12345678')
+    pytest.executer.connect_ssid(ssid, passwd,target='10.18.32')
     pytest.executer.kill_tvsetting()
-    pytest.executer.wait_for_address()
     pytest.executer.playback_youtube()
-    pytest.executer.forget_network_ssid(ssid)
+    pytest.executer.forget_ssid(ssid)

@@ -16,7 +16,7 @@ import os
 import logging
 from ADB import ADB
 from TelnetConnect import TelnetInterface
-import time
+import datetime
 from tools.TestResult import TestResult
 import shutil
 
@@ -49,7 +49,7 @@ def pytest_sessionstart(session):
     # 创建 测试结果文件夹
     if not os.path.exists('results'):
         os.mkdir('results')
-    result_path = os.path.join(os.getcwd(), 'results\\' + time.asctime().replace(' ', '_').replace(':', '_'))
+    result_path = os.path.join(os.getcwd(), 'results\\' + datetime.datetime.now().strftime("%Y.%m.%d_%H.%M.%S"))
     os.mkdir(result_path)
     pytest.testResult = TestResult(result_path, [])
 

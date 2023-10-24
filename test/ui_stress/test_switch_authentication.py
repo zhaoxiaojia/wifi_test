@@ -2,12 +2,14 @@
 # -*-coding:utf-8 -*-
 
 """
-# File       : test_switch_5g_channel.py
-# Time       ：2023/9/20 13:55
+# File       : test_switch_authentication.py
+# Time       ：2023/10/9 9:57
 # Author     ：chao.li
 # version    ：python 3.9
 # Description：
 """
+
+
 
 import logging
 import time
@@ -26,12 +28,12 @@ from tools.Asusax88uControl import Asusax88uControl
 
 ssid = 'ATC_ASUS_AX88U_5G'
 passwd = '12345678'
-router_ch36 = Router(band='5 GHz', ssid=ssid, wireless_mode='N/AC/AX mixed', channel='36', bandwidth='20 MHz',
+router_open = Router(band='5 GHz', ssid=ssid, wireless_mode='N/AC/AX mixed', channel='36', bandwidth='40 MHz',
+                     authentication_method='Open System')
+router_legacy = Router(band='5 GHz', ssid=ssid, wireless_mode='Legacy', channel='40', bandwidth='20 MHz',
+                       authentication_method='WPA2-Personal', wpa_passwd=passwd)
+router_auto = Router(band='5 GHz', ssid=ssid, wireless_mode='自动', channel='44', bandwidth='40 MHz',
                      authentication_method='WPA2-Personal', wpa_passwd=passwd)
-router_ch48 = Router(band='5 GHz', ssid=ssid, wireless_mode='N/AC/AX mixed', channel='48', bandwidth='20 MHz',
-                     authentication_method='WPA2-Personal', wpa_passwd=passwd)
-router_ch149 = Router(band='5 GHz', ssid=ssid, wireless_mode='N/AC/AX mixed', channel='149', bandwidth='20 MHz',
-                      authentication_method='WPA2-Personal', wpa_passwd=passwd)
 
 ax88uControl = Asusax88uControl()
 
@@ -39,17 +41,15 @@ ax88uControl = Asusax88uControl()
 @pytest.fixture(autouse=True, scope='session')
 def teardown():
     yield
-    logging.info('handsome')
     ax88uControl.router_control.driver.quit()
     pytest.executer.forget_network_ssid(ssid)
     pytest.executer.kill_tvsetting()
 
 
-@pytest.fixture(autouse=True, params=[router_ch36, router_ch48, router_ch149] * 10000)
+@pytest.fixture(autouse=True, params=[router_open, router_legacy, router_auto] * 10000)
 def setup(request):
     ax88uControl.change_setting(request.param)
 
 
-def test_change_5g_channel():
+def test_change_5g_authentication():
     pytest.executer.connect_ssid(ssid, passwd)
-    pytest.executer.playback_youtube()

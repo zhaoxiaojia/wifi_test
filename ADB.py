@@ -874,7 +874,6 @@ class ADB(Executer):
         @return: None
         '''
         count = 0
-        logging.info(self.serialnumber)
         while subprocess.run(f'adb -s {self.serialnumber} shell getprop sys.boot_completed'.split(),
                              stdout=subprocess.PIPE).returncode != 0:
             flag = True
@@ -917,7 +916,7 @@ class ADB(Executer):
         @param command: command
         @return: feedback
         '''
-        command = ' shell ' + command
+        command = 'shell ' + command
         return self.checkoutput_shell(command)
 
     @connect_again
@@ -1172,25 +1171,6 @@ class ADB(Executer):
     def disconnect_wifi(self) -> None:
         self.checkoutput(self.WIFI_DISCONNECT_COMMAND)
 
-    def forget_wifi(self, accompanying=False) -> None:
-        dut = accompanying_dut if accompanying else self
-        dut.checkoutput(dut.WIFI_CONNECT_ACTIVITY + dut.WIFI_FORGET_WIFI_STR)
-        dut.home()
-        dut.app_stop(dut.WIFI_CONNECT_PACKAGE)
-        time.sleep(3)
-
-    def forget_network_cmd(self, target_ip="192.168.50.1", accompanying=False) -> None:
-        dut = accompanying_dut if accompanying else self
-        if 'No networks' not in dut.checkoutput('cmd wifi list-networks'):
-            networkid = dut.checkoutput(dut.CMD_WIFI_LIST_NETWORK)
-            for i in networkid.split():
-                dut.checkoutput(dut.CMD_WIFI_FORGET_NETWORK.format(i))
-            start = time.time()
-            while dut.ping(hostname=target_ip):
-                time.sleep(5)
-                if time.time() - start > 30:
-                    assert False, 'still connected'
-
     def wait_for_wifi_service(self, type='wlan0') -> None:
         count = 0
         # time.sleep(10)
@@ -1280,21 +1260,21 @@ class ADB(Executer):
             self.keyevent(4)
         self.kill_tvsetting()
 
-    def wait_for_wifi_address(self, cmd: str = '', target='192.168.50', accompanying=False):
-        dut = accompanying_dut if accompanying else self
-        ip_address = dut.subprocess_run('ifconfig wlan0 |egrep -o "inet [^ ]*"|cut -f 2 -d :')
+    def wait_for_wifi_address(self, cmd: str = '', target='192.168.50'):
+        logging.info(f"waiting for wifi {target}")
+        ip_address = self.subprocess_run('ifconfig wlan0 |egrep -o "inet [^ ]*"|cut -f 2 -d :')
         # logging.info(ip_address)
         step = 0
         while True:
             time.sleep(5)
             step += 1
-            ip_address = dut.subprocess_run('ifconfig wlan0 |egrep -o "inet [^ ]*"|cut -f 2 -d :')
+            ip_address = self.subprocess_run('ifconfig wlan0 |egrep -o "inet [^ ]*"|cut -f 2 -d :')
             if target in ip_address:
                 break
             if step == 2:
                 logging.info('repeat command')
                 if cmd:
-                    dut.checkoutput(cmd)
+                    self.checkoutput(cmd)
             if step > 10:
                 assert False, 'connected fail'
         logging.info(f'ip address {ip_address}')
@@ -1305,37 +1285,38 @@ class ADB(Executer):
         logging.info('enter activity done')
         time.sleep(1)
         self.wait_and_tap('See all', 'text')
-        count = 0
         result = False
         # for _ in range(3):
         #     self.keyevent(20)
-        for i in range(50):
-            for _ in range(3):
-                self.keyevent(20)
-            if self.find_element(ssid, 'text'):
+        for i in range(100):
+            if i < 51:
+                for _ in range(3):
+                    self.keyevent(20)
+            else:
+                for _ in range(3):
+                    self.keyevent(19)
+            if self.find_and_tap(ssid, 'text') != (-1,-1):
+                time.sleep(1)
                 logging.info('find done')
+                self.uiautomator_dump()
                 result = True
                 break
-            if self.find_element('See fewer', 'text'):
-                break;
+            else:
+                self.uiautomator_dump()
+                while 'Network & Internet' in self.get_dump_info():
+                    self.keyevent(4)
+                    self.uiautomator_dump()
+            if i < 51:
+                if self.find_element('See fewer', 'text'):
+                    break;
+            else:
+                if self.find_element('Available networks', 'text'):
+                    break;
         else:
             result = False
-        for i in range(50):
-            if result:
-                break
-            for _ in range(3):
-                self.keyevent(19)
-            if self.find_element(ssid, 'text'):
-                logging.info('find done')
-                result = True
-                break
-            if self.find_element('Available networks', 'text'):
-                break;
-        else:
-            result = False
-        self.wait_and_tap(ssid, 'text')
         time.sleep(1)
         assert result, "Can't find ssid"
+        logging.info('find ssid done')
         return result
 
     def wait_keyboard(self):
@@ -1386,7 +1367,8 @@ class ADB(Executer):
     def forget_ssid(self, ssid):
         self.find_ssid(ssid)
         self.wait_and_tap('Forget network', 'text')
-        self.kill_tvsetting()
+        self.wait_and_tap('OK', 'text')
+        time.sleep(1)
 
     def accompanying_dut_wait_ssid(self, ssid: str) -> None:
         accompanying_dut.checkoutput('cmd wifi start-scan')

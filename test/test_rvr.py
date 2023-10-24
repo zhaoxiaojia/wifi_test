@@ -164,20 +164,21 @@ def get_logcat(pair):
     with open('temp.txt', 'r') as f:
         if pair == 1:
             for line in f.readlines():
+                logging.info(f'line {line.strip()}')
                 if re.findall(r'.*?0\.0-\d+\.\d+.*?(\d+)\s+Mbits/sec.*?', line.strip(), re.S):
-                    result_list.append(
-                        int(re.findall(r'.*?0\.0-\d+\.\d+.*?(\d+)\s+Mbits/sec.*?', line.strip(), re.S)[0]))
+                    result_list.append(int(re.findall(r'.*?0\.0-\d+\.\d+.*?(\d+)\s+Mbits/sec.*?', line.strip(), re.S)[0]))
         else:
             for line in f.readlines():
-                # logging.info(f'line : {line.strip()}')
+                logging.info(f'line : {line.strip()}')
                 if '[SUM]' in line:
                     logging.info(f'line {line}')
                     result = line.split()[-2]
                     logging.info(f'catch result {result}')
                     result_list.append(int(result))
     if result_list:
-        logging.info(f'{sum(result_list) / len(result_list)}')
-        result = sum(result_list) / len(result_list)
+        logging.info(f'{sum(result_list)/len(result_list)}')
+        logging.info(f'{result_list}')
+        result = sum(result_list)/len(result_list)
     else:
         result = "Fail"
     return result
@@ -299,9 +300,10 @@ def session_setup_teardown(request):
     logging.info('run_done')
     yield
     # 后置动作
-    pytest.testResult.write_to_excel()
+
     # 生成 pdf
     if step_list != [0]:
+        pytest.testResult.write_to_excel()
         if test_type == 'rf':
             # 重置衰减
             if not rf_debug:
@@ -383,11 +385,10 @@ def get_tx_rate(router_info, pair, freq_num, rssi_num, type, corner_set='', db_s
             time.sleep(1)
             server = iperf_on(pytest.executer.IPERF_SERVER[type], '')
             time.sleep(1)
-            iperf_on(command=pytest.executer.IPERF_CLIENT_REGU[type]['tx'].format(
+            iperf_on(pytest.executer.IPERF_CLIENT_REGU[type]['tx'].format(
                 pytest.executer.pc_ip,
                 pytest.executer.IPERF_TEST_TIME,
-                pair if type == 'TCP' else 1,
-                pytest.executer.serialnumber))
+                pair if type == 'TCP' else 1), pytest.executer.serialnumber)
             time.sleep(pytest.executer.IPERF_WAIT_TIME)
             if pytest.connect_type == 'telnet':
                 time.sleep(15)
