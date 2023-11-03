@@ -166,15 +166,15 @@ def get_logcat(pair):
             for line in f.readlines():
                 logging.info(f'line {line.strip()}')
                 if re.findall(r'.*?0\.0-\d+\.\d+.*?(\d+)\s+Mbits/sec.*?', line.strip(), re.S):
-                    result_list.append(int(re.findall(r'.*?0\.0-\d+\.\d+.*?(\d+)\s+Mbits/sec.*?', line.strip(), re.S)[0]))
+                    result_list.append(int(float(re.findall(r'.*?0\.0-\d+\.\d+.*?(\d+)\s+Mbits/sec.*?', line.strip(), re.S)[0])))
         else:
             for line in f.readlines():
                 logging.info(f'line : {line.strip()}')
-                if '[SUM]' in line:
+                if '[SUM]' in line and 'Mbits/sec' in line:
                     logging.info(f'line {line}')
                     result = line.split()[-2]
                     logging.info(f'catch result {result}')
-                    result_list.append(int(result))
+                    result_list.append(int(float(result)))
     if result_list:
         logging.info(f'{sum(result_list)/len(result_list)}')
         logging.info(f'{result_list}')
