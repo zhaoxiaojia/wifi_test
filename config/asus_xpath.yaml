@@ -44,18 +44,18 @@ asus:
   ssid_element: wl_ssid
 
 #  //*[@id="WLgeneral"]/tbody/tr[9]/td/select/option[1]
-  channel_regu_element:
-    asus_5400: //*[@id="WLgeneral"]/tbody/tr[11]/td/select/option[{}]
-    asus_86u: //*[@id="WLgeneral"]/tbody/tr[11]/td/select/option[{}]
-    asus_88u: //*[@id="WLgeneral"]/tbody/tr[11]/td/select/option[{}]
-    asus_6700: //*[@id="WLgeneral"]/tbody/tr[9]/td/select/option[{}]
+  channel_element:
+    asus_5400: //*[@id="WLgeneral"]/tbody/tr[11]/td/select
+    asus_86u: //*[@id="WLgeneral"]/tbody/tr[11]/td/select
+    asus_88u: //*[@id="WLgeneral"]/tbody/tr[11]/td/select
+    asus_6700: //*[@id="WLgeneral"]/tbody/tr[9]/td/select
   bandwidth_element: //*[@id="wl_bw_field"]/td/select
 
-  authentication_method_regu_element:
-    asus_5400: //*[@id="WLgeneral"]/tbody/tr[13]/td/div[1]/select/option[{}]
-    asus_86u: //*[@id="WLgeneral"]/tbody/tr[13]/td/div[1]/select/option[{}]
-    asus_88u: //*[@id="WLgeneral"]/tbody/tr[13]/td/div[1]/select/option[{}]
-    asus_6700: //*[@id="WLgeneral"]/tbody/tr[11]/td/select/option[{}]
+  authentication_method_element:
+    asus_5400: //*[@id="WLgeneral"]/tbody/tr[13]/td/div[1]/select
+    asus_86u: //*[@id="WLgeneral"]/tbody/tr[13]/td/div[1]/select
+    asus_88u: //*[@id="WLgeneral"]/tbody/tr[13]/td/div[1]/select
+    asus_6700: //*[@id="WLgeneral"]/tbody/tr[11]/td/select
 
   wep_encrypt_regu_element:
     asus_5400: //*[@id="WLgeneral"]/tbody/tr[16]/td/select/option[{}]
@@ -63,12 +63,12 @@ asus:
     asus_88u: //*[@id="WLgeneral"]/tbody/tr[16]/td/select
     asus_6700: //*[@id="WLgeneral"]/tbody/tr[14]/td/select/option[{}]
 
-  wpa_encrypt_regu_element: //*[@id="WLgeneral"]/tbody/tr[14]/td/select/option[{}]
-  passwd_index_regu_element:
-    asus_5400: //*[@id="WLgeneral"]/tbody/tr[17]/td/select/option[{}]
-    asus_86u: //*[@id="WLgeneral"]/tbody/tr[17]/td/select/option[{}]
-    asus_88u: //*[@id="WLgeneral"]/tbody/tr[17]/td/select/option[{}]
-    asus_6700: //*[@id="WLgeneral"]/tbody/tr[15]/td/select/option[{}]
+  wpa_encrypt_element: //*[@id="WLgeneral"]/tbody/tr[14]/td/select
+  passwd_index_element:
+    asus_5400: //*[@id="WLgeneral"]/tbody/tr[17]/td/select
+    asus_86u: //*[@id="WLgeneral"]/tbody/tr[17]/td/select
+    asus_88u: //*[@id="WLgeneral"]/tbody/tr[17]/td/select
+    asus_6700: //*[@id="WLgeneral"]/tbody/tr[15]/td/select
 
   wep_passwd_element: wl_key1
   wpa_passwd_element:
@@ -77,11 +77,11 @@ asus:
     asus_88u: //*[@id="wpa_psk_key_field"]/td/div/div[1]/input
     asus_6700: //*[@id="WLgeneral"]/tbody/tr[13]/td/input
 
-  protect_frame_regu_element:
-    asus_5400: //*[@id="WLgeneral"]/tbody/tr[26]/td/select/option[{}]
-    asus_86u: //*[@id="WLgeneral"]/tbody/tr[26]/td/select/option[{}]
-    asus_88u: //*[@id="WLgeneral"]/tbody/tr[26]/td/select/option[{}]
-    asus_6700: //*[@id="WLgeneral"]/tbody/tr[24]/td/select/option[{}]
+  protect_frame_element:
+    asus_5400: //*[@id="WLgeneral"]/tbody/tr[26]/td/select
+    asus_86u: //*[@id="WLgeneral"]/tbody/tr[26]/td/select
+    asus_88u: //*[@id="WLgeneral"]/tbody/tr[26]/td/select
+    asus_6700: //*[@id="WLgeneral"]/tbody/tr[24]/td/select
   apply_element: applyButton
   setting_load_element: //*[@id="loadingBlock"]/tbody/tr/td[2]
 

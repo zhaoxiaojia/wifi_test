@@ -12,7 +12,7 @@ connect_type:
 # 测试路由的路由器
 router:
   # pls write down the router name .We can use asusac88u or asusax86u
-  name: asusax86u
+  name: asusax88u
 
 # test env control , should be rf , corner
 # rvr 衰减  或者是 转台 测试类别

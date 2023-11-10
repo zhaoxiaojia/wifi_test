@@ -81,9 +81,8 @@ class RouterTools(RouterControl):
         # 路由器完整信息
         self.router_info = router_info
         # 路由器 各控件 元素 配置文件
-        # self.yaml_info = yamlTool(os.getcwd() + f'\\config\\{self.router_type.split("_")[0]}_xpath.yaml')
-        # self.yaml_info = yamlTool(os.getcwd() + f'\\{self.router_type.split("_")[0]}_xpath.yaml')  # 调试用
-        self.yaml_info = yamlTool(f'D:\\wifi_test\\config\\{self.router_type}_xpath.yaml')
+        self.yaml_info = yamlTool(os.getcwd() + f'\\config\\{self.router_type.split("_")[0]}_xpath.yaml')
+        # self.yaml_info = yamlTool(f'D:\\wifi_test\\config\\{self.router_type}_xpath.yaml')
         # 元素配置文件 根节点
 
         self.xpath = self.yaml_info.get_note(self.router_type)
@@ -104,7 +103,7 @@ class RouterTools(RouterControl):
             self.driver = webdriver.Chrome(options=self.option)
 
         # 全局等待3秒 （当driver 去查询 控件时生效）
-        self.driver.implicitly_wait(10)
+        self.driver.implicitly_wait(3)
 
     def scroll_to(self, target):
         self.driver.execute_script(self.SCROL_JS, target)
@@ -130,7 +129,7 @@ class RouterTools(RouterControl):
                 EC.presence_of_element_located((By.ID, self.xpath['signin_done_element'])))
             time.sleep(1)
         except Exception as e:
-            ...
+            logging.info(e)
 
     def change_setting(self, router):
         ...
@@ -161,6 +160,8 @@ class RouterTools(RouterControl):
         bind_select = Select(self.driver.find_element(By.XPATH, self.xpath['band_element']))
         bind_select.select_by_visible_text(band)
 
+        # assert bind_select.first_selected_option.text == band, "Band not selected"
+
     def change_wireless_mode(self, mode):
         '''
         select mode
@@ -170,6 +171,7 @@ class RouterTools(RouterControl):
         wireless_mode_select = Select(
             self.driver.find_element(By.XPATH, self.xpath['wireless_mode_element'][self.router_info]))
         wireless_mode_select.select_by_visible_text(mode)
+        assert wireless_mode_select.first_selected_option.text == mode, "Wireless mode not selected"
 
     def change_ssid(self, ssid):
         '''
@@ -179,31 +181,29 @@ class RouterTools(RouterControl):
         '''
         ssid_element = self.driver.find_element(By.ID, self.xpath['ssid_element'])
         self.driver.execute_script(f'arguments[0].value = "{ssid}"', ssid_element)
-
+        assert ssid_element.get_attribute('value') == ssid, "Set ssid error"
         # self.driver.find_element(By.ID, self.xpath['ssid_element']).clear()
         # self.driver.find_element(By.ID, self.xpath['ssid_element']).send_keys(ssid)
 
     def change_hide_ssid(self, status):
         ...
 
-    def change_channel(self, index):
+    def change_channel(self, channel):
         '''
         change channel
         @param index: should be html source code
         @return:
         '''
         # self.driver.find_element(By.XPATH, self.xpath['channel_regu_element'][self.router_info].format(index)).click()
-        select = self.driver.find_element(By.XPATH,
-                                          self.xpath['channel_regu_element'][self.router_info].split('/option[{}]')[0])
-        select_info = select.text.split()
-        logging.info(select_info)
-        logging.info(index)
-        if index not in select_info:
-            logging.warning("Doesn't support this channel")
-            self.driver.find_element(By.XPATH, self.xpath['channel_regu_element'][self.router_info].format(1)).click()
-            return
-        self.driver.find_element(By.XPATH, self.xpath['channel_regu_element'][self.router_info].format(
-            select_info.index(index) + 1)).click()
+        select = Select(
+            self.driver.find_element(By.XPATH, self.xpath['channel_element'][self.router_info]))
+        select.select_by_visible_text(channel)
+        # if index not in select_info:
+        #     logging.warning("Doesn't support this channel")
+        #     self.driver.find_element(By.XPATH, self.xpath['channel_element'][self.router_info].format(1)).click()
+        #     return
+
+        assert select.first_selected_option.text == channel, "Channel not selected"
 
     def change_bandwidth(self, bandwidth):
         '''
@@ -214,14 +214,19 @@ class RouterTools(RouterControl):
         bandwidth_select = Select(self.driver.find_element(By.XPATH, self.xpath['bandwidth_element']))
         bandwidth_select.select_by_visible_text(bandwidth)
 
-    def change_authentication_method(self, index):
+        assert bandwidth_select.first_selected_option.text == bandwidth, "Band width mode not selected"
+
+    def change_authentication_method(self, mode):
         '''
         change authentication_method
         @param index: should be html source code
         @return:
         '''
-        self.driver.find_element(
-            By.XPATH, self.xpath['authentication_method_regu_element'][self.router_info].format(index)).click()
+        select = Select(self.driver.find_element(
+            By.XPATH, self.xpath['authentication_method_element'][self.router_info]))
+        select.select_by_visible_text(mode)
+
+        assert select.first_selected_option.text == mode, "Authentication mode not selected"
 
     def change_wep_encrypt(self, text):
         '''
@@ -233,13 +238,18 @@ class RouterTools(RouterControl):
             By.XPATH, self.xpath['wep_encrypt_regu_element'][self.router_info].format(text)))
         select.select_by_visible_text(text)
 
-    def change_wpa_encrypt(self, index):
+        assert select.first_selected_option.text == text, "Wep encrypt not selected"
+
+    def change_wpa_encrypt(self, encrpyt):
         '''
         change wpa encrypt
         @param index:
         @return:
         '''
-        self.driver.find_element(By.XPATH, self.xpath['wpa_encrypt_regu_element'].format(index)).click()
+        select = Select(self.driver.find_element(By.XPATH, self.xpath['wpa_encrypt_element']))
+        select.select_by_visible_text(encrpyt)
+
+        assert select.first_selected_option.text == encrpyt, "Wpa encrpyt not selected"
 
     def change_passwd_index(self, index):
         '''
@@ -247,8 +257,11 @@ class RouterTools(RouterControl):
         @param passwd_index: should be html source code
         @return:
         '''
-        self.driver.find_element(By.XPATH,
-                                 self.xpath['passwd_index_regu_element'][self.router_info].format(index)).click()
+
+        select = Select(self.driver.find_element(By.XPATH, self.xpath['passwd_index_element'][self.router_info]))
+        select.select_by_visible_text(index)
+
+        assert select.first_selected_option.text == index, "Password index not selected"
 
     def change_wep_passwd(self, passwd):
         '''
@@ -256,8 +269,12 @@ class RouterTools(RouterControl):
         @param passwd:
         @return:
         '''
-        self.driver.find_element(By.ID, self.xpath['wep_passwd_element']).clear()
-        self.driver.find_element(By.ID, self.xpath['wep_passwd_element']).send_keys(passwd)
+        element = self.driver.find_element(By.ID, self.xpath['wep_passwd_element'])
+        element.click()
+        element.clear()
+        element.send_keys(passwd)
+
+        assert element.get_property('value') == passwd, "Wep password set error"
 
     def change_wpa_passwd(self, passwd):
         '''
@@ -265,9 +282,13 @@ class RouterTools(RouterControl):
         @param passwd:
         @return:
         '''
-        self.driver.find_element(By.XPATH, self.xpath['wpa_passwd_element'][self.router_info]).click()
-        self.driver.find_element(By.XPATH, self.xpath['wpa_passwd_element'][self.router_info]).clear()
-        self.driver.find_element(By.XPATH, self.xpath['wpa_passwd_element'][self.router_info]).send_keys(passwd)
+
+        element = self.driver.find_element(By.XPATH, self.xpath['wpa_passwd_element'][self.router_info])
+        element.click()
+        element.clear()
+        element.send_keys(passwd)
+
+        assert element.get_property('value') == passwd, "Wpa password set error"
 
     def change_protect_frame(self, frame):
         '''
@@ -275,25 +296,11 @@ class RouterTools(RouterControl):
         @param frame: should be html source code
         @return:
         '''
-        bind_select = Select(self.driver.find_element(By.XPATH,
-                                                      self.xpath['protect_frame_regu_element'][self.router_info].split(
-                                                          '/option[{}]')[0]))
+        bind_select = Select(
+            self.driver.find_element(By.XPATH, self.xpath['protect_frame_element'][self.router_info]))
         bind_select.select_by_visible_text(frame)
-        # select = self.driver.find_element(
-        #     By.XPATH,
-        #     self.xpath['protect_frame_regu_element'][self.router_info].split('/option[{}]')[0])
-        # select_info = select.text.split()
-        # # logging.info(select_info)
-        # # logging.info(select_info.index(frame))
-        # if frame not in select_info:
-        #     logging.warning("Doesn't support this channel")
-        #     self.driver.find_element(
-        #         By.XPATH,
-        #         self.xpath['protect_frame_regu_element'][self.router_info].format(1)).click()
-        #     return
-        #
-        # self.driver.find_element(By.XPATH, self.xpath['protect_frame_regu_element'][self.router_info].format(
-        #     select_info.index(frame) + 1)).click()
+
+        assert bind_select.first_selected_option.text == frame, "Protect frame not selected"
 
     def apply_setting(self):
         '''
