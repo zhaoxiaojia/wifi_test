@@ -22,22 +22,24 @@ class Executer():
 
     SKIP_OOBE = "pm disable com.google.android.tungsten.setupwraith;settings put secure user_setup_complete 1;settings put global device_provisioned 1;settings put secure tv_user_setup_complete 1"
     # iperf 相关命令
-    IPERF_TEST_TIME = 30
-    IPERF_WAIT_TIME = IPERF_TEST_TIME + 20
-    IPERF_SERVER = {'TCP': 'iperf -s -w 4m -i 1',
-                    'UDP': 'iperf -s -u -i 1 '}
-    IPERF_CLIENT_REGU = {'TCP': {'tx': 'iperf -c {} -w 4m -i 1 -t {} -P{}',
-                                 'rx': 'iperf -c {} -w 4m -i 1 -t {} -P{}'},
-                         'UDP': {'tx': 'iperf -c {} -u -i1 -b 800M -t {} -P{}',
-                                 'rx': 'iperf -c {} -u -i1 -b 300M -t {} -P{}'}}
+    IPERF_TEST_TIME = 10
+    IPERF_WAIT_TIME = IPERF_TEST_TIME + 5
+
+    def iperf(args, command='iperf'):
+        return f'{command} {args}'
+
+    IPERF_SERVER = {'TCP': iperf(' -s -w 4m -i 1'),
+                    'UDP': iperf(' -s -u -i 1 ')}
+    IPERF_CLIENT_REGU = {'TCP': {'tx': iperf(' -c {} -w 4m -i 1 -t {} -P{}'),
+                                 'rx': iperf(' -c {} -w 4m -i 1 -t {} -P{}')},
+                         'UDP': {'tx': iperf(' -c {} -u -i1 -b 800M -t {} -P{}'),
+                                 'rx': iperf(' -c {} -u -i1 -b 300M -t {} -P{}')}}
+
     IPERF_MULTI_SERVER = 'iperf -s -w 4m -i 1 {}&'
     IPERF_MULTI_CLIENT_REGU = '.iperf -c {} -w 4m -i 1 -t 60 -p {}'
 
-    IPERF3_SERVER = 'iperf3 -s -i 1&'
-    IPERF3_CLIENT_TCP_REGU = 'iperf3 -c {} -t 60 -P {}'
     IPERF3_CLIENT_UDP_REGU = 'iperf3 -c {} -i 1 -t 60 -u -b 120M -l63k -P {}'
 
-    IPERF3_KILL = '[ -n "`ps -A|grep iperf`" ] && killall -9 iperf3 || echo no'
     IPERF_KILL = 'killall -9 iperf'
     IPERF_WIN_KILL = 'taskkill /im iperf.exe -f'
     IW_LINNK_COMMAND = 'iw wlan0 link'
@@ -96,3 +98,22 @@ class Executer():
         if not isinstance(command, list):
             command = command.split()
         return subprocess.check_output(command, encoding='gbk')
+
+    def kill_iperf(self):
+        # kill 板子 跟 pc 上的 iperf
+        try:
+            self.checkoutput(self.IPERF_KILL)
+        except Exception as e:
+            ...
+        try:
+            self.checkoutput(self.IPERF_KILL.replace('iperf', 'iperf3'))
+        except Exception as e:
+            ...
+        try:
+            self.checkoutput_term(self.IPERF_WIN_KILL)
+        except Exception as e:
+            ...
+        try:
+            self.checkoutput_term(self.IPERF_WIN_KILL.replace('iperf', 'iperf3'))
+        except Exception as e:
+            ...

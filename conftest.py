@@ -31,7 +31,7 @@ def pytest_sessionstart(session):
     pytest.config_yaml = yamlTool(os.getcwd() + '/config/config_wifi.yaml')
     # 获取 连接方式信息
     pytest.connect_type = pytest.config_yaml.get_note('connect_type')['type']
-    if pytest.connect_type == 'usb':
+    if pytest.connect_type == 'adb':
         # 创建 adb 连接 实例
         devices_num = pytest.config_yaml.get_note("connect_type")[pytest.connect_type]['device']
         pytest.executer = ADB(serialnumber=devices_num)
@@ -60,6 +60,7 @@ def pytest_sessionfinish(session):
     shutil.copy("report_temp.html", "all_test_report.html")
     shutil.move("all_test_report.html", pytest.testResult.logdir)
     if os.path.exists('temp.txt'):
+        pytest.executer.kill_iperf()
         os.remove('temp.txt')
     if os.path.exists('report_temp.html'):
         os.remove('report_temp.html')

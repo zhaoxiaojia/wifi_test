@@ -40,12 +40,18 @@ with open(os.getcwd() + '/config/asusax88u.csv', 'r') as f:
 logging.info(test_data)
 
 # 设置为True 时跳过 衰减 相关操作
-rf_debug = False
+rf_debug = True
 # 设置为True 时跳过 转台 相关操作
-corner_debug = False
+corner_debug = True
 # 设置为True 时跳过 路由 相关操作
 router_debug = False
+# 设置DUT iperf 运行命令 iperf 或者 iperf3
+dut_iperf = 'iperf'
+# 设置pc iperf 运行命令 iperf 或者 iperf3
+pc_ipef = 'iperf'
 
+# 设置是否需要push iperf
+push_iperf = True
 # 无法使用 命令行 连接wifi 是 设置为true
 third_dut = False
 if pytest.connect_type == 'telnet':
@@ -131,57 +137,84 @@ rx_result, tx_result = '', ''
 
 
 def iperf_on(command, adb):
-    logging.info(f'iperf_on {command} ->{adb}<-')
-    if adb == 'executer':
-        pytest.executer.checkoutput(command)
-    else:
-        if adb:
-            command = f'adb -s {adb} shell ' + command
-        if 'iperf -s' in command:
-            with open('temp.txt', 'w') as f:
-                popen = subprocess.Popen(command.split(), stdout=f, encoding='gbk')
-            logging.info('write done')
-        else:
-            popen = subprocess.Popen(command.split(), encoding='gbk')
+    def server_on():
+        logging.info(f'server {command} ->{adb}<-')
+        with open('temp.txt', 'w') as f:
+            if adb == 'executer':
+                iperf_log = pytest.executer.checkoutput(command)
+                f.write(iperf_log)
+            popen = subprocess.Popen(command.split(), stdout=f, encoding='gbk')
+        logging.info(subprocess.run('tasklist | findstr "iperf"'.replace('iperf',pc_ipef),shell=True,encoding='gbk'))
+        # logging.info(pytest.executer.checkoutput('ps -A|grep "iperf"'.replace('iperf',dut_iperf)))
+        logging.info('write done')
         return popen
+
+    # if adb == 'executer':
+    #     # 使用telnet 时 dut 场景
+    #     logging.info('telnet dut ')
+    #     command = command.replace('iperf', dut_iperf)
+    #     if dut_iperf == 'iperf3':
+    #         command = command.replace('-w 4m', '')
+    #     logging.info(f'telnet adb {command}')
+    #     pytest.executer.checkoutput(command)
+    #     if re.findall(r'iperf[3]?.*?-s', command):
+    #         popen = server_on()
+    #     return popen
+    if adb:
+        command = command.replace('iperf', dut_iperf)
+        if dut_iperf == 'iperf3':
+            command = command.replace('-w 4m', '')
+        if adb != 'executer':
+            command = f'adb -s {adb} shell ' + command
+    else:
+        command = command.replace('iperf', pc_ipef)
+        if pc_ipef == 'iperf3':
+            command = command.replace('-w 4m', '')
+    logging.info(f'command {command} ->{adb}<-')
+
+    if re.findall(r'iperf[3]?.*?-s', command):
+        popen = server_on()
+    else:
+        if adb == 'executer':
+            pytest.executer.checkoutput(command)
+        popen = subprocess.Popen(command.split(), encoding='gbk')
+    return popen
 
 
 def server_off(popen):
-    if pytest.connect_type == 'usb':
+    if pytest.connect_type == 'adb':
         if not isinstance(popen, subprocess.Popen):
             logging.warning('pls pass in the popen object')
             return 'pls pass in the popen object'
-        os.kill(popen.pid, signal.SIGTERM)
+        try:
+            os.kill(popen.pid, signal.SIGTERM)
+        except Exception as e:
+            ...
         popen.terminate()
     elif pytest.connect_type == 'telnet':
         pytest.executer.tn.close()
 
 
 def get_logcat(pair):
+    # pytest.executer.kill_iperf()
     # 分析 iperf 测试结果
     result_list = []
     with open('temp.txt', 'r') as f:
-        # 通道数为 1 时 数据格式特殊 单独处理
-        if pair == 1:
-            for line in f.readlines():
-                logging.info(f'line {line.strip()}')
-                if re.findall(r'.*?0\.0-\d+\.\d+.*?(\d+)\s+Mbits/sec.*?', line.strip(), re.S):
-                    result_list.append(
-                        int(float(re.findall(r'.*?0\.0-\d+\.\d+.*?(\d+)\s+Mbits/sec.*?', line.strip(), re.S)[0])))
-        else:
-            for line in f.readlines():
-                logging.info(f'line : {line.strip()}')
-                if '[SUM]' in line and 'Mbits/sec' in line:
-                    logging.info(f'line {line}')
-                    result = line.split()[-2]
-                    logging.info(f'catch result {result}')
-                    result_list.append(int(float(result)))
+        for line in f.readlines():
+            logging.info(f'line : {line.strip()}')
+            if pair != 1:
+                if '[SUM]' not in line:
+                    continue
+            if re.findall(r'.*?\d+\.\d*-\s*\d+\.\d*.*?(\d+\.*\d*)\s+Mbits/sec.*?', line.strip(), re.S):
+                result_list.append(
+                    int(float(re.findall(r'.*?\d+\.\d*-\s*\d+\.\d*.*?(\d+\.*\d*)\s+Mbits/sec.*?', line.strip(), re.S)[0])))
+
     if result_list:
         logging.info(f'{sum(result_list) / len(result_list)}')
         logging.info(f'{result_list}')
         result = sum(result_list) / len(result_list)
     else:
-        result = "Fail"
+        result = 0
     return result
 
 
@@ -193,7 +226,7 @@ def wifi_setup_teardown(request):
     router_info = request.param
     if not router_debug:
         # 修改路由器配置
-        assert router.change_setting(router_info),"Can't set ap , pls check first"
+        assert router.change_setting(router_info), "Can't set ap , pls check first"
 
     logging.info('wifi env set done')
     with open(pytest.testResult.detail_file, 'a', encoding='gbk') as f:
@@ -272,15 +305,15 @@ def wifi_setup_teardown(request):
     # 后置动作
     # 重置结果
     tx_result_list, rx_result_list = [], []
-    # if not router_debug:
-    #     router.router_control.driver.quit()
+    if not router_debug:
+        router.router_control.driver.quit()
 
 
 @pytest.fixture(scope='session', autouse=True, params=command_data)
 def session_setup_teardown(request):
     logging.info('==== debug command setup start')
-    # iperf2 配置
-    if pytest.connect_type == 'usb' and (
+    # iperf 配置
+    if push_iperf and pytest.connect_type == 'adb' and (
             pytest.executer.checkoutput('[ -e /system.bin/iperf ] && echo yes || echo no').strip() != 'yes'):
         path = os.path.join(os.getcwd(), 'res/iperf')
         pytest.executer.push(path, '/system/bin')
@@ -375,9 +408,8 @@ def get_tx_rate(router_info, pair, freq_num, rssi_num, type, corner_set='', db_s
             mcs_tx = 0
             # pytest.executer.checkoutput(pytest.executer.CLEAR_DMESG_COMMAND)
             # pytest.executer.checkoutput(pytest.executer.MCS_TX_KEEP_GET_COMMAND)
-            # server = iperf_on(pytest.executer.IPERF3_SERVER, '')
-            iperf_on(pytest.executer.IPERF_KILL, pytest.executer.serialnumber)
-            iperf_on(pytest.executer.IPERF_WIN_KILL, '')
+            # kill iperf
+            pytest.executer.kill_iperf()
             time.sleep(1)
             server = iperf_on(pytest.executer.IPERF_SERVER[type], '')
             time.sleep(1)
@@ -430,8 +462,8 @@ def get_rx_rate(router_info, pair, freq_num, rssi_num, type, corner_set='', db_s
             # clear mcs data
             # pytest.executer.checkoutput(pytest.executer.CLEAR_DMESG_COMMAND)
             # pytest.executer.checkoutput(pytest.executer.MCS_RX_CLEAR_COMMAND)
-            iperf_on(pytest.executer.IPERF_KILL, pytest.executer.serialnumber)
-            iperf_on(pytest.executer.IPERF_WIN_KILL, '')
+            # kill iperf
+            pytest.executer.kill_iperf()
             time.sleep(1)
             server = iperf_on(pytest.executer.IPERF_SERVER[type], pytest.executer.serialnumber)
             time.sleep(1)
@@ -510,7 +542,7 @@ def test_wifi_rvr(wifi_setup_teardown, rf_value):
 
     with open(pytest.testResult.detail_file, 'a') as f:
         f.write('-' * 40 + '\n')
-        info ,corner_set= '',''
+        info, corner_set = '', ''
         db_set = 0
         if 'rf' in env_control:
             db_set = rf_value[1] if type(rf_value) == tuple else rf_value
@@ -535,7 +567,7 @@ def test_wifi_rvr(wifi_setup_teardown, rf_value):
         rx_result, tx_result, rssi_num = 0, 0, 0
         with open(pytest.testResult.detail_file, 'a') as f:
             f.write('signal strength is not enough no rssi \n')
-        assert False,"Wifi is not connected"
+        assert False, "Wifi is not connected"
     logging.info('Start test')
     try:
         rssi_num = int(re.findall(r'signal:\s+-?(\d+)\s+dBm', rssi_info, re.S)[0])
@@ -549,12 +581,14 @@ def test_wifi_rvr(wifi_setup_teardown, rf_value):
     # handle iperf pair count
     logging.info(router_info)
     protocol = 'TCP' if 'TCP' in router_info.protocol_type else 'UDP'
-    direction = 'tx' if 'tx' in router_info.test_type else 'rx'
-    # 动态匹配 打流通道数
-    pair = set_pair_count(router_info, db_set, protocol, direction)
-    logging.info(f'rssi : {rssi_num} pair : {pair}')
+    logging.info(router_info.test_type)
     # iperf  打流
-    {
-        'tx': get_tx_rate(router_info, pair, freq_num, rssi_num, protocol, corner_set=corner_set, db_set=db_set),
-        'rx': get_rx_rate(router_info, pair, freq_num, rssi_num, protocol, corner_set=corner_set, db_set=db_set)
-    }[direction]
+    if 'tx' in router_info.test_type:
+        # 动态匹配 打流通道数
+        pair = set_pair_count(router_info, db_set, protocol, 'tx')
+        logging.info(f'rssi : {rssi_num} pair : {pair}')
+        get_tx_rate(router_info, pair, freq_num, rssi_num, protocol, corner_set=corner_set, db_set=db_set)
+    if 'rx' in router_info.test_type:
+        pair = set_pair_count(router_info, db_set, protocol, 'rx')
+        logging.info(f'rssi : {rssi_num} pair : {pair}')
+        get_rx_rate(router_info, pair, freq_num, rssi_num, protocol, corner_set=corner_set, db_set=db_set)

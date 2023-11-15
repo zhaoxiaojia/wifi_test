@@ -15,8 +15,8 @@ import telnetlib
 import time
 import subprocess
 from Executer import Executer
-
-
+import pytest
+import re
 class TelnetInterface(Executer):
     def __init__(self, ip):
         super().__init__()
@@ -25,6 +25,7 @@ class TelnetInterface(Executer):
             logging.info(f'Try to connect {ip}')
             self.tn = telnetlib.Telnet()
             self.tn.open(self.ip, port=23)
+            self.tn.read_until(b'roxton:/ #').decode('gbk')
             logging.info('telnet init done')
             # print('telnet init done')
         except Exception as f:
@@ -38,15 +39,16 @@ class TelnetInterface(Executer):
     def checkoutput(self, cmd):
         try:
             self.tn.write('\n'.encode('ascii') + b'\n')
-            res = self.tn.read_until(b'roxton:/ #').decode('gbk')
+            res = self.tn.re
         except AttributeError as e:
             self.tn.open(self.ip)
             res = self.tn.read_until(b'roxton:/ #').decode('gbk')
-        if 'iperf' in cmd:
+        if re.findall(r'iperf[3]?.*?-s', cmd):
             cmd += '&'
         logging.info(f'telnet command {cmd}')
         self.tn.write(cmd.encode('ascii') + b'\n')
-        res = self.tn.read_until(b'roxton:/ #').decode('gbk')
+
+        res = self.tn.read_until(b'roxton:/ # ').decode('gbk')
         # res = self.tn.read_very_eager().decode('gbk')
         time.sleep(1)
         return res.strip()
