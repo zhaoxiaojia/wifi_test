@@ -40,15 +40,15 @@ with open(os.getcwd() + '/config/asusax88u.csv', 'r') as f:
 logging.info(test_data)
 
 # 设置为True 时跳过 衰减 相关操作
-rf_debug = True
+rf_debug = False
 # 设置为True 时跳过 转台 相关操作
 corner_debug = True
 # 设置为True 时跳过 路由 相关操作
 router_debug = False
 # 设置DUT iperf 运行命令 iperf 或者 iperf3
-dut_iperf = 'iperf'
+dut_iperf = 'iperf3'
 # 设置pc iperf 运行命令 iperf 或者 iperf3
-pc_ipef = 'iperf'
+pc_ipef = 'iperf3'
 
 # 设置是否需要push iperf
 push_iperf = True
@@ -412,7 +412,6 @@ def get_tx_rate(router_info, pair, freq_num, rssi_num, type, corner_set='', db_s
             pytest.executer.kill_iperf()
             time.sleep(1)
             server = iperf_on(pytest.executer.IPERF_SERVER[type], '')
-            time.sleep(1)
             iperf_on(pytest.executer.IPERF_CLIENT_REGU[type]['tx'].format(
                 pytest.executer.pc_ip,
                 pytest.executer.IPERF_TEST_TIME,
@@ -466,7 +465,6 @@ def get_rx_rate(router_info, pair, freq_num, rssi_num, type, corner_set='', db_s
             pytest.executer.kill_iperf()
             time.sleep(1)
             server = iperf_on(pytest.executer.IPERF_SERVER[type], pytest.executer.serialnumber)
-            time.sleep(1)
             iperf_on(
                 pytest.executer.IPERF_CLIENT_REGU[type]['rx'].format(
                     pytest.executer.dut_ip, pytest.executer.IPERF_TEST_TIME,

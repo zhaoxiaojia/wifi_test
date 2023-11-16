@@ -19,7 +19,7 @@ from TelnetConnect import TelnetInterface
 import datetime
 from tools.TestResult import TestResult
 import shutil
-
+import psutil
 
 def pytest_sessionstart(session):
     '''
@@ -52,6 +52,8 @@ def pytest_sessionstart(session):
     result_path = os.path.join(os.getcwd(), 'results\\' + datetime.datetime.now().strftime("%Y.%m.%d_%H.%M.%S"))
     os.mkdir(result_path)
     pytest.testResult = TestResult(result_path, [])
+    if os.path.exists('temp.txt'):
+        os.remove('temp.txt')
 
 
 def pytest_sessionfinish(session):
@@ -61,6 +63,14 @@ def pytest_sessionfinish(session):
     shutil.move("all_test_report.html", pytest.testResult.logdir)
     if os.path.exists('temp.txt'):
         pytest.executer.kill_iperf()
+        for proc in psutil.process_iter():
+            try:
+                files = proc.open_files()
+                for f in files:
+                    if f.path == 'temp.txt':
+                        proc.kill()  # 杀死占用文件的进程
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                pass
         os.remove('temp.txt')
     if os.path.exists('report_temp.html'):
         os.remove('report_temp.html')

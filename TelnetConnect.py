@@ -17,6 +17,8 @@ import subprocess
 from Executer import Executer
 import pytest
 import re
+from threading import Thread
+
 class TelnetInterface(Executer):
     def __init__(self, ip):
         super().__init__()
@@ -37,6 +39,13 @@ class TelnetInterface(Executer):
         time.sleep(1)
 
     def checkoutput(self, cmd):
+
+        def run_iperf():
+            self.tn.write(cmd.encode('ascii') + b'\n')
+            res = self.tn.read_until(b'Server listening on 5201 (test #2)').decode('gbk')
+            with open('temp.txt', 'a') as f:
+                f.write(res)
+
         try:
             self.tn.write('\n'.encode('ascii') + b'\n')
             res = self.tn.re
@@ -46,9 +55,15 @@ class TelnetInterface(Executer):
         if re.findall(r'iperf[3]?.*?-s', cmd):
             cmd += '&'
         logging.info(f'telnet command {cmd}')
-        self.tn.write(cmd.encode('ascii') + b'\n')
 
-        res = self.tn.read_until(b'roxton:/ # ').decode('gbk')
+        if re.findall(r'iperf[3]?.*?-s', cmd):
+            logging.info('run thread')
+            t = Thread(target=run_iperf)
+            t.daemon = True
+            t.start()
+        else:
+            self.tn.write(cmd.encode('ascii') + b'\n')
+            res = self.tn.read_until(b'roxton:/ # ').decode('gbk')
         # res = self.tn.read_very_eager().decode('gbk')
         time.sleep(1)
         return res.strip()

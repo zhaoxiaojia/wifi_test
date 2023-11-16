@@ -22,7 +22,7 @@ class Executer():
 
     SKIP_OOBE = "pm disable com.google.android.tungsten.setupwraith;settings put secure user_setup_complete 1;settings put global device_provisioned 1;settings put secure tv_user_setup_complete 1"
     # iperf 相关命令
-    IPERF_TEST_TIME = 10
+    IPERF_TEST_TIME = 30
     IPERF_WAIT_TIME = IPERF_TEST_TIME + 5
 
     def iperf(args, command='iperf'):

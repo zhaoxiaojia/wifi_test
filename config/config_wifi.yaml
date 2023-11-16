@@ -1,12 +1,12 @@
 # This is yaml for wifi product
 # 待测产品的adb  number SN号
 connect_type:
-  type: adb
+  type: telnet
   adb:
 #    device: 'HQ2023DVT3'
     device: 'ohm56c019500a15'
   telnet:
-    ip: '192.168.50.217'
+    ip: '192.168.50.249'
 
 
 # 测试路由的路由器
