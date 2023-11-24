@@ -18,7 +18,7 @@ import pytest
 import serial
 from enum import Enum
 from UiautomatorTool import UiautomatorTool
-
+import random
 
 class videoLink(Enum):
     # 4k link
@@ -37,7 +37,7 @@ class Iptv:
 
     WIFI_ACTIVITY_TUPLE = "ctc.android.smart.terminal.settings","com.android.smart.terminal.settings.network.WifiActivity"
     BT_ACTIVITY_TUPLE = "ctc.android.smart.terminal.settings","com.android.amt.bluetooth.BluetoothActivity"
-    CTCC_ACTIVITY_TUPLE = "am start -n ctc.android.smart.terminal.iptv", "com.amt.app.IPTVActivity"
+    CTCC_ACTIVITY_TUPLE = "ctc.android.smart.terminal.iptv", "com.amt.app.IPTVActivity"
     # 清空 URL
     CLEAR_URL = "pm clear com.droidlogic.exoplayer2.demo"
     # 调用http视频播放器
@@ -195,5 +195,89 @@ class Iptv_ctl:
         self.ctl.checkoutput(self.iptv.CTCC_AUTHENTICATION)
 
     def play_ctcc(self):
+
+        def playback():
+            time.sleep(10)
+        def change_channel():
+            self.ctl.keyevent(random.randint(19,20))
+
+        def change_pip():
+            logging.info("switch pip windows")
+            while "按菜单键弹出更多操作" not in self.ctl.get_dump_info():
+                self.ctl.keyevent(23)
+                self.ctl.uiautomator_dump()
+            for _ in range(5):
+                change_channel()
+                time.sleep(3)
+                if random.randint(0,1):
+                    playback()
+            self.ctl.keyevent(4)
+            self.ctl.uiautomator_dump()
+            while "按菜单键弹出更多操作" in self.ctl.get_dump_info():
+                self.ctl.keyevent(23)
+                self.ctl.uiautomator_dump()
+
+        def change_multi():
+            logging.info('switch multi windows')
+            while "直播" not in self.ctl.get_dump_info():
+                self.ctl.keyevent(4)
+                self.ctl.uiautomator_dump()
+            self.ui_tool.d2.press("down")
+            time.sleep(1)
+            self.ui_tool.d2.press("down")
+            time.sleep(1)
+            self.ui_tool.d2.press("right")
+            time.sleep(1)
+            self.ui_tool.d2.press("right")
+            time.sleep(1)
+            self.ctl.uiautomator_dump()
+            if not '[1352,1248][1916,1600]' in self.ctl.get_dump_info():
+                logging.warning("Can't fouces multi player")
+                self.ctl.keyevent(4)
+                self.ctl.keyevent(4)
+                return
+            self.ctl.keyevent(23)
+            # enter multi player done
+            for _ in range(20):
+                while '按OK键互换大小屏内容' not in self.ctl.get_dump_info():
+                    self.ctl.keyevent(22)
+                    self.ctl.uiautomator_dump()
+                self.ctl.keyevent(23)
+                change_channel()
+                if random.randint(0,1):
+                    logging.info("playback a few seconds")
+                    playback()
+                if random.randint(0,1):
+                    logging.info("enter full screen playback")
+                    self.ui_tool.d2.press("left")
+                    self.ctl.keyevent(23)
+                    playback()
+                    self.ui_tool.d2.press("back")
+                    self.ctl.uiautomator_dump()
+                    while '按OK键互换大小屏内容' not in self.ctl.get_dump_info():
+                        self.ui_tool.d2.press("right")
+                        self.ctl.uiautomator_dump()
+            self.ui_tool.d2.press("back")
+            time.sleep(1)
+            self.ui_tool.d2.press("back")
+            time.sleep(1)
+            self.ctl.uiautomator_dump()
+            while "直播" in self.ctl.get_dump_info():
+                self.ctl.keyevent(4)
+                self.ctl.uiautomator_dump()
+
+        self.ctl.app_stop(self.iptv.CTCC_ACTIVITY_TUPLE[0])
         self.ctl.start_activity(*self.iptv.CTCC_ACTIVITY_TUPLE)
+        time.sleep(1)
+        self.ctl.uiautomator_dump()
+        for _ in range(5):
+            if 'IPTV认证数据不完整' not in self.ctl.get_dump_info():
+                time.sleep(1)
+                self.ctl.uiautomator_dump()
+            else:
+                break
+            raise EnvironmentError("Pls check env")
+
+        change_multi()
+        # change_pip()
 

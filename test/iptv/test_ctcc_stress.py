@@ -8,6 +8,7 @@
 # version    ：python 3.9
 # Description：
 """
+import logging
 
 import pytest
 from . import Iptv_ctl,videoLink
@@ -25,10 +26,11 @@ def setuo_teardown():
     if bt_test:
         iptvCtl.cancel_bt("MI BT18")
         iptvCtl.bt_device_press()
-    pytest.executer.home()
+    # pytest.executer.home()
 
 
 def test_ctcc():
-    iptvCtl.connect_wifi("AX86U-5G","12345678")
-    for i in videoLink:
-        iptvCtl.play_exo(i.value)
+    # iptvCtl.connect_wifi("AX86U-5G","12345678")
+    # for i in videoLink:
+    #     iptvCtl.play_exo(i.value)
+    iptvCtl.play_ctcc()
