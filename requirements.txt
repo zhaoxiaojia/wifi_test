@@ -11,3 +11,5 @@ pytest-repeat
 allure-pytest
 pytest-html
 pytest-rerunfailures
+psutil
+pyserial

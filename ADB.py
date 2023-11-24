@@ -1286,15 +1286,9 @@ class ADB(Executer):
         time.sleep(1)
         self.wait_and_tap('See all', 'text')
         result = False
-        # for _ in range(3):
-        #     self.keyevent(20)
         for i in range(100):
-            if i < 51:
-                for _ in range(3):
-                    self.keyevent(20)
-            else:
-                for _ in range(3):
-                    self.keyevent(19)
+            for _ in range(4):
+                self.ctl.keyevent(20 if i < 51 else 21)
             if self.find_and_tap(ssid, 'text') != (-1,-1):
                 time.sleep(1)
                 logging.info('find done')

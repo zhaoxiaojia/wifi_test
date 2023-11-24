@@ -49,6 +49,7 @@ class Executer():
     CMD_WIFI_HIDE = ' -h'
     CMD_WIFI_STATUS = 'cmd wifi status'
 
+
     WIFI_CONNECT_PACKAGE = 'com.example.wifiConnect'
     WIFI_CONNECT_ACTIVITY = f'am start -n {WIFI_CONNECT_PACKAGE}/.MainActivity'
     WIFI_CONNECT_COMMAND_REGU = 'am start -n com.example.wifiConnect/.MainActivity -e ssid {}'
