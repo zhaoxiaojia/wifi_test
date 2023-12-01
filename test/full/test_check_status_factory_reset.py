@@ -15,8 +15,8 @@ import time
 
 import pytest
 
-from tools.Asusax88uControl import Asusax88uControl
 from Router import Router
+from tools.Asusax88uControl import Asusax88uControl
 
 '''
 测试步骤
@@ -52,13 +52,13 @@ def setup_teardown():
 @pytest.mark.reset_dut
 def test_check_address_after_factory_reset():
     # get hwaddr before factory reset
-    hwAddr_before = pytest.executer.get_hwaddr()
-    pytest.executer.get_factory_reset()
+    hwAddr_before = pytest.executer.get_wifi_hw_addr()
+    pytest.executer.factory_reset_ui()
     pytest.executer.wait_for_wifi_service()
     pytest.executer.root()
     pytest.executer.remount()
     # get hwaddr after factory reset
-    hwAddr_after = pytest.executer.get_hwaddr()
+    hwAddr_after = pytest.executer.get_wifi_hw_addr()
     assert hwAddr_after == hwAddr_before, "hw addr not the same after factory reset"
     pytest.executer.enter_wifi_activity()
     pytest.executer.uiautomator_dump()

@@ -14,7 +14,9 @@ import logging
 import time
 
 import pytest
-from ADB import accompanying_dut
+
+from ADB import concomitant_dut
+
 '''
 测试步骤
 Open
@@ -43,7 +45,7 @@ def test_hotspot_wap2():
     pytest.executer.keyevent(4)
     cmd = pytest.executer.CMD_WIFI_CONNECT.format(ssid, 'wpa2', passwd)
     logging.info(cmd)
-    accompanying_dut.checkoutput(cmd)
+    concomitant_dut.checkoutput(cmd)
     pytest.executer.wait_for_wifi_address(cmd, accompanying=True)
     ipaddress = pytest.executer.wait_for_wifi_address(cmd, accompanying=True)[1]
     ipaddress = '.'.join(ipaddress.split('.')[:3] + ['1'])

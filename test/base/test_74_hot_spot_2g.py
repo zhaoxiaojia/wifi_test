@@ -13,7 +13,7 @@ import time
 
 import pytest
 
-from ADB import accompanying_dut
+from ADB import concomitant_dut
 
 '''
 测试步骤
@@ -48,9 +48,9 @@ def test_hotspot_2g():
         # none doesn't need passwd
         cmd = pytest.executer.CMD_WIFI_CONNECT_OPEN.format(ssid)
     logging.info(cmd)
-    accompanying_dut.checkoutput(cmd)
+    concomitant_dut.checkoutput(cmd)
     ipaddress = pytest.executer.wait_for_wifi_address(cmd, accompanying=True,target="192.168")[1]
-    logging.info(accompanying_dut.checkoutput(pytest.executer.IW_LINNK_COMMAND))
-    assert 'freq: 2' in accompanying_dut.checkoutput(pytest.executer.IW_LINNK_COMMAND), "Doesn't conect 2g "
+    logging.info(concomitant_dut.checkoutput(pytest.executer.IW_LINNK_COMMAND))
+    assert 'freq: 2' in concomitant_dut.checkoutput(pytest.executer.IW_LINNK_COMMAND), "Doesn't conect 2g "
     ipaddress = '.'.join(ipaddress.split('.')[:3] + ['1'])
     pytest.executer.forget_network_cmd(ipaddress, accompanying=True)

@@ -48,7 +48,7 @@ def setup():
     yield
     ax88uControl.router_control.driver.quit()
     pytest.executer.forget_network_ssid(ssid)
-    pytest.executer.kill_tvsetting()
+    pytest.executer.kill_setting()
 
 def test_change_bandwidth():
     count = 0

@@ -10,34 +10,38 @@
 # Description：
 """
 
-import pytest
-from .tools.yamlTool import yamlTool
-import os
+import datetime
 import logging
+import os
+import shutil
+
+import psutil
+import pytest
+
 from ADB import ADB
 from TelnetConnect import TelnetInterface
-import datetime
 from tools.TestResult import TestResult
-import shutil
-import psutil
+
+from .tools.yamlTool import yamlTool
+
 
 def pytest_sessionstart(session):
     '''
-    框架运行前置动作 每次框架启动只运行一次
+    Frame Run Pre-Action Runs only once per frame start
     :param session:
     :return:
     '''
-    # 获取 配置信息
-    pytest.config_yaml = yamlTool(os.getcwd() + '/config/config_wifi.yaml')
-    # 获取 连接方式信息
+    # The configuration information of  DUT
+    pytest.config_yaml = yamlTool(os.getcwd() + '/config/config.yaml')
+    # The connection method to the product to DUT
     pytest.connect_type = pytest.config_yaml.get_note('connect_type')['type']
     if pytest.connect_type == 'adb':
-        # 创建 adb 连接 实例
+        # Create adb obj
         devices_num = pytest.config_yaml.get_note("connect_type")[pytest.connect_type]['device']
         pytest.executer = ADB(serialnumber=devices_num)
         logging.info("adb connected %s" % devices_num)
     elif pytest.connect_type == 'telnet':
-        # 创建 serial 连接 实例
+        # Create telnet obj
         telnet_ip = pytest.config_yaml.get_note("connect_type")[pytest.connect_type]['ip']
         pytest.executer = TelnetInterface(telnet_ip)
         logging.info("telnet connected %s" % telnet_ip)
@@ -46,7 +50,7 @@ def pytest_sessionstart(session):
     pytest.executer.root()
     pytest.executer.remount()
 
-    # 创建 测试结果文件夹
+    # Create a test results folder
     if not os.path.exists('results'):
         os.mkdir('results')
     result_path = os.path.join(os.getcwd(), 'results\\' + datetime.datetime.now().strftime("%Y.%m.%d_%H.%M.%S"))
@@ -68,7 +72,7 @@ def pytest_sessionfinish(session):
                 files = proc.open_files()
                 for f in files:
                     if f.path == 'temp.txt':
-                        proc.kill()  # 杀死占用文件的进程
+                        proc.kill()  # Kill the process that occupies the file
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 pass
         os.remove('temp.txt')

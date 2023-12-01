@@ -11,8 +11,8 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select, WebDriverWait
 
-from tools.RouterControl import ConfigError,RouterTools
 from tools.RouterConfig import RouterConfig
+from tools.RouterControl import ConfigError, RouterTools
 
 
 class ZTEax5400Config(RouterConfig):

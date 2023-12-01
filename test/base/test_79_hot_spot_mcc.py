@@ -13,9 +13,9 @@ import time
 
 import pytest
 
-from tools.Asusax88uControl import Asusax88uControl
-from ADB import accompanying_dut
+from ADB import concomitant_dut
 from Router import Router
+from tools.Asusax88uControl import Asusax88uControl
 
 '''
 测试步骤
@@ -69,11 +69,11 @@ def test_hotspot_scc():
     pytest.executer.kill_moresetting()
     logging.info(cmd)
     # accompanying connect hotspot
-    accompanying_dut.checkoutput(cmd)
+    concomitant_dut.checkoutput(cmd)
     ipaddress = pytest.executer.wait_for_wifi_address(cmd, accompanying=True,target="192.168")[1]
     # accompanying playback youtube content
-    accompanying_dut.playback_youtube()
-    accompanying_dut.home()
-    assert 'freq: 5' in accompanying_dut.checkoutput(pytest.executer.IW_LINNK_COMMAND), "Doesn't conect 5g "
+    concomitant_dut.playback_youtube()
+    concomitant_dut.home()
+    assert 'freq: 5' in concomitant_dut.checkoutput(pytest.executer.IW_LINNK_COMMAND), "Doesn't conect 5g "
     ipaddress = '.'.join(ipaddress.split('.')[:3] + ['1'])
     pytest.executer.forget_network_cmd(ipaddress, accompanying=True)

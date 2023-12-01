@@ -14,8 +14,9 @@ import os
 import time
 
 import pytest
-from tools.Asusax88uControl import Asusax88uControl
+
 from Router import Router
+from tools.Asusax88uControl import Asusax88uControl
 
 '''
 测试配置
@@ -40,7 +41,7 @@ def setup():
     ax88uControl.router_control.driver.quit()
     time.sleep(10)
     yield
-    pytest.executer.kill_tvsetting()
+    pytest.executer.kill_setting()
     pytest.executer.forget_network_cmd()
 
 @pytest.mark.wifi_connect

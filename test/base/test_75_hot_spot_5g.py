@@ -14,7 +14,8 @@ import time
 
 import pytest
 
-from ADB import accompanying_dut
+from ADB import concomitant_dut
+
 '''
 测试步骤
 设置SAP band为5G
@@ -45,8 +46,8 @@ def test_hotspot_2g():
         # none doesn't need passwd
         cmd = pytest.executer.CMD_WIFI_CONNECT_OPEN.format(ssid)
     logging.info(cmd)
-    accompanying_dut.checkoutput(cmd)
+    concomitant_dut.checkoutput(cmd)
     ipaddress = pytest.executer.wait_for_wifi_address(cmd, accompanying=True,target="192.168")[1]
-    assert 'freq: 5' in accompanying_dut.checkoutput(accompanying_dut.IW_LINNK_COMMAND), "Doesn't conect 5g "
+    assert 'freq: 5' in concomitant_dut.checkoutput(concomitant_dut.IW_LINNK_COMMAND), "Doesn't conect 5g "
     ipaddress = '.'.join(ipaddress.split('.')[:3] + ['1'])
     pytest.executer.forget_network_cmd(ipaddress, accompanying=True)

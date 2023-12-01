@@ -13,8 +13,9 @@ import os
 import time
 
 import pytest
-from tools.Asusax88uControl import Asusax88uControl
+
 from Router import Router
+from tools.Asusax88uControl import Asusax88uControl
 
 '''
 测试配置
@@ -39,14 +40,14 @@ def setup():
     ax88uControl.change_setting(router_5g)
     ax88uControl.router_control.driver.quit()
     yield
-    pytest.executer.kill_tvsetting()
+    pytest.executer.kill_setting()
 
 
 def test_forget_then_onoff_wifi():
     pytest.executer.connect_ssid(ssid, passwd=passwd)
     assert pytest.executer.wait_for_wifi_address(), "Connect fail"
     pytest.executer.forget_network_cmd(target_ip='192.168.50.1')
-    pytest.executer.kill_tvsetting()
+    pytest.executer.kill_setting()
     pytest.executer.close_wifi()
     pytest.executer.open_wifi()
     try:

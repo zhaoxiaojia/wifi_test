@@ -15,8 +15,8 @@ import time
 
 import pytest
 
-from tools.Asusax88uControl import Asusax88uControl
 from Router import Router
+from tools.Asusax88uControl import Asusax88uControl
 
 '''
 测试步骤
@@ -47,7 +47,7 @@ def setup_teardown():
     ax88uControl.change_setting(router_5g)
     yield
     pytest.executer.forget_network_cmd(target_ip='192.168.50.1')
-    pytest.executer.kill_tvsetting()
+    pytest.executer.kill_setting()
 
 
 @pytest.mark.wifi_connect

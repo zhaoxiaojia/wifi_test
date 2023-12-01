@@ -42,7 +42,7 @@ def teardown():
     logging.info('handsome')
     ax88uControl.router_control.driver.quit()
     pytest.executer.forget_network_ssid(ssid)
-    pytest.executer.kill_tvsetting()
+    pytest.executer.kill_setting()
 
 
 @pytest.fixture(autouse=True, params=[router_ch36, router_ch48, router_ch149] * 10000)

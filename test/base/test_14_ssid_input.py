@@ -25,9 +25,9 @@ ssid = "abcdefghi"
 
 @pytest.fixture(autouse=True)
 def setup_teardown():
-    pytest.executer.kill_tvsetting()
+    pytest.executer.kill_setting()
     yield
-    pytest.executer.kill_tvsetting()
+    pytest.executer.kill_setting()
 
 
 def test_ssid_input():

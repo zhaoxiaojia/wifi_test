@@ -18,7 +18,6 @@ import time
 
 import pytest
 
-
 '''
 测试步骤
 手动 登录 youtube 账号
@@ -34,12 +33,12 @@ passwd = 'Home1357'
 def setup_teardown():
     ...
     yield
-    pytest.executer.kill_tvsetting()
+    pytest.executer.kill_setting()
 
 
 @pytest.mark.repeat(5000)
 def test_change_ap():
     pytest.executer.connect_ssid(ssid, passwd,target='10.18.32')
-    pytest.executer.kill_tvsetting()
+    pytest.executer.kill_setting()
     pytest.executer.playback_youtube()
     pytest.executer.forget_ssid(ssid)

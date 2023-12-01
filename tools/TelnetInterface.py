@@ -7,10 +7,10 @@
 # @Software: PyCharm
 
 
-import telnetlib
-import time
 import logging
 import re
+import telnetlib
+import time
 
 
 class TelnetInterface():

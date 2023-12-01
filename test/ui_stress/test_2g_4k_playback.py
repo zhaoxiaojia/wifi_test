@@ -11,11 +11,12 @@
 
 
 import logging
-import pytest
 import time
-from tools.Asusax88uControl import Asusax88uControl
-from Router import Router
 
+import pytest
+
+from Router import Router
+from tools.Asusax88uControl import Asusax88uControl
 
 ssid = 'ATC_ASUS_AX88U_2G'
 passwd = 'test1234'

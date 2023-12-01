@@ -17,7 +17,6 @@ import time
 
 import pytest
 
-
 '''
 测试步骤
 1.进入设置-无线网络

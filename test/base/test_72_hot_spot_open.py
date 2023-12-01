@@ -14,7 +14,8 @@ import logging
 
 import pytest
 
-from ADB import accompanying_dut
+from ADB import concomitant_dut
+
 '''
 测试步骤
 1.进入设置，开启热点，设置加密方式为OPEN
@@ -34,7 +35,7 @@ def test_hotspot_open():
     pytest.executer.set_hotspot(encrypt='None')
     cmd = pytest.executer.CMD_WIFI_CONNECT_OPEN.format(ssid)
     logging.info(cmd)
-    accompanying_dut.checkoutput(cmd)
+    concomitant_dut.checkoutput(cmd)
     ipaddress = pytest.executer.wait_for_wifi_address(cmd, accompanying=True,target="192.168")[1]
     ipaddress = '.'.join(ipaddress.split('.')[:3] + ['1'])
     pytest.executer.forget_network_cmd(ipaddress, accompanying=True)

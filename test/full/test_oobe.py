@@ -15,9 +15,8 @@ import time
 
 import pytest
 
-from tools.Asusax88uControl import Asusax88uControl
 from Router import Router
-
+from tools.Asusax88uControl import Asusax88uControl
 
 '''
 测试步骤
@@ -49,7 +48,7 @@ def setup_teardown():
 
 @pytest.mark.reset_dut
 def test_check_address_after_factory_reset():
-    pytest.executer.get_factory_reset()
+    pytest.executer.factory_reset_ui()
     pytest.executer.wait_for_wifi_service()
     pytest.executer.root()
     pytest.executer.remount()

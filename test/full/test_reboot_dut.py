@@ -11,11 +11,14 @@
 
 import logging
 import os
-import time
 import re
+import time
+
 import pytest
-from tools.Asusax88uControl import Asusax88uControl
+
 from Router import Router
+from tools.Asusax88uControl import Asusax88uControl
+
 '''
 测试配置
 连接AC-5G

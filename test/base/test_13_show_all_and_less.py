@@ -13,7 +13,6 @@ import logging
 
 import pytest
 
-
 '''
 测试步骤
 1.进入设置-无线网络
@@ -26,7 +25,7 @@ import pytest
 def setup_teardown():
     pytest.executer.enter_wifi_activity()
     yield
-    pytest.executer.kill_tvsetting()
+    pytest.executer.kill_setting()
 
 
 def test_show_all_and_less():

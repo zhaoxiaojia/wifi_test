@@ -1,31 +1,13 @@
 # from __init__ import *
+import ctypes
+import inspect
+import logging
 import signal
 import threading
 import time
-import inspect
-import ctypes
-import logging
 from functools import wraps
 from threading import Thread
 
-def count_down(duration):
-    '''
-    闹钟-倒计时
-    :param duration: 时长 单位秒
-    :return:
-    '''
-
-    def wrapper(func):
-        def inner(*args, **kwargs):
-            global res
-            start = time.time()
-            while time.time() - start < duration:
-                res = func(*args, **kwargs)
-            return res
-
-        return inner
-
-    return wrapper
 
 class MyThead(threading.Thread):
     def __init__(self,target,args=()):
@@ -63,11 +45,6 @@ def set_timeout(limit_time):
 
 
 def singleton(cls):
-    '''
-    单例
-    :param cls:
-    :return:
-    '''
     _instance = {}
 
     def _singleton(*args, **kargs):

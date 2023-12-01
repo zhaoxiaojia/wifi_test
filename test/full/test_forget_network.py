@@ -15,9 +15,10 @@ import time
 
 import pytest
 
+from Router import Router
 from tools.Asusax88uControl import Asusax88uControl
 from tools.yamlTool import yamlTool
-from Router import Router
+
 '''
 测试步骤
 Forget network

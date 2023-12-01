@@ -9,7 +9,9 @@
 # Description：
 """
 
+import bisect
 import csv
+import itertools
 import logging
 import os
 import random
@@ -22,16 +24,14 @@ import time
 
 import _io
 import pytest
-import bisect
 
+from Decorators import set_timeout
 from Router import Router
+from tools.Asusax86uControl import Asusax86uControl
+from tools.Asusax88uControl import Asusax88uControl
 from tools.TelnetInterface import TelnetInterface
 # from tools.UsbControl import UsbControl
 from tools.yamlTool import yamlTool
-from Decorators import set_timeout
-from tools.Asusax86uControl import Asusax86uControl
-from tools.Asusax88uControl import Asusax88uControl
-import itertools
 
 # 读取 测试配置
 with open(os.getcwd() + '/config/asusax88u.csv', 'r') as f:
@@ -59,8 +59,8 @@ if pytest.connect_type == 'telnet':
 
 sum_list_lock = threading.Lock()
 
-# loading config_wifi.yaml 文件 获取数据  dict 数据类型
-wifi_yaml = yamlTool(os.getcwd() + '/config/config_wifi.yaml')
+# loading config.yaml 文件 获取数据  dict 数据类型
+wifi_yaml = yamlTool(os.getcwd() + '/config/config.yaml')
 command_data = wifi_yaml.get_note('env_command')
 router_name = wifi_yaml.get_note('router')['name']
 router = ''

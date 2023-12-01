@@ -13,7 +13,9 @@
 import logging
 
 import pytest
-from ADB import accompanying_dut
+
+from ADB import concomitant_dut
+
 '''
 测试步骤
 1.设置SAP 密码为"123456789012345678901234567890123456789012345678901234567890123"
@@ -32,4 +34,4 @@ def setup_teardown():
 @pytest.mark.hot_spot
 def test_hotspot_special_char_ssid():
     pytest.executer.set_hotspot(ssid=ssid, passwd=passwd)
-    accompanying_dut.accompanying_dut_wait_ssid(ssid)
+    concomitant_dut.wait_ssid_cmd(ssid)

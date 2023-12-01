@@ -15,8 +15,8 @@ import time
 
 import pytest
 
-from tools.Asusax88uControl import Asusax88uControl
 from Router import Router
+from tools.Asusax88uControl import Asusax88uControl
 
 '''
 测试步骤
@@ -40,7 +40,7 @@ def setup_teardown():
     time.sleep(10)
     yield
     pytest.executer.forget_network_cmd(target_ip='192.168.50.1')
-    pytest.executer.kill_tvsetting()
+    pytest.executer.kill_setting()
 @pytest.mark.skip
 def test_country_code_cn():
     pytest.executer.checkoutput(pytest.executer.SET_COUNTRY_CODE_FORMAT.format('cn'))

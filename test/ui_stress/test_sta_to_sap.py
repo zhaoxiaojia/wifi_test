@@ -14,8 +14,8 @@ import time
 
 import pytest
 
+from ADB import concomitant_dut
 from Router import Router
-from ADB import accompanying_dut
 from tools.Asusax88uControl import Asusax88uControl
 
 ssid = 'ATC_ASUS_AX88U_2G'
@@ -32,7 +32,7 @@ def setup():
     yield
     ax88uControl.router_control.driver.quit()
     pytest.executer.forget_ssid(ssid)
-    pytest.executer.kill_tvsetting()
+    pytest.executer.kill_setting()
 
 
 def test_sta_sap():
@@ -41,7 +41,7 @@ def test_sta_sap():
     pytest.executer.close_wifi()
     pytest.executer.open_hotspot()
     pytest.executer.set_hotspot(ssid=hotspot_ssid,passwd=hotspot_passwd,encrypt="WPA2 PSK")
-    accompanying_dut.checkoutput(pytest.executer.CMD_WIFI_CONNECT.format(hotspot_ssid,'wpa2',hotspot_passwd))
-    accompanying_dut.wait_for_wifi_address(target="192.168")
+    concomitant_dut.checkoutput(pytest.executer.CMD_WIFI_CONNECT.format(hotspot_ssid, 'wpa2', hotspot_passwd))
+    concomitant_dut.wait_for_wifi_address(target="192.168")
     pytest.executer.close_hotspot()
-    accompanying_dut.forget_wifi()
+    concomitant_dut.forget_wifi()

@@ -14,9 +14,11 @@ import logging
 import time
 
 import pytest
-from tools.Asusax88uControl import Asusax88uControl
-from Router import Router
+
 from Iperf import Iperf
+from Router import Router
+from tools.Asusax88uControl import Asusax88uControl
+
 '''
 测试步骤
 5G-RX

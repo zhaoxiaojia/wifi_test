@@ -7,7 +7,10 @@
 # @Software: PyCharm
 
 
+import datetime
 import logging
+import os
+import sys
 import time
 from collections import namedtuple
 
@@ -18,9 +21,7 @@ from selenium.webdriver.support.ui import Select, WebDriverWait
 
 from tools.AsusRouterConfig import Asus88uConfig
 from tools.RouterControl import ConfigError, RouterTools
-import sys
-import os
-import datetime
+
 
 class Asusax88uControl():
     '''

@@ -6,17 +6,19 @@
 # @File    : TestResult.py
 # @Software: PyCharm
 
+import csv
 import logging
+import math
 import os
 import re
 import time
-import math
+
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 from matplotlib.backends.backend_pdf import PdfPages
-import csv
+
 from Decorators import singleton
-import numpy as np
 
 plt.rcParams['font.family'] = ['SimHei']
 

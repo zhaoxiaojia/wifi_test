@@ -11,13 +11,16 @@
 """
 
 import logging
+import re
+import subprocess
 import telnetlib
 import time
-import subprocess
-from Executer import Executer
-import pytest
-import re
 from threading import Thread
+
+import pytest
+
+from Executer import Executer
+
 
 class TelnetInterface(Executer):
     def __init__(self, ip):

@@ -11,12 +11,13 @@
 
 
 import logging
-import pytest
 import time
+
+import pytest
+
+from Router import Router
 from tools.Asusax88uControl import Asusax88uControl
 from tools.ZTEax5400Control import ZTEax5400Control
-from Router import Router
-
 
 asus_ssid_name = 'ATC_ASUS_AX88U_2G'
 zte_ssid_name = 'ZTEax5400_5G'

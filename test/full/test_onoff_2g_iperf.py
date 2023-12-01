@@ -14,9 +14,9 @@ import time
 
 import pytest
 
-from tools.Asusax88uControl import Asusax88uControl
-from Router import Router
 from Iperf import Iperf
+from Router import Router
+from tools.Asusax88uControl import Asusax88uControl
 
 '''
 测试配置
@@ -45,7 +45,7 @@ def setup():
     logging.info(pytest.executer.CMD_WIFI_CONNECT.format(ssid, 'wpa2', passwd))
     pytest.executer.checkoutput(pytest.executer.CMD_WIFI_CONNECT.format(ssid, 'wpa2', passwd))
     yield
-    pytest.executer.kill_tvsetting()
+    pytest.executer.kill_setting()
     pytest.executer.forget_network_cmd(target_ip='192.168.50.1')
 
 

@@ -14,6 +14,7 @@ import logging
 
 import pytest
 
+from ADB import concomitant_dut
 
 '''
 测试步骤
@@ -46,4 +47,4 @@ def test_hotspot_cn_char_ssid():
     pytest.executer.keyevent(66)
     pytest.executer.wait_element('Hotspot name', 'text')
     assert ssid == pytest.executer.u().d2(resourceId="android:id/summary").get_text(), "ssid can't be set currently"
-    pytest.executer.accompanying_dut_wait_ssid(ssid)
+    concomitant_dut.wait_ssid_cmd(ssid)

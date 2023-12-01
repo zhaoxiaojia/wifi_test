@@ -15,9 +15,9 @@ import re
 import signal
 import time
 from time import sleep
+
 import pytest
 import serial
-from util.Decorators import set_timeout
 
 
 class SerialPort:

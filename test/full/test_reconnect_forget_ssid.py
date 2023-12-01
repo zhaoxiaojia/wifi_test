@@ -17,8 +17,9 @@ import time
 
 import pytest
 
-from tools.Asusax88uControl import Asusax88uControl
 from Router import Router
+from tools.Asusax88uControl import Asusax88uControl
+
 '''
 测试步骤
 忘记5G网络重新连接
@@ -53,5 +54,5 @@ def setup():
 @pytest.mark.wifi_connect
 def test_connect_forget_ssid():
     pytest.executer.forget_ssid(ssid)
-    pytest.executer.kill_tvsetting()
+    pytest.executer.kill_setting()
     assert pytest.executer.connect_ssid(ssid, passwd=passwd), "Can't reconnect"

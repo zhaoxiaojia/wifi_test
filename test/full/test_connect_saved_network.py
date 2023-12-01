@@ -15,8 +15,8 @@ import time
 
 import pytest
 
-from tools.Asusax88uControl import Asusax88uControl
 from Router import Router
+from tools.Asusax88uControl import Asusax88uControl
 
 '''
 测试配置
@@ -38,7 +38,7 @@ def setup():
     pytest.executer.connect_ssid(ssid1, 'Home1357', target="10.18")
     pytest.executer.connect_ssid(ssid2, 'Qatest123', target="10.18")
     yield
-    pytest.executer.kill_tvsetting()
+    pytest.executer.kill_setting()
 
 
 @pytest.mark.wifi_connect

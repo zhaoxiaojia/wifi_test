@@ -15,8 +15,9 @@ import time
 
 import pytest
 
-from tools.Asusax88uControl import Asusax88uControl
 from Router import Router
+from tools.Asusax88uControl import Asusax88uControl
+
 '''
 测试配置
 Auto mode 信道14
@@ -38,7 +39,7 @@ def setup():
     ax88uControl.change_country(router_2g)
     ax88uControl.change_setting(router_2g)
     yield
-    pytest.executer.kill_tvsetting()
+    pytest.executer.kill_setting()
     router_2g = router_2g._replace(country_code='美国')
     ax88uControl.change_country(router_2g)
     ax88uControl.router_control.driver.quit()

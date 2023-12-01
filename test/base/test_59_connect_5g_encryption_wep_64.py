@@ -15,8 +15,9 @@ import time
 
 import pytest
 
-from tools.Asusax88uControl import Asusax88uControl
 from Router import Router
+from tools.Asusax88uControl import Asusax88uControl
+
 '''
 测试步骤
 1.设置路由器5G 无线网络名称为“ATC_ASUS_AX88U_5G”，隐藏SSID设置为否，无线模式设置为Legcy，频道带宽设置为20/40/80M,信道设置为149，授权方式为shared key，WEP加密选择 WEP-64bits,无线密码索引选择1，WEP无线密码1设置为Abc1234567
@@ -36,7 +37,7 @@ def setup_teardown():
     ax88uControl.router_control.driver.quit()
     yield
     pytest.executer.forget_network_cmd(target_ip='192.168.50.1')
-    pytest.executer.kill_tvsetting()
+    pytest.executer.kill_setting()
 
 
 @pytest.mark.wifi_connect

@@ -16,7 +16,7 @@ import time
 
 import pytest
 
-from ADB import accompanying_dut
+from ADB import concomitant_dut
 
 '''
 测试步骤
@@ -35,4 +35,4 @@ def setup_teardown():
 @pytest.mark.hot_spot
 def test_hotspot_single_ssid():
     pytest.executer.set_hotspot(ssid)
-    accompanying_dut.accompanying_dut_wait_ssid(ssid)
+    concomitant_dut.wait_ssid_cmd(ssid)

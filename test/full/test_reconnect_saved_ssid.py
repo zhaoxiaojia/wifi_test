@@ -15,9 +15,9 @@ import time
 
 import pytest
 
+from Router import Router
 from tools.Asusax88uControl import Asusax88uControl
 from tools.ZTEax5400Control import ZTEax5400Control
-from Router import Router
 
 '''
 测试步骤
@@ -51,7 +51,7 @@ def setup_teardown():
     yield
     pytest.executer.forget_network_cmd(target_ip='192.168.50.1')
     pytest.executer.forget_network_cmd(target_ip='192.168.2.1')
-    pytest.executer.kill_tvsetting()
+    pytest.executer.kill_setting()
 
 
 @pytest.mark.mul_router

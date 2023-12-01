@@ -1,31 +1,22 @@
-# This is yaml for wifi product
-# 待测产品的adb  number SN号
+# This is yaml for DUT info
 connect_type:
   type: telnet
   adb:
-#    device: 'HQ2023DVT3'
     device: 'ohm56c019500a15'
   telnet:
     ip: '192.168.50.249'
 
 
-# 测试路由的路由器
+# Router model
 router:
-  # pls write down the router name .We can use asusac88u or asusax86u
+  # pls write down the router name .It should be asusac88u or asusax86u
   name: asusax88u
 
-# test env control , should be rf , corner
-# rvr 衰减  或者是 转台 测试类别
+# test env control , should be rf , corner or both
 env_control: rf
 
-# test list config , such as if you wanna test base function use "wifi_base" , or use "wifi" test rvr
-# wifi 测试用例 类别
-test_config:
-  config: wifi_full
-
-# 衰减
+# Attenuation information. It should be RC4DAT-8G-95 or RADIORACK-4-220
 rf_solution:
-  #  support RC4DAT-8G-95 ,RADIORACK-4-220
   model: RADIORACK-4-220
   RC4DAT-8G-95:
     idVendor: 0x20ce
@@ -34,11 +25,9 @@ rf_solution:
   RADIORACK-4-220:
     ip_address: 192.168.50.19
   # reduction step for rf signal, can be configured according to test requirements
-  # for i in range(0,50,2)
   step: [ 0,50 ]
-#  step: [ 0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44,46,48 ]
 
-# 转角
+# Turntable information
 corner_angle:
   # angle step for corner, can be configured according to test requirements
   ip_address: 192.168.50.18
@@ -51,9 +40,8 @@ test_wifi:
   ssid: i-test
   passwd: "@12345678"
 
-# 打流通道数
+# Number of channels played
 pair_num:
-  # db 区间 < 40, 40-50, 50, > 60
   ax:
     '2': { 'tx': [ 15,10,6,4,2 ],'rx': [ 15,10,6,4,2 ] }
     '5': { 'tx': [ 35,35,15,6,4,2 ],'rx': [ 35,35,15,6,4,2 ] }
@@ -62,17 +50,9 @@ pair_num:
   'auto':
     '2': { 'tx': [ 15,10,6,4,2 ],'rx': [ 15,10,6,4,2 ] }
     '5': { 'tx': [ 15,15,15,6,4,2 ],'rx': [ 15,15,15,6,4,2 ] }
-  # db 区间  < 60 , 60-75  ,> 75
   n:
     '2': { 'tx': [ 15,10,6,4,2 ],'rx': [ 15,10,6,4,2 ] }
     '5': { 'tx': [ 15,15,10,6,4,2 ],'rx': [ 15,15,10,6,4,2 ] }
 
-# wifi func 004 repeat times
-times_004: 3
-
-# wifi func 063 repeat times
-times_063: 20
-
-# wifi func 081 repeat times
-times_081: 20
-accompanying_dut: aq2228019431943b23a0d
+#
+concomitant_dut: aq2228019431943b23a0d

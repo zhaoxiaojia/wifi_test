@@ -12,6 +12,8 @@ import logging
 
 import pytest
 
+from ADB import concomitant_dut
+
 '''
 测试步骤
 密码含有特殊字符
@@ -36,4 +38,4 @@ def test_hotspot_blank_ssid():
     pytest.executer.set_hotspot(ssid=ssid)
     pytest.executer.wait_element('Hotspot name', 'text')
     assert ssid == pytest.executer.u().d2(resourceId="android:id/summary").get_text(), "ssid can't be set currently"
-    pytest.executer.accompanying_dut_wait_ssid(ssid)
+    concomitant_dut.wait_ssid_cmd(ssid)

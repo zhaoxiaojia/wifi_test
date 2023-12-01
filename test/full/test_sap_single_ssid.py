@@ -16,6 +16,8 @@ import time
 
 import pytest
 
+from ADB import concomitant_dut
+
 '''
 测试步骤
 SSID 为单个字符
@@ -39,5 +41,5 @@ def test_sap_single_chars_ssid():
     pytest.executer.open_hotspot()
     pytest.executer.set_hotspot(ssid=ssid)
     assert ssid == pytest.executer.u().d2(resourceId="android:id/summary").get_text(), "ssid can't be set currently"
-    pytest.executer.accompanying_dut_wait_ssid(ssid)
+    concomitant_dut.wait_ssid_cmd(ssid)
 

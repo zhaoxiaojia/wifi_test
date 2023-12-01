@@ -17,10 +17,11 @@ import re
 import time
 
 import pytest
+
+from Iperf import Iperf
+from Router import Router
 from tools.Asusax88uControl import Asusax88uControl
 from tools.ZTEax5400Control import ZTEax5400Control
-from Router import Router
-from Iperf import Iperf
 
 '''
 测试步骤
@@ -54,11 +55,11 @@ def setup():
 def switch_ap():
     logging.info('switch ap')
     pytest.executer.connect_ssid(ssid1, 'Home1357', target='10.18')
-    pytest.executer.kill_tvsetting()
+    pytest.executer.kill_setting()
     pytest.executer.connect_ssid(ssid2, 'Qatest123', target='10.18')
-    pytest.executer.kill_tvsetting()
+    pytest.executer.kill_setting()
     pytest.executer.connect_ssid(asus_ssid_name, 'test1234', target="192.168.50")
-    pytest.executer.kill_tvsetting()
+    pytest.executer.kill_setting()
 
 def playback_youtube():
     logging.info('play youtube')

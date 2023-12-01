@@ -16,8 +16,9 @@ import time
 
 import pytest
 
-from tools.Asusax88uControl import Asusax88uControl
 from Router import Router
+from tools.Asusax88uControl import Asusax88uControl
+
 '''
 测试步骤
 连接一个AP
@@ -40,7 +41,7 @@ def setup_teardown():
     ax88uControl.change_setting(router)
     ax88uControl.router_control.driver.quit()
     yield
-    pytest.executer.kill_tvsetting()
+    pytest.executer.kill_setting()
 
 
 def test_hide_passwd():

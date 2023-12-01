@@ -15,9 +15,10 @@ import re
 import time
 
 import pytest
+
+from Router import Router
 from tools.Asusax88uControl import Asusax88uControl
 from tools.ZTEax5400Control import ZTEax5400Control
-from Router import Router
 
 '''
 测试步骤
@@ -70,13 +71,13 @@ def setup():
 @pytest.mark.repeat(50000)
 def test_change_ap():
     pytest.executer.connect_ssid(ssid1, 'Home1357', target='10.18')
-    pytest.executer.kill_tvsetting()
+    pytest.executer.kill_setting()
     pytest.executer.playback_youtube()
     pytest.executer.connect_ssid(ssid2, 'Qatest123', target='10.18')
-    pytest.executer.kill_tvsetting()
+    pytest.executer.kill_setting()
     pytest.executer.playback_youtube()
     pytest.executer.connect_ssid(asus_ssid_name, 'test1234', target="192.168.50")
-    pytest.executer.kill_tvsetting()
+    pytest.executer.kill_setting()
     pytest.executer.playback_youtube()
     #     pytest.executer.kill_tvsetting()
     #     pytest.executer.playback_youtube()

@@ -10,11 +10,12 @@
 
 import logging
 import os
-import subprocess
-import time
-import pytest
 import re
 import signal
+import subprocess
+import time
+
+import pytest
 
 
 class Iperf:

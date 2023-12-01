@@ -19,13 +19,14 @@ import signal
 import subprocess
 import threading
 import time
+from collections import Counter
 from xml.dom import minidom
-import pytest
 
 import _io
+import pytest
+
 from Executer import Executer
 from UiautomatorTool import UiautomatorTool
-from collections import Counter
 
 
 def connect_again(func):
@@ -45,14 +46,8 @@ class ADB(Executer):
     ADB class Provide common device control functions over the ADB bridge
 
     Attributes:
-        ADB_S : adb multi devices command flags
-        DUMP_FILE : ui dump file name
-
         serialnumber : adb number : str
         logdir : testcase result log path
-        live : thread flag , adb status : boolean
-        lock : threading.Lock
-        p_config_wifi : conf_wifi test data
 
     """
 
@@ -73,7 +68,7 @@ class ADB(Executer):
 
     def set_status_on(self):
         '''
-        set live to True
+        set DUT survival condition to True
         @return: None
         '''
         if not self.live:
@@ -84,7 +79,7 @@ class ADB(Executer):
 
     def set_status_off(self):
         '''
-        set live to False
+        set DUT survival condition to True
         @return:
         '''
         if self.live:
@@ -96,14 +91,13 @@ class ADB(Executer):
     # @property
     def u(self, type="u2"):
         '''
-        uiautomater instance
+        uiautomater obj
         @return: instance
         '''
-        # if not hasattr(self, '_u'):
         self._u = UiautomatorTool(self.serialnumber, type)
         return self._u
 
-    def getUUID(self):
+    def get_uuid(self):
         '''
         get u-disk uuid
         @return: uuid : str
@@ -111,7 +105,7 @@ class ADB(Executer):
         self.root()
         return self.checkoutput("ls /storage/ |awk '{print $1}' |head -n 1")
 
-    def getUUIDs(self):
+    def get_uuids(self):
         '''
         get u-disk uuid list
         @return: uuid : list [str]
@@ -119,22 +113,22 @@ class ADB(Executer):
         self.root()
         return self.checkoutput("ls /storage/ |awk '{print $1}'")[1].split("\n")
 
-    def getUUIDSize(self):
+    def get_uuid_size(self):
         '''
         get u-disk size
         @return: size : [int]
         '''
-        uuid = self.getUUID()
+        uuid = self.get_uuid()
         logging.info(f'uuid {uuid}')
         size = self.checkoutput(f"df -h |grep {uuid}|cut -f 3 -d ' '").strip()[:-1]
         return int(float(size))
 
-    def getUUIDAvailSize(self):
+    def get_uuid_avail_size(self):
         '''
         get u-disk avail size
         @return: size %  : [int]
         '''
-        uuid = self.getUUID()
+        uuid = self.get_uuid()
         size = self.checkoutput(f"df -h |grep {uuid}|cut -f 7 -d ' '").strip()[:-1]
         unit = re.findall(r'[A-Za-z]', self.checkoutput(f"df -h |grep {uuid}|cut -f 7 -d ' '"))
         if len(size) == 0:
@@ -151,7 +145,7 @@ class ADB(Executer):
 
     def keyevent(self, keycode):
         '''
-        input keyevent
+        input keyevent keycode
         @param keycode: keyevent
         @return: None
         '''
@@ -160,7 +154,13 @@ class ADB(Executer):
         self.checkoutput_term(self.ADB_S + self.serialnumber +
                               " shell input keyevent " + keycode)
 
-    def sendevent(self, key, hold=3):
+    def send_event(self, key, hold=3):
+        '''
+        sendevent
+        :param key: key number
+        :param hold: long press duration
+        :return:
+        '''
         # /dev/input/event5: 0004 0004 000c0045
         self.checkoutput(
             f'sendevent /dev/input/event5 4 4 786501;sendevent /dev/input/event5 1 {key} 1;sendevent  /dev/input/event5 0 0 0;')
@@ -170,14 +170,14 @@ class ADB(Executer):
 
     def home(self):
         '''
-        ui home button
+        set DUT back to home over keyevent
         @return: None
         '''
         self.keyevent("KEYCODE_HOME")
 
     def enter(self):
         '''
-        ui enter button
+        confirm button
         @return: None
         '''
         self.keyevent("KEYCODE_ENTER")
@@ -205,7 +205,7 @@ class ADB(Executer):
 
     def back(self):
         '''
-        ui back button
+        set DUT cancel button over keyevent
         @return:
         '''
         self.keyevent("KEYCODE_BACK")
@@ -229,9 +229,19 @@ class ADB(Executer):
         # self.kill_logcat_pid()
 
     def clear_app_data(self, app_name):
+        '''
+        clear app data
+        :param app_name: package name. Such as com.google.xxx
+        :return:
+        '''
         self.checkoutput(f"pm clear {app_name}")
 
     def expand_logcat_capacity(self):
+        '''
+        Set the logcat cache space
+        Adjust the logcat priority
+        :return:
+        '''
         self.checkoutput("logcat -G 40m")
         self.checkoutput("renice -n -50 `pidof logd`")
 
@@ -327,7 +337,7 @@ class ADB(Executer):
 
     def filter_logcat_pid(self):
         p_lookup_logcat_thread_cmd = 'ps -e | grep logcat'
-        rc, output = self.checkoutput(p_lookup_logcat_thread_cmd)
+        output = self.checkoutput(p_lookup_logcat_thread_cmd)
         if 'logcat' in output:
             p_logcat_pid = re.search('(.*?) logcat', output, re.M | re.I).group(1).strip().split(" ")
             # print(f"p_logcat_pid 1: {p_logcat_pid}")
@@ -338,7 +348,7 @@ class ADB(Executer):
                         # print(f"p_logcat_pid 2: {one}")
                         self.checkoutput(f"kill -9 {one}")
                         break
-        return rc, output
+        return output
 
     def start_activity(self, packageName, activityName, intentname=""):
         '''
@@ -460,6 +470,11 @@ class ADB(Executer):
             return False
 
     def check_apk_exist(self, package_name):
+        '''
+        check is apk exists or not
+        :param package_name: package name. Such as com.google.xxx
+        :return:
+        '''
         return True if package_name in self.checkoutput('pm list packages') else False
 
     def install_apk(self, apk_path):
@@ -491,7 +506,12 @@ class ADB(Executer):
             logging.info('APK uninstall failed')
             return False
 
-    def getTime(self, time=None):
+    def get_time(self, time=None):
+        '''
+        get time information from the logcat
+        :param time: logcat info
+        :return:
+        '''
         if (":" not in time[6:8]) and (":" not in time[9:11]) and (":" not in time[12:14]) and (
                 ":" not in time[15:18]) and ("." not in time[15:18]):
             th = int(time[6:8])
@@ -588,7 +608,7 @@ class ADB(Executer):
                     if layer == "video":
                         png_type = 0
                     cmd = "pngtest " + str(png_type)
-                    self.run_shell_cmd(cmd)
+                    self.checkoutput(cmd)
             else:
                 logging.info("please check the set screen layer arg")
 
@@ -600,7 +620,6 @@ class ADB(Executer):
         @param app_level: sdk version
         @return: None
         '''
-        app_level = int(self.build_version)
         if layer == "osd":
             devicePath = "/sdcard/screen.png"
             destination = self.logdir + "/" + "screencap_" + destination + ".png"
@@ -630,7 +649,6 @@ class ADB(Executer):
         @param screenshot_counter: screen shot times
         @return: None
         '''
-        app_level = int(self.build_version)
         dirs = self.mkdir_temp()
         if app_level > 28 and screenshot_counter > 1 and (layer == "video" or layer == self.OSD_VIDEO_LAYER):
             self.screencatch(layer, screenshot_counter)
@@ -681,7 +699,6 @@ class ADB(Executer):
                -t <type>     : select video-only(0) or video+osd(1), default as video+osd
                -s <second>   : record times, unit second(s), default as 30
         '''
-        app_level = int(self.build_version)
         destination = self.logdir + "/" + "video_record_" + destination + ".ts"
         dirs = self.mkdir_temp()
         if app_level <= 28:
@@ -705,15 +722,11 @@ class ADB(Executer):
         '''
         self.root()
         dirs = '/data/temp'
-        temp = self.run_shell_cmd("ls /data")[1]
+        temp = self.checkoutput("ls /data")
         if "temp" not in temp:
-            self.run_shell_cmd("mkdir " + dirs)
-        self.run_shell_cmd("chmod 777 " + dirs)
+            self.checkoutput("mkdir " + dirs)
+        self.checkoutput("chmod 777 " + dirs)
         return dirs
-
-    def _touch(self):
-        self.shell("input keyevent mouse")
-        return True
 
     def check_adb_status(self, waitTime=100):
         '''
@@ -955,7 +968,7 @@ class ADB(Executer):
         self.checkoutput("setprop debug.stagefright.omx-debug 0")
         self.checkoutput("setprop vendor.mediahal.loglevels 0")
 
-    def factory_reset(self):
+    def factory_reset_bootloader(self):
         '''
         factory reset over adb
         @return:
@@ -980,12 +993,12 @@ class ADB(Executer):
 
     def apk_enable(self, packageName):
         '''
-        aok enable
+        apk enable
         @param packageName: apk package name
         @return: None
         '''
-        rc, output = self.checkoutput(f'pm enable {packageName}')
-        return re, output
+        output = self.checkoutput(f'pm enable {packageName}')
+        return output
 
     def check_cmd_wifi(self):
         '''
@@ -999,25 +1012,25 @@ class ADB(Executer):
 
     def set_wifi_enabled(self):
         '''
-        open wifi
+        Open wifi over cmd wifi
         '''
         output = self.checkoutput("ifconfig")
-        if "wlan0" not in output[1]:
+        if "wlan0" not in output:
             self.checkoutput("cmd wifi set-wifi-enabled enabled")
         else:
             logging.debug("wifi has opened,no need to open wifi")
 
     def set_wifi_disabled(self):
         '''
-        close wifi
+        Close wifi over cmd wifi
         '''
         output = self.checkoutput("cmd wifi set-wifi-enabled disabled")
-        if "wlan0" not in output[1]:
+        if "wlan0" not in output:
             logging.debug("wifi has closed")
 
     def connect_wifi(self, ssid, pwd, security):
         '''
-        To connect wifi
+        Connect wifi over cmd wifi
         '''
         cmd = f"cmd wifi connect-network {ssid} {security} {pwd}"
         logging.info(f"Connect wifi command: {cmd}")
@@ -1038,45 +1051,12 @@ class ADB(Executer):
             if "successful" in output1[1]:
                 logging.info(f"Network id {network_id[0]} closed")
 
-    def wifi_setup(self):
-        if not self.check_apk_exist('com.example.wifiConnect'):
-            self.install_apk('wifiConnect.apk')
-            self.get_wifi_connect_permission()
-
-    def check_ping_host(self, interface):
-        self.root()
-        time.sleep(5)
-        for _ in range(3):
-            hostname = "www.sohu.com"
-            logging.info(f'----start to ping host {hostname}')
-            if self.ping(interface, hostname):
-                return True
-            logging.info('ping sohu.com failed')
-            # return False
-        for _ in range(3):
-            hostname = "www.google.com"
-            logging.info(f'----start to ping host {hostname}')
-            if self.ping(interface, hostname):
-                return True
-            logging.info('ping google.com failed')
-            return False
-
-    def get_wifi_connect_permission(self):
-        self.checkoutput(self.WIFI_CONNECT_ACTIVITY)
-        time.sleep(3)
-        self.wait_and_tap('While using the app', 'text')
-        self.wait_and_tap('Allow', 'text')
-        self.wait_and_tap('Allow', 'text')
-        self.home()
-        self.app_stop(self.WIFI_CONNECT_PACKAGE)
-
-    def run_vtscts(self, sh_name, case_filename, file_directory, tools_directory):
-        self.checkoutput_term("chmod +x " + sh_name)
-        cmd = "./" + sh_name + " " + case_filename + " " + file_directory + " " + tools_directory
-        logging.info(cmd)
-        self.checkoutput_term(cmd)
 
     def check_wifi_driver(self):
+        '''
+        Check vlsicomm.ko exists or not
+        :return:
+        '''
         self.clear_logcat()
         file_list = self.checkoutput("ls /vendor/lib/modules")
         if 'vlsicomm.ko' in file_list:
@@ -1087,6 +1067,10 @@ class ADB(Executer):
             return False
 
     def get_mcs_rx(self):
+        '''
+        get mcs rx info
+        :return:
+        '''
         try:
             self.checkoutput(self.MCS_RX_GET_COMMAND)
             mcs_info = self.checkoutput(self.DMESG_COMMAND)
@@ -1107,6 +1091,10 @@ class ADB(Executer):
             return 'mcs_rx'
 
     def get_mcs_tx(self):
+        '''
+        get mcs tx info
+        :return:
+        '''
         try:
             mcs_info = self.checkoutput(self.DMESG_COMMAND)
             # logging.debug(mcs_info)
@@ -1139,39 +1127,9 @@ class ADB(Executer):
         except Exception as e:
             return 'Data Error'
 
-    def connect_wifi(self, router, type='', passwd='', hide=False) -> None:
-        if 'com.example.wifiConnect' not in self.checkoutput('pm list package'):
-            self.install_apk('apk/app-debug.apk')
-            self.get_wifi_connect_permission()
-        if int(self.getprop('ro.build.version.sdk')) >= 30 and type != 'NONE' and type != 'WEP':
-            logging.info('use cmd wifi connect')
-            if passwd == '':
-                self.checkoutput(self.CMD_WIFI_CONNECT_OPEN.format(router.ssid))
-            else:
-                self.checkoutput(self.CMD_WIFI_CONNECT.format(router.ssid, type, passwd))
-        else:
-            logging.info('use apk connect')
-            cmd = self.WIFI_CONNECT_COMMAND_REGU.format(router.ssid)
-            if passwd:
-                # logging.info(passwd)
-                cmd += self.WIFI_CONNECT_PASSWD_REGU.format(passwd)
-            if hide == True:
-                cmd += ' --ez hide_ssid true'
-            if type:
-                cmd += f' -e type {type}'
-            if not passwd and not type:
-                cmd += ' -e type NONE'
-            self.checkoutput(cmd)
-        start = time.time()
-        while not self.ping(hostname="192.168.50.1"):
-            time.sleep(1)
-            if time.time() - start > 60:
-                raise TimeoutError('Connect over time')
-
-    def disconnect_wifi(self) -> None:
-        self.checkoutput(self.WIFI_DISCONNECT_COMMAND)
 
     def wait_for_wifi_service(self, type='wlan0') -> None:
+        # Wait for Wi-Fi network is available
         count = 0
         # time.sleep(10)
         while True:
@@ -1184,6 +1142,10 @@ class ADB(Executer):
                 raise EnvironmentError('Lost device')
 
     def wait_for_launcher(self) -> None:
+        '''
+        # Wait for home launcher is available
+        :return:
+        '''
         log = self.popen('logcat')
         while True:
             try:
@@ -1198,6 +1160,10 @@ class ADB(Executer):
         log.send_signal(signal.SIGINT)
 
     def enter_wifi_activity(self) -> None:
+        '''
+        Enter in Wi-Fi activity over ui settings
+        :return:
+        '''
         self.app_stop(self.SETTING_ACTIVITY_TUPLE[0])
         logging.info('Enter wifi activity')
         self.start_activity(*self.SETTING_ACTIVITY_TUPLE)
@@ -1209,11 +1175,10 @@ class ADB(Executer):
         self.wait_element('Wi-Fi', 'text')
 
     def enter_hotspot(self) -> None:
-        # if 'com.droidlogic.tv.settings' in self.checkoutput('ls -l /data/data'):
-        #     logging.info('coco is handsome ')
-        #     self.start_activity(*self.MORE_SETTING_ACTIVITY_TUPLE)
-        # else:
-        logging.info('No more setting')
+        '''
+        Enter in hotspot avtivity over ui settings
+        :return:
+        '''
         self.start_activity(*self.SETTING_ACTIVITY_TUPLE)
         self.wait_element('Network & Internet', 'text')
         self.wait_and_tap('Network & Internet', 'text')
@@ -1222,6 +1187,10 @@ class ADB(Executer):
         self.wait_and_tap('HotSpot', 'text')
 
     def open_hotspot(self) -> None:
+        '''
+        Open hotspot over ui settings
+        :return:
+        '''
         self.enter_hotspot()
         self.wait_element('Portable HotSpot Enabled', 'text')
         self.uiautomator_dump()
@@ -1237,7 +1206,11 @@ class ADB(Executer):
                 raise EnvironmentError("Can't open hotspot")
 
     def close_hotspot(self) -> None:
-        self.kill_tvsetting()
+        '''
+        Close hostspot over ui settings
+        :return:
+        '''
+        self.kill_setting()
         self.enter_hotspot()
         self.wait_element('Portable HotSpot Enabled', 'text')
         self.uiautomator_dump()
@@ -1252,15 +1225,16 @@ class ADB(Executer):
             if times > 5:
                 raise EnvironmentError("Can't close hotspot")
 
-    def kill_tvsetting(self) -> None:
+    def kill_setting(self) -> None:
         self.app_stop(self.SETTING_ACTIVITY_TUPLE[0])
 
     def kill_moresetting(self) -> None:
         for i in range(5):
             self.keyevent(4)
-        self.kill_tvsetting()
+        self.kill_setting()
 
     def wait_for_wifi_address(self, cmd: str = '', target='192.168.50'):
+        # Wait for th wireless adapter to obtaion the ip address
         logging.info(f"waiting for wifi {target}")
         ip_address = self.subprocess_run('ifconfig wlan0 |egrep -o "inet [^ ]*"|cut -f 2 -d :')
         # logging.info(ip_address)
@@ -1281,6 +1255,11 @@ class ADB(Executer):
         return True, ip_address
 
     def find_ssid(self, ssid) -> bool:
+        '''
+        Faciliates list finding SSID
+        :param ssid: SSID
+        :return:
+        '''
         self.enter_wifi_activity()
         logging.info('enter activity done')
         time.sleep(1)
@@ -1289,7 +1268,7 @@ class ADB(Executer):
         for i in range(100):
             for _ in range(4):
                 self.ctl.keyevent(20 if i < 51 else 21)
-            if self.find_and_tap(ssid, 'text') != (-1,-1):
+            if self.find_and_tap(ssid, 'text') != (-1, -1):
                 time.sleep(1)
                 logging.info('find done')
                 self.uiautomator_dump()
@@ -1314,6 +1293,10 @@ class ADB(Executer):
         return result
 
     def wait_keyboard(self):
+        '''
+        Wait for android keybard
+        :return:
+        '''
         for i in range(5):
             self.uiautomator_dump()
             if 'keyboard_area' in self.get_dump_info():  # or \
@@ -1324,6 +1307,13 @@ class ADB(Executer):
                 time.sleep(2)
 
     def connect_ssid(self, ssid, passwd='', target="192.168.50") -> bool:
+        '''
+        Connect ssid over ui setting
+        :param ssid: SSID (target)
+        :param passwd: password if needed
+        :param target: target ip address
+        :return:
+        '''
         self.find_ssid(ssid)
         self.uiautomator_dump()
         if 'IP address' in self.get_dump_info():
@@ -1351,50 +1341,62 @@ class ADB(Executer):
         self.wait_for_wifi_address(target=target)
         return True
 
-    def connect_save_ssid(self, ssid, accompanying=False, target=''):
-        dut = accompanying_dut if accompanying else self
-        dut.find_ssid(ssid)
-        dut.wait_and_tap('Connect', 'text')
-        dut.wait_for_wifi_address(target=target)
+    def connect_save_ssid(self, ssid,target=''):
+        '''
+        Connect ssid which is saved over ui settings
+        :param ssid:
+        :param target:
+        :return:
+        '''
+        self.find_ssid(ssid)
+        self.wait_and_tap('Connect', 'text')
+        self.wait_for_wifi_address(target=target)
         return True
 
     def forget_ssid(self, ssid):
+        '''
+        Forget ssid over ui settings
+        :param ssid:
+        :return:
+        '''
         self.find_ssid(ssid)
         self.wait_and_tap('Forget network', 'text')
         self.wait_and_tap('OK', 'text')
         time.sleep(1)
 
-    def accompanying_dut_wait_ssid(self, ssid: str) -> None:
-        accompanying_dut.checkoutput('cmd wifi start-scan')
-        scan_list = accompanying_dut.subprocess_run(f'cmd wifi list-scan-results |grep "{ssid}"')
+    def wait_ssid_cmd(self, ssid: str) -> None:
+        '''
+        Wait for SSID to appear in the Wi-Fi list
+        :param ssid: SSID
+        :return:
+        '''
+        self.checkoutput('cmd wifi start-scan')
+        scan_list = self.subprocess_run(f'cmd wifi list-scan-results |grep "{ssid}"')
         step = 0
         while ' ' + ssid + ' ' not in scan_list:
             time.sleep(5)
             step += 1
             logging.info('re scan')
-            accompanying_dut.subprocess_run('cmd wifi start-scan')
-            scan_list = accompanying_dut.subprocess_run(f'cmd wifi list-scan-results |grep "{ssid}"')
+            self.subprocess_run('cmd wifi start-scan')
+            scan_list = self.subprocess_run(f'cmd wifi list-scan-results |grep "{ssid}"')
             logging.info(f'scan_list {scan_list}')
             if step > 5:
                 assert False, "hotspot can't be found"
 
-    def accompanying_dut_wait_ssid_disapper(self, ssid: str) -> None:
-        accompanying_dut.checkoutput('cmd wifi start-scan')
-        scan_list = accompanying_dut.subprocess_run(f'cmd wifi list-scan-results |grep "{ssid}"')
-        step = 0
-        while ' ' + ssid + ' ' in scan_list:
-            time.sleep(5)
-            step += 1
-            logging.info('re scan')
-            accompanying_dut.subprocess_run('cmd wifi start-scan')
-            scan_list = accompanying_dut.subprocess_run(f'cmd wifi list-scan-results |grep "{ssid}"')
-            logging.info(f'scan_list {scan_list}')
-            if step > 3:
-                assert False, "hotspot still can be found"
+    def wait_ssid_disapper_cmd(self, ssid: str) -> None:
+        '''
+        Wait for SSID to appear in the Wi-Fi list
+        :param ssid: SSID
+        :return:
+        '''
+        try:
+            self.wait_ssid_cmd(ssid)
+        except AssertionError as e:
+            assert "hotspot can't be found" in e ,"hotspot still can be found"
 
     def change_keyboard_language(self) -> None:
         '''
-        set chinese type keyboard
+        Set chinese type keyboard
         @return:
         '''
         self.install_apk('ADBKeyboard.apk')
@@ -1419,6 +1421,13 @@ class ADB(Executer):
         self.uninstall_apk('com.android.adbkeyboard')
 
     def add_network(self, ssid, type, passwd='') -> None:
+        '''
+        Add wifi network over ui settings
+        :param ssid: SSID (target)
+        :param type: wifi type
+        :param passwd: password if needed
+        :return:
+        '''
         self.enter_wifi_activity()
         time.sleep(2)
         self.wait_and_tap('Add new network', 'text')
@@ -1440,15 +1449,23 @@ class ADB(Executer):
         return True
 
     def open_wifi(self) -> None:
+        '''
+        Open Wi-Fi over ui settings
+        :return:
+        '''
         self.enter_wifi_activity()
         self.wait_element('Wi-Fi', 'text')
         self.uiautomator_dump()
         if 'Available networks' not in self.get_dump_info():
             self.wait_and_tap('Wi-Fi', 'text')
         self.wait_element('Available networks', 'text')
-        self.kill_tvsetting()
+        self.kill_setting()
 
     def close_wifi(self) -> None:
+        '''
+        Close Wi-Fi over ui settings
+        :return:
+        '''
         self.enter_wifi_activity()
         self.wait_element('Wi-Fi', 'text')
         self.uiautomator_dump()
@@ -1456,13 +1473,17 @@ class ADB(Executer):
         if 'Available networks' in self.get_dump_info():
             self.wait_and_tap('Wi-Fi', 'text')
         self.wait_element('IP settings', 'text')
-        self.kill_tvsetting()
+        self.kill_setting()
 
-    def get_hwaddr(self) -> str:
-        hwAddr = self.checkoutput('ifconfig wlan0')
-        hwAddr = re.findall(r'HWaddr (.*?)  Driver', hwAddr, re.S)
-        if hwAddr[0]:
-            return hwAddr
+    def get_wifi_hw_addr(self) -> str:
+        '''
+        Get Wi-Fi hardware address
+        :return:
+        '''
+        hw_addr = self.checkoutput('ifconfig wlan0')
+        hw_addr = re.findall(r'HWaddr (.*?)  Driver', hw_addr, re.S)
+        if hw_addr[0]:
+            return hw_addr
         else:
             raise Exception("Can't get hw addr")
 
@@ -1482,19 +1503,26 @@ class ADB(Executer):
         logging.info('Router is power on')
 
     def playback_youtube(self, sleep_time=60, seek=False, seek_time=3):
+        '''
+        Playback youtube
+        :param sleep_time: playing time
+        :param seek: whether need to seek
+        :param seek_time:
+        :return:
+        '''
         try:
             self.checkoutput(self.PLAYERACTIVITY_REGU.format(self.VIDEO_TAG_LIST[0]['link']))
             time.sleep(10)
             if seek:
                 for _ in range(60 * 24):
-                    # 长按 右键
+                    # Long right press
                     self.keyevent(23)
-                    self.sendevent(106, seek_time)
+                    self.send_event(106, seek_time)
                     self.keyevent(23)
                     time.sleep(30)
-                    # 长按 左键
+                    # Long left press
                     self.keyevent(23)
-                    self.sendevent(105, seek_time)
+                    self.send_event(105, seek_time)
                     self.keyevent(23)
                     time.sleep(30)
             else:
@@ -1504,9 +1532,17 @@ class ADB(Executer):
             ...
 
     def set_hotspot(self, ssid='', passwd='', type='', encrypt=''):
+        '''
+        Setup hotspot
+        :param ssid: hotspot ssid
+        :param passwd: hotspot passwd
+        :param type:  hotspot type
+        :param encrypt: hotspot encrypt
+        :return:
+        '''
         if ssid:
             self.wait_and_tap("Hotspot name", "text")
-            self.wait_element("android:id/edit","resource-id")
+            self.wait_element("android:id/edit", "resource-id")
             self.u().d2(resourceId="android:id/edit").clear_text()
             if ' ' in ssid:
                 self.checkoutput(f'input text $(echo "{ssid}" | sed -e "s/ /\%s/g")')
@@ -1535,9 +1571,17 @@ class ADB(Executer):
             self.wait_element('AP Band', 'text')
 
     def get_hotspot_config(self):
+        '''
+        Get hotspot configuration
+        :return:
+        '''
         return self.checkoutput('cat /data/vendor/wifi/hostapd/hostapd_*.conf')
 
-    def get_factory_reset(self):
+    def factory_reset_ui(self):
+        '''
+        Set factory reset over ui settings
+        :return:
+        '''
         self.start_activity(*self.SETTING_ACTIVITY_TUPLE)
         self.wait_and_tap('Device Preferences', 'text')
         self.wait_and_tap('About', 'text')
@@ -1558,9 +1602,9 @@ class ADB(Executer):
 
 from tools.yamlTool import yamlTool
 
-accompanying_dut = ''
+concomitant_dut = ''
 # try:
-#     accompanying_dut = ADB(yamlTool(os.getcwd() + '/config/config_wifi.yaml').get_note('accompanying_dut'))
+#     accompanying_dut = ADB(yamlTool(os.getcwd() + '/config/config.yaml').get_note('concomitant_dut'))
 #     accompanying_dut.root()
 #     accompanying_dut.remount()
 #     logging.info('Try to init accompanyiny_dut')

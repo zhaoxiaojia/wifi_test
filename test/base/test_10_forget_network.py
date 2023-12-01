@@ -15,10 +15,9 @@ import time
 
 import pytest
 
+from Router import Router
 from tools.Asusax88uControl import Asusax88uControl
 from tools.yamlTool import yamlTool
-
-from Router import Router
 
 '''
 测试步骤
@@ -40,13 +39,13 @@ def setup():
     ax88uControl.change_setting(router_2g)
     ax88uControl.router_control.driver.quit()
     yield
-    pytest.executer.kill_tvsetting()
+    pytest.executer.kill_setting()
 
 
 def test_forget_wifi():
     # connect wifi
     pytest.executer.connect_ssid(ssid,passwd)
-    pytest.executer.kill_tvsetting()
+    pytest.executer.kill_setting()
     pytest.executer.find_ssid('ATC_ASUS_AX88U_2G')
     pytest.executer.wait_and_tap('Forget network', 'text')
     for _ in range(3):

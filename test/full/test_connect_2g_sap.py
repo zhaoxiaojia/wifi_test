@@ -15,9 +15,10 @@ import time
 
 import pytest
 
-from tools.Asusax88uControl import Asusax88uControl
+from ADB import concomitant_dut
 from Router import Router
-from ADB import accompanying_dut
+from tools.Asusax88uControl import Asusax88uControl
+
 '''
 测试步骤
 1.DUT 有线连接外网；
@@ -67,9 +68,9 @@ def test_hotspot_2g():
         # none doesn't need passwd
         cmd = pytest.executer.CMD_WIFI_CONNECT_OPEN.format(ssid)
     logging.info(cmd)
-    accompanying_dut.checkoutput(cmd)
+    concomitant_dut.checkoutput(cmd)
     ipaddress = pytest.executer.wait_for_wifi_address(cmd, accompanying=True)[1]
-    logging.info(accompanying_dut.checkoutput(pytest.executer.IW_LINNK_COMMAND))
-    assert 'freq: 2' in accompanying_dut.checkoutput(pytest.executer.IW_LINNK_COMMAND), "Doesn't conect 2g "
+    logging.info(concomitant_dut.checkoutput(pytest.executer.IW_LINNK_COMMAND))
+    assert 'freq: 2' in concomitant_dut.checkoutput(pytest.executer.IW_LINNK_COMMAND), "Doesn't conect 2g "
     ipaddress = '.'.join(ipaddress.split('.')[:3] + ['1'])
     pytest.executer.forget_network_cmd(ipaddress, accompanying=True)

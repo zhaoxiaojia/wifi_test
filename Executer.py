@@ -101,7 +101,7 @@ class Executer():
         return subprocess.check_output(command, encoding='gbk')
 
     def kill_iperf(self):
-        # kill 板子 跟 pc 上的 iperf
+        # kill iperf
         try:
             self.checkoutput(self.IPERF_KILL)
         except Exception as e:

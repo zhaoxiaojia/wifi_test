@@ -14,8 +14,8 @@ import time
 
 import pytest
 
-from tools.Asusax88uControl import Asusax88uControl
 from Router import Router
+from tools.Asusax88uControl import Asusax88uControl
 
 '''
 测试步骤
@@ -29,8 +29,6 @@ passwd = 'Abc1234567'
 router_5g = Router(band='5 GHz', ssid=ssid, wireless_mode='Legacy', channel='149', bandwidth='20 MHz',
                    authentication_method='WPA3-Personal', wpa_passwd=passwd)
 
-times = pytest.config_yaml.get_note('times_081')
-
 
 @pytest.fixture(autouse=True, scope='session')
 def setup_teardown():
@@ -42,10 +40,10 @@ def setup_teardown():
         pytest.executer.CMD_WIFI_CONNECT.format(ssid, 'wpa3', passwd)), "Can't connect"
     yield
     pytest.executer.forget_network_cmd("192.168.50.1")
-    pytest.executer.kill_tvsetting()
+    pytest.executer.kill_setting()
 
 
-@pytest.mark.repeat(times)
+@pytest.mark.repeat(20)
 def test_onoff_stress():
     pytest.executer.open_wifi()
     assert pytest.executer.wait_for_wifi_address(), "Can't get ipaddress"

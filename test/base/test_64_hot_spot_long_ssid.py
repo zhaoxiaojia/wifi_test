@@ -16,7 +16,8 @@ import time
 
 import pytest
 
-from ADB import accompanying_dut
+from ADB import concomitant_dut
+
 '''
 测试步骤
 1.设置SAP SSID为32个字符"12345678901234567890123456789012"
@@ -34,4 +35,4 @@ def setup_teardown():
 @pytest.mark.hot_spot
 def test_hotspot_long_ssid():
     pytest.executer.set_hotspot(ssid)
-    pytest.executer.accompanying_dut_wait_ssid(ssid)
+    concomitant_dut.wait_ssid_cmd(ssid)

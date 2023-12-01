@@ -8,8 +8,9 @@
 
 import logging
 import time
-from uiautomator import Device
+
 import uiautomator2 as u2
+from uiautomator import Device
 
 
 class UiautomatorTool:

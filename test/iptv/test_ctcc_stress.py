@@ -11,7 +11,8 @@
 import logging
 
 import pytest
-from . import Iptv_ctl,videoLink
+
+from . import Iptv_ctl, videoLink
 
 iptvCtl = Iptv_ctl()
 

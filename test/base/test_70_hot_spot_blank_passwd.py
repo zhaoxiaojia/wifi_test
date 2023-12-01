@@ -13,7 +13,7 @@ import time
 
 import pytest
 
-from ADB import accompanying_dut
+from ADB import concomitant_dut
 
 '''
 测试步骤

@@ -11,14 +11,16 @@
 
 
 import logging
+import random
 import re
 import time
+from enum import Enum
 
 import pytest
 import serial
-from enum import Enum
+
 from UiautomatorTool import UiautomatorTool
-import random
+
 
 class videoLink(Enum):
     # 4k link
