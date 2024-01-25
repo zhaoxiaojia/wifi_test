@@ -51,7 +51,7 @@ class ADB(Executer):
 
     """
 
-    ADB_S = 'adb -s '
+    ADB_S = 'adb '
     DUMP_FILE = '\\view.xml'
     OSD_VIDEO_LAYER = 'osd+video'
 
@@ -151,8 +151,7 @@ class ADB(Executer):
         '''
         if isinstance(keycode, int):
             keycode = str(keycode)
-        self.checkoutput_term(self.ADB_S + self.serialnumber +
-                              " shell input keyevent " + keycode)
+        self.checkoutput_term(self.ADB_S + " shell input keyevent " + keycode)
 
     def send_event(self, key, hold=3):
         '''
@@ -265,7 +264,7 @@ class ADB(Executer):
         @param y: y index
         @return: None
         '''
-        self.checkoutput_term(self.ADB_S + self.serialnumber + " shell input tap " + str(x) + " " + str(y))
+        self.checkoutput_term(self.ADB_S + " shell input tap " + str(x) + " " + str(y))
 
     def swipe(self, x_start, y_start, x_end, y_end, duration):
         '''
@@ -277,7 +276,7 @@ class ADB(Executer):
         @param duration: action time duration
         @return: None
         '''
-        self.checkoutput_term(self.ADB_S + self.serialnumber + " shell input swipe " + str(x_start) +
+        self.checkoutput_term(self.ADB_S + " shell input swipe " + str(x_start) +
                               " " + str(y_start) + " " + str(x_end) + " " + str(y_end) + " " + str(duration))
 
     def text(self, text):
@@ -288,14 +287,14 @@ class ADB(Executer):
         '''
         if isinstance(text, int):
             text = str(text)
-        self.checkoutput_term(self.ADB_S + self.serialnumber + " shell input text " + text)
+        self.checkoutput_term(self.ADB_S + " shell input text " + text)
 
     def clear_logcat(self):
         '''
         clear logcat
         @return: None
         '''
-        self.checkoutput_term(self.ADB_S + self.serialnumber + " logcat -b all -c")
+        self.checkoutput_term(self.ADB_S +  " logcat -b all -c")
 
     def save_logcat(self, filepath, tag=''):
         '''
@@ -308,10 +307,10 @@ class ADB(Executer):
         logcat_file = open(filepath, 'w')
         if tag and ("grep -E" not in tag) and ("all" not in tag):
             tag = f'-s {tag}'
-            log = subprocess.Popen(f"adb -s {self.serialnumber} shell logcat -v time {tag}".split(), stdout=logcat_file,
+            log = subprocess.Popen(f"adb shell logcat -v time {tag}".split(), stdout=logcat_file,
                                    preexec_fn=os.setsid)
         else:
-            log = subprocess.Popen(f"adb -s {self.serialnumber} shell logcat -v time {tag}", stdout=logcat_file,
+            log = subprocess.Popen(f"adb shell logcat -v time {tag}", stdout=logcat_file,
                                    shell=True, stdin=subprocess.PIPE, preexec_fn=os.setsid)
         return log, logcat_file
 
@@ -362,9 +361,9 @@ class ADB(Executer):
             self.app_stop(packageName)
         except Exception as e:
             ...
-        command = self.ADB_S + self.serialnumber + " shell am start -a " + intentname + " -n " + packageName + "/" + activityName
+        command = self.ADB_S + " shell am start -a " + intentname + " -n " + packageName + "/" + activityName
         logging.info(command)
-        self.checkoutput_term(self.ADB_S + self.serialnumber +
+        self.checkoutput_term(self.ADB_S+
                               " shell am start -a " + intentname + " -n " + packageName + "/" + activityName)
 
     def pull(self, filepath, destination):
@@ -374,7 +373,7 @@ class ADB(Executer):
         @param destination: target path
         @return: None
         '''
-        self.checkoutput_term(self.ADB_S + self.serialnumber +
+        self.checkoutput_term(self.ADB_S +
                               " pull " + filepath + " " + destination)
 
     def push(self, filepath, destination):
@@ -384,7 +383,7 @@ class ADB(Executer):
         @param destination: target path
         @return: None
         '''
-        self.checkoutput_term(self.ADB_S + self.serialnumber +
+        self.checkoutput_term(self.ADB_S +
                               " push " + filepath + " " + destination)
 
     def shell(self, cmd):
@@ -393,7 +392,7 @@ class ADB(Executer):
         @param cmd: command
         @return: None
         '''
-        self.checkoutput_term(self.ADB_S + self.serialnumber + " shell " + cmd)
+        self.checkoutput_term(self.ADB_S + " shell " + cmd)
 
     def ping(self, interface=None, hostname="www.baidu.com",
              interval_in_seconds=1, ping_time_in_seconds=5,
@@ -544,7 +543,7 @@ class ADB(Executer):
         @param path: file path
         @return: None
         '''
-        self.checkoutput_term(self.ADB_S + self.serialnumber + " shell rm " + flags + " " + path)
+        self.checkoutput_term(self.ADB_S+ " shell rm " + flags + " " + path)
 
     def uiautomator_dump(self, filepath='', uiautomator_type='u2'):
         '''
@@ -583,7 +582,7 @@ class ADB(Executer):
         expand android notification bar
         @return: None
         '''
-        self.checkoutput_term(self.ADB_S + self.serialnumber + " shell cmd statusbar expand-notifications")
+        self.checkoutput_term(self.ADB_S + " shell cmd statusbar expand-notifications")
 
     def _screencap(self, filepath, layer="osd", app_level=28):
         '''
@@ -598,7 +597,7 @@ class ADB(Executer):
         '''
 
         if layer == "osd":
-            self.checkoutput_term(self.ADB_S + self.serialnumber + " shell screencap -p " + filepath)
+            self.checkoutput_term(self.ADB_S + " shell screencap -p " + filepath)
         else:
             png_type = 1
             if layer == "video" or layer == self.OSD_VIDEO_LAYER:
@@ -887,7 +886,7 @@ class ADB(Executer):
         @return: None
         '''
         count = 0
-        while subprocess.run(f'adb -s {self.serialnumber} shell getprop sys.boot_completed'.split(),
+        while subprocess.run(f'adb shell getprop sys.boot_completed'.split(),
                              stdout=subprocess.PIPE).returncode != 0:
             flag = True
             if count % 10 == 0:
@@ -914,8 +913,8 @@ class ADB(Executer):
         @param command: command
         @return: subprocess.Popen
         '''
-        logging.debug(f"command:{self.ADB_S + self.serialnumber + ' ' + command}")
-        cmd = self.ADB_S + self.serialnumber + ' ' + command
+        logging.debug(f"command:{self.ADB_S  + ' ' + command}")
+        cmd = self.ADB_S + ' ' + command
         return self.popen_term(cmd)
 
     def popen_term(self, command):
@@ -934,7 +933,9 @@ class ADB(Executer):
 
     @connect_again
     def checkoutput_shell(self, command):
-        command = self.ADB_S + self.serialnumber + ' ' + command
+        if self.ADB_S:
+            command = self.ADB_S + ' ' + command
+        logging.info(f'command {command}')
         return self.checkoutput_term(command)
 
     @connect_again
@@ -945,7 +946,7 @@ class ADB(Executer):
         @return: subprocess.CompletedProcess
         '''
         if not isinstance(command, list):
-            command = (self.ADB_S + self.serialnumber + ' shell ' + command).split()
+            command = (self.ADB_S + ' shell ' + command).split()
         return subprocess.run(command, stdout=subprocess.PIPE, encoding='utf-8').stdout
 
     def open_omx_info(self):
@@ -1051,7 +1052,6 @@ class ADB(Executer):
             if "successful" in output1[1]:
                 logging.info(f"Network id {network_id[0]} closed")
 
-
     def check_wifi_driver(self):
         '''
         Check vlsicomm.ko exists or not
@@ -1126,7 +1126,6 @@ class ADB(Executer):
             return rate
         except Exception as e:
             return 'Data Error'
-
 
     def wait_for_wifi_service(self, type='wlan0') -> None:
         # Wait for Wi-Fi network is available
@@ -1341,7 +1340,7 @@ class ADB(Executer):
         self.wait_for_wifi_address(target=target)
         return True
 
-    def connect_save_ssid(self, ssid,target=''):
+    def connect_save_ssid(self, ssid, target=''):
         '''
         Connect ssid which is saved over ui settings
         :param ssid:
@@ -1392,7 +1391,7 @@ class ADB(Executer):
         try:
             self.wait_ssid_cmd(ssid)
         except AssertionError as e:
-            assert "hotspot can't be found" in e ,"hotspot still can be found"
+            assert "hotspot can't be found" in e, "hotspot still can be found"
 
     def change_keyboard_language(self) -> None:
         '''
