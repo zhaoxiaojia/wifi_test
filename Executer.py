@@ -17,7 +17,7 @@ class Executer():
     DMESG_COMMAND = 'dmesg -S'
     CLEAR_DMESG_COMMAND = 'dmesg -c'
 
-    SETTING_ACTIVITY_TUPLE = 'com.android.tv.settings', '.MainSettings'
+    SETTING_ACTIVITY_TUPLE = 'com.android.smart.terminal.settings','.LauncherActivity'
     MORE_SETTING_ACTIVITY_TUPLE = 'com.droidlogic.tv.settings', '.more.MorePrefFragmentActivity'
 
     SKIP_OOBE = "pm disable com.google.android.tungsten.setupwraith;settings put secure user_setup_complete 1;settings put global device_provisioned 1;settings put secure tv_user_setup_complete 1"
