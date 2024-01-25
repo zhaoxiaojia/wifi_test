@@ -40,18 +40,18 @@ with open(os.getcwd() + '/config/asusax88u.csv', 'r') as f:
 logging.info(test_data)
 
 # 设置为True 时跳过 衰减 相关操作
-rf_debug = False
+rf_debug = True
 # 设置为True 时跳过 转台 相关操作
 corner_debug = True
 # 设置为True 时跳过 路由 相关操作
 router_debug = False
 # 设置DUT iperf 运行命令 iperf 或者 iperf3
-dut_iperf = 'iperf3'
+dut_iperf = 'iperf'
 # 设置pc iperf 运行命令 iperf 或者 iperf3
-pc_ipef = 'iperf3'
+pc_ipef = 'iperf'
 
 # 设置是否需要push iperf
-push_iperf = True
+push_iperf = False
 # 无法使用 命令行 连接wifi 是 设置为true
 third_dut = False
 if pytest.connect_type == 'telnet':
@@ -314,7 +314,7 @@ def session_setup_teardown(request):
     logging.info('==== debug command setup start')
     # iperf 配置
     if push_iperf and pytest.connect_type == 'adb' and (
-            pytest.executer.checkoutput('[ -e /system.bin/iperf ] && echo yes || echo no').strip() != 'yes'):
+            pytest.executer.checkoutput('[ -e /system/bin/iperf ] && echo yes || echo no').strip() != 'yes'):
         path = os.path.join(os.getcwd(), 'res/iperf')
         pytest.executer.push(path, '/system/bin')
         pytest.executer.checkoutput('chmod a+x /system/bin/iperf')
