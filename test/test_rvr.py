@@ -40,7 +40,7 @@ with open(os.getcwd() + '/config/asusax88u.csv', 'r') as f:
 logging.info(test_data)
 
 # 设置为True 时跳过 衰减 相关操作
-rf_debug = True
+rf_debug = False
 # 设置为True 时跳过 转台 相关操作
 corner_debug = True
 # 设置为True 时跳过 路由 相关操作
@@ -116,11 +116,6 @@ if test_type == 'corner' or test_type == 'both':
         corner_step_list = [i for i in range(*corner_step_list)][::45]
         logging.info(f'corner step_list {corner_step_list}')
 
-# step_list_rf = wifi_yaml.get_note('rf_solution')['step']
-# rf_step_list = [i for i in range(*step_list_rf)][::]
-#
-# step_list_corner = wifi_yaml.get_note('corner_angle')['step']
-# corner_step_list = [i for i in range(*step_list_corner)][::45]
 step_list = [1]
 if test_type == 'rf' and rf_step_list:
     step_list = rf_step_list
@@ -128,6 +123,8 @@ if test_type == 'corner' and corner_step_list:
     step_list = corner_step_list
 if test_type == 'both' and rf_step_list and corner_step_list:
     step_list = itertools.product(corner_step_list, rf_step_list)
+
+logging.info(f'finall step_list {step_list}')
 
 # 配置 测试报告
 pytest.testResult.x_path = [] if test_type == 'both' else step_list
@@ -256,6 +253,8 @@ def wifi_setup_teardown(request):
     else:
         # 连接 网络 最多三次重试
         for _ in range(3):
+            if router_debug:
+                break
             try:
                 if int(pytest.executer.getprop('ro.build.version.sdk')) >= 30 and not router_info.wep_encrypt:
                     logging.info('sdk over 30 ')
@@ -293,11 +292,9 @@ def wifi_setup_teardown(request):
 
     if pytest.connect_type == 'telnet':
         pytest.executer.dut_ip = pytest.executer.ip
-    elif not router_debug:
+    else:
         dut_info = pytest.executer.checkoutput('ifconfig wlan0')
         pytest.executer.dut_ip = re.findall(r'inet addr:(\d+\.\d+\.\d+\.\d+)', dut_info, re.S)[0]
-    else:
-        pytest.executer.dut_ip = ''
     logging.info(f'dut_ip:{pytest.executer.dut_ip}')
     logging.info('==== wifi env setup done')
     connect_status = True
@@ -305,8 +302,8 @@ def wifi_setup_teardown(request):
     # 后置动作
     # 重置结果
     tx_result_list, rx_result_list = [], []
-    if not router_debug:
-        router.router_control.driver.quit()
+    # if not router_debug:
+    #     router.router_control.driver.quit()
 
 
 @pytest.fixture(scope='session', autouse=True, params=command_data)
@@ -400,40 +397,37 @@ def set_pair_count(router_info, rssi_num, type, dire):
 
 
 def get_tx_rate(router_info, pair, freq_num, rssi_num, type, corner_set='', db_set=''):
-    if not rf_debug or not router_debug:
-        # 最多三次 重试机会
-        for _ in range(3):
-            logging.info('run tx ')
-            tx_result = 0
-            mcs_tx = 0
-            # pytest.executer.checkoutput(pytest.executer.CLEAR_DMESG_COMMAND)
-            # pytest.executer.checkoutput(pytest.executer.MCS_TX_KEEP_GET_COMMAND)
-            # kill iperf
-            pytest.executer.kill_iperf()
-            time.sleep(1)
-            server = iperf_on(pytest.executer.IPERF_SERVER[type], '')
-            iperf_on(pytest.executer.IPERF_CLIENT_REGU[type]['tx'].format(
-                pytest.executer.pc_ip,
-                pytest.executer.IPERF_TEST_TIME,
-                pair if type == 'TCP' else 1), pytest.executer.serialnumber)
-            time.sleep(pytest.executer.IPERF_WAIT_TIME)
-            if pytest.connect_type == 'telnet':
-                time.sleep(15)
-            tx_result = get_logcat(pair if type == 'TCP' else 1)
-            logging.info(f'get result done : {tx_result}')
-            if tx_result == False:
-                logging.info("Connect failed")
-                continue
-            time.sleep(3)
-            server_off(server)
-            logging.info(f'tx_result {tx_result}')
-            mcs_tx = pytest.executer.get_mcs_tx()
-            if tx_result and mcs_tx:
-                logging.info(f'{tx_result}, {mcs_tx}')
-                break
-    else:
-        tx_result = 70 + random.randrange(200, 300)
-        mcs_tx = 'msc_tx'
+
+    # 最多三次 重试机会
+    for _ in range(3):
+        logging.info('run tx ')
+        tx_result = 0
+        mcs_tx = 0
+        # pytest.executer.checkoutput(pytest.executer.CLEAR_DMESG_COMMAND)
+        # pytest.executer.checkoutput(pytest.executer.MCS_TX_KEEP_GET_COMMAND)
+        # kill iperf
+        pytest.executer.kill_iperf()
+        time.sleep(1)
+        server = iperf_on(pytest.executer.IPERF_SERVER[type], '')
+        iperf_on(pytest.executer.IPERF_CLIENT_REGU[type]['tx'].format(
+            pytest.executer.pc_ip,
+            pytest.executer.IPERF_TEST_TIME,
+            pair if type == 'TCP' else 1), pytest.executer.serialnumber)
+        time.sleep(pytest.executer.IPERF_WAIT_TIME)
+        if pytest.connect_type == 'telnet':
+            time.sleep(15)
+        tx_result = get_logcat(pair if type == 'TCP' else 1)
+        logging.info(f'get result done : {tx_result}')
+        if tx_result == False:
+            logging.info("Connect failed")
+            continue
+        time.sleep(3)
+        server_off(server)
+        logging.info(f'tx_result {tx_result}')
+        mcs_tx = pytest.executer.get_mcs_tx()
+        if tx_result and mcs_tx:
+            logging.info(f'{tx_result}, {mcs_tx}')
+            break
     corner = 'None'
 
     if 'corner' in env_control:
@@ -453,39 +447,35 @@ def get_tx_rate(router_info, pair, freq_num, rssi_num, type, corner_set='', db_s
 
 
 def get_rx_rate(router_info, pair, freq_num, rssi_num, type, corner_set='', db_set=''):
-    if not rf_debug or not router_debug:
-        for _ in range(3):
-            logging.info('run rx ')
-            rx_result = 0
-            mcs_rx = 0
-            # clear mcs data
-            # pytest.executer.checkoutput(pytest.executer.CLEAR_DMESG_COMMAND)
-            # pytest.executer.checkoutput(pytest.executer.MCS_RX_CLEAR_COMMAND)
-            # kill iperf
-            pytest.executer.kill_iperf()
-            time.sleep(1)
-            server = iperf_on(pytest.executer.IPERF_SERVER[type], pytest.executer.serialnumber)
-            iperf_on(
-                pytest.executer.IPERF_CLIENT_REGU[type]['rx'].format(
-                    pytest.executer.dut_ip, pytest.executer.IPERF_TEST_TIME,
-                    pair if type == 'TCP' else 4), '')
-            time.sleep(pytest.executer.IPERF_WAIT_TIME)
-            if pytest.connect_type == 'telnet':
-                time.sleep(15)
-            rx_result = get_logcat(pair if type == 'TCP' else 4)
-            if rx_result == False:
-                logging.info("Connect failed")
-                continue
-            time.sleep(3)
-            server_off(server)
-            # get mcs data
-            mcs_rx = pytest.executer.get_mcs_rx()
-            if rx_result and mcs_rx:
-                logging.info(f'{rx_result}, {mcs_rx}')
-                break
-    else:
-        rx_result = 70 + random.randrange(200, 300)
-        mcs_rx = 'mcs_rx'
+    for _ in range(3):
+        logging.info('run rx ')
+        rx_result = 0
+        mcs_rx = 0
+        # clear mcs data
+        # pytest.executer.checkoutput(pytest.executer.CLEAR_DMESG_COMMAND)
+        # pytest.executer.checkoutput(pytest.executer.MCS_RX_CLEAR_COMMAND)
+        # kill iperf
+        pytest.executer.kill_iperf()
+        time.sleep(1)
+        server = iperf_on(pytest.executer.IPERF_SERVER[type], pytest.executer.serialnumber)
+        iperf_on(
+            pytest.executer.IPERF_CLIENT_REGU[type]['rx'].format(
+                pytest.executer.dut_ip, pytest.executer.IPERF_TEST_TIME,
+                pair if type == 'TCP' else 4), '')
+        time.sleep(pytest.executer.IPERF_WAIT_TIME)
+        if pytest.connect_type == 'telnet':
+            time.sleep(15)
+        rx_result = get_logcat(pair if type == 'TCP' else 4)
+        if rx_result == False:
+            logging.info("Connect failed")
+            continue
+        time.sleep(3)
+        server_off(server)
+        # get mcs data
+        mcs_rx = pytest.executer.get_mcs_rx()
+        if rx_result and mcs_rx:
+            logging.info(f'{rx_result}, {mcs_rx}')
+            break
     corner = 'None'
     if 'corner' in env_control:
         if not rf_debug:

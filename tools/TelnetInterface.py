@@ -61,16 +61,13 @@ class TelnetInterface():
         if type not in ['gs', 'rt', 'gcp']:
             assert 0, 'type must be gs or tr or gcp'
         if type == 'rt':
-            if angle != '':
-                self.angle = angle
-            else:
-                self.angle += 30 * 10
+            if angle == '':
+                angle += self.get_turntanle_current_angle() + 30 * 10
             if angle != self.get_turntanle_current_angle():
-                self.tn.write(f"{type} {self.angle % 3600}".encode('ascii') + b'\r\n')
+                self.tn.write(f"{type} {angle % 3600}".encode('ascii') + b'\r\n')
         else:
             self.tn.write(f"{type}".encode('ascii') + b'\r\n')
         self.wait_standyby()
-        # self.tn.write(b'exit\r\r')
 
     def set_turntable_zero(self):
         self.tn.write('rt 0'.encode('ascii') + b'\r\n')
