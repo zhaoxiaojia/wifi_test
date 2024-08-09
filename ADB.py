@@ -187,14 +187,14 @@ class ADB(Executer):
         set adb root
         @return: None
         '''
-        self.checkoutput_shell('root')
+        self.subprocess_run('root')
 
     def remount(self):
         '''
         set adb remount
         @return: None
         '''
-        self.checkoutput_shell('remount')
+        self.subprocess_run('remount')
 
     def reboot(self):
         '''

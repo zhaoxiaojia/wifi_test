@@ -2,7 +2,7 @@
 connect_type:
   type: adb
   adb:
-    device: 'ohm56c019501211'
+    device: 'ap2228019621984103f16'
   telnet:
     ip: '192.168.50.249'
 
@@ -33,12 +33,20 @@ corner_angle:
   ip_address: 192.168.50.18
   step: [ 0, 360 ]
 
-# ≤‚ ‘«∞≈‰÷√≤Œ ˝
+rvr:
+  tool: iperf
+  iperf:
+    # should be iperf or iperf3
+    version: iperf3
+    # dut iperf path
+    path: ''
+  ixchariot:
+
 env_command: [ "pwd" ]
 #env_command: [ "iwpriv wlan0 set_rate_ofdm 9","iwpriv wlan0 set_rate_ofdm 8","iwpriv wlan0 set_rate_ofdm 3" ]
-test_wifi:
-  ssid: i-test
-  passwd: "@12345678"
+#test_wifi:
+#  ssid: i-test
+#  passwd: "@12345678"
 
 # Number of channels played
 pair_num:

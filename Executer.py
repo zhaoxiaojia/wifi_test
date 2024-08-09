@@ -45,7 +45,6 @@ class Executer():
     IW_LINNK_COMMAND = 'iw wlan0 link'
 
     CMD_WIFI_CONNECT = 'cmd wifi connect-network {} {} {}'
-    CMD_WIFI_CONNECT_OPEN = 'cmd wifi connect-network {} open'
     CMD_WIFI_HIDE = ' -h'
     CMD_WIFI_STATUS = 'cmd wifi status'
 
@@ -102,19 +101,9 @@ class Executer():
 
     def kill_iperf(self):
         # kill iperf
-        try:
-            self.checkoutput(self.IPERF_KILL)
-        except Exception as e:
-            ...
-        try:
-            self.checkoutput(self.IPERF_KILL.replace('iperf', 'iperf3'))
-        except Exception as e:
-            ...
-        try:
-            self.checkoutput_term(self.IPERF_WIN_KILL)
-        except Exception as e:
-            ...
-        try:
-            self.checkoutput_term(self.IPERF_WIN_KILL.replace('iperf', 'iperf3'))
-        except Exception as e:
-            ...
+        command_list = [self.IPERF_KILL,self.IPERF_KILL.replace('iperf', 'iperf3'),self.IPERF_WIN_KILL,self.IPERF_WIN_KILL.replace('iperf', 'iperf3')]
+        for i in command_list:
+            try:
+                self.checkoutput(i)
+            except Exception as e:
+                ...

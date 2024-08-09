@@ -30,7 +30,6 @@ from Router import Router
 from tools.Asusax86uControl import Asusax86uControl
 from tools.Asusax88uControl import Asusax88uControl
 from tools.TelnetInterface import TelnetInterface
-# from tools.UsbControl import UsbControl
 from tools.yamlTool import yamlTool
 
 # 读取 测试配置
@@ -45,13 +44,9 @@ rf_debug = False
 corner_debug = True
 # 设置为True 时跳过 路由 相关操作
 router_debug = False
-# 设置DUT iperf 运行命令 iperf 或者 iperf3
-dut_iperf = 'iperf'
-# 设置pc iperf 运行命令 iperf 或者 iperf3
-pc_ipef = 'iperf'
 
 # 设置是否需要push iperf
-push_iperf = False
+iperf_tool = False
 # 无法使用 命令行 连接wifi 是 设置为true
 third_dut = False
 if pytest.connect_type == 'telnet':
@@ -64,6 +59,13 @@ wifi_yaml = yamlTool(os.getcwd() + '/config/config.yaml')
 command_data = wifi_yaml.get_note('env_command')
 router_name = wifi_yaml.get_note('router')['name']
 router = ''
+
+
+rvr_tool = wifi_yaml.get_note('rvr')['tool']
+if rvr_tool == 'iperf':
+    test_tool = wifi_yaml.get_note('rvr')[rvr_tool]['version']
+    tool_path = wifi_yaml.get_note('rvr')[rvr_tool]['path']
+    logging.info(f'test_tool {test_tool}')
 
 # 实例路由器对象
 if not router_debug:
@@ -124,16 +126,16 @@ if test_type == 'corner' and corner_step_list:
 if test_type == 'both' and rf_step_list and corner_step_list:
     step_list = itertools.product(corner_step_list, rf_step_list)
 
-logging.info(f'finall step_list {step_list}')
+logging.info(f'finally step_list {step_list}')
 
 # 配置 测试报告
 pytest.testResult.x_path = [] if test_type == 'both' else step_list
 pytest.testResult.init_rvr_result()
-tx_result_list, rx_result_list = [], []
+# tx_result_list, rx_result_list = [], []
 rx_result, tx_result = '', ''
 
 
-def iperf_on(command, adb):
+def iperf_on(command, adb,direction = 'tx'):
     def server_on():
         logging.info(f'server {command} ->{adb}<-')
         with open('temp.txt', 'w') as f:
@@ -141,32 +143,22 @@ def iperf_on(command, adb):
                 iperf_log = pytest.executer.checkoutput(command)
                 f.write(iperf_log)
             popen = subprocess.Popen(command.split(), stdout=f, encoding='gbk')
-        logging.info(subprocess.run('tasklist | findstr "iperf"'.replace('iperf',pc_ipef),shell=True,encoding='gbk'))
+        # logging.info(subprocess.run('tasklist | findstr "iperf"'.replace('iperf',pc_ipef),shell=True,encoding='gbk'))
         # logging.info(pytest.executer.checkoutput('ps -A|grep "iperf"'.replace('iperf',dut_iperf)))
         logging.info('write done')
         return popen
 
-    # if adb == 'executer':
-    #     # 使用telnet 时 dut 场景
-    #     logging.info('telnet dut ')
-    #     command = command.replace('iperf', dut_iperf)
-    #     if dut_iperf == 'iperf3':
-    #         command = command.replace('-w 4m', '')
-    #     logging.info(f'telnet adb {command}')
-    #     pytest.executer.checkoutput(command)
-    #     if re.findall(r'iperf[3]?.*?-s', command):
-    #         popen = server_on()
-    #     return popen
     if adb:
-        command = command.replace('iperf', dut_iperf)
-        if dut_iperf == 'iperf3':
-            command = command.replace('-w 4m', '')
+        if test_tool == 'iperf3':
+            command = 'iperf3 -s -1'
         if adb != 'executer':
             command = f'adb -s {adb} shell ' + command
     else:
-        command = command.replace('iperf', pc_ipef)
-        if pc_ipef == 'iperf3':
-            command = command.replace('-w 4m', '')
+        if test_tool == 'iperf3':
+            command = f'iperf3 -c {pytest.executer.dut_ip} -i1 -t30 -P5'
+            if direction == 'tx':
+                command = f'iperf3 -c {pytest.executer.dut_ip} -i1 -t30 -P5 -R'
+
     logging.info(f'command {command} ->{adb}<-')
 
     if re.findall(r'iperf[3]?.*?-s', command):
@@ -214,12 +206,18 @@ def get_logcat(pair):
         result = 0
     return result
 
+def push_iperf():
+    if iperf_tool and pytest.connect_type == 'adb' and (
+            pytest.executer.checkoutput('[ -e /system/bin/iperf ] && echo yes || echo no').strip() != 'yes'):
+        path = os.path.join(os.getcwd(), 'res/iperf')
+        pytest.executer.push(path, '/system/bin')
+        pytest.executer.checkoutput('chmod a+x /system/bin/iperf')
 
 @pytest.fixture(scope='session', autouse=True, params=test_data)
 def wifi_setup_teardown(request):
-    global tx_result_list, rx_result_list, rx_result, tx_result
+    global x_result, tx_resul  #,tx_result_list, rx_result_list,
     logging.info('==== wifi env setup start')
-
+    push_iperf()
     router_info = request.param
     if not router_debug:
         # 修改路由器配置
@@ -256,32 +254,21 @@ def wifi_setup_teardown(request):
             if router_debug:
                 break
             try:
-                if int(pytest.executer.getprop('ro.build.version.sdk')) >= 30 and not router_info.wep_encrypt:
-                    logging.info('sdk over 30 ')
-                    type = 'wpa3' if 'WPA3' in router_info.authentication_method else 'wpa2'
-                    if router_info.authentication_method.lower() in \
-                            ['open', '不加密', '无', 'open system', '无加密(允许所有人连接)', 'none']:
-                        logging.info('no passwd')
-                        cmd = pytest.executer.CMD_WIFI_CONNECT_OPEN.format(router_info.ssid)
-                    else:
-                        cmd = pytest.executer.CMD_WIFI_CONNECT.format(router_info.ssid, type,
-                                                                      router_info.wpa_passwd)
-                    if router_info.hide_ssid == '是':
-                        if int(pytest.executer.getprop('ro.build.version.sdk')) >= 31:
-                            cmd += pytest.executer.CMD_WIFI_HIDE
-                        else:
-                            cmd = (pytest.executer.WIFI_CONNECT_COMMAND_REGU.format(router_info.ssid) +
-                                   pytest.executer.WIFI_CONNECT_PASSWD_REGU.format(router_info.wpa_passwd) +
-                                   pytest.executer.WIFI_CONNECT_HIDE_SSID_REGU.format(router_info.hide_type))
+                type = 'wpa3' if 'WPA3' in router_info.authentication_method else 'wpa2'
+                if router_info.authentication_method.lower() in \
+                        ['open', '不加密', '无', 'open system', '无加密(允许所有人连接)', 'none']:
+                    logging.info('no passwd')
+                    cmd = pytest.executer.CMD_WIFI_CONNECT.format(router_info.ssid,"open","")
                 else:
-                    logging.info('sdk less then 30')
-                    if router_info.hide_ssid == '是':
+                    cmd = pytest.executer.CMD_WIFI_CONNECT.format(router_info.ssid, type,
+                                                                  router_info.wpa_passwd)
+                if router_info.hide_ssid == '是':
+                    if int(pytest.executer.getprop('ro.build.version.sdk')) >= 31:
+                        cmd += pytest.executer.CMD_WIFI_HIDE
+                    else:
                         cmd = (pytest.executer.WIFI_CONNECT_COMMAND_REGU.format(router_info.ssid) +
                                pytest.executer.WIFI_CONNECT_PASSWD_REGU.format(router_info.wpa_passwd) +
                                pytest.executer.WIFI_CONNECT_HIDE_SSID_REGU.format(router_info.hide_type))
-                    else:
-                        cmd = (pytest.executer.WIFI_CONNECT_COMMAND_REGU.format(router_info.ssid) +
-                               pytest.executer.WIFI_CONNECT_PASSWD_REGU.format(router_info.wpa_passwd))
                 pytest.executer.checkoutput(cmd)
                 if pytest.executer.wait_for_wifi_address():
                     connect_status = True
@@ -296,35 +283,34 @@ def wifi_setup_teardown(request):
         dut_info = pytest.executer.checkoutput('ifconfig wlan0')
         pytest.executer.dut_ip = re.findall(r'inet addr:(\d+\.\d+\.\d+\.\d+)', dut_info, re.S)[0]
     logging.info(f'dut_ip:{pytest.executer.dut_ip}')
-    logging.info('==== wifi env setup done')
     connect_status = True
+    ipfoncig_info = pytest.executer.checkoutput_term('ipconfig').strip()
+    pytest.executer.pc_ip = re.findall(r'IPv4 地址.*?(\d+\.\d+\.\d+\.\d+)', ipfoncig_info, re.S)[0]
+    logging.info(f'pc_ip:{pytest.executer.pc_ip}')
+    logging.info('==== wifi env setup done')
     yield connect_status, router_info
     # 后置动作
+    pytest.executer.kill_iperf()
     # 重置结果
-    tx_result_list, rx_result_list = [], []
+    # tx_result_list, rx_result_list = [], []
     # if not router_debug:
     #     router.router_control.driver.quit()
 
 
-@pytest.fixture(scope='session', autouse=True, params=command_data)
-def session_setup_teardown(request):
-    logging.info('==== debug command setup start')
+
+# @pytest.fixture(scope='session', autouse=True, params=command_data)
+# def session_setup_teardown(request):
+#     logging.info('==== debug command setup start')
     # iperf 配置
-    if push_iperf and pytest.connect_type == 'adb' and (
-            pytest.executer.checkoutput('[ -e /system/bin/iperf ] && echo yes || echo no').strip() != 'yes'):
-        path = os.path.join(os.getcwd(), 'res/iperf')
-        pytest.executer.push(path, '/system/bin')
-        pytest.executer.checkoutput('chmod a+x /system/bin/iperf')
+
 
     # 获取板子的ip 地址
-    ipfoncig_info = pytest.executer.checkoutput_term('ipconfig').strip()
-    pytest.executer.pc_ip = re.findall(r'IPv4 地址.*?(\d+\.\d+\.\d+\.\d+)', ipfoncig_info, re.S)[0]
-    logging.info(f'pc_ip:{pytest.executer.pc_ip}')
-    command_info = request.param
-    logging.info(f"command_info : {command_info}")
-    pytest.executer.subprocess_run(command_info)
-    logging.info('==== debug command setup done')
-    yield
+
+    # command_info = request.param
+    # logging.info(f"command_info : {command_info}")
+    # pytest.executer.subprocess_run(command_info)
+    # logging.info('==== debug command setup done')
+    # yield
     # 后置动作
 
     # 生成 pdf
@@ -408,11 +394,19 @@ def get_tx_rate(router_info, pair, freq_num, rssi_num, type, corner_set='', db_s
         # kill iperf
         pytest.executer.kill_iperf()
         time.sleep(1)
-        server = iperf_on(pytest.executer.IPERF_SERVER[type], '')
-        iperf_on(pytest.executer.IPERF_CLIENT_REGU[type]['tx'].format(
-            pytest.executer.pc_ip,
-            pytest.executer.IPERF_TEST_TIME,
-            pair if type == 'TCP' else 1), pytest.executer.serialnumber)
+        if test_tool == 'iperf3':
+            adb_popen = iperf_on(tool_path+pytest.executer.IPERF_CLIENT_REGU[type]['tx'].format(
+                pytest.executer.pc_ip,
+                pytest.executer.IPERF_TEST_TIME,
+                pair if type == 'TCP' else 1), pytest.executer.serialnumber)
+            pc_popen = iperf_on(pytest.executer.IPERF_SERVER[type], '')
+        else:
+            pc_popen = iperf_on(pytest.executer.IPERF_SERVER[type], '')
+            adb_popen = iperf_on(tool_path+pytest.executer.IPERF_CLIENT_REGU[type]['tx'].format(
+                pytest.executer.pc_ip,
+                pytest.executer.IPERF_TEST_TIME,
+                pair if type == 'TCP' else 1), pytest.executer.serialnumber)
+
         time.sleep(pytest.executer.IPERF_WAIT_TIME)
         if pytest.connect_type == 'telnet':
             time.sleep(15)
@@ -422,7 +416,8 @@ def get_tx_rate(router_info, pair, freq_num, rssi_num, type, corner_set='', db_s
             logging.info("Connect failed")
             continue
         time.sleep(3)
-        server_off(server)
+        server_off(adb_popen)
+        server_off(pc_popen)
         logging.info(f'tx_result {tx_result}')
         mcs_tx = pytest.executer.get_mcs_tx()
         if tx_result and mcs_tx:
@@ -457,11 +452,11 @@ def get_rx_rate(router_info, pair, freq_num, rssi_num, type, corner_set='', db_s
         # kill iperf
         pytest.executer.kill_iperf()
         time.sleep(1)
-        server = iperf_on(pytest.executer.IPERF_SERVER[type], pytest.executer.serialnumber)
-        iperf_on(
+        adb_popen = iperf_on(tool_path+pytest.executer.IPERF_SERVER[type], pytest.executer.serialnumber)
+        pc_popen = iperf_on(
             pytest.executer.IPERF_CLIENT_REGU[type]['rx'].format(
                 pytest.executer.dut_ip, pytest.executer.IPERF_TEST_TIME,
-                pair if type == 'TCP' else 4), '')
+                pair if type == 'TCP' else 4), '',direction='rx')
         time.sleep(pytest.executer.IPERF_WAIT_TIME)
         if pytest.connect_type == 'telnet':
             time.sleep(15)
@@ -470,7 +465,8 @@ def get_rx_rate(router_info, pair, freq_num, rssi_num, type, corner_set='', db_s
             logging.info("Connect failed")
             continue
         time.sleep(3)
-        server_off(server)
+        server_off(adb_popen)
+        server_off(pc_popen)
         # get mcs data
         mcs_rx = pytest.executer.get_mcs_rx()
         if rx_result and mcs_rx:
@@ -500,8 +496,8 @@ def test_wifi_rvr(wifi_setup_teardown, rf_value):
     # 判断板子是否存在  ip
     if not wifi_setup_teardown[0]:
         logging.info("Can't connect wifi ,input 0")
-        rx_result_list.append('0')
-        tx_result_list.append('0')
+        # rx_result_list.append('0')
+        # tx_result_list.append('0')
         with open(pytest.testResult.detail_file, 'a') as f:
             f.write("\n Can't connect wifi , skip this loop\n\n")
         return
@@ -557,6 +553,7 @@ def test_wifi_rvr(wifi_setup_teardown, rf_value):
             f.write('signal strength is not enough no rssi \n')
         assert False, "Wifi is not connected"
     logging.info('Start test')
+
     try:
         rssi_num = int(re.findall(r'signal:\s+-?(\d+)\s+dBm', rssi_info, re.S)[0])
         freq_num = int(re.findall(r'freq:\s+(\d+)\s+', rssi_info, re.S)[0])
