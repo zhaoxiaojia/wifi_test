@@ -66,7 +66,6 @@ def pytest_sessionfinish(session):
     shutil.copy("report_temp.html", "all_test_report.html")
     shutil.move("all_test_report.html", pytest.testResult.logdir)
     if os.path.exists('temp.txt'):
-        pytest.executer.kill_iperf()
         for proc in psutil.process_iter():
             try:
                 files = proc.open_files()

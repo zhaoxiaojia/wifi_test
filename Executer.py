@@ -99,11 +99,3 @@ class Executer():
             command = command.split()
         return subprocess.check_output(command, encoding='gbk')
 
-    def kill_iperf(self):
-        # kill iperf
-        command_list = [self.IPERF_KILL,self.IPERF_KILL.replace('iperf', 'iperf3'),self.IPERF_WIN_KILL,self.IPERF_WIN_KILL.replace('iperf', 'iperf3')]
-        for i in command_list:
-            try:
-                self.checkoutput(i)
-            except Exception as e:
-                ...
