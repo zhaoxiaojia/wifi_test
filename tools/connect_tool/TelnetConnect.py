@@ -19,10 +19,10 @@ from threading import Thread
 
 import pytest
 
-from Executer import Executer
+from tools.connect_tool.Dut import Dut
 
 
-class TelnetInterface(Executer):
+class TelnetInterface(Dut):
     def __init__(self, ip):
         super().__init__()
         self.ip = ip

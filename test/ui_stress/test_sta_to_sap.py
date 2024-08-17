@@ -9,14 +9,11 @@
 # Description：
 """
 
-import logging
-import time
-
 import pytest
 
-from ADB import concomitant_dut
-from Router import Router
-from tools.Asusax88uControl import Asusax88uControl
+from tools.connect_tool.adb import concomitant_dut
+from tools.router_tool.Router import Router
+from tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
 
 ssid = 'ATC_ASUS_AX88U_2G'
 passwd = '12345678'

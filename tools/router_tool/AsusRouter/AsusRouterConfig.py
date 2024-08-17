@@ -6,7 +6,7 @@
 # @File    : AsusRouterConfig.py
 # @Software: PyCharm
 
-from .RouterConfig import RouterConfig
+from tools.router_tool.RouterConfig import RouterConfig
 
 
 class AsusRouterConfig(RouterConfig):
@@ -178,7 +178,7 @@ class Asus5400Config(AsusRouterConfig):
         super(Asus5400Config, self).__init__()
 
     BANDWIDTH_5_LIST = ['20/40/80 MHz', '20 MHz', '40 MHz', '80 MHz', '160 MHz']
-
+    WIRELESS_MODE = ['自动', 'N only', 'AX only', 'N/AC mixed', 'Legacy']
     CHANNEL_5_DICT = {
         '自动': '1',
         '36': '2',

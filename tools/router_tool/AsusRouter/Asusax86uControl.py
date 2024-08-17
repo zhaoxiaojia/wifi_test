@@ -9,15 +9,14 @@
 
 import logging
 import time
-from collections import namedtuple
 
-from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.ui import Select, WebDriverWait
+from selenium.webdriver.support.ui import WebDriverWait
 
-from tools.AsusRouterConfig import Asus86uConfig
-from tools.RouterControl import ConfigError, RouterTools
+from tools.router_tool.AsusRouter.AsusRouterConfig import Asus86uConfig
+from tools.router_tool.RouterConfig import ConfigError
+from tools.router_tool.RouterControl import RouterTools
 
 
 class Asusax86uControl():

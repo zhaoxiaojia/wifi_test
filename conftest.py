@@ -18,8 +18,8 @@ import shutil
 import psutil
 import pytest
 
-from ADB import ADB
-from TelnetConnect import TelnetInterface
+from tools.connect_tool.adb import ADB
+from tools.connect_tool.TelnetConnect import TelnetInterface
 from tools.TestResult import TestResult
 
 from .tools.yamlTool import yamlTool
@@ -53,9 +53,9 @@ def pytest_sessionstart(session):
     # Create a test results folder
     if not os.path.exists('results'):
         os.mkdir('results')
-    result_path = os.path.join(os.getcwd(), 'results\\' + datetime.datetime.now().strftime("%Y.%m.%d_%H.%M.%S"))
-    os.mkdir(result_path)
-    pytest.testResult = TestResult(result_path, [])
+    pytest.result_path = os.path.join(os.getcwd(), 'results\\' + datetime.datetime.now().strftime("%Y.%m.%d_%H.%M.%S"))
+    os.mkdir(pytest.result_path)
+    pytest.testResult = TestResult(pytest.result_path, [])
     if os.path.exists('temp.txt'):
         os.remove('temp.txt')
 
@@ -63,8 +63,6 @@ def pytest_sessionstart(session):
 def pytest_sessionfinish(session):
     shutil.copy("pytest.log", "debug.log")
     shutil.move("debug.log", pytest.testResult.logdir)
-    shutil.copy("report_temp.html", "all_test_report.html")
-    shutil.move("all_test_report.html", pytest.testResult.logdir)
     if os.path.exists('temp.txt'):
         for proc in psutil.process_iter():
             try:

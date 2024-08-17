@@ -8,12 +8,7 @@
 # Description：
 """
 
-import logging
-import time
-
 import pytest
-
-from ADB import concomitant_dut
 
 '''
 测试步骤

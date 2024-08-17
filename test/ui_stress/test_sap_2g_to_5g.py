@@ -9,13 +9,9 @@
 # Description：
 """
 
-
-
-import logging
-
 import pytest
 
-from ADB import concomitant_dut
+from tools.connect_tool.adb import concomitant_dut
 
 hotspot_ssid = "android_sap"
 hotspot_passwd = "12345678"

@@ -25,8 +25,8 @@ from xml.dom import minidom
 import _io
 import pytest
 
-from Executer import Executer
-from UiautomatorTool import UiautomatorTool
+from tools.connect_tool.Dut import Dut
+from tools.connect_tool.UiautomatorTool import UiautomatorTool
 
 
 def connect_again(func):
@@ -41,7 +41,7 @@ def connect_again(func):
     return inner
 
 
-class ADB(Executer):
+class ADB(Dut):
     """
     ADB class Provide common device control functions over the ADB bridge
 

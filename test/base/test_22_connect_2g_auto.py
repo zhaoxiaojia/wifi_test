@@ -8,15 +8,10 @@
 # Description：
 """
 
-
-import logging
-import re
-import time
-
 import pytest
 
-from Router import Router
-from tools.Asusax88uControl import Asusax88uControl
+from tools.router_tool.Router import Router
+from tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
 
 '''
 测试步骤

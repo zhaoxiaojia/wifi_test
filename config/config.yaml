@@ -64,3 +64,10 @@ pair_num:
 
 #
 concomitant_dut: aq2228019431943b23a0d
+
+
+mysql:
+  host: 192.168.50.169
+  user: visitor
+  passwd: 123456
+  database: wifi_test

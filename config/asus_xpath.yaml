@@ -11,7 +11,7 @@ asus:
   username_element: login_username
   password_element: login_passwd
   signin_element:
-    asus_5400: //*[@id="button"]
+    asus_5400: //*[@id="login_filed"]/div[8]
     asus_86u: //*[@id="login_filed"]/div[8]
     asus_88u: //*[@id="login_filed"]/div[9]
     asus_6700: //*[@id="login_filed"]/div[8]

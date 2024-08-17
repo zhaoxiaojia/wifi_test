@@ -13,3 +13,6 @@ pytest-html
 pytest-rerunfailures
 psutil
 pyserial
+PyMySQL
+cryptography
+PyUserInput

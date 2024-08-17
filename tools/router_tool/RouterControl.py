@@ -3,21 +3,20 @@
 # @Time    : 2021/12/30 11:05
 # @Author  : chao.li
 # @Site    :
-# @File    : RouterControl.py
+# @File    : router_tool.py
 # @Software: PyCharm
+
 import logging
 import os
 import time
 from abc import ABCMeta, abstractmethod
 
 from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select, WebDriverWait
 
-from .RouterConfig import ConfigError
-from .yamlTool import yamlTool
+from tools.yamlTool import yamlTool
 
 
 class RouterControl(metaclass=ABCMeta):
@@ -81,8 +80,8 @@ class RouterTools(RouterControl):
         # 路由器完整信息
         self.router_info = router_info
         # 路由器 各控件 元素 配置文件
-        self.yaml_info = yamlTool(os.getcwd() + f'\\config\\{self.router_type.split("_")[0]}_xpath.yaml')
-        # self.yaml_info = yamlTool(f'D:\\wifi_test\\config\\{self.router_type}_xpath.yaml')
+        # self.yaml_info = yamlTool(os.getcwd() + f'\\config\\{self.router_type.split("_")[0]}_xpath.yaml')
+        self.yaml_info = yamlTool(f'D:\PycharmProjects\wifi_test\config\{self.router_type}_xpath.yaml')
         # 元素配置文件 根节点
 
         self.xpath = self.yaml_info.get_note(self.router_type)

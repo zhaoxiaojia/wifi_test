@@ -7,20 +7,19 @@
 # @Software: PyCharm
 
 
-import datetime
 import logging
 import os
 import sys
 import time
 from collections import namedtuple
 
-from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.ui import Select, WebDriverWait
+from selenium.webdriver.support.ui import WebDriverWait
 
-from tools.AsusRouterConfig import Asus88uConfig
-from tools.RouterControl import ConfigError, RouterTools
+from tools.router_tool.AsusRouter.AsusRouterConfig import Asus88uConfig
+from tools.router_tool.RouterConfig import ConfigError
+from tools.router_tool.RouterControl import RouterTools
 
 
 class Asusax88uControl():
@@ -270,6 +269,7 @@ class Asusax88uControl():
 # router = Router(band='2.4 GHz', ssid=ssid, wireless_mode='自动', channel='11', bandwidth='20 MHz',
 #                 authentication_method='WPA2-Personal', wpa_passwd="12345678",protect_frame="停用")
 # control = Asusax88uControl()
-# # control.change_country(router)
+#
 # control.change_setting(router)
+# # control.change_country(router)
 # # control.router_control.reboot_router()

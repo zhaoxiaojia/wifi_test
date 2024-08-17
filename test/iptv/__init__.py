@@ -19,7 +19,7 @@ from enum import Enum
 import pytest
 import serial
 
-from UiautomatorTool import UiautomatorTool
+from tools.connect_tool.UiautomatorTool import UiautomatorTool
 
 
 class videoLink(Enum):

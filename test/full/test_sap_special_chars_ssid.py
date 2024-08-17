@@ -12,7 +12,7 @@ import logging
 
 import pytest
 
-from ADB import concomitant_dut
+from tools.connect_tool.adb import concomitant_dut
 
 '''
 测试步骤

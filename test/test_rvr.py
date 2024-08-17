@@ -14,22 +14,16 @@ import csv
 import itertools
 import logging
 import os
-import random
 import re
 import signal
 import subprocess
-import tempfile
 import threading
 import time
 
-import _io
 import pytest
 
-from Decorators import set_timeout
-from Router import Router
-from tools.Asusax86uControl import Asusax86uControl
-from tools.Asusax88uControl import Asusax88uControl
-from tools.TelnetInterface import TelnetInterface
+from tools.router_tool.Router import Router
+from tools.connect_tool.TelnetInterface import TelnetInterface
 from tools.yamlTool import yamlTool
 
 # 读取 测试配置

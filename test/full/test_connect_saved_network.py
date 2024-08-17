@@ -9,14 +9,7 @@
 # Description：
 """
 
-import logging
-import os
-import time
-
 import pytest
-
-from Router import Router
-from tools.Asusax88uControl import Asusax88uControl
 
 '''
 测试配置

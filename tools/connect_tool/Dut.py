@@ -3,7 +3,7 @@
 
 
 """
-# File       : Executer.py
+# File       : Dut.py
 # Time       ：2023/7/4 15:51
 # Author     ：chao.li
 # version    ：python 3.9
@@ -13,7 +13,7 @@ import logging
 import subprocess
 
 
-class Executer():
+class Dut():
     DMESG_COMMAND = 'dmesg -S'
     CLEAR_DMESG_COMMAND = 'dmesg -c'
 

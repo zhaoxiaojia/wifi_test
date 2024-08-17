@@ -11,13 +11,12 @@
 
 
 import logging
-import time
 
 import pytest
 
-from Iperf import Iperf
-from Router import Router
-from tools.Asusax88uControl import Asusax88uControl
+from tools.Iperf import Iperf
+from tools.router_tool.Router import Router
+from tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
 
 '''
 测试步骤
