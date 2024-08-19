@@ -1,20 +1,21 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*- 
-"""
-# File       : test_change_5g_channel_iperf.py
-# Time       ：2023/7/24 11:14
-# Author     ：chao.li
-# version    ：python 3.9
-# Description：
-"""
+# _*_ coding: utf-8 _*_
+# @Time    : 2023/6/5 15:15
+# @Author  : chao.li
+# @Site    :
+# @File    : test_change_5g_channel_iperf.py
+# @Software: PyCharm
+
+
 
 import logging
+import os
 import time
 
 import pytest
+from test import (Router, connect_ssid, forget_network_cmd, iperf,
+                        kill_setting, wait_for_wifi_address)
 
-from tools.Iperf import Iperf
-from tools.router_tool.Router import Router
 from tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
 
 '''
@@ -28,31 +29,27 @@ from tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
 ssid = 'ATC_ASUS_AX88U_5G'
 passwd = 'Abc@123456'
 router_ch36 = Router(band='5 GHz', ssid=ssid, wireless_mode='自动', channel='36', bandwidth='40 MHz',
-                     authentication_method='WPA2-Personal', wpa_passwd=passwd)
+                   authentication_method='WPA2-Personal', wpa_passwd=passwd)
 router_ch100 = Router(band='5 GHz', ssid=ssid, wireless_mode='自动', channel='100', bandwidth='40 MHz',
-                      authentication_method='WPA2-Personal', wpa_passwd=passwd)
+                   authentication_method='WPA2-Personal', wpa_passwd=passwd)
 router_ch161 = Router(band='5 GHz', ssid=ssid, wireless_mode='自动', channel='161', bandwidth='40 MHz',
-                      authentication_method='WPA2-Personal', wpa_passwd=passwd)
+                   authentication_method='WPA2-Personal', wpa_passwd=passwd)
+
 
 ax88uControl = Asusax88uControl()
-iperf = Iperf()
-
-
 @pytest.fixture(scope='function', autouse=True)
 def setup():
     # set router
-    ax88uControl.change_setting(router_ch100)
-    time.sleep(150)
     yield
     ax88uControl.router_control.driver.quit()
-    pytest.executer.kill_setting()
-    pytest.executer.forget_network_cmd(target_ip='192.168.50.1')
+    kill_setting()
+    forget_network_cmd(target_ip='192.168.50.1')
 
 
 def test_change_channel_iperf():
-    for i in [router_ch36, router_ch100, router_ch161] * 7:
+    for i in [router_ch36,router_ch100,router_ch161]*7:
         ax88uControl.change_setting(i)
-        logging.info(pytest.executer.CMD_WIFI_CONNECT.format(ssid, 'wpa2', passwd))
-        pytest.executer.checkoutput(pytest.executer.CMD_WIFI_CONNECT.format(ssid, 'wpa2', passwd))
-        pytest.executer.wait_for_wifi_address()
-        assert iperf.run_iperf(), "Can't run iperf success"
+        logging.info(pytest.executer.CMD_WIFI_CONNECT.format(ssid,'wpa2',passwd))
+        pytest.executer.checkoutput(pytest.executer.CMD_WIFI_CONNECT.format(ssid,'wpa2',passwd))
+        wait_for_wifi_address()
+        assert iperf.run_iperf(),"Can't run iperf success"

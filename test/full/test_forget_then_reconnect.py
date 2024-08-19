@@ -1,16 +1,21 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*- 
-"""
-# File       : test_forget_then_reconnect.py
-# Time       ：2023/7/25 9:00
-# Author     ：chao.li
-# version    ：python 3.9
-# Description：
-"""
+# !/usr/bin/env python
+# -*- coding: utf-8 -*-
+# @Time    : 2023/5/24 09:56
+# @Author  : Chao.li
+# @File    : test_forget_then_reconnect.py
+# @Project : python
+# @Software: PyCharm
+
+
+
+import logging
+import os
+import time
 
 import pytest
+from test import (Router, connect_ssid, forget_network_cmd,
+                        kill_setting, wait_for_wifi_address)
 
-from tools.router_tool.Router import Router
 from tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
 
 '''
@@ -36,13 +41,12 @@ def setup():
     ax88uControl.change_setting(router_5g)
     ax88uControl.router_control.driver.quit()
     yield
-    pytest.executer.kill_setting()
-    pytest.executer.forget_network_cmd()
+    kill_setting()
+    forget_network_cmd(target_ip='192.168.50.1')
 
 
-@pytest.mark.wifi_connect
 def test_channel_36():
-    pytest.executer.connect_ssid(ssid, passwd=passwd)
-    assert pytest.executer.wait_for_wifi_address(), "Connect fail"
-    pytest.executer.forget_network_cmd(target_ip='192.168.50.1')
-    pytest.executer.connect_ssid(ssid, passwd=passwd)
+    connect_ssid(ssid, passwd=passwd)
+    assert wait_for_wifi_address(), "Connect fail"
+    forget_network_cmd(target_ip='192.168.50.1')
+    connect_ssid(ssid, passwd=passwd)

@@ -1,6 +1,6 @@
 # !/usr/bin/env python
 # -*- coding: utf-8 -*-
-# @Time    : 2024/8/16 15:11
+# @Time    : 2024/8/19 10:32
 # @Author  : chao.li
 # @File    : decorators.py
 
@@ -11,7 +11,41 @@ import ctypes
 import logging
 from functools import wraps
 
+import threading
 
+class MyThead(threading.Thread):
+    def __init__(self,target,args=()):
+        super(MyThead,self).__init__()
+        self.func = target
+        self.args = args
+
+    def run(self):
+        self.a = self.func(*self.args)
+
+    def get_result(self):
+        try:
+            return  self.a
+        except Exception:
+            return None
+
+def set_timeout(limit_time):
+    def functions(func):
+        # 执行操作
+        def run(*params):
+            thre_func = MyThead(target=func, args=params)
+            # 主线程结束(超出时长),则线程方法结束
+            thre_func.setDaemon(True)
+            thre_func.start()
+            time.sleep(limit_time)
+            # 最终返回值(不论线程是否已结束)
+            if thre_func.get_result():
+                return thre_func.get_result()
+            else:
+                raise False
+
+        return run
+
+    return functions
 def count_down(duration):
     '''
     闹钟-倒计时
@@ -26,10 +60,9 @@ def count_down(duration):
             while time.time() - start < duration:
                 res = func(*args, **kwargs)
             return res
-
         return inner
-
     return wrapper
+
 def singleton(cls):
     '''
     单例

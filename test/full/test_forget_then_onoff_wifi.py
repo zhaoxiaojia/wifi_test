@@ -1,16 +1,20 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*- 
-"""
-# File       : test_forget_then_onoff_wifi.py
-# Time       ：2023/7/25 8:31
-# Author     ：chao.li
-# version    ：python 3.9
-# Description：
-"""
+# !/usr/bin/env python
+# -*- coding: utf-8 -*-
+# @Time    : 2023/5/25 10:54
+# @Author  : Chao.li
+# @File    : test_forget_then_onoff_wifi.py
+# @Project : python
+# @Software: PyCharm
+
+
+import logging
+import os
+import time
 
 import pytest
+from test import (Router, close_wifi, connect_ssid, forget_network_cmd,
+                        kill_setting, open_wifi, wait_for_wifi_address)
 
-from tools.router_tool.Router import Router
 from tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
 
 '''
@@ -36,18 +40,18 @@ def setup():
     ax88uControl.change_setting(router_5g)
     ax88uControl.router_control.driver.quit()
     yield
-    pytest.executer.kill_setting()
+    kill_setting()
+    forget_network_cmd(target_ip='192.168.50.1')
 
 
 def test_forget_then_onoff_wifi():
-    pytest.executer.connect_ssid(ssid, passwd=passwd)
-    assert pytest.executer.wait_for_wifi_address(), "Connect fail"
-    pytest.executer.forget_network_cmd(target_ip='192.168.50.1')
-    pytest.executer.kill_setting()
-    pytest.executer.close_wifi()
-    pytest.executer.open_wifi()
+    connect_ssid(ssid, passwd=passwd)
+    assert wait_for_wifi_address(), "Connect fail"
+    forget_network_cmd(target_ip='192.168.50.1')
+    close_wifi()
+    open_wifi()
     try:
-        pytest.executer.wait_for_wifi_address()
+        wait_for_wifi_address()
         assert False, "Should not reconnect"
     except AssertionError:
         assert True

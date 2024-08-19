@@ -1,16 +1,21 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*- 
-"""
-# File       : test_add_network_wrong_input.py
-# Time       ：2023/7/24 10:19
-# Author     ：chao.li
-# version    ：python 3.9
-# Description：
-"""
+# _*_ coding: utf-8 _*_
+# @Time    : 2023/5/30 11:00
+# @Author  : chao.li
+# @Site    :
+# @File    : test_add_network_wrong_input.py
+# @Software: PyCharm
+
+
+
+import logging
+import os
+import time
 
 import pytest
+from test import (Router, add_network, forget_network_cmd,
+                        kill_setting, wait_for_wifi_address)
 
-from tools.router_tool.Router import Router
 from tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
 
 '''
@@ -36,12 +41,12 @@ def setup():
     ax88uControl.change_setting(router_2g)
     ax88uControl.router_control.driver.quit()
     yield
-    pytest.executer.kill_setting()
+    kill_setting()
 
 
 def test_add_network_wrong_input():
     try:
-        pytest.executer.add_network('wronginput', 'None')
+        add_network('wronginput', 'None')
         assert False,"Should not get ip address"
     except AssertionError:
         assert True

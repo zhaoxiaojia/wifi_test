@@ -1,12 +1,11 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*- 
-"""
-# File       : test_connect_sap_wpa2_psk.py
-# Time       ：2023/7/25 8:24
-# Author     ：chao.li
-# version    ：python 3.9
-# Description：
-"""
+# _*_ coding: utf-8 _*_
+# @Time    : 2023/6/14 10:07
+# @Author  : chao.li
+# @Site    :
+# @File    : test_connect_sap_wpa2_psk.py
+# @Software: PyCharm
+
 
 
 
@@ -14,8 +13,8 @@ import logging
 import time
 
 import pytest
-
-from tools.connect_tool.adb import concomitant_dut
+from test import (accompanying_dut, close_hotspot, forget_network_cmd, kill_moresetting,
+                        open_hotspot, wait_for_wifi_address)
 
 '''
 测试步骤
@@ -28,16 +27,19 @@ SoftAP安全性设置（Open）
 
 @pytest.fixture(autouse=True)
 def setup_teardown():
-    pytest.executer.open_hotspot()
+    open_hotspot()
     logging.info('setup done')
     yield
-    pytest.executer.close_hotspot()
+    close_hotspot()
 
 @pytest.mark.hot_spot
 def test_hotspot_wap2():
     ssid = pytest.executer.u().d2(resourceId="android:id/summary").get_text()
     logging.info(ssid)
-    pytest.executer.set_hotspot(encrypt='WPA2 PSK')
+    pytest.executer.wait_and_tap('Security', 'text')
+    pytest.executer.wait_element('WPA2 PSK', 'text')
+    pytest.executer.wait_and_tap('WPA2 PSK', 'text')
+    pytest.executer.wait_element('Security', 'text')
     pytest.executer.wait_and_tap('Hotspot password', 'text')
     passwd = pytest.executer.u().d2(resourceId="android:id/edit").get_text()
     logging.info(passwd)
@@ -45,8 +47,8 @@ def test_hotspot_wap2():
     pytest.executer.keyevent(4)
     cmd = pytest.executer.CMD_WIFI_CONNECT.format(ssid, 'wpa2', passwd)
     logging.info(cmd)
-    concomitant_dut.checkoutput(cmd)
-    pytest.executer.wait_for_wifi_address(cmd, accompanying=True)
-    ipaddress = pytest.executer.wait_for_wifi_address(cmd, accompanying=True)[1]
+    accompanying_dut.checkoutput(cmd)
+    wait_for_wifi_address(cmd, accompanying=True)
+    ipaddress = wait_for_wifi_address(cmd, accompanying=True)[1]
     ipaddress = '.'.join(ipaddress.split('.')[:3] + ['1'])
-    pytest.executer.forget_network_cmd(ipaddress, accompanying=True)
+    forget_network_cmd(ipaddress, accompanying=True)

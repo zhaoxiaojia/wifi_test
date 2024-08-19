@@ -63,7 +63,9 @@ pair_num:
     '5': { 'tx': [ 15,15,10,6,4,2 ],'rx': [ 15,15,10,6,4,2 ] }
 
 #
-concomitant_dut: aq2228019431943b23a0d
+concomitant_dut:
+  status: True
+  device_number: aq2228019431943b23a0d
 
 
 mysql:

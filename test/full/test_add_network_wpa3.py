@@ -1,16 +1,21 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*- 
-"""
-# File       : test_add_network_wpa3.py
-# Time       ：2023/7/24 10:16
-# Author     ：chao.li
-# version    ：python 3.9
-# Description：
-"""
+# _*_ coding: utf-8 _*_
+# @Time    : 2023/5/30 10:24
+# @Author  : chao.li
+# @Site    :
+# @File    : test_add_network_wpa3.py
+# @Software: PyCharm
+
+
+
+import logging
+import os
+import time
 
 import pytest
+from test import (Router, add_network, forget_network_cmd,
+                        kill_setting, wait_for_wifi_address)
 
-from tools.router_tool.Router import Router
 from tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
 
 '''
@@ -38,10 +43,10 @@ def setup():
     ax88uControl.change_setting(router_2g)
     ax88uControl.router_control.driver.quit()
     yield
-    pytest.executer.kill_setting()
-    pytest.executer.forget_network_cmd(target_ip='192.168.50.1')
+    kill_setting()
+    forget_network_cmd(target_ip='192.168.50.1')
 
 
 def test_add_network_wpa3():
-    pytest.executer.add_network(ssid, 'WPA3-Personal',passwd=passwd)
-    assert pytest.executer.wait_for_wifi_address(), "Connect fail"
+    add_network(ssid, 'WPA3-Personal',passwd=passwd)
+    assert wait_for_wifi_address(), "Connect fail"

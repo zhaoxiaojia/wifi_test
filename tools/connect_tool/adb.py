@@ -1599,16 +1599,20 @@ class ADB(Dut):
         self.wait_devices()
         logging.info('device done')
 
+    def get_hwaddr(self):
+        hwAddr = self.checkoutput('ifconfig wlan0')
+        hwAddr = re.findall(r'HWaddr (.*?)  Driver', hwAddr, re.S)
+        if hwAddr[0]:
+            return hwAddr
+        else:
+            raise Exception("Can't get hw addr")
 
 from tools.yamlTool import yamlTool
 
-concomitant_dut = ''
-# try:
-#     accompanying_dut = ADB(yamlTool(os.getcwd() + '/config/config.yaml').get_note('concomitant_dut'))
-#     accompanying_dut.root()
-#     accompanying_dut.remount()
-#     logging.info('Try to init accompanyiny_dut')
-#     logging.info(accompanying_dut.serialnumber)
-# except Exception as e:
-#     logging.info('未连接配测产品')
-#     accompanyiny_dut = None
+concomitant_dut_config = yamlTool(os.getcwd() + '/config/config.yaml').get_note('concomitant_dut')
+if concomitant_dut_config['status']:
+    accompanying_dut = ADB(concomitant_dut_config['device_number'])
+    accompanying_dut.root()
+    accompanying_dut.remount()
+else:
+    accompanying_dut = ''

@@ -1,18 +1,16 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*- 
-"""
-# File       : test_sap_63_chars_passwd.py
-# Time       ：2023/7/25 10:02
-# Author     ：chao.li
-# version    ：python 3.9
-# Description：
-"""
-
+# _*_ coding: utf-8 _*_
+# @Time    : 2023/6/9 09:55
+# @Author  : chao.li
+# @Site    :
+# @File    : test_sap_63_chars_passwd.py
+# @Software: PyCharm
 
 
 import logging
 
 import pytest
+from test import (close_hotspot, kill_moresetting, open_hotspot)
 
 '''
 测试步骤
@@ -32,15 +30,17 @@ passwd = 'abcdefghijabcdefghij1234567890123456789012345678901234567890123'
 
 @pytest.fixture(autouse=True)
 def setup_teardown():
-
+    open_hotspot()
     logging.info('setup done')
     yield
-    pytest.executer.close_hotspot()
+    close_hotspot()
 
 
 @pytest.mark.hot_spot
 def test_hotspot_long_ssid():
-    pytest.executer.open_hotspot()
-    pytest.executer.set_hotspot(passwd=passwd)
-    assert f'wpa_passphrase={passwd}' in pytest.executer.get_hotspot_config(), "passwd doesn't currently"
-
+    pytest.executer.wait_and_tap('Hotspot password', 'text')
+    pytest.executer.u().d2(resourceId="android:id/edit").clear_text()
+    pytest.executer.checkoutput(f'input text {passwd}')
+    pytest.executer.uiautomator_dump()
+    assert passwd in pytest.executer.get_dump_info(), "passwd doesn't currently"
+    pytest.executer.keyevent(66)

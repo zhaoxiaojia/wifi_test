@@ -1,16 +1,21 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*- 
-"""
-# File       : test_long_ssid_32_chars.py
-# Time       ：2023/7/25 9:07
-# Author     ：chao.li
-# version    ：python 3.9
-# Description：
-"""
+# _*_ coding: utf-8 _*_
+# @Time    : 2023/6/7 14:25
+# @Author  : chao.li
+# @Site    :
+# @File    : test_long_ssid_32_chars.py
+# @Software: PyCharm
+
+
+
+import logging
+import os
+import time
 
 import pytest
+from test import (Router, connect_ssid, forget_network_cmd,
+                        kill_setting)
 
-from tools.router_tool.Router import Router
 from tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
 
 '''
@@ -36,9 +41,10 @@ def setup_teardown():
     ax88uControl.change_setting(router_2g)
     ax88uControl.router_control.driver.quit()
     yield
-    pytest.executer.forget_network_cmd()
-    pytest.executer.kill_setting()
+    forget_network_cmd(target_ip='192.168.50.1',ssid=ssid)
+    kill_setting()
 
-@pytest.mark.wifi_connect
+
 def test_connect_32_chars_ssid():
-    assert pytest.executer.connect_ssid(ssid), "Can't connect"
+    assert connect_ssid(ssid), "Can't connect"
+    assert pytest.executer.ping(hostname="192.168.50.1"), "Can't ping"
