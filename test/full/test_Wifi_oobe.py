@@ -39,85 +39,85 @@ def setup_teardown():
     ax88uControl.change_setting(router)
     ax88uControl.router_control.driver.quit()
     yield
-    pytest.executer.reboot()
-    pytest.executer.wait_devices()
-    pytest.executer.root()
-    pytest.executer.remount()
-    pytest.executer.subprocess_run(
+    pytest.dut.reboot()
+    pytest.dut.wait_devices()
+    pytest.dut.root()
+    pytest.dut.remount()
+    pytest.dut.subprocess_run(
         "pm disable com.google.android.tungsten.setupwraith;settings put secure user_setup_complete 1;settings put global device_provisioned 1;settings put secure tv_user_setup_complete 1")
     time.sleep(10)
 
 
 def get_factory_reset():
-    pytest.executer.start_activity(*pytest.executer.SETTING_ACTIVITY_TUPLE)
-    pytest.executer.wait_and_tap('Device Preferences', 'text')
-    pytest.executer.wait_and_tap('About', 'text')
-    pytest.executer.wait_and_tap('Factory reset', 'text')
+    pytest.dut.start_activity(*pytest.dut.SETTING_ACTIVITY_TUPLE)
+    pytest.dut.wait_and_tap('Device Preferences', 'text')
+    pytest.dut.wait_and_tap('About', 'text')
+    pytest.dut.wait_and_tap('Factory reset', 'text')
     time.sleep(1)
-    pytest.executer.keyevent(20)
-    pytest.executer.keyevent(20)
-    pytest.executer.keyevent(23)
+    pytest.dut.keyevent(20)
+    pytest.dut.keyevent(20)
+    pytest.dut.keyevent(23)
     time.sleep(1)
-    pytest.executer.keyevent(20)
-    pytest.executer.keyevent(20)
-    pytest.executer.keyevent(23)
+    pytest.dut.keyevent(20)
+    pytest.dut.keyevent(20)
+    pytest.dut.keyevent(23)
     time.sleep(5)
-    assert pytest.executer.serialnumber not in pytest.executer.checkoutput_term('adb devices'), 'Factory reset fail'
-    pytest.executer.wait_devices()
+    assert pytest.dut.serialnumber not in pytest.dut.checkoutput_term('adb devices'), 'Factory reset fail'
+    pytest.dut.wait_devices()
     logging.info('device done')
 
 
 def test_check_address_after_factory_reset():
     get_factory_reset()
     wait_for_wifi_service()
-    pytest.executer.root()
-    pytest.executer.remount()
-    pytest.executer.wait_and_tap('English (United States)','text')
+    pytest.dut.root()
+    pytest.dut.remount()
+    pytest.dut.wait_and_tap('English (United States)','text')
     # set android phone
-    pytest.executer.wait_and_tap('Skip','text')
+    pytest.dut.wait_and_tap('Skip','text')
     # find ssid
-    pytest.executer.wait_and_tap('See all', 'text')
+    pytest.dut.wait_and_tap('See all', 'text')
     count = 0
     for i in range(200):
-        if pytest.executer.find_element(ssid, 'text'):
+        if pytest.dut.find_element(ssid, 'text'):
             break
         if i < 100:
-            pytest.executer.keyevent(20)
+            pytest.dut.keyevent(20)
         else:
-            pytest.executer.keyevent(19)
+            pytest.dut.keyevent(19)
     else:
         raise EnvironmentError("Can't find ssid")
 
-    pytest.executer.wait_and_tap(ssid, 'text')
+    pytest.dut.wait_and_tap(ssid, 'text')
     if passwd != '':
         for _ in range(5):
             logging.info('try to input passwd')
-            pytest.executer.u().d2(resourceId="com.android.tv.settings:id/guidedactions_item_title").clear_text()
+            pytest.dut.u().d2(resourceId="com.android.tv.settings:id/guidedactions_item_title").clear_text()
             time.sleep(1)
-            # pytest.executer.u().d2(resourceId="com.android.tv.settings:id/guidedactions_item_title").click()
-            pytest.executer.checkoutput(f'input text {passwd}')
+            # pytest.dut.u().d2(resourceId="com.android.tv.settings:id/guidedactions_item_title").click()
+            pytest.dut.checkoutput(f'input text {passwd}')
             time.sleep(1)
-            pytest.executer.uiautomator_dump()
-            if passwd in pytest.executer.get_dump_info():
-                pytest.executer.keyevent(66)
+            pytest.dut.uiautomator_dump()
+            if passwd in pytest.dut.get_dump_info():
+                pytest.dut.keyevent(66)
                 break
         else:
-            assert passwd in pytest.executer.get_dump_info(), "passwd not currently"
+            assert passwd in pytest.dut.get_dump_info(), "passwd not currently"
     wait_for_wifi_address()
-    assert pytest.executer.ping(hostname=TARGET_IP)
-    pytest.executer.wait_and_tap('Sign In', 'text', times=120)
-    pytest.executer.wait_element('Sign in - Google Accounts', 'text')
-    pytest.executer.text('amlogictest1@gmail.com')
-    pytest.executer.keyevent(66)
-    pytest.executer.wait_element('Show password', 'text')
-    pytest.executer.text('amltest123')
-    pytest.executer.keyevent(66)
-    pytest.executer.wait_and_tap('Accept', 'text', times=20)
-    pytest.executer.wait_and_tap('Accept', 'text', times=20)
-    pytest.executer.wait_and_tap('Continue', 'text', times=20)
-    pytest.executer.wait_and_tap('No thanks', 'text', times=20)
-    pytest.executer.wait_and_tap('No thanks', 'text', times=20)
-    pytest.executer.wait_and_tap('No', 'text', times=20)
+    assert pytest.dut.ping(hostname=TARGET_IP)
+    pytest.dut.wait_and_tap('Sign In', 'text', times=120)
+    pytest.dut.wait_element('Sign in - Google Accounts', 'text')
+    pytest.dut.text('amlogictest1@gmail.com')
+    pytest.dut.keyevent(66)
+    pytest.dut.wait_element('Show password', 'text')
+    pytest.dut.text('amltest123')
+    pytest.dut.keyevent(66)
+    pytest.dut.wait_and_tap('Accept', 'text', times=20)
+    pytest.dut.wait_and_tap('Accept', 'text', times=20)
+    pytest.dut.wait_and_tap('Continue', 'text', times=20)
+    pytest.dut.wait_and_tap('No thanks', 'text', times=20)
+    pytest.dut.wait_and_tap('No thanks', 'text', times=20)
+    pytest.dut.wait_and_tap('No', 'text', times=20)
     for _ in range(5):
-        pytest.executer.keyevent(22)
-    pytest.executer.wait_element('Apps', 'text')
+        pytest.dut.keyevent(22)
+    pytest.dut.wait_element('Apps', 'text')

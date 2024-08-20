@@ -29,10 +29,10 @@ def setup_teardown():
     ax88uControl.change_setting(router_2g)
     ax88uControl.router_control.driver.quit()
     yield
-    pytest.executer.forget_network_cmd(target_ip='192.168.50.1')
-    pytest.executer.kill_setting()
+    pytest.dut.forget_network_cmd(target_ip='192.168.50.1')
+    pytest.dut.kill_setting()
 
 
 def test_connect_wpa_wpa2():
-    pytest.executer.connect_ssid(ssid,passwd)
+    pytest.dut.connect_ssid(ssid,passwd)
 

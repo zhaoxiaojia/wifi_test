@@ -50,5 +50,5 @@ def test_add_network_open():
     add_network(ssid, 'None')
     assert wait_for_wifi_address(), "Connect fail"
     enter_wifi_activity()
-    pytest.executer.uiautomator_dump()
-    assert ssid in pytest.executer.get_dump_info(),"Can't display ssid info "
+    pytest.dut.uiautomator_dump()
+    assert ssid in pytest.dut.get_dump_info(),"Can't display ssid info "

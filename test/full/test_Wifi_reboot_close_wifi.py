@@ -3,7 +3,7 @@
 # @Time    : 2023/4/23 10:13
 # @Author  : chao.li
 # @Site    :
-# @File    : test_Wifi_reboot_close_pytest.executer.py
+# @File    : test_Wifi_reboot_close_pytest.dut.py
 # @Software: PyCharm
 
 
@@ -33,15 +33,15 @@ from test import (close_wifi, config_yaml, enter_wifi_activity,
 def setup_teardown():
     yield
     open_wifi()
-    pytest.executer.reboot()
-    pytest.executer.wait_devices()
+    pytest.dut.reboot()
+    pytest.dut.wait_devices()
 
 
 def test_reboot_close_wifi():
     close_wifi()
-    pytest.executer.reboot()
-    pytest.executer.wait_devices()
+    pytest.dut.reboot()
+    pytest.dut.wait_devices()
     wait_for_wifi_service()
     enter_wifi_activity()
-    pytest.executer.uiautomator_dump()
-    assert 'Available networks' not in pytest.executer.get_dump_info(), 'Wifi is not disable'
+    pytest.dut.uiautomator_dump()
+    assert 'Available networks' not in pytest.dut.get_dump_info(), 'Wifi is not disable'

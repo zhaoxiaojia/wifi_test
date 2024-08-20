@@ -27,17 +27,17 @@ from tools.connect_tool.adb import concomitant_dut
 
 @pytest.fixture(autouse=True)
 def setup_teardown():
-    pytest.executer.open_hotspot()
+    pytest.dut.open_hotspot()
     yield
-    pytest.executer.kill_moresetting()
+    pytest.dut.kill_moresetting()
 
 @pytest.mark.hot_spot
 @pytest.mark.repeat(20)
 def test_hotspot_control():
-    pytest.executer.get_dump_info()
-    ssid = re.findall(r'text="(.*?)" resource-id="android:id/summary"', pytest.executer.get_dump_info())[0]
+    pytest.dut.get_dump_info()
+    ssid = re.findall(r'text="(.*?)" resource-id="android:id/summary"', pytest.dut.get_dump_info())[0]
     logging.info(f'ssid {ssid}')
     concomitant_dut.wait_ssid_cmd(ssid)
-    pytest.executer.wait_and_tap('Portable HotSpot Enabled', 'text')
+    pytest.dut.wait_and_tap('Portable HotSpot Enabled', 'text')
     concomitant_dut.wait_ssid_disapper_cmd(ssid)
-    pytest.executer.wait_and_tap('Portable HotSpot Enabled', 'text')
+    pytest.dut.wait_and_tap('Portable HotSpot Enabled', 'text')

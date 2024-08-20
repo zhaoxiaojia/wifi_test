@@ -44,23 +44,23 @@ def setup():
     ax88uControl.change_setting(router_ausu)
     ax88uControl.router_control.driver.quit()
     yield
-    pytest.executer.home()
-    pytest.executer.forget_ssid(ssid1)
-    pytest.executer.forget_ssid(ssid1)
-    pytest.executer.forget_ssid(asus_ssid_name)
+    pytest.dut.home()
+    pytest.dut.forget_ssid(ssid1)
+    pytest.dut.forget_ssid(ssid1)
+    pytest.dut.forget_ssid(asus_ssid_name)
 
 def switch_ap():
     logging.info('switch ap')
-    pytest.executer.connect_ssid(ssid1, 'Home1357', target='10.18')
-    pytest.executer.kill_setting()
-    pytest.executer.connect_ssid(ssid2, 'Qatest123', target='10.18')
-    pytest.executer.kill_setting()
-    pytest.executer.connect_ssid(asus_ssid_name, 'test1234', target="192.168.50")
-    pytest.executer.kill_setting()
+    pytest.dut.connect_ssid(ssid1, 'Home1357', target='10.18')
+    pytest.dut.kill_setting()
+    pytest.dut.connect_ssid(ssid2, 'Qatest123', target='10.18')
+    pytest.dut.kill_setting()
+    pytest.dut.connect_ssid(asus_ssid_name, 'test1234', target="192.168.50")
+    pytest.dut.kill_setting()
 
 def playback_youtube():
     logging.info('play youtube')
-    pytest.executer.playback_youtube()
+    pytest.dut.playback_youtube()
 
 
 def run_iperf():
@@ -70,20 +70,20 @@ def run_iperf():
 
 
 def onoff_wifi():
-    pytest.executer.close_wifi()
-    pytest.executer.open_wifi()
+    pytest.dut.close_wifi()
+    pytest.dut.open_wifi()
 
 
 def reconnect_wifi():
-    pytest.executer.connect_ssid(ssid1, 'Home1357', target='10.18')
-    pytest.executer.forget_ssid(ssid1)
+    pytest.dut.connect_ssid(ssid1, 'Home1357', target='10.18')
+    pytest.dut.forget_ssid(ssid1)
 
 @pytest.mark.repeat(50000)
 def test_change_ap():
-    # pytest.executer.root()
-    # pytest.executer.remount()
-    # pytest.executer.checkoutput("echo 8 > /proc/sys/kernel/printk")
-    # pytest.executer.checkoutput("iw dev wlan0 vendor send 0xc3 0xc4 0x0a 0x00 0xf0 0x00 0x04 0x0f 0xfb 0xf0 0xff;iw dev wlan0 vendor send 0xc3 0xc4 0x0a 0x00 0xf0 0x00 0x08 0x00 0x04 0x0f 0x00;iw dev wlan0 vendor send 0xc3 0xc4 0x0a 0x00 0xf0 0x00 0x20 0x00 0x00 0x00 0x01;")
+    # pytest.dut.root()
+    # pytest.dut.remount()
+    # pytest.dut.checkoutput("echo 8 > /proc/sys/kernel/printk")
+    # pytest.dut.checkoutput("iw dev wlan0 vendor send 0xc3 0xc4 0x0a 0x00 0xf0 0x00 0x04 0x0f 0xfb 0xf0 0xff;iw dev wlan0 vendor send 0xc3 0xc4 0x0a 0x00 0xf0 0x00 0x08 0x00 0x04 0x0f 0x00;iw dev wlan0 vendor send 0xc3 0xc4 0x0a 0x00 0xf0 0x00 0x20 0x00 0x00 0x00 0x01;")
 
     {1:switch_ap(),
      2:playback_youtube(),
@@ -91,6 +91,6 @@ def test_change_ap():
      4:onoff_wifi(),
      5:reconnect_wifi()}[random.randint(1,5)]
 
-    # pytest.executer.reboot()
-    # pytest.executer.wait_devices()
-    # pytest.executer.wait_for_wifi_service()
+    # pytest.dut.reboot()
+    # pytest.dut.wait_devices()
+    # pytest.dut.wait_for_wifi_service()

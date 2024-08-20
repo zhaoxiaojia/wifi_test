@@ -56,7 +56,7 @@ class Iptv_ctl:
 
     WIFI_BUTTON_FOCUSED_INFO = '<node index="0" text="" resource-id="ctc.android.smart.terminal.settings:id/wifiap_on_off" class="android.widget.RelativeLayout" package="ctc.android.smart.terminal.settings" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="true" focused="true" scrollable="false" long-clickable="false" password="false" selected="false" visible-to-user="true" bounds="[720,530][1320,665]">'
     def __init__(self):
-        self.ctl = pytest.executer
+        self.ctl = pytest.dut
         self.iptv = Iptv()
         self.ui_tool = UiautomatorTool(self.ctl.serialnumber)
     def init_ser(self):
@@ -74,8 +74,8 @@ class Iptv_ctl:
         return True if self.ctl.wait_element("ctc.android.smart.terminal.settings:id/bluetooth_name","resource-id") else False
 
     def start_wifi(self):
-        pytest.executer.app_stop(self.iptv.WIFI_ACTIVITY_TUPLE[0])
-        pytest.executer.start_activity(*self.iptv.WIFI_ACTIVITY_TUPLE)
+        pytest.dut.app_stop(self.iptv.WIFI_ACTIVITY_TUPLE[0])
+        pytest.dut.start_activity(*self.iptv.WIFI_ACTIVITY_TUPLE)
         if not self.check_wifi_status():
             if self.WIFI_BUTTON_FOCUSED_INFO in self.ctl.get_dump_info():
                 self.ctl.keyevent(23)
@@ -84,8 +84,8 @@ class Iptv_ctl:
             time.sleep(3)
 
     def start_bt(self):
-        pytest.executer.app_stop(self.iptv.BT_ACTIVITY_TUPLE[0])
-        pytest.executer.start_activity(*self.iptv.BT_ACTIVITY_TUPLE)
+        pytest.dut.app_stop(self.iptv.BT_ACTIVITY_TUPLE[0])
+        pytest.dut.start_activity(*self.iptv.BT_ACTIVITY_TUPLE)
         if not self.check_bt_status():
             self.ctl.wait_and_tap("蓝牙","text")
             self.ctl.wait_and_tap("开启","text")

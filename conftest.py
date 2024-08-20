@@ -38,31 +38,39 @@ def pytest_sessionstart(session):
     if pytest.connect_type == 'adb':
         # Create adb obj
         devices_num = pytest.config_yaml.get_note("connect_type")[pytest.connect_type]['device']
-        pytest.executer = ADB(serialnumber=devices_num)
+        pytest.dut = ADB(serialnumber=devices_num)
         logging.info("adb connected %s" % devices_num)
     elif pytest.connect_type == 'telnet':
         # Create telnet obj
         telnet_ip = pytest.config_yaml.get_note("connect_type")[pytest.connect_type]['ip']
-        pytest.executer = TelnetInterface(telnet_ip)
+        pytest.dut = TelnetInterface(telnet_ip)
         logging.info("telnet connected %s" % telnet_ip)
     else:
         raise EnvironmentError("Not support connect type %s" % pytest.connect_type)
-    pytest.executer.root()
-    pytest.executer.remount()
+    pytest.dut.root()
+    pytest.dut.remount()
 
     # Create a test results folder
     if not os.path.exists('results'):
         os.mkdir('results')
-    pytest.result_path = os.path.join(os.getcwd(), 'results\\' + datetime.datetime.now().strftime("%Y.%m.%d_%H.%M.%S"))
-    os.mkdir(pytest.result_path)
+    pytest.result_path = os.getcwd() + '/report/' + session.config.getoption("--resultpath")
     pytest.testResult = TestResult(pytest.result_path, [])
     if os.path.exists('temp.txt'):
         os.remove('temp.txt')
 
 
+def pytest_addoption(parser):
+    parser.addoption(
+        "--resultpath", action="store", default=None, help="Test result path"
+    )
+
+
 def pytest_sessionfinish(session):
     shutil.copy("pytest.log", "debug.log")
     shutil.move("debug.log", pytest.testResult.logdir)
+    shutil.copy("report_temp.html", "report.html")
+    shutil.move("report.html", pytest.testResult.logdir)
+
     if os.path.exists('temp.txt'):
         for proc in psutil.process_iter():
             try:
@@ -73,5 +81,5 @@ def pytest_sessionfinish(session):
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 pass
         os.remove('temp.txt')
-    if os.path.exists('report_temp.html'):
-        os.remove('report_temp.html')
+    # if os.path.exists('report_temp.html'):
+    #     os.remove('report_temp.html')

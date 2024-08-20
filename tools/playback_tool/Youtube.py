@@ -12,7 +12,7 @@ import re
 import signal
 import subprocess
 import time
-
+import pytest
 from tools.connect_tool.adb import  ADB
 from tools.decorators import set_timeout
 
@@ -58,8 +58,8 @@ class Youtube(Online):
         # {'link': 'hNAbQYU0wpg', 'name': 'VR 360 Video of Top 5 Roller (360)'}  # 360
     ]
 
-    def __init__(self, name=''):
-        super(Youtube, self).__init__(name or 'Youtube')
+    def __init__(self,):
+        super().__init__()
 
     def youtube_playback(self, playback_format, repeat_time=0, seekcheck=False, switch_able=False, home_able=False):
         '''
@@ -139,11 +139,11 @@ class Youtube(Online):
                     assert self.check_playback_status(), 'playback not success'
                     time.sleep(10)
                     # playerCheck.check_secure()
-                    self.keyevent("KEYCODE_DPAD_CENTER")
+                    pytest.dut.keyevent("KEYCODE_DPAD_CENTER")
                     time.sleep(2)
-                    self.keyevent("KEYCODE_DPAD_RIGHT")
+                    pytest.dut.keyevent("KEYCODE_DPAD_RIGHT")
                     time.sleep(2)
-                    self.keyevent("KEYCODE_DPAD_CENTER")
+                    pytest.dut.keyevent("KEYCODE_DPAD_CENTER")
                     time.sleep(30)
                     # return playerCheck.check_seek()
                 else:
@@ -156,9 +156,9 @@ class Youtube(Online):
                     assert self.check_playback_status(), 'playback not success'
                     time.sleep(10)
                     # playerCheck.check_secure()
-                    self.keyevent("KEYCODE_HOME")
+                    pytest.dut.keyevent("KEYCODE_HOME")
                     time.sleep(2)
-                    self.checkoutput(f'monkey -p {self.GOOGLE_YOUTUBE_PACKAGENAME} 1')
+                    pytest.dut.checkoutput(f'monkey -p {self.GOOGLE_YOUTUBE_PACKAGENAME} 1')
                     time.sleep(2)
                     # return playerCheck.check_home_play()
                 else:
@@ -188,7 +188,7 @@ class Youtube(Online):
                     # assert playerCheck.check_frame_rate() == '59', 'frame rate error'
                 # assert playerCheck.run_check_main_thread(30), f'play_error: {i}'
                 if seekcheck == "True":
-                    self.keyevent("KEYCODE_DPAD_CENTER")
+                    pytest.dut.keyevent("KEYCODE_DPAD_CENTER")
                     time.sleep(5)
                     # TODO seek_check not found
                     # playerCheck.seek_check()
@@ -199,17 +199,17 @@ class Youtube(Online):
 
     def time_out(self):
         logging.warning('Time over!')
-        if hasattr(self, 'logcat') and isinstance(self.logcat, subprocess.Popen):
-            os.kill(self.logcat.pid, signal.SIGTERM)
-            self.logcat.terminate()
-        self.clear_logcat()
+        # if hasattr(self, 'logcat') and isinstance(self.logcat, subprocess.Popen):
+        #     os.kill(self.logcat.pid, signal.SIGTERM)
+        #     self.logcat.terminate()
+        # self.clear_logcat()
 
     def check_current_window(self):
-        current_window = self.checkoutput(self.CURRENT_FOCUS)[1]
+        current_window = pytest.dut.checkoutput(self.CURRENT_FOCUS)[1]
         return current_window
 
     def stop_youtube(self):
-        self.checkoutput("am force-stop com.google.android.youtube.tv")
+        pytest.dut.checkoutput("am force-stop com.google.android.youtube.tv")
         time.sleep(2)
         count = 0
         while True:
@@ -220,7 +220,7 @@ class Youtube(Online):
                 time.sleep(1)
                 count = count + 1
             if count >= 5:
-                self.checkoutput("am force-stop com.google.android.youtube.tv")
+                pytest.dut.checkoutput("am force-stop com.google.android.youtube.tv")
                 if self.GOOGLE_YOUTUBE_PACKAGENAME not in self.check_current_window():
                     logging.info("youtube is closed successfully")
                     break
@@ -228,8 +228,8 @@ class Youtube(Online):
                     raise ValueError("apk hasn't exited yet")
             else:
                 logging.debug("continue check")
-        self.kill_logcat_pid()
-        self.checkoutput("logcat -c")
+        pytest.dut.kill_logcat_pid()
+        pytest.dut.checkoutput("logcat -c")
 
 
 

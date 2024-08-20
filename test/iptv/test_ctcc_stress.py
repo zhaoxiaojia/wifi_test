@@ -27,7 +27,7 @@ def setuo_teardown():
     if bt_test:
         iptvCtl.cancel_bt("MI BT18")
         iptvCtl.bt_device_press()
-    # pytest.executer.home()
+    # pytest.dut.home()
 
 
 def test_ctcc():

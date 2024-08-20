@@ -64,7 +64,7 @@ pair_num:
 
 #
 concomitant_dut:
-  status: True
+  status: False
   device_number: aq2228019431943b23a0d
 
 

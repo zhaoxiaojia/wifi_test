@@ -33,13 +33,13 @@ def setup_teardown():
 
 @pytest.mark.hot_spot
 def test_hotspot_open():
-    ssid = pytest.executer.u().d2(resourceId="android:id/summary").get_text()
+    ssid = pytest.dut.u().d2(resourceId="android:id/summary").get_text()
     logging.info(ssid)
-    pytest.executer.wait_and_tap('Security', 'text')
-    pytest.executer.wait_element('None', 'text')
-    pytest.executer.wait_and_tap('None', 'text')
-    pytest.executer.wait_element('Security', 'text')
-    cmd = pytest.executer.CMD_WIFI_CONNECT_OPEN.format(ssid)
+    pytest.dut.wait_and_tap('Security', 'text')
+    pytest.dut.wait_element('None', 'text')
+    pytest.dut.wait_and_tap('None', 'text')
+    pytest.dut.wait_element('Security', 'text')
+    cmd = pytest.dut.CMD_WIFI_CONNECT_OPEN.format(ssid)
     logging.info(cmd)
     accompanying_dut.checkoutput(cmd)
     ipaddress = wait_for_wifi_address(cmd, accompanying=True)[1]

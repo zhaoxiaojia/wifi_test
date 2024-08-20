@@ -47,4 +47,4 @@ def setup_teardown():
 
 def test_connect_32_chars_ssid():
     assert connect_ssid(ssid), "Can't connect"
-    assert pytest.executer.ping(hostname="192.168.50.1"), "Can't ping"
+    assert pytest.dut.ping(hostname="192.168.50.1"), "Can't ping"

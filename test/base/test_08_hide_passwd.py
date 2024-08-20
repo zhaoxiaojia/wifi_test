@@ -33,17 +33,17 @@ def setup_teardown():
     ax88uControl.change_setting(router)
     ax88uControl.router_control.driver.quit()
     yield
-    pytest.executer.kill_setting()
+    pytest.dut.kill_setting()
 
 
 def test_hide_passwd():
-    pytest.executer.find_ssid('ATC_ASUS_AX88U_5G')
-    pytest.executer.wait_keyboard()
-    pytest.executer.text('12345678')
-    pytest.executer.keyevent(4)
+    pytest.dut.find_ssid('ATC_ASUS_AX88U_5G')
+    pytest.dut.wait_keyboard()
+    pytest.dut.text('12345678')
+    pytest.dut.keyevent(4)
     time.sleep(1)
-    pytest.executer.keyevent(20)
+    pytest.dut.keyevent(20)
     time.sleep(1)
-    pytest.executer.keyevent(23)
-    pytest.executer.uiautomator_dump()
-    assert 'text="••••••••"' in pytest.executer.get_dump_info(), 'Passwd not be hidden'
+    pytest.dut.keyevent(23)
+    pytest.dut.uiautomator_dump()
+    assert 'text="••••••••"' in pytest.dut.get_dump_info(), 'Passwd not be hidden'

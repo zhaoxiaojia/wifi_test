@@ -41,8 +41,8 @@ def setup():
     # set router
     ax88uControl.change_setting(router_ch6)
     ax88uControl.router_control.driver.quit()
-    logging.info(pytest.executer.CMD_WIFI_CONNECT.format(ssid, 'wpa2', passwd))
-    pytest.executer.checkoutput(pytest.executer.CMD_WIFI_CONNECT.format(ssid, 'wpa2', passwd))
+    logging.info(pytest.dut.CMD_WIFI_CONNECT.format(ssid, 'wpa2', passwd))
+    pytest.dut.checkoutput(pytest.dut.CMD_WIFI_CONNECT.format(ssid, 'wpa2', passwd))
     yield
     kill_setting()
     forget_network_cmd(target_ip='192.168.50.1')

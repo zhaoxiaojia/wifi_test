@@ -38,12 +38,12 @@ def setup_teardown():
     ax88uControl.change_setting(router_5g)
     ax88uControl.router_control.driver.quit()
     yield
-    pytest.executer.forget_network_cmd()
-    pytest.executer.kill_setting()
+    pytest.dut.forget_network_cmd()
+    pytest.dut.kill_setting()
 
 
 @pytest.mark.wifi_connect
 def test_connect_ssid_wireless_auto():
-    pytest.executer.connect_ssid(ssid, passwd), "Can't connect"
-    assert pytest.executer.ping(hostname="192.168.50.1"), "Can't ping"
-    assert 'freq: 5' in pytest.executer.checkoutput(pytest.executer.IW_LINNK_COMMAND), "Doesn't conect 5g "
+    pytest.dut.connect_ssid(ssid, passwd), "Can't connect"
+    assert pytest.dut.ping(hostname="192.168.50.1"), "Can't ping"
+    assert 'freq: 5' in pytest.dut.checkoutput(pytest.dut.IW_LINNK_COMMAND), "Doesn't conect 5g "

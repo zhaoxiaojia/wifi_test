@@ -35,9 +35,9 @@ def setup_teardown():
 
 @pytest.mark.hot_spot
 def test_hotspot_long_ssid():
-    pytest.executer.wait_and_tap('Hotspot password', 'text')
-    pytest.executer.u().d2(resourceId="android:id/edit").clear_text()
-    pytest.executer.checkoutput(f'input text {passwd}')
-    pytest.executer.uiautomator_dump()
-    assert passwd in pytest.executer.get_dump_info(), "passwd doesn't currently"
-    pytest.executer.keyevent(66)
+    pytest.dut.wait_and_tap('Hotspot password', 'text')
+    pytest.dut.u().d2(resourceId="android:id/edit").clear_text()
+    pytest.dut.checkoutput(f'input text {passwd}')
+    pytest.dut.uiautomator_dump()
+    assert passwd in pytest.dut.get_dump_info(), "passwd doesn't currently"
+    pytest.dut.keyevent(66)

@@ -54,11 +54,11 @@ def setup_teardown():
 
 def test_check_5g_saved_status():
     connect_ssid('ATC_ASUS_AX88U_5G', passwd)
-    assert pytest.executer.ping(hostname="192.168.50.1"), "Can't ping"
+    assert pytest.dut.ping(hostname="192.168.50.1"), "Can't ping"
     connect_ssid('XiaomiAX3000_2G', passwd)
-    assert pytest.executer.ping(hostname="192.168.6.1"), "Can't ping"
+    assert pytest.dut.ping(hostname="192.168.6.1"), "Can't ping"
     enter_wifi_activity()
-    pytest.executer.uiautomator_dump()
-    assert 'saved' in pytest.executer.get_dump_info(),"connected ssid not saved"
+    pytest.dut.uiautomator_dump()
+    assert 'saved' in pytest.dut.get_dump_info(),"connected ssid not saved"
 
 

@@ -28,17 +28,17 @@ def setup():
     ax88uControl.change_setting(router)
     yield
     ax88uControl.router_control.driver.quit()
-    pytest.executer.forget_ssid(ssid)
-    pytest.executer.kill_setting()
+    pytest.dut.forget_ssid(ssid)
+    pytest.dut.kill_setting()
 
 
 def test_sta_sap():
-    pytest.executer.connect_ssid(ssid, passwd)
-    pytest.executer.wait_for_wifi_address()
-    pytest.executer.close_wifi()
-    pytest.executer.open_hotspot()
-    pytest.executer.set_hotspot(ssid=hotspot_ssid,passwd=hotspot_passwd,encrypt="WPA2 PSK")
-    concomitant_dut.checkoutput(pytest.executer.CMD_WIFI_CONNECT.format(hotspot_ssid, 'wpa2', hotspot_passwd))
+    pytest.dut.connect_ssid(ssid, passwd)
+    pytest.dut.wait_for_wifi_address()
+    pytest.dut.close_wifi()
+    pytest.dut.open_hotspot()
+    pytest.dut.set_hotspot(ssid=hotspot_ssid,passwd=hotspot_passwd,encrypt="WPA2 PSK")
+    concomitant_dut.checkoutput(pytest.dut.CMD_WIFI_CONNECT.format(hotspot_ssid, 'wpa2', hotspot_passwd))
     concomitant_dut.wait_for_wifi_address(target="192.168")
-    pytest.executer.close_hotspot()
+    pytest.dut.close_hotspot()
     concomitant_dut.forget_wifi()

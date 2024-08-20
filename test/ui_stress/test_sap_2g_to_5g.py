@@ -18,19 +18,19 @@ hotspot_passwd = "12345678"
 @pytest.fixture(autouse=True, scope='session')
 def setup():
     yield
-    pytest.executer.kill_setting()
+    pytest.dut.kill_setting()
 
 
 def test_sta_sap():
-    pytest.executer.open_hotspot()
-    pytest.executer.set_hotspot(ssid=hotspot_ssid,passwd=hotspot_passwd,encrypt="WPA2 PSK",type="2.4 GHz Band")
-    concomitant_dut.checkoutput(pytest.executer.CMD_WIFI_CONNECT.format(hotspot_ssid, 'wpa2', hotspot_passwd))
+    pytest.dut.open_hotspot()
+    pytest.dut.set_hotspot(ssid=hotspot_ssid,passwd=hotspot_passwd,encrypt="WPA2 PSK",type="2.4 GHz Band")
+    concomitant_dut.checkoutput(pytest.dut.CMD_WIFI_CONNECT.format(hotspot_ssid, 'wpa2', hotspot_passwd))
     concomitant_dut.wait_for_wifi_address(target="192.168")
-    assert 'freq: 2' in concomitant_dut.checkoutput(pytest.executer.IW_LINNK_COMMAND), "Doesn't conect 2g "
-    pytest.executer.open_hotspot()
-    pytest.executer.set_hotspot(ssid=hotspot_ssid,passwd=hotspot_passwd,encrypt="WPA2 PSK",type="5.0 GHz Band")
-    concomitant_dut.checkoutput(pytest.executer.CMD_WIFI_CONNECT.format(hotspot_ssid, 'wpa2', hotspot_passwd))
+    assert 'freq: 2' in concomitant_dut.checkoutput(pytest.dut.IW_LINNK_COMMAND), "Doesn't conect 2g "
+    pytest.dut.open_hotspot()
+    pytest.dut.set_hotspot(ssid=hotspot_ssid,passwd=hotspot_passwd,encrypt="WPA2 PSK",type="5.0 GHz Band")
+    concomitant_dut.checkoutput(pytest.dut.CMD_WIFI_CONNECT.format(hotspot_ssid, 'wpa2', hotspot_passwd))
     concomitant_dut.wait_for_wifi_address(target="192.168")
-    assert 'freq: 5' in concomitant_dut.checkoutput(pytest.executer.IW_LINNK_COMMAND), "Doesn't conect 5g "
-    pytest.executer.close_hotspot()
+    assert 'freq: 5' in concomitant_dut.checkoutput(pytest.dut.IW_LINNK_COMMAND), "Doesn't conect 5g "
+    pytest.dut.close_hotspot()
     concomitant_dut.forget_wifi()

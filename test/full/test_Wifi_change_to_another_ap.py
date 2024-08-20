@@ -61,7 +61,7 @@ def test_change_ap():
     connect_ssid(asus_ssid_name, passwd)
     kill_setting()
     connect_ssid(zte_ssid_name,passwd)
-    pytest.executer.wait_element('NetWork & Internet','text')
-    dumpinfo = pytest.executer.get_dump_info()
+    pytest.dut.wait_element('NetWork & Internet','text')
+    dumpinfo = pytest.dut.get_dump_info()
     assert re.findall(check_top_info,dumpinfo,re.S),'Connect ssid not on the top'
     assert check_save_info in dumpinfo, 'Last ssid not saved'

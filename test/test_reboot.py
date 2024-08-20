@@ -23,8 +23,8 @@ import pytest
 
 @pytest.mark.repeat(5000)
 def test_reboot():
-    pytest.executer.reboot()
-    pytest.executer.wait_devices()
-    pytest.executer.wait_for_wifi_service()
-    pytest.executer.wait_for_wifi_address()
-    pytest.executer.enter_wifi_activity()
+    pytest.dut.reboot()
+    pytest.dut.wait_devices()
+    pytest.dut.wait_for_wifi_service()
+    pytest.dut.wait_for_wifi_address()
+    pytest.dut.enter_wifi_activity()

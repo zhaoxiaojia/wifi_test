@@ -50,6 +50,6 @@ def setup():
 
 def test_cancel_input_passwd():
     find_ssid(ssid)
-    pytest.executer.back()
-    pytest.executer.uiautomator_dump()
-    assert check_info not in pytest.executer.get_dump_info(),"keyboard not be exit"
+    pytest.dut.back()
+    pytest.dut.uiautomator_dump()
+    assert check_info not in pytest.dut.get_dump_info(),"keyboard not be exit"

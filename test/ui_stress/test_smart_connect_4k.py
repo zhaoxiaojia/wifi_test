@@ -33,9 +33,9 @@ def setup_teardown():
     ax88uControl.change_setting(router)
     ax88uControl.router_control.driver.quit()
     yield
-    pytest.executer.home()
-    pytest.executer.forget_ssid(ssid)
+    pytest.dut.home()
+    pytest.dut.forget_ssid(ssid)
 
 
 def test_smart_connect():
-    pytest.executer.playback_youtube(sleep_time=3600*24)
+    pytest.dut.playback_youtube(sleep_time=3600*24)

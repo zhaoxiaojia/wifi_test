@@ -50,6 +50,6 @@ def setup():
 
 def test_cancel_input_passwd():
     connect_ssid(ssid,passwd)
-    pytest.executer.wait_element('NetWork & Internet','text')
-    pytest.executer.uiautomator_dump()
-    assert re.findall(check_info,pytest.executer.get_dump_info(),re.S),'ssid not no the top'
+    pytest.dut.wait_element('NetWork & Internet','text')
+    pytest.dut.uiautomator_dump()
+    assert re.findall(check_info,pytest.dut.get_dump_info(),re.S),'ssid not no the top'

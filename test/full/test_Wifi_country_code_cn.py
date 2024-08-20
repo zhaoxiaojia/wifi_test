@@ -43,8 +43,8 @@ def setup_teardown():
     kill_setting()
 
 def test_country_code_cn():
-    pytest.executer.checkoutput(pytest.executer.SET_COUNTRY_CODE_FORMAT.format('cn'))
+    pytest.dut.checkoutput(pytest.dut.SET_COUNTRY_CODE_FORMAT.format('cn'))
     # Todo @chao.li check cn code
-    pytest.executer.checkoutput(pytest.executer.GET_COUNTRY_CODE)
+    pytest.dut.checkoutput(pytest.dut.GET_COUNTRY_CODE)
     connect_ssid(ssid)
     assert wait_for_wifi_address(), "Connect fail"

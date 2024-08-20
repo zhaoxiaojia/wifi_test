@@ -42,8 +42,8 @@ ax88uControl = Asusax88uControl()
 def setup_teardown():
     ax88uControl.change_setting(router_ch6)
     ax88uControl.router_control.driver.quit()
-    logging.info(pytest.executer.CMD_WIFI_CONNECT.format(ssid, 'wpa2', passwd))
-    pytest.executer.checkoutput(pytest.executer.CMD_WIFI_CONNECT.format(ssid, 'wpa2', passwd))
+    logging.info(pytest.dut.CMD_WIFI_CONNECT.format(ssid, 'wpa2', passwd))
+    pytest.dut.checkoutput(pytest.dut.CMD_WIFI_CONNECT.format(ssid, 'wpa2', passwd))
     wait_for_wifi_address()
     open_hotspot()
     logging.info('setup done')
@@ -54,11 +54,11 @@ def setup_teardown():
 
 @pytest.mark.hot_spot
 def test_hotspot_2g_iperf_tx():
-    ssid = pytest.executer.u().d2(resourceId="android:id/summary").get_text()
+    ssid = pytest.dut.u().d2(resourceId="android:id/summary").get_text()
     logging.info(ssid)
-    pytest.executer.wait_and_tap('AP Band', 'text')
-    pytest.executer.wait_element('5.0 GHz Band', 'text')
-    pytest.executer.wait_and_tap('5.0 GHz Band', 'text')
-    pytest.executer.wait_element('AP Band', 'text')
+    pytest.dut.wait_and_tap('AP Band', 'text')
+    pytest.dut.wait_element('5.0 GHz Band', 'text')
+    pytest.dut.wait_and_tap('5.0 GHz Band', 'text')
+    pytest.dut.wait_element('AP Band', 'text')
     iperf.run_iperf(type='tx')
     kill_setting()

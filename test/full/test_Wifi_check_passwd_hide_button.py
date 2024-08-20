@@ -42,6 +42,6 @@ def setup_teardown():
 
 def test_check_passwd_hide_button():
     find_ssid(ssid)
-    pytest.executer.text(passwd)
-    pytest.executer.uiautomator_dump()
-    assert passwd in pytest.executer.get_dump_info(),'passwd not shown'
+    pytest.dut.text(passwd)
+    pytest.dut.uiautomator_dump()
+    assert passwd in pytest.dut.get_dump_info(),'passwd not shown'

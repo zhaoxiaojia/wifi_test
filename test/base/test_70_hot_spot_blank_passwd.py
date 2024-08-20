@@ -19,21 +19,21 @@ passwd = 'SAP_测试 123'
 
 @pytest.fixture(autouse=True)
 def setup_teardown():
-    pytest.executer.change_keyboard_language()
-    pytest.executer.open_hotspot()
+    pytest.dut.change_keyboard_language()
+    pytest.dut.open_hotspot()
     yield
-    pytest.executer.close_hotspot()
-    pytest.executer.reset_keyboard_language()
+    pytest.dut.close_hotspot()
+    pytest.dut.reset_keyboard_language()
 
 
 
 @pytest.mark.hot_spot
 def test_hotspot_blank_passwd():
-    pytest.executer.wait_and_tap('Hotspot password', 'text')
-    pytest.executer.wait_element("android:id/edit", "resource-id")
-    pytest.executer.u().d2(resourceId="android:id/edit").clear_text()
-    pytest.executer.checkoutput(f'am broadcast -a ADB_INPUT_TEXT --es msg "{passwd}"')
-    pytest.executer.uiautomator_dump()
-    assert passwd in pytest.executer.get_dump_info(), "passwd doesn't currently"
-    pytest.executer.wait_and_tap('GO', 'text')
+    pytest.dut.wait_and_tap('Hotspot password', 'text')
+    pytest.dut.wait_element("android:id/edit", "resource-id")
+    pytest.dut.u().d2(resourceId="android:id/edit").clear_text()
+    pytest.dut.checkoutput(f'am broadcast -a ADB_INPUT_TEXT --es msg "{passwd}"')
+    pytest.dut.uiautomator_dump()
+    assert passwd in pytest.dut.get_dump_info(), "passwd doesn't currently"
+    pytest.dut.wait_and_tap('GO', 'text')
 

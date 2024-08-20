@@ -58,6 +58,8 @@ class ADB(Dut):
     def __init__(self, serialnumber="", logdir=""):
         super().__init__()
         self.serialnumber = serialnumber
+        if self.serialnumber== "":
+            self.serialnumber = pytest.dut.serialnumber
         logging.info("get devices number %s" % serialnumber)
         self.logdir = logdir or os.path.join(os.getcwd(), 'results')
         self.timer = None
@@ -1550,7 +1552,7 @@ class ADB(Dut):
                 self.checkoutput(f'input text {ssid}')
             self.keyevent(66)
             self.wait_element('Hotspot name', 'text')
-            assert ssid == pytest.executer.u().d2(
+            assert ssid == pytest.dut.u().d2(
                 resourceId="android:id/summary").get_text(), "ssid can't be set currently"
         if passwd:
             self.wait_and_tap('Hotspot password', 'text')

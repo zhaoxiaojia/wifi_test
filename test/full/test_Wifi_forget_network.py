@@ -39,23 +39,23 @@ def setup():
     ax88uControl.change_setting(router_2g)
     ax88uControl.router_control.driver.quit()
     # connect wifi
-    cmd = pytest.executer.CMD_WIFI_CONNECT.format('ATC_ASUS_AX88U_2G', 'wpa2', '12345678')
-    pytest.executer.checkoutput(cmd)
+    cmd = pytest.dut.CMD_WIFI_CONNECT.format('ATC_ASUS_AX88U_2G', 'wpa2', '12345678')
+    pytest.dut.checkoutput(cmd)
     wait_for_wifi_address(cmd)
     yield
 
 
 def test_forget_wifi():
     find_ssid('ATC_ASUS_AX88U_2G')
-    pytest.executer.wait_and_tap('Forget network', 'text')
+    pytest.dut.wait_and_tap('Forget network', 'text')
     for _ in range(3):
-        if pytest.executer.find_element('Internet connection', 'text'):
+        if pytest.dut.find_element('Internet connection', 'text'):
             break
         time.sleep(1)
-        pytest.executer.keyevent(23)
-        pytest.executer.keyevent(23)
-    pytest.executer.uiautomator_dump()
-    while 'Not connected' not in pytest.executer.get_dump_info():
+        pytest.dut.keyevent(23)
+        pytest.dut.keyevent(23)
+    pytest.dut.uiautomator_dump()
+    while 'Not connected' not in pytest.dut.get_dump_info():
         time.sleep(1)
-        pytest.executer.uiautomator_dump()
-    assert not pytest.executer.ping(hostname="192.168.50.1")
+        pytest.dut.uiautomator_dump()
+    assert not pytest.dut.ping(hostname="192.168.50.1")

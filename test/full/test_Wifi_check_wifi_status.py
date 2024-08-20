@@ -29,5 +29,5 @@ WIFI_ENABLE_STRING = 'Wifi is enabled'
 
 def test_check_wifi_status():
     enter_wifi_activity()
-    pytest.executer.uiautomator_dump()
-    assert 'Available networks' in pytest.executer.get_dump_info(),'Wifi is not enable'
+    pytest.dut.uiautomator_dump()
+    assert 'Available networks' in pytest.dut.get_dump_info(),'Wifi is not enable'

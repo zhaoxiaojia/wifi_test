@@ -32,14 +32,14 @@ def setup_teardown():
     ax88uControl.change_setting(router_2g)
     ax88uControl.router_control.driver.quit()
     yield
-    pytest.executer.forget_network_cmd(target_ip="192.168.50.1")
-    pytest.executer.kill_setting()
+    pytest.dut.forget_network_cmd(target_ip="192.168.50.1")
+    pytest.dut.kill_setting()
 
 
 def test_cancel_forgetted():
-    pytest.executer.connect_ssid(ssid,passwd)
-    pytest.executer.kill_setting()
-    pytest.executer.find_ssid('ATC_ASUS_AX88U_2G')
-    pytest.executer.wait_and_tap('Forget network', 'text')
-    pytest.executer.wait_and_tap('Cancel', 'text')
-    assert pytest.executer.ping(hostname="192.168.50.1"), "Can't ping"
+    pytest.dut.connect_ssid(ssid,passwd)
+    pytest.dut.kill_setting()
+    pytest.dut.find_ssid('ATC_ASUS_AX88U_2G')
+    pytest.dut.wait_and_tap('Forget network', 'text')
+    pytest.dut.wait_and_tap('Cancel', 'text')
+    assert pytest.dut.ping(hostname="192.168.50.1"), "Can't ping"

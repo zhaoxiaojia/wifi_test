@@ -44,17 +44,17 @@ def setup_teardown():
     ax88uControl.change_setting(router)
     ax88uControl.router_control.driver.quit()
     time.sleep(3)
-    pytest.executer.connect_ssid(ssid, passwd)
+    pytest.dut.connect_ssid(ssid, passwd)
     logging.info('setup done')
     yield
-    pytest.executer.home()
-    pytest.executer.forget_ssid(ssid)
-    pytest.executer.IPERF_TEST_TIME = 30
-    pytest.executer.IPERF_WAIT_TIME = pytest.executer.IPERF_TEST_TIME * 2
+    pytest.dut.home()
+    pytest.dut.forget_ssid(ssid)
+    pytest.dut.IPERF_TEST_TIME = 30
+    pytest.dut.IPERF_WAIT_TIME = pytest.dut.IPERF_TEST_TIME * 2
 
 
 @pytest.mark.hot_spot
 def test_5g_iperf_rx():
-    pytest.executer.IPERF_TEST_TIME = 3600 * 24
-    pytest.executer.IPERF_WAIT_TIME = pytest.executer.IPERF_TEST_TIME + 20
+    pytest.dut.IPERF_TEST_TIME = 3600 * 24
+    pytest.dut.IPERF_WAIT_TIME = pytest.dut.IPERF_TEST_TIME + 20
     iperf.run_iperf(type='rx')

@@ -23,22 +23,22 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def setup_teardown():
-    pytest.executer.enter_wifi_activity()
+    pytest.dut.enter_wifi_activity()
     yield
-    pytest.executer.kill_setting()
+    pytest.dut.kill_setting()
 
 
 def test_show_all_and_less():
-    pytest.executer.wait_and_tap('See all', 'text')
-    pytest.executer.wait_element('Wi-Fi', 'text')
-    pytest.executer.uiautomator_dump()
-    assert 'Quick connect' not in pytest.executer.get_dump_info(), "Can't show all"
+    pytest.dut.wait_and_tap('See all', 'text')
+    pytest.dut.wait_element('Wi-Fi', 'text')
+    pytest.dut.uiautomator_dump()
+    assert 'Quick connect' not in pytest.dut.get_dump_info(), "Can't show all"
     count = 0
-    while not pytest.executer.find_element('See fewer', 'text'):
-        pytest.executer.keyevent(20)
+    while not pytest.dut.find_element('See fewer', 'text'):
+        pytest.dut.keyevent(20)
         if count > 100:
             raise EnvironmentError("Can't find see fewer")
-    pytest.executer.wait_and_tap('See fewer', 'text')
-    pytest.executer.wait_element('See all', 'text')
-    pytest.executer.uiautomator_dump()
-    assert 'Add new network' in pytest.executer.get_dump_info(), "Can't show all"
+    pytest.dut.wait_and_tap('See fewer', 'text')
+    pytest.dut.wait_element('See all', 'text')
+    pytest.dut.uiautomator_dump()
+    assert 'Add new network' in pytest.dut.get_dump_info(), "Can't show all"

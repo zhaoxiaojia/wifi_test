@@ -36,12 +36,12 @@ def setup_teardown():
     ax88uControl.change_setting(router_5g)
     ax88uControl.router_control.driver.quit()
     yield
-    pytest.executer.forget_network_cmd()
-    pytest.executer.kill_setting()
+    pytest.dut.forget_network_cmd()
+    pytest.dut.kill_setting()
 
 
 def test_switch_band():
-    pytest.executer.connect_ssid(ssid_2g,passwd=passwd)
-    pytest.executer.kill_setting()
-    pytest.executer.forget_network_cmd()
-    pytest.executer.connect_ssid(ssid_5g,passwd=passwd)
+    pytest.dut.connect_ssid(ssid_2g,passwd=passwd)
+    pytest.dut.kill_setting()
+    pytest.dut.forget_network_cmd()
+    pytest.dut.connect_ssid(ssid_5g,passwd=passwd)

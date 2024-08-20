@@ -33,20 +33,20 @@ def setup_teardown():
     ax88uControl = Asusax88uControl()
     ax88uControl.change_setting(router_5g)
     ax88uControl.router_control.driver.quit()
-    pytest.executer.open_wifi()
-    assert pytest.executer.wait_for_wifi_address(
-        pytest.executer.CMD_WIFI_CONNECT.format(ssid, 'wpa3', passwd)), "Can't connect"
+    pytest.dut.open_wifi()
+    assert pytest.dut.wait_for_wifi_address(
+        pytest.dut.CMD_WIFI_CONNECT.format(ssid, 'wpa3', passwd)), "Can't connect"
     yield
-    pytest.executer.forget_network_cmd("192.168.50.1")
-    pytest.executer.kill_setting()
+    pytest.dut.forget_network_cmd("192.168.50.1")
+    pytest.dut.kill_setting()
 
 
 @pytest.mark.repeat(20)
 def test_onoff_stress():
-    pytest.executer.open_wifi()
-    assert pytest.executer.wait_for_wifi_address(), "Can't get ipaddress"
-    assert pytest.executer.ping(hostname="192.168.50.1"), "Can't ping"
-    pytest.executer.close_wifi()
+    pytest.dut.open_wifi()
+    assert pytest.dut.wait_for_wifi_address(), "Can't get ipaddress"
+    assert pytest.dut.ping(hostname="192.168.50.1"), "Can't ping"
+    pytest.dut.close_wifi()
     time.sleep(1)
-    assert not pytest.executer.checkoutput(
+    assert not pytest.dut.checkoutput(
         'ifconfig wlan0 |egrep -o "inet [^ ]*"|cut -f 2 -d :'), "Still have ipaddress"

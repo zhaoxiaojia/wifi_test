@@ -3,7 +3,7 @@
 # @Time    : 2023/3/31 11:05
 # @Author  : chao.li
 # @Site    :
-# @File    : test_Wifi_reopen_pytest.executer.py
+# @File    : test_Wifi_reopen_pytest.dut.py
 # @Software: PyCharm
 
 
@@ -48,8 +48,8 @@ def setup_teardown():
 
 def test_reopen_wifi():
     assert connect_ssid(ssid_name, passwd), "Can't connect"
-    assert pytest.executer.ping(hostname="192.168.50.1"), "Can't ping"
+    assert pytest.dut.ping(hostname="192.168.50.1"), "Can't ping"
     close_wifi()
     open_wifi()
     time.sleep(5)
-    assert 'freq: 5' in pytest.executer.checkoutput(pytest.executer.IW_LINNK_COMMAND), "Doesn't conect 5g "
+    assert 'freq: 5' in pytest.dut.checkoutput(pytest.dut.IW_LINNK_COMMAND), "Doesn't conect 5g "

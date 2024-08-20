@@ -24,13 +24,13 @@ passwd = 'SAP_123test_'
 
 @pytest.fixture(autouse=True)
 def setup_teardown():
-    pytest.executer.open_hotspot()
+    pytest.dut.open_hotspot()
     logging.info('setup done')
     yield
-    pytest.executer.close_hotspot()
+    pytest.dut.close_hotspot()
 
 
 @pytest.mark.hot_spot
 def test_hotspot_special_passwd():
-    pytest.executer.set_hotspot(ssid=ssid, passwd=passwd)
+    pytest.dut.set_hotspot(ssid=ssid, passwd=passwd)
     concomitant_dut.wait_ssid_cmd(ssid)

@@ -35,10 +35,10 @@ def setup_teardown():
 
 @pytest.mark.hot_spot
 def test_hotspot_blank_ssid():
-    pytest.executer.wait_and_tap('Hotspot name', 'text')
-    pytest.executer.u().d2(resourceId="android:id/edit").clear_text()
-    pytest.executer.checkoutput(f'input text $(echo "{ssid}" | sed -e "s/ /\%s/g")')
-    pytest.executer.keyevent(66)
-    pytest.executer.wait_element('Hotspot name', 'text')
-    assert ssid == pytest.executer.u().d2(resourceId="android:id/summary").get_text(), "ssid can't be set currently"
+    pytest.dut.wait_and_tap('Hotspot name', 'text')
+    pytest.dut.u().d2(resourceId="android:id/edit").clear_text()
+    pytest.dut.checkoutput(f'input text $(echo "{ssid}" | sed -e "s/ /\%s/g")')
+    pytest.dut.keyevent(66)
+    pytest.dut.wait_element('Hotspot name', 'text')
+    assert ssid == pytest.dut.u().d2(resourceId="android:id/summary").get_text(), "ssid can't be set currently"
     accompanying_dut.wait_ssid_cmd(ssid)

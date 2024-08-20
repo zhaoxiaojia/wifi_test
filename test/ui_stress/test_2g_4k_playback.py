@@ -32,11 +32,11 @@ def setup():
     ax88uControl.change_setting(router_ausu)
     ax88uControl.router_control.driver.quit()
     time.sleep(3)
-    pytest.executer.connect_ssid(ssid, passwd)
+    pytest.dut.connect_ssid(ssid, passwd)
     yield
-    pytest.executer.home()
-    pytest.executer.forget_ssid(ssid)
+    pytest.dut.home()
+    pytest.dut.forget_ssid(ssid)
 
 
 def test_4k_playback():
-    pytest.executer.playback_youtube(sleep_time=3600*24)
+    pytest.dut.playback_youtube(sleep_time=3600*24)

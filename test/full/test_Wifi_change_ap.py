@@ -52,8 +52,8 @@ def setup_teardown():
 
 def test_change_ap():
     assert connect_ssid(ssid_name, passwd), "Can't connect"
-    assert pytest.executer.ping(hostname="192.168.50.1"), "Can't ping"
+    assert pytest.dut.ping(hostname="192.168.50.1"), "Can't ping"
     ax88uControl.change_setting(router_5g_temp)
     ax88uControl.router_control.driver.quit()
     time.sleep(5)
-    assert 'freq: 5' in pytest.executer.checkoutput(pytest.executer.IW_LINNK_COMMAND), "Doesn't conect 5g "
+    assert 'freq: 5' in pytest.dut.checkoutput(pytest.dut.IW_LINNK_COMMAND), "Doesn't conect 5g "

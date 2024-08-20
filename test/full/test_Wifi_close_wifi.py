@@ -3,7 +3,7 @@
 # @Time    : 2023/4/23 10:03
 # @Author  : chao.li
 # @Site    :
-# @File    : test_Wifi_close_pytest.executer.py
+# @File    : test_Wifi_close_pytest.dut.py
 # @Software: PyCharm
 
 
@@ -35,5 +35,5 @@ def setup_teardown():
 def test_close_wifi():
     close_wifi()
     enter_wifi_activity()
-    pytest.executer.uiautomator_dump()
-    assert wifi_onoff_tag not in pytest.executer.get_dump_info(), "Can't close wifi"
+    pytest.dut.uiautomator_dump()
+    assert wifi_onoff_tag not in pytest.dut.get_dump_info(), "Can't close wifi"

@@ -43,30 +43,30 @@ def setup_teardown():
 @pytest.mark.hot_spot
 def test_hotspot_scc():
     # dut connect ssid
-    cmd = pytest.executer.CMD_WIFI_CONNECT.format('ATC_ASUS_AX88U_5G', 'wpa2', '12345678')
-    pytest.executer.checkoutput(cmd)
+    cmd = pytest.dut.CMD_WIFI_CONNECT.format('ATC_ASUS_AX88U_5G', 'wpa2', '12345678')
+    pytest.dut.checkoutput(cmd)
     wait_for_wifi_address(cmd)
     # dut open hotspot
     open_hotspot()
-    ssid = pytest.executer.u().d2(resourceId="android:id/summary").get_text()
+    ssid = pytest.dut.u().d2(resourceId="android:id/summary").get_text()
     logging.info(ssid)
-    pytest.executer.wait_and_tap('AP Band', 'text')
-    pytest.executer.wait_element('5.0 GHz Band', 'text')
-    pytest.executer.wait_and_tap('5.0 GHz Band', 'text')
-    pytest.executer.wait_element('AP Band', 'text')
-    pytest.executer.uiautomator_dump()
-    if 'WPA2 PSK' in pytest.executer.get_dump_info():
+    pytest.dut.wait_and_tap('AP Band', 'text')
+    pytest.dut.wait_element('5.0 GHz Band', 'text')
+    pytest.dut.wait_and_tap('5.0 GHz Band', 'text')
+    pytest.dut.wait_element('AP Band', 'text')
+    pytest.dut.uiautomator_dump()
+    if 'WPA2 PSK' in pytest.dut.get_dump_info():
         # wpa2 need passwd
-        pytest.executer.wait_and_tap('Hotspot password', 'text')
-        passwd = pytest.executer.u().d2(resourceId="android:id/edit").get_text()
+        pytest.dut.wait_and_tap('Hotspot password', 'text')
+        passwd = pytest.dut.u().d2(resourceId="android:id/edit").get_text()
         logging.info(passwd)
         time.sleep(1)
-        pytest.executer.keyevent(4)
-        pytest.executer.keyevent(4)
-        cmd = pytest.executer.CMD_WIFI_CONNECT.format(ssid, 'wpa2', passwd)
+        pytest.dut.keyevent(4)
+        pytest.dut.keyevent(4)
+        cmd = pytest.dut.CMD_WIFI_CONNECT.format(ssid, 'wpa2', passwd)
     else:
         # none doesn't need passwd
-        cmd = pytest.executer.CMD_WIFI_CONNECT_OPEN.format(ssid)
+        cmd = pytest.dut.CMD_WIFI_CONNECT_OPEN.format(ssid)
     kill_moresetting()
     logging.info(cmd)
     # accompanying connect hotspot
@@ -78,6 +78,6 @@ def test_hotspot_scc():
     accompanying_dut.wait_and_tap('amlogictest1@gmail.com', 'text')
     # assert youtube.check_playback_status(), 'playback status with error'
     accompanying_dut.home()
-    assert 'freq: 5' in accompanying_dut.checkoutput(pytest.executer.IW_LINNK_COMMAND), "Doesn't conect 5g "
+    assert 'freq: 5' in accompanying_dut.checkoutput(pytest.dut.IW_LINNK_COMMAND), "Doesn't conect 5g "
     ipaddress = '.'.join(ipaddress.split('.')[:3] + ['1'])
     forget_network_cmd(ipaddress, accompanying=True)

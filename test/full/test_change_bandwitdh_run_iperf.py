@@ -52,7 +52,7 @@ def setup():
 def test_change_bandwitdh_iperf():
     for i in [router_band20, router_band40,] * 10:
         ax88uControl.change_setting(i)
-        logging.info(pytest.executer.CMD_WIFI_CONNECT.format(ssid, 'wpa2', passwd))
-        pytest.executer.checkoutput(pytest.executer.CMD_WIFI_CONNECT.format(ssid, 'wpa2', passwd))
+        logging.info(pytest.dut.CMD_WIFI_CONNECT.format(ssid, 'wpa2', passwd))
+        pytest.dut.checkoutput(pytest.dut.CMD_WIFI_CONNECT.format(ssid, 'wpa2', passwd))
         wait_for_wifi_address()
         assert iperf.run_iperf(), "Can't run iperf success"

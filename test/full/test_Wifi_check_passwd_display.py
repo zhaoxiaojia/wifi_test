@@ -50,6 +50,6 @@ def setup():
 
 def test_check_passwd_display():
     find_ssid(ssid)
-    pytest.executer.text(passwd)
-    pytest.executer.uiautomator_dump()
-    assert ssid in pytest.executer.get_dump_info(),"Passwd can not be display"
+    pytest.dut.text(passwd)
+    pytest.dut.uiautomator_dump()
+    assert ssid in pytest.dut.get_dump_info(),"Passwd can not be display"

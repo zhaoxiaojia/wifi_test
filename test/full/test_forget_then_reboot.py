@@ -50,7 +50,7 @@ def test_forget_then_reboot():
     connect_ssid(ssid, passwd=passwd)
     assert wait_for_wifi_address(), "Connect fail"
     forget_network_cmd(target_ip='192.168.50.1')
-    pytest.executer.reboot()
+    pytest.dut.reboot()
     wait_for_wifi_service()
     try:
         wait_for_wifi_address()

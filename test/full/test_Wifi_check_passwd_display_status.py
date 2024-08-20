@@ -47,5 +47,5 @@ def setup():
 
 def test_check_passwd_display_status():
     find_ssid(ssid)
-    pytest.executer.uiautomator_dump()
-    assert check_info in pytest.executer.get_dump_info(),'Hide passwd is not disable'
+    pytest.dut.uiautomator_dump()
+    assert check_info in pytest.dut.get_dump_info(),'Hide passwd is not disable'

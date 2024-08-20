@@ -50,6 +50,6 @@ def setup():
 
 def test_check_connect_info():
     connect_ssid(ssid,passwd)
-    pytest.executer.wait_element('NetWork & Internet','text')
-    pytest.executer.uiautomator_dump()
-    assert check_info in pytest.executer.get_dump_info(),'help text display wrong info'
+    pytest.dut.wait_element('NetWork & Internet','text')
+    pytest.dut.uiautomator_dump()
+    assert check_info in pytest.dut.get_dump_info(),'help text display wrong info'

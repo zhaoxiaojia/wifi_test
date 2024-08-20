@@ -38,20 +38,20 @@ def setup_teardown():
 
 @pytest.mark.hot_spot
 def test_8_char_wpa2():
-    ssid = pytest.executer.u().d2(resourceId="android:id/summary").get_text()
+    ssid = pytest.dut.u().d2(resourceId="android:id/summary").get_text()
     logging.info(ssid)
-    pytest.executer.wait_and_tap('Security', 'text')
-    pytest.executer.wait_element('WPA2 PSK', 'text')
-    pytest.executer.wait_and_tap('WPA2 PSK', 'text')
-    pytest.executer.wait_element('Security', 'text')
-    pytest.executer.wait_and_tap('Hotspot password', 'text')
-    pytest.executer.u().d2(resourceId="android:id/edit").clear_text()
-    pytest.executer.checkoutput(f'input text {passwd}')
-    pytest.executer.uiautomator_dump()
-    assert passwd in pytest.executer.get_dump_info(), "passwd doesn't currently"
+    pytest.dut.wait_and_tap('Security', 'text')
+    pytest.dut.wait_element('WPA2 PSK', 'text')
+    pytest.dut.wait_and_tap('WPA2 PSK', 'text')
+    pytest.dut.wait_element('Security', 'text')
+    pytest.dut.wait_and_tap('Hotspot password', 'text')
+    pytest.dut.u().d2(resourceId="android:id/edit").clear_text()
+    pytest.dut.checkoutput(f'input text {passwd}')
+    pytest.dut.uiautomator_dump()
+    assert passwd in pytest.dut.get_dump_info(), "passwd doesn't currently"
     time.sleep(1)
-    pytest.executer.keyevent(66)
-    cmd = pytest.executer.CMD_WIFI_CONNECT.format(ssid, 'wpa2', passwd)
+    pytest.dut.keyevent(66)
+    cmd = pytest.dut.CMD_WIFI_CONNECT.format(ssid, 'wpa2', passwd)
     logging.info(cmd)
     accompanying_dut.checkoutput(cmd)
     wait_for_wifi_address(cmd, accompanying=True)

@@ -46,9 +46,9 @@ def test_connect_us():
     ax88uControl.change_setting(router_us)
     ax88uControl.router_control.driver.quit()
     time.sleep(10)
-    pytest.executer.checkoutput(pytest.executer.SET_COUNTRY_CODE_FORMAT.format('cn'))
+    pytest.dut.checkoutput(pytest.dut.SET_COUNTRY_CODE_FORMAT.format('cn'))
     # Todo @chao.li check cn code
-    pytest.executer.checkoutput(pytest.executer.GET_COUNTRY_CODE)
+    pytest.dut.checkoutput(pytest.dut.GET_COUNTRY_CODE)
     connect_ssid(ssid)
     assert wait_for_wifi_address(), "Connect fail"
 

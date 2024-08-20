@@ -25,12 +25,12 @@ ssid = '12345678901234567890123456789012'
 
 @pytest.fixture(autouse=True)
 def setup_teardown():
-    pytest.executer.open_hotspot()
+    pytest.dut.open_hotspot()
     logging.info('setup done')
     yield
-    pytest.executer.close_hotspot()
+    pytest.dut.close_hotspot()
 
 @pytest.mark.hot_spot
 def test_hotspot_long_ssid():
-    pytest.executer.set_hotspot(ssid)
+    pytest.dut.set_hotspot(ssid)
     concomitant_dut.wait_ssid_cmd(ssid)

@@ -24,25 +24,25 @@ from tools.connect_tool.adb import concomitant_dut
 
 @pytest.fixture(autouse=True)
 def setup_teardown():
-    pytest.executer.open_hotspot()
+    pytest.dut.open_hotspot()
     logging.info('setup done')
     yield
-    pytest.executer.close_hotspot()
+    pytest.dut.close_hotspot()
 
 
 @pytest.mark.hot_spot
 def test_hotspot_wap2():
-    ssid = pytest.executer.u().d2(resourceId="android:id/summary").get_text()
+    ssid = pytest.dut.u().d2(resourceId="android:id/summary").get_text()
     logging.info(ssid)
-    pytest.executer.set_hotspot(encrypt='WPA2 PSK')
-    pytest.executer.wait_and_tap('Hotspot password', 'text')
-    passwd = pytest.executer.u().d2(resourceId="android:id/edit").get_text()
+    pytest.dut.set_hotspot(encrypt='WPA2 PSK')
+    pytest.dut.wait_and_tap('Hotspot password', 'text')
+    passwd = pytest.dut.u().d2(resourceId="android:id/edit").get_text()
     logging.info(passwd)
     time.sleep(1)
-    pytest.executer.keyevent(4)
-    cmd = pytest.executer.CMD_WIFI_CONNECT.format(ssid, 'wpa2', passwd)
+    pytest.dut.keyevent(4)
+    cmd = pytest.dut.CMD_WIFI_CONNECT.format(ssid, 'wpa2', passwd)
     logging.info(cmd)
     concomitant_dut.checkoutput(cmd)
-    ipaddress = pytest.executer.wait_for_wifi_address(cmd, accompanying=True,target="192.168")[1]
+    ipaddress = pytest.dut.wait_for_wifi_address(cmd, accompanying=True,target="192.168")[1]
     ipaddress = '.'.join(ipaddress.split('.')[:3] + ['1'])
-    pytest.executer.forget_network_cmd(ipaddress, accompanying=True)
+    pytest.dut.forget_network_cmd(ipaddress, accompanying=True)

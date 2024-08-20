@@ -15,13 +15,3 @@
 # d = u2.connect("12345678901234")
 # print(d.dump_hierarchy())
 
-class coco:
-    def __init__(self):
-        self.name = 'coco'
-
-    def print_info(self):
-        if not hasattr(self,"_field_"):
-            print('aaaa')
-
-c = coco()
-c.print_info()

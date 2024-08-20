@@ -51,7 +51,7 @@ def setup():
 def test_change_channel_iperf():
     for i in [router_ch1,router_ch6,router_ch11]*7:
         ax88uControl.change_setting(i)
-        logging.info(pytest.executer.CMD_WIFI_CONNECT.format(ssid,'wpa2',passwd))
-        pytest.executer.checkoutput(pytest.executer.CMD_WIFI_CONNECT.format(ssid,'wpa2',passwd))
+        logging.info(pytest.dut.CMD_WIFI_CONNECT.format(ssid,'wpa2',passwd))
+        pytest.dut.checkoutput(pytest.dut.CMD_WIFI_CONNECT.format(ssid,'wpa2',passwd))
         wait_for_wifi_address()
         assert iperf.run_iperf(),"Can't run iperf success"

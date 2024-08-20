@@ -18,7 +18,7 @@ import numpy as np
 import pandas as pd
 from matplotlib.backends.backend_pdf import PdfPages
 
-from Decorators import singleton
+from tools.decorators import singleton
 
 plt.rcParams['font.family'] = ['SimHei']
 

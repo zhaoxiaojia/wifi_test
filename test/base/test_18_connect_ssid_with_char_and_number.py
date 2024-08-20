@@ -33,10 +33,10 @@ def setup_teardown():
     ax88uControl.change_setting(router_2g)
     ax88uControl.router_control.driver.quit()
     yield
-    pytest.executer.forget_network_cmd(target_ip='192.168.50.1')
-    pytest.executer.kill_setting()
+    pytest.dut.forget_network_cmd(target_ip='192.168.50.1')
+    pytest.dut.kill_setting()
 
 
 def test_connect_ssid_with_char_and_number():
-    pytest.executer.connect_ssid(ssid, passwd)
-    assert pytest.executer.wait_for_wifi_address(), "Connect fail"
+    pytest.dut.connect_ssid(ssid, passwd)
+    assert pytest.dut.wait_for_wifi_address(), "Connect fail"

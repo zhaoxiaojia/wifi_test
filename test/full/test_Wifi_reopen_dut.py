@@ -53,7 +53,7 @@ def test_reopen_dut():
     connect_ssid(ssid,passwd)
     youtube.playback_youtube()
     time.sleep(30)
-    pytest.executer.reboot()
+    pytest.dut.reboot()
     wait_for_wifi_service()
     youtube.playback_youtube()
     time.sleep(30)

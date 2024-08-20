@@ -61,8 +61,8 @@ def test_change_ap():
     try:
         connect_ssid(zte_ssid_name,'12345678')
     except AssertionError:
-        pytest.executer.back()
+        pytest.dut.back()
         time.sleep(1)
-        pytest.executer.back()
+        pytest.dut.back()
     wait_for_wifi_address(target='192.168.50')
 

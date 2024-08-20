@@ -52,10 +52,10 @@ def setup_teardown():
 
 def test_connect_reboot():
     assert connect_ssid(ssid_name, passwd), "Can't connect"
-    assert pytest.executer.ping(hostname="192.168.50.1"), "Can't ping"
+    assert pytest.dut.ping(hostname="192.168.50.1"), "Can't ping"
     # reboot ap
     #Todo
     shutdown()
     wait_router()
     time.sleep(5)
-    assert 'freq: 5' in pytest.executer.checkoutput(pytest.executer.IW_LINNK_COMMAND), "Doesn't conect 5g "
+    assert 'freq: 5' in pytest.dut.checkoutput(pytest.dut.IW_LINNK_COMMAND), "Doesn't conect 5g "

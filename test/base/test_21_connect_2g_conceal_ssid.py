@@ -33,11 +33,11 @@ def setup():
     ax88uControl.change_setting(router_2g)
     ax88uControl.router_control.driver.quit()
     yield
-    pytest.executer.kill_setting()
-    pytest.executer.forget_network_cmd()
+    pytest.dut.kill_setting()
+    pytest.dut.forget_network_cmd()
 
 
 @pytest.mark.wifi_connect
 def test_connect_conceal_ssid():
-    pytest.executer.add_network(ssid, 'None')
-    assert pytest.executer.wait_for_wifi_address(), "Connect fail"
+    pytest.dut.add_network(ssid, 'None')
+    assert pytest.dut.wait_for_wifi_address(), "Connect fail"

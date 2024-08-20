@@ -24,13 +24,13 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def setup_teardown():
-    pytest.executer.open_hotspot()
+    pytest.dut.open_hotspot()
     logging.info('setup done')
     yield
-    pytest.executer.kill_moresetting()
+    pytest.dut.kill_moresetting()
 
 @pytest.mark.hot_spot
 def test_hotspot_auto_close():
     time.sleep(60*10)
-    pytest.executer.uiautomator_dump()
-    assert re.findall(pytest.executer.CLOSE_INFO,pytest.executer.get_dump_info(),re.S),"hotspot doesn't be closed"
+    pytest.dut.uiautomator_dump()
+    assert re.findall(pytest.dut.CLOSE_INFO,pytest.dut.get_dump_info(),re.S),"hotspot doesn't be closed"

@@ -32,10 +32,10 @@ def setup_teardown():
     ax88uControl.change_setting(router_5g)
     ax88uControl.router_control.driver.quit()
     yield
-    pytest.executer.forget_network_cmd(target_ip='192.168.50.1')
-    pytest.executer.kill_setting()
+    pytest.dut.forget_network_cmd(target_ip='192.168.50.1')
+    pytest.dut.kill_setting()
 
 
 @pytest.mark.wifi_connect
 def test_connect_legcy_ssid():
-    assert pytest.executer.connect_ssid(ssid, passwd),"Can't connect"
+    assert pytest.dut.connect_ssid(ssid, passwd),"Can't connect"

@@ -54,8 +54,8 @@ def setup_teardown():
 
 def test_2g_switch_5g():
     assert connect_ssid('ATC_ASUS_AX88U_2G', passwd), "Can't connect"
-    assert pytest.executer.ping(hostname="192.168.50.1"), "Can't ping"
+    assert pytest.dut.ping(hostname="192.168.50.1"), "Can't ping"
     assert connect_ssid('XiaomiAX3000_5G', passwd), "Can't connect"
-    assert pytest.executer.ping(hostname="192.168.50.1"), "Can't ping"
+    assert pytest.dut.ping(hostname="192.168.50.1"), "Can't ping"
     assert connect_save_ssid('ATC_ASUS_AX88U_2G'), "Can't connect"
     playback_youtube()

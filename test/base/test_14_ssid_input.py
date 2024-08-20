@@ -25,14 +25,14 @@ ssid = "abcdefghi"
 
 @pytest.fixture(autouse=True)
 def setup_teardown():
-    pytest.executer.kill_setting()
+    pytest.dut.kill_setting()
     yield
-    pytest.executer.kill_setting()
+    pytest.dut.kill_setting()
 
 
 def test_ssid_input():
-    pytest.executer.enter_wifi_activity()
-    pytest.executer.wait_and_tap('Add new network', 'text')
-    pytest.executer.checkoutput(f'input text {ssid}')
-    pytest.executer.uiautomator_dump()
-    assert ssid in pytest.executer.get_dump_info(), "ssid can't be input"
+    pytest.dut.enter_wifi_activity()
+    pytest.dut.wait_and_tap('Add new network', 'text')
+    pytest.dut.checkoutput(f'input text {ssid}')
+    pytest.dut.uiautomator_dump()
+    assert ssid in pytest.dut.get_dump_info(), "ssid can't be input"

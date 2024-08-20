@@ -23,20 +23,20 @@ ssid = 'SAP测试1234'
 
 @pytest.fixture(autouse=True)
 def setup_teardown():
-    pytest.executer.change_keyboard_language()
-    pytest.executer.open_hotspot()
+    pytest.dut.change_keyboard_language()
+    pytest.dut.open_hotspot()
     logging.info('setup done')
     yield
-    pytest.executer.reset_keyboard_language()
-    pytest.executer.close_hotspot()
+    pytest.dut.reset_keyboard_language()
+    pytest.dut.close_hotspot()
 
 @pytest.mark.hot_spot
 def test_hotspot_chinese_char_ssid():
-    pytest.executer.wait_and_tap('Hotspot name', 'text')
-    pytest.executer.u().d2(resourceId="android:id/edit").clear_text()
-    pytest.executer.checkoutput(f'am broadcast -a ADB_INPUT_TEXT --es msg  {ssid}')
-    pytest.executer.wait_and_tap('GO','text')
-    pytest.executer.keyevent(66)
-    pytest.executer.wait_element('Hotspot name', 'text')
-    assert ssid == pytest.executer.u().d2(resourceId="android:id/summary").get_text(), "ssid can't be set currently"
+    pytest.dut.wait_and_tap('Hotspot name', 'text')
+    pytest.dut.u().d2(resourceId="android:id/edit").clear_text()
+    pytest.dut.checkoutput(f'am broadcast -a ADB_INPUT_TEXT --es msg  {ssid}')
+    pytest.dut.wait_and_tap('GO','text')
+    pytest.dut.keyevent(66)
+    pytest.dut.wait_element('Hotspot name', 'text')
+    assert ssid == pytest.dut.u().d2(resourceId="android:id/summary").get_text(), "ssid can't be set currently"
     concomitant_dut.wait_ssid_cmd(ssid)

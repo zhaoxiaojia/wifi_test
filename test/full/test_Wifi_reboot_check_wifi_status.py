@@ -32,17 +32,17 @@ WIFI_ENABLE_STRING = 'Wifi is enabled'
 @pytest.fixture(autouse=True)
 def setup_teardown():
     enter_wifi_activity()
-    pytest.executer.uiautomator_dump()
-    assert 'Available networks' in pytest.executer.get_dump_info(), 'Wifi is not enable'
+    pytest.dut.uiautomator_dump()
+    assert 'Available networks' in pytest.dut.get_dump_info(), 'Wifi is not enable'
     yield
-    pytest.executer.reboot()
-    pytest.executer.wait_devices()
+    pytest.dut.reboot()
+    pytest.dut.wait_devices()
 
 
 def test_check_status_after_reboot():
-    pytest.executer.reboot()
-    pytest.executer.wait_devices()
+    pytest.dut.reboot()
+    pytest.dut.wait_devices()
     wait_for_wifi_service()
     enter_wifi_activity()
-    pytest.executer.uiautomator_dump()
-    assert 'Available networks' in pytest.executer.get_dump_info(), 'Wifi is not enable'
+    pytest.dut.uiautomator_dump()
+    assert 'Available networks' in pytest.dut.get_dump_info(), 'Wifi is not enable'

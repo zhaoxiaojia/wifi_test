@@ -13,12 +13,12 @@ import threading
 import time
 
 
-from tools.connect_tool.adb import ADB
+
 from tools.decorators import set_timeout
 
+import pytest
 
-
-class Online(ADB):
+class Online():
     '''
     Online video playback
 
@@ -33,8 +33,8 @@ class Online(ADB):
     DECODE_TAG_AndroidS = 'VDA'
     PLAYER_PACKAGE_TUPLE = '', ''
 
-    def __init__(self, name=''):
-        super(Online, self).__init__('OnlinePlayback')
+    def __init__(self):
+        ...
 
     def playback(self, activity, link):
         '''
@@ -45,7 +45,7 @@ class Online(ADB):
         @return:
         '''
         logging.info(activity.format(link))
-        self.checkoutput(activity.format(link))
+        pytest.dut.checkoutput(activity.format(link))
 
     def time_out(self):
         '''
@@ -59,7 +59,7 @@ class Online(ADB):
         #     self.logcat.terminate()
         # self.clear_logcat()
 
-    @set_timeout(300, time_out)
+    @set_timeout(300)
     def check_playback_status(self):
         '''
         Waiting for network load video
@@ -73,4 +73,4 @@ class Online(ADB):
         check apk status
         @return: apk status : boolean
         '''
-        return True if self.PLAYER_PACKAGE_TUPLE[0] in self.checkoutput('ls /data/data/') else False
+        return True if self.PLAYER_PACKAGE_TUPLE[0] in pytest.dut.checkoutput('ls /data/data/') else False

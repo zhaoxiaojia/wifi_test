@@ -37,8 +37,8 @@ ax88uControl = Asusax88uControl()
 def teardown():
     yield
     ax88uControl.router_control.driver.quit()
-    pytest.executer.forget_network_ssid(ssid)
-    pytest.executer.kill_setting()
+    pytest.dut.forget_network_ssid(ssid)
+    pytest.dut.kill_setting()
 
 
 @pytest.fixture(autouse=True, params=[router_ch1, router_ch6, router_ch11] * 10000)
@@ -47,4 +47,4 @@ def setup(request):
 
 
 def test_change_2g_channel():
-    pytest.executer.connect_ssid(ssid, passwd)
+    pytest.dut.connect_ssid(ssid, passwd)

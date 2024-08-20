@@ -26,13 +26,13 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def setup_teardown():
-    pytest.executer.close_wifi()
+    pytest.dut.close_wifi()
     yield
-    pytest.executer.open_wifi()
+    pytest.dut.open_wifi()
 
 
 def test_open_wifi():
-    pytest.executer.open_wifi()
-    pytest.executer.enter_wifi_activity()
-    pytest.executer.uiautomator_dump()
-    assert pytest.executer.WIFI_BUTTON_TAG in pytest.executer.get_dump_info(), "Can't open wifi"
+    pytest.dut.open_wifi()
+    pytest.dut.enter_wifi_activity()
+    pytest.dut.uiautomator_dump()
+    assert pytest.dut.WIFI_BUTTON_TAG in pytest.dut.get_dump_info(), "Can't open wifi"

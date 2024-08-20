@@ -54,10 +54,10 @@ def setup():
 def test_change_encryption_iperf():
     for i in [router_wpa1, router_wpa2, router_open] * 7:
         ax88uControl.change_setting(i)
-        logging.info(pytest.executer.CMD_WIFI_CONNECT.format(ssid, 'wpa2', passwd))
+        logging.info(pytest.dut.CMD_WIFI_CONNECT.format(ssid, 'wpa2', passwd))
         if i.authentication_method == 'Open System':
-            pytest.executer.checkoutput(pytest.executer.CMD_WIFI_CONNECT_OPEN.format(ssid))
+            pytest.dut.checkoutput(pytest.dut.CMD_WIFI_CONNECT_OPEN.format(ssid))
         else:
-            pytest.executer.checkoutput(pytest.executer.CMD_WIFI_CONNECT.format(ssid, 'wpa2', passwd))
+            pytest.dut.checkoutput(pytest.dut.CMD_WIFI_CONNECT.format(ssid, 'wpa2', passwd))
         wait_for_wifi_address()
         assert iperf.run_iperf(), "Can't run iperf success"

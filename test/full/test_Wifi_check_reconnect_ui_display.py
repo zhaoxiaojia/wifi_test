@@ -60,6 +60,6 @@ def test_repeat_change_ap():
     connect_ssid(xiaomi_ssid_name, passwd, target='192.168.6')
     kill_setting()
     find_ssid(asus_ssid_name)
-    pytest.executer.uiautomator_dump()
-    assert 'Connect' in pytest.executer.get_dump_info(),"Display not currently"
-    assert 'Forget network' in pytest.executer.get_dump_info(),"Display not currently"
+    pytest.dut.uiautomator_dump()
+    assert 'Connect' in pytest.dut.get_dump_info(),"Display not currently"
+    assert 'Forget network' in pytest.dut.get_dump_info(),"Display not currently"

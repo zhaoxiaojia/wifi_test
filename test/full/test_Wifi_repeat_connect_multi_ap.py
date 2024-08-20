@@ -58,12 +58,12 @@ def test_repeat_change_ap():
     kill_setting()
     for i in range(4):
         find_ssid(asus_ssid_name)
-        pytest.executer.enter()
-        pytest.executer.wait_and_tap('Connect', 'text')
+        pytest.dut.enter()
+        pytest.dut.wait_and_tap('Connect', 'text')
         assert wait_for_wifi_address(target='192.168.50'),"Can't reconnect"
         kill_setting()
         find_ssid(zte_ssid_name)
-        pytest.executer.enter()
-        pytest.executer.wait_and_tap('Connect', 'text')
+        pytest.dut.enter()
+        pytest.dut.wait_and_tap('Connect', 'text')
         assert wait_for_wifi_address(target='192.168.2'),"Can't reconnect"
         kill_setting()

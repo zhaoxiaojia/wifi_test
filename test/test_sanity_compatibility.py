@@ -133,8 +133,8 @@ with open(os.getcwd() + '/config/wifi_compatibility_data/asusax5400.csv', 'r',en
 #     reader = csv.reader(f)
 #     test_data += [Router(*[i.strip() for i in row]) for row in reader][1:]
 
-ipfoncig_info = pytest.executer.checkoutput_term('ipconfig').strip()
-pytest.executer.pc_ip = re.findall(r'IPv4 地址.*?(\d+\.\d+\.\d+\.\d+)', ipfoncig_info, re.S)[0]
+ipfoncig_info = pytest.dut.checkoutput_term('ipconfig').strip()
+pytest.dut.pc_ip = re.findall(r'IPv4 地址.*?(\d+\.\d+\.\d+\.\d+)', ipfoncig_info, re.S)[0]
 wifiResult = WifiCompatibilityResult(pytest.result_path)
 router,target_ip = '',''
 task_ids = [i.__str__().replace(' ', '_').replace('/', '_') for i in test_data]
@@ -181,15 +181,15 @@ def wifi_setup_teardown(request):
     #     change_result = router.change_setting(router_info)
     #     target_ip = '192.168.9.1'
     if router_info.hide_ssid != '是':
-        pytest.executer.checkoutput('cmd wifi start-scan')
-        scan_list = pytest.executer.checkoutput(f'cmd wifi list-scan-results |grep -F "{router_info.ssid}"')
+        pytest.dut.checkoutput('cmd wifi start-scan')
+        scan_list = pytest.dut.checkoutput(f'cmd wifi list-scan-results |grep -F "{router_info.ssid}"')
         logging.info(scan_list)
         step = 0
         while ' ' + router_info.ssid + ' ' not in scan_list:
             time.sleep(5)
             logging.info('re scan')
-            pytest.executer.checkoutput('cmd wifi start-scan')
-            scan_list = pytest.executer.checkoutput(f'cmd wifi list-scan-results |grep -F "{router_info.ssid}"')
+            pytest.dut.checkoutput('cmd wifi start-scan')
+            scan_list = pytest.dut.checkoutput(f'cmd wifi list-scan-results |grep -F "{router_info.ssid}"')
             logging.info(scan_list)
             if step > 3:
                 change_result = False
@@ -223,25 +223,25 @@ def test_wifi(wifi_setup_teardown, ):
     if router_info.authentication_method.lower() in \
             ['open', '不加密', '无', 'open system', '无加密(允许所有人连接)', 'none']:
         logging.info('no passwd')
-        cmd = pytest.executer.CMD_WIFI_CONNECT.format(router_info.ssid,"open","")
+        cmd = pytest.dut.CMD_WIFI_CONNECT.format(router_info.ssid,"open","")
     else:
-        cmd = pytest.executer.CMD_WIFI_CONNECT.format(router_info.ssid, type, passwd)
+        cmd = pytest.dut.CMD_WIFI_CONNECT.format(router_info.ssid, type, passwd)
     if router_info.hide_ssid == '是':
-        cmd += pytest.executer.CMD_WIFI_HIDE
+        cmd += pytest.dut.CMD_WIFI_HIDE
 
     logging.info(f'cmd wifi: {cmd}')
-    pytest.executer.checkoutput(cmd)
+    pytest.dut.checkoutput(cmd)
 
     # 检测 网络是否 连接
     check_ipaddress = 'ifconfig wlan0 |egrep -o "inet [^ ]*"|cut -f 2 -d :'
-    ip_address = pytest.executer.checkoutput(check_ipaddress)
+    ip_address = pytest.dut.checkoutput(check_ipaddress)
     # logging.info(ip_address)
     step = 0
     while not ip_address:
-        ip_address = pytest.executer.checkoutput(check_ipaddress)
+        ip_address = pytest.dut.checkoutput(check_ipaddress)
         if step == 4:
             logging.info('repeat command')
-            pytest.executer.checkoutput(cmd)
+            pytest.dut.checkoutput(cmd)
         if step > 9:
             # if pytest.reruns_count == rerun_times + 1:
             logging.info('Fail')
@@ -253,7 +253,7 @@ def test_wifi(wifi_setup_teardown, ):
     logging.info(f'ip address {ip_address}')
     # assert wifi.ping(hostname=target_ip),"can't ping "
     # 获取 bitrate 信息
-    bitrate = pytest.executer.get_tx_bitrate()
+    bitrate = pytest.dut.get_tx_bitrate()
 
     logging.info('Pass')
     wifiResult.save_result(result + f'{bitrate},Pass')

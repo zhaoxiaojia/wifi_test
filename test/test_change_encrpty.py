@@ -42,15 +42,15 @@ devices_list = ['12345678901234']
 @pytest.fixture(autouse=True, scope='session')
 def setup():
     # ax88uControl.change_setting(router_wpa)
-    # pytest.executer.connect_ssid(ssid,passwd)
-    # pytest.executer.wait_for_wifi_address()
+    # pytest.dut.connect_ssid(ssid,passwd)
+    # pytest.dut.wait_for_wifi_address()
     # ax88uControl.change_setting(router_open)
-    # pytest.executer.connect_ssid(ssid)
-    # pytest.executer.wait_for_wifi_address()
+    # pytest.dut.connect_ssid(ssid)
+    # pytest.dut.wait_for_wifi_address()
     yield
     ax88uControl.router_control.driver.quit()
-    pytest.executer.forget_network_cmd()
-    pytest.executer.kill_setting()
+    pytest.dut.forget_network_cmd()
+    pytest.dut.kill_setting()
 
 
 def test_change_ap():
@@ -60,8 +60,8 @@ def test_change_ap():
         # for j in devices_list:
         #     pytest.execyter.serialnumber = j
         if i.authentication_method == 'Open System':
-            pytest.executer.checkoutput(pytest.executer.CMD_WIFI_CONNECT_OPEN.format(ssid))
+            pytest.dut.checkoutput(pytest.dut.CMD_WIFI_CONNECT_OPEN.format(ssid))
         else:
-            pytest.executer.checkoutput(pytest.executer.CMD_WIFI_CONNECT.format(ssid, 'wpa2', passwd))
+            pytest.dut.checkoutput(pytest.dut.CMD_WIFI_CONNECT.format(ssid, 'wpa2', passwd))
         logging.info('connect set')
-        pytest.executer.wait_for_wifi_address()
+        pytest.dut.wait_for_wifi_address()

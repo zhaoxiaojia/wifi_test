@@ -49,13 +49,13 @@ def setup():
 
 def test_wrong_passwd():
     find_ssid(ssid)
-    pytest.executer.text('wrongpasswd')
-    pytest.executer.keyevent(66)
+    pytest.dut.text('wrongpasswd')
+    pytest.dut.keyevent(66)
     for _ in range(3):
-        pytest.executer.wait_and_tap('Try again','text',times=10)
+        pytest.dut.wait_and_tap('Try again','text',times=10)
         time.sleep(1)
-        pytest.executer.keyevent(66)
-        pytest.executer.keyevent(66)
-        pytest.executer.wait_element('Wi-Fi password not valid','text')
-    pytest.executer.wait_and_tap('View available networks','text')
-    assert not pytest.executer.ping('192.168.50.1'),'should be no ip address'
+        pytest.dut.keyevent(66)
+        pytest.dut.keyevent(66)
+        pytest.dut.wait_element('Wi-Fi password not valid','text')
+    pytest.dut.wait_and_tap('View available networks','text')
+    assert not pytest.dut.ping('192.168.50.1'),'should be no ip address'

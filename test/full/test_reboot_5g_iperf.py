@@ -42,8 +42,8 @@ def setup():
     # set router
     ax88uControl.change_setting(router_ch6)
     ax88uControl.router_control.driver.quit()
-    logging.info(pytest.executer.CMD_WIFI_CONNECT.format(ssid, 'wpa2', passwd))
-    pytest.executer.checkoutput(pytest.executer.CMD_WIFI_CONNECT.format(ssid, 'wpa2', passwd))
+    logging.info(pytest.dut.CMD_WIFI_CONNECT.format(ssid, 'wpa2', passwd))
+    pytest.dut.checkoutput(pytest.dut.CMD_WIFI_CONNECT.format(ssid, 'wpa2', passwd))
     wait_for_wifi_address()
     yield
     kill_setting()
@@ -52,8 +52,8 @@ def setup():
 
 def test_reboot_dut_iperf():
     for _ in range(20):
-        pytest.executer.reboot()
-        pytest.executer.wait_devices()
+        pytest.dut.reboot()
+        pytest.dut.wait_devices()
         wait_for_wifi_address()
         time.sleep(5)
         assert iperf.run_iperf(), "Can't run iperf success"

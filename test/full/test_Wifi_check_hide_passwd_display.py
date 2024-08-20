@@ -43,11 +43,11 @@ def setup_teardown():
 
 
 def test_hide_passwd():
-    pytest.executer.checkoutput('input text 12345678')
-    pytest.executer.keyevent(4)
+    pytest.dut.checkoutput('input text 12345678')
+    pytest.dut.keyevent(4)
     time.sleep(1)
-    pytest.executer.keyevent(20)
+    pytest.dut.keyevent(20)
     time.sleep(1)
-    pytest.executer.keyevent(23)
-    pytest.executer.uiautomator_dump()
-    assert 'text="••••••••"' in pytest.executer.get_dump_info(), 'Passwd not be hidden'
+    pytest.dut.keyevent(23)
+    pytest.dut.uiautomator_dump()
+    assert 'text="••••••••"' in pytest.dut.get_dump_info(), 'Passwd not be hidden'

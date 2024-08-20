@@ -41,12 +41,12 @@ ax88uControl = Asusax88uControl()
 @pytest.fixture(autouse=True, scope='session')
 def setup():
     # ax88uControl.change_setting(router_ch11)
-    # pytest.executer.connect_ssid(ssid, passwd)
-    # pytest.executer.wait_for_wifi_address()
+    # pytest.dut.connect_ssid(ssid, passwd)
+    # pytest.dut.wait_for_wifi_address()
     yield
     ax88uControl.router_control.driver.quit()
-    pytest.executer.forget_network_ssid(ssid)
-    pytest.executer.kill_setting()
+    pytest.dut.forget_network_ssid(ssid)
+    pytest.dut.kill_setting()
 
 
 def test_change_bandwidth():
@@ -57,9 +57,9 @@ def test_change_bandwidth():
             logging.info(f"测试第 {count} 轮 。。。")
             ax88uControl.change_setting(i)
             for j in devices_list:
-                pytest.executer.serialnumber = j
-                pytest.executer.checkoutput(pytest.executer.CMD_WIFI_CONNECT.format(ssid, 'wpa2', passwd))
-                pytest.executer.wait_for_wifi_address()
+                pytest.dut.serialnumber = j
+                pytest.dut.checkoutput(pytest.dut.CMD_WIFI_CONNECT.format(ssid, 'wpa2', passwd))
+                pytest.dut.wait_for_wifi_address()
         except Exception as e:
             ...
         # playback_youtube()

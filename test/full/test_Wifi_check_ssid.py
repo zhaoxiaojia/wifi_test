@@ -43,10 +43,10 @@ def setup_teardown():
 
 def test_check_ssid():
     assert connect_ssid(ssid), "Can't connect"
-    assert pytest.executer.ping(hostname="192.168.50.1"), "Can't ping"
+    assert pytest.dut.ping(hostname="192.168.50.1"), "Can't ping"
     enter_wifi_activity()
-    pytest.executer.wait_element('Available networks','text')
-    pytest.executer.tap(1469,410)
-    pytest.executer.wait_element('Interet connection','text')
-    pytest.executer.uiautomator_dump()
-    assert ssid in pytest.executer.get_dump_info(),'SSID not current'
+    pytest.dut.wait_element('Available networks','text')
+    pytest.dut.tap(1469,410)
+    pytest.dut.wait_element('Interet connection','text')
+    pytest.dut.uiautomator_dump()
+    assert ssid in pytest.dut.get_dump_info(),'SSID not current'

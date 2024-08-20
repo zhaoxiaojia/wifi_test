@@ -44,8 +44,8 @@ def setup():
     ax88uControl.change_setting(router_5g)
     ax88uControl.router_control.driver.quit()
     # connect wifi
-    cmd = pytest.executer.CMD_WIFI_CONNECT.format('ATC_ASUS_AX88U_5G', 'wpa2', '12345678')
-    pytest.executer.checkoutput(cmd)
+    cmd = pytest.dut.CMD_WIFI_CONNECT.format('ATC_ASUS_AX88U_5G', 'wpa2', '12345678')
+    pytest.dut.checkoutput(cmd)
     wait_for_wifi_address(cmd)
     yield
 

@@ -19,13 +19,13 @@ import pytest
 @pytest.fixture(autouse=True,scope='session')
 def setup():
     logging.info('start setup')
-    pytest.executer.enter_wifi_activity()
+    pytest.dut.enter_wifi_activity()
     yield
-    pytest.executer.kill_moresetting()
+    pytest.dut.kill_moresetting()
 
 @pytest.mark.repeat(100000)
 def test_onoff():
-    pytest.executer.wait_and_tap('Wi-Fi', 'text')
+    pytest.dut.wait_and_tap('Wi-Fi', 'text')
     time.sleep(5)
-    pytest.executer.wait_and_tap('Wi-Fi', 'text')
+    pytest.dut.wait_and_tap('Wi-Fi', 'text')
     time.sleep(10)
