@@ -1,0 +1,1718 @@
+{
+    "test_change_2g_bandwitdh.py": {
+        "id": "T123456",
+        "desc": "This a smoke test",
+        "priority": "P1",
+        "path": "test\\test_change_2g_bandwitdh.py"
+    },
+    "test_change_5g_bandwidth.py": {
+        "id": "T654321",
+        "desc": "This a smoke test",
+        "priority": "P3",
+        "path": "test\\test_change_5g_bandwidth.py"
+    },
+    "test_change_ap_reboot_multi.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\test_change_ap_reboot_multi.py"
+    },
+    "test_change_channel.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\test_change_channel.py"
+    },
+    "test_change_encrpty.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\test_change_encrpty.py"
+    },
+    "test_reboot.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\test_reboot.py"
+    },
+    "test_rvr.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\test_rvr.py"
+    },
+    "test_sanity_compatibility.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\test_sanity_compatibility.py"
+    },
+    "test_Wifi_Sanity_Compatibility.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\test_Wifi_Sanity_Compatibility.py"
+    },
+    "test_Wifi_Sanity_Compatibility_Openwrt.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\test_Wifi_Sanity_Compatibility_Openwrt.py"
+    },
+    "test_03_open_wifi.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_03_open_wifi.py"
+    },
+    "test_05_close_wifi.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_05_close_wifi.py"
+    },
+    "test_08_hide_passwd.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_08_hide_passwd.py"
+    },
+    "test_09_switch_band.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_09_switch_band.py"
+    },
+    "test_10_forget_network.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_10_forget_network.py"
+    },
+    "test_11_cancel_forget_network.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_11_cancel_forget_network.py"
+    },
+    "test_12_reconnect_forgetted.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_12_reconnect_forgetted.py"
+    },
+    "test_13_show_all_and_less.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_13_show_all_and_less.py"
+    },
+    "test_14_ssid_input.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_14_ssid_input.py"
+    },
+    "test_15_connect_open.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_15_connect_open.py"
+    },
+    "test_16_connect_wpa_wpa2.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_16_connect_wpa_wpa2.py"
+    },
+    "test_17_connect_wpa3.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_17_connect_wpa3.py"
+    },
+    "test_18_connect_ssid_with_char_and_number.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_18_connect_ssid_with_char_and_number.py"
+    },
+    "test_19_connect_2g_special_ssid.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_19_connect_2g_special_ssid.py"
+    },
+    "test_20_connect_2g_ssid_with_blank.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_20_connect_2g_ssid_with_blank.py"
+    },
+    "test_21_connect_2g_conceal_ssid.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_21_connect_2g_conceal_ssid.py"
+    },
+    "test_22_connect_2g_auto.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_22_connect_2g_auto.py"
+    },
+    "test_23_connect_2g_ax.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_23_connect_2g_ax.py"
+    },
+    "test_24_connect_2g_11n.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_24_connect_2g_11n.py"
+    },
+    "test_25_connect_2g_legcy.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_25_connect_2g_legcy.py"
+    },
+    "test_26_connect_2g_40mhz.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_26_connect_2g_40mhz.py"
+    },
+    "test_27_connect_2g_20mhz.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_27_connect_2g_20mhz.py"
+    },
+    "test_28_connect_2g_1channel.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_28_connect_2g_1channel.py"
+    },
+    "test_29_connect_2g_6channel.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_29_connect_2g_6channel.py"
+    },
+    "test_30_connect_2g_11channel.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_30_connect_2g_11channel.py"
+    },
+    "test_31_connect_2g_wpa2_aes_no_pmf.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_31_connect_2g_wpa2_aes_no_pmf.py"
+    },
+    "test_32_connect_2g_wpa_aes_pmf.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_32_connect_2g_wpa_aes_pmf.py"
+    },
+    "test_33_connect_2g_wpa2_aes_pmf_no_mandatory.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_33_connect_2g_wpa2_aes_pmf_no_mandatory.py"
+    },
+    "test_34_connect_2g_wpa_tkip_aes.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_34_connect_2g_wpa_tkip_aes.py"
+    },
+    "test_35_connect_2g_wpa3_aes.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_35_connect_2g_wpa3_aes.py"
+    },
+    "test_36_connect_2g_wpa3_aes_pmf_no_mandatory.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_36_connect_2g_wpa3_aes_pmf_no_mandatory.py"
+    },
+    "test_37_connect_2g_wpa3_aes_pmf.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_37_connect_2g_wpa3_aes_pmf.py"
+    },
+    "test_38_connect_2g_encryption_wep_64.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_38_connect_2g_encryption_wep_64.py"
+    },
+    "test_39_connect_2g_encryption_wep_128.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_39_connect_2g_encryption_wep_128.py"
+    },
+    "test_40_connect_5g_special_ssid.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_40_connect_5g_special_ssid.py"
+    },
+    "test_41_connect_5g_conceal_ssid.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_41_connect_5g_conceal_ssid.py"
+    },
+    "test_42_connect_5g_auto.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_42_connect_5g_auto.py"
+    },
+    "test_43_connect_5g_ax.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_43_connect_5g_ax.py"
+    },
+    "test_44_connect_5g_n_ac_ax_mixed.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_44_connect_5g_n_ac_ax_mixed.py"
+    },
+    "test_45_connect_5g_legcy.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_45_connect_5g_legcy.py"
+    },
+    "test_46_connect_5g_80mhz.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_46_connect_5g_80mhz.py"
+    },
+    "test_47_connect_5g_40mhz.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_47_connect_5g_40mhz.py"
+    },
+    "test_48_connect_5g_20mhz.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_48_connect_5g_20mhz.py"
+    },
+    "test_49_connect_5g_161channel.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_49_connect_5g_161channel.py"
+    },
+    "test_50_connect_5g_36channel.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_50_connect_5g_36channel.py"
+    },
+    "test_51_connect_5g_52channel.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_51_connect_5g_52channel.py"
+    },
+    "test_52_connect_5g_wpa2_aes_no_pmf.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_52_connect_5g_wpa2_aes_no_pmf.py"
+    },
+    "test_53_connect_5g_wpa2_aes_pmf.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_53_connect_5g_wpa2_aes_pmf.py"
+    },
+    "test_54_connect_5g_wpa2_aes_pmf_no_mandatory.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_54_connect_5g_wpa2_aes_pmf_no_mandatory.py"
+    },
+    "test_55_connect_5g_wpa2_tkip_aes.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_55_connect_5g_wpa2_tkip_aes.py"
+    },
+    "test_56_connect_5g_wpa3_aes.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_56_connect_5g_wpa3_aes.py"
+    },
+    "test_57_connect_5g_wpa3_aes_pmf_no_mandatory.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_57_connect_5g_wpa3_aes_pmf_no_mandatory.py"
+    },
+    "test_58_connect_5g_wpa3_aes_pmf.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_58_connect_5g_wpa3_aes_pmf.py"
+    },
+    "test_59_connect_5g_encryption_wep_64.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_59_connect_5g_encryption_wep_64.py"
+    },
+    "test_60_connect_5g_encryption_wep_128.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_60_connect_5g_encryption_wep_128.py"
+    },
+    "test_61_connect_single_ssid.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_61_connect_single_ssid.py"
+    },
+    "test_62_smart_connect.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_62_smart_connect.py"
+    },
+    "test_63_hot_spot_control.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_63_hot_spot_control.py"
+    },
+    "test_64_hot_spot_long_ssid.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_64_hot_spot_long_ssid.py"
+    },
+    "test_65_hot_spot_single_ssid.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_65_hot_spot_single_ssid.py"
+    },
+    "test_66_hot_spot_chinese_character_ssid.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_66_hot_spot_chinese_character_ssid.py"
+    },
+    "test_67_hot_spot_blank_ssid.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_67_hot_spot_blank_ssid.py"
+    },
+    "test_68_hot_spot_special_char_ssid.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_68_hot_spot_special_char_ssid.py"
+    },
+    "test_69_hot_spot_long_passwd.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_69_hot_spot_long_passwd.py"
+    },
+    "test_70_hot_spot_blank_passwd.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_70_hot_spot_blank_passwd.py"
+    },
+    "test_71_hot_spot_special_passwd.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_71_hot_spot_special_passwd.py"
+    },
+    "test_72_hot_spot_open.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_72_hot_spot_open.py"
+    },
+    "test_73_hot_spot_wpa2.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_73_hot_spot_wpa2.py"
+    },
+    "test_74_hot_spot_2g.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_74_hot_spot_2g.py"
+    },
+    "test_75_hot_spot_5g.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_75_hot_spot_5g.py"
+    },
+    "test_76_hot_spot_auto_close.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_76_hot_spot_auto_close.py"
+    },
+    "test_77_hot_spot_scc.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_77_hot_spot_scc.py"
+    },
+    "test_78_hot_spot_scc.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_78_hot_spot_scc.py"
+    },
+    "test_79_hot_spot_mcc.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_79_hot_spot_mcc.py"
+    },
+    "test_80_hot_spot_mcc.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_80_hot_spot_mcc.py"
+    },
+    "test_81_wifi_onoff.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\base\\test_81_wifi_onoff.py"
+    },
+    "test_add_network_check_info.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_add_network_check_info.py"
+    },
+    "test_add_network_input_ssid.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_add_network_input_ssid.py"
+    },
+    "test_add_network_open.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_add_network_open.py"
+    },
+    "test_add_network_wep.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_add_network_wep.py"
+    },
+    "test_add_network_wpa3.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_add_network_wpa3.py"
+    },
+    "test_add_network_wpa_wpa2.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_add_network_wpa_wpa2.py"
+    },
+    "test_add_network_wrong_input.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_add_network_wrong_input.py"
+    },
+    "test_blank_char_ssid.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_blank_char_ssid.py"
+    },
+    "test_change_5g_bandwidth_iperf.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_change_5g_bandwidth_iperf.py"
+    },
+    "test_change_5g_channel_iperf.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_change_5g_channel_iperf.py"
+    },
+    "test_change_5g_entryption_iperf.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_change_5g_entryption_iperf.py"
+    },
+    "test_change_bandwitdh_run_iperf.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_change_bandwitdh_run_iperf.py"
+    },
+    "test_change_channel_run_iperf.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_change_channel_run_iperf.py"
+    },
+    "test_change_encryption_run_iperf.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_change_encryption_run_iperf.py"
+    },
+    "test_connect_2g_iperf_rx.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_connect_2g_iperf_rx.py"
+    },
+    "test_connect_2g_iperf_tx.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_connect_2g_iperf_tx.py"
+    },
+    "test_connect_5g_iperf_rx.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_connect_5g_iperf_rx.py"
+    },
+    "test_connect_5g_iperf_tx.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_connect_5g_iperf_tx.py"
+    },
+    "test_connect_sap_2g.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_connect_sap_2g.py"
+    },
+    "test_connect_sap_5g.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_connect_sap_5g.py"
+    },
+    "test_connect_sap_open.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_connect_sap_open.py"
+    },
+    "test_connect_sap_sta_both.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_connect_sap_sta_both.py"
+    },
+    "test_connect_sap_wpa2_psk.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_connect_sap_wpa2_psk.py"
+    },
+    "test_forget_then_onoff_wifi.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_forget_then_onoff_wifi.py"
+    },
+    "test_forget_then_reboot.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_forget_then_reboot.py"
+    },
+    "test_forget_then_reconnect.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_forget_then_reconnect.py"
+    },
+    "test_long_ssid_32_chars.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_long_ssid_32_chars.py"
+    },
+    "test_onoff_5g_wifi_iperf.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_onoff_5g_wifi_iperf.py"
+    },
+    "test_onoff_wifi_iperf.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_onoff_wifi_iperf.py"
+    },
+    "test_reboot_5g_iperf.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_reboot_5g_iperf.py"
+    },
+    "test_reboot_iperf.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_reboot_iperf.py"
+    },
+    "test_sap_2g.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_sap_2g.py"
+    },
+    "test_sap_5g.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_sap_5g.py"
+    },
+    "test_sap_63_chars_passwd.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_sap_63_chars_passwd.py"
+    },
+    "test_sap_63_numbers_passwd.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_sap_63_numbers_passwd.py"
+    },
+    "test_sap_8_char_wpa2.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_sap_8_char_wpa2.py"
+    },
+    "test_sap_cn_blank_passwd.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_sap_cn_blank_passwd.py"
+    },
+    "test_sap_cn_char_ssid.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_sap_cn_char_ssid.py"
+    },
+    "test_sap_mul_char_ssid.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_sap_mul_char_ssid.py"
+    },
+    "test_sap_over_32_chars_ssid.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_sap_over_32_chars_ssid.py"
+    },
+    "test_sap_special_char_ssid.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_sap_special_char_ssid.py"
+    },
+    "test_single_ssid.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_single_ssid.py"
+    },
+    "test_special_char_ssid.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_special_char_ssid.py"
+    },
+    "test_Wifi_11ac_channel_100.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_11ac_channel_100.py"
+    },
+    "test_Wifi_11ac_channel_120.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_11ac_channel_120.py"
+    },
+    "test_Wifi_11ac_channel_132.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_11ac_channel_132.py"
+    },
+    "test_Wifi_11ac_channel_140.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_11ac_channel_140.py"
+    },
+    "test_Wifi_11ac_channel_144.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_11ac_channel_144.py"
+    },
+    "test_Wifi_11ac_channel_149.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_11ac_channel_149.py"
+    },
+    "test_Wifi_11ac_channel_161.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_11ac_channel_161.py"
+    },
+    "test_Wifi_11ac_channel_165.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_11ac_channel_165.py"
+    },
+    "test_Wifi_11ac_channel_36.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_11ac_channel_36.py"
+    },
+    "test_Wifi_11ac_channel_44.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_11ac_channel_44.py"
+    },
+    "test_Wifi_11ac_channel_52_20mhz.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_11ac_channel_52_20mhz.py"
+    },
+    "test_Wifi_11ac_channel_64.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_11ac_channel_64.py"
+    },
+    "test_Wifi_11ax_channel_100.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_11ax_channel_100.py"
+    },
+    "test_Wifi_11ax_channel_120.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_11ax_channel_120.py"
+    },
+    "test_Wifi_11ax_channel_132.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_11ax_channel_132.py"
+    },
+    "test_Wifi_11ax_channel_136.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_11ax_channel_136.py"
+    },
+    "test_Wifi_11ax_channel_144.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_11ax_channel_144.py"
+    },
+    "test_Wifi_11ax_channel_149.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_11ax_channel_149.py"
+    },
+    "test_Wifi_11ax_channel_161.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_11ax_channel_161.py"
+    },
+    "test_Wifi_11ax_channel_165.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_11ax_channel_165.py"
+    },
+    "test_Wifi_11ax_channel_36.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_11ax_channel_36.py"
+    },
+    "test_Wifi_11ax_channel_44_40mhz.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_11ax_channel_44_40mhz.py"
+    },
+    "test_Wifi_11ax_channel_52_20mhz.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_11ax_channel_52_20mhz.py"
+    },
+    "test_Wifi_11ax_channel_60.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_11ax_channel_60.py"
+    },
+    "test_Wifi_11ax_channel_64.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_11ax_channel_64.py"
+    },
+    "test_Wifi_11a_channel_100.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_11a_channel_100.py"
+    },
+    "test_Wifi_11a_channel_108.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_11a_channel_108.py"
+    },
+    "test_Wifi_11a_channel_120.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_11a_channel_120.py"
+    },
+    "test_Wifi_11a_channel_132.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_11a_channel_132.py"
+    },
+    "test_Wifi_11a_channel_149.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_11a_channel_149.py"
+    },
+    "test_Wifi_11a_channel_161.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_11a_channel_161.py"
+    },
+    "test_Wifi_11a_channel_165.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_11a_channel_165.py"
+    },
+    "test_Wifi_11a_channel_36.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_11a_channel_36.py"
+    },
+    "test_Wifi_11a_channel_44.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_11a_channel_44.py"
+    },
+    "test_Wifi_11a_channel_64.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_11a_channel_64.py"
+    },
+    "test_Wifi_11n_channel_100.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_11n_channel_100.py"
+    },
+    "test_Wifi_11n_channel_108.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_11n_channel_108.py"
+    },
+    "test_Wifi_11n_channel_120.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_11n_channel_120.py"
+    },
+    "test_Wifi_11n_channel_132.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_11n_channel_132.py"
+    },
+    "test_Wifi_11n_channel_161.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_11n_channel_161.py"
+    },
+    "test_Wifi_11n_channel_165.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_11n_channel_165.py"
+    },
+    "test_Wifi_11n_channel_36.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_11n_channel_36.py"
+    },
+    "test_Wifi_11n_channel_44.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_11n_channel_44.py"
+    },
+    "test_Wifi_11n_channel_52_20mhz.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_11n_channel_52_20mhz.py"
+    },
+    "test_Wifi_11n_channel_64.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_11n_channel_64.py"
+    },
+    "test_Wifi_2g_auto.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_2g_auto.py"
+    },
+    "test_Wifi_2g_axonly.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_2g_axonly.py"
+    },
+    "test_Wifi_2g_hide_wpa.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_2g_hide_wpa.py"
+    },
+    "test_Wifi_2g_hide_wpa2.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_2g_hide_wpa2.py"
+    },
+    "test_Wifi_2g_hide_wpa3.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_2g_hide_wpa3.py"
+    },
+    "test_Wifi_2g_switch_5g.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_2g_switch_5g.py"
+    },
+    "test_Wifi_32_characters_ssid.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_32_characters_ssid.py"
+    },
+    "test_Wifi_5g_auto.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_5g_auto.py"
+    },
+    "test_Wifi_5g_axonly.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_5g_axonly.py"
+    },
+    "test_Wifi_5g_mixed.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_5g_mixed.py"
+    },
+    "test_Wifi_cancel_passwd_input.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_cancel_passwd_input.py"
+    },
+    "test_Wifi_change_ap.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_change_ap.py"
+    },
+    "test_Wifi_change_ap_fail.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_change_ap_fail.py"
+    },
+    "test_Wifi_change_to_another_ap.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_change_to_another_ap.py"
+    },
+    "test_Wifi_channel_1.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_channel_1.py"
+    },
+    "test_Wifi_channel_11.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_channel_11.py"
+    },
+    "test_Wifi_channel_14.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_channel_14.py"
+    },
+    "test_Wifi_channel_6.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_channel_6.py"
+    },
+    "test_Wifi_check_connect_info.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_check_connect_info.py"
+    },
+    "test_Wifi_check_hide_passwd_display.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_check_hide_passwd_display.py"
+    },
+    "test_Wifi_check_passwd_display.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_check_passwd_display.py"
+    },
+    "test_Wifi_check_passwd_display_status.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_check_passwd_display_status.py"
+    },
+    "test_Wifi_check_passwd_hide_button.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_check_passwd_hide_button.py"
+    },
+    "test_Wifi_check_reconnect_ui_display.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_check_reconnect_ui_display.py"
+    },
+    "test_Wifi_check_saved_status_2g.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_check_saved_status_2g.py"
+    },
+    "test_Wifi_check_saved_status_5g.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_check_saved_status_5g.py"
+    },
+    "test_Wifi_check_ssid.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_check_ssid.py"
+    },
+    "test_Wifi_check_status_factory_reset.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_check_status_factory_reset.py"
+    },
+    "test_Wifi_check_wifi_status.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_check_wifi_status.py"
+    },
+    "test_Wifi_close_wifi.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_close_wifi.py"
+    },
+    "test_Wifi_connect_32_characters_ssid.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_connect_32_characters_ssid.py"
+    },
+    "test_Wifi_connect_and_reboot.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_connect_and_reboot.py"
+    },
+    "test_Wifi_connect_and_reboot_ap.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_connect_and_reboot_ap.py"
+    },
+    "test_Wifi_connect_char_ssid.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_connect_char_ssid.py"
+    },
+    "test_Wifi_connect_default.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_connect_default.py"
+    },
+    "test_Wifi_connect_multe_ssid.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_connect_multe_ssid.py"
+    },
+    "test_Wifi_connect_open_wep_128bit_ascii.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_connect_open_wep_128bit_ascii.py"
+    },
+    "test_Wifi_connect_open_wep_128bit_hex.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_connect_open_wep_128bit_hex.py"
+    },
+    "test_Wifi_connect_open_wep_64bit_ascii.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_connect_open_wep_64bit_ascii.py"
+    },
+    "test_Wifi_connect_open_wep_64bit_hex.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_connect_open_wep_64bit_hex.py"
+    },
+    "test_Wifi_connect_pmf_not_on_wpa.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_connect_pmf_not_on_wpa.py"
+    },
+    "test_Wifi_connect_pmf_not_on_wpa2.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_connect_pmf_not_on_wpa2.py"
+    },
+    "test_Wifi_connect_pmf_off_wpa.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_connect_pmf_off_wpa.py"
+    },
+    "test_Wifi_connect_pmf_off_wpa2.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_connect_pmf_off_wpa2.py"
+    },
+    "test_Wifi_connect_pmf_off_wpa3.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_connect_pmf_off_wpa3.py"
+    },
+    "test_Wifi_connect_pmf_on_wpa3.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_connect_pmf_on_wpa3.py"
+    },
+    "test_Wifi_connect_saved_network.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_connect_saved_network.py"
+    },
+    "test_Wifi_connect_save_ssid.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_connect_save_ssid.py"
+    },
+    "test_Wifi_connect_sharekey_wep_128bit_ascii.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_connect_sharekey_wep_128bit_ascii.py"
+    },
+    "test_Wifi_connect_sharekey_wep_128bit_hex.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_connect_sharekey_wep_128bit_hex.py"
+    },
+    "test_Wifi_connect_sharekey_wep_64bit_ascii.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_connect_sharekey_wep_64bit_ascii.py"
+    },
+    "test_Wifi_connect_sharekey_wep_64bit_hex.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_connect_sharekey_wep_64bit_hex.py"
+    },
+    "test_Wifi_connect_single_ssid.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_connect_single_ssid.py"
+    },
+    "test_Wifi_connect_ssid.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_connect_ssid.py"
+    },
+    "test_Wifi_country_code_cn.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_country_code_cn.py"
+    },
+    "test_Wifi_country_code_us.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_country_code_us.py"
+    },
+    "test_Wifi_dfs_switch_to_non_dfs.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_dfs_switch_to_non_dfs.py"
+    },
+    "test_Wifi_exit_passwd_input.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_exit_passwd_input.py"
+    },
+    "test_Wifi_forget_network.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_forget_network.py"
+    },
+    "test_Wifi_hide_open.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_hide_open.py"
+    },
+    "test_Wifi_hide_open_incorrect_type.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_hide_open_incorrect_type.py"
+    },
+    "test_Wifi_hide_ssid_open.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_hide_ssid_open.py"
+    },
+    "test_Wifi_hide_ssid_wep128.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_hide_ssid_wep128.py"
+    },
+    "test_Wifi_hide_ssid_wep64.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_hide_ssid_wep64.py"
+    },
+    "test_Wifi_hide_ssid_wpa.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_hide_ssid_wpa.py"
+    },
+    "test_Wifi_hide_ssid_wpa2.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_hide_ssid_wpa2.py"
+    },
+    "test_Wifi_hide_ssid_wpa3.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_hide_ssid_wpa3.py"
+    },
+    "test_Wifi_hide_wep128_incorrect_type.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_hide_wep128_incorrect_type.py"
+    },
+    "test_Wifi_hide_wep64_incorrect_type.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_hide_wep64_incorrect_type.py"
+    },
+    "test_Wifi_hide_wpa2_incorrect_type.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_hide_wpa2_incorrect_type.py"
+    },
+    "test_Wifi_hide_wpa3_incorrect_type.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_hide_wpa3_incorrect_type.py"
+    },
+    "test_Wifi_hide_wpa_incorrect_type.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_hide_wpa_incorrect_type.py"
+    },
+    "test_Wifi_input_current_passwd.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_input_current_passwd.py"
+    },
+    "test_Wifi_input_wrong_passwd_try_again.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_input_wrong_passwd_try_again.py"
+    },
+    "test_Wifi_non_dfs_swtich_to_dfs.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_non_dfs_swtich_to_dfs.py"
+    },
+    "test_Wifi_oobe.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_oobe.py"
+    },
+    "test_Wifi_reboot_check_wifi_status.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_reboot_check_wifi_status.py"
+    },
+    "test_Wifi_reboot_close_wifi.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_reboot_close_wifi.py"
+    },
+    "test_Wifi_reconnect_forget_ssid.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_reconnect_forget_ssid.py"
+    },
+    "test_Wifi_reconnect_saved_ssid.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_reconnect_saved_ssid.py"
+    },
+    "test_Wifi_reopen_dut.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_reopen_dut.py"
+    },
+    "test_Wifi_reopen_wifi.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_reopen_wifi.py"
+    },
+    "test_Wifi_repeat_connect_multi_ap.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_repeat_connect_multi_ap.py"
+    },
+    "test_Wifi_smart_connect.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_smart_connect.py"
+    },
+    "test_Wifi_smart_connect_reboot.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_smart_connect_reboot.py"
+    },
+    "test_Wifi_view_available_network.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\full\\test_Wifi_view_available_network.py"
+    },
+    "test_ctcc_stress.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\iptv\\test_ctcc_stress.py"
+    },
+    "test_2g_4k_playback.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\ui_stress\\test_2g_4k_playback.py"
+    },
+    "test_2g_4k_seek.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\ui_stress\\test_2g_4k_seek.py"
+    },
+    "test_2g_ax_rx.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\ui_stress\\test_2g_ax_rx.py"
+    },
+    "test_2g_ax_tx.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\ui_stress\\test_2g_ax_tx.py"
+    },
+    "test_5g_4k_playback.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\ui_stress\\test_5g_4k_playback.py"
+    },
+    "test_5g_4k_seek.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\ui_stress\\test_5g_4k_seek.py"
+    },
+    "test_5g_ac_rx.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\ui_stress\\test_5g_ac_rx.py"
+    },
+    "test_5g_ac_tx.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\ui_stress\\test_5g_ac_tx.py"
+    },
+    "test_5g_ax_rx.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\ui_stress\\test_5g_ax_rx.py"
+    },
+    "test_5g_ax_tx.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\ui_stress\\test_5g_ax_tx.py"
+    },
+    "test_multi_action.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\ui_stress\\test_multi_action.py"
+    },
+    "test_sap_2g_to_5g.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\ui_stress\\test_sap_2g_to_5g.py"
+    },
+    "test_smart_connect_4k.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\ui_stress\\test_smart_connect_4k.py"
+    },
+    "test_sta_to_sap.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\ui_stress\\test_sta_to_sap.py"
+    },
+    "test_switch_2g_bandwidth.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\ui_stress\\test_switch_2g_bandwidth.py"
+    },
+    "test_switch_2g_channel.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\ui_stress\\test_switch_2g_channel.py"
+    },
+    "test_switch_5g_bandwidth.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\ui_stress\\test_switch_5g_bandwidth.py"
+    },
+    "test_switch_5g_channel.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\ui_stress\\test_switch_5g_channel.py"
+    },
+    "test_switch_authentication.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\ui_stress\\test_switch_authentication.py"
+    },
+    "test_swtich_2g_to_2g.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\ui_stress\\test_swtich_2g_to_2g.py"
+    },
+    "test_swtich_2g_to_5g.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\ui_stress\\test_swtich_2g_to_5g.py"
+    },
+    "test_swtich_5g_to_5g.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\ui_stress\\test_swtich_5g_to_5g.py"
+    },
+    "test_ui_change_ap.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\ui_stress\\test_ui_change_ap.py"
+    },
+    "test_ui_forget_reconnect.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\ui_stress\\test_ui_forget_reconnect.py"
+    },
+    "test_ui_onoff.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test\\ui_stress\\test_ui_onoff.py"
+    }
+}

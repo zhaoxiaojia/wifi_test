@@ -1,0 +1,3 @@
+smoke:
+- test\test_change_2g_bandwitdh.py
+- test\test_change_5g_bandwidth.py

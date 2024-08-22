@@ -9,14 +9,16 @@ import json
 import subprocess
 
 timestamp = datetime.datetime.now().strftime("%Y.%m.%d_%H.%M.%S")
-test_case = 'test/test_rvr.py'
+test_case ='test/test_rvr.py'
 
 report_parent_path = test_case.replace('test', 'report', 1)
 
-if os.path.isdir(test_case):
-    allure_cmd = f'--alluredir=./results/allure/{test_case.split("test/")[1]}'
-else:
-    allure_cmd = f'--alluredir=./allure'
+if isinstance(test_case,str):
+    if os.path.isdir(test_case):
+        allure_cmd = f'--alluredir=./results/allure/{test_case.split("test/")[1]}'
+    if os.path.isfile(test_case):
+        allure_cmd = f'--alluredir=./allure'
+
 allure_path = fr'./report/{test_case.split("test/")[1]}/{timestamp}'
 report_path = fr'./report/{timestamp}'
 
@@ -59,19 +61,16 @@ def update_file():
 
 
 if __name__ == '__main__':
-    # retry '--reruns=3', '--reruns-delay=3',
-    # pytest.main(['-v', '-s','test/test_demo.py'])
+
     if not os.path.exists('report'):
         os.mkdir('report')
-    # if os.path.exists('allure'):
-    # 	shutil.rmtree('allure')
+
     if not os.path.exists(report_path):
         os.mkdir(report_path)
 
     cmd = ['-v', '--capture=sys', '--html=report.html', f'--resultpath={timestamp}', test_case, allure_cmd]
     print(" ".join(cmd))
-    # pytest.main(cmd)
-    pytest.main(['-v', '-s', f'--resultpath={timestamp}', 'test/test_demo.py', allure_cmd])
+    pytest.main(cmd)
     # os.system("allure generate -c results/ -o allure-report/")
     if allure_cmd:
         subprocess.check_output(f'allure generate -c ./allure -o {allure_path}', shell=True)
