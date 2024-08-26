@@ -1,3 +1,5 @@
-serial,band,ssid ,wireless_mode,channel,bandwidth,authentication_method,wpa_passwd,test_type,protocol_type
-1,5 GHz, AX86U-5G,自动 ,36 ,20 MHz ,  Open System , ,tx,TCP
-1,5 GHz, AX86U-5G,自动 ,36 ,20 MHz ,  Open System , ,rx,TCP
+serial,band,ssid ,wireless_mode,channel,bandwidth,authentication_method,wpa_passwd,test_type,protocol_type,data_row
+1,2.4 GHz, AX88U-5G,N only ,1 ,20 MHz ,  Open System , ,rx tx,TCP,5
+2,2.4 GHz, AX88U-5G,N only ,6 ,40 MHz ,  Open System , ,rx tx,TCP,7
+3,2.4 GHz, AX88U-5G,N only ,9 ,20 MHz ,  Open System , ,rx tx,TCP,9
+4,2.4 GHz, AX88U-5G,N only ,11 ,20 MHz ,  Open System , ,rx tx,TCP,11

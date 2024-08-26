@@ -25,11 +25,42 @@ import pytest
 from tools.router_tool.Router import Router
 from tools.connect_tool.TelnetInterface import TelnetInterface
 from tools.yamlTool import yamlTool
+from tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
+import openpyxl
+from copy import copy
+
+filename = 'XiaoMi-Rvr.xlsx'
+rvr_xlsx = openpyxl.load_workbook(filename)
+sheet = rvr_xlsx['Sheet1']
+new_sheet = rvr_xlsx.create_sheet(title=f'{pytest.timestamp}')
+
+for row in sheet.iter_rows(values_only=False):
+    for cell in row:
+        new_sheet[cell.coordinate].value = copy(cell.value)
+        new_sheet[cell.coordinate].font = copy(cell.font)
+        new_sheet[cell.coordinate].border = copy(cell.border)
+        new_sheet[cell.coordinate].fill = copy(cell.fill)
+        new_sheet[cell.coordinate].number_format = copy(cell.number_format)
+        new_sheet[cell.coordinate].protection = copy(cell.protection)
+        new_sheet[cell.coordinate].alignment = copy(cell.alignment)
+
+for merged_range in sheet.merged_cells.ranges:
+    new_sheet.merge_cells(str(merged_range))
+
+rvr_xlsx.save(filename)
+
+
+def writeInExcelArea(value, row_num, col_num):
+    for i in range(0, len(value)):
+        logging.info(f'execl write {row_num} {i + col_num}')
+        new_sheet.cell(row=row_num, column=i + col_num, value=value[i])
+
 
 # 读取 测试配置
 with open(os.getcwd() + '/config/asusax88u.csv', 'r') as f:
     reader = csv.reader(f)
     test_data = [Router(*[i.strip() for i in row]) for row in reader][1:]
+
 logging.info(test_data)
 
 # 设置为True 时 开启 衰减测试流程
@@ -37,7 +68,7 @@ rf_needed = False
 # 设置为True 时 开启 状态测试流程
 corner_needed = False
 # 设置为True 时 开启 路由相关配置
-router_needed = False
+router_needed = True
 
 # 设置是否需要push iperf
 iperf_tool = False
@@ -55,16 +86,16 @@ command_data = wifi_yaml.get_note('env_command')
 router_name = wifi_yaml.get_note('router')['name']
 router = ''
 
-
 rvr_tool = wifi_yaml.get_note('rvr')['tool']
 if rvr_tool == 'iperf':
     test_tool = wifi_yaml.get_note('rvr')[rvr_tool]['version']
-    tool_path = wifi_yaml.get_note('rvr')[rvr_tool]['path']
+    tool_path = wifi_yaml.get_note('rvr')[rvr_tool]['path'] or ''
     logging.info(f'test_tool {test_tool}')
 if rvr_tool == 'ixchariot':
-    #Todo
+    # Todo
     ...
     # logging.info(f'test_tool {test_tool}')
+
 # 实例路由器对象
 if router_needed:
     exec(f'router = {router_name.capitalize()}Control()')
@@ -117,11 +148,11 @@ logging.info(f'finally step_list {step_list}')
 # 配置 测试报告
 pytest.testResult.x_path = [] if (rf_needed and corner_needed) == 'both' else step_list
 pytest.testResult.init_rvr_result()
-# tx_result_list, rx_result_list = [], []
+tx_result_list, rx_result_list = [], []
 rx_result, tx_result = '', ''
 
 
-def iperf_on(command, adb,direction = 'tx'):
+def iperf_on(command, adb, direction='tx'):
     def server_on():
         logging.info(f'server {command} ->{adb}<-')
         with open('temp.txt', 'w') as f:
@@ -182,7 +213,8 @@ def get_logcat(pair):
                     continue
             if re.findall(r'.*?\d+\.\d*-\s*\d+\.\d*.*?(\d+\.*\d*)\s+Mbits/sec.*?', line.strip(), re.S):
                 result_list.append(
-                    int(float(re.findall(r'.*?\d+\.\d*-\s*\d+\.\d*.*?(\d+\.*\d*)\s+Mbits/sec.*?', line.strip(), re.S)[0])))
+                    int(float(
+                        re.findall(r'.*?\d+\.\d*-\s*\d+\.\d*.*?(\d+\.*\d*)\s+Mbits/sec.*?', line.strip(), re.S)[0])))
 
     if result_list:
         logging.info(f'{sum(result_list) / len(result_list)}')
@@ -192,6 +224,7 @@ def get_logcat(pair):
         result = 0
     return result
 
+
 def push_iperf():
     if iperf_tool and pytest.connect_type == 'adb' and (
             pytest.dut.checkoutput('[ -e /system/bin/iperf ] && echo yes || echo no').strip() != 'yes'):
@@ -199,9 +232,12 @@ def push_iperf():
         pytest.dut.push(path, '/system/bin')
         pytest.dut.checkoutput('chmod a+x /system/bin/iperf')
 
+
 @pytest.fixture(scope='session', autouse=True, params=test_data)
 def wifi_setup_teardown(request):
-    global x_result, tx_resul  #,tx_result_list, rx_result_list,
+    global x_result, tx_resul, tx_result_list, rx_result_list
+    tx_result_list.clear()
+    rx_result_list.clear()
     logging.info('==== wifi env setup start')
     # push_iperf()
     router_info = request.param
@@ -244,10 +280,10 @@ def wifi_setup_teardown(request):
                 if router_info.authentication_method.lower() in \
                         ['open', '不加密', '无', 'open system', '无加密(允许所有人连接)', 'none']:
                     logging.info('no passwd')
-                    cmd = pytest.dut.CMD_WIFI_CONNECT.format(router_info.ssid,"open","")
+                    cmd = pytest.dut.CMD_WIFI_CONNECT.format(router_info.ssid, "open", "")
                 else:
                     cmd = pytest.dut.CMD_WIFI_CONNECT.format(router_info.ssid, type,
-                                                                  router_info.wpa_passwd)
+                                                             router_info.wpa_passwd)
                 if router_info.hide_ssid == '是':
                     if int(pytest.dut.getprop('ro.build.version.sdk')) >= 31:
                         cmd += pytest.dut.CMD_WIFI_HIDE
@@ -278,44 +314,50 @@ def wifi_setup_teardown(request):
     # 后置动作
     kill_iperf()
     # 重置结果
-    # tx_result_list, rx_result_list = [], []
+    logging.info(f'tx_result_list {tx_result_list}')
+    logging.info(f'rx_result_list {rx_result_list}')
+    logging.info(f'len  {len(tx_result_list)}')
+    if len(tx_result_list) == 3:
+        writeInExcelArea(rx_result_list, row_num=int(router_info.data_row), col_num=10)
+        writeInExcelArea(tx_result_list, row_num=int(router_info.data_row) + 1, col_num=10)
+
+    rvr_xlsx.save(filename)
     # if not router_debug:
     #     router.router_control.driver.quit()
-
 
 
 # @pytest.fixture(scope='session', autouse=True, params=command_data)
 # def session_setup_teardown(request):
 #     logging.info('==== debug command setup start')
-    # iperf 配置
+# iperf 配置
 
 
-    # 获取板子的ip 地址
+# 获取板子的ip 地址
 
-    # command_info = request.param
-    # logging.info(f"command_info : {command_info}")
-    # pytest.dut.subprocess_run(command_info)
-    # logging.info('==== debug command setup done')
-    # yield
-    # 后置动作
+# command_info = request.param
+# logging.info(f"command_info : {command_info}")
+# pytest.dut.subprocess_run(command_info)
+# logging.info('==== debug command setup done')
+# yield
+# 后置动作
 
-    # 生成 pdf
-    # if step_list != [0]:
-    #     pytest.testResult.write_to_excel()
-    #     if test_type == 'rf':
-    #         # 重置衰减
-    #         if not rf_debug:
-    #             rf_tool.execute_rf_cmd(0)
-    #         # 生成折线图
-    #         pytest.testResult.write_attenuation_data_to_pdf()
-    #     elif test_type == 'corner':
-    #         # 转台重置
-    #         if not rf_debug:
-    #             corner_tool.set_turntable_zero()
-    #         # 生成雷达图
-    #         pytest.testResult.write_corner_data_to_pdf()
-    #     else:
-    #         ...
+# 生成 pdf
+# if step_list != [0]:
+#     pytest.testResult.write_to_excel()
+#     if test_type == 'rf':
+#         # 重置衰减
+#         if not rf_debug:
+#             rf_tool.execute_rf_cmd(0)
+#         # 生成折线图
+#         pytest.testResult.write_attenuation_data_to_pdf()
+#     elif test_type == 'corner':
+#         # 转台重置
+#         if not rf_debug:
+#             corner_tool.set_turntable_zero()
+#         # 生成雷达图
+#         pytest.testResult.write_corner_data_to_pdf()
+#     else:
+#         ...
 
 
 pair_count = {
@@ -367,14 +409,16 @@ def set_pair_count(router_info, rssi_num, type, dire):
     logging.info(f'pair {pair}')
     return int(pair)
 
+
 def kill_iperf():
     # kill iperf
     if rvr_tool == 'iperf':
-        pytest.dut.subprocess_run(pytest.dut.IPERF_KILL.replace('iperf',test_tool))
-        pytest.dut.popen_term(pytest.dut.IPERF_WIN_KILL.replace('iperf',test_tool))
+        pytest.dut.subprocess_run(pytest.dut.IPERF_KILL.replace('iperf', test_tool))
+        pytest.dut.popen_term(pytest.dut.IPERF_WIN_KILL.replace('iperf', test_tool))
 
 
 def get_tx_rate(router_info, pair, freq_num, rssi_num, type, corner_set='', db_set=''):
+    global tx_result_list
 
     # 最多三次 重试机会
     for _ in range(3):
@@ -388,14 +432,14 @@ def get_tx_rate(router_info, pair, freq_num, rssi_num, type, corner_set='', db_s
             kill_iperf()
             time.sleep(1)
             if test_tool == 'iperf3':
-                adb_popen = iperf_on(tool_path+pytest.dut.IPERF_CLIENT_REGU[type]['tx'].format(
+                adb_popen = iperf_on(tool_path + pytest.dut.IPERF_CLIENT_REGU[type]['tx'].format(
                     pytest.dut.pc_ip,
                     pytest.dut.IPERF_TEST_TIME,
                     pair if type == 'TCP' else 1), pytest.dut.serialnumber)
                 pc_popen = iperf_on(pytest.dut.IPERF_SERVER[type], '')
             else:
                 pc_popen = iperf_on(pytest.dut.IPERF_SERVER[type], '')
-                adb_popen = iperf_on(tool_path+pytest.dut.IPERF_CLIENT_REGU[type]['tx'].format(
+                adb_popen = iperf_on(tool_path + pytest.dut.IPERF_CLIENT_REGU[type]['tx'].format(
                     pytest.dut.pc_ip,
                     pytest.dut.IPERF_TEST_TIME,
                     pair if type == 'TCP' else 1), pytest.dut.serialnumber)
@@ -409,7 +453,7 @@ def get_tx_rate(router_info, pair, freq_num, rssi_num, type, corner_set='', db_s
             tx_result = get_logcat(pair if type == 'TCP' else 1)
 
         if rvr_tool == 'ixchariot':
-            #Todo
+            # Todo
             ...
 
         if tx_result == False:
@@ -419,7 +463,9 @@ def get_tx_rate(router_info, pair, freq_num, rssi_num, type, corner_set='', db_s
         mcs_tx = pytest.dut.get_mcs_tx()
         if tx_result and mcs_tx:
             logging.info(f'{tx_result}, {mcs_tx}')
+            tx_result_list.append(tx_result)
             break
+
     corner = 'None'
     corner = corner_tool.get_turntanle_current_angle() if corner_needed else corner_set
 
@@ -434,6 +480,7 @@ def get_tx_rate(router_info, pair, freq_num, rssi_num, type, corner_set='', db_s
 
 
 def get_rx_rate(router_info, pair, freq_num, rssi_num, type, corner_set='', db_set=''):
+    global rx_result_list
     for _ in range(3):
         logging.info('run rx ')
         rx_result = 0
@@ -445,11 +492,11 @@ def get_rx_rate(router_info, pair, freq_num, rssi_num, type, corner_set='', db_s
         if rvr_tool == 'iperf':
             kill_iperf()
             time.sleep(1)
-            adb_popen = iperf_on(tool_path+pytest.dut.IPERF_SERVER[type], pytest.dut.serialnumber)
+            adb_popen = iperf_on(tool_path + pytest.dut.IPERF_SERVER[type], pytest.dut.serialnumber)
             pc_popen = iperf_on(
                 pytest.dut.IPERF_CLIENT_REGU[type]['rx'].format(
                     pytest.dut.dut_ip, pytest.dut.IPERF_TEST_TIME,
-                    pair if type == 'TCP' else 4), '',direction='rx')
+                    pair if type == 'TCP' else 4), '', direction='rx')
             time.sleep(pytest.dut.IPERF_WAIT_TIME)
             if pytest.connect_type == 'telnet':
                 time.sleep(15)
@@ -458,7 +505,7 @@ def get_rx_rate(router_info, pair, freq_num, rssi_num, type, corner_set='', db_s
             rx_result = get_logcat(pair if type == 'TCP' else 4)
 
         if rvr_tool == 'ixchariot':
-            #Todo
+            # Todo
             ...
         if rx_result == False:
             logging.info("Connect failed")
@@ -469,6 +516,7 @@ def get_rx_rate(router_info, pair, freq_num, rssi_num, type, corner_set='', db_s
         mcs_rx = pytest.dut.get_mcs_rx()
         if rx_result and mcs_rx:
             logging.info(f'{rx_result}, {mcs_rx}')
+            rx_result_list.append(rx_result)
             break
     corner = 'None'
     corner = corner_tool.get_turntanle_current_angle() if corner_needed else corner_set
@@ -484,9 +532,10 @@ def get_rx_rate(router_info, pair, freq_num, rssi_num, type, corner_set='', db_s
 
 
 # 测试 iperf
+@pytest.mark.repeat(3)
 @pytest.mark.parametrize("rf_value", step_list)
 def test_wifi_rvr(wifi_setup_teardown, rf_value):
-    global rx_result, tx_result, rx_result_list, tx_result_list
+    global rx_result, tx_result
     # 判断板子是否存在  ip
     if not wifi_setup_teardown[0]:
         logging.info("Can't connect wifi ,input 0")

@@ -53,7 +53,8 @@ def pytest_sessionstart(session):
     # Create a test results folder
     if not os.path.exists('results'):
         os.mkdir('results')
-    pytest.result_path = os.getcwd() + '/report/' + session.config.getoption("--resultpath")
+    pytest.timestamp = session.config.getoption("--resultpath")
+    pytest.result_path = os.getcwd() + '/report/' + pytest.timestamp
     pytest.testResult = TestResult(pytest.result_path, [])
     if os.path.exists('temp.txt'):
         os.remove('temp.txt')
@@ -68,8 +69,6 @@ def pytest_addoption(parser):
 def pytest_sessionfinish(session):
     shutil.copy("pytest.log", "debug.log")
     shutil.move("debug.log", pytest.testResult.logdir)
-    shutil.copy("report_temp.html", "report.html")
-    shutil.move("report.html", pytest.testResult.logdir)
 
     if os.path.exists('temp.txt'):
         for proc in psutil.process_iter():

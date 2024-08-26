@@ -34,12 +34,12 @@ corner_angle:
   step: [ 0, 360 ]
 
 rvr:
-  tool: ixchariot
+  tool: iperf
   iperf:
     # should be iperf or iperf3
-    version: iperf
+    version: iperf3
     # dut iperf path
-    path: './data/'
+    path:
   ixchariot:
 
 env_command: [ "pwd" ]
