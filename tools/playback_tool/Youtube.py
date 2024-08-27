@@ -7,16 +7,9 @@
 
 
 import logging
-import os
-import re
-import signal
-import subprocess
 import time
 import pytest
-from tools.connect_tool.adb import  ADB
-from tools.decorators import set_timeout
 
-import threadpool
 from tools.playback_tool.OnlinePlayback import Online
 
 class Youtube(Online):

@@ -9,15 +9,4 @@
 # Description：
 """
 
-#
-# import uiautomator2 as u2
-#
-# d = u2.connect("12345678901234")
-# print(d.dump_hierarchy())
 
-coco1 = {"1":{'name':'coco'}}
-coco2 = {"2":{'age':18}}
-
-
-coco2['2'].update({'name':'zues','age':20,'gender':'man'})
-print(coco2)

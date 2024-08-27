@@ -8,13 +8,9 @@
 import csv
 import logging
 import os
-import random
 import re
-import signal
-import subprocess
 import time
 
-import _io
 import pytest
 
 
@@ -28,15 +24,10 @@ from tools.router_tool.Tplink.TplinkAx6000Control import TplinkAx6000Control
 from tools.router_tool.Tplink.TplinkWr842Control import TplinkWr842Control
 from tools.router_tool.Xiaomi.Xiaomiax3000Control import Xiaomiax3000Control
 from tools.router_tool.ZTEax5400Control import ZTEax5400Control
-from tools.yamlTool import yamlTool
-import threading
-
-
-
 
 import pandas as pd
 
-from tools.decorators import singleton
+from util.decorators import singleton
 @singleton
 class WifiCompatibilityResult:
     '''

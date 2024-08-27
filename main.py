@@ -9,11 +9,11 @@ import json
 import subprocess
 
 timestamp = datetime.datetime.now().strftime("%Y.%m.%d_%H.%M.%S")
-test_case ='test/test_rvr.py'
+test_case = 'test/test_rvr.py'
 
 report_parent_path = test_case.replace('test', 'report', 1)
 
-if isinstance(test_case,str):
+if isinstance(test_case, str):
     if os.path.isdir(test_case):
         allure_cmd = f'--alluredir=./results/allure/{test_case.split("test/")[1]}'
     if os.path.isfile(test_case):
@@ -68,7 +68,8 @@ if __name__ == '__main__':
     if not os.path.exists(report_path):
         os.mkdir(report_path)
 
-    cmd = ['-v', '--capture=sys', '--html=report.html', f'--resultpath={timestamp}', test_case, allure_cmd]
+    cmd = ['-v', '--capture=sys', '--full-trace', '--html=report.html', f'--resultpath={timestamp}', test_case,
+           allure_cmd]
     print(" ".join(cmd))
     pytest.main(cmd)
     # os.system("allure generate -c results/ -o allure-report/")
