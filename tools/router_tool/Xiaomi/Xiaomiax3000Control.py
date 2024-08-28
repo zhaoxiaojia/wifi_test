@@ -156,7 +156,6 @@ class Xiaomiax3000Control:
                 lis = select_list.find_elements(By.TAG_NAME, 'span')
                 if len(lis) > 1:
                     index = [i.text for i in lis].index(router.bandwidth) + 1
-                    print('index', index)
                     self.router_control.driver.find_element(
                         By.XPATH, self.router_control.xpath['bandwidth_element'].format(index)).click()
 
@@ -187,12 +186,12 @@ class Xiaomiax3000Control:
             self.router_control.driver.quit()
 
 
-# fields = ['serial', 'band', 'ssid', 'wireless_mode', 'channel', 'bandwidth', 'authentication_method', 'wpa_passwd',
-#           'test_type',
-#           'wep_encrypt', 'passwd_index', 'wep_passwd', 'protect_frame', 'wpa_encrypt', 'hide_ssid']
-# Router = namedtuple('Router', fields, defaults=[None, ] * len(fields))
-# router = Router(serial='1', band='2.4 GHz', ssid='XiaomiAX3000_2.4G', channel='1',
-#                 bandwidth='40/20MHz', authentication_method='超强加密(WPA3个人版)', wpa_passwd='12345678',hide_ssid='否')
-# control = Xiaomiax3000Control()
-# control.change_setting(router)
+fields = ['serial', 'band', 'ssid', 'wireless_mode', 'channel', 'bandwidth', 'authentication_method', 'wpa_passwd',
+          'test_type',
+          'wep_encrypt', 'passwd_index', 'wep_passwd', 'protect_frame', 'wpa_encrypt', 'hide_ssid']
+Router = namedtuple('Router', fields, defaults=[None, ] * len(fields))
+router = Router(serial='1', band='2.4 GHz', ssid='XiaomiAX3000_2.4G', channel='1',
+                bandwidth='40/20MHz', authentication_method='超强加密(WPA3个人版)', wpa_passwd='12345678',hide_ssid='否')
+control = Xiaomiax3000Control()
+control.change_setting(router)
 # control.reboot_router()

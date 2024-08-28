@@ -1,0 +1,43 @@
+# This is yaml for NETGEAR router xpath info
+netgear:
+  address:
+    R6100: http://192.168.9.1
+  account: admin
+  passwd: '12345678'
+
+  wireless_mode_element: wireless
+  ssid_element_2g: //*[@id="ssid_bc_bgn"]/td/input
+  ssid_element_5g: //*[@id="ssid_bc_an"]/td/input
+  apply_element: /html/body/form/div[2]/table/tbody/tr/td/input[2]
+  wireless_mode_frame: formframe
+  wep_encryption_byte: //*[@id="view"]/table/tbody/tr[4]/td[2]/select
+  wep_encryption_passwd: //*[@id="view"]/table/tbody/tr[7]/td/table/tbody/tr[1]/td[2]/input
+  ssid_text_element_2g: //*[@id="ESSID" and @name="ssid"]
+  ssid_text_element_5g: //*[@id="ESSID" and @name="ssid_an"]
+
+  authentication_for_2G_element:
+    None: //*[@id="main"]/table[2]/tbody/tr[2]/td[1]/input
+    WEP: //*[@id="wep_54"]/td/input
+    WPA-PSK: //*[@id="wpa_psk_54"]/td/input
+    WPA2-PSK: //*[@id="main"]/table[2]/tbody/tr[5]/td/input
+    WPA/WPA2: //*[@id="main"]/table[2]/tbody/tr[6]/td/input
+#    wpa_enter: //*[@id="main"]/table[2]/tbody/tr[7]/td/input
+
+  authentication_for_5G_element:
+    None: //*[@id="have_an"]/table[2]/tbody/tr[2]/td[1]/input
+    WPA2: //*[@id="have_an"]/table[2]/tbody/tr[5]/td/input
+    WPA/WPA2: //*[@id="have_an"]/table[2]/tbody/tr[6]/td/input
+#    wpa_enter: //*[@id="wpa_wpa2_an_enterprise"]/td/input
+
+  channel_select_element:
+    channel_for_2g: //*[@id="main"]/table[1]/tbody/tr[8]/td[2]/select
+    channel_for_5g: //*[@id="select_channel_an"]
+
+  mode_select_element:
+#    mode_for_2g_wep: //*[@id="opmode_54"]/select
+    mode_for_2g: //*[@id="opmode_all"]/select
+    mode_for_5g: //*[@id="opmode_an_all"]/select
+
+  passwd_input_element:
+    passwd_for_2g: //*[@id="textWpaPwdPhrase" and @name="passphrase"]
+    passwd_for_5g: //*[@id="textWpaPwdPhrase" and @name="passphrase_an"]
