@@ -17,7 +17,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
-from tools.router_tool.AsusRouter.AsusRouterConfig import Asus88uConfig
+from tools.router_tool.AsusRouter.AsusRouterConfig import Asusax88uConfig
 from tools.router_tool.RouterConfig import ConfigError
 from tools.router_tool.RouterControl import RouterTools
 
@@ -80,7 +80,7 @@ class Asusax88uControl():
 
             # 修改 band
             if router.band and not router.smart_connect:
-                if router.band not in Asus88uConfig.BAND_LIST: raise ConfigError('band element error')
+                if router.band not in Asusax88uConfig.BAND_LIST: raise ConfigError('band element error')
                 self.router_control.change_band(router.band)
 
 
@@ -88,9 +88,9 @@ class Asusax88uControl():
             if (router.wireless_mode and not router.smart_connect):
                 try:
                     if router.band == '2.4 GHz':
-                        assert router.wireless_mode in Asus88uConfig.WIRELESS_2_MODE
+                        assert router.wireless_mode in Asusax88uConfig.WIRELESS_2_MODE
                     else:
-                        assert router.wireless_mode in Asus88uConfig.WIRELESS_5_MODE
+                        assert router.wireless_mode in Asusax88uConfig.WIRELESS_5_MODE
                 except ConfigError:
                     raise ConfigError('channel element error')
                 if router.wireless_mode == 'AX only':
@@ -126,7 +126,7 @@ class Asusax88uControl():
             # 修改 bandwidth
             if (router.bandwidth and not router.smart_connect):
                 if router.bandwidth not in \
-                        {'2.4 GHz': Asus88uConfig.BANDWIDTH_2_LIST, '5 GHz': Asus88uConfig.BANDWIDTH_5_LIST}[
+                        {'2.4 GHz': Asusax88uConfig.BANDWIDTH_2_LIST, '5 GHz': Asusax88uConfig.BANDWIDTH_5_LIST}[
                             router.band]: raise ConfigError('bandwidth element error')
                 self.router_control.change_bandwidth(router.bandwidth)
 
@@ -164,18 +164,18 @@ class Asusax88uControl():
 
             # 修改 wep_encrypt
             if (router.wep_encrypt):
-                if router.wep_encrypt not in Asus88uConfig.WEP_ENCRYPT: raise ConfigError('wep encrypt elemenr error')
+                if router.wep_encrypt not in Asusax88uConfig.WEP_ENCRYPT: raise ConfigError('wep encrypt elemenr error')
                 self.router_control.change_wep_encrypt(router.wep_encrypt)
 
             # 修改 wpa_encrypt
             if (router.wpa_encrypt):
-                if router.wpa_encrypt not in Asus88uConfig.WPA_ENCRYPT: raise ConfigError('wpa encrypt elemenr error')
+                if router.wpa_encrypt not in Asusax88uConfig.WPA_ENCRYPT: raise ConfigError('wpa encrypt elemenr error')
                 self.router_control.change_wpa_encrypt(router.wpa_encrypt)
 
             # 修改 passwd_index
             # //*[@id="WLgeneral"]/tbody/tr[17]/td/select/option[1]
             if (router.passwd_index):
-                if router.passwd_index not in Asus88uConfig.PASSWD_INDEX_DICT: raise ConfigError(
+                if router.passwd_index not in Asusax88uConfig.PASSWD_INDEX_DICT: raise ConfigError(
                     'passwd index element error')
                 self.router_control.change_passwd_index(router.passwd_index)
 
@@ -235,12 +235,12 @@ class Asusax88uControl():
                 EC.presence_of_element_located((By.ID, 'FormTitle')))
             # 修改 国家码
             if router.country_code:
-                if router.country_code not in Asus88uConfig.COUNTRY_CODE: raise ConfigError('country code error')
+                if router.country_code not in Asusax88uConfig.COUNTRY_CODE: raise ConfigError('country code error')
                 self.router_control.driver.find_element(
                     By.XPATH, '//*[@id="Advanced_WAdvanced_Content_tab"]/span').click()
                 WebDriverWait(driver=self.router_control.driver, timeout=5, poll_frequency=0.5).until(
                     EC.presence_of_element_located((By.ID, 'titl_desc')))
-                index = Asus88uConfig.COUNTRY_CODE[router.country_code]
+                index = Asusax88uConfig.COUNTRY_CODE[router.country_code]
                 # logging.info(self.router_control.xpath['country_code_element'][self.router_control.router_info].format(index))
                 self.router_control.driver.find_element(
                     By.XPATH,

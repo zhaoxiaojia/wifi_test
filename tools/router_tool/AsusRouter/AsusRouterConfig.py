@@ -122,13 +122,13 @@ class AsusRouterConfig(RouterConfig):
     }
 
 
-class Asus86uConfig(AsusRouterConfig):
+class Asusax86uConfig(AsusRouterConfig):
     '''
     asus 86u router setting config
     '''
 
     def __init__(self):
-        super(Asus86uConfig, self).__init__()
+        super(Asusax86uConfig, self).__init__()
 
     CHANNEL_2_DICT = {
         'auto': '1',
@@ -148,13 +148,13 @@ class Asus86uConfig(AsusRouterConfig):
     }
 
 
-class Asus88uConfig(AsusRouterConfig):
+class Asusax88uConfig(AsusRouterConfig):
     '''
     asus 88u router setting config
     '''
 
     def __init__(self):
-        super(Asus88uConfig, self).__init__()
+        super(Asusax88uConfig, self).__init__()
 
     CHANNEL_5_DICT = {
         '自动': '1',

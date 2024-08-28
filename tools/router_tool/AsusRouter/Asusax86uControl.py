@@ -14,7 +14,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
-from tools.router_tool.AsusRouter.AsusRouterConfig import Asus86uConfig
+from tools.router_tool.AsusRouter.AsusRouterConfig import Asusax86uConfig
 from tools.router_tool.RouterConfig import ConfigError
 from tools.router_tool.RouterControl import RouterTools
 
@@ -46,14 +46,14 @@ class Asusax86uControl():
 
             # 修改 band
             if (router.band):
-                if router.band not in Asus86uConfig.BAND_LIST: raise ConfigError('band element error')
+                if router.band not in Asusax86uConfig.BAND_LIST: raise ConfigError('band element error')
                 self.router_control.change_band(router.band)
 
             # 修改 wireless_mode
             if (router.wireless_mode):
                 try:
                     if router.band == '2.4 GHz':
-                        assert router.wireless_mode in Asus86uConfig.WIRELESS_2_MODE
+                        assert router.wireless_mode in Asusax86uConfig.WIRELESS_2_MODE
                         if router.wireless_mode == 'AX only':
                             if router.wireless_mode == 'AX only':
                                 index = '1'
@@ -67,7 +67,7 @@ class Asusax86uControl():
                                     index),
                             ).click()
                     else:
-                        assert router.wireless_mode in Asus86uConfig.WIRELESS_5_MODE
+                        assert router.wireless_mode in Asusax86uConfig.WIRELESS_5_MODE
                 except ConfigError:
                     raise ConfigError('channel element error')
                 self.router_control.change_wireless_mode(router.wireless_mode)
@@ -88,7 +88,7 @@ class Asusax86uControl():
             # 修改 bandwidth
             if (router.bandwidth):
                 if router.bandwidth not in \
-                        {'2.4 GHz': Asus86uConfig.BANDWIDTH_2_LIST, '5 GHz': Asus86uConfig.BANDWIDTH_5_LIST}[
+                        {'2.4 GHz': Asusax86uConfig.BANDWIDTH_2_LIST, '5 GHz': Asusax86uConfig.BANDWIDTH_5_LIST}[
                             router.band]: raise ConfigError('bandwidth element error')
                 self.router_control.change_bandwidth(router.bandwidth)
 
@@ -114,27 +114,27 @@ class Asusax86uControl():
             # //*[@id="WLgeneral"]/tbody/tr[13]/td/div[1]/select/option[5]
             if (router.authentication_method):
                 try:
-                    index = (Asus86uConfig.AUTHENTICATION_METHOD_DICT[router.authentication_method]
+                    index = (Asusax86uConfig.AUTHENTICATION_METHOD_DICT[router.authentication_method]
                              if router.wireless_mode != 'Legacy' else
-                             Asus86uConfig.AUTHENTICATION_METHOD_LEGCY_DICT[router.authentication_method])
+                             Asusax86uConfig.AUTHENTICATION_METHOD_LEGCY_DICT[router.authentication_method])
                 except ConfigError:
                     raise ConfigError('authentication method element error')
                 self.router_control.change_authentication_method(index)
 
             # 修改 wep_encrypt
             if (router.wep_encrypt):
-                if router.wep_encrypt not in Asus86uConfig.WEP_ENCRYPT: raise ConfigError('wep encrypt elemenr error')
-                self.router_control.change_wep_encrypt(Asus86uConfig.WEP_ENCRYPT[router.wep_encrypt])
+                if router.wep_encrypt not in Asusax86uConfig.WEP_ENCRYPT: raise ConfigError('wep encrypt elemenr error')
+                self.router_control.change_wep_encrypt(Asusax86uConfig.WEP_ENCRYPT[router.wep_encrypt])
 
             # 修改 wpa_encrypt
             if (router.wpa_encrypt):
-                if router.wpa_encrypt not in Asus86uConfig.WPA_ENCRYPT: raise ConfigError('wpa encrypt elemenr error')
-                self.router_control.change_wpa_encrypt(Asus86uConfig.WPA_ENCRYPT[router.wpa_encrypt])
+                if router.wpa_encrypt not in Asusax86uConfig.WPA_ENCRYPT: raise ConfigError('wpa encrypt elemenr error')
+                self.router_control.change_wpa_encrypt(Asusax86uConfig.WPA_ENCRYPT[router.wpa_encrypt])
 
             # 修改 passwd_index
             # //*[@id="WLgeneral"]/tbody/tr[17]/td/select/option[1]
             if (router.passwd_index):
-                if router.passwd_index not in Asus86uConfig.PASSWD_INDEX_DICT: raise ConfigError(
+                if router.passwd_index not in Asusax86uConfig.PASSWD_INDEX_DICT: raise ConfigError(
                     'passwd index element error')
                 self.router_control.change_passwd_index(router.passwd_index)
 
@@ -149,7 +149,7 @@ class Asusax86uControl():
             # 修改 受保护的管理帧
             # //*[@id="WLgeneral"]/tbody/tr[26]/td/select/option[1]
             if (router.protect_frame):
-                if router.protect_frame not in Asus86uConfig.PROTECT_FRAME: raise ConfigError(
+                if router.protect_frame not in Asusax86uConfig.PROTECT_FRAME: raise ConfigError(
                     'protect frame element error')
                 self.router_control.change_protect_frame(self.PROTECT_FRAME[router.protect_frame])
 

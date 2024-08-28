@@ -26,6 +26,8 @@ from tools.router_tool.Router import Router
 from tools.connect_tool.TelnetInterface import TelnetInterface
 from tools.yamlTool import yamlTool
 from tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
+from tools.router_tool.AsusRouter.AsusRouterConfig import Asusax88uConfig
+from tools.router_tool.AsusRouter.AsusRouterConfig import Asusax86uConfig
 import openpyxl
 from copy import copy
 
@@ -33,6 +35,12 @@ filename = 'XiaoMi-Rvr.xlsx'
 rvr_xlsx = openpyxl.load_workbook(filename)
 sheet = rvr_xlsx['Sheet1']
 new_sheet = rvr_xlsx.create_sheet(title=f'{pytest.timestamp}')
+
+# loading config.yaml 文件 获取数据  dict 数据类型
+wifi_yaml = yamlTool(os.getcwd() + '/config/config.yaml')
+command_data = wifi_yaml.get_note('env_command')
+router_name = wifi_yaml.get_note('router')['name']
+router = ''
 
 for row in sheet.iter_rows(values_only=False):
     for cell in row:
@@ -56,12 +64,29 @@ def writeInExcelArea(value, row_num, col_num):
         new_sheet.cell(row=row_num, column=i + col_num, value=value[i])
 
 
+router_config = ''
+exec(f'router_config = {router_name.capitalize()}Config()')
+
 # 读取 测试配置
 with open(os.getcwd() + '/config/asusax88u.csv', 'r') as f:
     reader = csv.reader(f)
     test_data = [Router(*[i.strip() for i in row]) for row in reader][1:]
 
 logging.info(test_data)
+
+ssid_verify = set()
+# 校验 csv 数据是否异常
+for i in test_data:
+    if '2' in i.band:
+        ssid_verify.add(i.band)
+    if '5' in i.band:
+        assert i.band in ssid_verify,"5g ssid can't as the same as 2g , pls modify"
+    assert i.band in ['2.4 GHz', '5 GHz'],"Pls check band info "
+    assert i.wireless_mode in router_config.WIRELESS_MODE,"Pls check wireless info"
+    assert i.channel in router_config.CHANNEL_2_DICT if '2' in i.band else router_config.CHANNEL_5_DICT,"Pls check channel info"
+    assert i.bandwidth in router_config.BANDWIDTH_2_LIST if '2' in i.band else router_config.BANDWIDTH_5_LIST,"Pls check bandwidth info"
+    assert i.authentication_method in router_config.AUTHENTICATION_METHOD_LEGCY_DICT if 'Legacy' in i.wireless_mode else router_config.AUTHENTICATION_METHOD_DICT,"Pls check authentication info"
+
 
 # 设置为True 时 开启 衰减测试流程
 rf_needed = False
@@ -79,12 +104,6 @@ if pytest.connect_type == 'telnet':
     third_dut = True
 
 sum_list_lock = threading.Lock()
-
-# loading config.yaml 文件 获取数据  dict 数据类型
-wifi_yaml = yamlTool(os.getcwd() + '/config/config.yaml')
-command_data = wifi_yaml.get_note('env_command')
-router_name = wifi_yaml.get_note('router')['name']
-router = ''
 
 rvr_tool = wifi_yaml.get_note('rvr')['tool']
 if rvr_tool == 'iperf':
