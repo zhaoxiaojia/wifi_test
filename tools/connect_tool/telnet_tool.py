@@ -3,7 +3,7 @@
 
 
 """
-# File       : TelnetConnect.py
+# File       : telnet_tool.py
 # Time       ：2023/6/30 16:57
 # Author     ：chao.li
 # version    ：python 3.9
@@ -19,18 +19,26 @@ from threading import Thread
 
 import pytest
 
-from tools.connect_tool.Dut import Dut
+from tools.connect_tool.dut import Dut
 
+cmd_line_wildcard = {
+    'sandia': b'sandia:/ #',
+    'sandia_latam': b'sandia_isdb:/ #',
+    'sandia_hkc': b'sandia manu:/ #',
+    'sandia_dvb': b'sandia_dvb:/ #',
+    'bayside': b'bayside:/ #'
+}
 
 class TelnetInterface(Dut):
-    def __init__(self, ip):
+    def __init__(self, ip, wildcard):
         super().__init__()
         self.ip = ip
+        self.wildcard = cmd_line_wildcard[wildcard] if type(wildcard) == str else wildcard
         try:
             logging.info(f'Try to connect {ip}')
             self.tn = telnetlib.Telnet()
             self.tn.open(self.ip, port=23)
-            self.tn.read_until(b'roxton:/ #').decode('gbk')
+            self.tn.read_until(self.wildcard).decode('utf-8')
             logging.info('telnet init done')
             # print('telnet init done')
         except Exception as f:
@@ -41,7 +49,7 @@ class TelnetInterface(Dut):
         self.tn.write(cmd.encode('ascii') + b'\n')
         time.sleep(1)
 
-    def checkoutput(self, cmd):
+    def checkoutput(self, cmd, wildcard=''):
 
         def run_iperf():
             self.tn.write(cmd.encode('ascii') + b'\n')
@@ -49,12 +57,14 @@ class TelnetInterface(Dut):
             with open('temp.txt', 'a') as f:
                 f.write(res)
 
+        if not wildcard:
+            wildcard = self.wildcard
         try:
             self.tn.write('\n'.encode('ascii') + b'\n')
             res = self.tn.re
         except AttributeError as e:
             self.tn.open(self.ip)
-            res = self.tn.read_until(b'roxton:/ #').decode('gbk')
+            res = self.tn.read_until(self.wildcard).decode('gbk')
         if re.findall(r'iperf[3]?.*?-s', cmd):
             cmd += '&'
         logging.info(f'telnet command {cmd}')
@@ -66,11 +76,13 @@ class TelnetInterface(Dut):
             t.start()
         else:
             self.tn.write(cmd.encode('ascii') + b'\n')
-            res = self.tn.read_until(b'roxton:/ # ').decode('gbk')
+            res = self.tn.read_until(self.wildcard).decode('gbk')
         # res = self.tn.read_very_eager().decode('gbk')
         time.sleep(1)
         return res.strip()
 
+    def popen_term(self, command):
+        return subprocess.Popen(command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     def subprocess_run(self, cmd):
         return self.checkoutput(cmd)
 

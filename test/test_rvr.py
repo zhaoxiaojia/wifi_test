@@ -77,16 +77,17 @@ logging.info(test_data)
 ssid_verify = set()
 # 校验 csv 数据是否异常
 for i in test_data:
-    if '2' in i.band:
-        ssid_verify.add(i.band)
-    if '5' in i.band:
-        assert i.band in ssid_verify,"5g ssid can't as the same as 2g , pls modify"
-    assert i.band in ['2.4 GHz', '5 GHz'],"Pls check band info "
-    assert i.wireless_mode in router_config.WIRELESS_MODE,"Pls check wireless info"
-    assert i.channel in router_config.CHANNEL_2_DICT if '2' in i.band else router_config.CHANNEL_5_DICT,"Pls check channel info"
-    assert i.bandwidth in router_config.BANDWIDTH_2_LIST if '2' in i.band else router_config.BANDWIDTH_5_LIST,"Pls check bandwidth info"
-    assert i.authentication_method in router_config.AUTHENTICATION_METHOD_LEGCY_DICT if 'Legacy' in i.wireless_mode else router_config.AUTHENTICATION_METHOD_DICT,"Pls check authentication info"
-
+    if pytest.connect_type == 'adb':
+        if '2' in i.band:
+            ssid_verify.add(i.ssid)
+        if '5' in i.band:
+            logging.info(f'ssid_verify {ssid_verify}')
+            assert i.ssid not in ssid_verify, "5g ssid can't as the same as 2g , pls modify"
+    assert i.band in ['2.4 GHz', '5 GHz'], "Pls check band info "
+    assert i.wireless_mode in router_config.WIRELESS_MODE, "Pls check wireless info"
+    assert i.channel in router_config.CHANNEL_2_DICT if '2' in i.band else router_config.CHANNEL_5_DICT, "Pls check channel info"
+    assert i.bandwidth in router_config.BANDWIDTH_2_LIST if '2' in i.band else router_config.BANDWIDTH_5_LIST, "Pls check bandwidth info"
+    assert i.authentication_method in router_config.AUTHENTICATION_METHOD_LEGCY_DICT if 'Legacy' in i.wireless_mode else router_config.AUTHENTICATION_METHOD_DICT, "Pls check authentication info"
 
 # 设置为True 时 开启 衰减测试流程
 rf_needed = False
@@ -98,8 +99,6 @@ router_needed = True
 # 设置是否需要push iperf
 iperf_tool = False
 
-# 无法使用 命令行 连接wifi 是 设置为true
-third_dut = False
 if pytest.connect_type == 'telnet':
     third_dut = True
 
@@ -263,13 +262,17 @@ def wifi_setup_teardown(request):
     if router_needed:
         # 修改路由器配置
         assert router.change_setting(router_info), "Can't set ap , pls check first"
+        if pytest.connect_type == 'telnet':
+            logging.info('roku 用例特殊处理')
+            band = '5 GHz' if '2'  in router_info.band else '2.4 GHz'
+            ssid = router_info.ssid + "_bat";
+            router.change_setting(Router(band=band,ssid=ssid))
 
     logging.info('wifi env set done')
     with open(pytest.testResult.detail_file, 'a', encoding='gbk') as f:
         f.write(f'Testing {router_info} \n')
 
     # 重置衰减&转台
-
     # 衰减器置0
     if rf_needed:
         logging.info('Reset rf value')
@@ -284,7 +287,7 @@ def wifi_setup_teardown(request):
         logging.info(corner_tool.get_turntanle_current_angle())
         time.sleep(3)
 
-    if third_dut:
+    if pytest.connect_type == 'telnet':
         connect_status = True
         if not router_needed:
             # router 有修改时 等待 30 秒 让板子回连
@@ -379,54 +382,55 @@ def wifi_setup_teardown(request):
 #         ...
 
 
-pair_count = {
-    'n': {
-        '2': wifi_yaml.get_note('pair_num')['n']['2'],
-        '5': wifi_yaml.get_note('pair_num')['n']['5']
-    },
-    'ac': {
-        '5': wifi_yaml.get_note('pair_num')['ac']['5']
-    },
-    'ax': {
-        '2': wifi_yaml.get_note('pair_num')['ax']['2'],
-        '5': wifi_yaml.get_note('pair_num')['ax']['5'],
-    },
-    'auto': {
-        '2': wifi_yaml.get_note('pair_num')['auto']['2'],
-        '5': wifi_yaml.get_note('pair_num')['auto']['5'],
-    }
-}
+# pair_count = {
+#     'n': {
+#         '2': wifi_yaml.get_note('pair_num')['n']['2'],
+#         '5': wifi_yaml.get_note('pair_num')['n']['5']
+#     },
+#     'ac': {
+#         '5': wifi_yaml.get_note('pair_num')['ac']['5']
+#     },
+#     'ax': {
+#         '2': wifi_yaml.get_note('pair_num')['ax']['2'],
+#         '5': wifi_yaml.get_note('pair_num')['ax']['5'],
+#     },
+#     'auto': {
+#         '2': wifi_yaml.get_note('pair_num')['auto']['2'],
+#         '5': wifi_yaml.get_note('pair_num')['auto']['5'],
+#     }
+# }
 
 
 def set_pair_count(router_info, rssi_num, type, dire):
     '''
     匹配 打流通道数
     '''
-    if 'AX' in router_info.wireless_mode:
-        type = 'ax'
-    elif 'AC' in router_info.wireless_mode:
-        type = 'ac'
-    elif '自动' in router_info.wireless_mode:
-        type = 'auto'
-    else:
-        type = 'n'
-
-    if '2' in router_info.band:
-        band = '2'
-    else:
-        band = '5'
-
-    _2g = [10, 20, 30, 40]
-    _5g = [10, 20, 30, 40, 50]
-
-    if band == '2':
-        target_list = _2g
-    else:
-        target_list = _5g
-    logging.info(f'rf current db {rssi_num}')
-    pair = pair_count[type][band][dire][bisect.bisect(target_list, rssi_num)]
-    logging.info(f'pair {pair}')
-    return int(pair)
+    # if 'AX' in router_info.wireless_mode:
+    #     type = 'ax'
+    # elif 'AC' in router_info.wireless_mode:
+    #     type = 'ac'
+    # elif '自动' in router_info.wireless_mode:
+    #     type = 'auto'
+    # else:
+    #     type = 'n'
+    #
+    # if '2' in router_info.band:
+    #     band = '2'
+    # else:
+    #     band = '5'
+    #
+    # _2g = [10, 20, 30, 40]
+    # _5g = [10, 20, 30, 40, 50]
+    #
+    # if band == '2':
+    #     target_list = _2g
+    # else:
+    #     target_list = _5g
+    # logging.info(f'rf current db {rssi_num}')
+    # pair = pair_count[type][band][dire][bisect.bisect(target_list, rssi_num)]
+    # logging.info(f'pair {pair}')
+    pair_num = wifi_yaml.get_note('rvr')['pair']
+    return pair_num
 
 
 def kill_iperf():
@@ -551,9 +555,10 @@ def get_rx_rate(router_info, pair, freq_num, rssi_num, type, corner_set='', db_s
 
 
 # 测试 iperf
-@pytest.mark.repeat(3)
+@pytest.mark.repeat(0)
 @pytest.mark.parametrize("rf_value", step_list)
 def test_wifi_rvr(wifi_setup_teardown, rf_value):
+
     global rx_result, tx_result
     # 判断板子是否存在  ip
     if not wifi_setup_teardown[0]:
@@ -565,6 +570,7 @@ def test_wifi_rvr(wifi_setup_teardown, rf_value):
         return
     router_info = wifi_setup_teardown[1]
 
+
     # 执行 修改 步长
     # 修改衰减
     if rf_needed:
@@ -574,6 +580,7 @@ def test_wifi_rvr(wifi_setup_teardown, rf_value):
         rf_tool.execute_rf_cmd(value)
         # 获取当前衰减值
         logging.info(rf_tool.get_rf_current_value())
+
     if corner_needed:
         logging.info('set corner value')
         value = rf_value[0] if type(rf_value) == tuple else rf_value
@@ -581,6 +588,7 @@ def test_wifi_rvr(wifi_setup_teardown, rf_value):
         corner_tool.execute_turntable_cmd('rt', angle=value * 10)
         # 获取转台角度
         logging.info(corner_tool.get_turntanle_current_angle())
+
 
     with open(pytest.testResult.detail_file, 'a') as f:
         f.write('-' * 40 + '\n')

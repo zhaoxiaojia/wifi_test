@@ -19,7 +19,7 @@ import psutil
 import pytest
 
 from tools.connect_tool.adb import ADB
-from tools.connect_tool.TelnetConnect import TelnetInterface
+from tools.connect_tool.telnet_tool import TelnetInterface
 from tools.TestResult import TestResult
 
 from .tools.yamlTool import yamlTool
@@ -43,7 +43,8 @@ def pytest_sessionstart(session):
     elif pytest.connect_type == 'telnet':
         # Create telnet obj
         telnet_ip = pytest.config_yaml.get_note("connect_type")[pytest.connect_type]['ip']
-        pytest.dut = TelnetInterface(telnet_ip)
+        wildcard = pytest.config_yaml.get_note("connect_type")[pytest.connect_type]['wildcard']
+        pytest.dut = TelnetInterface(telnet_ip,wildcard)
         logging.info("telnet connected %s" % telnet_ip)
     else:
         raise EnvironmentError("Not support connect type %s" % pytest.connect_type)

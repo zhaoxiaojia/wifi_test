@@ -1,11 +1,12 @@
 # This is yaml for DUT info
 connect_type:
-  type: adb
+  type: telnet
   adb:
     device: 'ap2228019621984103f16'
   telnet:
-    ip: '192.168.50.249'
-
+    ip: '192.168.50.12'
+    #    market 区域 默认填写 sandia  支持列表：sandia,sandia_latam,sandia_hkc,sandia_dvb
+    wildcard: bayside
 
 # Router model
 router:
@@ -37,10 +38,12 @@ rvr:
   tool: iperf
   iperf:
     # should be iperf or iperf3
-    version: iperf3
+    version: iperf
     # dut iperf path
     path:
   ixchariot:
+  pair: 10
+  repeat: 0
 
 env_command: [ "pwd" ]
 #env_command: [ "iwpriv wlan0 set_rate_ofdm 9","iwpriv wlan0 set_rate_ofdm 8","iwpriv wlan0 set_rate_ofdm 3" ]

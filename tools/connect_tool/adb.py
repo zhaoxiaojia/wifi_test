@@ -25,7 +25,7 @@ from xml.dom import minidom
 import _io
 import pytest
 
-from tools.connect_tool.Dut import Dut
+from tools.connect_tool.dut import Dut
 from tools.connect_tool.UiautomatorTool import UiautomatorTool
 
 

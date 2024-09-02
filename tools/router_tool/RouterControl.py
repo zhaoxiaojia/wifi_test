@@ -115,6 +115,7 @@ class RouterTools(RouterControl):
         try:
             # driver 连接 登录地址
             self.driver.get(self.address)
+            time.sleep(3)
             # input username
             self.driver.find_element(By.ID, self.xpath['username_element']).click()
             self.driver.find_element(By.ID, self.xpath['username_element']).send_keys(self.xpath['account'])

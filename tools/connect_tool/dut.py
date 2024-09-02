@@ -3,7 +3,7 @@
 
 
 """
-# File       : Dut.py
+# File       : dut.py
 # Time       ：2023/7/4 15:51
 # Author     ：chao.li
 # version    ：python 3.9
