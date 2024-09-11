@@ -53,18 +53,18 @@ class TelnetInterface(Dut):
 
         def run_iperf():
             self.tn.write(cmd.encode('ascii') + b'\n')
-            res = self.tn.read_until(b'Server listening on 5201 (test #2)').decode('gbk')
-            with open('temp.txt', 'a') as f:
+            res = self.tn.read_until(b'[SUM]  0.0-3').decode('gbk')
+            with open('temp.txt', 'w') as f:
                 f.write(res)
 
         if not wildcard:
             wildcard = self.wildcard
         try:
-            self.tn.write('\n'.encode('ascii') + b'\n')
-            res = self.tn.re
+            self.tn.write('ls'.encode('ascii') + b'\n')
+            res = self.tn.read_until(wildcard).decode('gbk')
         except AttributeError as e:
             self.tn.open(self.ip)
-            res = self.tn.read_until(self.wildcard).decode('gbk')
+            # res = self.tn.read_until(wildcard).decode('gbk')
         if re.findall(r'iperf[3]?.*?-s', cmd):
             cmd += '&'
         logging.info(f'telnet command {cmd}')
@@ -76,7 +76,7 @@ class TelnetInterface(Dut):
             t.start()
         else:
             self.tn.write(cmd.encode('ascii') + b'\n')
-            res = self.tn.read_until(self.wildcard).decode('gbk')
+            res = self.tn.read_until(wildcard).decode('gbk')
         # res = self.tn.read_very_eager().decode('gbk')
         time.sleep(1)
         return res.strip()

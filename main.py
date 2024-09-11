@@ -68,14 +68,14 @@ if __name__ == '__main__':
     if not os.path.exists(report_path):
         os.mkdir(report_path)
 
-    cmd = ['-v', '--capture=sys', '--full-trace', '--html=report.html', f'--resultpath={timestamp}', test_case,
-           allure_cmd]
+    cmd = ['-v', '--capture=sys', '--full-trace', '--html=report.html', f'--resultpath={timestamp}', test_case]
+          # allure_cmd]
     print(" ".join(cmd))
     pytest.main(cmd)
     # os.system("allure generate -c results/ -o allure-report/")
-    if allure_cmd:
-        subprocess.check_output(f'allure generate -c ./allure -o {allure_path}', shell=True)
-        allure_history_file = os.listdir(report_parent_path)
-        get_dir()
-        update_file()
-    os.system(f'allure serve ./allure')
+    # if allure_cmd:
+    #     subprocess.check_output(f'allure generate -c ./allure -o {allure_path}', shell=True)
+    #     allure_history_file = os.listdir(report_parent_path)
+    #     get_dir()
+    #     update_file()
+    # os.system(f'allure serve ./allure')

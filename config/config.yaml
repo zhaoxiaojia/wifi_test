@@ -1,10 +1,10 @@
 # This is yaml for DUT info
 connect_type:
-  type: telnet
+  type: adb
   adb:
-    device: 'ap2228019621984103f16'
+    device: '192.168.31.45'
   telnet:
-    ip: '192.168.50.12'
+    ip: '192.168.50.91'
     #    market 区域 默认填写 sandia  支持列表：sandia,sandia_latam,sandia_hkc,sandia_dvb
     wildcard: bayside
 
@@ -26,7 +26,7 @@ rf_solution:
   RADIORACK-4-220:
     ip_address: 192.168.50.19
   # reduction step for rf signal, can be configured according to test requirements
-  step: [ 0,2 ]
+  step: [0,50 ]
 
 # Turntable information
 corner_angle:
@@ -35,14 +35,15 @@ corner_angle:
   step: [ 0, 360 ]
 
 rvr:
-  tool: iperf
+  tool: ixchariot
   iperf:
     # should be iperf or iperf3
     version: iperf
     # dut iperf path
     path:
   ixchariot:
-  pair: 10
+    path: D:/Program Files (x86)/Ixia/IxChariot
+  pair: 2
   repeat: 0
 
 env_command: [ "pwd" ]

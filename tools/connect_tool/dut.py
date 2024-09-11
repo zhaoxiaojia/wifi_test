@@ -42,8 +42,9 @@ class Dut():
 
     IPERF_KILL = 'killall -9 iperf'
     IPERF_WIN_KILL = 'taskkill /im iperf.exe -f'
-    IW_LINNK_COMMAND = 'iw wlan0 link'
-
+    IW_LINNK_COMMAND = 'iw dev wlan0 link'
+    IX_ENDPOINT_COMMAND = "monkey -p com.ixia.ixchariot 1"
+    STOP_IX_ENDPOINT_COMMAND = "am force-stop com.ixia.ixchariot"
     CMD_WIFI_CONNECT = 'cmd wifi connect-network {} {} {}'
     CMD_WIFI_HIDE = ' -h'
     CMD_WIFI_STATUS = 'cmd wifi status'

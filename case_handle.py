@@ -106,10 +106,10 @@ class testCase:
         return case_list
 
 
-# coco = testCase()
-# # coco.sync_testSuite('xx', 'xx')
-# caselist = coco.sync_testSuite(suite='smoke', case=r'test_change_2g_bandwitdh.py', id='T123456',
-#                                desc='This a smoke test', priority='P1')
-# caselist = coco.sync_testSuite(suite='smoke', case=r'test_change_5g_bandwidth.py', id='T654321',
-#                                desc='This a smoke test', priority='P3')
-# print(caselist)
+coco = testCase()
+# coco.sync_testSuite('xx', 'xx')
+caselist = coco.sync_testSuite(suite='smoke', case=r'test_change_2g_bandwitdh.py', id='T123456',
+                               desc='This a smoke test', priority='P1')
+caselist = coco.sync_testSuite(suite='smoke', case=r'test_change_5g_bandwidth.py', id='T654321',
+                               desc='This a smoke test', priority='P3',arms='80')
+print(caselist)

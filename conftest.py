@@ -70,6 +70,8 @@ def pytest_addoption(parser):
 def pytest_sessionfinish(session):
     shutil.copy("pytest.log", "debug.log")
     shutil.move("debug.log", pytest.testResult.logdir)
+    shutil.copy("report.html", "report_bat.html")
+    shutil.move("report_bat.html", pytest.testResult.logdir)
 
     if os.path.exists('temp.txt'):
         for proc in psutil.process_iter():
