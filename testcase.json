@@ -9,7 +9,8 @@
         "id": "T654321",
         "desc": "This a smoke test",
         "priority": "P3",
-        "path": "test\\test_change_5g_bandwidth.py"
+        "path": "test\\test_change_5g_bandwidth.py",
+        "arms": "80"
     },
     "test_change_ap_reboot_multi.py": {
         "id": 1,

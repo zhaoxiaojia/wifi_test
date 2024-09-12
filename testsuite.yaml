@@ -1,3 +1,3 @@
-smoke:
-- test\test_change_2g_bandwitdh.py
-- test\test_change_5g_bandwidth.py
+stability:
+- test\base\test_03_open_wifi.py
+- test\base\test_08_hide_passwd.py

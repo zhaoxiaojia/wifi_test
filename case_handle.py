@@ -32,7 +32,7 @@ class testCase:
 
     def update_caseJson(self, case, **kwargs):
         self.case_dict[case].update(**kwargs)
-        print(self.case_dict)
+        logging.info(self.case_dict)
         with open(self.case_json, 'w') as f:
             f.write(json.dumps(self.case_dict, indent=4))
 
@@ -51,7 +51,7 @@ class testCase:
                     continue
                 if filename not in self.case_dict.keys():
                     logging.info(f'新增: {os.path.join(filepath, filename)}')
-                    print('新增:', os.path.join(filepath, filename).replace('\\', '/'))
+                    logging.info('新增:', os.path.join(filepath, filename).replace('\\', '/'))
                     print(type(os.path.join(filepath, filename)))
                     self.case_dict[filename] = {'id': 1, 'desc': 'xxx', 'priority': 'P0',
                                                 'path': os.path.join(filepath, filename).replace('\\', '/')}
@@ -91,9 +91,11 @@ class testCase:
         if kwargs:
             self.update_caseJson(case, **kwargs)
         case_list = self.load_suiteYaml(suite)
-        print('case', case_list)
         if case_list:
-            if case not in case_list:
+            for i in case_list:
+                if case in i:
+                    break
+            else:
                 case_list.append(self.case_dict[case]['path'])
             data = {
                 **self.sute_dict, **{suite: case_list}
@@ -106,10 +108,4 @@ class testCase:
         return case_list
 
 
-coco = testCase()
-# coco.sync_testSuite('xx', 'xx')
-caselist = coco.sync_testSuite(suite='smoke', case=r'test_change_2g_bandwitdh.py', id='T123456',
-                               desc='This a smoke test', priority='P1')
-caselist = coco.sync_testSuite(suite='smoke', case=r'test_change_5g_bandwidth.py', id='T654321',
-                               desc='This a smoke test', priority='P3',arms='80')
-print(caselist)
+
