@@ -9,5 +9,5 @@
 # Description：
 """
 
-
-print('AX88U-5G' in {'AX88U-2G'})
+with open('temp.txt','a') as f:
+    f.write('coco is handsome')

@@ -256,9 +256,7 @@ def get_logcat(pair):
                         continue
                 if re.findall(r'.*?\d+\.\d*-\s*\d+\.\d*.*?(\d+\.*\d*)\s+Mbits/sec.*?', line.strip(), re.S):
                     result_list.append(
-                        int(float(
-                            re.findall(r'.*?\d+\.\d*-\s*\d+\.\d*.*?(\d+\.*\d*)\s+Mbits/sec.*?', line.strip(), re.S)[
-                                0])))
+                        float(re.findall(r'.*?\d+\.\d*-\s*\d+\.\d*.*?(\d+\.*\d*)\s+Mbits/sec.*?', line.strip(), re.S)[0]))
 
     if result_list:
         logging.info(f'{sum(result_list) / len(result_list)}')
@@ -304,12 +302,10 @@ def wifi_setup_teardown(request):
     if router_needed:
         # 修改路由器配置
         assert router.change_setting(router_info), "Can't set ap , pls check first"
-        if pytest.connect_type == 'telnet':
-            logging.info('roku 用例特殊处理')
-            band = '5 GHz' if '2' in router_info.band else '2.4 GHz'
-            ssid = router_info.ssid + "_bat";
-            router.change_setting(Router(band=band, ssid=ssid))
-            time.sleep(60)
+        band = '5 GHz' if '2' in router_info.band else '2.4 GHz'
+        ssid = router_info.ssid + "_bat";
+        router.change_setting(Router(band=band, ssid=ssid))
+        time.sleep(60)
 
     logging.info('wifi env set done')
     with open(pytest.testResult.detail_file, 'a', encoding='gbk') as f:
@@ -341,7 +337,8 @@ def wifi_setup_teardown(request):
                         cmd = (pytest.dut.WIFI_CONNECT_COMMAND_REGU.format(router_info.ssid) +
                                pytest.dut.WIFI_CONNECT_PASSWD_REGU.format(router_info.wpa_passwd) +
                                pytest.dut.WIFI_CONNECT_HIDE_SSID_REGU.format(router_info.hide_type))
-                pytest.dut.checkoutput(cmd)
+                # Todo
+                # pytest.dut.checkoutput(cmd)
                 if pytest.dut.wait_for_wifi_address():
                     connect_status = True
                     break
@@ -662,14 +659,14 @@ def test_wifi_rvr(wifi_setup_teardown, rf_value):
     # time.sleep(1)
 
     # 获取rssi
-    for i in range(3):
+    for i in range(10):
         rssi_info = pytest.dut.checkoutput(pytest.dut.IW_LINNK_COMMAND)
-        time.sleep(1)
+        logging.info(rssi_info)
         if 'signal' in rssi_info:
             break
-        logging.info(rssi_info)
     else:
         rssi_info = ''
+        
     if 'Not connected' in rssi_info:
         logging.info('The signal strength is not enough ,input 0')
         rx_result, tx_result, rssi_num = 0, 0, 0

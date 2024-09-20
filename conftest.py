@@ -83,5 +83,3 @@ def pytest_sessionfinish(session):
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 pass
         os.remove('temp.txt')
-    # if os.path.exists('report_temp.html'):
-    #     os.remove('report_temp.html')

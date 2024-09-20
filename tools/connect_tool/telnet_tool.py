@@ -11,6 +11,7 @@
 """
 
 import logging
+import os.path
 import re
 import subprocess
 import telnetlib
@@ -32,10 +33,11 @@ cmd_line_wildcard = {
 class TelnetInterface(Dut):
     def __init__(self, ip, wildcard):
         super().__init__()
+
         self.ip = ip
         self.wildcard = cmd_line_wildcard[wildcard] if type(wildcard) == str else wildcard
         try:
-            logging.info(f'Try to connect {ip}')
+            logging.info(f'Try to connect {ip} {wildcard}')
             self.tn = telnetlib.Telnet()
             self.tn.open(self.ip, port=23)
             self.tn.read_until(self.wildcard).decode('utf-8')
@@ -43,7 +45,7 @@ class TelnetInterface(Dut):
             # print('telnet init done')
         except Exception as f:
             logging.info(f)
-            return None
+
 
     def execute_cmd(self, cmd):
         self.tn.write(cmd.encode('ascii') + b'\n')
@@ -52,19 +54,25 @@ class TelnetInterface(Dut):
     def checkoutput(self, cmd, wildcard=''):
 
         def run_iperf():
+            if os.path.exists('temp.txt'):
+                os.remove('temp.txt')
+            start_time = time.time()
             self.tn.write(cmd.encode('ascii') + b'\n')
-            res = self.tn.read_until(b'[SUM]  0.0-3').decode('gbk')
-            with open('temp.txt', 'w') as f:
-                f.write(res)
+            while time.time() - start_time < 60:
+                logging.info('try to get rvr result')
+                res = self.tn.read_until(b'Mbits/sec').decode('gbk')
+                with open('temp.txt', 'a') as f:
+                    f.write(res)
 
         if not wildcard:
             wildcard = self.wildcard
         try:
-            self.tn.write('ls'.encode('ascii') + b'\n')
+            self.tn.write('\n'.encode('ascii') + b'\n')
             res = self.tn.read_until(wildcard).decode('gbk')
         except AttributeError as e:
-            self.tn.open(self.ip)
-            # res = self.tn.read_until(wildcard).decode('gbk')
+            # self.tn.open(self.ip)
+            self.tn.write('\n'.encode('ascii') + b'\n')
+            res = self.tn.read_until(wildcard).decode('gbk')
         if re.findall(r'iperf[3]?.*?-s', cmd):
             cmd += '&'
         logging.info(f'telnet command {cmd}')
@@ -101,8 +109,9 @@ class TelnetInterface(Dut):
     def get_mcs_rx(self):
         return 'mcs_rx'
 
-# tl = TelnetInterface('192.168.50.254')
+# tl = TelnetInterface('192.168.31.95','bayside')
 # tl.tn.close()
-# print(tl.checkoutput('iw wlan0 link'))
+# print(tl.checkoutput('iw dev wlan0 link'))
+# print(tl.checkoutput('iw dev wlan0 link'))
 # print('aaa')
 # print(tl.checkoutput('ls'))

@@ -7,7 +7,7 @@ set arg3 [lindex $argv 2]
 set e1 $arg1
 set e2 $arg2
 set ixchariot_installation_dir "D:/Program Files (x86)/Ixia/IxChariot"
-set script "$ixchariot_installation_dir/Scripts/Throughput.scr"
+set script "$ixchariot_installation_dir/Scripts/High_Performance_Throughput.scr"
 set testFile "$ixchariot_installation_dir/tests/lbtest.tst"
 set timeout 50
 

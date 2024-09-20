@@ -69,17 +69,18 @@ if __name__ == '__main__':
     if not os.path.exists(report_path):
         os.mkdir(report_path)
 
-    coco = testCase()
-    # coco.sync_testSuite('xx', 'xx')
-    caselist = coco.sync_testSuite(suite='stability', case=r'test_03_open_wifi.py')
+    #coco = testCase()
+    #caselist = coco.sync_testSuite(suite='stability', case=r'test_03_open_wifi.py')
     # caselist = coco.sync_testSuite(suite='stability', case=r'test_08_hide_passwd.py')
     # caselist = coco.sync_testSuite(suite='stability', case=r'test_05_close_wifi.py')
-    test_case = [f'.\\{i}' for i in caselist]
+    #test_case = [f'.\\{i}' for i in caselist]
     logging.info(test_case)
     # print(caselist)
     cmd = ['-v', '--capture=sys', '--full-trace','--html=report.html', f'--resultpath={timestamp}']
     # allure_cmd]
     # print(" ".join(cmd))
+    if type(test_case) == str:
+        test_case = [test_case]
     pytest.main(cmd+test_case)
 
     # os.system("allure generate -c results/ -o allure-report/")
