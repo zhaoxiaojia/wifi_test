@@ -67,3 +67,8 @@ class XiaomiRouterConfig(RouterConfig):
         '20MHz': '2',
         '40MHz': '3'
     }
+
+
+class Xiaomiax3000Config(XiaomiRouterConfig):
+    def __init__(self):
+        super().__init__()

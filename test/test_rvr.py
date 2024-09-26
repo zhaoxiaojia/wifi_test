@@ -28,6 +28,7 @@ from tools.yamlTool import yamlTool
 from tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
 from tools.router_tool.AsusRouter.AsusRouterConfig import Asusax88uConfig
 from tools.router_tool.AsusRouter.AsusRouterConfig import Asusax86uConfig
+from tools.router_tool.Xiaomi.XiaomiRouterConfig import Xiaomiax3000Config
 from tools.ixchariot import ix
 
 import openpyxl
