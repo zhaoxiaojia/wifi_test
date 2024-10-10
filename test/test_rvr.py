@@ -29,6 +29,7 @@ from tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
 from tools.router_tool.AsusRouter.AsusRouterConfig import Asusax88uConfig
 from tools.router_tool.AsusRouter.AsusRouterConfig import Asusax86uConfig
 from tools.router_tool.Xiaomi.XiaomiRouterConfig import Xiaomiax3000Config
+from tools.router_tool.Xiaomi.Xiaomiax3000Control import Xiaomiax3000Control
 from tools.ixchariot import ix
 
 import openpyxl
@@ -117,6 +118,7 @@ def modify_tcl_script(old_str, new_str):
     os.remove(file)
     os.rename("%s.bak" % file, file)
 
+
 rvr_tool = wifi_yaml.get_note('rvr')['tool']
 if rvr_tool == 'iperf':
     test_tool = wifi_yaml.get_note('rvr')[rvr_tool]['version']
@@ -186,7 +188,7 @@ rx_result, tx_result = '', ''
 
 
 def iperf_on(command, adb, direction='tx'):
-    if os.path.exists('temp.txt'):
+    if os.path.exists('temp.txt') and '-s' in commando:
         for proc in psutil.process_iter():
             try:
                 files = proc.open_files()
@@ -257,7 +259,8 @@ def get_logcat(pair):
                         continue
                 if re.findall(r'.*?\d+\.\d*-\s*\d+\.\d*.*?(\d+\.*\d*)\s+Mbits/sec.*?', line.strip(), re.S):
                     result_list.append(
-                        float(re.findall(r'.*?\d+\.\d*-\s*\d+\.\d*.*?(\d+\.*\d*)\s+Mbits/sec.*?', line.strip(), re.S)[0]))
+                        float(
+                            re.findall(r'.*?\d+\.\d*-\s*\d+\.\d*.*?(\d+\.*\d*)\s+Mbits/sec.*?', line.strip(), re.S)[0]))
 
     if result_list:
         logging.info(f'{sum(result_list) / len(result_list)}')
@@ -303,10 +306,10 @@ def wifi_setup_teardown(request):
     if router_needed:
         # 修改路由器配置
         assert router.change_setting(router_info), "Can't set ap , pls check first"
-        band = '5 GHz' if '2' in router_info.band else '2.4 GHz'
-        ssid = router_info.ssid + "_bat";
-        router.change_setting(Router(band=band, ssid=ssid))
-        time.sleep(60)
+        # band = '5 GHz' if '2' in router_info.band else '2.4 GHz'
+        # ssid = router_info.ssid + "_bat";
+        # router.change_setting(Router(band=band, ssid=ssid))
+        # time.sleep(60)
 
     logging.info('wifi env set done')
     with open(pytest.testResult.detail_file, 'a', encoding='gbk') as f:
@@ -360,7 +363,8 @@ def wifi_setup_teardown(request):
 
     if rvr_tool == 'ixchariot':
         if '5' in router_info.band:
-            modify_tcl_script("set script ", 'set script "$ixchariot_installation_dir/Scripts/High_Performance_Throughput.scr"\n')
+            modify_tcl_script("set script ",
+                              'set script "$ixchariot_installation_dir/Scripts/High_Performance_Throughput.scr"\n')
         else:
             modify_tcl_script("set script ",
                               'set script "$ixchariot_installation_dir/Scripts/Throughput.scr"\n')
@@ -666,7 +670,7 @@ def test_wifi_rvr(wifi_setup_teardown, rf_value):
             break
     else:
         rssi_info = ''
-        
+
     if 'Not connected' in rssi_info:
         logging.info('The signal strength is not enough ,input 0')
         rx_result, tx_result, rssi_num = 0, 0, 0

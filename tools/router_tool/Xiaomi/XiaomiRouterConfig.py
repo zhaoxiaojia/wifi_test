@@ -12,7 +12,7 @@ from tools.router_tool.RouterConfig import RouterConfig
 class XiaomiRouterConfig(RouterConfig):
     def __init__(self):
         super(XiaomiRouterConfig, self).__init__()
-
+        
     CHANNEL_2_DICT = {
         '自动': '1',
         '1': '2',
@@ -68,7 +68,7 @@ class XiaomiRouterConfig(RouterConfig):
         '40MHz': '3'
     }
 
-
+    WIRELESS_MODE = ['11ac','11ax']
 class Xiaomiax3000Config(XiaomiRouterConfig):
     def __init__(self):
         super().__init__()

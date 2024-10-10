@@ -1,6 +1,6 @@
 # This is yaml for DUT info
 connect_type:
-  type: telnet
+  type: adb
   adb:
     device: 'ap2228019621984103f16'
   telnet:
@@ -11,7 +11,7 @@ connect_type:
 # Router model
 router:
   # pls write down the router name .It should be asusac88u or asusax86u
-  name: asusax88u
+  name: xiaomiax3000
 
 # test env control , should be rf , corner or both
 env_control: rf
@@ -40,7 +40,7 @@ rvr:
     # should be iperf or iperf3
     version: iperf
     # dut iperf path
-    path:
+    path: ./data/
   ixchariot:
     path: D:/Program Files (x86)/Ixia/IxChariot
   pair: 2
