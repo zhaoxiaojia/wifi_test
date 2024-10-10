@@ -306,10 +306,10 @@ def wifi_setup_teardown(request):
     if router_needed:
         # 修改路由器配置
         assert router.change_setting(router_info), "Can't set ap , pls check first"
-        # band = '5 GHz' if '2' in router_info.band else '2.4 GHz'
-        # ssid = router_info.ssid + "_bat";
-        # router.change_setting(Router(band=band, ssid=ssid))
-        # time.sleep(60)
+        band = '5 GHz' if '2' in router_info.band else '2.4 GHz'
+        ssid = router_info.ssid + "_bat";
+        router.change_setting(Router(band=band, ssid=ssid))
+        time.sleep(60)
 
     logging.info('wifi env set done')
     with open(pytest.testResult.detail_file, 'a', encoding='gbk') as f:
