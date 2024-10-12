@@ -11,23 +11,22 @@ import os
 import re
 import time
 
+import pandas as pd
 import pytest
 
-
-from tools.router_tool.Router import Router
 from tools.router_tool.AsusRouter.Asusax5400Control import Asusax5400Control
 from tools.router_tool.AsusRouter.Asusea6700Control import Asusea6700Control
 from tools.router_tool.H3CBX54Control import H3CBX54Control
 from tools.router_tool.Linksys1200acControl import Linksys1200acControl
+from tools.router_tool.Router import Router
 # from tools.router_tool.NetgearR6100Control import NetgearR6100Control
 from tools.router_tool.Tplink.TplinkAx6000Control import TplinkAx6000Control
 from tools.router_tool.Tplink.TplinkWr842Control import TplinkWr842Control
 from tools.router_tool.Xiaomi.Xiaomiax3000Control import Xiaomiax3000Control
 from tools.router_tool.ZTEax5400Control import ZTEax5400Control
-
-import pandas as pd
-
 from util.decorators import singleton
+
+
 @singleton
 class WifiCompatibilityResult:
     '''

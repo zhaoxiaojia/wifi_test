@@ -11,10 +11,9 @@
 import logging
 import re
 import time
+from test import config_yaml, enter_wifi_activity, wait_for_wifi_service
 
 import pytest
-from test import (config_yaml, enter_wifi_activity,
-                        wait_for_wifi_service)
 
 '''
 测试步骤

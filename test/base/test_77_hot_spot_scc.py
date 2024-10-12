@@ -15,8 +15,8 @@ import time
 import pytest
 
 from tools.connect_tool.adb import concomitant_dut
-from tools.router_tool.Router import Router
 from tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
+from tools.router_tool.Router import Router
 
 '''
 测试步骤

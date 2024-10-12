@@ -8,6 +8,9 @@ connect_type:
     #    market 区域 默认填写 sandia  支持列表：sandia,sandia_latam,sandia_hkc,sandia_dvb
     wildcard: bayside
 
+stress_dut: ['ap2228019621984103f16','ross9ca38c8c66670d']
+
+
 # Router model
 router:
   # pls write down the router name .It should be asusac88u or asusax86u
@@ -47,10 +50,6 @@ rvr:
   repeat: 0
 
 env_command: [ "pwd" ]
-#env_command: [ "iwpriv wlan0 set_rate_ofdm 9","iwpriv wlan0 set_rate_ofdm 8","iwpriv wlan0 set_rate_ofdm 3" ]
-#test_wifi:
-#  ssid: i-test
-#  passwd: "@12345678"
 
 # Number of channels played
 pair_num:

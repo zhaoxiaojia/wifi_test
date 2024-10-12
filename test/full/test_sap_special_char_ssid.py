@@ -9,10 +9,10 @@
 
 
 import logging
+from test import (accompanying_dut, close_hotspot, kill_moresetting,
+                  open_hotspot)
 
 import pytest
-from test import (accompanying_dut, close_hotspot,
-                        kill_moresetting, open_hotspot)
 
 '''
 测试步骤

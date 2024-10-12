@@ -11,10 +11,10 @@
 import logging
 import os
 import time
+from test import (close_wifi, enter_wifi_activity, kill_setting, open_wifi,
+                  wifi_onoff_tag)
 
 import pytest
-from test import (close_wifi, enter_wifi_activity, kill_setting,
-                        open_wifi,wifi_onoff_tag)
 
 '''
 测试步骤

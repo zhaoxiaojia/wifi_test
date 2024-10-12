@@ -11,9 +11,9 @@
 import logging
 import re
 import time
+from test import close_wifi, enter_wifi_activity, open_info
 
 import pytest
-from test import close_wifi, enter_wifi_activity, open_info
 
 '''
 测试步骤

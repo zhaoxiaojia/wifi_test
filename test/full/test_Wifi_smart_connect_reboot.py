@@ -11,10 +11,9 @@
 import logging
 import re
 import time
+from test import Router, connect_ssid, forget_network_cmd, kill_setting
 
 import pytest
-from test import (Router, connect_ssid, forget_network_cmd,
-                        kill_setting)
 
 from tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
 

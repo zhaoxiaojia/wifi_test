@@ -11,11 +11,10 @@
 import logging
 import re
 import time
+from test import (Router, connect_save_ssid, connect_ssid, find_ssid,
+                  forget_network_cmd, kill_setting, wait_for_wifi_address)
 
 import pytest
-from test import (Router, connect_save_ssid, connect_ssid, find_ssid,
-                        forget_network_cmd, kill_setting,
-                        wait_for_wifi_address)
 
 from tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
 from tools.router_tool.Xiaomi.Xiaomiax3000Control import Xiaomiax3000Control

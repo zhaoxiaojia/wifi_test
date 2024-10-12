@@ -6,9 +6,10 @@
 
 import logging
 
+import pytest
+
 from util.decorators import set_timeout
 
-import pytest
 
 class Online():
     '''

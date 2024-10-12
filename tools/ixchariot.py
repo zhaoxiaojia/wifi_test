@@ -4,11 +4,11 @@
 # @Author  : chao.li
 # @File    : ixchariot.py
 
+import logging
 import os
+import re
 import subprocess
 import time
-import logging
-import re
 
 
 class ix:

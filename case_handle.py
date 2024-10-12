@@ -4,9 +4,10 @@
 # @Author  : chao.li
 # @File    : case_handle.py
 
-import os
 import json
 import logging
+import os
+
 import yaml
 
 
@@ -16,7 +17,7 @@ class testCase:
         self.case_json = 'testcase.json'
         self.suite_yaml = 'testsuite.yaml'
         self.sute_dict = {}
-        self.load_caseJson()
+        self.sync_caseJson()
 
     def load_caseJson(self):
         '''
@@ -106,6 +107,3 @@ class testCase:
         with open(self.suite_yaml, 'w') as f:
             yaml.dump(data, stream=f, indent=4)
         return case_list
-
-
-

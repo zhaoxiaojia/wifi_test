@@ -1235,7 +1235,7 @@ class ADB(Dut):
             self.keyevent(4)
         self.kill_setting()
 
-    def wait_for_wifi_address(self, cmd: str = '', target='192.168.31'):
+    def wait_for_wifi_address(self, cmd: str = '', target='192.168.50'):
         # Wait for th wireless adapter to obtaion the ip address
         logging.info(f"waiting for wifi {target}")
         ip_address = self.subprocess_run('ifconfig wlan0 |egrep -o "inet [^ ]*"|cut -f 2 -d :')

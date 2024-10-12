@@ -19,21 +19,21 @@ import signal
 import subprocess
 import threading
 import time
+from copy import copy
+
+import openpyxl
 import psutil
 import pytest
 
-from tools.router_tool.Router import Router
 from tools.connect_tool.TelnetInterface import TelnetInterface
-from tools.yamlTool import yamlTool
-from tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
-from tools.router_tool.AsusRouter.AsusRouterConfig import Asusax88uConfig
-from tools.router_tool.AsusRouter.AsusRouterConfig import Asusax86uConfig
-from tools.router_tool.Xiaomi.XiaomiRouterConfig import Xiaomiax3000Config
-from tools.router_tool.Xiaomi.Xiaomiax3000Control import Xiaomiax3000Control
 from tools.ixchariot import ix
-
-import openpyxl
-from copy import copy
+from tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
+from tools.router_tool.AsusRouter.AsusRouterConfig import (Asusax86uConfig,
+                                                           Asusax88uConfig)
+from tools.router_tool.Router import Router
+from tools.router_tool.Xiaomi.Xiaomiax3000Control import Xiaomiax3000Control
+from tools.router_tool.Xiaomi.XiaomiRouterConfig import Xiaomiax3000Config
+from tools.yamlTool import yamlTool
 
 # 小米极限测试 记录
 # filename = 'XiaoMi-Rvr.xlsx'

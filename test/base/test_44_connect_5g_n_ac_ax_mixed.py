@@ -10,8 +10,8 @@
 
 import pytest
 
-from tools.router_tool.Router import Router
 from tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
+from tools.router_tool.Router import Router
 
 '''
 测试配置

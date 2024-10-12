@@ -9,5 +9,5 @@
 # Description：
 """
 
-with open('temp.txt','a') as f:
-    f.write('coco is handsome')
+
+run_cmd()

@@ -10,10 +10,10 @@
 
 import logging
 import time
+from test import (accompanying_dut, close_hotspot, forget_network_cmd,
+                  kill_moresetting, open_hotspot, wait_for_wifi_address)
 
 import pytest
-from test import (accompanying_dut,  close_hotspot, forget_network_cmd, kill_moresetting,
-                        open_hotspot, wait_for_wifi_address)
 
 '''
 测试步骤

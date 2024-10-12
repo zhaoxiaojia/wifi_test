@@ -12,10 +12,10 @@
 import logging
 import re
 import time
+from test import (close_wifi, config_yaml, enter_wifi_activity, open_wifi,
+                  wait_for_wifi_service)
 
 import pytest
-from test import (close_wifi, config_yaml, enter_wifi_activity,
-                        open_wifi, wait_for_wifi_service)
 
 '''
 测试步骤

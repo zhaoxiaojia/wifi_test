@@ -4,14 +4,14 @@
 # @Author  : chao.li
 # @File    : decorators.py
 
-import signal
-import time
-import inspect
 import ctypes
+import inspect
 import logging
+import signal
+import threading
+import time
 from functools import wraps
 
-import threading
 
 class MyThead(threading.Thread):
     def __init__(self,target,args=()):

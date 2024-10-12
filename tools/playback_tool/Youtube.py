@@ -8,9 +8,11 @@
 
 import logging
 import time
+
 import pytest
 
 from tools.playback_tool.OnlinePlayback import Online
+
 
 class Youtube(Online):
     '''

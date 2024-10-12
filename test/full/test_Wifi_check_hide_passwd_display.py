@@ -10,9 +10,9 @@
 import logging
 import re
 import time
+from test import Router, enter_wifi_activity, find_ssid, kill_setting
 
 import pytest
-from test import (Router, enter_wifi_activity, find_ssid, kill_setting)
 
 from tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
 

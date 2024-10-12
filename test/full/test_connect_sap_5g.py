@@ -10,10 +10,11 @@
 
 import logging
 import time
+from test import (Router, accompanying_dut, close_hotspot, forget_network_cmd,
+                  kill_moresetting, open_hotspot, wait_for_wifi_address,
+                  youtube)
 
 import pytest
-from test import (Router, accompanying_dut,close_hotspot, forget_network_cmd, kill_moresetting,
-                        open_hotspot, youtube, wait_for_wifi_address)
 
 from tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
 

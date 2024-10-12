@@ -8,9 +8,9 @@
 
 
 import logging
+from test import close_hotspot, kill_moresetting, open_hotspot
 
 import pytest
-from test import (close_hotspot, kill_moresetting, open_hotspot)
 
 '''
 测试步骤

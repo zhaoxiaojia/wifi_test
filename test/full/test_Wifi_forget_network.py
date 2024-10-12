@@ -10,9 +10,9 @@
 import logging
 import os
 import time
+from test import Router, find_ssid, wait_for_wifi_address
 
 import pytest
-from test import Router, find_ssid, wait_for_wifi_address
 
 from tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
 from tools.yamlTool import yamlTool

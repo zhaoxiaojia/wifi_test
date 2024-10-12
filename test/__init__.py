@@ -1,9 +1,11 @@
-from tools.router_tool.Router import Router
-from tools.Iperf import Iperf
-from tools.connect_tool.adb import accompanying_dut
-from tools.playback_tool.Youtube import Youtube
-import pytest
 import os
+
+import pytest
+
+from tools.connect_tool.adb import accompanying_dut
+from tools.Iperf import Iperf
+from tools.playback_tool.Youtube import Youtube
+from tools.router_tool.Router import Router
 
 if pytest.connect_type == 'adb':
     Router = Router

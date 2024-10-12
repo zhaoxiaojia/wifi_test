@@ -1,16 +1,18 @@
 # !/usr/bin/env python
 # -*-coding:utf-8 -*-
-import logging
-import os
-
-import pytest
 import datetime
 import json
+import logging
+import os
 import subprocess
+
+import pytest
+
 from case_handle import testCase
 
 timestamp = datetime.datetime.now().strftime("%Y.%m.%d_%H.%M.%S")
-test_case = 'test/test_rvr.py'
+# test_case = 'test/test_rvr.py'
+test_case = 'test/stress/test_wifi_switch.py'
 
 report_parent_path = test_case.replace('test', 'report', 1)
 
@@ -69,19 +71,17 @@ if __name__ == '__main__':
     if not os.path.exists(report_path):
         os.mkdir(report_path)
 
-    #coco = testCase()
-    #caselist = coco.sync_testSuite(suite='stability', case=r'test_03_open_wifi.py')
-    # caselist = coco.sync_testSuite(suite='stability', case=r'test_08_hide_passwd.py')
-    # caselist = coco.sync_testSuite(suite='stability', case=r'test_05_close_wifi.py')
-    #test_case = [f'.\\{i}' for i in caselist]
+    testcase_handler = testCase()
+    # caselist = coco.sync_testSuite(suite='stability', case=r'test_03_open_wifi.py')
+    # test_case = [f'.\\{i}' for i in caselist]
     logging.info(test_case)
     # print(caselist)
-    cmd = ['-v', '--capture=sys', '--full-trace','--html=report.html', f'--resultpath={timestamp}']
+    cmd = ['-v', '--capture=sys', '--full-trace', '--html=report.html', f'--resultpath={timestamp}']
     # allure_cmd]
     # print(" ".join(cmd))
     if type(test_case) == str:
         test_case = [test_case]
-    pytest.main(cmd+test_case)
+    pytest.main(cmd + test_case)
 
     # os.system("allure generate -c results/ -o allure-report/")
     # if allure_cmd:

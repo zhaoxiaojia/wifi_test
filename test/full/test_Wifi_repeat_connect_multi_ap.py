@@ -10,10 +10,10 @@
 import logging
 import re
 import time
+from test import (Router, connect_ssid, find_ssid, forget_network_cmd,
+                  kill_setting, wait_for_wifi_address)
 
 import pytest
-from test import (Router, connect_ssid, find_ssid, forget_network_cmd,
-                        kill_setting, wait_for_wifi_address)
 
 from tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
 from tools.router_tool.ZTEax5400Control import ZTEax5400Control

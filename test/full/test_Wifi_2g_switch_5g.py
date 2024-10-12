@@ -10,11 +10,10 @@
 import logging
 import re
 import time
+from test import (Router, connect_save_ssid, connect_ssid, forget_network_cmd,
+                  kill_setting, playback_youtube, wifi)
 
 import pytest
-from test import (Router, connect_save_ssid, connect_ssid,
-                        forget_network_cmd, kill_setting, playback_youtube,
-                        wifi)
 
 from tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
 from tools.router_tool.Xiaomi.Xiaomiax3000Control import Xiaomiax3000Control

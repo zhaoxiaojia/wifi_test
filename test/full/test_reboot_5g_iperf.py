@@ -11,11 +11,11 @@
 import logging
 import os
 import time
+from test import (Router, close_wifi, connect_ssid, forget_network_cmd, iperf,
+                  kill_setting, open_wifi, wait_for_wifi_address,
+                  wait_for_wifi_service)
 
 import pytest
-from test import (Router, close_wifi, connect_ssid, forget_network_cmd,
-                        iperf, kill_setting, open_wifi,
-                        wait_for_wifi_address, wait_for_wifi_service)
 
 from tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
 

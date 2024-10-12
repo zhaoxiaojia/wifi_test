@@ -9,9 +9,9 @@
 
 import logging
 import time
+from test import open_hotspot, open_wifi
 
 import pytest
-from test import open_hotspot, open_wifi
 
 from tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
 

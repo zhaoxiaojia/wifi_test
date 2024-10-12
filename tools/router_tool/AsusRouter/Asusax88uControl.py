@@ -10,18 +10,18 @@
 import logging
 import os
 import sys
-import time
 import telnetlib
+import time
 from collections import namedtuple
 
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
+from tools.connect_tool.telnet_tool import TelnetInterface
 from tools.router_tool.AsusRouter.AsusRouterConfig import Asusax88uConfig
 from tools.router_tool.RouterConfig import ConfigError
 from tools.router_tool.RouterControl import RouterTools
-from tools.connect_tool.telnet_tool import TelnetInterface
 
 nvram_cmd = {
     '2.4 GHz': {

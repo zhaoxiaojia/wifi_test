@@ -9,10 +9,10 @@
 
 
 import logging
+from test import (accompanying_dut, change_keyboard_language, close_hotspot,
+                  kill_moresetting, open_hotspot, reset_keyboard_language)
 
 import pytest
-from test import (change_keyboard_language, close_hotspot, kill_moresetting, open_hotspot,
-                        reset_keyboard_language,accompanying_dut)
 
 '''
 测试步骤
