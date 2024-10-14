@@ -12,7 +12,7 @@ from case_handle import testCase
 
 timestamp = datetime.datetime.now().strftime("%Y.%m.%d_%H.%M.%S")
 # test_case = 'test/test_rvr.py'
-test_case = 'test/stress/test_wifi_switch.py'
+test_case = 'test/stress/test_ap_switch.py'
 
 report_parent_path = test_case.replace('test', 'report', 1)
 

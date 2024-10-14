@@ -15,7 +15,6 @@ import pytest
 from tools.connect_tool.adb import ADB
 
 device_list = pytest.config_yaml.get_note('stress_dut')
-logging.info(device_list)
 
 
 def multi_stress(func):

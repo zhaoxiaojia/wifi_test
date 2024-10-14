@@ -58,7 +58,7 @@ class ADB(Dut):
     def __init__(self, serialnumber="", logdir=""):
         super().__init__()
         self.serialnumber = serialnumber
-        if self.serialnumber== "":
+        if self.serialnumber == "":
             self.serialnumber = pytest.dut.serialnumber
         logging.info("get devices number %s" % serialnumber)
         self.logdir = logdir or os.path.join(os.getcwd(), 'results')
@@ -67,6 +67,8 @@ class ADB(Dut):
         self.lock = threading.Lock()
         self.wait_devices()
         self.p_config_wifi = ''
+        self.root()
+        self.remount()
 
     def set_status_on(self):
         '''
@@ -189,14 +191,17 @@ class ADB(Dut):
         set adb root
         @return: None
         '''
-        self.subprocess_run('root')
+        self.checkoutput_shell('root')
 
     def remount(self):
         '''
         set adb remount
         @return: None
         '''
-        self.subprocess_run('remount')
+        try:
+            self.checkoutput_shell('remount')
+        except Exception as e:
+            ...
 
     def reboot(self):
         '''
@@ -204,6 +209,7 @@ class ADB(Dut):
         @return:
         '''
         self.checkoutput_shell('reboot')
+        self.wait_devices()
 
     def back(self):
         '''
@@ -896,7 +902,7 @@ class ADB(Dut):
                 logging.info('devices not exists')
             self.set_status_off()
             # subprocess.check_output('adb connect {}'.format(self.serialnumber), shell=True, encoding='utf-8')
-            time.sleep(3)
+            time.sleep(5)
             count += 1
             if count > 20:
                 raise EnvironmentError('Lost Device')
@@ -1053,7 +1059,6 @@ class ADB(Dut):
             if "successful" in output1[1]:
                 logging.info(f"Network id {network_id[0]} closed")
 
-
     def check_wifi_driver(self):
         '''
         Check vlsicomm.ko exists or not
@@ -1128,7 +1133,6 @@ class ADB(Dut):
             return rate
         except Exception as e:
             return 'Data Error'
-
 
     def wait_for_wifi_service(self, type='wlan0') -> None:
         # Wait for Wi-Fi network is available
@@ -1343,7 +1347,7 @@ class ADB(Dut):
         self.wait_for_wifi_address(target=target)
         return True
 
-    def connect_save_ssid(self, ssid,target=''):
+    def connect_save_ssid(self, ssid, target=''):
         '''
         Connect ssid which is saved over ui settings
         :param ssid:
@@ -1394,7 +1398,7 @@ class ADB(Dut):
         try:
             self.wait_ssid_cmd(ssid)
         except AssertionError as e:
-            assert "hotspot can't be found" in e ,"hotspot still can be found"
+            assert "hotspot can't be found" in e, "hotspot still can be found"
 
     def change_keyboard_language(self) -> None:
         '''
@@ -1608,6 +1612,7 @@ class ADB(Dut):
             return hwAddr
         else:
             raise Exception("Can't get hw addr")
+
 
 from tools.yamlTool import yamlTool
 

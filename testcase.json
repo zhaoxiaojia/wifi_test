@@ -1717,9 +1717,45 @@
         "path": "test\\ui_stress\\test_ui_onoff.py"
     },
     "test_wifi_switch.py": {
-        "id": 1,
+        "id": "WIFI-STA-SR0001",
         "desc": "xxx",
         "priority": "P0",
         "path": "test/stress/test_wifi_switch.py"
+    },
+    "test_ap_switch.py": {
+        "id": "WIFI-STA-SR0003",
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test/stress/test_ap_switch.py"
+    },
+    "test_bt_switch.py": {
+        "id": "WIFI-STA-SR0002",
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test/stress/test_bt_switch.py"
+    },
+    "test_autoreboot.py": {
+        "id": "WIFI-STA-SR0004",
+        "desc": "xxx",
+        "priority": "P2",
+        "path": "test/stress/test_autoreboot.py"
+    },
+    "test_monkey.py": {
+        "id": "WIFI-STA-SR0012",
+        "desc": "xxx",
+        "priority": "P2",
+        "path": "test/stress/test_monkey.py"
+    },
+    "test_sap_band_switch.py": {
+        "id": "WIFI-STA-SR0011",
+        "desc": "xxx",
+        "priority": "P1",
+        "path": "test/stress/test_sap_band_switch.py"
+    },
+    "test_sta_sap_switch.py": {
+        "id": "WIFI-STA-SR0010",
+        "desc": "xxx",
+        "priority": "P1",
+        "path": "test/stress/test_sta_sap_switch.py"
     }
 }

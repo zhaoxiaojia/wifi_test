@@ -1,8 +1,9 @@
 # !/usr/bin/env python
 # -*- coding: utf-8 -*-
-# @Time    : 2024/10/12 13:50
+# @Time    : 2024/10/14 10:17
 # @Author  : chao.li
-# @File    : test_wifi_switch.py
+# @File    : test_sta_sap_switch.py
+
 
 import logging
 import time
@@ -20,11 +21,11 @@ router_2g = Router(band='2.4 GHz', ssid=ssid, wireless_mode='N only', channel='1
 '''
 Test step
 1.Connect any AP
-2.Do wifi on/off stress test for about 12 hours.
-3.Check wifi status
+2.Turn on SAP.
+3.Turn on/off SAP stress test for about 12 hours.
 
 Expected Result
-3.WIFI works well,AP list display normal.
+WIFI works well,AP list display normal.
 
 '''
 
@@ -42,12 +43,12 @@ def setup_teardown():
 
 
 @multi_stress
-def test_wifi_switch(device):
+def test_sta_sap_switch(device):
     device.checkoutput(device.CMD_WIFI_CONNECT.format(ssid, 'open', ''))
     device.wait_for_wifi_address()
     start_time = time.time()
     while time.time() - start_time < 3600 * 12:
-        device.checkoutput(device.SVC_WIFI_DISABLE)
+        device.checkoutput(device.CMD_WIFI_START_SAP.format('android_sap', 'open', '', '2'))
         time.sleep(2)
-        device.checkoutput(device.SVC_WIFI_ENABLE)
+        device.checkoutput(device.CMD_WIFI_STOP_SAP)
         time.sleep(2)

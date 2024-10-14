@@ -48,8 +48,6 @@ def pytest_sessionstart(session):
         logging.info("telnet connected %s" % telnet_ip)
     else:
         raise EnvironmentError("Not support connect type %s" % pytest.connect_type)
-    pytest.dut.root()
-    pytest.dut.remount()
 
     # Create a test results folder
     if not os.path.exists('results'):

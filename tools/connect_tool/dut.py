@@ -48,6 +48,8 @@ class Dut():
     CMD_WIFI_CONNECT = 'cmd wifi connect-network {} {} {}'
     CMD_WIFI_HIDE = ' -h'
     CMD_WIFI_STATUS = 'cmd wifi status'
+    CMD_WIFI_START_SAP = 'cmd wifi start-softsap {} {} {} -b {}'
+    CMD_WIFI_STOP_SAP = 'cmd wifi stop-softsap'
 
     SVC_WIFI_DISABLE = 'svc wifi disable'
     SVC_WIFI_ENABLE = 'svc wifi enable'
