@@ -1,2 +1,2 @@
 serial,band,ssid ,wireless_mode,channel,bandwidth,authentication_method,wpa_passwd,test_type,protocol_type,data_row
-1,2.4 GHz, AX88U-2G,11ax ,11,40/20MHz , 强加密(WPA2个人版) ,12345678 ,rx,TCP,
+1,2.4 GHz, AX88U-2G,11ax ,11,40/20MHz , 强加密(WPA2个人版) ,12345678 ,tx rx,TCP,

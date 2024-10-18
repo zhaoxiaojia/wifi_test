@@ -9,7 +9,6 @@
 # Description：
 """
 
-import bisect
 import csv
 import itertools
 import logging
@@ -19,9 +18,7 @@ import signal
 import subprocess
 import threading
 import time
-from copy import copy
 
-import openpyxl
 import psutil
 import pytest
 
@@ -64,10 +61,9 @@ from tools.yamlTool import yamlTool
 
 # loading config.yaml 文件 获取数据  dict 数据类型
 wifi_yaml = yamlTool(os.getcwd() + '/config/config.yaml')
-command_data = wifi_yaml.get_note('env_command')
 router_name = wifi_yaml.get_note('router')['name']
 router = ''
-
+pc_ip, dut_ip = "", ""
 router_config = ''
 exec(f'router_config = {router_name.capitalize()}Config()')
 
@@ -88,9 +84,12 @@ for i in test_data:
             assert i.ssid not in ssid_verify, "5g ssid can't as the same as 2g , pls modify"
     assert i.band in ['2.4 GHz', '5 GHz'], "Pls check band info "
     assert i.wireless_mode in router_config.WIRELESS_MODE, "Pls check wireless info"
-    assert i.channel in router_config.CHANNEL_2_DICT if '2' in i.band else router_config.CHANNEL_5_DICT, "Pls check channel info"
-    assert i.bandwidth in router_config.BANDWIDTH_2_LIST if '2' in i.band else router_config.BANDWIDTH_5_LIST, "Pls check bandwidth info"
-    assert i.authentication_method in router_config.AUTHENTICATION_METHOD_LEGCY_DICT if 'Legacy' in i.wireless_mode else router_config.AUTHENTICATION_METHOD_DICT, "Pls check authentication info"
+    assert i.channel in router_config.CHANNEL_2_DICT if '2' in i.band else router_config.CHANNEL_5_DICT, \
+        "Pls check channel info"
+    assert i.bandwidth in router_config.BANDWIDTH_2_LIST if '2' in i.band else router_config.BANDWIDTH_5_LIST, \
+        "Pls check bandwidth info"
+    assert i.authentication_method in router_config.AUTHENTICATION_METHOD_LEGCY_DICT \
+        if 'Legacy' in i.wireless_mode else router_config.AUTHENTICATION_METHOD_DICT, "Pls check authentication info"
 
 # 设置为True 时 开启 衰减测试流程
 rf_needed = False
@@ -142,6 +141,7 @@ if router_needed:
 if rf_needed:
     # 读取衰减 配置
     rf_step_list = []
+    rf_ip = ''
     model = wifi_yaml.get_note('rf_solution')['model']
     if model != 'RADIORACK-4-220' and model != 'RC4DAT-8G-95':
         raise EnvironmentError("Doesn't support this model")
@@ -188,7 +188,7 @@ rx_result, tx_result = '', ''
 
 
 def iperf_on(command, adb, direction='tx'):
-    if os.path.exists('temp.txt') and '-s' in commando:
+    if os.path.exists(f'rvr_log_{adb}.txt') and '-s' in command:
         for proc in psutil.process_iter():
             try:
                 files = proc.open_files()
@@ -197,14 +197,14 @@ def iperf_on(command, adb, direction='tx'):
                         proc.kill()  # Kill the process that occupies the file
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 pass
-        os.remove('temp.txt')
+        os.remove(f'rvr_log_{adb}.txt')
 
     def server_on():
         logging.info(f'server {command} ->{adb}<-')
         if adb == 'executer':
             pytest.dut.checkoutput(command)
         else:
-            with open('temp.txt', 'w') as f:
+            with open(f'rvr_log_{adb}.txt', 'w') as f:
                 popen = subprocess.Popen(command.split(), stdout=f, encoding='gbk')
             return popen
         # logging.info(subprocess.run('tasklist | findstr "iperf"'.replace('iperf',pc_ipef),shell=True,encoding='gbk'))
@@ -246,12 +246,12 @@ def server_off(popen):
         pytest.dut.tn.close()
 
 
-def get_logcat(pair):
+def get_logcat(pair, adb):
     # pytest.dut.kill_iperf()
     # 分析 iperf 测试结果
     result_list = []
-    if os.path.exists('temp.txt'):
-        with open('temp.txt', 'r') as f:
+    if os.path.exists(f'rvr_log_{adb}.txt'):
+        with open(f'rvr_log_{adb}.txt', 'r') as f:
             for line in f.readlines():
                 logging.info(f'line : {line.strip()}')
                 if pair != 1:
@@ -281,7 +281,7 @@ def push_iperf():
 
 @pytest.fixture(scope='session', autouse=True, params=test_data)
 def wifi_setup_teardown(request):
-    global x_result, tx_resul, tx_result_list, rx_result_list
+    global rx_result, tx_result, tx_result_list, rx_result_list, pc_ip, dut_ip
     tx_result_list.clear()
     rx_result_list.clear()
     logging.info('==== wifi env setup start')
@@ -353,12 +353,12 @@ def wifi_setup_teardown(request):
         pytest.dut.dut_ip = pytest.dut.ip
     else:
         dut_info = pytest.dut.checkoutput('ifconfig wlan0')
-        pytest.dut.dut_ip = re.findall(r'inet addr:(\d+\.\d+\.\d+\.\d+)', dut_info, re.S)[0]
-    logging.info(f'dut_ip:{pytest.dut.dut_ip}')
+        dut_ip = re.findall(r'inet addr:(\d+\.\d+\.\d+\.\d+)', dut_info, re.S)[0]
+    logging.info(f'dut_ip:{dut_ip}')
     connect_status = True
     ipfoncig_info = pytest.dut.checkoutput_term('ipconfig').strip()
-    pytest.dut.pc_ip = re.findall(r'IPv4 地址.*?(\d+\.\d+\.\d+\.\d+)', ipfoncig_info, re.S)[0]
-    logging.info(f'pc_ip:{pytest.dut.pc_ip}')
+    pc_ip = re.findall(r'IPv4 地址.*?(\d+\.\d+\.\d+\.\d+)', ipfoncig_info, re.S)[0]
+    logging.info(f'pc_ip:{pc_ip}')
     logging.info('==== wifi env setup done')
 
     if rvr_tool == 'ixchariot':
@@ -392,21 +392,6 @@ def wifi_setup_teardown(request):
     #     router.router_control.driver.quit()
 
 
-# @pytest.fixture(scope='session', autouse=True, params=command_data)
-# def session_setup_teardown(request):
-#     logging.info('==== debug command setup start')
-# iperf 配置
-
-
-# 获取板子的ip 地址
-
-# command_info = request.param
-# logging.info(f"command_info : {command_info}")
-# pytest.dut.subprocess_run(command_info)
-# logging.info('==== debug command setup done')
-# yield
-# 后置动作
-
 # 生成 pdf
 # if step_list != [0]:
 #     pytest.testResult.write_to_excel()
@@ -425,58 +410,6 @@ def wifi_setup_teardown(request):
 #     else:
 #         ...
 
-
-# pair_count = {
-#     'n': {
-#         '2': wifi_yaml.get_note('pair_num')['n']['2'],
-#         '5': wifi_yaml.get_note('pair_num')['n']['5']
-#     },
-#     'ac': {
-#         '5': wifi_yaml.get_note('pair_num')['ac']['5']
-#     },
-#     'ax': {
-#         '2': wifi_yaml.get_note('pair_num')['ax']['2'],
-#         '5': wifi_yaml.get_note('pair_num')['ax']['5'],
-#     },
-#     'auto': {
-#         '2': wifi_yaml.get_note('pair_num')['auto']['2'],
-#         '5': wifi_yaml.get_note('pair_num')['auto']['5'],
-#     }
-# }
-
-
-def set_pair_count(router_info, rssi_num, type, dire):
-    '''
-    匹配 打流通道数
-    '''
-    # if 'AX' in router_info.wireless_mode:
-    #     type = 'ax'
-    # elif 'AC' in router_info.wireless_mode:
-    #     type = 'ac'
-    # elif '自动' in router_info.wireless_mode:
-    #     type = 'auto'
-    # else:
-    #     type = 'n'
-    #
-    # if '2' in router_info.band:
-    #     band = '2'
-    # else:
-    #     band = '5'
-    #
-    # _2g = [10, 20, 30, 40]
-    # _5g = [10, 20, 30, 40, 50]
-    #
-    # if band == '2':
-    #     target_list = _2g
-    # else:
-    #     target_list = _5g
-    # logging.info(f'rf current db {rssi_num}')
-    # pair = pair_count[type][band][dire][bisect.bisect(target_list, rssi_num)]
-    # logging.info(f'pair {pair}')
-    pair_num = wifi_yaml.get_note('rvr')['pair']
-    return pair_num
-
-
 def kill_iperf():
     # kill iperf
     if rvr_tool == 'iperf':
@@ -487,9 +420,8 @@ def kill_iperf():
         pytest.dut.popen_term(pytest.dut.IPERF_WIN_KILL.replace('iperf', test_tool))
 
 
-def get_tx_rate(router_info, pair, freq_num, rssi_num, type, corner_set='', db_set=''):
-    global tx_result_list
-
+def get_tx_rate(pc_ip, dut_ip, device_number, router_info, pair, freq_num, rssi_num, type, corner_set='', db_set=''):
+    global tx_result_list, tx_result
     # 最多三次 重试机会
     for _ in range(3):
         logging.info('run tx ')
@@ -503,16 +435,16 @@ def get_tx_rate(router_info, pair, freq_num, rssi_num, type, corner_set='', db_s
             time.sleep(1)
             if test_tool == 'iperf3':
                 adb_popen = iperf_on(tool_path + pytest.dut.IPERF_CLIENT_REGU[type]['tx'].format(
-                    pytest.dut.pc_ip,
+                    pc_ip,
                     pytest.dut.IPERF_TEST_TIME,
-                    pair if type == 'TCP' else 1), pytest.dut.serialnumber)
+                    pair if type == 'TCP' else 1), device_number)
                 pc_popen = iperf_on(pytest.dut.IPERF_SERVER[type], '')
             else:
                 pc_popen = iperf_on(pytest.dut.IPERF_SERVER[type], '')
                 adb_popen = iperf_on(tool_path + pytest.dut.IPERF_CLIENT_REGU[type]['tx'].format(
-                    pytest.dut.pc_ip,
+                    pc_ip,
                     pytest.dut.IPERF_TEST_TIME,
-                    pair if type == 'TCP' else 1), pytest.dut.serialnumber)
+                    pair if type == 'TCP' else 1), device_number)
 
             time.sleep(pytest.dut.IPERF_WAIT_TIME)
             if pytest.connect_type == 'telnet':
@@ -520,11 +452,11 @@ def get_tx_rate(router_info, pair, freq_num, rssi_num, type, corner_set='', db_s
             time.sleep(3)
             server_off(adb_popen)
             server_off(pc_popen)
-            tx_result = get_logcat(pair if type == 'TCP' else 1)
+            tx_result = get_logcat(pair if type == 'TCP' else 1, device_number)
 
         if rvr_tool == 'ixchariot':
-            ix.ep1 = pytest.dut.dut_ip
-            ix.ep2 = pytest.dut.pc_ip
+            ix.ep1 = dut_ip
+            ix.ep2 = pc_ip
             ix.pair = pair
             tx_result = ix.run_rvr()
 
@@ -543,21 +475,22 @@ def get_tx_rate(router_info, pair, freq_num, rssi_num, type, corner_set='', db_s
             tx_result_list.append(tx_result)
             break
 
-    corner = 'None'
     corner = corner_tool.get_turntanle_current_angle() if corner_needed else corner_set
 
     tx_result_info = (
         f'P0 RvR Standalone NULL Null {router_info.wireless_mode.split()[0]} {router_info.band.split()[0]} '
-        f'{router_info.bandwidth.split()[0]} Rate_Adaptation {router_info.channel} {type} UL NULL NULL {db_set} {rssi_num} {corner} NULL {tx_result} {mcs_tx if mcs_tx else "NULL"}')
+        f'{router_info.bandwidth.split()[0]} Rate_Adaptation {router_info.channel} {type} UL NULL NULL '
+        f'{db_set} {rssi_num} {corner} NULL {tx_result} {mcs_tx if mcs_tx else "NULL"}')
     logging.info(tx_result_info)
     pytest.testResult.save_result(tx_result_info.replace(' ', ','))
     with open(pytest.testResult.detail_file, 'a') as f:
         f.write(f'Tx {type} result : {tx_result}\n')
         f.write('-' * 40 + '\n\n')
+    return tx_result if tx_result else 0
 
 
-def get_rx_rate(router_info, pair, freq_num, rssi_num, type, corner_set='', db_set=''):
-    global rx_result_list
+def get_rx_rate(pc_ip, dut_ip, device_number, router_info, pair, freq_num, rssi_num, type, corner_set='', db_set=''):
+    global rx_result_list, rx_result
     for _ in range(3):
         logging.info('run rx ')
         rx_result = 0
@@ -569,21 +502,21 @@ def get_rx_rate(router_info, pair, freq_num, rssi_num, type, corner_set='', db_s
         if rvr_tool == 'iperf':
             kill_iperf()
             time.sleep(1)
-            adb_popen = iperf_on(tool_path + pytest.dut.IPERF_SERVER[type], pytest.dut.serialnumber)
+            adb_popen = iperf_on(tool_path + pytest.dut.IPERF_SERVER[type], device_number)
             pc_popen = iperf_on(
                 pytest.dut.IPERF_CLIENT_REGU[type]['rx'].format(
-                    pytest.dut.dut_ip, pytest.dut.IPERF_TEST_TIME,
+                    dut_ip, pytest.dut.IPERF_TEST_TIME,
                     pair if type == 'TCP' else 4), '', direction='rx')
             time.sleep(pytest.dut.IPERF_WAIT_TIME)
             if pytest.connect_type == 'telnet':
                 time.sleep(15)
             server_off(adb_popen)
             server_off(pc_popen)
-            rx_result = get_logcat(pair if type == 'TCP' else 4)
+            rx_result = get_logcat(pair if type == 'TCP' else 4, device_number)
 
         if rvr_tool == 'ixchariot':
-            ix.ep1 = pytest.dut.pc_ip
-            ix.ep2 = pytest.dut.dut_ip
+            ix.ep1 = pc_ip
+            ix.ep2 = dut_ip
             ix.pair = pair
             rx_result = ix.run_rvr()
 
@@ -603,24 +536,25 @@ def get_rx_rate(router_info, pair, freq_num, rssi_num, type, corner_set='', db_s
             logging.info(f'{rx_result}, {mcs_rx}')
             rx_result_list.append(rx_result)
             break
-    corner = 'None'
     corner = corner_tool.get_turntanle_current_angle() if corner_needed else corner_set
 
     rx_result_info = (
         f'P0 RvR Standalone NULL Null {router_info.wireless_mode.split()[0]} {router_info.band.split()[0]} '
-        f'{router_info.bandwidth.split()[0]} Rate_Adaptation {router_info.channel} {type} DL NULL NULL {db_set} {rssi_num} {corner} NULL {rx_result} {mcs_rx if mcs_rx else "NULL"}')
+        f'{router_info.bandwidth.split()[0]} Rate_Adaptation {router_info.channel} {type} DL NULL NULL '
+        f'{db_set} {rssi_num} {corner} NULL {rx_result} {mcs_rx if mcs_rx else "NULL"}')
     pytest.testResult.save_result(rx_result_info.replace(' ', ','))
     with open(pytest.testResult.detail_file, 'a', encoding='gbk') as f:
         logging.info('writing')
         f.write(f'Rx {type} result : {rx_result}\n')
         f.write('-' * 40 + '\n\n')
+    return rx_result if rx_result else 0
 
 
 # 测试 iperf
 @pytest.mark.repeat(0)
 @pytest.mark.parametrize("rf_value", step_list)
 def test_wifi_rvr(wifi_setup_teardown, rf_value):
-    global rx_result, tx_result
+    global rx_result, tx_result, pc_ip, dut_ip
     # 判断板子是否存在  ip
     if not wifi_setup_teardown[0]:
         logging.info("Can't connect wifi ,input 0")
@@ -694,10 +628,14 @@ def test_wifi_rvr(wifi_setup_teardown, rf_value):
     # iperf  打流
     if 'tx' in router_info.test_type:
         # 动态匹配 打流通道数
-        pair = set_pair_count(router_info, db_set, protocol, 'tx')
+        pair = wifi_yaml.get_note('rvr')['pair']
         logging.info(f'rssi : {rssi_num} pair : {pair}')
-        get_tx_rate(router_info, pair, freq_num, rssi_num, protocol, corner_set=corner_set, db_set=db_set)
+        get_tx_rate(pc_ip, dut_ip, pytest.dut.serialnumber, router_info, pair, freq_num, rssi_num, protocol,
+                    corner_set=corner_set,
+                    db_set=db_set)
     if 'rx' in router_info.test_type:
-        pair = set_pair_count(router_info, db_set, protocol, 'rx')
+        pair = wifi_yaml.get_note('rvr')['pair']
         logging.info(f'rssi : {rssi_num} pair : {pair}')
-        get_rx_rate(router_info, pair, freq_num, rssi_num, protocol, corner_set=corner_set, db_set=db_set)
+        get_rx_rate(pc_ip, dut_ip, pytest.dut.serialnumber, router_info, pair, freq_num, rssi_num, protocol,
+                    corner_set=corner_set,
+                    db_set=db_set)

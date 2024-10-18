@@ -1757,5 +1757,41 @@
         "desc": "xxx",
         "priority": "P1",
         "path": "test/stress/test_sta_sap_switch.py"
+    },
+    "test_2g_throughput.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test/stress/test_2g_throughput.py"
+    },
+    "test_2g_switch_channel_throughput.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test/stress/test_2g_switch_channel_throughput.py"
+    },
+    "test_2g_throughput_tx.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test/stress/test_2g_throughput_tx.py"
+    },
+    "test_2g_througtput_rx.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test/stress/test_2g_througtput_rx.py"
+    },
+    "test_5g_ax_throughput_rx.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test/stress/test_5g_ax_throughput_rx.py"
+    },
+    "test_5g_ax_throughput_tx.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test/stress/test_5g_ax_throughput_tx.py"
     }
 }

@@ -9,5 +9,4 @@
 # Description：
 """
 
-
-run_cmd()
+print(['1','2','3']*3)

@@ -53,7 +53,6 @@ class testCase:
                 if filename not in self.case_dict.keys():
                     logging.info(f'新增: {os.path.join(filepath, filename)}')
                     logging.info('新增:', os.path.join(filepath, filename).replace('\\', '/'))
-                    print(type(os.path.join(filepath, filename)))
                     self.case_dict[filename] = {'id': 1, 'desc': 'xxx', 'priority': 'P0',
                                                 'path': os.path.join(filepath, filename).replace('\\', '/')}
 

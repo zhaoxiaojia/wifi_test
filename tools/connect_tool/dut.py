@@ -30,6 +30,7 @@ class Dut():
 
     IPERF_SERVER = {'TCP': iperf(' -s -w 4m -i 1'),
                     'UDP': iperf(' -s -u -i 1 ')}
+
     IPERF_CLIENT_REGU = {'TCP': {'tx': iperf(' -c {} -w 4m -i 1 -t {} -P{}'),
                                  'rx': iperf(' -c {} -w 4m -i 1 -t {} -P{}')},
                          'UDP': {'tx': iperf(' -c {} -u -i1 -b 800M -t {} -P{}'),
