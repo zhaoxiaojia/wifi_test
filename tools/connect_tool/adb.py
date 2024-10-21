@@ -26,7 +26,7 @@ import _io
 import pytest
 
 from tools.connect_tool.dut import Dut
-from tools.connect_tool.UiautomatorTool import UiautomatorTool
+from tools.connect_tool.uiautomator_tool import UiautomatorTool
 
 
 def connect_again(func):

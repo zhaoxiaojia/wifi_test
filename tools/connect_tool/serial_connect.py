@@ -3,7 +3,7 @@
 
 
 """
-# File       : SerialConnect.py
+# File       : serial_connect.py
 # Time       ：2023/6/30 16:48
 # Author     ：chao.li
 # version    ：python 3.9

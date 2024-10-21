@@ -3,7 +3,7 @@
 # @Time    : 2022/4/27 10:08
 # @Author  : chao.li
 # @Site    :
-# @File    : UiautomatorTool.py
+# @File    : uiautomator_tool.py
 # @Software: PyCharm
 
 import logging
