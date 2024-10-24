@@ -8,5 +8,6 @@
 # version    ：python 3.9
 # Description：
 """
-
-print(['1','2','3']*3)
+import re
+str = "http://192.168.31.1/cgi-bin/luci/web"
+print(re.findall("\d+\.\d+\.\d+\.\d+",str)[0])

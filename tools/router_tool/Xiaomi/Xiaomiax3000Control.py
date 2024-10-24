@@ -161,8 +161,12 @@ class Xiaomiax3000Control:
 
             time.sleep(5)
             # 点击apply
+            if self.BAND_2 == router.band:
+                target = 'apply_2g'
+            else:
+                target = 'apply_5g'
             wait_for = self.router_control.driver.find_element(
-                By.XPATH, self.router_control.xpath['apply_element'])
+                By.XPATH, self.router_control.xpath['apply_element'][target])
             self.router_control.scroll_to(wait_for)
             wait_for.click()
             self.router_control.driver.find_element(By.XPATH, '/html/body/div[1]/div/div[3]/div/a[1]/span').click()
@@ -200,8 +204,11 @@ class Xiaomiax3000Control:
 #           'test_type',
 #           'wep_encrypt', 'passwd_index', 'wep_passwd', 'protect_frame', 'wpa_encrypt', 'hide_ssid']
 # Router = namedtuple('Router', fields, defaults=[None, ] * len(fields))
+# router = Router(serial='1', band='5 GHz', ssid='XiaomiAX3000_2.4G', channel='36', wireless_mode='11ax',
+#                 bandwidth='80MHz', authentication_method='超强加密(WPA3个人版)', wpa_passwd='12345678',
+#                 hide_ssid='否')
 # router = Router(serial='1', band='2.4 GHz', ssid='XiaomiAX3000_2.4G', channel='1', wireless_mode='11ax',
-#                 bandwidth='40/20MHz', authentication_method='超强加密(WPA3个人版)', wpa_passwd='12345678',
+#                 bandwidth='40MHz', authentication_method='超强加密(WPA3个人版)', wpa_passwd='12345678',
 #                 hide_ssid='否')
 # control = Xiaomiax3000Control()
 # control.change_setting(router)

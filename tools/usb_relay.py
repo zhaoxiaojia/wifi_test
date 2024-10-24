@@ -20,8 +20,34 @@ class UsbRelay:
         else:
             self.alive = False
 
-    def break_make(self, hold):
-        if self.alive:
+    def power_control(self, status, hold):
+        '''
+        should set power usb control to NC
+        Args:
+            status:
+            hold:
+
+        Returns:
+
+        '''
+        if status == 'off':
+            time.sleep(1)
             self.ser.write(b'\xA0\x01\x01\xA2')
             time.sleep(hold)
-            self.ser.write(b'\xA0\x01\x01\xA1')
+        if status == 'on':
+            time.sleep(1)
+            self.ser.write(b'\xA0\x01\x00\xA1')
+            time.sleep(hold)
+
+    def break_make(self):
+        '''
+        should set button usb control to NO
+        Returns:
+
+        '''
+        self.ser.write(b'\xA0\x01\x00\xA1')
+        time.sleep(0.2)
+        self.ser.write(b'\xA0\x01\x01\xA2')
+
+    def close(self):
+        self.ser.close()

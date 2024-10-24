@@ -35,6 +35,8 @@ xiaomi:
   hide_ssid:
     hide_2g: hidessid0
     hide_5g: hidessid1
-  apply_element: //*[@id="wifiset24"]/div[9]/button/span
+  apply_element:
+    'apply_2g': //*[@id="wifiset24"]/div[9]/button/span
+    'apply_5g': //*[@id="wifiset50"]/div[9]/button/span
 
 

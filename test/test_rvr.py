@@ -342,7 +342,7 @@ def wifi_setup_teardown(request):
                                pytest.dut.WIFI_CONNECT_PASSWD_REGU.format(router_info.wpa_passwd) +
                                pytest.dut.WIFI_CONNECT_HIDE_SSID_REGU.format(router_info.hide_type))
                 pytest.dut.checkoutput(cmd)
-                if pytest.dut.wait_for_wifi_address():
+                if pytest.dut.wait_for_wifi_address(target=router.ping_address):
                     connect_status = True
                     break
             except Exception as e:
