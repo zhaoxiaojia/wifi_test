@@ -171,8 +171,8 @@ class Xiaomiax3000Control:
             wait_for.click()
             self.router_control.driver.find_element(By.XPATH, '/html/body/div[1]/div/div[3]/div/a[1]/span').click()
             # try:
-            if '需要30秒请等待...' in self.router_control.driver.find_element(By.XPATH,
-                                                                              '/html/body/div[1]/div/div[2]/div/p').text:
+            if ('需要30秒请等待...' in self.router_control.driver.
+                    find_element(By.XPATH,'/html/body/div[1]/div/div[2]/div/p').text):
                 logging.info('Need wait 30 seconds')
                 time.sleep(30)
             else:
@@ -184,7 +184,8 @@ class Xiaomiax3000Control:
             time.sleep(3)
             # 修改wiremode
             if router.wireless_mode:
-                wifi6_switch = self.router_control.driver.find_element(By.XPATH, '/html/body/div[1]/div[2]/div[4]/div[1]/div/a')
+                wifi6_switch = self.router_control.driver.find_element(By.XPATH,
+                                                                       '/html/body/div[1]/div[2]/div[4]/div[1]/div/a')
                 self.router_control.scroll_to(wifi6_switch)
                 if wifi6_switch.get_attribute("data-on") != {'11ax': '0', '11ac': '1'}[router.wireless_mode]:
                     wifi6_switch.click()
@@ -198,7 +199,6 @@ class Xiaomiax3000Control:
             return False
         finally:
             self.router_control.driver.quit()
-
 
 # fields = ['serial', 'band', 'ssid', 'wireless_mode', 'channel', 'bandwidth', 'authentication_method', 'wpa_passwd',
 #           'test_type',

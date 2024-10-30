@@ -8,6 +8,8 @@
 # version    ：python 3.9
 # Description：
 """
-import re
-str = "http://192.168.31.1/cgi-bin/luci/web"
-print(re.findall("\d+\.\d+\.\d+\.\d+",str)[0])
+import itertools
+
+params = list(itertools.product(['xiaomi3000', 'asus88u'], ['tx', 'rx']))
+ids = [f"Test_{i[0]} {i[1][0]}" for i in enumerate(params)]
+print(ids)

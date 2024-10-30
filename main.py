@@ -11,8 +11,8 @@ import pytest
 from case_handle import testCase
 
 timestamp = datetime.datetime.now().strftime("%Y.%m.%d_%H.%M.%S")
-# test_case = 'test/test_rvr.py'
-test_case = 'test/stress/test_2g_switch_channel_throughput.py'
+test_case = 'test/test_demo.py'
+# test_case = 'test/stress/test_2g_switch_channel_throughput.py'
 
 report_parent_path = test_case.replace('test', 'report', 1)
 
@@ -24,7 +24,6 @@ if isinstance(test_case, str):
 
 allure_path = fr'./report/{test_case.split("test/")[1]}/{timestamp}'
 report_path = fr'./report/{timestamp}'
-
 allure_history_file = ''
 
 
@@ -49,6 +48,7 @@ def get_dir():
 def update_file():
     dict = []
     for i in allure_history_file:
+        print(i)
         file = os.path.join(report_parent_path, i, "widgets", "history-trend.json")
         with open(file) as f:
             temp_data = json.load(f)
@@ -74,19 +74,16 @@ if __name__ == '__main__':
     testcase_handler = testCase()
     # caselist = coco.sync_testSuite(suite='stability', case=r'test_03_open_wifi.py')
     # test_case = [f'.\\{i}' for i in caselist]
-    logging.info(test_case)
-    # print(caselist)
-    cmd = ['-v', '--capture=sys', '--full-trace', '--html=report.html', f'--resultpath={timestamp}']
-    # allure_cmd]
+    # cmd = ['-v', '--capture=sys', '--full-trace', '--html=report.html', f'--resultpath={timestamp}']
+    cmd = ['-v', '--capture=sys', '--full-trace', '--html=report.html', f'--resultpath={timestamp}', allure_cmd];
     # print(" ".join(cmd))
     if type(test_case) == str:
-        test_case = [test_case]
-    pytest.main(cmd + test_case)
+        test_case = [test_case];
+    pytest.main(cmd + test_case);
 
-    # os.system("allure generate -c results/ -o allure-report/")
-    # if allure_cmd:
-    #     subprocess.check_output(f'allure generate -c ./allure -o {allure_path}', shell=True)
-    #     allure_history_file = os.listdir(report_parent_path)
-    #     get_dir()
-    #     update_file()
-    # os.system(f'allure serve ./allure')
+    if allure_cmd:
+        subprocess.check_output(f'allure generate -c ./allure -o {allure_path}', shell=True);
+        allure_history_file = os.listdir(report_parent_path);
+        get_dir();
+        update_file();
+    os.system(f'allure open {allure_path}')

@@ -88,7 +88,7 @@ class Asusax86uControl():
             # 修改 bandwidth
             if (router.bandwidth):
                 if router.bandwidth not in \
-                        {'2.4 GHz': Asusax86uConfig.BANDWIDTH_2_LIST, '5 GHz': Asusax86uConfig.BANDWIDTH_5_LIST}[
+                        {'2.4 GHz': Asusax86uConfig.BANDWIDTH_2, '5 GHz': Asusax86uConfig.BANDWIDTH_5}[
                             router.band]: raise ConfigError('bandwidth element error')
                 self.router_control.change_bandwidth(router.bandwidth)
 
@@ -114,9 +114,9 @@ class Asusax86uControl():
             # //*[@id="WLgeneral"]/tbody/tr[13]/td/div[1]/select/option[5]
             if (router.authentication_method):
                 try:
-                    index = (Asusax86uConfig.AUTHENTICATION_METHOD_DICT[router.authentication_method]
+                    index = (Asusax86uConfig.AUTHENTICATION_METHOD[router.authentication_method]
                              if router.wireless_mode != 'Legacy' else
-                             Asusax86uConfig.AUTHENTICATION_METHOD_LEGCY_DICT[router.authentication_method])
+                             Asusax86uConfig.AUTHENTICATION_METHOD_LEGCY[router.authentication_method])
                 except ConfigError:
                     raise ConfigError('authentication method element error')
                 self.router_control.change_authentication_method(index)

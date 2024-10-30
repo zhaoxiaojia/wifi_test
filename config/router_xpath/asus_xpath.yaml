@@ -7,13 +7,13 @@ asus:
     88u: http://192.168.50.1/
     '6700': http://192.168.8.1/
   account: admin
-  passwd: 123456
+  passwd: 12345678
   username_element: login_username
   password_element: login_passwd
   signin_element:
     asus_5400: //*[@id="login_filed"]/div[8]
     asus_86u: //*[@id="login_filed"]/div[8]
-    asus_88u: //*[@id="login_filed"]/div[8]
+    asus_88u: //*[@id="login_filed"]/div[9]
     asus_6700: //*[@id="login_filed"]/div[8]
   signin_done_element: helpname
 

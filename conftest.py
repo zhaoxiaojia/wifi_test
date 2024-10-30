@@ -11,9 +11,11 @@
 """
 
 import datetime
+import subprocess
 import logging
 import os
 import shutil
+import re
 
 import psutil
 import pytest
@@ -38,13 +40,21 @@ def pytest_sessionstart(session):
     if pytest.connect_type == 'adb':
         # Create adb obj
         devices_num = pytest.config_yaml.get_note("connect_type")[pytest.connect_type]['device']
-        pytest.dut = ADB(serialnumber=devices_num)
-        logging.info("adb connected %s" % devices_num)
+        devices_stress = pytest.config_yaml.get_note("stress_dut")
+        if devices_num is None:
+            # Obtain the device number dynamically
+            info = subprocess.check_output("adb devices", encoding='utf-8')
+            devices = re.findall(r'\n(.*?)\s+device', info, re.S)
+            if len(devices) > 1 and (devices_stress is None):
+                assert False, "Should be single dut under devices list"
+            devices_num = devices[0]
+            pytest.dut = ADB(serialnumber=devices_num)
+            logging.info("adb connected %s" % devices_num)
     elif pytest.connect_type == 'telnet':
         # Create telnet obj
         telnet_ip = pytest.config_yaml.get_note("connect_type")[pytest.connect_type]['ip']
         wildcard = pytest.config_yaml.get_note("connect_type")[pytest.connect_type]['wildcard']
-        pytest.dut = TelnetInterface(telnet_ip,wildcard)
+        pytest.dut = TelnetInterface(telnet_ip, wildcard)
         logging.info("telnet connected %s" % telnet_ip)
     else:
         raise EnvironmentError("Not support connect type %s" % pytest.connect_type)

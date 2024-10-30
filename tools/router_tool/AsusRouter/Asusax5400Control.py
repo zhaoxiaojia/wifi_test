@@ -88,7 +88,7 @@ class Asusax5400Control:
             # 修改 bandwidth
             if (router.bandwidth):
                 if router.bandwidth not in \
-                        {'2.4 GHz': Asus5400Config.BANDWIDTH_2_LIST, '5 GHz': Asus5400Config.BANDWIDTH_5_LIST}[
+                        {'2.4 GHz': Asus5400Config.BANDWIDTH_2, '5 GHz': Asus5400Config.BANDWIDTH_5_LIST}[
                             router.band]: raise ConfigError('bandwidth element error')
                 self.router_control.change_bandwidth(router.bandwidth)
 

@@ -16,3 +16,4 @@ pyserial
 PyMySQL
 cryptography
 PyUserInput
+pysnmp

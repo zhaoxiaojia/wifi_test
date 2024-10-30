@@ -1793,5 +1793,53 @@
         "desc": "xxx",
         "priority": "P0",
         "path": "test/stress/test_5g_ax_throughput_tx.py"
+    },
+    "test_demo.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test/test_demo.py"
+    },
+    "test_2g_switch_bandwidth_throughput.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test/stress/test_2g_switch_bandwidth_throughput.py"
+    },
+    "test_5g_switch_bandwidth_throughput.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test/stress/test_5g_switch_bandwidth_throughput.py"
+    },
+    "test_5g_switch_channel_throughput.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test/stress/test_5g_switch_channel_throughput.py"
+    },
+    "test_ac.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test/stress/test_ac.py"
+    },
+    "test_ac_str.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test/stress/test_ac_str.py"
+    },
+    "test_ping.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test/stress/test_ping.py"
+    },
+    "test_str.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test/stress/test_str.py"
     }
 }

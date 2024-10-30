@@ -5,6 +5,7 @@
 # @Site    :
 # @File    : AsusRouterConfig.py
 # @Software: PyCharm
+from typing import List
 
 from tools.router_tool.RouterConfig import RouterConfig
 
@@ -18,32 +19,17 @@ class AsusRouterConfig(RouterConfig):
         super(AsusRouterConfig, self).__init__()
 
     WIRELESS_MODE = ['自动', 'N only', 'AX only', 'N/AC/AX mixed', 'Legacy']
-    BANDWIDTH_2_LIST = ['20/40 MHz', '20 MHz', '40 MHz']
-    BANDWIDTH_5_LIST = ['20/40/80 MHz', '20 MHz', '40 MHz', '80 MHz']
-    WIRELESS_2_MODE = ['自动', 'AX only', 'N only', 'Legacy']
-    WIRELESS_5_MODE = ['自动', 'AX only', 'N/AC/AX mixed', 'Legacy']
+    BANDWIDTH_2 = ['20/40 MHz', '20 MHz', '40 MHz']
+    BANDWIDTH_5 = ['20/40/80 MHz', '20 MHz', '40 MHz', '80 MHz']
+    WIRELESS_2_MODE = ['自动', '11n', '11g', '11n', '11ax', 'Legacy']
+    WIRELESS_5_MODE: list[str] = ['自动', '11a', '11ac', '11ax', 'Legacy']
 
-    AUTHENTICATION_METHOD_DICT = {
-        'Open System': '1',
-        'WPA2-Personal': '2',
-        'WPA3-Personal': '3',
-        'WPA/WPA2-Personal': '4',
-        'WPA2/WPA3-Personal': '5',
-        'WPA2-Enterprise': '6',
-        'WPA/WPA2-Enterprise': '7',
-    }
+    AUTHENTICATION_METHOD = ['Open System', 'WPA2-Personal', 'WPA3-Personal', 'WPA/WPA2-Personal', 'WPA2/WPA3-Personal',
+                             'WPA2-Enterprise', 'WPA/WPA2-Enterprise']
 
-    AUTHENTICATION_METHOD_LEGCY_DICT = {
-        'Open System': '1',
-        'Shared Key': '2',
-        'WPA2-Personal': '3',
-        'WPA3-Personal': '4',
-        'WPA/WPA2-Personal': '5',
-        'WPA2/WPA3-Personal': '6',
-        'WPA2-Enterprise': '7',
-        'WPA/WPA2-Enterprise': '8',
-        'Radius with 802.1x': '9',
-    }
+    AUTHENTICATION_METHOD_LEGCY = ['Open System', 'Shared Key', 'WPA2-Personal', 'WPA3-Personal',
+                                   'WPA/WPA2-Personal', 'WPA2/WPA3-Personal', 'WPA2-Enterprise',
+                                   'WPA/WPA2-Enterprise', 'Radius with 802.1x']
 
     PROTECT_FRAME = {
         '停用': 1,
@@ -51,11 +37,7 @@ class AsusRouterConfig(RouterConfig):
         '强制启用': 3
     }
 
-    WEP_ENCRYPT = {
-        'None': '1',
-        'WEP-64bits': '2',
-        'WEP-128bits': '3'
-    }
+    WEP_ENCRYPT = ['None', 'WEP-64bits', 'WEP-128bits']
 
     WPA_ENCRYPT = {
         'AES': 1,
@@ -68,48 +50,9 @@ class AsusRouterConfig(RouterConfig):
         '3': '3',
         '4': '4'
     }
-    CHANNEL_2_DICT = {
-        '自动': '1',
-        '1': '2',
-        '2': '3',
-        '3': '4',
-        '4': '5',
-        '5': '6',
-        '6': '7',
-        '7': '8',
-        '8': '9',
-        '9': '10',
-        '10': '11',
-        '11': '12'
-    }
-    CHANNEL_5_DICT = {
-        'auto': '1',
-        '36': '2',
-        '40': '3',
-        '44': '4',
-        '48': '5',
-        '52': '6',
-        '56': '7',
-        '60': '8',
-        '64': '9',
-        '100': '10',
-        '104': '11',
-        '108': '12',
-        '112': '13',
-        '116': '14',
-        '120': '15',
-        '124': '16',
-        '128': '17',
-        '132': '18',
-        '136': '19',
-        '140': '20',
-        '144': '21',
-        '149': '22',
-        '153': '23',
-        '157': '24',
-        '161': '25',
-        '165': '26'
-    }
+    CHANNEL_2 = ['自动', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11']
+    CHANNEL_5 = ['自动', '36', '40', '44', '48', '52', '56', '60', '64', '100', '104', '108', '112', '116', '120',
+                 '124', '128', '132', '136', '140', '144', '149', '153', '157', '161', '165']
     COUNTRY_CODE = {
         '亚洲': '1',
         '中国 (默认值)': '2',
@@ -177,7 +120,7 @@ class Asus5400Config(AsusRouterConfig):
     def __init__(self):
         super(Asus5400Config, self).__init__()
 
-    BANDWIDTH_5_LIST = ['20/40/80 MHz', '20 MHz', '40 MHz', '80 MHz', '160 MHz']
+    BANDWIDTH_5 = ['20/40/80 MHz', '20 MHz', '40 MHz', '80 MHz', '160 MHz']
     WIRELESS_MODE = ['自动', 'N only', 'AX only', 'N/AC mixed', 'Legacy']
     CHANNEL_5_DICT = {
         '自动': '1',
@@ -212,9 +155,9 @@ class Asus6700Config(AsusRouterConfig):
         'Legacy': '3'
     }
 
-    BANDWIDTH_5_LIST = ['20/40/80 MHz', '20 MHz', '40 MHz', '80 MHz']
+    BANDWIDTH_5 = ['20/40/80 MHz', '20 MHz', '40 MHz', '80 MHz']
 
-    AUTHENTICATION_METHOD_DICT = {
+    AUTHENTICATION_METHOD = {
         'Open System': '1',
         'WPA2-Personal': '2',
         'WPA-Auto-Personal': '3',
@@ -222,7 +165,7 @@ class Asus6700Config(AsusRouterConfig):
         'WPA-Auto-Enterprise': '5',
     }
 
-    AUTHENTICATION_METHOD_LEGCY_DICT = {
+    AUTHENTICATION_METHOD_LEGCY = {
         'Open System': '1',
         'Shared Key': '2',
         'WPA-Personal': '3',

@@ -88,7 +88,7 @@ class ZTEax5400Control():
             # 修改 authentication_method
             if (router.authentication_method):
                 try:
-                    index = ZTEax5400Config.AUTHENTICATION_METHOD_DICT[router.authentication_method]
+                    index = ZTEax5400Config.AUTHENTICATION_METHOD[router.authentication_method]
                 except ConfigError:
                     raise ConfigError('authentication method element error')
                 # //*[@id="ssid_enc"]/option[1]
