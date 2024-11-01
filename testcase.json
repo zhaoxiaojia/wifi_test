@@ -1841,5 +1841,17 @@
         "desc": "xxx",
         "priority": "P0",
         "path": "test/stress/test_str.py"
+    },
+    "test_2g_throughput_rx.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test/stress/test_2g_throughput_rx.py"
+    },
+    "test_multi_throughput.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test/stress/test_multi_throughput.py"
     }
 }

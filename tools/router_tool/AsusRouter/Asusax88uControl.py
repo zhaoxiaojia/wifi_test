@@ -47,7 +47,7 @@ class Asusax88uControl():
     def __init__(self):
         super().__init__()
         # self.router_control = RouterTools('asus_88u')
-        self.yaml_info = yamlTool(os.getcwd() + f'\\config\\router_xpath\\{self.router_type.split("_")[0]}_xpath.yaml')
+        self.yaml_info = yamlTool(os.getcwd() + f'\\config\\router_xpath\\asus_xpath.yaml')
         # self.yaml_info = yamlTool(r'D:\PycharmProjects\wifi_test\config\router_xpath\asus_xpath.yaml')
         self.xpath = self.yaml_info.get_note('asus')
         self.tn = telnetlib.Telnet("192.168.50.1", 23)

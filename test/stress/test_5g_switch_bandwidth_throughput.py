@@ -18,9 +18,9 @@ from tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
 from tools.router_tool.Router import Router
 
 ssid = 'ATC_ASUS_AX88U_2G'
-router_bw40= Router(band='5 GHz', ssid=ssid, wireless_mode='AX only', channel='149', bandwidth='40 MHz',
+router_bw40= Router(band='5 GHz', ssid=ssid, wireless_mode='11ax', channel='149', bandwidth='40 MHz',
                       authentication_method='Open System')
-router_bw80 = Router(band='5 GHz', ssid=ssid, wireless_mode='AX only', channel='149', bandwidth='80 MHz',
+router_bw80 = Router(band='5 GHz', ssid=ssid, wireless_mode='11ax', channel='149', bandwidth='80 MHz',
                       authentication_method='Open System')
 
 lock = threading.Lock()

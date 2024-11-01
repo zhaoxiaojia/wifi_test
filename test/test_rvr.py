@@ -75,21 +75,23 @@ with open(os.getcwd() + '/config/asusax88u.csv', 'r') as f:
 logging.info(test_data)
 
 ssid_verify = set()
-# 校验 csv 数据是否异常
-for i in test_data:
-    if pytest.connect_type == 'adb':
-        if '2' in i.band:
-            ssid_verify.add(i.ssid)
-        if '5' in i.band:
-            assert i.ssid not in ssid_verify, "5g ssid can't as the same as 2g , pls modify"
-    assert i.band in ['2.4 GHz', '5 GHz'], "Pls check band info "
-    assert i.wireless_mode in router_config.WIRELESS_MODE, "Pls check wireless info"
-    assert i.channel in router_config.CHANNEL_2_DICT if '2' in i.band else router_config.CHANNEL_5_DICT, \
-        "Pls check channel info"
-    assert i.bandwidth in router_config.BANDWIDTH_2_LIST if '2' in i.band else router_config.BANDWIDTH_5_LIST, \
-        "Pls check bandwidth info"
-    assert i.authentication_method in router_config.AUTHENTICATION_METHOD_LEGCY_DICT \
-        if 'Legacy' in i.wireless_mode else router_config.AUTHENTICATION_METHOD_DICT, "Pls check authentication info"
+
+if __name__ == '__main__':
+    # 校验 csv 数据是否异常
+    for i in test_data:
+        if pytest.connect_type == 'adb':
+            if '2' in i.band:
+                ssid_verify.add(i.ssid)
+            if '5' in i.band:
+                assert i.ssid not in ssid_verify, "5g ssid can't as the same as 2g , pls modify"
+        assert i.band in ['2.4 GHz', '5 GHz'], "Pls check band info "
+        assert i.wireless_mode in router_config.WIRELESS_MODE, "Pls check wireless info"
+        assert i.channel in router_config.CHANNEL_2_DICT if '2' in i.band else router_config.CHANNEL_5_DICT, \
+            "Pls check channel info"
+        assert i.bandwidth in router_config.BANDWIDTH_2_LIST if '2' in i.band else router_config.BANDWIDTH_5_LIST, \
+            "Pls check bandwidth info"
+        assert i.authentication_method in router_config.AUTHENTICATION_METHOD_LEGCY_DICT \
+            if 'Legacy' in i.wireless_mode else router_config.AUTHENTICATION_METHOD_DICT, "Pls check authentication info"
 
 # 设置为True 时 开启 衰减测试流程
 rf_needed = False
@@ -105,18 +107,6 @@ if pytest.connect_type == 'telnet':
     third_dut = True
 
 sum_list_lock = threading.Lock()
-
-
-def modify_tcl_script(old_str, new_str):
-    file = './script/rvr.tcl'
-    with open(file, "r", encoding="utf-8") as f1, open("%s.bak" % file, "w", encoding="utf-8") as f2:
-        for line in f1:
-            if old_str in line:
-                line = new_str
-            f2.write(line)
-    os.remove(file)
-    os.rename("%s.bak" % file, file)
-
 
 rvr_tool = wifi_yaml.get_note('rvr')['tool']
 if rvr_tool == 'iperf':
@@ -187,8 +177,19 @@ tx_result_list, rx_result_list = [], []
 rx_result, tx_result = '', ''
 
 
+def modify_tcl_script(old_str, new_str):
+    file = './script/rvr.tcl'
+    with open(file, "r", encoding="utf-8") as f1, open("%s.bak" % file, "w", encoding="utf-8") as f2:
+        for line in f1:
+            if old_str in line:
+                line = new_str
+            f2.write(line)
+    os.remove(file)
+    os.rename("%s.bak" % file, file)
+
+
 def iperf_on(command, adb, direction='tx'):
-    if os.path.exists(f'rvr_log_{adb}.txt') and '-s' in command:
+    if os.path.exists(f'rvr_log_{pytest.dut.serialnumber}.txt') and '-s' in command:
         for proc in psutil.process_iter():
             try:
                 files = proc.open_files()
@@ -197,14 +198,15 @@ def iperf_on(command, adb, direction='tx'):
                         proc.kill()  # Kill the process that occupies the file
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 pass
-        os.remove(f'rvr_log_{adb}.txt')
+        os.remove(f'rvr_log_{pytest.dut.serialnumber}.txt')
 
     def server_on():
         logging.info(f'server {command} ->{adb}<-')
         if adb == 'executer':
             pytest.dut.checkoutput(command)
         else:
-            with open(f'rvr_log_{adb}.txt', 'w') as f:
+            logging.info("Can't I see this ?")
+            with open(f'rvr_log_{pytest.dut.serialnumber}.txt', 'w') as f:
                 popen = subprocess.Popen(command.split(), stdout=f, encoding='gbk')
             return popen
         # logging.info(subprocess.run('tasklist | findstr "iperf"'.replace('iperf',pc_ipef),shell=True,encoding='gbk'))
@@ -250,8 +252,9 @@ def get_logcat(pair, adb):
     # pytest.dut.kill_iperf()
     # 分析 iperf 测试结果
     result_list = []
-    if os.path.exists(f'rvr_log_{adb}.txt'):
-        with open(f'rvr_log_{adb}.txt', 'r') as f:
+    if os.path.exists(f'rvr_log_{pytest.dut.serialnumber}.txt'):
+        logging.info('should print this ')
+        with open(f'rvr_log_{pytest.dut.serialnumber}.txt', 'r') as f:
             for line in f.readlines():
                 logging.info(f'line : {line.strip()}')
                 if pair != 1:
@@ -478,9 +481,10 @@ def get_tx_rate(pc_ip, dut_ip, device_number, router_info, pair, freq_num, rssi_
     corner = corner_tool.get_turntanle_current_angle() if corner_needed else corner_set
 
     tx_result_info = (
-        f'P0 RvR Standalone NULL Null {router_info.wireless_mode.split()[0]} {router_info.band.split()[0]} '
-        f'{router_info.bandwidth.split()[0]} Rate_Adaptation {router_info.channel} {type} UL NULL NULL '
-        f'{db_set} {rssi_num} {corner} NULL {tx_result} {mcs_tx if mcs_tx else "NULL"}')
+        f'P0 {device_number} RvR Standalone NULL Null {router_info.wireless_mode.split()[0]} '
+        f'{router_info.band.split()[0]} {router_info.bandwidth.split()[0]} Rate_Adaptation '
+        f'{router_info.channel} {type} UL NULL NULL {db_set} {rssi_num} {corner} NULL '
+        f'{tx_result} {mcs_tx if mcs_tx else "NULL"}')
     logging.info(tx_result_info)
     pytest.testResult.save_result(tx_result_info.replace(' ', ','))
     with open(pytest.testResult.detail_file, 'a') as f:
@@ -539,9 +543,10 @@ def get_rx_rate(pc_ip, dut_ip, device_number, router_info, pair, freq_num, rssi_
     corner = corner_tool.get_turntanle_current_angle() if corner_needed else corner_set
 
     rx_result_info = (
-        f'P0 RvR Standalone NULL Null {router_info.wireless_mode.split()[0]} {router_info.band.split()[0]} '
-        f'{router_info.bandwidth.split()[0]} Rate_Adaptation {router_info.channel} {type} DL NULL NULL '
-        f'{db_set} {rssi_num} {corner} NULL {rx_result} {mcs_rx if mcs_rx else "NULL"}')
+        f'P0 {device_number} RvR Standalone NULL Null {router_info.wireless_mode.split()[0]} '
+        f'{router_info.band.split()[0]} {router_info.bandwidth.split()[0]} Rate_Adaptation '
+        f'{router_info.channel} {type} DL NULL NULL {db_set} {rssi_num} {corner} NULL '
+        f'{rx_result} {mcs_rx if mcs_rx else "NULL"}')
     pytest.testResult.save_result(rx_result_info.replace(' ', ','))
     with open(pytest.testResult.detail_file, 'a', encoding='gbk') as f:
         logging.info('writing')

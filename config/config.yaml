@@ -8,14 +8,10 @@ connect_type:
     #    market 区域 默认填写 sandia  支持列表：sandia,sandia_latam,sandia_hkc,sandia_dvb
     wildcard: bayside
 
-#stress_dut: ['ap2228019621984103f16','ross6c8b8c8c6618eb']
-stress_dut:
-
-
 # Router model
 router:
-  # pls write down the router name .It should be asusac88u or asusax86u
-  name: xiaomiax3000
+  # pls write down the router name .It should be asusax88u or asusax86u
+  name: asusax88u
 
 # test env control , should be rf , corner or both
 env_control: rf

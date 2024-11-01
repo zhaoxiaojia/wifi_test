@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 # @Time    : 2024/10/18 15:26
 # @Author  : chao.li
-# @File    : test_2g_througtput_rx.py
+# @File    : test_2g_throughput_rx.py
 
 
 import logging
@@ -17,7 +17,7 @@ from tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
 from tools.router_tool.Router import Router
 
 ssid = 'ATC_ASUS_AX88U_2G'
-router_2g = Router(band='2.4 GHz', ssid=ssid, wireless_mode='AX only', channel='1', bandwidth='40 MHz',
+router_2g = Router(band='2.4 GHz', ssid=ssid, wireless_mode='11ax', channel='1', bandwidth='40 MHz',
                    authentication_method='Open System')
 
 '''

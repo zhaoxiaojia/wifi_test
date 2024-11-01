@@ -182,8 +182,8 @@ class PowerCtrl:
         for i in range(1,9):
             self.switch(i,False)
 
-# s = PowerCtrl("10.18.19.193")
-# s.switch(2, True)
+s = PowerCtrl("192.168.50.230")
+s.switch(2, True)
 # s.dark()
 # s.survival(1)
 # print(s.get_status(1))

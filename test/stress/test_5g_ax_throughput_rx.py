@@ -17,7 +17,7 @@ from tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
 from tools.router_tool.Router import Router
 
 ssid = 'ATC_ASUS_AX88U_5G'
-router_5g = Router(band='5 GHz', ssid=ssid, wireless_mode='AX only', channel='36', bandwidth='40 MHz',
+router_5g = Router(band='5 GHz', ssid=ssid, wireless_mode='11ax', channel='36', bandwidth='40 MHz',
                    authentication_method='Open System')
 
 '''

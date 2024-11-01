@@ -895,8 +895,14 @@ class ADB(Dut):
         @return: None
         '''
         count = 0
+
         while subprocess.run(f'adb -s {self.serialnumber} shell getprop sys.boot_completed'.split(),
                              stdout=subprocess.PIPE).returncode != 0:
+            logging.info('wait')
+            info = subprocess.check_output("adb devices", encoding='utf-8')
+            if re.findall(r'List of devices attached\n(\w+)', info, re.S):
+                self.serialnumber = re.findall(r'\n(.*?)\s+device', info, re.S)[0]
+
             flag = True
             if count % 10 == 0:
                 logging.info('devices not exists')
@@ -906,6 +912,7 @@ class ADB(Dut):
             count += 1
             if count > 20:
                 raise EnvironmentError('Lost Device')
+            time.sleep(10)
         self.set_status_on()
 
     def kill_logcat_pid(self):
@@ -1239,7 +1246,7 @@ class ADB(Dut):
             self.keyevent(4)
         self.kill_setting()
 
-    def wait_for_wifi_address(self, cmd: str = '', target='192.168.31'):
+    def wait_for_wifi_address(self, cmd: str = '', target='192.168.50'):
         # Wait for th wireless adapter to obtaion the ip address
         logging.info(f"waiting for wifi {target}")
         ip_address = self.subprocess_run('ifconfig wlan0 |egrep -o "inet [^ ]*"|cut -f 2 -d :')

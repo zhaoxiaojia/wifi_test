@@ -17,7 +17,7 @@ from tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
 from tools.router_tool.Router import Router
 
 ssid = 'ATC_ASUS_AX88U_2G'
-router_2g = Router(band='2.4 GHz', ssid=ssid, wireless_mode='AX only', channel='1', bandwidth='40 MHz',
+router_2g = Router(band='2.4 GHz', ssid=ssid, wireless_mode='11ax', channel='1', bandwidth='40 MHz',
                    authentication_method='Open System')
 
 '''
@@ -46,7 +46,7 @@ def setup_teardown():
     yield
 
 @multi_stress
-def test_2g_throughtput_rx(device):
+def test_2g_throughtput_tx(device):
     device.checkoutput(device.CMD_WIFI_CONNECT.format(ssid, 'open', ''))
     device.wait_for_wifi_address()
     ipfoncig_info = device.checkoutput_term('ipconfig').strip()

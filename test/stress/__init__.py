@@ -8,6 +8,7 @@
 import logging
 import threading
 import time
+import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pytest
