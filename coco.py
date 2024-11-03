@@ -9,9 +9,6 @@
 # Description：
 """
 
-import subprocess
-import re
+import sys
 
-name = 'coco'
-with open(f'{name}ishandsome.txt', 'w') as f:
-    f.write('coco is handsome')
+print(sys.platform)

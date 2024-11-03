@@ -12,6 +12,7 @@ import os
 import sys
 import telnetlib
 import time
+import pytest
 from collections import namedtuple
 
 from selenium.webdriver.common.by import By
@@ -47,7 +48,10 @@ class Asusax88uControl():
     def __init__(self):
         super().__init__()
         # self.router_control = RouterTools('asus_88u')
-        self.yaml_info = yamlTool(os.getcwd() + f'\\config\\router_xpath\\asus_xpath.yaml')
+        if pytest.win_flag:
+            self.yaml_info = yamlTool(os.getcwd() + f'\\config\\router_xpath\\asus_xpath.yaml')
+        else:
+            self.yaml_info = yamlTool(os.getcwd() + '/config/router_xpath/asus_xpath.yaml')
         # self.yaml_info = yamlTool(r'D:\PycharmProjects\wifi_test\config\router_xpath\asus_xpath.yaml')
         self.xpath = self.yaml_info.get_note('asus')
         self.tn = telnetlib.Telnet("192.168.50.1", 23)

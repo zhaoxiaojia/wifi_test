@@ -2,10 +2,10 @@
 connect_type:
   type: adb
   adb:
-    device:
+    device: 099030003FF
   telnet:
     ip: '192.168.31.95'
-    #    market 区域 默认填写 sandia  支持列表：sandia,sandia_latam,sandia_hkc,sandia_dvb
+    #    market area  sandia  list：sandia,sandia_latam,sandia_hkc,sandia_dvb
     wildcard: bayside
 
 # Router model

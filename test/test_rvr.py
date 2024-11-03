@@ -207,7 +207,7 @@ def iperf_on(command, adb, direction='tx'):
         else:
             logging.info("Can't I see this ?")
             with open(f'rvr_log_{pytest.dut.serialnumber}.txt', 'w') as f:
-                popen = subprocess.Popen(command.split(), stdout=f, encoding='gbk')
+                popen = subprocess.Popen(command.split(), stdout=f, encoding='utf-8')
             return popen
         # logging.info(subprocess.run('tasklist | findstr "iperf"'.replace('iperf',pc_ipef),shell=True,encoding='gbk'))
         # logging.info(pytest.dut.checkoutput('ps -A|grep "iperf"'.replace('iperf',dut_iperf)))
@@ -230,7 +230,7 @@ def iperf_on(command, adb, direction='tx'):
     else:
         if adb == 'executer':
             pytest.dut.checkoutput(command)
-        popen = subprocess.Popen(command.split(), encoding='gbk')
+        popen = subprocess.Popen(command.split(), encoding='utf-8')
     return popen
 
 
@@ -315,7 +315,7 @@ def wifi_setup_teardown(request):
         time.sleep(60)
 
     logging.info('wifi env set done')
-    with open(pytest.testResult.detail_file, 'a', encoding='gbk') as f:
+    with open(pytest.testResult.detail_file, 'a', encoding='utf-8') as f:
         f.write(f'Testing {router_info} \n')
 
     if pytest.connect_type == 'telnet':
@@ -359,8 +359,12 @@ def wifi_setup_teardown(request):
         dut_ip = re.findall(r'inet addr:(\d+\.\d+\.\d+\.\d+)', dut_info, re.S)[0]
     logging.info(f'dut_ip:{dut_ip}')
     connect_status = True
-    ipfoncig_info = pytest.dut.checkoutput_term('ipconfig').strip()
-    pc_ip = re.findall(r'IPv4 地址.*?(\d+\.\d+\.\d+\.\d+)', ipfoncig_info, re.S)[0]
+    if pytest.win_flag:
+        ipfoncig_info = pytest.dut.checkoutput_term('ipconfig').strip()
+        pc_ip = re.findall(r'IPv4 地址.*?(\d+\.\d+\.\d+\.\d+)', ipfoncig_info, re.S)[0]
+    else:
+        ipfoncig_info = pytest.dut.checkoutput_term('ifconfig')
+        pc_ip = re.findall(r'inet\s+(\d+\.\d+\.\d+\.\d+)', ipfoncig_info, re.S)[0]
     logging.info(f'pc_ip:{pc_ip}')
     logging.info('==== wifi env setup done')
 
@@ -420,7 +424,10 @@ def kill_iperf():
             pytest.dut.subprocess_run(pytest.dut.IPERF_KILL.replace('iperf', test_tool))
         except Exception:
             ...
-        pytest.dut.popen_term(pytest.dut.IPERF_WIN_KILL.replace('iperf', test_tool))
+        if pytest.win_flag:
+            pytest.dut.popen_term(pytest.dut.IPERF_WIN_KILL.replace('iperf', test_tool))
+        else:
+            pytest.dut.popen_term(pytest.dut.IPERF_KILL.replace('iperf', test_tool))
 
 
 def get_tx_rate(pc_ip, dut_ip, device_number, router_info, pair, freq_num, rssi_num, type, corner_set='', db_set=''):
@@ -548,7 +555,7 @@ def get_rx_rate(pc_ip, dut_ip, device_number, router_info, pair, freq_num, rssi_
         f'{router_info.channel} {type} DL NULL NULL {db_set} {rssi_num} {corner} NULL '
         f'{rx_result} {mcs_rx if mcs_rx else "NULL"}')
     pytest.testResult.save_result(rx_result_info.replace(' ', ','))
-    with open(pytest.testResult.detail_file, 'a', encoding='gbk') as f:
+    with open(pytest.testResult.detail_file, 'a', encoding='utf-8') as f:
         logging.info('writing')
         f.write(f'Rx {type} result : {rx_result}\n')
         f.write('-' * 40 + '\n\n')

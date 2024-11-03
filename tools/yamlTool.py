@@ -14,17 +14,15 @@ yaml 格式现在校验网站
 https://www.bejson.com/validators/yaml_editor/
 '''
 
-
 class yamlTool:
     def __init__(self, path):
         self.path = path
-        with open(path) as a_yaml_file:
+        with open(path,encoding='gbk') as a_yaml_file:
             # 解析yaml
             self.parsed_yaml_file = yaml.load(a_yaml_file, Loader=yaml.FullLoader)
 
     def get_note(self, note):
         return self.parsed_yaml_file.get(note)
-
 
 # coco = yamlTool('config.yaml')
 # print(coco.get_note('router'))

@@ -10,7 +10,7 @@ import csv
 import logging
 import os
 import time
-
+import pytest
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -50,14 +50,15 @@ class TestResult():
                                          'Rvr' + time.asctime().replace(' ', '_').replace(':', '_') + '.csv')
         if not hasattr(self, 'detialFile'):
             self.detail_file = os.path.join(self.logdir, 'Rvr_Detial.log')
-            with open(self.detail_file, 'a', encoding='gbk') as f:
+            with open(self.detail_file, 'a', encoding='utf-8') as f:
                 f.write("This is rvr test detial data\n")
-        with open(self.log_file, 'a', encoding='gbk') as f:
+        with open(self.log_file, 'a', encoding='utf-8') as f:
             title = 'Priority SerianNumber Test_Category	Sub_Category	Coex_Method	BT_WF_Isolation	Standard	Freq_Band	BW	Data_Rate	CH_Freq_MHz	Protocol	Direction	Total_Path_Loss	RxP DB	Beacon_RSSI Angel	Data_RSSI	Throughput	MCS_Rate'
             logging.info(title.split())
             f.write(','.join(title.split()))
             f.write('\n')
-        with open(os.path.join(os.getcwd(), 'config\\asusax88u.csv'), 'r', encoding='gbk') as f:
+        with open(os.path.join(os.getcwd(), 'config\\asusax88u.csv' if pytest.win_flag else 'config/asusax88u.csv'),
+                  'r') as f:
             reader = csv.reader(f)
             self.results_length = []
             for i in [j for j in reader][1:]:
@@ -89,7 +90,7 @@ class TestResult():
         '''
         logging.info('Write to excel')
 
-        df = pd.read_csv(self.log_file, encoding='gbk')
+        df = pd.read_csv(self.log_file, encoding='utf-8')
         # 转置数据
         # df = pd.DataFrame(df.values.T, index=df.columns, columns=df.index)
         if not os.path.exists(self.rvr_excelfile):

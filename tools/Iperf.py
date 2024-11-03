@@ -41,7 +41,7 @@ class Iperf:
                 f'adb -s {pytest.dut.serialnumber} shell ' + pytest.dut.IPERF_SERVER['TCP'])
             with open('temp.txt', 'w') as f:
                 server = subprocess.Popen((f'adb -s {pytest.dut.serialnumber} shell ' +
-                                           pytest.dut.IPERF_SERVER['TCP']).split(), stdout=f,encoding='gbk')
+                                           pytest.dut.IPERF_SERVER['TCP']).split(), stdout=f,encoding='utf-8')
             time.sleep(1)
             logging.info(
                 pytest.dut.IPERF_CLIENT_REGU['TCP']['rx'].format(dut_ip, pytest.dut.IPERF_TEST_TIME, 4))
@@ -54,7 +54,7 @@ class Iperf:
             logging.info(
                 pytest.dut.IPERF_SERVER['TCP'])
             with open('temp.txt', 'w') as f:
-                server = subprocess.Popen(pytest.dut.IPERF_SERVER['TCP'].split(), stdout=f, encoding='gbk')
+                server = subprocess.Popen(pytest.dut.IPERF_SERVER['TCP'].split(), stdout=f, encoding='utf-8')
             time.sleep(1)
             logging.info(f'adb -s {pytest.dut.serialnumber} shell ' +
                          pytest.dut.IPERF_CLIENT_REGU['TCP']['tx'].format(dut_ip, pytest.dut.IPERF_TEST_TIME,

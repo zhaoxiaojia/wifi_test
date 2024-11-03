@@ -17,6 +17,7 @@ import os
 import shutil
 import re
 
+import sys
 import psutil
 import pytest
 
@@ -33,6 +34,11 @@ def pytest_sessionstart(session):
     :param session:
     :return:
     '''
+    # get the pc system
+    if 'win' in sys.platform:
+        pytest.win_flag = True
+    else:
+        pytest.win_flag = False
     # The configuration information of  DUT
     pytest.config_yaml = yamlTool(os.getcwd() + '/config/config.yaml')
     # The connection method to the product to DUT
