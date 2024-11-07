@@ -1853,5 +1853,17 @@
         "desc": "xxx",
         "priority": "P0",
         "path": "test/stress/test_multi_throughput.py"
+    },
+    "test_wifi_switch_band.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test/roku/test_wifi_switch_band.py"
+    },
+    "test_auto_reboot.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test/roku/test_auto_reboot.py"
     }
 }

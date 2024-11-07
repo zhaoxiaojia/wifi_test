@@ -61,9 +61,12 @@ class Asusax88uControl():
         self.tn.write(str(self.xpath['passwd']).encode("ascii") + b'\n')
 
     def telnet_write(self, cmd):
-        print(cmd)
         logging.info(cmd)
-        self.tn.write(cmd.encode("ascii") + b'\n')
+        try:
+            self.tn.write(cmd.encode("ascii") + b'\n')
+        except Exception:
+            self.tn.open("192.168.50.1", 23)
+            self.tn.write(cmd.encode("ascii") + b'\n')
 
     def set_2g_ssid(self, ssid):
         cmd = 'nvram set wl0_ssid={}'
@@ -137,7 +140,7 @@ class Asusax88uControl():
     def set_5g_channel(self, channel):
         cmd = 'nvram set wl1_chanspec={}/80'
         channel = str(channel)
-        if channel not in Asusax88uConfig.CHANNEL_2:
+        if channel not in Asusax88uConfig.CHANNEL_5:
             raise ConfigError('channel element error')
         channel = 0 if channel == '自动' else channel
         self.telnet_write(cmd.format(channel))
@@ -336,7 +339,6 @@ class Asusax88uControl():
                     EC.presence_of_element_located((By.XPATH, '/html/body/form/div/div/div[1]/div[2]')))
         except Exception as e:
             logging.info('country code set with error')
-
 
 # ['Open System', 'WPA2-Personal', 'WPA3-Personal', 'WPA/WPA2-Personal', 'WPA2/WPA3-Personal',
 #                              'WPA2-Enterprise', 'WPA/WPA2-Enterprise']

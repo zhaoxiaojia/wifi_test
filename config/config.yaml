@@ -1,11 +1,11 @@
 # This is yaml for DUT info
 connect_type:
-  type: adb
+  type: telnet
   adb:
     device: 099030003FF
   telnet:
-    ip: '192.168.31.95'
-    #    market area  sandia  list£ºsandia,sandia_latam,sandia_hkc,sandia_dvb
+    ip: '192.168.50.123'
+    #    market area  sandia  listï¿½ï¿½sandia,sandia_latam,sandia_hkc,sandia_dvb
     wildcard: bayside
 
 # Router model

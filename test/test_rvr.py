@@ -108,6 +108,18 @@ if pytest.connect_type == 'telnet':
 
 sum_list_lock = threading.Lock()
 
+
+def modify_tcl_script(old_str, new_str):
+    file = './script/rvr.tcl'
+    with open(file, "r", encoding="utf-8") as f1, open("%s.bak" % file, "w", encoding="utf-8") as f2:
+        for line in f1:
+            if old_str in line:
+                line = new_str
+            f2.write(line)
+    os.remove(file)
+    os.rename("%s.bak" % file, file)
+
+
 rvr_tool = wifi_yaml.get_note('rvr')['tool']
 if rvr_tool == 'iperf':
     test_tool = wifi_yaml.get_note('rvr')[rvr_tool]['version']
@@ -194,7 +206,7 @@ def iperf_on(command, adb, direction='tx'):
             try:
                 files = proc.open_files()
                 for f in files:
-                    if f.path == 'temp.txt':
+                    if f.path == f'rvr_log_{pytest.dut.serialnumber}.txt':
                         proc.kill()  # Kill the process that occupies the file
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 pass
@@ -202,7 +214,7 @@ def iperf_on(command, adb, direction='tx'):
 
     def server_on():
         logging.info(f'server {command} ->{adb}<-')
-        if adb == 'executer':
+        if adb and pytest.connect_type == 'telnet':
             pytest.dut.checkoutput(command)
         else:
             logging.info("Can't I see this ?")
@@ -215,7 +227,7 @@ def iperf_on(command, adb, direction='tx'):
     if adb:
         if test_tool == 'iperf3':
             command = 'iperf3 -s -1'
-        if adb != 'executer':
+        if pytest.connect_type == 'adb':
             command = f'adb -s {adb} shell ' + command
     else:
         if test_tool == 'iperf3':
@@ -228,7 +240,7 @@ def iperf_on(command, adb, direction='tx'):
     if re.findall(r'iperf[3]?.*?-s', command):
         popen = server_on()
     else:
-        if adb == 'executer':
+        if adb and pytest.connect_type == 'telnet':
             pytest.dut.checkoutput(command)
         popen = subprocess.Popen(command.split(), encoding='utf-8')
     return popen
@@ -295,7 +307,7 @@ def wifi_setup_teardown(request):
         logging.info('Reset rf value')
         rf_tool.execute_rf_cmd(0)
         logging.info(rf_tool.get_rf_current_value())
-        time.sleep(10)
+        time.sleep(30)
 
     # 转台置0
     if corner_needed:
@@ -312,7 +324,7 @@ def wifi_setup_teardown(request):
         band = '5 GHz' if '2' in router_info.band else '2.4 GHz'
         ssid = router_info.ssid + "_bat";
         router.change_setting(Router(band=band, ssid=ssid))
-        time.sleep(60)
+        time.sleep(10)
 
     logging.info('wifi env set done')
     with open(pytest.testResult.detail_file, 'a', encoding='utf-8') as f:
@@ -320,8 +332,7 @@ def wifi_setup_teardown(request):
 
     if pytest.connect_type == 'telnet':
         connect_status = True
-        if not router_needed:
-            # router 有修改时 等待 30 秒 让板子回连
+        if router_needed:
             time.sleep(30)
     else:
         # 连接 网络 最多三次重试
@@ -353,7 +364,7 @@ def wifi_setup_teardown(request):
                 connect_status = False
 
     if pytest.connect_type == 'telnet':
-        pytest.dut.dut_ip = pytest.dut.ip
+        dut_ip = pytest.dut.ip
     else:
         dut_info = pytest.dut.checkoutput('ifconfig wlan0')
         dut_ip = re.findall(r'inet addr:(\d+\.\d+\.\d+\.\d+)', dut_info, re.S)[0]
@@ -612,7 +623,7 @@ def test_wifi_rvr(wifi_setup_teardown, rf_value):
     for i in range(10):
         rssi_info = pytest.dut.checkoutput(pytest.dut.IW_LINNK_COMMAND)
         logging.info(rssi_info)
-        if 'signal' in rssi_info:
+        if 'signal' in rssi_info and i > 4:
             break
     else:
         rssi_info = ''

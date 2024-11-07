@@ -35,7 +35,7 @@ def pytest_sessionstart(session):
     :return:
     '''
     # get the pc system
-    if 'win' in sys.platform:
+    if ('win32' or 'win64') in sys.platform:
         pytest.win_flag = True
     else:
         pytest.win_flag = False
