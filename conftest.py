@@ -40,22 +40,21 @@ def pytest_sessionstart(session):
     else:
         pytest.win_flag = False
     # The configuration information of  DUT
-    pytest.config_yaml = yamlTool(os.getcwd() + '/config/config.yaml')
+    if pytest.win_flag:
+        ...
+    else:
+        pytest.config_yaml = yamlTool(os.getcwd() + '/config/config.yaml')
     # The connection method to the product to DUT
     pytest.connect_type = pytest.config_yaml.get_note('connect_type')['type']
     if pytest.connect_type == 'adb':
         # Create adb obj
-        devices_num = pytest.config_yaml.get_note("connect_type")[pytest.connect_type]['device']
-        if devices_num is None:
+        device = pytest.config_yaml.get_note("connect_type")[pytest.connect_type]['device']
+        if device is None:
             # Obtain the device number dynamically
-            info = subprocess.check_output("adb devices", encoding='utf-8')
-            devices = re.findall(r'\n(.*?)\s+device', info, re.S)
-            if not devices:
-                assert False, "Can't found any dut"
-            devices_num = devices[0]
-            logging.info(f'Catch devices {devices_num}')
-        pytest.dut = ADB(serialnumber=devices_num)
-        logging.info("adb connected %s" % devices_num)
+            info = subprocess.check_output("adb devices", shell=True, encoding='utf-8')
+            device = re.findall(r'\n(.*?)\s+device', info, re.S)
+            if device: device = device[0]
+        pytest.dut = ADB(serialnumber=device if device else '')
     elif pytest.connect_type == 'telnet':
         # Create telnet obj
         telnet_ip = pytest.config_yaml.get_note("connect_type")[pytest.connect_type]['ip']

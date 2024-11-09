@@ -18,7 +18,6 @@ class AsusRouterConfig(RouterConfig):
     def __init__(self):
         super(AsusRouterConfig, self).__init__()
 
-    WIRELESS_MODE = ['自动', 'N only', 'AX only', 'N/AC/AX mixed', 'Legacy']
     BANDWIDTH_2 = ['20/40 MHz', '20 MHz', '40 MHz']
     BANDWIDTH_5 = ['20/40/80 MHz', '20 MHz', '40 MHz', '80 MHz']
     WIRELESS_2_MODE = ['自动', '11b', '11g', '11n', '11ax', 'Legacy']

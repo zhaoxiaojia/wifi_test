@@ -39,3 +39,43 @@ from tools.router_tool.Router import Router
 #     wifi_onoff_tag = 'Available networks'
 #
 #     config_yaml = pytest.config_yaml
+
+from tools.yamlTool import yamlTool
+from tools.router_tool.AsusRouter.AsusRouterConfig import (Asusax86uConfig,
+                                                           Asusax88uConfig)
+import csv
+import logging
+
+
+def get_testdata():
+    wifi_yaml = yamlTool(os.getcwd() + '/config/config.yaml')
+    router_name = wifi_yaml.get_note('router')['name']
+    router = ''
+    pc_ip, dut_ip = "", ""
+    router_config = Asusax88uConfig()
+
+    # 读取 测试配置
+    with open(os.getcwd() + '/config/asusax88u.csv', 'r') as f:
+        reader = csv.reader(f)
+        test_data = [Router(*[i.strip() for i in row]) for row in reader][1:]
+
+    logging.info(test_data)
+
+    ssid_verify = set()
+
+    # 校验 csv 数据是否异常
+    for i in test_data:
+        if pytest.connect_type == 'adb':
+            if '2' in i.band:
+                ssid_verify.add(i.ssid)
+            if '5' in i.band:
+                assert i.ssid not in ssid_verify, "5g ssid can't as the same as 2g , pls modify"
+        assert i.band in ['2.4 GHz', '5 GHz'], "Pls check band info "
+        assert i.wireless_mode in router_config.WIRELESS_2_MODE if '2' in i.band else router_config.WIRELESS_5_MODE, "Pls check wireless info"
+        assert i.channel in router_config.CHANNEL_2 if '2' in i.band else router_config.CHANNEL_5, \
+            "Pls check channel info"
+        assert i.bandwidth in router_config.BANDWIDTH_2 if '2' in i.band else router_config.BANDWIDTH_5, \
+            "Pls check bandwidth info"
+        assert i.authentication_method in router_config.AUTHENTICATION_METHOD_LEGCY \
+            if 'Legacy' in i.wireless_mode else router_config.AUTHENTICATION_METHOD, "Pls check authentication info"
+    return test_data

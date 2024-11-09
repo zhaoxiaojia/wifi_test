@@ -1,11 +1,17 @@
 # _*_ coding:utf-8 _*_
 # 依赖pysnmp 请自行安装(可以使用命令 pip install pysnmp)
 import logging
+import subprocess
 import time
-
+import sys
+import os
 from pysnmp.entity import engine
-from pysnmp.entity.rfc3413.oneliner import cmdgen
+from tools.yamlTool import yamlTool
+
+if ('win32' or 'win64') in sys.platform:
+    from pysnmp.entity.rfc3413.oneliner import cmdgen
 from pysnmp.proto import rfc1902
+
 
 # global enter_key
 # enter_key = '1.3.6.1.4.1.23280.9.1.2'
@@ -170,20 +176,65 @@ class PowerCtrl:
         return value
 
     # 仅保留指定端口上电
-    def survival(self,nSock):
-        for i in range(1,9):
+    def survival(self, nSock):
+        for i in range(1, 9):
             if i == nSock:
                 self.switch(i, True)
                 continue
-            self.switch(i,False)
+            self.switch(i, False)
 
     # 关闭所有端口电源
     def dark(self):
-        for i in range(1,9):
-            self.switch(i,False)
+        for i in range(1, 9):
+            self.switch(i, False)
 
-s = PowerCtrl("192.168.50.230")
-s.switch(2, True)
+
+class power_ctrl:
+    SWITCH_KEY = 'snmpset -v1 -c private {} .1.3.6.1.4.1.23280.9.1.2.{} i {}'
+    SET_KEY = 'snmpset -v1 -c private {} 1.3.6.1.4.1.23273.4.40.{} i 255'
+
+    def handle_env_data(self):
+        temp = []
+        for i in self.port_list:
+            if i:
+                for j in i:
+                    temp.append((self.ip_list[self.port_list.index(i)], j))
+        return temp
+
+    def __init__(self):
+        self.config = yamlTool(os.getcwd() + '/config/config.yaml')
+        self.power_ctrl = self.config.get_note('power_relay')
+        self.ip_list = list(self.power_ctrl.keys())
+        self.port_list = list(self.power_ctrl.values())
+        self.ctrl = self.handle_env_data()
+
+    def checkoutput(self, cmd):
+        info = subprocess.check_output(cmd, shell=True, encoding='utf-8')
+        return info
+
+    def switch(self, ip, port, status):
+        cmd = self.SWITCH_KEY.format(ip, port, status)
+        self.checkoutput(cmd)
+
+    def set_all(self, status):
+        for k, v in self.power_ctrl.items():
+            if v == '12345678':
+                cmd = self.SET_KEY.format(k, 0 if status else 1)
+                self.checkoutput(cmd)
+            else:
+                for i in self.ctrl:
+                    if k == i[0]:
+                        cmd = self.SWITCH_KEY.format(k, i[1], 1 if status else 2)
+                        self.checkoutput(cmd)
+
+    def shutdown(self):
+        self.set_all(False)
+
+    def poweron(self):
+        self.set_all(True)
+
+# s = PowerCtrl("192.168.50.230")
+# s.switch(2, True)
 # s.dark()
 # s.survival(1)
 # print(s.get_status(1))
@@ -191,3 +242,7 @@ s.switch(2, True)
 # print("start on")
 # s.switch(1, True)
 # print(s.get_status(2))
+
+
+# s = power_ctrl()
+# s.shutdown()

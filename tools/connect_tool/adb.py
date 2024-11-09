@@ -58,17 +58,15 @@ class ADB(Dut):
     def __init__(self, serialnumber="", logdir=""):
         super().__init__()
         self.serialnumber = serialnumber
-        if self.serialnumber == "":
-            self.serialnumber = pytest.dut.serialnumber
-        logging.info("get devices number %s" % serialnumber)
         self.logdir = logdir or os.path.join(os.getcwd(), 'results')
         self.timer = None
         self.live = False
         self.lock = threading.Lock()
-        self.wait_devices()
+        # self.wait_devices()
         self.p_config_wifi = ''
-        self.root()
-        self.remount()
+        if self.serialnumber:
+            self.root()
+            self.remount()
 
     def set_status_on(self):
         '''
@@ -191,17 +189,14 @@ class ADB(Dut):
         set adb root
         @return: None
         '''
-        self.checkoutput_shell('root')
+        subprocess.run('adb root', shell=True)
 
     def remount(self):
         '''
         set adb remount
         @return: None
         '''
-        try:
-            self.checkoutput_shell('remount')
-        except Exception as e:
-            ...
+        subprocess.run('adb remount', shell=True)
 
     def reboot(self):
         '''
@@ -889,6 +884,17 @@ class ADB(Dut):
         self.keyevent("KEYCODE_ENTER")
         return x_midpoint, y_midpoint
 
+    @classmethod
+    def wait_power(cls):
+        for i in range(10):
+            info = subprocess.check_output("adb devices", shell=True, encoding='utf-8')
+            devices = re.findall(r'\n(.*?)\s+device', info, re.S)
+            if devices:
+                break
+            time.sleep(10)
+        else:
+            assert False, "Can't find any device"
+
     def wait_devices(self):
         '''
         check adb exists if not wait for one minute
@@ -899,7 +905,7 @@ class ADB(Dut):
         while subprocess.run(f'adb -s {self.serialnumber} shell getprop sys.boot_completed'.split(),
                              stdout=subprocess.PIPE).returncode != 0:
             logging.info('wait')
-            info = subprocess.check_output("adb devices", encoding='utf-8')
+            info = subprocess.check_output("adb devices", shell=True, encoding='utf-8')
             if re.findall(r'List of devices attached\n(\w+)', info, re.S):
                 self.serialnumber = re.findall(r'\n(.*?)\s+device', info, re.S)[0]
 

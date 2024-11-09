@@ -13,6 +13,7 @@ import logging
 import subprocess
 import pytest
 
+
 class Dut():
     DMESG_COMMAND = 'dmesg -S'
     CLEAR_DMESG_COMMAND = 'dmesg -c'
@@ -108,4 +109,8 @@ class Dut():
         logging.info(f"command:{command}")
         if not isinstance(command, list):
             command = command.split()
-        return subprocess.check_output(command,encoding='gbk' if pytest.win_flag else 'utf-8')
+        try:
+            info = subprocess.check_output(command, encoding='gbk' if pytest.win_flag else 'utf-8')
+        except Exception:
+            info = ''
+        return info

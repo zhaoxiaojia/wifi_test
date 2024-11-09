@@ -9,7 +9,6 @@
 # Description：
 """
 
-import csv
 import itertools
 import logging
 import os
@@ -25,11 +24,11 @@ import pytest
 from tools.connect_tool.TelnetInterface import TelnetInterface
 from tools.ixchariot import ix
 from tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
-from tools.router_tool.AsusRouter.AsusRouterConfig import (Asusax86uConfig,
-                                                           Asusax88uConfig)
+
 from tools.router_tool.Router import Router
 from tools.router_tool.Xiaomi.Xiaomiax3000Control import Xiaomiax3000Control
 from tools.router_tool.Xiaomi.XiaomiRouterConfig import Xiaomiax3000Config
+from test import get_testdata
 from tools.yamlTool import yamlTool
 
 # 小米极限测试 记录
@@ -59,40 +58,9 @@ from tools.yamlTool import yamlTool
 # logging.info(f'execl write {row_num} {i + col_num}')
 # new_sheet.cell(row=row_num, column=i + col_num, value=value[i])
 
-# loading config.yaml 文件 获取数据  dict 数据类型
 wifi_yaml = yamlTool(os.getcwd() + '/config/config.yaml')
 router_name = wifi_yaml.get_note('router')['name']
-router = ''
-pc_ip, dut_ip = "", ""
-router_config = ''
-exec(f'router_config = {router_name.capitalize()}Config()')
-
-# 读取 测试配置
-with open(os.getcwd() + '/config/asusax88u.csv', 'r') as f:
-    reader = csv.reader(f)
-    test_data = [Router(*[i.strip() for i in row]) for row in reader][1:]
-
-logging.info(test_data)
-
-ssid_verify = set()
-
-if __name__ == '__main__':
-    # 校验 csv 数据是否异常
-    for i in test_data:
-        if pytest.connect_type == 'adb':
-            if '2' in i.band:
-                ssid_verify.add(i.ssid)
-            if '5' in i.band:
-                assert i.ssid not in ssid_verify, "5g ssid can't as the same as 2g , pls modify"
-        assert i.band in ['2.4 GHz', '5 GHz'], "Pls check band info "
-        assert i.wireless_mode in router_config.WIRELESS_MODE, "Pls check wireless info"
-        assert i.channel in router_config.CHANNEL_2_DICT if '2' in i.band else router_config.CHANNEL_5_DICT, \
-            "Pls check channel info"
-        assert i.bandwidth in router_config.BANDWIDTH_2_LIST if '2' in i.band else router_config.BANDWIDTH_5_LIST, \
-            "Pls check bandwidth info"
-        assert i.authentication_method in router_config.AUTHENTICATION_METHOD_LEGCY_DICT \
-            if 'Legacy' in i.wireless_mode else router_config.AUTHENTICATION_METHOD_DICT, "Pls check authentication info"
-
+test_data = get_testdata()
 # 设置为True 时 开启 衰减测试流程
 rf_needed = False
 # 设置为True 时 开启 状态测试流程
@@ -217,7 +185,6 @@ def iperf_on(command, adb, direction='tx'):
         if adb and pytest.connect_type == 'telnet':
             pytest.dut.checkoutput(command)
         else:
-            logging.info("Can't I see this ?")
             with open(f'rvr_log_{pytest.dut.serialnumber}.txt', 'w') as f:
                 popen = subprocess.Popen(command.split(), stdout=f, encoding='utf-8')
             return popen
@@ -462,6 +429,7 @@ def get_tx_rate(pc_ip, dut_ip, device_number, router_info, pair, freq_num, rssi_
                 pc_popen = iperf_on(pytest.dut.IPERF_SERVER[type], '')
             else:
                 pc_popen = iperf_on(pytest.dut.IPERF_SERVER[type], '')
+                time.sleep(2)
                 adb_popen = iperf_on(tool_path + pytest.dut.IPERF_CLIENT_REGU[type]['tx'].format(
                     pc_ip,
                     pytest.dut.IPERF_TEST_TIME,
@@ -525,6 +493,7 @@ def get_rx_rate(pc_ip, dut_ip, device_number, router_info, pair, freq_num, rssi_
             kill_iperf()
             time.sleep(1)
             adb_popen = iperf_on(tool_path + pytest.dut.IPERF_SERVER[type], device_number)
+            time.sleep(2)
             pc_popen = iperf_on(
                 pytest.dut.IPERF_CLIENT_REGU[type]['rx'].format(
                     dut_ip, pytest.dut.IPERF_TEST_TIME,
