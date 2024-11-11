@@ -906,9 +906,10 @@ class ADB(Dut):
                              stdout=subprocess.PIPE).returncode != 0:
             logging.info('wait')
             info = subprocess.check_output("adb devices", shell=True, encoding='utf-8')
-            if re.findall(r'List of devices attached\n(\w+)', info, re.S):
+            if re.findall(r'\n(.*?)\s+device', info, re.S):
                 self.serialnumber = re.findall(r'\n(.*?)\s+device', info, re.S)[0]
-
+                if '.' in self.serialnumber:
+                    subprocess.check_output(f'adb connect {self.serialnumber}', shell=True)
             flag = True
             if count % 10 == 0:
                 logging.info('devices not exists')
@@ -1147,12 +1148,12 @@ class ADB(Dut):
         except Exception as e:
             return 'Data Error'
 
-    def wait_for_wifi_service(self, type='wlan0') -> None:
+    def wait_for_wifi_service(self, type='wlan0',recv='Link encap:UNSPEC') -> None:
         # Wait for Wi-Fi network is available
         count = 0
         # time.sleep(10)
         while True:
-            if 'Link encap:Ethernet' in self.subprocess_run(f'ifconfig {type}'):
+            if recv in self.subprocess_run(f'ifconfig {type}'):
                 logging.info(self.subprocess_run(f'ifconfig {type}'))
                 break
             time.sleep(10)

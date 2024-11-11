@@ -1865,5 +1865,11 @@
         "desc": "xxx",
         "priority": "P0",
         "path": "test/roku/test_auto_reboot.py"
+    },
+    "test_autoreboot_norouter.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test/stress/test_autoreboot_norouter.py"
     }
 }
