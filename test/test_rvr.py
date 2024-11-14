@@ -153,7 +153,6 @@ logging.info(f'finally step_list {step_list}')
 # 配置 测试报告
 pytest.testResult.x_path = [] if (rf_needed and corner_needed) == 'both' else step_list
 pytest.testResult.init_rvr_result()
-tx_result_list, rx_result_list = [], []
 rx_result, tx_result = '', ''
 
 
@@ -250,7 +249,7 @@ def get_logcat(pair, adb):
         result = sum(result_list) / len(result_list)
     else:
         result = 0
-    return result
+    return round(result, 1)
 
 
 def push_iperf():
@@ -263,9 +262,7 @@ def push_iperf():
 
 @pytest.fixture(scope='session', autouse=True, params=test_data)
 def wifi_setup_teardown(request):
-    global rx_result, tx_result, tx_result_list, rx_result_list, pc_ip, dut_ip
-    tx_result_list.clear()
-    rx_result_list.clear()
+    global rx_result, tx_result, pc_ip, dut_ip
     logging.info('==== wifi env setup start')
 
     # 重置衰减&转台
@@ -316,14 +313,17 @@ def wifi_setup_teardown(request):
                     cmd = pytest.dut.CMD_WIFI_CONNECT.format(router_info.ssid, type,
                                                              router_info.wpa_passwd)
                 if router_info.hide_ssid == '是':
-                    if int(pytest.dut.getprop('ro.build.version.sdk')) >= 31:
-                        cmd += pytest.dut.CMD_WIFI_HIDE
-                    else:
-                        cmd = (pytest.dut.WIFI_CONNECT_COMMAND_REGU.format(router_info.ssid) +
-                               pytest.dut.WIFI_CONNECT_PASSWD_REGU.format(router_info.wpa_passwd) +
-                               pytest.dut.WIFI_CONNECT_HIDE_SSID_REGU.format(router_info.hide_type))
+                    cmd += pytest.dut.CMD_WIFI_HIDE
+
                 pytest.dut.checkoutput(cmd)
-                if pytest.dut.wait_for_wifi_address(target=router.ping_address):
+                time.sleep(5)
+                dut_info = pytest.dut.checkoutput('ifconfig wlan0')
+                logging.info(dut_info)
+                dut_ip = re.findall(r'inet addr:(\d+\.\d+\.\d+\.\d+)', dut_info, re.S)
+                if dut_ip:
+                    dut_ip = dut_ip[0]
+                logging.info(f'dut ip address {dut_ip}')
+                if pytest.dut.wait_for_wifi_address(target=re.findall(r'(\d+\.\d+\.\d+\.)', dut_ip)[0]):
                     connect_status = True
                     break
             except Exception as e:
@@ -332,9 +332,6 @@ def wifi_setup_teardown(request):
 
     if pytest.connect_type == 'telnet':
         dut_ip = pytest.dut.ip
-    else:
-        dut_info = pytest.dut.checkoutput('ifconfig wlan0')
-        dut_ip = re.findall(r'inet addr:(\d+\.\d+\.\d+\.\d+)', dut_info, re.S)[0]
     logging.info(f'dut_ip:{dut_ip}')
     connect_status = True
     if pytest.win_flag:
@@ -365,9 +362,6 @@ def wifi_setup_teardown(request):
         logging.info(rf_tool.get_rf_current_value())
         time.sleep(10)
     # 重置结果
-    logging.info(f'tx_result_list {tx_result_list}')
-    logging.info(f'rx_result_list {rx_result_list}')
-    logging.info(f'len  {len(tx_result_list)}')
     # if len(tx_result_list) == 3 and router_info.data_row !='0':
     #     writeInExcelArea(rx_result_list, row_num=int(router_info.data_row), col_num=10)
     #     writeInExcelArea(tx_result_list, row_num=int(router_info.data_row) + 1, col_num=10)
@@ -409,9 +403,10 @@ def kill_iperf():
 
 
 def get_tx_rate(pc_ip, dut_ip, device_number, router_info, pair, freq_num, rssi_num, type, corner_set='', db_set=''):
-    global tx_result_list, tx_result
+    global tx_result
+    tx_result_list = []
     # 最多三次 重试机会
-    for _ in range(3):
+    for _ in range(5):
         logging.info('run tx ')
         tx_result = 0
         mcs_tx = 0
@@ -459,29 +454,28 @@ def get_tx_rate(pc_ip, dut_ip, device_number, router_info, pair, freq_num, rssi_
             continue
 
         mcs_tx = pytest.dut.get_mcs_tx()
-        if tx_result and mcs_tx:
-            logging.info(f'{tx_result}, {mcs_tx}')
-            tx_result_list.append(tx_result)
+        logging.info(f'expected rate {router_info.expected_rate.split()[0]}')
+        logging.info(f'{tx_result}, {mcs_tx}')
+        tx_result_list.append(tx_result)
+        if len(tx_result_list) > 2:
             break
-
     corner = corner_tool.get_turntanle_current_angle() if corner_needed else corner_set
-
     tx_result_info = (
-        f'P0 {device_number} RvR Standalone NULL Null {router_info.wireless_mode.split()[0]} '
+        f'{device_number} Throughput Standalone NULL Null {router_info.wireless_mode.split()[0]} '
         f'{router_info.band.split()[0]} {router_info.bandwidth.split()[0]} Rate_Adaptation '
         f'{router_info.channel} {type} UL NULL NULL {db_set} {rssi_num} {corner} NULL '
-        f'{tx_result} {mcs_tx if mcs_tx else "NULL"}')
+        f'{mcs_tx if mcs_tx else "NULL"} {",".join(map(str, tx_result_list))}')
     logging.info(tx_result_info)
     pytest.testResult.save_result(tx_result_info.replace(' ', ','))
     with open(pytest.testResult.detail_file, 'a') as f:
         f.write(f'Tx {type} result : {tx_result}\n')
         f.write('-' * 40 + '\n\n')
-    return tx_result if tx_result else 0
+    return tx_result_list
 
 
 def get_rx_rate(pc_ip, dut_ip, device_number, router_info, pair, freq_num, rssi_num, type, corner_set='', db_set=''):
-    global rx_result_list, rx_result
-    for _ in range(3):
+    rx_result_list = []
+    for _ in range(5):
         logging.info('run rx ')
         rx_result = 0
         mcs_rx = 0
@@ -520,26 +514,27 @@ def get_rx_rate(pc_ip, dut_ip, device_number, router_info, pair, freq_num, rssi_
                 time.sleep(3)
             continue
         time.sleep(3)
-
+        logging.info(f'tx result {tx_result}')
         # get mcs data
         mcs_rx = pytest.dut.get_mcs_rx()
-        if rx_result and mcs_rx:
-            logging.info(f'{rx_result}, {mcs_rx}')
-            rx_result_list.append(rx_result)
+        logging.info(f'expected rate {router_info.expected_rate.split()[1]}')
+        logging.info(f'{rx_result}, {mcs_rx}')
+        rx_result_list.append(rx_result)
+        if len(rx_result_list) > 2:
             break
     corner = corner_tool.get_turntanle_current_angle() if corner_needed else corner_set
 
     rx_result_info = (
-        f'P0 {device_number} RvR Standalone NULL Null {router_info.wireless_mode.split()[0]} '
+        f'{device_number} Throughput Standalone NULL Null {router_info.wireless_mode.split()[0]} '
         f'{router_info.band.split()[0]} {router_info.bandwidth.split()[0]} Rate_Adaptation '
         f'{router_info.channel} {type} DL NULL NULL {db_set} {rssi_num} {corner} NULL '
-        f'{rx_result} {mcs_rx if mcs_rx else "NULL"}')
+        f'{mcs_rx if mcs_rx else "NULL"} {",".join(map(str, rx_result_list))}')
     pytest.testResult.save_result(rx_result_info.replace(' ', ','))
     with open(pytest.testResult.detail_file, 'a', encoding='utf-8') as f:
         logging.info('writing')
         f.write(f'Rx {type} result : {rx_result}\n')
         f.write('-' * 40 + '\n\n')
-    return rx_result if rx_result else 0
+    return rx_result_list
 
 
 # 测试 iperf
@@ -606,7 +601,7 @@ def test_wifi_rvr(wifi_setup_teardown, rf_value):
     logging.info('Start test')
 
     try:
-        rssi_num = int(re.findall(r'signal:\s+-?(\d+)\s+dBm', rssi_info, re.S)[0])
+        rssi_num = int(re.findall(r'signal:\s+(-?\d+)\s+dBm', rssi_info, re.S)[0])
         freq_num = int(re.findall(r'freq:\s+(\d+)\s+', rssi_info, re.S)[0])
         with open(pytest.testResult.detail_file, 'a') as f:
             f.write(f'Rssi : {rssi_num}\n')

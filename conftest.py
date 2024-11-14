@@ -41,7 +41,7 @@ def pytest_sessionstart(session):
         pytest.win_flag = False
     # The configuration information of  DUT
     if pytest.win_flag:
-        ...
+        pytest.config_yaml = yamlTool(os.getcwd() + '\\config\\config.yaml')
     else:
         pytest.config_yaml = yamlTool(os.getcwd() + '/config/config.yaml')
     # The connection method to the product to DUT

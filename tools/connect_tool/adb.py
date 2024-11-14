@@ -387,6 +387,8 @@ class ADB(Dut):
         @param destination: target path
         @return: None
         '''
+        logging.info(self.ADB_S + self.serialnumber +
+                              " push " + filepath + " " + destination)
         self.checkoutput_term(self.ADB_S + self.serialnumber +
                               " push " + filepath + " " + destination)
 
@@ -1064,14 +1066,15 @@ class ADB(Dut):
         '''
         list_networks_cmd = "cmd wifi list-networks"
         output = self.checkoutput(list_networks_cmd)
-        if "No networks" in output[1]:
+        if "No networks" in output:
             logging.debug("has no wifi connect")
         else:
-            network_id = re.findall("\n(.*?) ", output[1])
-            forget_wifi_cmd = "cmd wifi forget-network {}".format(int(network_id[0]))
-            output1 = self.checkoutput(forget_wifi_cmd)
-            if "successful" in output1[1]:
-                logging.info(f"Network id {network_id[0]} closed")
+            network_id = re.findall("\n(.*?) ", output)
+            if network_id:
+                forget_wifi_cmd = "cmd wifi forget-network {}".format(int(network_id[0]))
+                output1 = self.checkoutput(forget_wifi_cmd)
+                if "successful" in output1:
+                    logging.info(f"Network id {network_id[0]} closed")
 
     def check_wifi_driver(self):
         '''
@@ -1130,7 +1133,6 @@ class ADB(Dut):
                         result_list.append(temp[0])
                         break
             counts = Counter(result_list)
-            logging.info(counts)
             return max(counts.keys(), key=counts.get)
         except Exception as e:
             return 'mcs_tx'
@@ -1148,13 +1150,14 @@ class ADB(Dut):
         except Exception as e:
             return 'Data Error'
 
-    def wait_for_wifi_service(self, type='wlan0',recv='Link encap:UNSPEC') -> None:
+    def wait_for_wifi_service(self, type='wlan0',recv='Link encap') -> None:
         # Wait for Wi-Fi network is available
         count = 0
         # time.sleep(10)
         while True:
-            if recv in self.subprocess_run(f'ifconfig {type}'):
-                logging.info(self.subprocess_run(f'ifconfig {type}'))
+            info =  self.checkoutput(f'ifconfig {type}')
+            logging.info(info)
+            if recv in info:
                 break
             time.sleep(10)
             count += 1

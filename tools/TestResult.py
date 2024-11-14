@@ -53,7 +53,7 @@ class TestResult():
             with open(self.detail_file, 'a', encoding='utf-8') as f:
                 f.write("This is rvr test detial data\n")
         with open(self.log_file, 'a', encoding='utf-8') as f:
-            title = 'Priority SerianNumber Test_Category	Sub_Category	Coex_Method	BT_WF_Isolation	Standard	Freq_Band	BW	Data_Rate	CH_Freq_MHz	Protocol	Direction	Total_Path_Loss	RxP DB	Beacon_RSSI Angel	Data_RSSI	Throughput	MCS_Rate'
+            title = 'SerianNumber Test_Category	Sub_Category	Coex_Method	BT_WF_Isolation	Standard	Freq_Band	BW	Data_Rate	CH_Freq_MHz	Protocol	Direction	Total_Path_Loss	RxP DB	RSSI Angel	Data_RSSI MCS_Rate Throughput	'
             logging.info(title.split())
             f.write(','.join(title.split()))
             f.write('\n')

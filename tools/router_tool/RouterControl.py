@@ -91,6 +91,7 @@ class RouterTools(RouterControl):
 
         # 路由器登录 地址
         self.address = self.xpath['address'][router_info.split("_")[1]]
+        logging.info(self.address)
         self.ping_address = re.findall(r"\d+\.\d+\.\d+\.\d+", self.address)[0]
         # 实例 driver 用于对浏览器进行操作
         self.option = webdriver.ChromeOptions()

@@ -1871,5 +1871,11 @@
         "desc": "xxx",
         "priority": "P0",
         "path": "test/stress/test_autoreboot_norouter.py"
+    },
+    "test_compatibility.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test/stress/test_compatibility.py"
     }
 }

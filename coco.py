@@ -9,6 +9,4 @@
 # Description：
 """
 
-import sys
-
-print(sys.platform)
+print('a b'.split())

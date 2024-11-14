@@ -210,6 +210,7 @@ class power_ctrl:
 
     def checkoutput(self, cmd):
         info = subprocess.check_output(cmd, shell=True, encoding='utf-8')
+        logging.info(info)
         return info
 
     def switch(self, ip, port, status):
@@ -245,4 +246,4 @@ class power_ctrl:
 
 
 # s = power_ctrl()
-# s.shutdown()
+# s.switch("192.168.1.3",2,1)
