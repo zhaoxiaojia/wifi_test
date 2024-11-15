@@ -14,7 +14,7 @@ import subprocess
 import pytest
 
 
-class Dut():
+class dut():
     DMESG_COMMAND = 'dmesg -S'
     CLEAR_DMESG_COMMAND = 'dmesg -c'
 

@@ -13,7 +13,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pytest
 import re
-from tools.connect_tool.adb import ADB
+from tools.connect_tool.adb import adb
 
 info = subprocess.check_output("adb devices", shell=True, encoding='utf-8')
 device_list = re.findall(r'\n(.*?)\s+device', info, re.S)
@@ -23,7 +23,7 @@ logging.info(device_list)
 def multi_stress(func):
     def wrapper(*args, **kwargs):
         with ThreadPoolExecutor(max_workers=len(device_list)) as pool:
-            futures = [pool.submit(func, ADB(serialnumber=i)) for i in device_list]
+            futures = [pool.submit(func, adb(serialnumber=i)) for i in device_list]
             for j in as_completed(futures):
                 j.result()
 

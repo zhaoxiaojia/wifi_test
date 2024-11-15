@@ -18,7 +18,7 @@ from tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
 from tools.router_tool.Router import Router
 from tools.pdusnmp import power_ctrl
 from test import get_testdata
-from tools.connect_tool.adb import ADB
+from tools.connect_tool.adb import adb
 
 test_data = get_testdata()
 ipfoncig_info = subprocess.check_output('ifconfig', shell=True, encoding='utf-8').strip()
@@ -44,7 +44,7 @@ def power_setting(router_setting, request):
     power_delay.switch(ip, port, 1)
     time.sleep(10)
     yield
-    # power_delay.switch(ip, port, 2)
+    power_delay.switch(ip, port, 2)
 
 
 def check_iperf():
@@ -70,7 +70,7 @@ def handle_wifi_cmd(router_info):
 @pytest.mark.wifi_connect
 def test_multi_throughtput_tx(router_setting):
     router = router_setting
-    ADB.wait_power()
+    adb.wait_power()
     pytest.dut.wait_devices()
     check_iperf()
     pytest.dut.wait_for_wifi_service()
@@ -91,7 +91,7 @@ def test_multi_throughtput_tx(router_setting):
     tx_result = get_tx_rate(pc_ip, dut_ip, pytest.dut.serialnumber, router, 4, freq_num, rssi_num, "TCP")
     logging.info(tx_result)
     for i in tx_result:
-        if i >= float(router.expected_rate.spplit()[0]):
+        if i >= float(router.expected_rate.split()[0]):
             break
     else:
         assert False,'Rate too low'
@@ -101,7 +101,7 @@ def test_multi_throughtput_tx(router_setting):
 @pytest.mark.wifi_connect
 def test_multi_throughtput_rx(router_setting):
     router = router_setting
-    ADB.wait_power()
+    adb.wait_power()
     pytest.dut.wait_devices()
     check_iperf()
     pytest.dut.wait_for_wifi_service()

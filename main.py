@@ -12,7 +12,7 @@ import pytest
 from case_handle import testCase
 
 timestamp = datetime.datetime.now().strftime("%Y.%m.%d_%H.%M.%S")
-test_case = 'test/stress/test_multi_throughput.py'
+test_case = 'test/stress/test_compatibility.py'
 # test_case = 'test/stress/test_2g_switch_channel_throughput.py'
 
 report_parent_path = test_case.replace('test', 'report', 1)
@@ -82,9 +82,9 @@ if __name__ == '__main__':
         test_case = [test_case];
     pytest.main(cmd + test_case);
 
-    # if allure_cmd:
-    #     subprocess.check_output(f'allure generate -c ./allure -o {allure_path}', shell=True);
-    #     allure_history_file = os.listdir(report_parent_path);
-    #     get_dir();
-    #     update_file();
-    # os.system(f'allure open {allure_path}')
+    if allure_cmd:
+        subprocess.check_output(f'allure generate -c ./allure -o {allure_path}', shell=True);
+        # allure_history_file = os.listdir(report_parent_path);
+        # get_dir();
+        # update_file();
+    os.system(f'allure open {allure_path}')

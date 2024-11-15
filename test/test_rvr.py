@@ -31,6 +31,7 @@ from tools.router_tool.Xiaomi.XiaomiRouterConfig import Xiaomiax3000Config
 from test import get_testdata
 from tools.yamlTool import yamlTool
 
+
 # 小米极限测试 记录
 # filename = 'XiaoMi-Rvr.xlsx'
 # rvr_xlsx = openpyxl.load_workbook(filename)
@@ -57,6 +58,16 @@ from tools.yamlTool import yamlTool
 #     for i in range(0, len(value)):
 # logging.info(f'execl write {row_num} {i + col_num}')
 # new_sheet.cell(row=row_num, column=i + col_num, value=value[i])
+def modify_tcl_script(old_str, new_str):
+    file = './script/rvr.tcl'
+    with open(file, "r", encoding="utf-8") as f1, open("%s.bak" % file, "w", encoding="utf-8") as f2:
+        for line in f1:
+            if old_str in line:
+                line = new_str
+            f2.write(line)
+    os.remove(file)
+    os.rename("%s.bak" % file, file)
+
 
 wifi_yaml = yamlTool(os.getcwd() + '/config/config.yaml')
 router_name = wifi_yaml.get_note('router')['name']
@@ -76,18 +87,6 @@ if pytest.connect_type == 'telnet':
 
 sum_list_lock = threading.Lock()
 
-
-def modify_tcl_script(old_str, new_str):
-    file = './script/rvr.tcl'
-    with open(file, "r", encoding="utf-8") as f1, open("%s.bak" % file, "w", encoding="utf-8") as f2:
-        for line in f1:
-            if old_str in line:
-                line = new_str
-            f2.write(line)
-    os.remove(file)
-    os.rename("%s.bak" % file, file)
-
-
 rvr_tool = wifi_yaml.get_note('rvr')['tool']
 if rvr_tool == 'iperf':
     test_tool = wifi_yaml.get_note('rvr')[rvr_tool]['version']
@@ -100,12 +99,13 @@ if rvr_tool == 'ixchariot':
     logging.info(f'path {script_path}')
     logging.info(f'test_tool {test_tool}')
     modify_tcl_script("set ixchariot_installation_dir ", f"set ixchariot_installation_dir \"{script_path}\"\n")
-# 实例路由器对象
-if router_needed:
-    exec(f'router = {router_name.capitalize()}Control()')
+
+if __name__ == '__main__':
+    # 实例路由器对象
+    if router_needed:
+        exec(f'router = {router_name.capitalize()}Control()')
 
 # env_control = wifi_yaml.get_note('env_control')
-
 
 # 初始化 衰减 & 转台 对象
 if rf_needed:
@@ -231,7 +231,6 @@ def get_logcat(pair, adb):
     # 分析 iperf 测试结果
     result_list = []
     if os.path.exists(f'rvr_log_{pytest.dut.serialnumber}.txt'):
-        logging.info('should print this ')
         with open(f'rvr_log_{pytest.dut.serialnumber}.txt', 'r') as f:
             for line in f.readlines():
                 logging.info(f'line : {line.strip()}')

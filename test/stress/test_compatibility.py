@@ -14,34 +14,40 @@ from tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
 from tools.router_tool.Router import Router
 from tools.pdusnmp import power_ctrl
 from test import get_testdata
-from tools.connect_tool.adb import ADB
+from tools.connect_tool.adb import adb
 
 
-ipfoncig_info = subprocess.check_output('ifconfig', shell=True, encoding='utf-8').strip()
-pc_ip = re.findall(r'inet\s+(\d+\.\d+\.\d+\.\d+)', ipfoncig_info, re.S)[0]
 power_delay = power_ctrl()
 router = ''
+pc_ip = ''
+ssid_2g = 'Aml_AP_Comp_2.4G'
+ssid_5g = 'Aml_AP_Comp_5G'
+ssid_6g = 'Aml_AP_Comp_6G'
+passwd = '@Aml#*st271'
 
+router = Router(band='2.4 GHz',ssid=ssid_2g,wpa_passwd=passwd,expected_rate='10 10')
 @pytest.fixture(scope='module', autouse=True, params=power_delay.ctrl,ids=[str(i) for i in power_delay.ctrl])
 def power_setting(request):
+    global pc_ip
     ip, port = request.param
     power_delay.shutdown()
     time.sleep(2)
     power_delay.switch(ip, port, 1)
-    time.sleep(10)
+    time.sleep(60)
+    pc_ip = pytest.host_os.dynamic_flush_network_card('eth0')
+    pytest.dut.ip_target = '.'.join(pc_ip.split('.')[:3])
+    logging.info(f'pc_ip {pc_ip}')
+    check_iperf()
+    pytest.dut.checkoutput(pytest.dut.CMD_WIFI_CONNECT.format(ssid_2g,'wpa2',passwd))
+    pytest.dut.wait_for_wifi_address()
     yield
-    power_delay.switch(ip, port, 2)
+    # power_delay.switch(ip, port, 2)
 
 
 def check_iperf():
-    try:
-        pytest.dut.checkoutput('ls /data/iperf')
-    except Exception:
-        logging.info('push iperf')
-        pytest.dut.root()
-        pytest.dut.remount
-        pytest.dut.push('./res/iperf', '/system/bin/iperf')
-        pytest.dut.checkoutput('chmod a+x /system/bin/iperf')
+    pytest.dut.checkoutput('ls /system/bin/iperf')
+    pytest.dut.push('./res/iperf', '/system/bin/iperf')
+    pytest.dut.checkoutput('chmod a+x /system/bin/iperf')
 
 
 def handle_wifi_cmd(router_info):
@@ -59,16 +65,8 @@ def handle_wifi_cmd(router_info):
 
 
 @pytest.mark.wifi_connect
-def test_multi_throughtput_tx(router_setting):
-    router = router_setting
-    ADB.wait_power()
-    pytest.dut.wait_devices()
-    check_iperf()
-    pytest.dut.wait_for_wifi_service()
-    time.sleep(5)
-    pytest.dut.forget_wifi()
-    pytest.dut.checkoutput(handle_wifi_cmd(router))
-    pytest.dut.wait_for_wifi_address()
+def test_multi_throughtput_tx():
+    global pc_ip
     rssi_info = pytest.dut.checkoutput(pytest.dut.IW_LINNK_COMMAND)
     logging.info(rssi_info)
     try:
@@ -90,10 +88,8 @@ def test_multi_throughtput_tx(router_setting):
 
 
 @pytest.mark.wifi_connect
-def test_multi_throughtput_rx(router_setting):
-    pytest.dut.forget_wifi()
-    pytest.dut.checkoutput(handle_wifi_cmd(router))
-    pytest.dut.wait_for_wifi_address()
+def test_multi_throughtput_rx():
+    global pc_ip
     rssi_info = pytest.dut.checkoutput(pytest.dut.IW_LINNK_COMMAND)
     logging.info(rssi_info)
     try:

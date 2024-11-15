@@ -25,7 +25,7 @@ from xml.dom import minidom
 import _io
 import pytest
 
-from tools.connect_tool.dut import Dut
+from tools.connect_tool.dut import dut
 from tools.connect_tool.uiautomator_tool import UiautomatorTool
 
 
@@ -41,7 +41,7 @@ def connect_again(func):
     return inner
 
 
-class ADB(Dut):
+class adb(dut):
     """
     ADB class Provide common device control functions over the ADB bridge
 
@@ -1256,9 +1256,11 @@ class ADB(Dut):
             self.keyevent(4)
         self.kill_setting()
 
-    def wait_for_wifi_address(self, cmd: str = '', target='192.168.50'):
+    def wait_for_wifi_address(self, cmd: str = '', target=''):
         # Wait for th wireless adapter to obtaion the ip address
         logging.info(f"waiting for wifi {target}")
+        if not target:
+            target = self.ip_target
         ip_address = self.subprocess_run('ifconfig wlan0 |egrep -o "inet [^ ]*"|cut -f 2 -d :')
         # logging.info(ip_address)
         step = 0
@@ -1635,7 +1637,7 @@ from tools.yamlTool import yamlTool
 
 concomitant_dut_config = yamlTool(os.getcwd() + '/config/config.yaml').get_note('concomitant_dut')
 if concomitant_dut_config['status']:
-    accompanying_dut = ADB(concomitant_dut_config['device_number'])
+    accompanying_dut = adb(concomitant_dut_config['device_number'])
     accompanying_dut.root()
     accompanying_dut.remount()
 else:

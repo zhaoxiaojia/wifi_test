@@ -20,7 +20,7 @@ from threading import Thread
 
 import pytest
 
-from tools.connect_tool.dut import Dut
+from tools.connect_tool.dut import dut
 
 cmd_line_wildcard = {
     'sandia': b'sandia:/ #',
@@ -30,7 +30,7 @@ cmd_line_wildcard = {
     'bayside': b'bayside:/ #'
 }
 
-class TelnetInterface(Dut):
+class TelnetInterface(dut):
     def __init__(self, ip, wildcard):
         super().__init__()
 
@@ -54,14 +54,14 @@ class TelnetInterface(Dut):
     def checkoutput(self, cmd, wildcard=''):
 
         def run_iperf():
-            if os.path.exists('temp.txt'):
-                os.remove('temp.txt')
+            if os.path.exists(f'rvr_log_{pytest.dut.serialnumber}.txt'):
+                os.remove(f'rvr_log_{pytest.dut.serialnumber}.txt')
             start_time = time.time()
             self.tn.write(cmd.encode('ascii') + b'\n')
             while time.time() - start_time < 60:
                 logging.info('try to get rvr result')
                 res = self.tn.read_until(b'Mbits/sec').decode('gbk')
-                with open('temp.txt', 'a') as f:
+                with open(f'rvr_log_{pytest.dut.serialnumber}.txt', 'a') as f:
                     f.write(res)
 
         if not wildcard:
@@ -70,7 +70,7 @@ class TelnetInterface(Dut):
             self.tn.write('\n'.encode('ascii') + b'\n')
             res = self.tn.read_until(wildcard).decode('gbk')
         except AttributeError as e:
-            # self.tn.open(self.ip)
+            self.tn.open(self.ip)
             self.tn.write('\n'.encode('ascii') + b'\n')
             res = self.tn.read_until(wildcard).decode('gbk')
         if re.findall(r'iperf[3]?.*?-s', cmd):

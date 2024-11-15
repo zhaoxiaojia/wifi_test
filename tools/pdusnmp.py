@@ -191,19 +191,20 @@ class PowerCtrl:
 
 class power_ctrl:
     SWITCH_KEY = 'snmpset -v1 -c private {} .1.3.6.1.4.1.23280.9.1.2.{} i {}'
-    SET_KEY = 'snmpset -v1 -c private {} 1.3.6.1.4.1.23273.4.40.{} i 255'
+    SET_KEY = 'snmpset -v1 -c private {} 1.3.6.1.4.1.23273.4.4{}.0 i 255'
 
     def handle_env_data(self):
         temp = []
-        for i in self.port_list:
-            if i:
-                for j in i:
-                    temp.append((self.ip_list[self.port_list.index(i)], j))
+        for k, v in self.power_ctrl.items():
+            if v:
+                for i in v:
+                    temp.append((k, i))
         return temp
 
     def __init__(self):
         self.config = yamlTool(os.getcwd() + '/config/config.yaml')
         self.power_ctrl = self.config.get_note('power_relay')
+        print(self.power_ctrl)
         self.ip_list = list(self.power_ctrl.keys())
         self.port_list = list(self.power_ctrl.values())
         self.ctrl = self.handle_env_data()
@@ -215,6 +216,10 @@ class power_ctrl:
 
     def switch(self, ip, port, status):
         cmd = self.SWITCH_KEY.format(ip, port, status)
+        self.checkoutput(cmd)
+
+    def set(self, ip, status):
+        cmd = self.SET_KEY.format(ip, status)
         self.checkoutput(cmd)
 
     def set_all(self, status):
@@ -234,6 +239,7 @@ class power_ctrl:
     def poweron(self):
         self.set_all(True)
 
+
 # s = PowerCtrl("192.168.50.230")
 # s.switch(2, True)
 # s.dark()
@@ -246,4 +252,4 @@ class power_ctrl:
 
 
 # s = power_ctrl()
-# s.switch("192.168.1.3",2,1)
+# s.set('192.168.200.3',1)

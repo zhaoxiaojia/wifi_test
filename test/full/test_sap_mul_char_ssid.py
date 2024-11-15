@@ -16,7 +16,7 @@ from test import (accompanying_dut, change_keyboard_language, close_hotspot,
 
 import pytest
 
-from tools.connect_tool.adb import ADB
+from tools.connect_tool.adb import adb
 
 '''
 测试步骤

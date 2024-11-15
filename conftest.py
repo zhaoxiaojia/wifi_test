@@ -21,10 +21,10 @@ import sys
 import psutil
 import pytest
 
-from tools.connect_tool.adb import ADB
+from tools.connect_tool.adb import adb
 from tools.connect_tool.telnet_tool import TelnetInterface
 from tools.TestResult import TestResult
-
+from tools.connect_tool.host_os import host_os
 from .tools.yamlTool import yamlTool
 
 
@@ -34,6 +34,8 @@ def pytest_sessionstart(session):
     :param session:
     :return:
     '''
+    # get host os
+    pytest.host_os = host_os()
     # get the pc system
     if ('win32' or 'win64') in sys.platform:
         pytest.win_flag = True
@@ -54,7 +56,7 @@ def pytest_sessionstart(session):
             info = subprocess.check_output("adb devices", shell=True, encoding='utf-8')
             device = re.findall(r'\n(.*?)\s+device', info, re.S)
             if device: device = device[0]
-        pytest.dut = ADB(serialnumber=device if device else '')
+        pytest.dut = adb(serialnumber=device if device else '')
     elif pytest.connect_type == 'telnet':
         # Create telnet obj
         telnet_ip = pytest.config_yaml.get_note("connect_type")[pytest.connect_type]['ip']
