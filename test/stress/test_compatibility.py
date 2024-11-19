@@ -1,6 +1,3 @@
-
-
-
 import logging
 import re
 import subprocess
@@ -16,7 +13,6 @@ from tools.pdusnmp import power_ctrl
 from test import get_testdata
 from tools.connect_tool.adb import adb
 
-
 power_delay = power_ctrl()
 router = ''
 pc_ip = ''
@@ -25,22 +21,45 @@ ssid_5g = 'Aml_AP_Comp_5G'
 ssid_6g = 'Aml_AP_Comp_6G'
 passwd = '@Aml#*st271'
 
-router = Router(band='2.4 GHz',ssid=ssid_2g,wpa_passwd=passwd,expected_rate='10 10')
-@pytest.fixture(scope='module', autouse=True, params=power_delay.ctrl,ids=[str(i) for i in power_delay.ctrl])
-def power_setting(request):
+router_2g = Router(band='2.4 GHz', wireless_mode='11ac', channel='1', authentication_method='Open System',
+                   bandwidth='20 MHz', ssid=ssid_2g, wpa_passwd=passwd, expected_rate='10 10')
+
+router_5g = Router(band='5 GHz', wireless_mode='11ac', channel='36', authentication_method='Open System',
+                   bandwidth='20 MHz', ssid=ssid_5g, wpa_passwd=passwd, expected_rate='10 10')
+test_data = [router_2g, router_5g]
+
+
+@pytest.fixture(scope='module', autouse=True, params=test_data, ids=[str(i) for i in test_data])
+def router_setting(power_setting, request):
     global pc_ip
-    ip, port = request.param
-    power_delay.shutdown()
-    time.sleep(2)
-    power_delay.switch(ip, port, 1)
-    time.sleep(60)
+    router = request.param
     pc_ip = pytest.host_os.dynamic_flush_network_card('eth0')
     pytest.dut.ip_target = '.'.join(pc_ip.split('.')[:3])
     logging.info(f'pc_ip {pc_ip}')
     check_iperf()
-    pytest.dut.checkoutput(pytest.dut.CMD_WIFI_CONNECT.format(ssid_2g,'wpa2',passwd))
+    for _ in range(30):
+        info = pytest.dut.checkoutput("cmd wifi start-scan;cmd wifi list-scan-results")
+        logging.info(info)
+        if 'Aml_AP_Comp_' in info:
+            break;
+        time.sleep(3)
+    else:
+        assert False,"Can't scan target ssid"
+    pytest.dut.forget_wifi()
+    pytest.dut.checkoutput(pytest.dut.CMD_WIFI_CONNECT.format(router.ssid, 'wpa2', router.wpa_passwd))
     pytest.dut.wait_for_wifi_address()
-    yield
+    yield router
+
+
+@pytest.fixture(scope='module', autouse=True, params=power_delay.ctrl, ids=[str(i) for i in power_delay.ctrl])
+def power_setting(request):
+    ip, port = request.param
+    power_delay.shutdown()
+    time.sleep(2)
+    power_delay.switch(ip, port, 1)
+    time.sleep(30)
+    logging.info(f'address {ip} port {port}')
+    yield ip, port
     # power_delay.switch(ip, port, 2)
 
 
@@ -63,10 +82,10 @@ def handle_wifi_cmd(router_info):
     return cmd
 
 
-
 @pytest.mark.wifi_connect
-def test_multi_throughtput_tx():
+def test_multi_throughtput_tx(router_setting):
     global pc_ip
+    router = router_setting
     rssi_info = pytest.dut.checkoutput(pytest.dut.IW_LINNK_COMMAND)
     logging.info(rssi_info)
     try:
@@ -80,12 +99,11 @@ def test_multi_throughtput_tx():
     tx_result = get_tx_rate(pc_ip, dut_ip, pytest.dut.serialnumber, router, 4, freq_num, rssi_num, "TCP")
     logging.info(tx_result)
     for i in tx_result:
-        if i >= router.expected_rate[0]:
+        if i >= float(router.expected_rate[0]):
             break
     else:
-        assert False,'Rate too low'
+        assert False, 'Rate too low'
     time.sleep(5)
-
 
 @pytest.mark.wifi_connect
 def test_multi_throughtput_rx():
@@ -103,8 +121,8 @@ def test_multi_throughtput_rx():
     rx_result = get_rx_rate(pc_ip, dut_ip, pytest.dut.serialnumber, router, 4, freq_num, rssi_num, "TCP")
     logging.info(rx_result)
     for i in rx_result:
-        if i >= router.expected_rate[1]:
+        if i >= float(router.expected_rate[1]):
             break
     else:
-        assert False,'Rate too low'
+        assert False, 'Rate too low'
     time.sleep(5)

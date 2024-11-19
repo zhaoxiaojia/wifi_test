@@ -388,7 +388,7 @@ class adb(dut):
         @return: None
         '''
         logging.info(self.ADB_S + self.serialnumber +
-                              " push " + filepath + " " + destination)
+                     " push " + filepath + " " + destination)
         self.checkoutput_term(self.ADB_S + self.serialnumber +
                               " push " + filepath + " " + destination)
 
@@ -1150,12 +1150,12 @@ class adb(dut):
         except Exception as e:
             return 'Data Error'
 
-    def wait_for_wifi_service(self, type='wlan0',recv='Link encap') -> None:
+    def wait_for_wifi_service(self, type='wlan0', recv='Link encap') -> None:
         # Wait for Wi-Fi network is available
         count = 0
         # time.sleep(10)
         while True:
-            info =  self.checkoutput(f'ifconfig {type}')
+            info = self.checkoutput(f'ifconfig {type}')
             logging.info(info)
             if recv in info:
                 break
@@ -1258,9 +1258,10 @@ class adb(dut):
 
     def wait_for_wifi_address(self, cmd: str = '', target=''):
         # Wait for th wireless adapter to obtaion the ip address
-        logging.info(f"waiting for wifi {target}")
+
         if not target:
             target = self.ip_target
+        logging.info(f"waiting for wifi {target}")
         ip_address = self.subprocess_run('ifconfig wlan0 |egrep -o "inet [^ ]*"|cut -f 2 -d :')
         # logging.info(ip_address)
         step = 0
@@ -1275,6 +1276,7 @@ class adb(dut):
                 if cmd:
                     self.checkoutput(cmd)
             if step > 10:
+                logging.error("Can't catch the target ip address")
                 assert False, 'connected fail'
         logging.info(f'ip address {ip_address}')
         return True, ip_address
