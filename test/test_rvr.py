@@ -456,7 +456,7 @@ def get_tx_rate(pc_ip, dut_ip, device_number, router_info, pair, freq_num, rssi_
         logging.info(f'expected rate {router_info.expected_rate.split()[0]}')
         logging.info(f'{tx_result}, {mcs_tx}')
         tx_result_list.append(tx_result)
-        if len(tx_result_list) > 2:
+        if len(tx_result_list) > 0:
             break
     corner = corner_tool.get_turntanle_current_angle() if corner_needed else corner_set
     tx_result_info = (

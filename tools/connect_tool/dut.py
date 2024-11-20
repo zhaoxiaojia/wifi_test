@@ -52,6 +52,8 @@ class dut():
     CMD_WIFI_STATUS = 'cmd wifi status'
     CMD_WIFI_START_SAP = 'cmd wifi start-softsap {} {} {} -b {}'
     CMD_WIFI_STOP_SAP = 'cmd wifi stop-softsap'
+    CMD_WIFI_LIST_NETWORK = "cmd wifi list-networks |grep -v Network |awk '{print $1}'"
+    CMD_WIFI_FORGET_NETWORK = 'cmd wifi forget-network {}'
 
     CMD_PING = 'ping -n {}'
     SVC_WIFI_DISABLE = 'svc wifi disable'
@@ -59,18 +61,6 @@ class dut():
 
     SVC_BLUETOOTH_DISABLE = 'svc bluetooth disable'
     SVC_BLUETOOTH_ENABLE = 'svc bluetooth enable'
-
-    # WIFI_CONNECT_PACKAGE = 'com.example.wifiConnect'
-    # WIFI_CONNECT_ACTIVITY = f'am start -n {WIFI_CONNECT_PACKAGE}/.MainActivity'
-    # WIFI_CONNECT_COMMAND_REGU = 'am start -n com.example.wifiConnect/.MainActivity -e ssid {}'
-    # WIFI_CONNECT_PASSWD_REGU = ' -e passwd {}'
-    # WIFI_CONNECT_HIDE_SSID_REGU = ' --ez hide_ssid true -e type {}'
-    # WIFI_DISCONNECT_COMMAND = WIFI_CONNECT_ACTIVITY + ' --ez disconnect true'
-    # WIFI_CHANGE_STATUS_REGU = ' -e wifi_status {}'
-    # WIFI_FORGET_WIFI_STR = ' --ez forget true'
-
-    CMD_WIFI_LIST_NETWORK = "cmd wifi list-networks |grep -v Network |awk '{print $1}'"
-    CMD_WIFI_FORGET_NETWORK = 'cmd wifi forget-network {}'
 
     MCS_RX_GET_COMMAND = 'iwpriv wlan0 get_last_rx'
     MCS_RX_CLEAR_COMMAND = 'iwpriv wlan0 clear_last_rx'

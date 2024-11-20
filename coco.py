@@ -8,6 +8,3 @@
 # version    ：python 3.9
 # Description：
 """
-
-
-print('.'.join('192.168.1.101'.split('.')[:3]))

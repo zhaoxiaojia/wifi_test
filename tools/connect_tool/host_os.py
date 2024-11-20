@@ -14,18 +14,22 @@ class host_os:
         return host_os._instance
 
     def __init__(self):
-        self.config = yamlTool(os.getcwd() + '/config/config.yaml')
+        self.config = yamlTool(os.getcwd() + '/../../config/config.yaml')
         self.host = self.config.get_note('host_os')
         self.user = self.host['user']
         self.passwd = self.host['password']
 
     def checkoutput(self, cmd):
-        info = subprocess.check_output(cmd, shell=True, encoding='utf-8')
-        return info
+        try:
+            info = subprocess.check_output(cmd, shell=True, encoding='utf-8')
+        except Exception as e:
+            return None
+        else:
+            return info
 
     def checkoutput_root(self, cmd):
         cmd = f'echo {self.passwd}|sudo -S {cmd}'
-        self.checkoutput(cmd)
+        return self.checkoutput(cmd)
 
     def get_ipaddress(self, net_card=''):
         info = self.checkoutput(f'ifconfig {net_card}')
