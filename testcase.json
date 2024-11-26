@@ -1883,5 +1883,17 @@
         "desc": "xxx",
         "priority": "P0",
         "path": "test/stress/test_multi_throughput_no_powerrelay.py"
+    },
+    "test_str_netflix.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test/project/xiaomi/test_str_netflix.py"
+    },
+    "test_str_reconnect.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test/project/xiaomi/test_str_reconnect.py"
     }
 }

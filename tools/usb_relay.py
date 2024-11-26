@@ -10,6 +10,17 @@ import logging
 
 
 class UsbRelay:
+    cmd = {
+        '1': {
+            'close': b'\xA0\x01\x01\xA2',
+            'release': b'\xA0\x01\x00\xA1'
+        },
+        '2': {
+            'close': b'\xA0\x02\x01\xA3',
+            'release': b'\xA0\x02\x00\xA2'
+        }
+    }
+
     def __init__(self, com):
         try:
             self.ser = serial.Serial(com, 9600)
@@ -20,10 +31,14 @@ class UsbRelay:
         else:
             self.alive = False
 
-    def power_control(self, status, hold):
+    def cmd_filter(self, status, port):
+        return self.cmd[port][status]
+
+    def power_control(self, status, hold, port=1):
         '''
         should set power usb control to NC
         Args:
+            port:
             status:
             hold:
 
@@ -32,22 +47,34 @@ class UsbRelay:
         '''
         if status == 'off':
             time.sleep(1)
-            self.ser.write(b'\xA0\x01\x01\xA2')
+            # self.write(fr'\xA0\x0{port}\x01\xA{port + 1}')
+            self.ser.write(self.cmd_filter('close', port))
             time.sleep(hold)
         if status == 'on':
             time.sleep(1)
-            self.ser.write(b'\xA0\x01\x00\xA1')
+            # self.write(fr'\xA0\x0{port}\x00\xA{port}')
+            self.ser.write(self.cmd_filter('release', port))
             time.sleep(hold)
 
-    def break_make(self):
+    def break_make(self, port=1):
         '''
-        should set button usb control to NO
+
+        Args:
+            port:
+
         Returns:
 
         '''
-        self.ser.write(b'\xA0\x01\x00\xA1')
-        time.sleep(0.2)
-        self.ser.write(b'\xA0\x01\x01\xA2')
+
+        # self.ser.write(b'\xA0\x02\x01\xA3')
+        self.ser.write(self.cmd_filter('close', str(port)))
+        # time.sleep(0.2)
+        self.ser.write(self.cmd_filter('release', str(port)))
+        # self.ser.write(b'\xA0\x02\x00\xA2')
 
     def close(self):
         self.ser.close()
+
+
+# ser = UsbRelay("COM10")
+# ser.break_make(port=1)

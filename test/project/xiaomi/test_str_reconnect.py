@@ -1,8 +1,8 @@
 # !/usr/bin/env python
 # -*- coding: utf-8 -*-
-# @Time    : 2024/10/23 17:31
+# @Time    : 2024/11/25 19:07
 # @Author  : chao.li
-# @File    : test_str.py
+# @File    : test_str_reconnect.py
 
 
 from tools.usb_relay import UsbRelay
@@ -11,7 +11,7 @@ import time
 import pytest
 
 # the control by power usb
-bt = UsbRelay("COM6")
+bt = UsbRelay("COM10")
 
 # set time to power on
 str_sleep = 5
@@ -22,6 +22,9 @@ repeat = 1000
 # test address
 address = "192.168.50.1"
 
+ssid = 'AX88U-2G'
+passwd = '12345678'
+security = 'wpa2'
 '''
 Test step
 
@@ -39,10 +42,12 @@ def setup_teardown():
 
 
 @multi_stress
-def test_ac(device):
+def test_str(device):
     for _ in range(repeat):
-        bt.break_make()
+        device.forget_wifi()
+        bt.break_make(port=2)
         time.sleep(str_sleep)
-        bt.break_make()
+        bt.break_make(port=2)
         time.sleep(str_wake)
+        device.connect_wifi(ssid, passwd, security)
         device.ping(address)

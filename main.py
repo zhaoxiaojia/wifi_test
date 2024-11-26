@@ -12,7 +12,7 @@ import pytest
 from case_handle import testCase
 
 timestamp = datetime.datetime.now().strftime("%Y.%m.%d_%H.%M.%S")
-test_case = 'test/stress/test_compatibility.py'
+test_case = 'test/project/xiaomi/test_str_reconnect.py'
 # test_case = 'test/stress/test_2g_switch_channel_throughput.py'
 
 report_parent_path = test_case.replace('test', 'report', 1)
@@ -75,16 +75,16 @@ if __name__ == '__main__':
     testcase_handler = testCase()
     # caselist = coco.sync_testSuite(suite='stability', case=r'test_03_open_wifi.py')
     # test_case = [f'.\\{i}' for i in caselist]
-    # cmd = ['-v', '--capture=sys', '--full-trace', '--html=report.html', f'--resultpath={timestamp}']
-    cmd = ['-v', '--capture=sys', '--full-trace', '--html=report.html', f'--resultpath={timestamp}', allure_cmd];
+    cmd = ['-v', '--capture=sys', '--full-trace', '--html=report.html', f'--resultpath={timestamp}']
+    # cmd = ['-v', '--capture=sys', '--full-trace', '--html=report.html', f'--resultpath={timestamp}', allure_cmd];
     # print(" ".join(cmd))
     if type(test_case) == str:
         test_case = [test_case];
     pytest.main(cmd + test_case);
 
-    if allure_cmd:
+    if locals().get('allure_cmd'):
         subprocess.check_output(f'allure generate -c ./allure -o {allure_path}', shell=True);
         # allure_history_file = os.listdir(report_parent_path);
         # get_dir();
         # update_file();
-    os.system(f'allure open {allure_path}')
+        os.system(f'allure open {allure_path}')

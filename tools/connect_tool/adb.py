@@ -1262,13 +1262,13 @@ class adb(dut):
         if not target:
             target = self.ip_target
         logging.info(f"waiting for wifi {target}")
-        ip_address = self.subprocess_run('ifconfig lo |egrep -o "inet [^ ]*"|cut -d ' ' -f 2')
+        ip_address = self.subprocess_run('ifconfig wlan0 |egrep -o "inet [^ ]*"|cut -d " " -f 2')
         # logging.info(ip_address)
         step = 0
         while True:
             time.sleep(5)
             step += 1
-            ip_address = self.subprocess_run('ifconfig lo |egrep -o "inet [^ ]*"|cut -d ' ' -f 2')
+            ip_address = self.subprocess_run('ifconfig wlan0 |egrep -o "inet [^ ]*"|cut -d " " -f 2')
             if target in ip_address:
                 break
             if step == 2:

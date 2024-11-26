@@ -319,7 +319,7 @@ class cmd_wpa:
 
 # host = host_os()
 # wpa = cmd_wpa(host=host)
-# wpa.connect_wifi('host', ssid='coco 的杂货铺', psk='12345678')
+# wpa.connect_wifi('host', ssid='sunshine', psk='Home1357')
 # print(wpa.send_cmd('ifconfig wlp0s20f3', 'host'))
 # wpa.forget_wifi('host')
 # print(wpa.send_cmd('ifconfig wlp0s20f3', 'host'))

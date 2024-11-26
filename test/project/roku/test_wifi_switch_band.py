@@ -7,13 +7,9 @@
 # @Software: PyCharm
 
 
-import logging
-import re
-import time
-from test.roku import *
+from test.project.roku import *
 import pytest
 
-from test.stress.test_ap_switch import ssid_2g
 from tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
 from tools.router_tool.Router import Router
 
