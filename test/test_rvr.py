@@ -296,7 +296,7 @@ def wifi_setup_teardown(request):
     if pytest.connect_type == 'telnet':
         connect_status = True
         if router_needed:
-            time.sleep(30)
+            time.sleep(90)
     else:
         # 连接 网络 最多三次重试
         for _ in range(3):
