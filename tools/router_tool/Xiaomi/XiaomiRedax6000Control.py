@@ -1,11 +1,13 @@
-#!/usr/bin/env python
-# _*_ coding: utf-8 _*_
-# @Time    : 2022/11/3 09:42
-# @Author  : chao.li
-# @Site    :
-# @File    : Xiaomiax3000Control.py
-# @Software: PyCharm
-
+#!/usr/bin/env python 
+# encoding: utf-8 
+'''
+@author: chao.li
+@contact: chao.li@amlogic.com
+@software: pycharm
+@file: XiaomiRedax6000Control.py 
+@time: 2024/12/2 11:20 
+@desc: 
+'''
 
 import logging
 import time
@@ -18,10 +20,10 @@ from selenium.webdriver.support.ui import Select, WebDriverWait
 
 from tools.router_tool.RouterConfig import ConfigError
 from tools.router_tool.RouterControl import RouterTools
-from tools.router_tool.Xiaomi.XiaomiRouterConfig import Xiaomiax3000Config
+from tools.router_tool.Xiaomi.XiaomiRouterConfig import XiaomiRouterConfig
 
 
-class Xiaomiax3000Control:
+class XiaomiRedax3000Control:
     BAND_2 = '2.4 GHz'
     BAND_5 = '5 GHz'
 
@@ -94,7 +96,7 @@ class Xiaomiax3000Control:
             # 修改 authentication_method
             if router.authentication_method:
                 try:
-                    index = Xiaomiax3000Config.AUTHENTICATION_METHOD_DICT[router.authentication_method]
+                    index = XiaomiRouterConfig.AUTHENTICATION_METHOD_DICT[router.authentication_method]
                 except ConfigError:
                     raise ConfigError('authentication method element error')
                 target = 'authentication_method_2g' if self.BAND_2 == router.band else 'authentication_method_5g'
@@ -119,10 +121,10 @@ class Xiaomiax3000Control:
                 channel = str(router.channel)
                 try:
                     if router.band == '2.4 GHz':
-                        index = Xiaomiax3000Config.CHANNEL_2_DICT[channel]
+                        index = XiaomiRouterConfig.CHANNEL_2_DICT[channel]
                         target = 'channel_2g'
                     else:
-                        index = Xiaomiax3000Config.CHANNEL_5_DICT[channel]
+                        index = XiaomiRouterConfig.CHANNEL_5_DICT[channel]
                         target = 'channel_5g'
                 except KeyError:
                     raise ConfigError('channel element error')
@@ -143,10 +145,10 @@ class Xiaomiax3000Control:
             # 修改 bandwidth
             if router.bandwidth:
                 if router.band == self.BAND_2:
-                    target_dict = Xiaomiax3000Config.BANDWIDTH_2_LIST
+                    target_dict = XiaomiRouterConfig.BANDWIDTH_2_LIST
                     target = 'bandwidth_2g'
                 else:
-                    target_dict = Xiaomiax3000Config.BANDWIDTH_5_LIST
+                    target_dict = XiaomiRouterConfig.BANDWIDTH_5_LIST
                     target = 'bandwidth_5g'
                 if router.bandwidth not in target_dict: raise ConfigError('bandwidth element error')
                 self.router_control.driver.find_element(
@@ -161,22 +163,26 @@ class Xiaomiax3000Control:
 
             time.sleep(5)
             # 点击apply
+            # if self.BAND_2 == router.band:
+            #     target = 'apply_2g'
+            # else:
+            #     target = 'apply_5g'
             wait_for = self.router_control.driver.find_element(
                 By.XPATH, self.router_control.xpath['apply_element']['apply_5g'])
             self.router_control.scroll_to(wait_for)
             wait_for.click()
             self.router_control.driver.find_element(By.XPATH, '/html/body/div[1]/div/div[3]/div/a[1]/span').click()
-            # try:
-            if ('需要30秒请等待...' in self.router_control.driver.
-                    find_element(By.XPATH, '/html/body/div[1]/div/div[2]/div/p').text):
-                logging.info('Need wait 30 seconds')
-                time.sleep(30)
-            else:
-                logging.info('Need wait 75 seconds')
-                time.sleep(75)
+            try:
+                if ('需要30秒请等待...' in self.router_control.driver.
+                        find_element(By.XPATH, '/html/body/div[1]/div/div[2]/div/p').text):
+                    logging.info('Need wait 30 seconds')
+                    time.sleep(30)
+                else:
+                    logging.info('Need wait 75 seconds')
+                    time.sleep(75)
 
-            # except Exception as e:
-            #     logging.info(e)
+            except Exception as e:
+                logging.info(e)
             time.sleep(3)
             # 修改wiremode
             if router.wireless_mode:
@@ -185,7 +191,7 @@ class Xiaomiax3000Control:
                 self.router_control.scroll_to(wifi6_switch)
                 if wifi6_switch.get_attribute("data-on") != {'11ax': '0', '11ac': '1'}[router.wireless_mode]:
                     wifi6_switch.click()
-                    time.sleep(35)
+                    time.sleep(15)
 
             logging.info('Router setting done')
             return True
@@ -196,16 +202,5 @@ class Xiaomiax3000Control:
         finally:
             self.router_control.driver.quit()
 
-# fields = ['serial', 'band', 'ssid', 'wireless_mode', 'channel', 'bandwidth', 'authentication_method', 'wpa_passwd',
-#           'test_type',
-#           'wep_encrypt', 'passwd_index', 'wep_passwd', 'protect_frame', 'wpa_encrypt', 'hide_ssid']
-# Router = namedtuple('Router', fields, defaults=[None, ] * len(fields))
-# router5 = Router(serial='1', band='5 GHz', ssid='XiaomiAX3000_2.4G', channel='36', wireless_mode='11ax',
-#                 bandwidth='80MHz', authentication_method='超强加密(WPA3个人版)', wpa_passwd='12345678',
-#                 hide_ssid='否')
-# router2 = Router(serial='1', band='2.4 GHz', ssid='XiaomiAX3000_2.4G', channel='1', wireless_mode='11ac',
-#                 bandwidth='40MHz', authentication_method='超强加密(WPA3个人版)', wpa_passwd='12345678',
-#                 hide_ssid='否')
-# control = Xiaomiax3000Control()
-# control.change_setting(router2)
+# fields = ['serial', 'band', 'ssid', 'wireless_mode', 'channel', '
 # control.reboot_router()
