@@ -56,8 +56,7 @@ class MainActivity : AppCompatActivity() {
     private val TAG = "btConnect"
 
     private val bluetoothPermissions = arrayOf(
-        Manifest.permission.BLUETOOTH_CONNECT,
-        Manifest.permission.BLUETOOTH_SCAN
+        Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_SCAN
     )
 
     private fun checkAndRequestPermissions() {
@@ -70,11 +69,11 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
+
     @SuppressLint("MissingPermission")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-        Log.d(TAG, "onCreate")
         if (bluetoothAdapter == null) {
             Toast.makeText(this, "设备不支持蓝牙", Toast.LENGTH_SHORT).show()
             finish()
@@ -105,15 +104,9 @@ class MainActivity : AppCompatActivity() {
 
     @SuppressLint("MissingPermission")
     private fun startDiscoveryAndPairing() {
-        if (bluetoothAdapter == null) {
-            Toast.makeText(this, "设备不支持蓝牙", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        if (bluetoothAdapter.isDiscovering) {
+        if (bluetoothAdapter!!.isDiscovering) {
             bluetoothAdapter.cancelDiscovery()
         }
-
         bluetoothAdapter.startDiscovery()
 
         // 搜索设备并自动尝试配对
@@ -132,7 +125,7 @@ class MainActivity : AppCompatActivity() {
                         if (device.bondState == BluetoothDevice.BOND_NONE) {
                             pairDevice(device)
                         } else {
-                            Log.d(TAG, "设备已配对")
+                            Log.d(TAG, "pair done")
                         }
                     }
                 }
@@ -165,20 +158,15 @@ class MainActivity : AppCompatActivity() {
 
                 when (bondState) {
                     BluetoothDevice.BOND_BONDING -> {
-                        Toast.makeText(
-                            this@MainActivity, "正在配对 ${device?.name}", Toast.LENGTH_SHORT
-                        ).show()
+                        Log.d(TAG, "pair ${device?.name}")
                     }
 
                     BluetoothDevice.BOND_BONDED -> {
-                        Toast.makeText(
-                            this@MainActivity, "已配对 ${device?.name}", Toast.LENGTH_SHORT
-                        ).show()
+                        Log.d(TAG, "pair done ${device?.name}")
                     }
 
                     BluetoothDevice.BOND_NONE -> {
-                        Toast.makeText(this@MainActivity, "配对失败或取消配对", Toast.LENGTH_SHORT)
-                            .show()
+                        Log.d(TAG, "cancel")
                     }
                 }
             }
@@ -196,16 +184,13 @@ class MainActivity : AppCompatActivity() {
                     Log.d(TAG, ("ble " + device?.name) ?: "null")
                     // 处理扫描到的设备
                     if (device.name == targetDeviceName) {
-                        Toast.makeText(
-                            this@MainActivity, "发现设备: ${device.name}", Toast.LENGTH_SHORT
-                        ).show()
                         connectToDevice(device)
                     }
                 }
             }
 
             override fun onScanFailed(errorCode: Int) {
-                Toast.makeText(this@MainActivity, "扫描失败: $errorCode", Toast.LENGTH_SHORT).show()
+                Log.d(TAG, "scan failed")
             }
         }
 
@@ -214,14 +199,14 @@ class MainActivity : AppCompatActivity() {
             if (scanning) {
                 bluetoothLeScanner?.stopScan(scanCallback)
                 scanning = false
-                Log.d(TAG, "ble扫描结束")
+                Log.d(TAG, "ble scan done")
             }
         }
 
         // 开始扫描
         scanning = true
         bluetoothLeScanner?.startScan(null, ScanSettings.Builder().build(), scanCallback)
-        Log.d(TAG, "开始扫描 BLE 设备...")
+        Log.d(TAG, "start scan BLE ...")
 
         // 设置超时停止扫描
         handler.postDelayed(stopScanRunnable, SCAN_PERIOD)
@@ -244,12 +229,12 @@ class MainActivity : AppCompatActivity() {
                 super.onConnectionStateChange(gatt, status, newState)
                 when (newState) {
                     BluetoothGatt.STATE_CONNECTED -> {
-                        Log.d(TAG, "连接成功")
+                        Log.d(TAG, "connected")
                         gatt.discoverServices() // 开始发现服务
                     }
 
                     BluetoothGatt.STATE_DISCONNECTED -> {
-                        Log.d(TAG, "连接断开")
+                        Log.d(TAG, "disconnected")
                     }
                 }
             }
@@ -258,7 +243,7 @@ class MainActivity : AppCompatActivity() {
                 super.onServicesDiscovered(gatt, status)
                 if (status == BluetoothGatt.GATT_SUCCESS) {
                     val services = gatt.services
-                    Log.d(TAG, "发现服务: ${services.size}")
+                    Log.d(TAG, "find service: ${services.size}")
                     // 示例：获取第一个服务的特征
                     val characteristic = services[0].characteristics[0]
                     readCharacteristic(gatt, characteristic)
@@ -271,7 +256,7 @@ class MainActivity : AppCompatActivity() {
                 super.onCharacteristicRead(gatt, characteristic, status)
                 if (status == BluetoothGatt.GATT_SUCCESS) {
                     val value = characteristic.value
-                    Log.d(TAG, "读取到数据: ${value.contentToString()}")
+                    Log.d(TAG, "get data: ${value.contentToString()}")
                 }
             }
         })
@@ -288,7 +273,7 @@ class MainActivity : AppCompatActivity() {
     private fun disconnect() {
         try {
             bluetoothSocket?.close()
-            Log.d(TAG, "连接已断开")
+            Log.d(TAG, "disconnected")
         } catch (e: IOException) {
             e.printStackTrace()
         }

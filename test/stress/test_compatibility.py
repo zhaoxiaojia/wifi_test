@@ -44,7 +44,7 @@ def router_setting(power_setting, request):
             break;
         time.sleep(3)
     else:
-        assert False,"Can't scan target ssid"
+        assert False, "Can't scan target ssid"
     pytest.dut.forget_wifi()
     pytest.dut.checkoutput(pytest.dut.CMD_WIFI_CONNECT.format(router.ssid, 'wpa2', router.wpa_passwd))
     pytest.dut.wait_for_wifi_address()
@@ -60,7 +60,7 @@ def power_setting(request):
     time.sleep(30)
     logging.info(f'address {ip} port {port}')
     yield ip, port
-    # power_delay.switch(ip, port, 2)
+    power_delay.switch(ip, port, 2)
 
 
 def check_iperf():
@@ -105,9 +105,11 @@ def test_multi_throughtput_tx(router_setting):
         assert False, 'Rate too low'
     time.sleep(5)
 
+
 @pytest.mark.wifi_connect
-def test_multi_throughtput_rx():
+def test_multi_throughtput_rx(router_setting):
     global pc_ip
+    router = router_setting
     rssi_info = pytest.dut.checkoutput(pytest.dut.IW_LINNK_COMMAND)
     logging.info(rssi_info)
     try:

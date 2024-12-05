@@ -100,11 +100,12 @@ if rvr_tool == 'ixchariot':
     logging.info(f'test_tool {test_tool}')
     modify_tcl_script("set ixchariot_installation_dir ", f"set ixchariot_installation_dir \"{script_path}\"\n")
 
-if __name__ == '__main__':
+try:
     # 实例路由器对象
     if router_needed:
         exec(f'router = {router_name.capitalize()}Control()')
-
+except Exception as e:
+    ...
 # env_control = wifi_yaml.get_note('env_control')
 
 # 初始化 衰减 & 转台 对象
