@@ -33,6 +33,7 @@ class Xiaomiax3000Control:
         self.router_control.driver.get(self.router_control.address)
         # input passwd
         self.router_control.driver.find_element(By.ID, self.router_control.xpath['password_element']).click()
+        time.sleep(0.5)
         self.router_control.driver.find_element(By.ID, self.router_control.xpath['password_element']).send_keys(
             self.router_control.xpath['passwd'])
         # click login
@@ -59,7 +60,7 @@ class Xiaomiax3000Control:
             wait.until(EC.presence_of_element_located((By.XPATH, '//*[@id="wifiset24"]/div[1]')))
 
             if router.band == self.BAND_5:
-                wait_for = self.router_control.driver.find_element(By.XPATH, '//*[@id="bd"]/div[4]/div[1]/h3')
+                wait_for = self.router_control.driver.find_element(By.XPATH, '//*[@id="wifiset50"]')
                 self.router_control.scroll_to(wait_for)
 
             # 修改 ssid
@@ -181,7 +182,7 @@ class Xiaomiax3000Control:
             # 修改wiremode
             if router.wireless_mode:
                 wifi6_switch = self.router_control.driver.find_element(By.XPATH,
-                                                                       '/html/body/div[1]/div[2]/div[4]/div[1]/div/a')
+                                                                       '//*[@id="WIFI6switch"]')
                 self.router_control.scroll_to(wifi6_switch)
                 if wifi6_switch.get_attribute("data-on") != {'11ax': '0', '11ac': '1'}[router.wireless_mode]:
                     wifi6_switch.click()
@@ -196,16 +197,17 @@ class Xiaomiax3000Control:
         finally:
             self.router_control.driver.quit()
 
+
 # fields = ['serial', 'band', 'ssid', 'wireless_mode', 'channel', 'bandwidth', 'authentication_method', 'wpa_passwd',
 #           'test_type',
 #           'wep_encrypt', 'passwd_index', 'wep_passwd', 'protect_frame', 'wpa_encrypt', 'hide_ssid']
 # Router = namedtuple('Router', fields, defaults=[None, ] * len(fields))
 # router5 = Router(serial='1', band='5 GHz', ssid='XiaomiAX3000_2.4G', channel='36', wireless_mode='11ax',
-#                 bandwidth='80MHz', authentication_method='超强加密(WPA3个人版)', wpa_passwd='12345678',
-#                 hide_ssid='否')
+#                  bandwidth='80MHz', authentication_method='超强加密(WPA3个人版)', wpa_passwd='12345678',
+#                  hide_ssid='否')
 # router2 = Router(serial='1', band='2.4 GHz', ssid='XiaomiAX3000_2.4G', channel='1', wireless_mode='11ac',
-#                 bandwidth='40MHz', authentication_method='超强加密(WPA3个人版)', wpa_passwd='12345678',
-#                 hide_ssid='否')
+#                  bandwidth='40MHz', authentication_method='超强加密(WPA3个人版)', wpa_passwd='12345678',
+#                  hide_ssid='否')
 # control = Xiaomiax3000Control()
 # control.change_setting(router2)
 # control.reboot_router()

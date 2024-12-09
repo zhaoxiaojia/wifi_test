@@ -34,6 +34,7 @@ def router_setting(power_setting, request):
     global pc_ip
     router = request.param
     pc_ip = pytest.host_os.dynamic_flush_network_card('eth0')
+    if pc_ip is None: assert False, "Can't get pc ip address"
     pytest.dut.ip_target = '.'.join(pc_ip.split('.')[:3])
     logging.info(f'pc_ip {pc_ip}')
     check_iperf()
@@ -57,8 +58,8 @@ def power_setting(request):
     power_delay.shutdown()
     time.sleep(2)
     power_delay.switch(ip, port, 1)
-    time.sleep(30)
     logging.info(f'address {ip} port {port}')
+    time.sleep(60)
     yield ip, port
     power_delay.switch(ip, port, 2)
 

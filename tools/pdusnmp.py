@@ -215,6 +215,7 @@ class power_ctrl:
         return info
 
     def switch(self, ip, port, status):
+        logging.info(f'ser power relay : {ip} port {port} {"on" if status == 1 else "off"}')
         cmd = self.SWITCH_KEY.format(ip, port, status)
         self.checkoutput(cmd)
 
@@ -238,7 +239,6 @@ class power_ctrl:
 
     def poweron(self):
         self.set_all(True)
-
 
 # s = PowerCtrl("192.168.50.230")
 # s.switch(2, True)

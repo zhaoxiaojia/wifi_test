@@ -38,11 +38,10 @@ class host_os:
             return info[0]
 
     def dynamic_flush_network_card(self, net_card=''):
+        self.checkoutput_root(f'dhclient -r {net_card}')
         for i in range(30):
-            if i % 5 == 0:
-                self.checkoutput_root(f'dhclient -r {net_card}')
-                time.sleep(1)
-                self.checkoutput_root(f'dhclient {net_card}')
+            time.sleep(2)
+            self.checkoutput_root(f'dhclient {net_card}')
             if self.get_ipaddress(net_card):
                 return self.get_ipaddress(net_card)
             time.sleep(6)

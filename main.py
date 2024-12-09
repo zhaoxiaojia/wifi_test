@@ -68,7 +68,8 @@ if __name__ == '__main__':
 
     if not os.path.exists('report'):
         os.mkdir('report')
-
+    if os.path.exists('assets'):
+        os.remove('assets')
     if not os.path.exists(report_path):
         os.mkdir(report_path)
 
