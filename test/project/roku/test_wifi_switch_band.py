@@ -51,6 +51,8 @@ def test_wifi_switch():
         ax88uControl.change_setting(Router(band='2.4 Ghz', ssid=ssid))
         ax88uControl.change_setting(Router(band='5 Ghz', ssid=ssid_bat))
         time.sleep(60)
+        pytest.dut.checkoutput("ls")
         ax88uControl.change_setting(Router(band='5 Ghz', ssid=ssid))
         ax88uControl.change_setting(Router(band='2.4 Ghz', ssid=ssid_bat))
         time.sleep(60)
+        pytest.dut.checkoutput("ls")
