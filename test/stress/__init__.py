@@ -6,13 +6,14 @@
 
 
 import logging
+import re
+import subprocess
 import threading
 import time
-import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pytest
-import re
+
 from tools.connect_tool.adb import adb
 
 info = subprocess.check_output("adb devices", shell=True, encoding='utf-8')

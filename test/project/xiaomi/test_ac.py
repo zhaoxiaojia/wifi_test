@@ -5,10 +5,12 @@
 # @File    : test_ac.py
 
 
-from tools.usb_relay import UsbRelay
-from test.stress import multi_stress
 import time
+from test.stress import multi_stress
+
 import pytest
+
+from tools.usb_relay import UsbRelay
 
 # the control by power usb
 power = UsbRelay("COM9")

@@ -17,7 +17,6 @@ import pytest
 from tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
 from tools.router_tool.Router import Router
 
-
 '''
 Test step
 1.Connect any AP

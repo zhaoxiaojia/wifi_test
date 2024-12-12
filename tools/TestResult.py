@@ -10,10 +10,11 @@ import csv
 import logging
 import os
 import time
-import pytest
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import pytest
 from matplotlib.backends.backend_pdf import PdfPages
 
 from util.decorators import singleton

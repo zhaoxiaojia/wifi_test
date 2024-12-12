@@ -18,17 +18,71 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select, WebDriverWait
 
-from tools.router_tool.RouterConfig import ConfigError
-from tools.router_tool.RouterControl import RouterTools
-from tools.router_tool.Xiaomi.XiaomiRouterConfig import XiaomiRouterConfig
+from tools.router_tool.RouterControl import ConfigError, RouterTools
 
 
-class XiaomiRedax3000Control:
+class XiaomiRedax3000Control(RouterTools):
     BAND_2 = '2.4 GHz'
     BAND_5 = '5 GHz'
+    CHANNEL_2_DICT = {
+        '自动': '1',
+        '1': '2',
+        '2': '3',
+        '3': '4',
+        '4': '5',
+        '5': '6',
+        '6': '7',
+        '7': '8',
+        '8': '9',
+        '9': '10',
+        '10': '11',
+        '11': '12',
+        '12': '13',
+        '13': '14',
+    }
+
+    CHANNEL_5_DICT = {
+        '自动': '1',
+        '36': '2',
+        '40': '3',
+        '44': '4',
+        '48': '5',
+        '52': '6',
+        '56': '7',
+        '60': '8',
+        '64': '9',
+        '149': '10',
+        '153': '11',
+        '157': '12',
+        '161': '13',
+        '165': '14'
+    }
+
+    AUTHENTICATION_METHOD_DICT = {
+        '超强加密(WPA3个人版)': '1',
+        '强混合加密(WPA3/WPA2个人版)': '2',
+        '强加密(WPA2个人版)': '3',
+        '混合加密(WPA/WPA2个人版)': '4',
+        '无加密(允许所有人连接)': '5'
+    }
+
+    BANDWIDTH_5_LIST = {
+        '160/80/40/20MHz': '1',
+        '20MHz': '2',
+        '40MHz': '3',
+        '80MHz': '4'
+    }
+
+    BANDWIDTH_2_LIST = {
+        '40/20MHz': '1',
+        '20MHz': '2',
+        '40MHz': '3'
+    }
+
+    WIRELESS_MODE = ['11ac', '11ax']
 
     def __init__(self):
-        self.router_control = RouterTools('xiaomi_ax3000', display=True)
+        super().__init__('xiaomi_ax3000', display=True)
 
     def login(self):
         # try:
@@ -96,7 +150,7 @@ class XiaomiRedax3000Control:
             # 修改 authentication_method
             if router.authentication_method:
                 try:
-                    index = XiaomiRouterConfig.AUTHENTICATION_METHOD_DICT[router.authentication_method]
+                    index = self.AUTHENTICATION_METHOD_DICT[router.authentication_method]
                 except ConfigError:
                     raise ConfigError('authentication method element error')
                 target = 'authentication_method_2g' if self.BAND_2 == router.band else 'authentication_method_5g'
@@ -121,10 +175,10 @@ class XiaomiRedax3000Control:
                 channel = str(router.channel)
                 try:
                     if router.band == '2.4 GHz':
-                        index = XiaomiRouterConfig.CHANNEL_2_DICT[channel]
+                        index = self.CHANNEL_2_DICT[channel]
                         target = 'channel_2g'
                     else:
-                        index = XiaomiRouterConfig.CHANNEL_5_DICT[channel]
+                        index = self.CHANNEL_5_DICT[channel]
                         target = 'channel_5g'
                 except KeyError:
                     raise ConfigError('channel element error')
@@ -145,10 +199,10 @@ class XiaomiRedax3000Control:
             # 修改 bandwidth
             if router.bandwidth:
                 if router.band == self.BAND_2:
-                    target_dict = XiaomiRouterConfig.BANDWIDTH_2_LIST
+                    target_dict = self.BANDWIDTH_2_LIST
                     target = 'bandwidth_2g'
                 else:
-                    target_dict = XiaomiRouterConfig.BANDWIDTH_5_LIST
+                    target_dict = self.BANDWIDTH_5_LIST
                     target = 'bandwidth_5g'
                 if router.bandwidth not in target_dict: raise ConfigError('bandwidth element error')
                 self.router_control.driver.find_element(
@@ -199,8 +253,6 @@ class XiaomiRedax3000Control:
             logging.info('Router change setting with error')
             logging.info(e)
             return False
-        finally:
-            self.router_control.driver.quit()
 
 # fields = ['serial', 'band', 'ssid', 'wireless_mode', 'channel', '
 # control.reboot_router()

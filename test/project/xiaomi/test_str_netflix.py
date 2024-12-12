@@ -4,10 +4,12 @@
 # @Author  : chao.li
 # @File    : test_str_netflix.py
 
-from tools.usb_relay import UsbRelay
-from test.stress import multi_stress
 import time
+from test.stress import multi_stress
+
 import pytest
+
+from tools.usb_relay import UsbRelay
 
 # the control by power usb
 bt = UsbRelay("COM10")

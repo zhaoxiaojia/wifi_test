@@ -1,10 +1,10 @@
-import subprocess
 import os
 import re
+import subprocess
 import time
+from subprocess import check_output
 
 from tools.yamlTool import yamlTool
-from subprocess import check_output
 
 
 class host_os:

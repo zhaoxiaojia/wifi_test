@@ -12,17 +12,15 @@ import os
 import sys
 import telnetlib
 import time
-import pytest
 from collections import namedtuple
 
+import pytest
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
-from tools.connect_tool.telnet_tool import TelnetInterface
-from tools.router_tool.AsusRouter.AsusRouterConfig import Asusax88uConfig
-from tools.router_tool.RouterConfig import ConfigError
-from tools.router_tool.RouterControl import RouterTools
+from tools.connect_tool.telnet_tool import telnet_tool
+from tools.router_tool.RouterControl import ConfigError
 from tools.yamlTool import yamlTool
 
 
@@ -44,10 +42,24 @@ class Asusax88uControl():
         # 'WPA2-Enterprise': '6',
         # 'WPA/WPA2-Enterprise': '7',
     }
+    CHANNEL_5_DICT = {
+        '自动': '1',
+        '36': '2',
+        '40': '3',
+        '44': '4',
+        '48': '5',
+        '52': '6',
+        '56': '7',
+        '60': '8',
+        '64': '9',
+        '149': '10',
+        '153': '11',
+        '157': '12',
+        '161': '13',
+    }
 
     def __init__(self):
         super().__init__()
-        # self.router_control = RouterTools('asus_88u')
         if pytest.win_flag:
             self.yaml_info = yamlTool(os.getcwd() + f'\\config\\router_xpath\\asus_xpath.yaml')
         else:
@@ -85,7 +97,7 @@ class Asusax88uControl():
             '11ax': 'nvram set wl0_11ax=1;nvram set wl0_nmode_x=9',
             'Legacy': 'nvram set wl0_11ax=0;nvram set wl0_nmode_x=2',
         }
-        if mode not in Asusax88uConfig.WIRELESS_2_MODE:
+        if mode not in self.WIRELESS_2_MODE:
             raise ConfigError('wireless elemenr error')
         self.telnet_write(cmd[mode])
 
@@ -97,7 +109,7 @@ class Asusax88uControl():
             '11ax': 'nvram set wl1_11ax=1;nvram set wl1_nmode_x=9',
             'Legacy': 'nvram set wl1_11ax=0;nvram set wl1_nmode_x=2',
         }
-        if mode not in Asusax88uConfig.WIRELESS_5_MODE:
+        if mode not in self.WIRELESS_5_MODE:
             raise ConfigError('wireless elemenr error')
         self.telnet_write(cmd[mode])
 
@@ -111,8 +123,8 @@ class Asusax88uControl():
 
     def set_2g_authentication_method(self, method):
         cmd = 'nvram set wl0_auth_mode_x={}'
-        mode_list = Asusax88uConfig.AUTHENTICATION_METHOD if method != 'Legacy' \
-            else Asusax88uConfig.AUTHENTICATION_METHOD_LEGCY
+        mode_list = self.AUTHENTICATION_METHOD if method != 'Legacy' \
+            else self.AUTHENTICATION_METHOD_LEGCY
         if method not in mode_list:
             raise ConfigError('authentication method element error')
         self.telnet_write(cmd.format(self.MODE_PARAM[method]))
@@ -121,8 +133,8 @@ class Asusax88uControl():
 
     def set_5g_authentication_method(self, method):
         cmd = 'nvram set wl1_auth_mode_x={}'
-        mode_list = Asusax88uConfig.AUTHENTICATION_METHOD if method != 'Legacy' \
-            else Asusax88uConfig.AUTHENTICATION_METHOD_LEGCY
+        mode_list = self.AUTHENTICATION_METHOD if method != 'Legacy' \
+            else self.AUTHENTICATION_METHOD_LEGCY
         if method not in mode_list:
             raise ConfigError('authentication method element error')
         self.telnet_write(cmd.format(self.MODE_PARAM[method]))
@@ -132,7 +144,7 @@ class Asusax88uControl():
     def set_2g_channel(self, channel):
         cmd = 'nvram set wl0_chanspec={}'
         channel = str(channel)
-        if channel not in Asusax88uConfig.CHANNEL_2:
+        if channel not in self.CHANNEL_2:
             raise ConfigError('channel element error')
         channel = 0 if channel == '自动' else channel
         self.telnet_write(cmd.format(channel))
@@ -140,25 +152,25 @@ class Asusax88uControl():
     def set_5g_channel(self, channel):
         cmd = 'nvram set wl1_chanspec={}/80'
         channel = str(channel)
-        if channel not in Asusax88uConfig.CHANNEL_5:
+        if channel not in self.CHANNEL_5:
             raise ConfigError('channel element error')
         channel = 0 if channel == '自动' else channel
         self.telnet_write(cmd.format(channel))
 
     def set_2g_bandwidth(self, width):
         cmd = 'nvram set wl0_bw={}'
-        if width not in Asusax88uConfig.BANDWIDTH_2:
+        if width not in self.BANDWIDTH_2:
             raise ConfigError('bandwidth element error')
-        self.telnet_write(cmd.format(Asusax88uConfig.BANDWIDTH_2.index(width)))
+        self.telnet_write(cmd.format(self.BANDWIDTH_2.index(width)))
 
     def set_5g_bandwidth(self, width):
         cmd = 'nvram set wl1_bw={}'
-        if width not in Asusax88uConfig.BANDWIDTH_5: raise ConfigError('bandwidth element error')
-        self.telnet_write(cmd.format(Asusax88uConfig.BANDWIDTH_5.index(width)))
+        if width not in self.BANDWIDTH_5: raise ConfigError('bandwidth element error')
+        self.telnet_write(cmd.format(self.BANDWIDTH_5.index(width)))
 
     def set_2g_wep_encrypt(self, encrypt):
         cmd = 'nvram set wl0_wep_x={};nvram set w1_wep_x={}'
-        if encrypt not in Asusax88uConfig.WEP_ENCRYPT:
+        if encrypt not in self.WEP_ENCRYPT:
             raise ConfigError('wep encrypt elemenr error')
         # passwd_wep
         index = '1' if '64' in encrypt else '2'
@@ -167,7 +179,7 @@ class Asusax88uControl():
 
     def set_5g_wep_encrypt(self, encrypt):
         cmd = 'nvram set wl1_wep_x={};nvram set w1_wep_x={}'
-        if encrypt not in Asusax88uConfig.WEP_ENCRYPT:
+        if encrypt not in self.WEP_ENCRYPT:
             raise ConfigError('wep encrypt elemenr error')
         # passwd_wep
         index = '1' if '64' in encrypt else '2'
@@ -191,80 +203,7 @@ class Asusax88uControl():
         @param router: Router instance
         @return: status : boolean
         '''
-        # logging.info('Try to set router')
-        # try:
-        # self.router_control.login()
 
-        # content_table = self.router_control.driver.find_element(By.XPATH, "/html/body/table")
-        # content_table.find_element(By.XPATH, '//*[@id="Advanced_Wireless_Content_menu"]').click()
-        #
-        # # Wireless - General
-        # WebDriverWait(driver=self.router_control.driver, timeout=5, poll_frequency=0.5).until(
-        #     EC.presence_of_element_located((By.ID, 'FormTitle')))
-        #
-        # smart_connect_style = self.router_control.driver.find_element(
-        #     By.ID, 'smartcon_rule_link').value_of_css_property('display')
-        #
-        # if (router.smart_connect and smart_connect_style == 'none') or (
-        #         not router.smart_connect and smart_connect_style == 'table-cell'):
-        #     self.router_control.driver.find_element(
-        #         By.ID,
-        #         self.router_control.xpath['smart_connect_element'][self.router_control.router_info]).click()
-        #
-        # # 修改 band
-        # if router.band and not router.smart_connect:
-        #     if router.band not in Asusax88uConfig.BAND_LIST: raise ConfigError('band element error')
-        #     self.router_control.change_band(router.band)
-        #
-        # # 修改 ssid 是否隐藏
-        # if router.hide_ssid:
-        #     if router.hide_ssid == '是':
-        #         self.router_control.driver.find_element(By.XPATH, ".//input[@type='radio' and @value='1']").click()
-        #     elif router.hide_ssid == '否':
-        #         self.router_control.driver.find_element(By.XPATH, ".//input[@type='radio' and @value='0']").click()
-        # else:
-        #     self.router_control.driver.find_element(By.XPATH, ".//input[@type='radio' and @value='0']").click()
-        #
-        # # 修改 wpa_encrypt
-        # if router.wpa_encrypt:
-        #     if router.wpa_encrypt not in Asusax88uConfig.WPA_ENCRYPT: raise ConfigError('wpa encrypt elemenr error')
-        #     self.router_control.change_wpa_encrypt(router.wpa_encrypt)
-        #
-        # # 修改 passwd_index
-        # # //*[@id="WLgeneral"]/tbody/tr[17]/td/select/option[1]
-        # if router.passwd_index:
-        #     if router.passwd_index not in Asusax88uConfig.PASSWD_INDEX_DICT: raise ConfigError(
-        #         'passwd index element error')
-        #     self.router_control.change_passwd_index(router.passwd_index)
-        #
-        # # 修改 受保护的管理帧
-        # # //*[@id="WLgeneral"]/tbody/tr[26]/td/select/option[1]
-        # if router.protect_frame:
-        #     self.router_control.change_protect_frame(router.protect_frame)
-        #
-        # time.sleep(5)
-        #
-        # # 点击apply
-        # self.router_control.apply_setting()
-        # try:
-        #     self.router_control.driver.switch_to.alert.accept()
-        #     self.router_control.driver.switch_to.alert.accept()
-        #
-        # except Exception as e:
-        #     ...
-        # try:
-        #     if router.hide_ssid == '是':
-        #         self.router_control.driver.find_element(By.XPATH, "/html/body/div[4]/div/div[3]/div[1]").click()
-        # except Exception as e:
-        #     ...
-        # # /html/body/div[4]/div/div[3]/div[1]
-        # WebDriverWait(self.router_control.driver, 20).until_not(
-        #     #     //*[@id="loadingBlock"]/tbody/tr/td[2]
-        #     EC.visibility_of_element_located((By.XPATH, '//*[@id="loadingBlock"]/tbody/tr/td[2]'))
-        # )
-        # time.sleep(2)
-
-        # 修改 ssid
         if router.ssid:
             self.set_2g_ssid(router.ssid) if '2' in router.band else self.set_5g_ssid(router.ssid)
 
@@ -316,12 +255,12 @@ class Asusax88uControl():
                 EC.presence_of_element_located((By.ID, 'FormTitle')))
             # 修改 国家码
             if router.country_code:
-                if router.country_code not in Asusax88uConfig.COUNTRY_CODE: raise ConfigError('country code error')
+                if router.country_code not in self.COUNTRY_CODE: raise ConfigError('country code error')
                 self.router_control.driver.find_element(
                     By.XPATH, '//*[@id="Advanced_WAdvanced_Content_tab"]/span').click()
                 WebDriverWait(driver=self.router_control.driver, timeout=5, poll_frequency=0.5).until(
                     EC.presence_of_element_located((By.ID, 'titl_desc')))
-                index = Asusax88uConfig.COUNTRY_CODE[router.country_code]
+                index = self.COUNTRY_CODE[router.country_code]
                 # logging.info(self.router_control.xpath['country_code_element'][self.router_control.router_info].format(index))
                 self.router_control.driver.find_element(
                     By.XPATH,

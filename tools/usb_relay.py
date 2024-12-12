@@ -3,10 +3,10 @@
 # @Time    : 2024/10/21 11:25
 # @Author  : chao.li
 # @File    : usb_relay.py
+import logging
 import time
 
 import serial
-import logging
 
 
 class UsbRelay:

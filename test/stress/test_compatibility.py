@@ -2,16 +2,15 @@ import logging
 import re
 import subprocess
 import time
-
+from test import get_testdata
 from test.test_rvr import get_rx_rate, get_tx_rate, iperf_on, kill_iperf
 
 import pytest
 
+from tools.connect_tool.adb import adb
+from tools.pdusnmp import power_ctrl
 from tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
 from tools.router_tool.Router import Router
-from tools.pdusnmp import power_ctrl
-from test import get_testdata
-from tools.connect_tool.adb import adb
 
 power_delay = power_ctrl()
 router = ''

@@ -17,6 +17,7 @@ import signal
 import subprocess
 import threading
 import time
+from test import get_testdata, modify_tcl_script
 
 import psutil
 import pytest
@@ -24,13 +25,9 @@ import pytest
 from tools.connect_tool.TelnetInterface import TelnetInterface
 from tools.ixchariot import ix
 from tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
-
 from tools.router_tool.Router import Router
 from tools.router_tool.Xiaomi.Xiaomiax3000Control import Xiaomiax3000Control
-from tools.router_tool.Xiaomi.XiaomiRouterConfig import Xiaomiax3000Config
-from test import get_testdata
 from tools.yamlTool import yamlTool
-
 
 # 小米极限测试 记录
 # filename = 'XiaoMi-Rvr.xlsx'
@@ -58,27 +55,25 @@ from tools.yamlTool import yamlTool
 #     for i in range(0, len(value)):
 # logging.info(f'execl write {row_num} {i + col_num}')
 # new_sheet.cell(row=row_num, column=i + col_num, value=value[i])
-def modify_tcl_script(old_str, new_str):
-    file = './script/rvr.tcl'
-    with open(file, "r", encoding="utf-8") as f1, open("%s.bak" % file, "w", encoding="utf-8") as f2:
-        for line in f1:
-            if old_str in line:
-                line = new_str
-            f2.write(line)
-    os.remove(file)
-    os.rename("%s.bak" % file, file)
 
 
 wifi_yaml = yamlTool(os.getcwd() + '/config/config.yaml')
 router_name = wifi_yaml.get_note('router')['name']
-test_data = get_testdata()
+
 # 设置为True 时 开启 衰减测试流程
 rf_needed = False
 # 设置为True 时 开启 状态测试流程
 corner_needed = False
 # 设置为True 时 开启 路由相关配置
 router_needed = True
+try:
+    # 实例路由器对象
+    if router_needed:
+        exec(f'router = {router_name.capitalize()}Control()')
+except Exception as e:
+    router = ''
 
+test_data = get_testdata(router)
 # 设置是否需要push iperf
 iperf_tool = False
 
@@ -100,12 +95,6 @@ if rvr_tool == 'ixchariot':
     logging.info(f'test_tool {test_tool}')
     modify_tcl_script("set ixchariot_installation_dir ", f"set ixchariot_installation_dir \"{script_path}\"\n")
 
-try:
-    # 实例路由器对象
-    if router_needed:
-        exec(f'router = {router_name.capitalize()}Control()')
-except Exception as e:
-    ...
 # env_control = wifi_yaml.get_note('env_control')
 
 # 初始化 衰减 & 转台 对象
@@ -155,17 +144,6 @@ logging.info(f'finally step_list {step_list}')
 pytest.testResult.x_path = [] if (rf_needed and corner_needed) == 'both' else step_list
 pytest.testResult.init_rvr_result()
 rx_result, tx_result = '', ''
-
-
-def modify_tcl_script(old_str, new_str):
-    file = './script/rvr.tcl'
-    with open(file, "r", encoding="utf-8") as f1, open("%s.bak" % file, "w", encoding="utf-8") as f2:
-        for line in f1:
-            if old_str in line:
-                line = new_str
-            f2.write(line)
-    os.remove(file)
-    os.rename("%s.bak" % file, file)
 
 
 def iperf_on(command, adb, direction='tx'):

@@ -11,20 +11,21 @@
 """
 
 import datetime
-import subprocess
 import logging
 import os
-import shutil
 import re
-
+import shutil
+import subprocess
 import sys
+
 import psutil
 import pytest
 
 from tools.connect_tool.adb import adb
-from tools.connect_tool.telnet_tool import TelnetInterface
-from tools.TestResult import TestResult
 from tools.connect_tool.host_os import host_os
+from tools.connect_tool.telnet_tool import telnet_tool
+from tools.TestResult import TestResult
+
 from .tools.yamlTool import yamlTool
 
 
@@ -61,8 +62,7 @@ def pytest_sessionstart(session):
         # Create telnet obj
         telnet_ip = pytest.config_yaml.get_note("connect_type")[pytest.connect_type]['ip']
         wildcard = pytest.config_yaml.get_note("connect_type")[pytest.connect_type]['wildcard']
-        pytest.dut = TelnetInterface(telnet_ip, wildcard)
-        logging.info("telnet connected %s" % telnet_ip)
+        pytest.dut = telnet_tool(telnet_ip, wildcard)
     else:
         raise EnvironmentError("Not support connect type %s" % pytest.connect_type)
 

@@ -30,7 +30,8 @@ cmd_line_wildcard = {
     'bayside': b'bayside:/ #'
 }
 
-class TelnetInterface(dut):
+
+class telnet_tool(dut):
     def __init__(self, ip, wildcard):
         super().__init__()
 
@@ -41,11 +42,9 @@ class TelnetInterface(dut):
             self.tn = telnetlib.Telnet()
             self.tn.open(self.ip, port=23)
             self.tn.read_until(self.wildcard).decode('utf-8')
-            logging.info('telnet init done')
-            # print('telnet init done')
+            logging.info(f'telnet init done, ip : {self.ip}')
         except Exception as f:
             logging.info(f)
-
 
     def execute_cmd(self, cmd):
         self.tn.write(cmd.encode('ascii') + b'\n')
@@ -91,6 +90,7 @@ class TelnetInterface(dut):
 
     def popen_term(self, command):
         return subprocess.Popen(command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
     def subprocess_run(self, cmd):
         return self.checkoutput(cmd)
 

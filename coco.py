@@ -10,4 +10,7 @@
 """
 
 
-print(str([44.7, 42.7, 42.5])[1:-1])
+import uiautomator2 as u2
+
+d = u2.connect("twilight9de10187801e1c")
+print(d.dump_hierarchy())

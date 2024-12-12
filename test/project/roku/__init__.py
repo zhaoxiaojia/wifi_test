@@ -10,14 +10,13 @@
 
 import logging
 import os
+import time
 
 import pytest
 
 from dut_control.roku_ctrl import RokuCtrl
 from tools.pil_tool import PilTool
 from tools.yamlTool import yamlTool
-import time
-
 
 roku_ctl = RokuCtrl()
 # pytest.executer.execute_cmd('echo 6 > /proc/sys/kernel/printk')

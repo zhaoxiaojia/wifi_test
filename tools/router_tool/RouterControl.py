@@ -57,6 +57,10 @@ class RouterControl(metaclass=ABCMeta):
 # option.add_experimental_option("detach", True)  # 不自动关闭浏览器
 # service = Service(executable_path=r"C:\Users\yu.zeng\ChromeWebDriver\chromedriver.exe")
 
+class ConfigError(Exception):
+    def __str__(self):
+        return 'element error'
+
 
 class RouterTools(RouterControl):
     '''
@@ -74,6 +78,53 @@ class RouterTools(RouterControl):
 
     # 操作 网页 页面 滚动  js 命令
     SCROL_JS = 'arguments[0].scrollIntoView();'
+
+    # asus router setup value
+    BAND_LIST = ['2.4 GHz', '5 GHz']
+    BANDWIDTH_2 = ['20/40 MHz', '20 MHz', '40 MHz']
+    BANDWIDTH_5 = ['20/40/80 MHz', '20 MHz', '40 MHz', '80 MHz']
+    WIRELESS_2_MODE = ['自动', '11b', '11g', '11n', '11ax', 'Legacy']
+    WIRELESS_5_MODE: list[str] = ['自动', '11a', '11ac', '11ax', 'Legacy']
+
+    AUTHENTICATION_METHOD = ['Open System', 'WPA2-Personal', 'WPA3-Personal', 'WPA/WPA2-Personal', 'WPA2/WPA3-Personal',
+                             'WPA2-Enterprise', 'WPA/WPA2-Enterprise']
+
+    AUTHENTICATION_METHOD_LEGCY = ['Open System', 'Shared Key', 'WPA2-Personal', 'WPA3-Personal',
+                                   'WPA/WPA2-Personal', 'WPA2/WPA3-Personal', 'WPA2-Enterprise',
+                                   'WPA/WPA2-Enterprise', 'Radius with 802.1x']
+
+    PROTECT_FRAME = {
+        '停用': 1,
+        '非强制启用': 2,
+        '强制启用': 3
+    }
+
+    WEP_ENCRYPT = ['None', 'WEP-64bits', 'WEP-128bits']
+
+    WPA_ENCRYPT = {
+        'AES': 1,
+        'TKIP+AES': 2
+    }
+
+    PASSWD_INDEX_DICT = {
+        '1': '1',
+        '2': '2',
+        '3': '3',
+        '4': '4'
+    }
+    CHANNEL_2 = ['自动', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11']
+    CHANNEL_5 = ['自动', '36', '40', '44', '48', '52', '56', '60', '64', '100', '104', '108', '112', '116', '120',
+                 '124', '128', '132', '136', '140', '144', '149', '153', '157', '161', '165']
+    COUNTRY_CODE = {
+        '亚洲': '1',
+        '中国 (默认值)': '2',
+        '欧洲': '3',
+        '韩国': '4',
+        '俄罗斯': '5',
+        '新加坡': '6',
+        '美国': '7',
+        '澳大利亚': '8'
+    }
 
     def __init__(self, router_info, display=False):
         # 路由器品牌

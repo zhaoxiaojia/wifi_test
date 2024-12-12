@@ -1,17 +1,19 @@
 # _*_ coding:utf-8 _*_
 # 依赖pysnmp 请自行安装(可以使用命令 pip install pysnmp)
 import logging
-import subprocess
-import time
-import sys
 import os
+import subprocess
+import sys
+import time
+
 from pysnmp.entity import engine
+
 from tools.yamlTool import yamlTool
 
 if ('win32' or 'win64') in sys.platform:
     from pysnmp.entity.rfc3413.oneliner import cmdgen
-from pysnmp.proto import rfc1902
 
+from pysnmp.proto import rfc1902
 
 # global enter_key
 # enter_key = '1.3.6.1.4.1.23280.9.1.2'

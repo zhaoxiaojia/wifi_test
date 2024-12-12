@@ -5,7 +5,7 @@
 # @Site    :
 # @File    : yamlTool.py
 # @Software: PyCharm
-
+import os
 
 import yaml
 
@@ -24,7 +24,6 @@ class yamlTool:
     def get_note(self, note):
         return self.parsed_yaml_file.get(note)
 
-# coco = yamlTool('config.yaml')
 # print(coco.get_note('router'))
 # # {'name': 'asusac68u'}
 # print(coco.get_note('router')['name'])

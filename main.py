@@ -5,6 +5,7 @@ import datetime
 import json
 import logging
 import os
+import shutil
 import subprocess
 
 import pytest
@@ -12,7 +13,7 @@ import pytest
 from case_handle import testCase
 
 timestamp = datetime.datetime.now().strftime("%Y.%m.%d_%H.%M.%S")
-test_case = 'test/project/xiaomi/test_rvr.py'
+test_case = 'test/test_demo.py'
 # test_case = 'test/stress/test_2g_switch_channel_throughput.py'
 
 report_parent_path = test_case.replace('test', 'report', 1)
@@ -69,7 +70,7 @@ if __name__ == '__main__':
     if not os.path.exists('report'):
         os.mkdir('report')
     if os.path.exists('assets'):
-        os.remove('assets')
+        shutil.rmtree('assets')
     if not os.path.exists(report_path):
         os.mkdir(report_path)
 

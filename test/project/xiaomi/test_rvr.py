@@ -17,6 +17,9 @@ import signal
 import subprocess
 import threading
 import time
+from copy import copy
+from test import get_testdata, modify_tcl_script
+
 import openpyxl
 import psutil
 import pytest
@@ -24,13 +27,9 @@ import pytest
 from tools.connect_tool.TelnetInterface import TelnetInterface
 from tools.ixchariot import ix
 from tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
-
 from tools.router_tool.Router import Router
 from tools.router_tool.Xiaomi.Xiaomiax3000Control import Xiaomiax3000Control
-from tools.router_tool.Xiaomi.XiaomiRouterConfig import Xiaomiax3000Config
-from test import get_testdata
 from tools.yamlTool import yamlTool
-from copy import copy
 
 # 小米极限测试 记录
 filename = 'XiaoMi-Rvr.xlsx'
@@ -60,27 +59,21 @@ def writeInExcelArea(value, row_num, col_num):
         new_sheet.cell(row=row_num, column=i + col_num, value=value[i])
 
 
-def modify_tcl_script(old_str, new_str):
-    file = './script/rvr.tcl'
-    with open(file, "r", encoding="utf-8") as f1, open("%s.bak" % file, "w", encoding="utf-8") as f2:
-        for line in f1:
-            if old_str in line:
-                line = new_str
-            f2.write(line)
-    os.remove(file)
-    os.rename("%s.bak" % file, file)
-
-
 wifi_yaml = yamlTool(os.getcwd() + '/config/config.yaml')
 router_name = wifi_yaml.get_note('router')['name']
-test_data = get_testdata()
+
 # 设置为True 时 开启 衰减测试流程
 rf_needed = False
 # 设置为True 时 开启 状态测试流程
 corner_needed = False
 # 设置为True 时 开启 路由相关配置
 router_needed = True
-
+# 实例路由器对象
+if router_needed:
+    exec(f'router = {router_name.capitalize()}Control()')
+else:
+    router = ''
+test_data = get_testdata(router)
 # 设置是否需要push iperf
 iperf_tool = False
 bt_device = 'JBL GO 2'
@@ -101,10 +94,6 @@ if rvr_tool == 'ixchariot':
     logging.info(f'path {script_path}')
     logging.info(f'test_tool {test_tool}')
     modify_tcl_script("set ixchariot_installation_dir ", f"set ixchariot_installation_dir \"{script_path}\"\n")
-
-# 实例路由器对象
-if router_needed:
-    exec(f'router = {router_name.capitalize()}Control()')
 
 # env_control = wifi_yaml.get_note('env_control')
 
@@ -412,13 +401,29 @@ def kill_iperf():
 
 
 def disconnect_bt():
-    pytest.dut.checkoutput('com.android.tv.settings/.MainSettings')
-    pytest.dut.wait_and_tap('Remote & Accessories', 'text')
-    pytest.dut.uiautomator_dump()
-    if bt_device in pytest.dut.get_dump_info():
-        pytest.dut.wait_and_tap(bt_device, 'text')
-        pytest.dut.wait_and_tap('Disconnect', 'text')
-        pytest.dut.wait_and_tap('Yes', 'text')
+    pytest.dut.start_activity(*('com.android.tv.settings', '.MainSettings'))
+    for _ in range(10):
+        pytest.dut.keyevent(20)
+        pytest.dut.uiautomator_dump()
+        if 'Pair accessory' in pytest.dut.get_dump_info():
+            pytest.dut.keyevent(23)
+            time.sleep(1)
+            break
+    else:
+        assert False, "Can't find Remotes & Accessories"
+    for _ in range(10):
+        pytest.dut.keyevent(20)
+        pytest.dut.uiautomator_dump()
+        if f'text="{bt_device}" resource-id="com.android.tv.settings:id/decor_title"' in pytest.dut.get_dump_info():
+            pytest.dut.keyevent(22)
+            time.sleep(1)
+            break
+    else:
+        assert False, "Can't find target bt device"
+    pytest.dut.keyevent(20)
+    pytest.dut.keyevent(23)
+    pytest.dut.keyevent(19)
+    pytest.dut.keyevent(23)
 
 
 def get_tx_rate(pc_ip, dut_ip, device_number, router_info, pair, freq_num, rssi_num, type, corner_set='', db_set=''):

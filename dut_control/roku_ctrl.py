@@ -15,12 +15,13 @@ import time
 from threading import Thread
 from urllib.parse import quote_plus, urlparse
 from xml.etree import ElementTree as ET
+
 import pytest
 import requests
 from roku import Roku
 
 from dut_control.ir import Ir
-from tools.connect_tool.telnet_tool import TelnetInterface
+from tools.connect_tool.telnet_tool import telnet_tool
 from tools.yamlTool import yamlTool
 
 COMMANDS = {
@@ -748,7 +749,7 @@ class RokuCtrl(Roku, Ir):
 						f.write(info)
 
 		logging.info('start telnet 8080 to caputre kernel log ')
-		tl = TelnetInterface(self.ip, 'sandia')
+		tl = telnet_tool(self.ip, 'sandia')
 		info = tl.execute_cmd(f'telnet {self.ip} 8080', wildcard=b'onn. Roku TV')
 		# logging.info(info)
 		tl.execute_cmd('logcast start')

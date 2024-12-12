@@ -1,3 +1,5 @@
+import csv
+import logging
 import os
 
 import pytest
@@ -6,6 +8,8 @@ from tools.connect_tool.adb import accompanying_dut
 from tools.Iperf import Iperf
 from tools.playback_tool.Youtube import Youtube
 from tools.router_tool.Router import Router
+from tools.yamlTool import yamlTool
+
 
 # if pytest.connect_type == 'adb':
 #     Router = Router
@@ -40,22 +44,14 @@ from tools.router_tool.Router import Router
 #
 #     config_yaml = pytest.config_yaml
 
-from tools.yamlTool import yamlTool
-from tools.router_tool.AsusRouter.AsusRouterConfig import (Asusax86uConfig,
-                                                           Asusax88uConfig)
-import csv
-import logging
 
-
-def get_testdata():
+def get_testdata(router):
     wifi_yaml = yamlTool(os.getcwd() + '/config/config.yaml')
     router_name = wifi_yaml.get_note('router')['name']
-    router = ''
     pc_ip, dut_ip = "", ""
-    router_config = Asusax88uConfig()
 
     # 读取 测试配置
-    with open(os.getcwd() + '/config/asusax88u.csv', 'r') as f:
+    with open(os.getcwd() + '/config/asusax88u.csv', 'r', encoding='utf-8') as f:
         reader = csv.reader(f)
         test_data = [Router(*[i.strip() for i in row]) for row in reader][1:]
 
@@ -72,14 +68,24 @@ def get_testdata():
             if '5' in i.band:
                 assert i.ssid not in ssid_verify, "5g ssid can't as the same as 2g , pls modify"
         assert i.band in ['2.4 GHz', '5 GHz'], "Pls check band info "
-        assert i.wireless_mode in {'2.4 GHz': router_config.WIRELESS_2_MODE, '5 GHz': router_config.WIRELESS_5_MODE}[
+        assert i.wireless_mode in {'2.4 GHz': router.WIRELESS_2_MODE, '5 GHz': router.WIRELESS_5_MODE}[
             i.band], "Pls check wireless info"
-        assert i.channel in {'2.4 GHz': router_config.CHANNEL_2, '5 GHz': router_config.CHANNEL_5}[
+        assert i.channel in {'2.4 GHz': router.CHANNEL_2, '5 GHz': router.CHANNEL_5}[
             i.band], "Pls check channel info"
-        assert i.bandwidth in {'2.4 GHz': router_config.BANDWIDTH_2, '5 GHz': router_config.BANDWIDTH_5}[
+        assert i.bandwidth in {'2.4 GHz': router.BANDWIDTH_2, '5 GHz': router.BANDWIDTH_5}[
             i.band], "Pls check bandwidth info"
         if 'Legacy' in i.wireless_mode:
-            assert i.authentication_method in router_config.AUTHENTICATION_METHOD_LEGCY, "Pls check authentication info"
+            assert i.authentication_method in router.AUTHENTICATION_METHOD_LEGCY, "Pls check authentication info"
         else:
-            assert i.authentication_method in router_config.AUTHENTICATION_METHOD, "Pls check authentication info"
+            assert i.authentication_method in router.AUTHENTICATION_METHOD, "Pls check authentication info"
     return test_data
+
+def modify_tcl_script(old_str, new_str):
+    file = './script/rvr.tcl'
+    with open(file, "r", encoding="utf-8") as f1, open("%s.bak" % file, "w", encoding="utf-8") as f2:
+        for line in f1:
+            if old_str in line:
+                line = new_str
+            f2.write(line)
+    os.remove(file)
+    os.rename("%s.bak" % file, file)
