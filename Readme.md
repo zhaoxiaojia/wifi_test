@@ -16,7 +16,7 @@ Amlogic-Fae-Qa wifi测试套件
 ### Features - 特性
 
 ## Requirements - 必要条件
-测试环境 windows or ubuntu+ python3.6+ 
+测试环境 windows or ubuntu+ python3.8+ 
 
 ## Configuration - 配置
 /config/config.yaml

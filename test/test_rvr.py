@@ -24,9 +24,8 @@ import pytest
 
 from tools.connect_tool.TelnetInterface import TelnetInterface
 from tools.ixchariot import ix
-from tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
 from tools.router_tool.Router import Router
-from tools.router_tool.Xiaomi.Xiaomiax3000Control import Xiaomiax3000Control
+from tools.router_tool.router_factory import get_router
 from tools.yamlTool import yamlTool
 
 # 小米极限测试 记录
@@ -68,8 +67,7 @@ corner_needed = False
 router_needed = True
 try:
     # 实例路由器对象
-    if router_needed:
-        exec(f'router = {router_name.capitalize()}Control()')
+    router = get_router(router_name)
 except Exception as e:
     router = ''
 
@@ -263,10 +261,11 @@ def wifi_setup_teardown(request):
     if router_needed:
         # 修改路由器配置
         assert router.change_setting(router_info), "Can't set ap , pls check first"
-        band = '5 GHz' if '2' in router_info.band else '2.4 GHz'
-        ssid = router_info.ssid + "_bat";
-        router.change_setting(Router(band=band, ssid=ssid))
-        time.sleep(10)
+        if pytest.connect_type == 'telnet':
+            band = '5 GHz' if '2' in router_info.band else '2.4 GHz'
+            ssid = router_info.ssid + "_bat";
+            router.change_setting(Router(band=band, ssid=ssid))
+        time.sleep(3)
 
     logging.info('wifi env set done')
     with open(pytest.testResult.detail_file, 'a', encoding='utf-8') as f:

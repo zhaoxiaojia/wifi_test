@@ -51,12 +51,11 @@ def get_testdata(router):
     pc_ip, dut_ip = "", ""
 
     # 读取 测试配置
-    with open(os.getcwd() + '/config/asusax88u.csv', 'r', encoding='utf-8') as f:
+    with open(os.getcwd() + '/config/rvr_wifi_setup.csv', 'r', encoding='utf-8') as f:
         reader = csv.reader(f)
         test_data = [Router(*[i.strip() for i in row]) for row in reader][1:]
 
     logging.info(f'test_data {test_data}')
-
     ssid_verify = set()
 
     # 校验 csv 数据是否异常
@@ -79,6 +78,7 @@ def get_testdata(router):
         else:
             assert i.authentication_method in router.AUTHENTICATION_METHOD, "Pls check authentication info"
     return test_data
+
 
 def modify_tcl_script(old_str, new_str):
     file = './script/rvr.tcl'

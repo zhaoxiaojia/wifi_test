@@ -15,7 +15,7 @@ import pandas as pd
 import pytest
 
 from tools.router_tool.AsusRouter.Asusax5400Control import Asusax5400Control
-from tools.router_tool.AsusRouter.Asusea6700Control import Asusea6700Control
+from tools.router_tool.AsusRouter.Asusax6700Control import Asusax6700Control
 from tools.router_tool.H3CBX54Control import H3CBX54Control
 from tools.router_tool.Linksys1200acControl import Linksys1200acControl
 from tools.router_tool.Router import Router
@@ -163,7 +163,7 @@ def wifi_setup_teardown(request):
         change_result = router.change_setting(router_info)
         target_ip = '192.168.7.1'
     if 'Asusea6700' in router_info.ssid:
-        router = Asusea6700Control()
+        router = Asusax6700Control()
         change_result = router.change_setting(router_info)
         target_ip = '192.168.8.1'
     # if 'NetgearR6100' in router_info.ssid:

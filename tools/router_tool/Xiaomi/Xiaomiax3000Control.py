@@ -20,9 +20,14 @@ from tools.router_tool.RouterControl import ConfigError, RouterTools
 
 
 class Xiaomiax3000Control(RouterTools):
+    '''
+
+    rvr
+    1,2.4 GHz, XiaomiAX3000_2.4G,11ac ,6,40MHz ,超强加密(WPA3个人版) , 12345678,rx,TCP,5 ,10 10
+    '''
     BAND_2 = '2.4 GHz'
     BAND_5 = '5 GHz'
-    CHANNEL_2_DICT = {
+    CHANNEL_2 = {
         '自动': '1',
         '1': '2',
         '2': '3',
@@ -39,7 +44,7 @@ class Xiaomiax3000Control(RouterTools):
         '13': '14',
     }
 
-    CHANNEL_5_DICT = {
+    CHANNEL_5 = {
         '自动': '1',
         '36': '2',
         '40': '3',
@@ -56,7 +61,7 @@ class Xiaomiax3000Control(RouterTools):
         '165': '14'
     }
 
-    AUTHENTICATION_METHOD_DICT = {
+    AUTHENTICATION_METHOD = {
         '超强加密(WPA3个人版)': '1',
         '强混合加密(WPA3/WPA2个人版)': '2',
         '强加密(WPA2个人版)': '3',
@@ -64,25 +69,29 @@ class Xiaomiax3000Control(RouterTools):
         '无加密(允许所有人连接)': '5'
     }
 
-    BANDWIDTH_5_LIST = {
+    BANDWIDTH_5 = {
         '160/80/40/20MHz': '1',
         '20MHz': '2',
         '40MHz': '3',
         '80MHz': '4'
     }
 
-    BANDWIDTH_2_LIST = {
+    BANDWIDTH_2 = {
         '40/20MHz': '1',
         '20MHz': '2',
         '40MHz': '3'
     }
 
     WIRELESS_MODE = ['11ac', '11ax']
-
     def __init__(self):
         super().__init__('xiaomi_ax3000', display=True)
 
     def login(self):
+        '''
+
+        Returns:
+
+        '''
         # try:
         self.driver.get(self.address)
         # input passwd

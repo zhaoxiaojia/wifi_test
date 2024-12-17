@@ -3,7 +3,7 @@
 # @Time    : 2023/1/11 16:02
 # @Author  : chao.li
 # @Site    :
-# @File    : Asusea6700Control.py
+# @File    : Asusax6700Control.py
 # @Software: PyCharm
 
 
@@ -16,12 +16,10 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select, WebDriverWait
 
-from tools.router_tool.AsusRouter.AsusRouterConfig import Asus6700Config
-from tools.router_tool.RouterConfig import ConfigError
-from tools.router_tool.RouterControl import RouterTools
+from tools.router_tool.RouterControl import RouterTools,ConfigError
 
 
-class Asusea6700Control:
+class Asusax6700Control:
     def __init__(self):
         self.router_info = 'asus_6700'
         self.router_control = RouterTools(self.router_info)
@@ -42,14 +40,14 @@ class Asusea6700Control:
 
             # 修改 band
             if (router.band):
-                if router.band not in Asus6700Config.BAND_LIST: raise ConfigError('band element error')
+                if router.band not in self.BAND_LIST: raise ConfigError('band element error')
                 element = '//*[@id="wl_unit_field"]/td/select/option[{}]'
                 index = '1' if router.band == '2.4 GHz' else '2'
                 self.router_control.driver.find_element(By.XPATH, element.format(index)).click()
 
             # 修改 wireless_mode
             if (router.wireless_mode):
-                target_dict = Asus6700Config.WIRELESS_2_MODE if router.band == '2.4 GHz' else Asus6700Config.WIRELESS_5_MODE
+                target_dict = self.WIRELESS_2 if router.band == '2.4 GHz' else self.WIRELESS_5
                 try:
                     assert router.wireless_mode in target_dict
                 except ConfigError:
@@ -82,8 +80,8 @@ class Asusea6700Control:
                 channel = str(router.channel)
                 # try:
                 #     channel_index = (
-                #         Asus6700Config.CHANNEL_2_DICT[channel] if router.band == '2.4 GHz' else
-                #         Asus6700Config.CHANNEL_5_DICT[channel])
+                #         self.CHANNEL_2_DICT[channel] if router.band == '2.4 GHz' else
+                #         self.CHANNEL_5_DICT[channel])
                 # except ConfigError:
                 #     raise ConfigError('channel element error')
                 # //*[@id="WLgeneral"]/tbody/tr[11]/td/select/option[22]
@@ -92,7 +90,7 @@ class Asusea6700Control:
             # 修改 bandwidth
             if (router.bandwidth):
                 if router.bandwidth not in \
-                        {'2.4 GHz': Asus6700Config.BANDWIDTH_2, '5 GHz': Asus6700Config.BANDWIDTH_5_LIST}[
+                        {'2.4 GHz': self.BANDWIDTH_2, '5 GHz': self.BANDWIDTH_5}[
                             router.band]: raise ConfigError('bandwidth element error')
                 self.router_control.change_bandwidth(router.bandwidth)
 
@@ -101,27 +99,27 @@ class Asusea6700Control:
             # //*[@id="WLgeneral"]/tbody/tr[13]/td/div[1]/select/option[5]
             if (router.authentication_method):
                 try:
-                    index = (Asus6700Config.AUTHENTICATION_METHOD_DICT[router.authentication_method]
+                    index = (self.AUTHENTICATION_METHOD[router.authentication_method]
                              if router.wireless_mode != 'Legacy' else
-                             Asus6700Config.AUTHENTICATION_METHOD_LEGCY_DICT[router.authentication_method])
+                             self.AUTHENTICATION_METHOD_LEGCY[router.authentication_method])
                 except ConfigError:
                     raise ConfigError('authentication method element error')
                 self.router_control.change_authentication_method(index)
 
             # 修改 wep_encrypt
             if (router.wep_encrypt):
-                if router.wep_encrypt not in Asus6700Config.WEP_ENCRYPT: raise ConfigError('wep encrypt elemenr error')
-                self.router_control.change_wep_encrypt(Asus6700Config.WEP_ENCRYPT[router.wep_encrypt])
+                if router.wep_encrypt not in self.WEP_ENCRYPT: raise ConfigError('wep encrypt elemenr error')
+                self.router_control.change_wep_encrypt(self.WEP_ENCRYPT[router.wep_encrypt])
 
             # 修改 wpa_encrypt
             if (router.wpa_encrypt):
-                if router.wpa_encrypt not in Asus6700Config.WPA_ENCRYPT: raise ConfigError('wpa encrypt elemenr error')
-                self.router_control.change_wpa_encrypt(Asus6700Config.WPA_ENCRYPT[router.wpa_encrypt])
+                if router.wpa_encrypt not in self.WPA_ENCRYPT: raise ConfigError('wpa encrypt elemenr error')
+                self.router_control.change_wpa_encrypt(self.WPA_ENCRYPT[router.wpa_encrypt])
 
             # 修改 passwd_index
             # //*[@id="WLgeneral"]/tbody/tr[17]/td/select/option[1]
             if (router.passwd_index):
-                if router.passwd_index not in Asus6700Config.PASSWD_INDEX_DICT: raise ConfigError(
+                if router.passwd_index not in self.PASSWD_INDEX_DICT: raise ConfigError(
                     'passwd index element error')
                 self.router_control.change_passwd_index(router.passwd_index)
 
@@ -136,9 +134,9 @@ class Asusea6700Control:
             # 修改 受保护的管理帧
             # //*[@id="WLgeneral"]/tbody/tr[26]/td/select/option[1]
             if (router.protect_frame):
-                if router.protect_frame not in Asus6700Config.PROTECT_FRAME: raise ConfigError(
+                if router.protect_frame not in self.PROTECT_FRAME: raise ConfigError(
                     'protect frame element error')
-                self.router_control.change_protect_frame(Asus6700Config.PROTECT_FRAME[router.protect_frame])
+                self.router_control.change_protect_frame(self.PROTECT_FRAME[router.protect_frame])
 
             time.sleep(5)
             # 点击apply

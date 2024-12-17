@@ -1,3 +1,0 @@
-serial,band,ssid ,wireless_mode,channel,bandwidth,authentication_method,wpa_passwd,test_type,protocol_type,data_row,expected_rate
-1,2.4 GHz, AX86U-2G,11ax ,6,40 MHz ,  Open System , ,rx,TCP,5 ,10 10
-0,2.4 GHz, AX86U-2G,11ax ,6,40 MHz ,  Open System , ,rx,TCP,13 ,10 10

@@ -28,6 +28,8 @@ from tools.TestResult import TestResult
 
 from .tools.yamlTool import yamlTool
 
+pytest_plugins = "util.report_plugin"
+
 
 def pytest_sessionstart(session):
     '''
@@ -80,6 +82,15 @@ def pytest_addoption(parser):
     parser.addoption(
         "--resultpath", action="store", default=None, help="Test result path"
     )
+
+
+def pytest_runtest_logreport(report):
+    if report.when == "setup" and hasattr(report, "nodeid"):
+        test_nodeid = report.nodeid
+        if "[" in test_nodeid:
+            params = test_nodeid.split("[", 1)[-1].rstrip("]")
+            logging.info(f"Running test: {test_nodeid}")
+            logging.info(f"Parameters: {params}")
 
 
 def pytest_sessionfinish(session):

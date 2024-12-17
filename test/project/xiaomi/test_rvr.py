@@ -26,9 +26,8 @@ import pytest
 
 from tools.connect_tool.TelnetInterface import TelnetInterface
 from tools.ixchariot import ix
-from tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
+from tools.router_tool.RouterControl import RouterFactory
 from tools.router_tool.Router import Router
-from tools.router_tool.Xiaomi.Xiaomiax3000Control import Xiaomiax3000Control
 from tools.yamlTool import yamlTool
 
 # 小米极限测试 记录
@@ -69,10 +68,7 @@ corner_needed = False
 # 设置为True 时 开启 路由相关配置
 router_needed = True
 # 实例路由器对象
-if router_needed:
-    exec(f'router = {router_name.capitalize()}Control()')
-else:
-    router = ''
+router = RouterFactory(router_name)
 test_data = get_testdata(router)
 # 设置是否需要push iperf
 iperf_tool = False

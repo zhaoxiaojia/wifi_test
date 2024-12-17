@@ -58,8 +58,8 @@ class TestResult():
             logging.info(title.split())
             f.write(','.join(title.split()))
             f.write('\n')
-        with open(os.path.join(os.getcwd(), 'config\\asusax88u.csv' if pytest.win_flag else 'config/asusax88u.csv'),
-                  'r') as f:
+        with open(os.path.join(os.getcwd(), 'config\\rvr_wifi_setup.csv' if pytest.win_flag else 'config/rvr_wifi_setup.csv'),
+                  'r',encoding='utf-8') as f:
             reader = csv.reader(f)
             self.results_length = []
             for i in [j for j in reader][1:]:

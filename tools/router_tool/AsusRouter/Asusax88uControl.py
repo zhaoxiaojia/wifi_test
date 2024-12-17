@@ -30,6 +30,8 @@ class Asusax88uControl():
 
     Attributes:
 
+    rvr
+    0,2.4 GHz, AX86U-2G,11ax ,6,40 MHz ,  Open System , ,rx,TCP,13 ,10 10
     '''
 
     MODE_PARAM = {
