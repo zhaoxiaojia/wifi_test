@@ -11,11 +11,14 @@ import logging
 import re
 import telnetlib
 import time
+import pytest
 
 
 class TelnetInterface():
     def __init__(self, ip):
         self.ip = ip
+        model = pytest.config_yaml.get_note('rf_solution')['model']
+        self.model = pytest.config_yaml.get_note('rf_solution')[model]['ip_address']
         try:
             logging.info(f'Try to connect {ip}')
             self.tn = telnetlib.Telnet()
@@ -39,15 +42,15 @@ class TelnetInterface():
         if int(value) < 0 or int(value) > 110:
             assert 0, 'value must be in range 1-110'
         logging.info(f'Set rf value to {value}')
-        if self.ip == '192.168.50.10':
-            self.tn.write(f"*:CHAN:1:2:3:4:SETATT:{value};".encode('ascii') + b'\r\n')
+        if self.model == 'RC4DAT-8G-95':
+            self.tn.write(f":CHAN:1:2:3:4:SETATT:{value};".encode('ascii') + b'\r\n')
             self.tn.read_some()
         else:
             self.tn.write(f"ATT 1 {value};2 {value};3 {value};4 {value};".encode('ascii') + b'\r')
         time.sleep(2)
 
     def get_rf_current_value(self):
-        if self.ip == '192.168.50.10':
+        if self.model == 'RC4DAT-8G-95':
             self.tn.write("ATT?;".encode('ascii') + b'\r')
             # self.tn.read_some().decode('ascii')
             res = self.tn.read_some().decode('ascii')

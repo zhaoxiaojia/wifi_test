@@ -26,7 +26,7 @@ import pytest
 
 from tools.connect_tool.TelnetInterface import TelnetInterface
 from tools.ixchariot import ix
-from tools.router_tool.RouterControl import RouterFactory
+from tools.router_tool.router_factory import get_router
 from tools.router_tool.Router import Router
 from tools.yamlTool import yamlTool
 
@@ -68,11 +68,11 @@ corner_needed = False
 # 设置为True 时 开启 路由相关配置
 router_needed = True
 # 实例路由器对象
-router = RouterFactory(router_name)
+router = get_router(router_name)
 test_data = get_testdata(router)
 # 设置是否需要push iperf
 iperf_tool = False
-bt_device = 'JBL GO 2'
+bt_device = 'Mi Outdoor Bluetooth Speaker'
 if pytest.connect_type == 'telnet':
     third_dut = True
 
@@ -102,11 +102,7 @@ if rf_needed:
     if model != 'RADIORACK-4-220' and model != 'RC4DAT-8G-95':
         raise EnvironmentError("Doesn't support this model")
 
-    if model == 'RADIORACK-4-220':
-        rf_ip = wifi_yaml.get_note('rf_solution')[model]['ip_address']
-    if model == 'RC4DAT-8G-95':
-        rf_ip = '192.168.50.19'
-
+    rf_ip = wifi_yaml.get_note('rf_solution')[model]['ip_address']
     logging.info('test rf')
     rf_tool = TelnetInterface(rf_ip)
     logging.info(f'rf_ip {rf_ip}')
@@ -305,7 +301,7 @@ def wifi_setup_teardown(request):
                 if router_info.hide_ssid == '是':
                     cmd += pytest.dut.CMD_WIFI_HIDE
 
-                # pytest.dut.checkoutput(cmd)
+                pytest.dut.checkoutput(cmd)
                 time.sleep(5)
                 dut_info = pytest.dut.checkoutput('ifconfig wlan0')
                 logging.info(dut_info)
