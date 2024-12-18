@@ -84,8 +84,8 @@ class RouterTools(RouterControl):
     BAND_LIST = ['2.4 GHz', '5 GHz']
     BANDWIDTH_2 = ['20/40 MHz', '20 MHz', '40 MHz']
     BANDWIDTH_5 = ['20/40/80 MHz', '20 MHz', '40 MHz', '80 MHz']
-    WIRELESS_2_MODE = ['自动', '11b', '11g', '11n', '11ax', 'Legacy']
-    WIRELESS_5_MODE: list[str] = ['自动', '11a', '11ac', '11ax', 'Legacy']
+    WIRELESS_2_MODE = ['自动', '11b', '11g', '11n', '11ax', 'Legacy','N only']
+    WIRELESS_5_MODE: list[str] = ['自动', '11a', '11ac', '11ax', 'Legacy','N/AC/AX mixed','AX only']
 
     AUTHENTICATION_METHOD = ['Open System', 'WPA2-Personal', 'WPA3-Personal', 'WPA/WPA2-Personal', 'WPA2/WPA3-Personal',
                              'WPA2-Enterprise', 'WPA/WPA2-Enterprise']
@@ -133,8 +133,8 @@ class RouterTools(RouterControl):
         # 路由器完整信息
         self.router_info = router_info
         # 路由器 各控件 元素 配置文件
-        self.yaml_info = yamlTool(os.getcwd() + f'\\config\\router_xpath\\{self.router_type.split("_")[0]}_xpath.yaml')
-        # self.yaml_info = yamlTool(fr'D:\PycharmProjects\wifi_test\config\router_xpath\{self.router_type}_xpath.yaml')
+        # self.yaml_info = yamlTool(os.getcwd() + f'\\config\\router_xpath\\{self.router_type.split("_")[0]}_xpath.yaml')
+        self.yaml_info = yamlTool(fr'D:\PycharmProjects\wifi_test\config\router_xpath\{self.router_type}_xpath.yaml')
         # 元素配置文件 根节点
 
         self.xpath = self.yaml_info.get_note(self.router_type)
