@@ -72,8 +72,10 @@ class Asusax86uControl(RouterTools):
             if router.wifi6:
                 if router.wifi6 == 'on':
                     index = '1'
-                else:
+                elif router.wifi6 == 'off':
                     index = '2'
+                else:
+                    raise ValueError("Doesn't support this status")
                 try:
                     self.driver.find_element(By.XPATH,
                                              self.xpath['wireless_ax_element'][self.router_info].format(index)).click()
@@ -171,7 +173,6 @@ class Asusax86uControl(RouterTools):
             return False
         # finally:
         #     self.driver.quit()
-
 
 # fields = ['band', 'ssid', 'wireless_mode', 'channel', 'bandwidth', 'authentication_method', 'wpa_passwd', 'test_type',
 #           'wep_encrypt', 'passwd_index', 'wep_passwd', 'protect_frame', 'wpa_encrypt', 'hide_ssid', 'wifi6']
