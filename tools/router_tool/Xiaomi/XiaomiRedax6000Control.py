@@ -21,7 +21,7 @@ from selenium.webdriver.support.ui import Select, WebDriverWait
 from tools.router_tool.RouterControl import ConfigError, RouterTools
 
 
-class XiaomiRedax3000Control(RouterTools):
+class XiaomiRedax6000Control(RouterTools):
     BAND_2 = '2.4 GHz'
     BAND_5 = '5 GHz'
     CHANNEL_2 = {
@@ -89,6 +89,8 @@ class XiaomiRedax3000Control(RouterTools):
         self.driver.get(self.address)
         # input passwd
         self.driver.find_element(By.ID, self.xpath['password_element']).click()
+        self.driver.find_element(By.ID, self.xpath['password_element']).clear()
+        time.sleep(1)
         self.driver.find_element(By.ID, self.xpath['password_element']).send_keys(
             self.xpath['passwd'])
         # click login
@@ -230,7 +232,7 @@ class XiaomiRedax3000Control(RouterTools):
         # 修改wiremode
         if router.wireless_mode:
             wifi6_switch = self.driver.find_element(By.XPATH,
-                                                                   '/html/body/div[1]/div[2]/div[4]/div[1]/div/a')
+                                                    '/html/body/div[1]/div[2]/div[4]/div[1]/div/a')
             self.scroll_to(wifi6_switch)
             if wifi6_switch.get_attribute("data-on") != {'11ax': '0', '11ac': '1'}[router.wireless_mode]:
                 wifi6_switch.click()
@@ -242,4 +244,3 @@ class XiaomiRedax3000Control(RouterTools):
         #     logging.info('Router change setting with error')
         #     logging.info(e)
         #     return False
-

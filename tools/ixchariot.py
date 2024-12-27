@@ -32,3 +32,13 @@ class ix:
         logging.info(info)
         date = re.findall(r'avg \d+\.\d+', info, re.S)
         return date[0] if date else False
+
+    def modify_tcl_script(self, old_str, new_str):
+        file = './script/rvr.tcl'
+        with open(file, "r", encoding="utf-8") as f1, open("%s.bak" % file, "w", encoding="utf-8") as f2:
+            for line in f1:
+                if old_str in line:
+                    line = new_str
+                f2.write(line)
+        os.remove(file)
+        os.rename("%s.bak" % file, file)

@@ -1,12 +1,12 @@
 # This is yaml for DUT info
 connect_type:
-  type: adb
+  type: telnet
   adb:
     device: 'twilight9de10187801e1c'
   telnet:
-    ip: '192.168.50.123'
+    ip: '192.168.0.250'
     #    market area  sandia  list:sandia,sandia_latam,sandia_hkc,sandia_dvb
-    wildcard: bayside
+    wildcard: sandia
 
 host_os:
   user: amlogic
@@ -14,8 +14,9 @@ host_os:
 
 # Router model
 router:
-  # pls write down the router name .It should be asusax88u or asusax86u
-  name: asusax88u
+  # pls write down the router name .
+  # It should be asusax86u,asusax88u,asusax5400,asusax6700,xiaomiredax6000,xiaomiax3000
+  name: xiaomiredax6000
 
 power_relay: {
   '192.168.200.3': '12345678',
@@ -53,6 +54,7 @@ rvr:
   ixchariot:
     path: D:/Program Files (x86)/Ixia/IxChariot
   pair: 2
+  # re-test count , type 0 means don't repeat test once ,type 1 means repeat one time,totally get two test result totally
   repeat: 0
 
 

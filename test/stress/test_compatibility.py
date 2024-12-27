@@ -3,7 +3,6 @@ import re
 import subprocess
 import time
 from test import get_testdata
-from test.test_rvr import get_rx_rate, get_tx_rate, iperf_on, kill_iperf
 
 import pytest
 
@@ -14,7 +13,6 @@ from tools.router_tool.Router import Router
 
 power_delay = power_ctrl()
 router = ''
-pc_ip = ''
 ssid_2g = 'Aml_AP_Comp_2.4G'
 ssid_5g = 'Aml_AP_Comp_5G'
 ssid_6g = 'Aml_AP_Comp_6G'
@@ -84,8 +82,7 @@ def handle_wifi_cmd(router_info):
 
 @pytest.mark.wifi_connect
 def test_multi_throughtput_tx(router_setting):
-    global pc_ip
-    router = router_setting
+    router_info = router_setting
     rssi_info = pytest.dut.checkoutput(pytest.dut.IW_LINNK_COMMAND)
     logging.info(rssi_info)
     try:
@@ -94,9 +91,8 @@ def test_multi_throughtput_tx(router_setting):
     except IndexError as e:
         rssi_num = -1
         freq_num = -1
-    dut_info = pytest.dut.checkoutput('ifconfig wlan0')
-    dut_ip = re.findall(r'inet addr:(\d+\.\d+\.\d+\.\d+)', dut_info, re.S)[0]
-    tx_result = get_tx_rate(pc_ip, dut_ip, pytest.dut.serialnumber, router, 4, freq_num, rssi_num, "TCP")
+    protocol = 'TCP' if 'TCP' in router_info.protocol_type else 'UDP'
+    tx_result = pytest.dut.get_tx_rate(router_info, rssi_num, protocol)
     logging.info(tx_result)
     for i in tx_result:
         if i >= float(router.expected_rate[0]):
@@ -108,8 +104,7 @@ def test_multi_throughtput_tx(router_setting):
 
 @pytest.mark.wifi_connect
 def test_multi_throughtput_rx(router_setting):
-    global pc_ip
-    router = router_setting
+    router_info = router_setting
     rssi_info = pytest.dut.checkoutput(pytest.dut.IW_LINNK_COMMAND)
     logging.info(rssi_info)
     try:
@@ -120,7 +115,7 @@ def test_multi_throughtput_rx(router_setting):
         freq_num = -1
     dut_info = pytest.dut.checkoutput('ifconfig wlan0')
     dut_ip = re.findall(r'inet addr:(\d+\.\d+\.\d+\.\d+)', dut_info, re.S)[0]
-    rx_result = get_rx_rate(pc_ip, dut_ip, pytest.dut.serialnumber, router, 4, freq_num, rssi_num, "TCP")
+    rx_result = pytest.dut.get_rx_rate(router_info, rssi_num, "TCP")
     logging.info(rx_result)
     for i in rx_result:
         if i >= float(router.expected_rate[1]):

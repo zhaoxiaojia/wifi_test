@@ -23,7 +23,10 @@ class TelnetInterface():
             logging.info(f'Try to connect {ip}')
             self.tn = telnetlib.Telnet()
             self.tn.open(self.ip, port=23)
-            logging.info('telnet init done')
+            logging.info('*' * 80)
+            logging.info(f'* ip   : {ip}')
+            logging.info(f'* port: 23')
+            logging.info('*' * 80)
             # print('telnet init done')
 
         except Exception as f:
@@ -97,7 +100,6 @@ class TelnetInterface():
         current_angle = int(self.tn.read_some().decode('utf-8'))
         self.angle = int(current_angle)
         return self.angle
-
 
 # tn = TelnetInterface("192.168.50.200")
 # tn.turn_table_init()

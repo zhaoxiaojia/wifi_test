@@ -84,8 +84,8 @@ class RouterTools(RouterControl):
     BAND_LIST = ['2.4 GHz', '5 GHz']
     BANDWIDTH_2 = ['20/40 MHz', '20 MHz', '40 MHz']
     BANDWIDTH_5 = ['20/40/80 MHz', '20 MHz', '40 MHz', '80 MHz']
-    WIRELESS_2_MODE = ['自动', '11b', '11g', '11n', '11ax', 'Legacy','N only']
-    WIRELESS_5_MODE: list[str] = ['自动', '11a', '11ac', '11ax', 'Legacy','N/AC/AX mixed','AX only']
+    WIRELESS_2_MODE = ['自动', '11b', '11g', '11n', '11ax', 'Legacy', 'N only']
+    WIRELESS_5_MODE: list[str] = ['自动', '11a', '11ac', '11ax', 'Legacy', 'N/AC/AX mixed', 'AX only']
 
     AUTHENTICATION_METHOD = ['Open System', 'WPA2-Personal', 'WPA3-Personal', 'WPA/WPA2-Personal', 'WPA2/WPA3-Personal',
                              'WPA2-Enterprise', 'WPA/WPA2-Enterprise']
@@ -158,6 +158,9 @@ class RouterTools(RouterControl):
 
         # 全局等待3秒 （当driver 去查询 控件时生效）
         self.driver.implicitly_wait(3)
+        logging.info('*' * 80)
+        logging.info(f'* Router {self.router_info}')
+        logging.info('*' * 80)
 
     def scroll_to(self, target):
         self.driver.execute_script(self.SCROL_JS, target)
@@ -387,4 +390,3 @@ class RouterTools(RouterControl):
 
     # def __del__(self):
     #     self.driver.quit()
-

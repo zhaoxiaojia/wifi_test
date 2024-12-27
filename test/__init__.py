@@ -3,6 +3,9 @@ import logging
 import os
 
 import pytest
+import psutil
+import re
+import subprocess
 
 from tools.connect_tool.adb import accompanying_dut
 from tools.Iperf import Iperf
@@ -61,11 +64,12 @@ def get_testdata(router):
     # 校验 csv 数据是否异常
     for i in test_data:
         logging.info(i)
-        if pytest.connect_type == 'adb':
-            if '2' in i.band:
-                ssid_verify.add(i.ssid)
-            if '5' in i.band:
-                assert i.ssid not in ssid_verify, "5g ssid can't as the same as 2g , pls modify"
+        if pytest.connect_type != 'adb':
+            break
+        if '2' in i.band:
+            ssid_verify.add(i.ssid)
+        if '5' in i.band:
+            assert i.ssid not in ssid_verify, "5g ssid can't as the same as 2g , pls modify"
         assert i.band in ['2.4 GHz', '5 GHz'], "Pls check band info "
         assert i.wireless_mode in {'2.4 GHz': router.WIRELESS_2_MODE, '5 GHz': router.WIRELESS_5_MODE}[
             i.band], "Pls check wireless info"
@@ -80,12 +84,6 @@ def get_testdata(router):
     return test_data
 
 
-def modify_tcl_script(old_str, new_str):
-    file = './script/rvr.tcl'
-    with open(file, "r", encoding="utf-8") as f1, open("%s.bak" % file, "w", encoding="utf-8") as f2:
-        for line in f1:
-            if old_str in line:
-                line = new_str
-            f2.write(line)
-    os.remove(file)
-    os.rename("%s.bak" % file, file)
+
+
+

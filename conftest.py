@@ -89,23 +89,18 @@ def pytest_runtest_logreport(report):
         test_nodeid = report.nodeid
         if "[" in test_nodeid:
             params = test_nodeid.split("[", 1)[-1].rstrip("]")
-            logging.info(f"Running test: {test_nodeid}")
-            logging.info(f"Parameters: {params}")
+            logging.info('*'*80)
+            logging.info(f"* Test params: {params}")
+            logging.info('*' * 80)
 
+def pytest_collection_modifyitems(items):
+    # item表示收集到的测试用例，对他进行重新编码处理
+    for item in items:
+        item.name = item.name.encode("utf-8").decode("unicode-escape")
+        item._nodeid = item._nodeid.encode("utf-8").decode("unicode-escape")
 
 def pytest_sessionfinish(session):
     shutil.copy("pytest.log", "debug.log")
     shutil.move("debug.log", pytest.testResult.logdir)
     shutil.copy("report.html", "report_bat.html")
     shutil.move("report_bat.html", pytest.testResult.logdir)
-
-    if os.path.exists('temp.txt'):
-        for proc in psutil.process_iter():
-            try:
-                files = proc.open_files()
-                for f in files:
-                    if f.path == 'temp.txt':
-                        proc.kill()  # Kill the process that occupies the file
-            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-                pass
-        os.remove('temp.txt')

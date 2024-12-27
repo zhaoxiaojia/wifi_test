@@ -156,6 +156,7 @@ class adb(dut):
         self.checkoutput_term(self.ADB_S + self.serialnumber +
                               " shell input keyevent " + keycode)
         time.sleep(0.5)
+
     def send_event(self, key, hold=3):
         '''
         sendevent
@@ -1633,6 +1634,12 @@ class adb(dut):
             return hwAddr
         else:
             raise Exception("Can't get hw addr")
+
+    def push_iperf(self):
+        if self.checkoutput('[ -e /system/bin/iperf ] && echo yes || echo no').strip() != 'yes':
+            path = os.path.join(os.getcwd(), 'res/iperf')
+            self.push(path, '/system/bin')
+            self.checkoutput('chmod a+x /system/bin/iperf')
 
 
 from tools.yamlTool import yamlTool

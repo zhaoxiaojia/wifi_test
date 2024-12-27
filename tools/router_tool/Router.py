@@ -16,7 +16,7 @@ def _info(info):
 
 
 def router_str(self):
-    return f'{_info(self.serial)}_{_info(self.band)} {_info(self.ssid)} {_info(self.wireless_mode)} {_info(self.channel)} {_info(self.bandwidth)} {_info(self.authentication_method)}'
+    return f'{_info(self.band)} {_info(self.ssid)} {_info(self.wireless_mode)} {_info(self.channel)} {_info(self.bandwidth)} {_info(self.authentication_method)}'
 
 
 RUN_SETTING_ACTIVITY = 'am start -n com.android.tv.settings/.MainSettings'

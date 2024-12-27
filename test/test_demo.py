@@ -13,13 +13,16 @@ import pytest
 bt_device = 'JBL GO 2'
 
 
-@pytest.fixture()
-def setup_teardown():
+@pytest.fixture(params=['xiaomi'],autouse=True)
+def setup_teardown(request):
     logging.info('This is setup')
+    logging.info(f'request.param {request.param}')
     yield
     logging.info('This is teardown')
 
 
-def test():
+@pytest.mark.parametrize("rf_value", [1,2])
+def test(rf_value):
     logging.info('This is a demo test')
+    logging.info(f'rf_value {rf_value}')
     assert True

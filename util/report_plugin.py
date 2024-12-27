@@ -9,12 +9,13 @@ import logging
 from _pytest.terminal import TerminalReporter
 
 
-def pytest_runtest_call(item):
-    try:
-        item.runtest()
-    except Exception as e:
-        logging.exception(e)
-        raise
+# def pytest_runtest_call(item):
+#     try:
+#         item.runtest()
+#     except Exception as e:
+#         logging.exception(e)
+#         raise
+
 
 @pytest.mark.trylast
 def pytest_configure(config):
@@ -30,7 +31,7 @@ def pytest_configure(config):
         if "::" in test_path:
             test_path = test_path.split("::")[0]
         if not os.path.exists(test_path):
-            pytest.result.log_brok("Given test path does not exist: %s" % test_path)
+            # pytest.result.log_brok("Given test path does not exist: %s" % test_path)
             raise Exception("Given test path does not exist: %s" % test_path)
 
 
@@ -51,8 +52,8 @@ class QaTerminalReporter(TerminalReporter):
     def pytest_runtest_logstart(self, nodeid, location):
         # ensure that the path is printed before the
         # 1st test of a module starts running
-        logging.info('{title:{char}^{length}}'.format(title=' runtest start ', length=80, char='='))
-        logging.info(nodeid)
+        logging.info('{title:{char}^{length}}'.format(title=' runtest start ', length=70, char='='))
+        # logging.info(nodeid)
         if self.showlongtestinfo:
             line = self._locationline(nodeid, *location)
             self.write_ensure_prefix(line, "\n")
@@ -61,21 +62,21 @@ class QaTerminalReporter(TerminalReporter):
             self.write_fspath_result(fsid, "\n")
 
     def pytest_sessionstart(self, session):
-        logging.info('{title:{char}^{length}}'.format(title=' live log sessionstart ', length=80, char='-'))
+        logging.info('{title:{char}^{length}}'.format(title=' live log sessionstart ', length=110, char='-'))
         # super(QaTerminalReporter, self).pytest_sessionstart(session)
 
     def pytest_runtest_setup(self):
-        logging.info('{title:{char}^{length}}'.format(title=' live log setup ', length=80, char='-'))
+        logging.info('{title:{char}^{length}}'.format(title=' live log setup ', length=110, char='-'))
 
     def pytest_runtest_teardown(self):
-        logging.info('{title:{char}^{length}}'.format(title=' live log teardown ', length=80, char='-'))
+        logging.info('{title:{char}^{length}}'.format(title=' live log teardown ', length=110, char='-'))
 
     def pytest_sessionfinish(self, exitstatus):
-        logging.info('{title:{char}^{length}}'.format(title=' live log sessionfinish ', length=80, char='-'))
+        logging.info('{title:{char}^{length}}'.format(title=' live log sessionfinish ', length=110, char='-'))
         # super(AATSTerminalReporter, self).pytest_sessionfinish(exitstatus)
 
     def pytest_runtest_call(self):
-        logging.info('{title:{char}^{length}}'.format(title=' live log call ', length=80, char='-'))
+        logging.info('{title:{char}^{length}}'.format(title=' live log call ', length=110, char='-'))
 
     def pytest_collectreport(self, report):
         # Show errors occurred during the collection instantly.
@@ -118,7 +119,7 @@ class QaTerminalReporter(TerminalReporter):
                     msg = report.longrepr[2]
                 except:
                     pass
-        logging.debug('{title:{char}^{length}}'.format(title=' runtest finish ', length=80, char='='))
+        logging.debug('{title:{char}^{length}}'.format(title=' runtest finish ', length=110, char='='))
 
     def summary_fialures(self):
         # Prevent failure summary from being shown since we already
