@@ -308,7 +308,7 @@ class dut():
             f.write('-' * 40 + '\n\n')
         return rx_result_list
 
-    def get_tx_rate(self, router_info, rssi_num, type, corner_tool=None,
+    def get_tx_rate(self, router_info, rssi_num, type='TCP', corner_tool=None,
                     db_set=''):
         global tx_result
         tx_result_list = []
@@ -376,3 +376,4 @@ class dut():
             f.write(f'Tx {type} result : {tx_result}\n')
             f.write('-' * 40 + '\n\n')
         return tx_result_list
+

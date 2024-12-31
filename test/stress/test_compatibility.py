@@ -34,7 +34,7 @@ def router_setting(power_setting, request):
     if pc_ip is None: assert False, "Can't get pc ip address"
     pytest.dut.ip_target = '.'.join(pc_ip.split('.')[:3])
     logging.info(f'pc_ip {pc_ip}')
-    check_iperf()
+    pytest.dut.push_iperf()
     for _ in range(30):
         info = pytest.dut.checkoutput("cmd wifi start-scan;cmd wifi list-scan-results")
         logging.info(info)
@@ -44,7 +44,7 @@ def router_setting(power_setting, request):
     else:
         assert False, "Can't scan target ssid"
     pytest.dut.forget_wifi()
-    pytest.dut.checkoutput(pytest.dut.CMD_WIFI_CONNECT.format(router.ssid, 'wpa2', router.wpa_passwd))
+    pytest.dut.checkoutput(pytest.dut.get_wifi_cmd(router))
     pytest.dut.wait_for_wifi_address()
     yield router
 
@@ -55,29 +55,9 @@ def power_setting(request):
     power_delay.shutdown()
     time.sleep(2)
     power_delay.switch(ip, port, 1)
-    logging.info(f'address {ip} port {port}')
     time.sleep(60)
     yield ip, port
     power_delay.switch(ip, port, 2)
-
-
-def check_iperf():
-    pytest.dut.checkoutput('ls /system/bin/iperf')
-    pytest.dut.push('./res/iperf', '/system/bin/iperf')
-    pytest.dut.checkoutput('chmod a+x /system/bin/iperf')
-
-
-def handle_wifi_cmd(router_info):
-    type = 'wpa3' if 'WPA3' in router_info.authentication_method else 'wpa2'
-    if router_info.authentication_method.lower() in \
-            ['open', '不加密', '无', 'open system', '无加密(允许所有人连接)', 'none']:
-        cmd = pytest.dut.CMD_WIFI_CONNECT.format(router_info.ssid, "open", "")
-    else:
-        cmd = pytest.dut.CMD_WIFI_CONNECT.format(router_info.ssid, type,
-                                                 router_info.wpa_passwd)
-    if router_info.hide_ssid == '是':
-        cmd += pytest.dut.CMD_WIFI_HIDE
-    return cmd
 
 
 @pytest.mark.wifi_connect
@@ -91,8 +71,7 @@ def test_multi_throughtput_tx(router_setting):
     except IndexError as e:
         rssi_num = -1
         freq_num = -1
-    protocol = 'TCP' if 'TCP' in router_info.protocol_type else 'UDP'
-    tx_result = pytest.dut.get_tx_rate(router_info, rssi_num, protocol)
+    tx_result = pytest.dut.get_tx_rate(router_info, rssi_num)
     logging.info(tx_result)
     for i in tx_result:
         if i >= float(router.expected_rate[0]):

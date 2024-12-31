@@ -1641,6 +1641,18 @@ class adb(dut):
             self.push(path, '/system/bin')
             self.checkoutput('chmod a+x /system/bin/iperf')
 
+    def get_wifi_cmd(self, router_info):
+        type = 'wpa3' if 'WPA3' in router_info.authentication_method else 'wpa2'
+        if router_info.authentication_method.lower() in \
+                ['open', '不加密', '无', 'open system', '无加密(允许所有人连接)', 'none']:
+            cmd = pytest.dut.CMD_WIFI_CONNECT.format(router_info.ssid, "open", "")
+        else:
+            cmd = pytest.dut.CMD_WIFI_CONNECT.format(router_info.ssid, type,
+                                                     router_info.wpa_passwd)
+        if router_info.hide_ssid == '是':
+            cmd += pytest.dut.CMD_WIFI_HIDE
+        return cmd
+
 
 from tools.yamlTool import yamlTool
 
