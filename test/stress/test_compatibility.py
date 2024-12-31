@@ -26,6 +26,12 @@ router_5g = Router(band='5 GHz', wireless_mode='11ac', channel='36', authenticat
 test_data = [router_2g, router_5g]
 
 
+@pytest.fixture(scope='session', autouse=True)
+def power_shotdown():
+    power_delay.shutdown()
+    time.sleep(2)
+
+
 @pytest.fixture(scope='module', autouse=True, params=test_data, ids=[str(i) for i in test_data])
 def router_setting(power_setting, request):
     global pc_ip
@@ -52,8 +58,6 @@ def router_setting(power_setting, request):
 @pytest.fixture(scope='module', autouse=True, params=power_delay.ctrl, ids=[str(i) for i in power_delay.ctrl])
 def power_setting(request):
     ip, port = request.param
-    power_delay.shutdown()
-    time.sleep(2)
     power_delay.switch(ip, port, 1)
     time.sleep(60)
     yield ip, port
