@@ -14,8 +14,8 @@ from functools import wraps
 
 
 class MyThead(threading.Thread):
-    def __init__(self,target,args=()):
-        super(MyThead,self).__init__()
+    def __init__(self, target, args=()):
+        super(MyThead, self).__init__()
         self.func = target
         self.args = args
 
@@ -24,9 +24,10 @@ class MyThead(threading.Thread):
 
     def get_result(self):
         try:
-            return  self.a
+            return self.a
         except Exception:
             return None
+
 
 def set_timeout(limit_time):
     def functions(func):
@@ -46,6 +47,8 @@ def set_timeout(limit_time):
         return run
 
     return functions
+
+
 def count_down(duration):
     '''
     闹钟-倒计时
@@ -60,8 +63,11 @@ def count_down(duration):
             while time.time() - start < duration:
                 res = func(*args, **kwargs)
             return res
+
         return inner
+
     return wrapper
+
 
 def singleton(cls):
     '''

@@ -9,10 +9,32 @@
 # Description：
 """
 
-import logging
 
-logging.basicConfig(filename='program.log', filemode='w', level=logging.DEBUG)
+def step(func):
+    def wrapper(*args, **kwargs):
+        print('-' * 80)
+        print("Step:")
+        print(func.__name__)
+        print(func.__doc__)
+        info = func(*args, **kwargs)
+        print('-' * 80)
+        return info
 
-logging.info(' live log sessionstart '.center(100,'-'))
-logging.info(' live log  '.center(100,'-'))
-logging.info('*'*80)
+
+    return wrapper
+
+
+@step
+def get_wifi(cmd):
+    '''
+    get wifi
+    Args:
+        cmd:
+
+    Returns:
+
+    '''
+    print(f'{cmd} get done')
+
+
+get_wifi('aa')

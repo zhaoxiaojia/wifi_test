@@ -205,7 +205,7 @@ class power_ctrl:
         return temp
 
     def __init__(self):
-        self.config = yamlTool(os.getcwd() + '/../config/config.yaml')
+        self.config = yamlTool(os.getcwd() + '/config/config.yaml')
         self.power_ctrl = self.config.get_note('power_relay')
         print(self.power_ctrl)
         self.ip_list = list(self.power_ctrl.keys())
