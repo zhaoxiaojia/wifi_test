@@ -120,15 +120,15 @@ def setup(request):
 
     # push_iperf()
     router_info = request.param
-    # Todo
-    # if router_needed:
-    #     # 修改路由器配置
-    #     assert router.change_setting(router_info), "Can't set ap , pls check first"
-    #     if pytest.connect_type == 'telnet':
-    #         band = '5 GHz' if '2' in router_info.band else '2.4 GHz'
-    #         ssid = router_info.ssid + "_bat";
-    #         router.change_setting(Router(band=band, ssid=ssid))
-    #     time.sleep(3)
+
+    if router_needed:
+        # 修改路由器配置
+        assert router.change_setting(router_info), "Can't set ap , pls check first"
+        if pytest.connect_type == 'telnet':
+            band = '5 GHz' if '2' in router_info.band else '2.4 GHz'
+            ssid = router_info.ssid + "_bat";
+            router.change_setting(Router(band=band, ssid=ssid))
+        time.sleep(3)
 
     logging.info('router set done')
     with open(pytest.testResult.detail_file, 'a', encoding='utf-8') as f:
@@ -137,9 +137,8 @@ def setup(request):
     logging.info(f'dut try to connect {router_info.ssid}')
     if pytest.connect_type == 'telnet':
         connect_status = True
-        # Todo
-        # if router_needed:
-        #     time.sleep(90)
+        if router_needed:
+            time.sleep(90)
     else:
         # 连接 网络 最多三次重试
         for _ in range(3):
@@ -261,29 +260,8 @@ def test_rvr(setup, rf_value):
     # time.sleep(1)
 
     # 获取rssi
-    for i in range(10):
-        rssi_info = pytest.dut.checkoutput(pytest.dut.IW_LINNK_COMMAND)
-        logging.info(f'Get WiFi link status via command iw dev wlan0 link {rssi_info}')
-        if 'signal' in rssi_info and i > 4:
-            break
-    else:
-        rssi_info = ''
+    rssi_num = pytest.dut.get_rssi()
 
-    if 'Not connected' in rssi_info:
-        logging.info('The signal strength is not enough ,input 0')
-        rx_result, tx_result, rssi_num = 0, 0, 0
-        with open(pytest.testResult.detail_file, 'a') as f:
-            f.write('signal strength is not enough no rssi \n')
-        assert False, "Wifi is not connected"
-    try:
-        rssi_num = int(re.findall(r'signal:\s+(-?\d+)\s+dBm', rssi_info, re.S)[0])
-        freq_num = int(re.findall(r'freq:\s+(\d+)\s+', rssi_info, re.S)[0])
-        with open(pytest.testResult.detail_file, 'a') as f:
-            f.write(f'Rssi : {rssi_num}\n')
-            f.write(f'Freq : {freq_num}\n')
-    except IndexError as e:
-        rssi_num = -1
-        freq_num = -1
     # handle iperf pair count
     logging.info('start test tx/rx')
     logging.info(f'router_info: {router_info}')

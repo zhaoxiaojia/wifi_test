@@ -21,6 +21,7 @@ from tools.ixchariot import ix
 
 
 class dut():
+    count = 0
     DMESG_COMMAND = 'dmesg -S'
     CLEAR_DMESG_COMMAND = 'dmesg -c'
 
@@ -129,6 +130,19 @@ class dut():
         if self._pc_ip == '': self._pc_ip = self.get_pc_ip()
         return self._pc_ip
 
+    def step(func):
+        def wrapper(*args, **kwargs):
+            logging.info('-' * 80)
+            dut.count += 1
+            logging.info(f"Test Step {dut.count}:")
+            logging.info(func.__name__)
+            info = func(*args, **kwargs)
+
+            logging.info('-' * 80)
+            return info
+
+        return wrapper
+
     def checkoutput_term(self, command):
         logging.info(f"command:{command}")
         if not isinstance(command, list):
@@ -170,14 +184,14 @@ class dut():
             # logging.info(pytest.dut.checkoutput('ps -A|grep "iperf"'.replace('iperf',dut_iperf)))
 
         if os.path.exists(f'rvr_log_{pytest.dut.serialnumber}.txt') and '-s' in command:
-            for proc in psutil.process_iter():
-                try:
-                    files = proc.open_files()
-                    for f in files:
-                        if f.path == f'rvr_log_{pytest.dut.serialnumber}.txt':
-                            proc.kill()  # Kill the process that occupies the file
-                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-                    pass
+            # for proc in psutil.process_iter():
+            #     try:
+            #         files = proc.open_files()
+            #         for f in files:
+            #             if f.path == f'rvr_log_{pytest.dut.serialnumber}.txt':
+            #                 proc.kill()  # Kill the process that occupies the file
+            #     except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            #         pass
             os.remove(f'rvr_log_{pytest.dut.serialnumber}.txt')
 
         if adb:
@@ -246,6 +260,7 @@ class dut():
         if not dut_ip: assert False, "Can't get dut ip"
         return dut_ip
 
+    @step
     def get_rx_rate(self, router_info, rssi_num, type, corner_tool=None, db_set=''):
         rx_result_list = []
         for _ in range(5):
@@ -308,6 +323,7 @@ class dut():
             f.write('-' * 40 + '\n\n')
         return rx_result_list
 
+    @step
     def get_tx_rate(self, router_info, rssi_num, type='TCP', corner_tool=None,
                     db_set=''):
         global tx_result
@@ -377,3 +393,30 @@ class dut():
             f.write('-' * 40 + '\n\n')
         return tx_result_list
 
+    @step
+    def get_rssi(self):
+        for i in range(10):
+            time.sleep(1)
+            rssi_info = pytest.dut.checkoutput(pytest.dut.IW_LINNK_COMMAND)
+            logging.info(f'Get WiFi link status via command iw dev wlan0 link {rssi_info}')
+            if 'signal' in rssi_info:
+                break
+        else:
+            rssi_info = ''
+
+        if 'Not connected' in rssi_info:
+            with open(pytest.testResult.detail_file, 'a') as f:
+                f.write('Wifi is not connected \n')
+            assert False, "Wifi is not connected"
+        try:
+            rssi_num = int(re.findall(r'signal:\s+(-?\d+)\s+dBm', rssi_info, re.S)[0])
+            # freq_num = int(re.findall(r'freq:\s+(\d+)\s+', rssi_info, re.S)[0])
+            with open(pytest.testResult.detail_file, 'a') as f:
+                f.write(f'Rssi : {rssi_num}\n')
+                # f.write(f'Freq : {freq_num}\n')
+        except IndexError as e:
+            rssi_num = -1
+            # freq_num = -1
+        return rssi_num
+
+    step = staticmethod(step)

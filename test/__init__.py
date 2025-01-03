@@ -8,7 +8,6 @@ import re
 import subprocess
 
 from tools.connect_tool.adb import accompanying_dut
-from tools.Iperf import Iperf
 from tools.playback_tool.Youtube import Youtube
 from tools.router_tool.Router import Router
 from tools.yamlTool import yamlTool

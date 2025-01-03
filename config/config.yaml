@@ -4,7 +4,7 @@ connect_type:
   adb:
     device: 'twilight9de10187801e1c'
   telnet:
-    ip: '192.168.0.249'
+    ip: '192.168.0.250'
     #    market area  sandia  list:sandia,sandia_latam,sandia_hkc,sandia_dvb
     wildcard: sandia
 

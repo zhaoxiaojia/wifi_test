@@ -326,31 +326,7 @@ def test_xiaomi_rvr(setup, rf_value):
     # time.sleep(1)
 
     # 获取rssi
-    for i in range(10):
-        rssi_info = pytest.dut.checkoutput(pytest.dut.IW_LINNK_COMMAND)
-        logging.info(rssi_info)
-        if 'signal' in rssi_info and i > 4:
-            break
-    else:
-        rssi_info = ''
-
-    if 'Not connected' in rssi_info:
-        logging.info('The signal strength is not enough ,input 0')
-        rx_result, tx_result, rssi_num = 0, 0, 0
-        with open(pytest.testResult.detail_file, 'a') as f:
-            f.write('signal strength is not enough no rssi \n')
-        assert False, "Wifi is not connected"
-    logging.info('Start test')
-
-    try:
-        rssi_num = int(re.findall(r'signal:\s+(-?\d+)\s+dBm', rssi_info, re.S)[0])
-        freq_num = int(re.findall(r'freq:\s+(\d+)\s+', rssi_info, re.S)[0])
-        with open(pytest.testResult.detail_file, 'a') as f:
-            f.write(f'Rssi : {rssi_num}\n')
-            f.write(f'Freq : {freq_num}\n')
-    except IndexError as e:
-        rssi_num = -1
-        freq_num = -1
+    rssi_num = pytest.dut.get_rssi()
     # handle iperf pair count
     logging.info(router_info)
     protocol = 'TCP' if 'TCP' in router_info.protocol_type else 'UDP'
@@ -363,31 +339,7 @@ def test_xiaomi_rvr(setup, rf_value):
                                corner_tool=corner_tool,
                                db_set=db_set)
     # 获取rssi
-    for i in range(10):
-        rssi_info = pytest.dut.checkoutput(pytest.dut.IW_LINNK_COMMAND)
-        logging.info(f'Get WiFi link status via command iw dev wlan0 link {rssi_info}')
-        if 'signal' in rssi_info and i > 4:
-            break
-    else:
-        rssi_info = ''
-
-    if 'Not connected' in rssi_info:
-        logging.info('The signal strength is not enough ,input 0')
-        rx_result, tx_result, rssi_num = 0, 0, 0
-        with open(pytest.testResult.detail_file, 'a') as f:
-            f.write('signal strength is not enough no rssi \n')
-        assert False, "Wifi is not connected"
-    logging.info('Start test')
-
-    try:
-        rssi_num = int(re.findall(r'signal:\s+(-?\d+)\s+dBm', rssi_info, re.S)[0])
-        freq_num = int(re.findall(r'freq:\s+(\d+)\s+', rssi_info, re.S)[0])
-        with open(pytest.testResult.detail_file, 'a') as f:
-            f.write(f'Rssi : {rssi_num}\n')
-            f.write(f'Freq : {freq_num}\n')
-    except IndexError as e:
-        rssi_num = -1
-        freq_num = -1
+    rssi_num = pytest.dut.get_rssi()
     if 'rx' in router_info.test_type:
         pair = wifi_yaml.get_note('rvr')['pair']
         logging.info(f'rssi : {rssi_num} pair : {pair}')
