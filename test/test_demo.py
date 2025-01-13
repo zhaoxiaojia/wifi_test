@@ -4,25 +4,12 @@
 # @Author  : chao.li
 # @File    : test_demo.py
 
-import itertools
-import logging
-import time
 
+from dut_control.roku_ctrl import roku_ctrl
 import pytest
 
-bt_device = 'JBL GO 2'
+roku = roku_ctrl()
 
 
-@pytest.fixture(params=['xiaomi'],autouse=True)
-def setup_teardown(request):
-    logging.info('This is setup')
-    logging.info(f'request.param {request.param}')
-    yield
-    logging.info('This is teardown')
-
-
-@pytest.mark.parametrize("rf_value", [1,2])
-def test(rf_value):
-    logging.info('This is a demo test')
-    logging.info(f'rf_value {rf_value}')
-    assert True
+def test_demo():
+    assert roku.wifi_conn(ssid='AP-002-2.4G')

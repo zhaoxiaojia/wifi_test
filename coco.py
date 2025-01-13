@@ -8,3 +8,14 @@
 # version    ：python 3.9
 # Description：
 """
+
+
+from roku import Roku
+
+# roku = Roku('192.168.0.250')
+# roku.literal(' ')
+
+a = 'AP-002-2.4G'
+b = 'AP-002-2.4G   (-23)'
+
+print(a in b)
