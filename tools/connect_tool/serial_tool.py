@@ -3,7 +3,7 @@
 
 
 """
-# File       : serial_connect.py
+# File       : serial_tool.py
 # Time       ：2023/6/30 16:48
 # Author     ：chao.li
 # version    ：python 3.9
@@ -20,7 +20,7 @@ import pytest
 import serial
 
 
-class SerialPort:
+class serial_tool:
     '''
     serial command control
     Attributes:
@@ -32,20 +32,19 @@ class SerialPort:
     '''
 
     def __init__(self, serial_port='', baud=''):
-        self.serial_port = serial_port or pytest.config['serial_port']
-        self.baud = baud or pytest.config['baudrate']
-        logging.info(f"self.serial_port: {self.serial_port},self.baud: {self.baud}")
-        self.ser = ''
+        self.serial_port = serial_port or pytest.config_yaml.get_note('serial_port')['port']
+        self.baud = baud or pytest.config_yaml.get_note('serial_port')['baud']
+        logging.info(f'port {self.serial_port} baud {self.baud}')
         self.ethernet_ip = ''
         self.uboot_time = 0
         try:
             self.ser = serial.Serial(self.serial_port, self.baud, timeout=0.25)
-            logging.info('the serial port %s-%s is opened' % (self.serial_port, self.baud))
-            self.write('su')
-            assert self.recv_until_pattern(b'#'), 'The serial port cannot to communicate to device'
+            logging.info('*' * 80)
+            logging.info(f'* Serial  {self.serial_port}-{self.baud} is opened  ')
+            logging.info('*' * 80)
             # self.ser.write(chr(0x03))
-            self.write('setprop persist.sys.usb.debugging y')
-            self.write('setprop service.adb.tcp.port 5555')
+            # self.write('setprop persist.sys.usb.debugging y')
+            # self.write('setprop service.adb.tcp.port 5555')
         except serial.serialutil.SerialException as e:
             logging.info(f'not found serial:{e}')
         if isinstance(self.ser, serial.Serial):
@@ -65,7 +64,7 @@ class SerialPort:
         ip, eth0Ip, wlanIp, ppp0Ip = '', '', '', ''
         logging.info('getting ip info through the serial port')
         self.write('ifconfig')
-        time.sleep(2)
+        time.sleep(1)
         ipInfo = ''.join([i.decode('utf-8') for i in self.ser.readlines()]).split('TX bytes:')
         logging.info(ipInfo)
         if ipInfo == ['']:
@@ -77,15 +76,13 @@ class SerialPort:
                     eth0Ip = re.findall(r'inet addr:(.*?)  Bcast', i, re.S)
                 if inet == 'ipv6':
                     eth0Ip = re.findall(r'inet6 addr:(.*?)  Bcast', i, re.S)
-                return eth0Ip[0]
+                return eth0Ip[0] if eth0Ip else None
             if 'wlan0' in i:
                 wlanIp = re.findall(r'inet addr:(.*?)  Bcast', i, re.S)
-                return wlanIp[0]
+                return wlanIp[0] if wlanIp else None
             if 'ppp0' in i:
                 ppp0Ip = re.findall(r'inet addr:(.*?)  P-t-P', i, re.S)
-                return ppp0Ip[0]
-        logging.info('Devices no ip info')
-        return None
+                return ppp0Ip[0] if ppp0Ip else None
 
     def write_pipe(self, command):
         '''
@@ -192,7 +189,7 @@ class SerialPort:
             log = self.ser.readline()
             if not log:
                 continue
-            logging.info(log)
+            # logging.info(log)
             result.append(log)
             if pattern and pattern in log:
                 return result

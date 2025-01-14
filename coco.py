@@ -10,12 +10,11 @@
 """
 
 
-from roku import Roku
+from dut_control.roku_ctrl import roku_ctrl
 
-# roku = Roku('192.168.0.250')
-# roku.literal(' ')
+roku = roku_ctrl('192.168.0.106')
 
-a = 'AP-002-2.4G'
-b = 'AP-002-2.4G   (-23)'
+input('change wifi')
+roku = roku_ctrl( '192.168.50.4')
 
-print(a in b)
+roku.home()
