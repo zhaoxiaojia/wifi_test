@@ -83,6 +83,7 @@ class Xiaomiax3000Control(RouterTools):
     }
 
     WIRELESS_MODE = ['11ac', '11ax']
+
     def __init__(self):
         super().__init__('xiaomi_ax3000', display=True)
 
@@ -136,6 +137,7 @@ class Xiaomiax3000Control(RouterTools):
                     By.XPATH, self.xpath['ssid_element'][target]).clear()
                 self.driver.find_element(
                     By.XPATH, self.xpath['ssid_element'][target]).send_keys(router.ssid)
+                self.driver.find_element(By.XPATH, self.xpath['ssid_element'][target]).click()
 
             hide_2g = self.driver.find_element(
                 By.ID, self.xpath['hide_ssid']['hide_2g'])
@@ -158,7 +160,7 @@ class Xiaomiax3000Control(RouterTools):
             # 修改 authentication_method
             if router.authentication_method:
                 try:
-                    index = self.AUTHENTICATION_METHOD_DICT[router.authentication_method]
+                    index = self.AUTHENTICATION_METHOD[router.authentication_method]
                 except ConfigError:
                     raise ConfigError('authentication method element error')
                 target = 'authentication_method_2g' if self.BAND_2 == router.band else 'authentication_method_5g'
@@ -183,10 +185,10 @@ class Xiaomiax3000Control(RouterTools):
                 channel = str(router.channel)
                 try:
                     if router.band == '2.4 GHz':
-                        index = self.CHANNEL_2_DICT[channel]
+                        index = self.CHANNEL_2[channel]
                         target = 'channel_2g'
                     else:
-                        index = self.CHANNEL_5_DICT[channel]
+                        index = self.CHANNEL_5[channel]
                         target = 'channel_5g'
                 except KeyError:
                     raise ConfigError('channel element error')

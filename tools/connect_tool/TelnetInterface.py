@@ -17,8 +17,7 @@ import pytest
 class TelnetInterface():
     def __init__(self, ip):
         self.ip = ip
-        model = pytest.config_yaml.get_note('rf_solution')['model']
-        self.model = pytest.config_yaml.get_note('rf_solution')[model]['ip_address']
+        self.model = pytest.config_yaml.get_note('rf_solution')['model']
         try:
             logging.info(f'Try to connect {ip}')
             self.tn = telnetlib.Telnet()
