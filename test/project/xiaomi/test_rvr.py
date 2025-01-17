@@ -19,16 +19,16 @@ import threading
 import time
 from copy import copy
 from test import get_testdata
+from test.test_rvr import corner_tool
 
 import openpyxl
 import psutil
 import pytest
 
-from test.test_rvr import corner_tool
 from tools.connect_tool.TelnetInterface import TelnetInterface
 from tools.ixchariot import ix
-from tools.router_tool.router_factory import get_router
 from tools.router_tool.Router import Router
+from tools.router_tool.router_factory import get_router
 from tools.yamlTool import yamlTool
 
 # 小米极限测试 记录

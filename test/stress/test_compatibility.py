@@ -2,13 +2,10 @@ import logging
 import re
 import subprocess
 import time
-from test import get_testdata
 
 import pytest
 
-from tools.connect_tool.adb import adb
 from tools.pdusnmp import power_ctrl
-from tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
 from tools.router_tool.Router import Router
 
 power_delay = power_ctrl()
@@ -41,14 +38,14 @@ def router_setting(power_setting, request):
     pytest.dut.ip_target = '.'.join(pc_ip.split('.')[:3])
     logging.info(f'pc_ip {pc_ip}')
     pytest.dut.push_iperf()
-    for _ in range(30):
+    for _ in range(5):
         info = pytest.dut.checkoutput("cmd wifi start-scan;cmd wifi list-scan-results")
         logging.info(info)
-        if 'Aml_AP_Comp_' in info:
+        if router.ssid in info:
             break;
         time.sleep(3)
     else:
-        assert False, "Can't scan target ssid"
+        assert False, f"Can't scan target ssid {router.ssid}"
     pytest.dut.forget_wifi()
     pytest.dut.checkoutput(pytest.dut.get_wifi_cmd(router))
     pytest.dut.wait_for_wifi_address()
@@ -67,14 +64,7 @@ def power_setting(request):
 @pytest.mark.wifi_connect
 def test_multi_throughtput_tx(router_setting):
     router_info = router_setting
-    rssi_info = pytest.dut.checkoutput(pytest.dut.IW_LINNK_COMMAND)
-    logging.info(rssi_info)
-    try:
-        rssi_num = int(re.findall(r'signal:\s+-?(\d+)\s+dBm', rssi_info, re.S)[0])
-        freq_num = int(re.findall(r'freq:\s+(\d+)\s+', rssi_info, re.S)[0])
-    except IndexError as e:
-        rssi_num = -1
-        freq_num = -1
+    rssi_num = pytest.dut.get_rssi()
     tx_result = pytest.dut.get_tx_rate(router_info, rssi_num)
     logging.info(tx_result)
     for i in tx_result:
@@ -88,17 +78,8 @@ def test_multi_throughtput_tx(router_setting):
 @pytest.mark.wifi_connect
 def test_multi_throughtput_rx(router_setting):
     router_info = router_setting
-    rssi_info = pytest.dut.checkoutput(pytest.dut.IW_LINNK_COMMAND)
-    logging.info(rssi_info)
-    try:
-        rssi_num = int(re.findall(r'signal:\s+-?(\d+)\s+dBm', rssi_info, re.S)[0])
-        freq_num = int(re.findall(r'freq:\s+(\d+)\s+', rssi_info, re.S)[0])
-    except IndexError as e:
-        rssi_num = -1
-        freq_num = -1
-    dut_info = pytest.dut.checkoutput('ifconfig wlan0')
-    dut_ip = re.findall(r'inet addr:(\d+\.\d+\.\d+\.\d+)', dut_info, re.S)[0]
-    rx_result = pytest.dut.get_rx_rate(router_info, rssi_num, "TCP")
+    rssi_num = pytest.dut.get_rssi()
+    rx_result = pytest.dut.get_rx_rate(router_info, rssi_num)
     logging.info(rx_result)
     for i in rx_result:
         if i >= float(router.expected_rate[1]):

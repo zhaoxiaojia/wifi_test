@@ -3,11 +3,11 @@
 # @Time    : 2024/8/27 14:43
 # @Author  : chao.li
 # @File    : report_plugin.py
-import os
-import pytest
 import logging
-from _pytest.terminal import TerminalReporter
+import os
 
+import pytest
+from _pytest.terminal import TerminalReporter
 
 # def pytest_runtest_call(item):
 #     try:

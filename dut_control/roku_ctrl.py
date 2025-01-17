@@ -21,9 +21,9 @@ import requests
 from roku import Roku
 
 from dut_control.ir import Ir
+from tools.connect_tool.serial_tool import serial_tool
 from tools.connect_tool.telnet_tool import telnet_tool
 from tools.yamlTool import yamlTool
-from tools.connect_tool.serial_tool import serial_tool
 
 COMMANDS = {
     # Standard Keys

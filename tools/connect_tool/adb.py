@@ -1277,8 +1277,7 @@ class adb(dut):
                 if cmd:
                     self.checkoutput(cmd)
             if step > 10:
-                logging.error("Can't catch the target ip address")
-                assert False, 'connected fail'
+                assert False, f"Can't catch the address:{target} "
         logging.info(f'ip address {ip_address}')
         return True, ip_address
 
@@ -1651,6 +1650,7 @@ class adb(dut):
                                                      router_info.wpa_passwd)
         if router_info.hide_ssid == '是':
             cmd += pytest.dut.CMD_WIFI_HIDE
+        logging.info(f'conn wifi cmd :{cmd}')
         return cmd
 
 

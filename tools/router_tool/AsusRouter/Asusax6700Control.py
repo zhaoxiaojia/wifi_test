@@ -16,7 +16,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select, WebDriverWait
 
-from tools.router_tool.RouterControl import RouterTools,ConfigError
+from tools.router_tool.RouterControl import ConfigError, RouterTools
 
 
 class Asusax6700Control:

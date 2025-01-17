@@ -1,17 +1,16 @@
 import csv
 import logging
 import os
-
-import pytest
-import psutil
 import re
 import subprocess
+
+import psutil
+import pytest
 
 from tools.connect_tool.adb import accompanying_dut
 from tools.playback_tool.Youtube import Youtube
 from tools.router_tool.Router import Router
 from tools.yamlTool import yamlTool
-
 
 # if pytest.connect_type == 'adb':
 #     Router = Router

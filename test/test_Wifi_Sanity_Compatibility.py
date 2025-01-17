@@ -21,7 +21,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import _io
 import pytest
 
-
 from tools.router_tool.AsusRouter.Asusax5400Control import Asusax5400Control
 from tools.router_tool.AsusRouter.Asusax6700Control import Asusax6700Control
 from tools.router_tool.H3CBX54Control import H3CBX54Control

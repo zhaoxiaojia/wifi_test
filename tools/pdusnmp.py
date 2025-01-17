@@ -15,7 +15,6 @@ if ('win32' or 'win64') in sys.platform:
 
 from pysnmp.proto import rfc1902
 
-
 # global enter_key
 # enter_key = '1.3.6.1.4.1.23280.9.1.2'
 

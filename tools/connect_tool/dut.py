@@ -10,13 +10,14 @@
 # Description：
 """
 import logging
-import subprocess
-
-import pytest
 import os
-import psutil
 import re
+import subprocess
 import time
+
+import psutil
+import pytest
+
 from tools.ixchariot import ix
 
 
@@ -261,7 +262,7 @@ class dut():
         return dut_ip
 
     @step
-    def get_rx_rate(self, router_info, rssi_num, type, corner_tool=None, db_set=''):
+    def get_rx_rate(self, router_info, rssi_num, type='TCP', corner_tool=None, db_set=''):
         rx_result_list = []
         for _ in range(5):
             logging.info('run rx')

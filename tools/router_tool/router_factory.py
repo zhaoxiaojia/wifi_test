@@ -10,12 +10,13 @@
 '''
 import logging
 
+from tools.router_tool.AsusRouter.Asusax86uControl import Asusax86uControl
+from tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
 from tools.router_tool.AsusRouter.Asusax5400Control import Asusax5400Control
 from tools.router_tool.AsusRouter.Asusax6700Control import Asusax6700Control
-from tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
-from tools.router_tool.AsusRouter.Asusax86uControl import Asusax86uControl
-from tools.router_tool.Xiaomi.XiaomiRedax6000Control import XiaomiRedax6000Control
 from tools.router_tool.Xiaomi.Xiaomiax3000Control import Xiaomiax3000Control
+from tools.router_tool.Xiaomi.XiaomiRedax6000Control import \
+    XiaomiRedax6000Control
 
 
 def get_router(router_name):

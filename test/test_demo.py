@@ -3,12 +3,13 @@
 # @Time    : 2024/10/25 15:46
 # @Author  : chao.li
 # @File    : test_demo.py
+import logging
 import time
+
+import pytest
 
 from dut_control.roku_ctrl import roku_ctrl
 from tools.connect_tool.serial_tool import serial_tool
-import pytest
-import logging
 
 roku = roku_ctrl(pytest.dut.ip)
 
