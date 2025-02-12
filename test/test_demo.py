@@ -15,5 +15,5 @@ roku = roku_ctrl(pytest.dut.ip)
 
 
 def test_demo():
-    # roku.wifi_conn(ssid='AP-002-5G', pwd='yl12345678.')
+    roku.wifi_conn(ssid='AP-002-5G', pwd='yl12345678.')
     roku.enter_bt()

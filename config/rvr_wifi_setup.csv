@@ -1,11 +1,2 @@
 serial,band,ssid ,wireless_mode,channel,bandwidth,authentication_method,wpa_passwd,test_type,protocol_type,data_row,expected_rate,wifi6
 1,2.4 GHz, XiaomiAX3000_2.4G,11ax ,6,40MHz ,超强加密(WPA3个人版) , 12345678,tx rx,TCP,5 ,10 10,on
-1,2.4 GHz, XiaomiAX3000_2.4G,11ax ,6,40MHz ,超强加密(WPA3个人版) , 12345678,tx rx,TCP,5 ,10 10,on
-1,2.4 GHz, XiaomiAX3000_2.4G,11ax ,6,40MHz ,超强加密(WPA3个人版) , 12345678,tx rx,TCP,5 ,10 10,on
-1,2.4 GHz, XiaomiAX3000_2.4G,11ax ,6,40MHz ,超强加密(WPA3个人版) , 12345678,tx rx,TCP,5 ,10 10,on
-0,2.4 GHz, XiaomiAX3000_2.4G,11ax ,6,40MHz ,超强加密(WPA3个人版) , 12345678,tx rx,TCP,5 ,10 10,on
-1,2.4 GHz, XiaomiAX3000_2.4G,11ax ,6,40MHz ,超强加密(WPA3个人版) , 12345678,tx rx,TCP,5 ,10 10,on
-1,2.4 GHz, XiaomiAX3000_2.4G,11ax ,6,40MHz ,超强加密(WPA3个人版) , 12345678,tx rx,TCP,5 ,10 10,on
-1,2.4 GHz, XiaomiAX3000_2.4G,11ax ,6,40MHz ,超强加密(WPA3个人版) , 12345678,tx rx,TCP,5 ,10 10,on
-1,2.4 GHz, XiaomiAX3000_2.4G,11ax ,6,40MHz ,超强加密(WPA3个人版) , 12345678,tx rx,TCP,5 ,10 10,on
-1,2.4 GHz, XiaomiAX3000_2.4G,11ax ,6,40MHz ,超强加密(WPA3个人版) , 12345678,tx rx,TCP,5 ,10 10,on

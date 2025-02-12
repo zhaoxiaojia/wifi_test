@@ -13,12 +13,16 @@ import logging
 import os
 import re
 import subprocess
+import threading
 import time
 
 import psutil
 import pytest
-
+import telnetlib
 from tools.ixchariot import ix
+from threading import Thread
+
+lock = threading.Lock()
 
 
 class dut():
@@ -104,9 +108,10 @@ class dut():
         self.serialnumber = 'executer'
         self.rvr_tool = pytest.config_yaml.get_note('rvr')['tool']
         self.pair = pytest.config_yaml.get_note('rvr')['pair']
-        self.repest_times = pytest.config_yaml.get_note('rvr')['repeat']
+        self.repest_times = int(pytest.config_yaml.get_note('rvr')['repeat'])
         self._dut_ip = ''
         self._pc_ip = ''
+        self.rvr_result = None
         if self.rvr_tool == 'iperf':
             self.test_tool = pytest.config_yaml.get_note('rvr')[self.rvr_tool]['version']
             self.tool_path = pytest.config_yaml.get_note('rvr')[self.rvr_tool]['path'] or ''
@@ -174,51 +179,74 @@ class dut():
             ...
 
     def run_iperf(self, command, adb, direction='tx', iperf3=False):
-        def run_server():
-            if adb and pytest.connect_type == 'telnet':
-                pytest.dut.checkoutput(command)
+
+        def telnet_iperf():
+            tn = telnetlib.Telnet(pytest.dut.ip)
+            tn.write(command.encode('ascii') + b'\n')
+
+            while True:
+                res = tn.read_until(b'Mbits/sec').decode('gbk')
+                logging.info(f'res {res.strip()}')
+                with lock:
+                    if '[SUM]' in res:
+                        data = float(
+                            re.findall(r'.*?\d+\.\d*-\s*\d+\.\d*.*?(\d+\.*\d*)\s+Mbits/sec.*?', res.strip(), re.S)[0])
+                        if data:
+                            result_list.append(data)
+                if re.findall(r'\[SUM\]  0.0-[3|4|5]\d',res,re.S):
+                    logging.info(f'result_list {result_list}')
+                    break
+            if result_list:
+                logging.info(f'{sum(result_list) / len(result_list)}')
+                logging.info(f'{result_list}')
+                self.rvr_result = sum(result_list) / len(result_list)
+            else:
+                self.rvr_result = 0
+            logging.info('run thread done')
+
+        result_list = []
+        if os.path.exists(f'rvr_log_{pytest.dut.serialnumber}.txt') and '-s' in command:
+            os.remove(f'rvr_log_{pytest.dut.serialnumber}.txt')
+            time.sleep(1)
+        # if adb:
+        #     if iperf3:
+        #         command = 'iperf3 -s -1'
+        #     if pytest.connect_type == 'adb':
+        #         command = f'adb -s {adb} shell ' + command
+        # else:
+        #     if iperf3:
+        #         command = f'iperf3 -c {pytest.dut.dut_ip} -i1 -t30 -P5'
+        #         if direction == 'tx':
+        #             command = f'iperf3 -c {pytest.dut.dut_ip} -i1 -t30 -P5 -R'
+        #
+
+        if '-s' in command:
+            if adb:
+                if pytest.connect_type == 'telnet':
+                    logging.info('run thread')
+                    t = Thread(target=telnet_iperf)
+                    t.daemon = True
+                    t.start()
+                    return None
+                else:
+                    with open(f'rvr_log_{pytest.dut.serialnumber}.txt', 'w') as f:
+                        process = subprocess.Popen(command.split(), stdout=f, encoding='utf-8')
+                    return process
             else:
                 with open(f'rvr_log_{pytest.dut.serialnumber}.txt', 'w') as f:
-                    popen = subprocess.Popen(command.split(), stdout=f, encoding='utf-8')
-                return popen
-            # logging.info(subprocess.run('tasklist | findstr "iperf"'.replace('iperf',pc_ipef),shell=True,encoding='gbk'))
-            # logging.info(pytest.dut.checkoutput('ps -A|grep "iperf"'.replace('iperf',dut_iperf)))
-
-        if os.path.exists(f'rvr_log_{pytest.dut.serialnumber}.txt') and '-s' in command:
-            # for proc in psutil.process_iter():
-            #     try:
-            #         files = proc.open_files()
-            #         for f in files:
-            #             if f.path == f'rvr_log_{pytest.dut.serialnumber}.txt':
-            #                 proc.kill()  # Kill the process that occupies the file
-            #     except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-            #         pass
-            os.remove(f'rvr_log_{pytest.dut.serialnumber}.txt')
-
-        if adb:
-            if iperf3:
-                command = 'iperf3 -s -1'
-            if pytest.connect_type == 'adb':
-                command = f'adb -s {adb} shell ' + command
+                    process = subprocess.Popen(command.split(), stdout=f, encoding='utf-8')
+                return process
         else:
-            if iperf3:
-                command = f'iperf3 -c {pytest.dut.dut_ip} -i1 -t30 -P5'
-                if direction == 'tx':
-                    command = f'iperf3 -c {pytest.dut.dut_ip} -i1 -t30 -P5 -R'
-
-        logging.info(f'{adb} run command {command} ')
-
-        if re.findall(r'iperf[3]?.*?-s', command):
-            popen = run_server()
-        else:
-            if adb and pytest.connect_type == 'telnet':
+            if adb:
                 pytest.dut.checkoutput(command)
-            popen = subprocess.Popen(command.split(), encoding='utf-8')
-        return popen
+            else:
+                subprocess.Popen(command.split())
 
     def get_logcat(self, pair, adb):
         # pytest.dut.kill_iperf()
         # 分析 iperf 测试结果
+        if self.rvr_result is not None:
+            return round(self.rvr_result, 1)
         result_list = []
         if os.path.exists(f'rvr_log_{pytest.dut.serialnumber}.txt'):
             with open(f'rvr_log_{pytest.dut.serialnumber}.txt', 'r') as f:
@@ -227,11 +255,9 @@ class dut():
                     if pair != 1:
                         if '[SUM]' not in line:
                             continue
-                    if re.findall(r'.*?\d+\.\d*-\s*\d+\.\d*.*?(\d+\.*\d*)\s+Mbits/sec.*?', line.strip(), re.S):
-                        result_list.append(
-                            float(
-                                re.findall(r'.*?\d+\.\d*-\s*\d+\.\d*.*?(\d+\.*\d*)\s+Mbits/sec.*?', line.strip(), re.S)[
-                                    0]))
+                    data = re.findall(r'.*?\d+\.\d*-\s*\d+\.\d*.*?(\d+\.*\d*)\s+Mbits/sec.*?', line.strip(), re.S)[0]
+                    if data:
+                        result_list.append(float(data))
 
         if result_list:
             logging.info(f'{sum(result_list) / len(result_list)}')
@@ -264,6 +290,7 @@ class dut():
     @step
     def get_rx_rate(self, router_info, rssi_num, type='TCP', corner_tool=None, db_set=''):
         rx_result_list = []
+        self.rvr_result = None
         for _ in range(5):
             logging.info('run rx')
             rx_result = 0
@@ -274,10 +301,9 @@ class dut():
             # kill iperf
             if self.rvr_tool == 'iperf':
                 pytest.dut.kill_iperf()
+                terminal = pytest.dut.run_iperf(self.tool_path + pytest.dut.IPERF_SERVER[type], self.serialnumber)
                 time.sleep(1)
-                adb_popen = pytest.dut.run_iperf(self.tool_path + pytest.dut.IPERF_SERVER[type], self.serialnumber)
-                time.sleep(2)
-                pc_popen = pytest.dut.run_iperf(
+                pytest.dut.run_iperf(
                     pytest.dut.IPERF_CLIENT_REGU[type]['rx'].format(
                         self.dut_ip, pytest.dut.IPERF_TEST_TIME,
                         self.pair), '', direction='rx')
@@ -285,7 +311,9 @@ class dut():
                 if pytest.connect_type == 'telnet':
                     time.sleep(15)
                 rx_result = self.get_logcat(self.pair, self.serialnumber)
-
+                logging.info(f'termainal {terminal}')
+                if isinstance(terminal, subprocess.Popen):
+                    terminal.terminate()
             if self.rvr_tool == 'ixchariot':
                 ix.ep1 = self.pc_ip
                 ix.ep2 = self.dut_ip
@@ -327,8 +355,8 @@ class dut():
     @step
     def get_tx_rate(self, router_info, rssi_num, type='TCP', corner_tool=None,
                     db_set=''):
-        global tx_result
         tx_result_list = []
+        self.rvr_result = None
         for _ in range(5):
             logging.info('run tx ')
             tx_result = 0
@@ -339,26 +367,28 @@ class dut():
             if self.rvr_tool == 'iperf':
                 pytest.dut.kill_iperf()
                 time.sleep(1)
-                if self.test_tool == 'iperf3':
-                    adb_popen = pytest.dut.run_iperf(self.tool_path + pytest.dut.IPERF_CLIENT_REGU[type]['tx'].format(
-                        self.pc_ip,
-                        pytest.dut.IPERF_TEST_TIME,
-                        self.pair), self.serialnumber)
-                    pc_popen = pytest.dut.run_iperf(pytest.dut.IPERF_SERVER[type], '')
-                else:
-                    pc_popen = pytest.dut.run_iperf(pytest.dut.IPERF_SERVER[type], '')
-                    time.sleep(2)
-                    adb_popen = pytest.dut.run_iperf(self.tool_path + pytest.dut.IPERF_CLIENT_REGU[type]['tx'].format(
-                        self.pc_ip,
-                        pytest.dut.IPERF_TEST_TIME,
-                        self.pair), self.serialnumber)
+                # if self.test_tool == 'iperf3':
+                #     adb_popen = pytest.dut.run_iperf(self.tool_path + pytest.dut.IPERF_CLIENT_REGU[type]['tx'].format(
+                #         self.pc_ip,
+                #         pytest.dut.IPERF_TEST_TIME,
+                #         self.pair), self.serialnumber)
+                #     pc_popen = pytest.dut.run_iperf(pytest.dut.IPERF_SERVER[type], '')
+                # else:
+                terminal = pytest.dut.run_iperf(pytest.dut.IPERF_SERVER[type], '')
+                time.sleep(1)
+                pytest.dut.run_iperf(self.tool_path + pytest.dut.IPERF_CLIENT_REGU[type]['tx'].format(
+                    self.pc_ip,
+                    pytest.dut.IPERF_TEST_TIME,
+                    self.pair), self.serialnumber)
 
                 time.sleep(pytest.dut.IPERF_WAIT_TIME)
                 if pytest.connect_type == 'telnet':
                     time.sleep(15)
                 time.sleep(3)
                 tx_result = self.get_logcat(self.pair if type == 'TCP' else 1, self.serialnumber)
-
+                logging.info(f'termainal {terminal}')
+                if isinstance(terminal, subprocess.Popen):
+                    terminal.terminate()
             if self.rvr_tool == 'ixchariot':
                 ix.ep1 = self.dut_ip
                 ix.ep2 = self.pc_ip
@@ -380,8 +410,8 @@ class dut():
             tx_result_list.append(tx_result)
             if len(tx_result_list) > self.repest_times:
                 break
-        # corner = corner_tool.get_turntanle_current_angle() if corner_needed else corner_set
-        corner = ''
+        corner = corner_tool.get_turntanle_current_angle() if corner_tool else ''
+
         tx_result_info = (
             f'{self.serialnumber} Throughput Standalone NULL Null {router_info.wireless_mode.split()[0]} '
             f'{router_info.band.split()[0]} {router_info.bandwidth.split()[0]} Rate_Adaptation '

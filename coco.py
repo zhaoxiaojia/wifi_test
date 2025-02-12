@@ -8,13 +8,9 @@
 # version    ：python 3.9
 # Description：
 """
+import time
+import re
+info = '[SUM]  0.0-51.0 sec   969 MBytes   271 Mbits/sec'
 
-
-from dut_control.roku_ctrl import roku_ctrl
-
-roku = roku_ctrl('192.168.0.106')
-
-input('change wifi')
-roku = roku_ctrl( '192.168.50.4')
-
-roku.home()
+if re.findall(r'\[SUM\]  0.0-[3|4|5]\d',info,re.S):
+    print('find it')

@@ -54,20 +54,6 @@ class telnet_tool(dut):
 
     def checkoutput(self, cmd, wildcard=''):
 
-        def run_iperf():
-            if os.path.exists(f'rvr_log_{pytest.dut.serialnumber}.txt'):
-                os.remove(f'rvr_log_{pytest.dut.serialnumber}.txt')
-            start_time = time.time()
-            self.tn.write(cmd.encode('ascii') + b'\n')
-            while time.time() - start_time < 60:
-                # logging.info('try to get rvr result')
-                res = self.tn.read_until(b'Mbits/sec').decode('gbk')
-                with open(f'rvr_log_{pytest.dut.serialnumber}.txt', 'a') as f:
-                    f.write(res)
-                if '[SUM]  0.0-30' in res:
-                    break
-            logging.info('run thread done')
-
         if not wildcard:
             wildcard = self.wildcard
         try:
@@ -81,14 +67,9 @@ class telnet_tool(dut):
             cmd += '&'
         logging.info(f'telnet {self.ip} :{cmd}')
 
-        if re.findall(r'iperf[3]?.*?-s', cmd):
-            logging.info('run thread')
-            t = Thread(target=run_iperf)
-            t.daemon = True
-            t.start()
-        else:
-            self.tn.write(cmd.encode('ascii') + b'\n')
-            res = self.tn.read_until(wildcard).decode('gbk')
+
+        self.tn.write(cmd.encode('ascii') + b'\n')
+        res = self.tn.read_until(wildcard).decode('gbk')
         # res = self.tn.read_very_eager().decode('gbk')
         time.sleep(1)
         return res.strip()

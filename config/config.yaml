@@ -4,9 +4,9 @@ connect_type:
   adb:
     device: 'twilight9de10187801e1c'
   telnet:
-    ip: '192.168.50.4'
+    ip: '192.168.50.110'
     #    market area  sandia  list:sandia,sandia_latam,sandia_hkc,sandia_dvb
-    wildcard: bayside
+    wildcard: sandia_dvb
 
 host_os:
   user: amlogic

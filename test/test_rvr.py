@@ -98,7 +98,7 @@ pytest.testResult.init_rvr_result()
 rx_result, tx_result = '', ''
 
 
-@pytest.fixture(scope='session',params=test_data, ids=[str(i) for i in test_data])
+@pytest.fixture(scope='session', params=test_data, ids=[str(i) for i in test_data])
 def setup(request):
     global rx_result, tx_result, pc_ip, dut_ip
     logging.info('router setup start')
@@ -268,7 +268,6 @@ def test_rvr(setup, rf_value):
     protocol = 'TCP' if 'TCP' in router_info.protocol_type else 'UDP'
     # iperf  打流
     if 'tx' in router_info.test_type:
-        # 动态匹配 打流通道数
         pair = wifi_yaml.get_note('rvr')['pair']
         logging.info(f'rssi : {rssi_num} pair : {pair}')
         pytest.dut.get_tx_rate(router_info, rssi_num, protocol,
