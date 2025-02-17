@@ -15,6 +15,7 @@ if ('win32' or 'win64') in sys.platform:
 
 from pysnmp.proto import rfc1902
 
+
 # global enter_key
 # enter_key = '1.3.6.1.4.1.23280.9.1.2'
 
@@ -219,7 +220,8 @@ class power_ctrl:
     def switch(self, ip, port, status):
         logging.info(f'set power relay : {ip} port {port} {"on" if status == 1 else "off"}')
         cmd = self.SWITCH_KEY.format(ip, port, status)
-        self.checkoutput(cmd)
+        # Todo
+        # self.checkoutput(cmd)
 
     def set(self, ip, status):
         cmd = self.SET_KEY.format(ip, status)

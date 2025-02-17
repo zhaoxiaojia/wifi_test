@@ -2,25 +2,36 @@ import logging
 import re
 import subprocess
 import time
-
+import os
+import json
 import pytest
 
 from tools.pdusnmp import power_ctrl
 from tools.router_tool.Router import Router
+from tools.router_tool.router_performance import fpga, compatibility_data
 
 power_delay = power_ctrl()
+power_ctrl = power_delay.ctrl
 router = ''
 ssid_2g = 'Aml_AP_Comp_2.4G'
 ssid_5g = 'Aml_AP_Comp_5G'
 ssid_6g = 'Aml_AP_Comp_6G'
 passwd = '@Aml#*st271'
-
+dut_fpgs = 'w1'
 router_2g = Router(band='2.4 GHz', wireless_mode='11ac', channel='1', authentication_method='Open System',
                    bandwidth='20 MHz', ssid=ssid_2g, wpa_passwd=passwd, expected_rate='10 10')
 
 router_5g = Router(band='5 GHz', wireless_mode='11ac', channel='36', authentication_method='Open System',
                    bandwidth='20 MHz', ssid=ssid_5g, wpa_passwd=passwd, expected_rate='10 10')
-test_data = [router_2g, router_5g]
+
+with open(f"{os.getcwd()}/config/compatobility_expectdata.json", 'r') as f:
+    router_datas = json.load(f)
+
+
+def handle_expectdata(ip, port, band, mimo, dir):
+    for data in router_datas:
+        if data['ip'] == ip and data['port'] == port:
+            return data['data'][band][fpga[dut_fpgs][band]]['40MHz'][fpga[dut_fpgs][mimo]][dir]
 
 
 @pytest.fixture(scope='session', autouse=True)
@@ -29,14 +40,32 @@ def power_shotdown():
     time.sleep(2)
 
 
-@pytest.fixture(scope='module', autouse=True, params=test_data, ids=[str(i) for i in test_data])
+@pytest.fixture(scope='module', autouse=True, params=power_ctrl, ids=[str(i) for i in power_ctrl])
+def power_setting(request):
+    ip, port = request.param
+    power_delay.switch(ip, port, 1)
+    time.sleep(60)
+    yield [x for x in filter(lambda x: x.port == port and x.ip == ip, compatibility_data._instances)]
+    power_delay.switch(ip, port, 2)
+
+
+@pytest.fixture(scope='module', autouse=True, params=['2.4G', '5G'], ids=['2.4G', '5G'])
 def router_setting(power_setting, request):
-    global pc_ip
-    router = request.param
     pc_ip = pytest.host_os.dynamic_flush_network_card('eth0')
     if pc_ip is None: assert False, "Can't get pc ip address"
     pytest.dut.ip_target = '.'.join(pc_ip.split('.')[:3])
     logging.info(f'pc_ip {pc_ip}')
+    router_set = power_setting[0]['data']
+    band = request.param
+    expect_tx = handle_expectdata(router_set.ip, router_set.port, router_set.band, router_set.mimo, 'UL')
+    expect_rx = handle_expectdata(router_set.ip, router_set.port, router_set.band, router_set.mimo, 'DL')
+    router = Router(band=band, wireless_mode=router_set.mode, channel='default', authentication_method='default',
+                    bandwidth=router_set.bandwidth, ssid=ssid_2g, wpa_passwd=passwd,
+                    expected_rate=f'{expect_tx} {expect_rx}')
+    yield router
+
+
+def test_scan(router_setting):
     pytest.dut.push_iperf()
     for _ in range(5):
         info = pytest.dut.checkoutput("cmd wifi start-scan;cmd wifi list-scan-results")
@@ -46,19 +75,12 @@ def router_setting(power_setting, request):
         time.sleep(3)
     else:
         assert False, f"Can't scan target ssid {router.ssid}"
+
+
+def test_connect(router_setting):
     pytest.dut.forget_wifi()
     pytest.dut.checkoutput(pytest.dut.get_wifi_cmd(router))
-    pytest.dut.wait_for_wifi_address()
-    yield router
-
-
-@pytest.fixture(scope='module', autouse=True, params=power_delay.ctrl, ids=[str(i) for i in power_delay.ctrl])
-def power_setting(request):
-    ip, port = request.param
-    power_delay.switch(ip, port, 1)
-    time.sleep(60)
-    yield ip, port
-    power_delay.switch(ip, port, 2)
+    assert pytest.dut.wait_for_wifi_address()[0], "Can't connect ssid"
 
 
 @pytest.mark.wifi_connect

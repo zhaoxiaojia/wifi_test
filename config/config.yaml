@@ -7,6 +7,8 @@ connect_type:
     ip: '192.168.50.110'
     #    market area  sandia  list:sandia,sandia_latam,sandia_hkc,sandia_dvb
     wildcard: sandia_dvb
+  # model such as w1 w1u w2 w2l
+  fpga: w1
 
 host_os:
   user: amlogic

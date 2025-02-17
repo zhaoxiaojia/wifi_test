@@ -4,11 +4,6 @@
 # @Author  : chao.li
 # @File    : test_bt_switch.py
 
-# !/usr/bin/env python
-# -*- coding: utf-8 -*-
-# @Time    : 2024/10/12 13:50
-# @Author  : chao.li
-# @File    : test_wifi_switch.py
 
 import logging
 import time
