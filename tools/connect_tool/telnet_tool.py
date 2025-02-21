@@ -39,74 +39,50 @@ class telnet_tool(dut):
 
         self.ip = ip
         self.port = 23
+        logging.info('*' * 80)
+        logging.info(f'* Telnet {self.ip}')
+        logging.info('*' * 80)
         # self.wildcard = cmd_line_wildcard[wildcard] if type(wildcard) == str else wildcard
-        # try:
-        #     logging.info(f'Try to connect {ip} {wildcard}')
-        #     self.tn = telnetlib.Telnet()
-        #     self.tn.open(self.ip, port=23)
-        #     self.tn.read_until(self.wildcard).decode('utf-8')
-        #     logging.info('*' * 80)
-        #     logging.info(f'* Telnet {self.ip}')
-        #     logging.info('*' * 80)
-        # except Exception as f:
-        #     logging.info(f)
 
     def execute_cmd(self, cmd):
         self.tn.write(cmd.encode('ascii') + b'\n')
         time.sleep(1)
 
     def checkoutput(self, cmd, wildcard=''):
-
-        # if not wildcard:
-        #     wildcard = self.wildcard
-        # try:
-        #     self.tn.write('\n'.encode('ascii') + b'\n')
-        #     res = self.tn.read_until(wildcard).decode('gbk')
-        # except Exception as e:
-        #     self.tn.open(self.ip)
-        #     self.tn.write('\n'.encode('ascii') + b'\n')
-        #     res = self.tn.read_until(wildcard).decode('gbk')
-        # if re.findall(r'iperf[3]?.*?-s', cmd):
-        #     cmd += '&'
-        # logging.info(f'telnet {self.ip} :{cmd}')
-        #
-        # self.tn.write(cmd.encode('ascii') + b'\n')
-        # res = self.tn.read_until(wildcard).decode('gbk')
-        # # res = self.tn.read_very_eager().decode('gbk')
-        # time.sleep(1)
-        # return res.strip()
         return asyncio.run(self.telnet_client(cmd))
 
+    @pytest.mark.asyncio
     async def telnet_client(self, command):
-        reader, writer = await telnetlib3.open_connection(self.ip, self.port)
-
-        async def safe_read():
-            try:
-                return await asyncio.wait_for(reader.read(1024), timeout=2)  # 2 秒超时
-            except asyncio.TimeoutError:
-                return "Read timeout"
-
-        async def read_all(timeout=2):
+        async def read_all(reader, timeout=2):
             """循环读取数据，若超时无数据，则退出"""
+            output = []
             while True:
                 try:
                     data = await asyncio.wait_for(reader.read(1024), timeout)
-                    if not data:  # 服务器关闭连接
+                    if not data:
                         break
-                    print(data, end="")
+                    output.append(data)
                 except asyncio.TimeoutError:
                     break
+            return "".join(output)
 
-        # 发送命令
-        writer.write(command + "\n")
-        await writer.drain()
+        try:
+            reader, writer = await telnetlib3.open_connection(self.ip, self.port)
 
-        # 读取命令执行结果
-        result = await read_all()
-        logging.info(f"Telnet Command Output: {result}")
-        # 关闭连接
-        writer.close()
-        return result
+            # 发送命令
+            writer.write(command + "\n")
+            await writer.drain()
+
+            # 读取命令执行结果
+            result = await read_all(reader)
+            logging.info(f"Telnet Command Output: {result}")
+            return result
+        except Exception as e:
+            logging.error(f"Telnet error: {e}")
+            return None
+        finally:
+            if writer:
+                writer.close()
 
     def popen_term(self, command):
         return subprocess.Popen(command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -129,7 +105,7 @@ class telnet_tool(dut):
     def get_mcs_rx(self):
         return 'mcs_rx'
 
-# tl = TelnetInterface('192.168.31.95','bayside')
+# tl = telnet_tool('192.168.50.207','bayside')
 # tl.tn.close()
 # print(tl.checkoutput('iw dev wlan0 link'))
 # print(tl.checkoutput('iw dev wlan0 link'))

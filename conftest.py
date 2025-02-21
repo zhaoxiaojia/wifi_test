@@ -50,6 +50,7 @@ def pytest_sessionstart(session):
     else:
         pytest.config_yaml = yamlTool(os.getcwd() + '/config/config.yaml')
     # The connection method to the product to DUT
+    pytest.chip_info = pytest.config_yaml.get_note('fpga')
     pytest.connect_type = pytest.config_yaml.get_note('connect_type')['type']
     if pytest.connect_type == 'adb':
         # Create adb obj

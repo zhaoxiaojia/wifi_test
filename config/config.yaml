@@ -1,14 +1,15 @@
 # This is yaml for DUT info
 connect_type:
-  type: telnet
+  type: adb
   adb:
     device: 'twilight9de10187801e1c'
   telnet:
     ip: '192.168.50.110'
     #    market area  sandia  list:sandia,sandia_latam,sandia_hkc,sandia_dvb
     wildcard: sandia_dvb
-  # model such as w1 w1u w2 w2l
-  fpga: w1
+
+# model such as w1 w1u w2 w2l
+fpga: w2_sdio
 
 host_os:
   user: amlogic
