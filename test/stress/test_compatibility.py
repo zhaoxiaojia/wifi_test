@@ -8,7 +8,7 @@ import pytest
 
 from tools.pdusnmp import power_ctrl
 from tools.router_tool.Router import Router
-from tools.router_tool.router_performance import fpga, compatibility_data
+from tools.router_tool.router_performance import fpga, compatibility_router
 
 power_delay = power_ctrl()
 power_ctrl = power_delay.ctrl
@@ -25,6 +25,9 @@ router_5g = Router(band='5 GHz', wireless_mode='11ac', channel='36', authenticat
                    bandwidth='20 MHz', ssid=ssid_5g, wpa_passwd=passwd, expected_rate='10 10')
 
 wifichip, interface = pytest.chip_info.split('_')
+power_delay.shutdown()
+time.sleep(2)
+
 
 def handle_expectdata(ip, port, band, bandwidth, dir):
     '''
@@ -47,52 +50,12 @@ def handle_expectdata(ip, port, band, bandwidth, dir):
             return data[band][interface][fpga[wifichip][band]][bandwidth][fpga[wifichip]['mimo']][dir]
 
 
-@pytest.fixture(scope="session")
-def test_results():
-    """全局存储测试方法的返回值和执行结果"""
-    return {}
-
-
-@pytest.fixture
-def record_result(request, test_results):
-    """Fixture 用于存储单个测试的返回值"""
-
-    def store(value):
-        test_results[request.node.nodeid] = {
-            "return_value": value,
-            "result": None  # 先存储返回值，测试结果稍后更新
-        }
-
-    return store
-
-
-@pytest.hookimpl(tryfirst=True, hookwrapper=True)
-def pytest_runtest_makereport(item, call):
-    """在测试完成后记录测试结果（passed/failed）"""
-    outcome = yield
-    report = outcome.get_result()
-
-    if call.when == "call":  # 仅记录测试方法执行阶段
-        if hasattr(item.session, "test_results") and item.nodeid in item.session.test_results:
-            item.session.test_results[item.nodeid]["result"] = report.outcome
-
-
-@pytest.fixture(scope='session', autouse=True)
-def power_shotdown(request, test_results):
-    power_delay.shutdown()
-    time.sleep(2)
-    yield
-    print("\n=== 测试结果汇总 ===")
-    for test_name, data in test_results.items():
-        print(f"Test: {test_name}, Result: {data['result']}, Return Value: {data['return_value']}")
-
-
 @pytest.fixture(scope='module', autouse=True, params=power_ctrl, ids=[str(i) for i in power_ctrl])
 def power_setting(request):
     ip, port = request.param
     power_delay.switch(ip, port, 1)
     time.sleep(60)
-    yield [x for x in filter(lambda x: x.port == port and x.ip == ip, compatibility_data._instances)]
+    yield [x for x in filter(lambda x: x.port == port and x.ip == ip, compatibility_router._instances)]
     power_delay.switch(ip, port, 2)
 
 
@@ -114,54 +77,49 @@ def router_setting(power_setting, request):
 
 
 @pytest.mark.dependency(name="scan")
-def test_scan(router_setting, record_result):
+def test_scan(router_setting):
     pytest.dut.push_iperf()
+    result = 'FAIL'
     for _ in range(5):
         info = pytest.dut.checkoutput("cmd wifi start-scan;cmd wifi list-scan-results")
         logging.info(info)
-        if router.ssid in info:
+        if router_setting.ssid in info:
+            result = 'PASS'
             break;
         time.sleep(3)
-    else:
-        assert False, f"Can't scan target ssid {router.ssid}"
-    record_result(None)
+    assert result == 'PASS', f"Can't scan target ssid {router_setting.ssid}"
 
 
 @pytest.mark.dependency(name="connect", depends=["scan"])
-def test_connect(router_setting, record_result):
+def test_connect(router_setting):
+    result = 'FAIL'
     pytest.dut.forget_wifi()
-    pytest.dut.checkoutput(pytest.dut.get_wifi_cmd(router))
-    assert pytest.dut.wait_for_wifi_address()[0], "Can't connect ssid"
-    record_result(None)
+    pytest.dut.checkoutput(pytest.dut.get_wifi_cmd(router_setting))
+    result = 'PASS' if pytest.dut.wait_for_wifi_address()[0] else 'FAIL'
+    assert result == 'PASS', "Can't conect ssid"
 
 
 @pytest.mark.dependency(depends=["connect"])
 @pytest.mark.wifi_connect
-def test_multi_throughtput_tx(router_setting, record_result):
+def test_multi_throughtput_tx(router_setting, request):
     router_info = router_setting
     rssi_num = pytest.dut.get_rssi()
     tx_result = pytest.dut.get_tx_rate(router_info, rssi_num)
-    logging.info(tx_result)
-    for i in tx_result:
-        if i >= float(router.expected_rate[0]):
-            break
-    else:
-        assert False, 'Rate too low'
-    time.sleep(5)
-    record_result(tx_result)
+    logging.info(f'tx_result {tx_result}')
+    expect_data = float(router_setting.expected_rate[0])
+    logging.info(f'expect_data {expect_data}')
+    request.node._store['return_value'] = tx_result
+    assert all(float(x) > expect_data for x in tx_result)
 
 
 @pytest.mark.dependency(depends=["connect"])
 @pytest.mark.wifi_connect
-def test_multi_throughtput_rx(router_setting, record_result):
-    router_info = router_setting
+def test_multi_throughtput_rx(router_setting, request):
     rssi_num = pytest.dut.get_rssi()
-    rx_result = pytest.dut.get_rx_rate(router_info, rssi_num)
-    logging.info(rx_result)
-    for i in rx_result:
-        if i >= float(router.expected_rate[1]):
-            break
-    else:
-        assert False, 'Rate too low'
-    time.sleep(5)
-    record_result(rx_result)
+    rx_result = pytest.dut.get_rx_rate(router_setting, rssi_num)
+    logging.info(router_setting)
+    logging.info(f'rx_result {rx_result}')
+    expect_data = float(router_setting.expected_rate[1])
+    logging.info(f'expect_data {expect_data}')
+    request.node._store['return_value'] = rx_result
+    assert all(float(x) > expect_data for x in rx_result)

@@ -44,6 +44,7 @@ class TestResult():
         self.x_path = step
         self.x_length = len(self.x_path)
 
+
     def init_rvr_result(self):
         self.rvr_excelfile = os.path.join(self.logdir, 'RvrCheckExcel.xlsx')
         if not hasattr(self, 'logFile'):

@@ -20,15 +20,15 @@ import sys
 
 import psutil
 import pytest
-
+import csv
 from tools.connect_tool.adb import adb
 from tools.connect_tool.host_os import host_os
 from tools.connect_tool.telnet_tool import telnet_tool
 from tools.TestResult import TestResult
-
-from .tools.yamlTool import yamlTool
+from tools.yamlTool import yamlTool
 
 pytest_plugins = "util.report_plugin"
+test_results = []
 
 
 def pytest_sessionstart(session):
@@ -90,9 +90,10 @@ def pytest_runtest_logreport(report):
         test_nodeid = report.nodeid
         if "[" in test_nodeid:
             params = test_nodeid.split("[", 1)[-1].rstrip("]")
-            logging.info('*'*80)
+            logging.info('*' * 80)
             logging.info(f"* Test params: {params}")
             logging.info('*' * 80)
+
 
 def pytest_collection_modifyitems(items):
     # item表示收集到的测试用例，对他进行重新编码处理
@@ -100,7 +101,27 @@ def pytest_collection_modifyitems(items):
         item.name = item.name.encode("utf-8").decode("unicode-escape")
         item._nodeid = item._nodeid.encode("utf-8").decode("unicode-escape")
 
-def pytest_sessionfinish(session):
+
+
+@pytest.hookimpl(tryfirst=True, hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    outcome = yield
+    report = outcome.get_result()
+
+    if report.when == "call":  # 只处理测试调用阶段
+        test_name = item.name
+        test_result = report.outcome
+        test_duration = report.duration
+        # ✅ **正确方式：从 request.node._store 读取 return 值**
+        test_return_value = item._store.get("return_value", None)
+        test_results.append([test_name, test_result, test_duration, test_return_value])
+
+@pytest.hookimpl(trylast=True)
+def pytest_sessionfinish(session, exitstatus):
+    with open("test_results.csv", mode="w", newline="") as file:
+        writer = csv.writer(file)
+        writer.writerow(["Test Name", "Result", "Duration", "Return Value"])
+        writer.writerows(test_results)
     shutil.copy("pytest.log", "debug.log")
     shutil.move("debug.log", pytest.testResult.logdir)
     shutil.copy("report.html", "report_bat.html")

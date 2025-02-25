@@ -10,6 +10,12 @@
 '''
 
 import json
+from collections import defaultdict
+
+
+def nested_dict():
+    """递归创建嵌套字典"""
+    return defaultdict(nested_dict)
 
 
 class json_mixin:
@@ -34,3 +40,12 @@ class json_mixin:
             return self.__convert_dict(value.__dict__)
         else:
             return value
+
+    def __getitem__(self, key):
+        if key not in self.__dict__:
+            self.__dict__[key] = nested_dict()
+        return self.__dict__[key]
+
+    def __setitem__(self, key, value):
+        """支持嵌套赋值"""
+        self.__dict__[key] = value
