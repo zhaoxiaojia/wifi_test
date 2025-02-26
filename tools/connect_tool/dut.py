@@ -162,10 +162,12 @@ class dut():
     def kill_iperf(self):
         try:
             pytest.dut.subprocess_run(pytest.dut.IPERF_KILL)
+            pytest.dut.popen_term(pytest.dut.IPERF_KILL)
         except Exception:
             ...
         try:
             pytest.dut.subprocess_run(pytest.dut.IPERF_KILL.replace('iperf', 'iperf3'))
+            pytest.dut.popen_term(pytest.dut.IPERF_KILL.replace('iperf', 'iperf3'))
         except Exception:
             ...
 
@@ -229,6 +231,7 @@ class dut():
                     t.start()
                     return None
                 else:
+                    command = f'adb -s {pytest.dut.serialnumber} shell {command} '
                     with open(f'rvr_log_{pytest.dut.serialnumber}.txt', 'w') as f:
                         process = subprocess.Popen(command.split(), stdout=f, encoding='utf-8')
                     return process

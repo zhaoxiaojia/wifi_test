@@ -8,26 +8,6 @@ import logging
 import pytest
 
 
-@pytest.fixture(autouse=True)
-def router_setting():
-    return 'router_setting'
-
-
-def test_addition(router_setting):
-    result = 2 + 3
-    logging.info(router_setting)
-    assert result == 5
-    return result  # 确保 pytest 能够捕获 return 值
-
-
-def test_subtraction(router_setting):
-    result = 10 - 5
-    logging.info(router_setting)
-    assert result == 5
-    return result
-
-
-@pytest.mark.skip(reason="Skipping this test")
-def test_skipped_case():
-    result = "This test is skipped"
-    return result
+def test_multi_throughtput_rx():
+    rssi_num = pytest.dut.get_rssi()
+    rx_result = pytest.dut.get_rx_rate(router_setting, rssi_num)

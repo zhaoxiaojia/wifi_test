@@ -9,5 +9,6 @@
 # Description：
 """
 
-dut_wifichip = 'w2_sdio'
-wifichip, interface = dut_wifichip.split('_')
+print('DIRECTION' if 'INPUT' == 'INPUT'
+
+      else 'DIRECTION不匹配')

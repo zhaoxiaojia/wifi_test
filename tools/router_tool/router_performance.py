@@ -46,7 +46,7 @@ class compatibility_router(json_mixin):
         # 直接在 self.__dict__ 中创建嵌套字典
 
     def save_expect(self):
-        with open(f"{os.getcwd()}/config/compatibility_router.json", 'r') as f:
+        with open(f"{os.getcwd()}/config/compatibility_router.json", 'w') as f:
             json.dump(self._instances, f, indent=4, ensure_ascii=False)
 
 
@@ -265,4 +265,4 @@ def handle_expectdata(ip, port, band, dir):
                 return dut_data[band][interface][FPGA_CONFIG[wifichip][band]][bandwidth][FPGA_CONFIG[wifichip]['mimo']][
                     dir]
 
-print(handle_expectdata("192.168.200.6", "7", '2.4G', 'UL'))
+# print(handle_expectdata("192.168.200.6", "7", '2.4G', 'UL'))
