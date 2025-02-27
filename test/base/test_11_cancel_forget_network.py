@@ -37,7 +37,7 @@ def setup_teardown():
 
 
 def test_cancel_forgetted():
-    pytest.dut.connect_ssid(ssid,passwd)
+    pytest.dut.connect_ssid_via_ui(ssid, passwd)
     pytest.dut.kill_setting()
     pytest.dut.find_ssid('ATC_ASUS_AX88U_2G')
     pytest.dut.wait_and_tap('Forget network', 'text')

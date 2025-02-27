@@ -16,7 +16,6 @@ import time
 import pytest
 
 from dut_control.roku_ctrl import roku_ctrl
-from tools.connect_tool.serial_tool import serial_tool
 
 roku = roku_ctrl(pytest.dut.ip)
 

@@ -38,5 +38,5 @@ def setup_teardown():
 
 @pytest.mark.wifi_connect
 def test_connect_tkip_aes_ssid():
-    pytest.dut.connect_ssid(ssid,passwd)
+    pytest.dut.connect_ssid_via_ui(ssid, passwd)
     assert pytest.dut.ping(hostname="192.168.50.1"), "Can't ping"

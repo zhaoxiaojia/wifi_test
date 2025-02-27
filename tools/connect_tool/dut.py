@@ -16,7 +16,6 @@ import subprocess
 import threading
 import time
 
-import psutil
 import pytest
 import telnetlib
 from tools.ixchariot import ix
@@ -431,6 +430,57 @@ class dut():
             f.write(f'Tx {type} result : {tx_result}\n')
             f.write('-' * 40 + '\n\n')
         return tx_result_list
+
+    def wait_for_wifi_address(self, cmd: str = '', target=''):
+        if pytest.connect_type == 'telnet':
+            return True
+        else:
+            # Wait for th wireless adapter to obtaion the ip address
+            if not target:
+                target = self.ip_target
+            logging.info(f"waiting for wifi {target}")
+            ip_address = self.subprocess_run('ifconfig wlan0 |egrep -o "inet [^ ]*"|cut -d " " -f 2')
+            # logging.info(ip_address)
+            step = 0
+            while True:
+                time.sleep(5)
+                step += 1
+                ip_address = self.subprocess_run('ifconfig wlan0 |egrep -o "inet [^ ]*"|cut -d " " -f 2')
+                if target in ip_address:
+                    break
+                if step == 2:
+                    logging.info('repeat command')
+                    if cmd:
+                        self.checkoutput(cmd)
+                if step > 10:
+                    assert False, f"Can't catch the address:{target} "
+            logging.info(f'ip address {ip_address}')
+            return True, ip_address
+
+    def forget_wifi(self):
+        '''
+        Remove the network mentioned by <networkId>
+        '''
+        if pytest.connect_type == 'telnet':
+            ...
+        else:
+            list_networks_cmd = "cmd wifi list-networks"
+            output = self.checkoutput(list_networks_cmd)
+            if "No networks" in output:
+                logging.debug("has no wifi connect")
+            else:
+                network_id = re.findall("\n(.*?) ", output)
+                if network_id:
+                    forget_wifi_cmd = "cmd wifi forget-network {}".format(int(network_id[0]))
+                    output1 = self.checkoutput(forget_wifi_cmd)
+                    if "successful" in output1:
+                        logging.info(f"Network id {network_id[0]} closed")
+
+    def connect_ssid(self, router=""):
+        if pytest.connect_type == 'telnet':
+            pytest.dut.roku.wifi_conn(ssid=router.ssid, pwd=router.wpa_passwd)
+        else:
+            pytest.dut.checkoutput(pytest.dut.get_wifi_cmd(router))
 
     @step
     def get_rssi(self):

@@ -45,7 +45,7 @@ def setup_teardown():
     ax88uControl.change_setting(router)
     ax88uControl.router_control.driver.quit()
     time.sleep(3)
-    pytest.dut.connect_ssid(ssid, passwd)
+    pytest.dut.connect_ssid_via_ui(ssid, passwd)
     logging.info('setup done')
     yield
     pytest.dut.home()

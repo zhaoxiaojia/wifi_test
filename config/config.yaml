@@ -1,6 +1,6 @@
 # This is yaml for DUT info
 connect_type:
-  type: adb
+  type: telnet
   adb:
     device: 'ross6c3b8c8c66df08'
   telnet:

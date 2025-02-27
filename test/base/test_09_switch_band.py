@@ -41,7 +41,7 @@ def setup_teardown():
 
 
 def test_switch_band():
-    pytest.dut.connect_ssid(ssid_2g,passwd=passwd)
+    pytest.dut.connect_ssid_via_ui(ssid_2g, passwd=passwd)
     pytest.dut.kill_setting()
     pytest.dut.forget_network_cmd()
-    pytest.dut.connect_ssid(ssid_5g,passwd=passwd)
+    pytest.dut.connect_ssid_via_ui(ssid_5g, passwd=passwd)

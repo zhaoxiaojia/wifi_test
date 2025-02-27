@@ -67,13 +67,13 @@ def setup():
 
 @pytest.mark.repeat(50000)
 def test_change_ap():
-    pytest.dut.connect_ssid(ssid1, 'Home1357', target='10.18')
+    pytest.dut.connect_ssid_via_ui(ssid1, 'Home1357', target='10.18')
     pytest.dut.kill_setting()
     pytest.dut.playback_youtube()
-    pytest.dut.connect_ssid(ssid2, 'Qatest123', target='10.18')
+    pytest.dut.connect_ssid_via_ui(ssid2, 'Qatest123', target='10.18')
     pytest.dut.kill_setting()
     pytest.dut.playback_youtube()
-    pytest.dut.connect_ssid(asus_ssid_name, 'test1234', target="192.168.50")
+    pytest.dut.connect_ssid_via_ui(asus_ssid_name, 'test1234', target="192.168.50")
     pytest.dut.kill_setting()
     pytest.dut.playback_youtube()
     #     pytest.dut.kill_tvsetting()
