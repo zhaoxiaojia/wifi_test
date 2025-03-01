@@ -37,5 +37,5 @@ def setup_teardown():
 
 @pytest.mark.wifi_connect
 def test_connect_n_ac_ax_ssid():
-    pytest.dut.connect_ssid(ssid)
+    pytest.dut.connect_ssid_via_ui(ssid)
     assert pytest.dut.ping(hostname="192.168.50.1"), "Can't ping"

@@ -38,7 +38,7 @@ def setup_teardown():
 
 @pytest.mark.repeat(5000)
 def test_change_ap():
-    pytest.dut.connect_ssid(ssid, passwd,target='10.18.32')
+    pytest.dut.connect_ssid_via_ui(ssid, passwd, target='10.18.32')
     pytest.dut.kill_setting()
     pytest.dut.playback_youtube()
     pytest.dut.forget_ssid(ssid)

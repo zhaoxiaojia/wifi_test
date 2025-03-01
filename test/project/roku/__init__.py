@@ -18,7 +18,7 @@ from dut_control.roku_ctrl import roku_ctrl
 from tools.pil_tool import PilTool
 from tools.yamlTool import yamlTool
 
-roku_ctl = roku_ctrl()
+pytest.dut.roku = roku_ctrl()
 # pytest.executer.execute_cmd('echo 6 > /proc/sys/kernel/printk')
 
 # info = pytest.executer.checkoutput('[ -e /nvram/debug_overlay/etc/autostart ] && echo "yes" || echo "no"')

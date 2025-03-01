@@ -37,5 +37,5 @@ def setup_teardown():
 
 
 def test_connect_open():
-    pytest.dut.connect_ssid(ssid)
+    pytest.dut.connect_ssid_via_ui(ssid)
     assert pytest.dut.wait_for_wifi_address(), "Connect fail"

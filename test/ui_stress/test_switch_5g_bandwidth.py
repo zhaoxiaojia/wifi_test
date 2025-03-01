@@ -49,4 +49,4 @@ def setup(request):
 
 
 def test_change_5g_bandwidth():
-    pytest.dut.connect_ssid(ssid, passwd)
+    pytest.dut.connect_ssid_via_ui(ssid, passwd)

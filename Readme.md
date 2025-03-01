@@ -31,6 +31,7 @@ python main.py
 
 ## Changelog - 更新日志
 V1.0  主题框架完成
+V2.0  添加兼容性测试用例
 
 ## FAQ - 常见问题
 

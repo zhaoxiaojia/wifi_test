@@ -40,7 +40,7 @@ def setup_teardown():
 
 
 def test_reconnect_forgetted_ssid():
-    pytest.dut.connect_ssid(ssid, passwd)
+    pytest.dut.connect_ssid_via_ui(ssid, passwd)
     pytest.dut.kill_setting()
     pytest.dut.find_ssid(ssid)
     pytest.dut.wait_and_tap('Forget network', 'text')
@@ -55,4 +55,4 @@ def test_reconnect_forgetted_ssid():
         time.sleep(1)
         pytest.dut.uiautomator_dump()
     pytest.dut.kill_setting()
-    assert pytest.dut.connect_ssid('ATC_ASUS_AX88U_2G', '12345678'), "Connect fail"
+    assert pytest.dut.connect_ssid_via_ui('ATC_ASUS_AX88U_2G', '12345678'), "Connect fail"

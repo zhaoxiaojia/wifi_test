@@ -40,7 +40,7 @@ def setup():
 
 def test_forget_wifi():
     # connect wifi
-    pytest.dut.connect_ssid(ssid,passwd)
+    pytest.dut.connect_ssid_via_ui(ssid, passwd)
     pytest.dut.kill_setting()
     pytest.dut.find_ssid('ATC_ASUS_AX88U_2G')
     pytest.dut.wait_and_tap('Forget network', 'text')

@@ -1061,21 +1061,6 @@ class adb(dut):
         logging.info(f"Connect wifi command: {cmd}")
         return self.checkoutput(cmd)
 
-    def forget_wifi(self):
-        '''
-        Remove the network mentioned by <networkId>
-        '''
-        list_networks_cmd = "cmd wifi list-networks"
-        output = self.checkoutput(list_networks_cmd)
-        if "No networks" in output:
-            logging.debug("has no wifi connect")
-        else:
-            network_id = re.findall("\n(.*?) ", output)
-            if network_id:
-                forget_wifi_cmd = "cmd wifi forget-network {}".format(int(network_id[0]))
-                output1 = self.checkoutput(forget_wifi_cmd)
-                if "successful" in output1:
-                    logging.info(f"Network id {network_id[0]} closed")
 
     def check_wifi_driver(self):
         '''
@@ -1257,29 +1242,6 @@ class adb(dut):
             self.keyevent(4)
         self.kill_setting()
 
-    def wait_for_wifi_address(self, cmd: str = '', target=''):
-        # Wait for th wireless adapter to obtaion the ip address
-
-        if not target:
-            target = self.ip_target
-        logging.info(f"waiting for wifi {target}")
-        ip_address = self.subprocess_run('ifconfig wlan0 |egrep -o "inet [^ ]*"|cut -d " " -f 2')
-        # logging.info(ip_address)
-        step = 0
-        while True:
-            time.sleep(5)
-            step += 1
-            ip_address = self.subprocess_run('ifconfig wlan0 |egrep -o "inet [^ ]*"|cut -d " " -f 2')
-            if target in ip_address:
-                break
-            if step == 2:
-                logging.info('repeat command')
-                if cmd:
-                    self.checkoutput(cmd)
-            if step > 10:
-                assert False, f"Can't catch the address:{target} "
-        logging.info(f'ip address {ip_address}')
-        return True, ip_address
 
     def find_ssid(self, ssid) -> bool:
         '''
@@ -1333,7 +1295,7 @@ class adb(dut):
                 self.keyevent(23)
                 time.sleep(2)
 
-    def connect_ssid(self, ssid, passwd='', target="192.168.50") -> bool:
+    def connect_ssid_via_ui(self, ssid, passwd='', target="192.168.50") -> bool:
         '''
         Connect ssid over ui setting
         :param ssid: SSID (target)

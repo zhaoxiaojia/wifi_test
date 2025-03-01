@@ -40,7 +40,7 @@ ax88uControl = Asusax88uControl()
 @pytest.fixture(autouse=True, scope='session')
 def setup():
     ax88uControl.change_setting(router_ch11)
-    pytest.dut.connect_ssid(ssid, passwd)
+    pytest.dut.connect_ssid_via_ui(ssid, passwd)
     pytest.dut.wait_for_wifi_address()
     yield
     ax88uControl.router_control.driver.quit()

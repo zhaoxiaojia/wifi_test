@@ -20,7 +20,6 @@ ssid = {
 ssid_6g = 'Aml_AP_Comp_6G'
 passwd = '@Aml#*st271'
 
-
 wifichip, interface = pytest.chip_info.split('_')
 power_delay.shutdown()
 time.sleep(2)
@@ -50,7 +49,6 @@ def handle_expectdata(ip, port, band, dir):
                 dut_data = json.load(f)
                 return dut_data[band][interface][FPGA_CONFIG[wifichip][band]][bandwidth][FPGA_CONFIG[wifichip]['mimo']][
                     dir]
-
 
 
 @pytest.fixture(scope='module', autouse=True, params=power_ctrl, ids=[str(i) for i in power_ctrl])
@@ -98,7 +96,7 @@ def test_scan(router_setting):
 def test_connect(router_setting):
     result = 'FAIL'
     pytest.dut.forget_wifi()
-    pytest.dut.checkoutput(pytest.dut.get_wifi_cmd(router_setting))
+    pytest.dut.connect_ssid(router_setting)
     result = 'PASS' if pytest.dut.wait_for_wifi_address()[0] else 'FAIL'
     assert result == 'PASS', "Can't conect ssid"
 

@@ -36,11 +36,11 @@ def setup():
     ax88uControl.change_setting(router_ausu)
     ax88uControl.router_control.driver.quit()
     time.sleep(3)
-    pytest.dut.connect_ssid(asus_ssid_name,passwd)
+    pytest.dut.connect_ssid_via_ui(asus_ssid_name, passwd)
     zte5400Control = ZTEax5400Control()
     zte5400Control.change_setting(router_zte)
     zte5400Control.router_control.driver.quit()
-    pytest.dut.connect_ssid(zte_ssid_name, passwd)
+    pytest.dut.connect_ssid_via_ui(zte_ssid_name, passwd)
     yield
     pytest.dut.home()
     pytest.dut.forget_ssid(asus_ssid_name)
@@ -48,5 +48,5 @@ def setup():
 
 @pytest.mark.repeat(10000)
 def test_2g_swtich_5g():
-    pytest.dut.connect_ssid(asus_ssid_name,target="192.168.50")
-    pytest.dut.connect_ssid(zte_ssid_name,target="192.168.2")
+    pytest.dut.connect_ssid_via_ui(asus_ssid_name, target="192.168.50")
+    pytest.dut.connect_ssid_via_ui(zte_ssid_name, target="192.168.2")

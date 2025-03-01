@@ -33,7 +33,7 @@ def setup():
     ax88uControl.change_setting(router_ausu)
     ax88uControl.router_control.driver.quit()
     time.sleep(3)
-    pytest.dut.connect_ssid(ssid, passwd)
+    pytest.dut.connect_ssid_via_ui(ssid, passwd)
     yield
     pytest.dut.home()
     pytest.dut.forget_ssid(ssid)

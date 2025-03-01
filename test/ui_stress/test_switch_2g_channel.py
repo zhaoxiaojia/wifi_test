@@ -47,4 +47,4 @@ def setup(request):
 
 
 def test_change_2g_channel():
-    pytest.dut.connect_ssid(ssid, passwd)
+    pytest.dut.connect_ssid_via_ui(ssid, passwd)

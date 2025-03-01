@@ -33,7 +33,7 @@ def setup():
 
 
 def test_sta_sap():
-    pytest.dut.connect_ssid(ssid, passwd)
+    pytest.dut.connect_ssid_via_ui(ssid, passwd)
     pytest.dut.wait_for_wifi_address()
     pytest.dut.close_wifi()
     pytest.dut.open_hotspot()
