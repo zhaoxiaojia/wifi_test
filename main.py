@@ -77,7 +77,7 @@ if __name__ == '__main__':
     testcase_handler = testCase()
     # caselist = coco.sync_testSuite(suite='stability', case=r'test_03_open_wifi.py')
     # test_case = [f'.\\{i}' for i in caselist]
-    cmd = ['-v', '--capture=sys', '--full-trace', '--html=report.html', f'--resultpath={timestamp}']
+    cmd = ['-v', '--capture=sys', '--full-trace', f'--resultpath={timestamp}']
     # cmd = ['-v', '--capture=sys', '--full-trace', '--html=report.html', f'--resultpath={timestamp}', allure_cmd];
     # print(" ".join(cmd))
     if type(test_case) == str:

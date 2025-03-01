@@ -95,6 +95,36 @@ def pytest_runtest_logreport(report):
             logging.info('*' * 80)
 
 
+@pytest.fixture(autouse=True)
+def record_test_data(request):
+    """
+    自动收集测试用例的 fixture 参数 ids，并存储返回值
+    """
+    test_name = request.node.originalname  # 获取测试名称
+    logging.info(test_name)
+    fixture_values = {}  # 存储 fixture 返回值
+    # 遍历所有 fixture 并存储返回值
+    for fixture_name in request.node.fixturenames:
+        if fixture_name in request.node.funcargs:
+            fixture_values[fixture_name] = request.node.funcargs[fixture_name]
+    # 确保 request.node._store 存在
+    request.node._store = getattr(request.node, "_store", {})
+    request.node._store["return_value"] = None  # 初始化返回值
+    request.node._store["fixture_values"] = fixture_values  # 记录 fixture 返回值
+
+    yield  # 让测试执行
+    # 获取测试结果
+    test_result = request.node._store.get("test_result", "UNKNOWN")  # 这里改为从 _store 获取
+    # 获取测试方法的返回值
+    test_return_value = request.node._store.get("return_value", "None")
+    # 存储到全局字典
+    test_results.append({test_name: {
+        "result": test_result,
+        "return_value": test_return_value,
+        "fixtures": fixture_values
+    }})
+
+
 def pytest_collection_modifyitems(items):
     # item表示收集到的测试用例，对他进行重新编码处理
     for item in items:
@@ -102,27 +132,50 @@ def pytest_collection_modifyitems(items):
         item._nodeid = item._nodeid.encode("utf-8").decode("unicode-escape")
 
 
-
-@pytest.hookimpl(tryfirst=True, hookwrapper=True)
+@pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_makereport(item, call):
+    """
+    获取测试返回值，并存入 request.node._store['return_value']
+    """
     outcome = yield
     report = outcome.get_result()
+    if report.when == 'call':
+        item._store['test_result'] = "PASSED" if report.passed else "FAILED"
+        logging.info(f"item {item._store['test_result']}")
+        # 记录返回值
+        if not report.failed:
+            return_value = getattr(call, "result", None) or item._store.get("return_value",None)
+            logging.info(f'record return value: {call.result}')
+            item._store["return_value"] = return_value
 
-    if report.when == "call":  # 只处理测试调用阶段
-        test_name = item.name
-        test_result = report.outcome
-        test_duration = report.duration
-        # ✅ **正确方式：从 request.node._store 读取 return 值**
-        test_return_value = item._store.get("return_value", None)
-        test_results.append([test_name, test_result, test_duration, test_return_value])
 
 @pytest.hookimpl(trylast=True)
 def pytest_sessionfinish(session, exitstatus):
-    with open("test_results.csv", mode="w", newline="") as file:
-        writer = csv.writer(file)
-        writer.writerow(["Test Name", "Result", "Duration", "Return Value"])
-        writer.writerows(test_results)
+    csv_file = "test_results.csv"
+
+    # 生成表头
+    row_data = []
+    logging.info(test_results)
+    for test_result in test_results:
+        test_name = sorted(test_result.keys())[0]
+        if test_name in row_data:
+            with open(csv_file, mode="a", newline="", encoding="utf-8") as file:
+                writer = csv.writer(file, quotechar=' ')
+                writer.writerow(row_data)  # 写入数据
+            row_data.clear()
+        data = test_result[test_name]
+        keys = sorted(data['fixtures'].keys())
+        if data['fixtures'][keys[0]] not in row_data:
+            for j in keys:
+                row_data.append(data['fixtures'][j])
+        row_data.append(test_name)
+        row_data.append(data['result'])
+        row_data.append(data['return_value'])
+    with open(csv_file, mode="a", newline="", encoding="utf-8") as file:
+        writer = csv.writer(file, quotechar=' ')
+        writer.writerow(row_data)
+
     shutil.copy("pytest.log", "debug.log")
     shutil.move("debug.log", pytest.testResult.logdir)
-    shutil.copy("report.html", "report_bat.html")
-    shutil.move("report_bat.html", pytest.testResult.logdir)
+    # shutil.copy("report.html", "report_bat.html")
+    # shutil.move("report_bat.html", pytest.testResult.logdir)
