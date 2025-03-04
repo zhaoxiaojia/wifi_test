@@ -1061,7 +1061,6 @@ class adb(dut):
         logging.info(f"Connect wifi command: {cmd}")
         return self.checkoutput(cmd)
 
-
     def check_wifi_driver(self):
         '''
         Check vlsicomm.ko exists or not
@@ -1241,7 +1240,6 @@ class adb(dut):
         for i in range(5):
             self.keyevent(4)
         self.kill_setting()
-
 
     def find_ssid(self, ssid) -> bool:
         '''
@@ -1595,12 +1593,6 @@ class adb(dut):
             return hwAddr
         else:
             raise Exception("Can't get hw addr")
-
-    def push_iperf(self):
-        if self.checkoutput('[ -e /system/bin/iperf ] && echo yes || echo no').strip() != 'yes':
-            path = os.path.join(os.getcwd(), 'res/iperf')
-            self.push(path, '/system/bin')
-            self.checkoutput('chmod a+x /system/bin/iperf')
 
     def get_wifi_cmd(self, router_info):
         type = 'wpa3' if 'WPA3' in router_info.authentication_method else 'wpa2'

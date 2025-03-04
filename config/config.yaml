@@ -26,8 +26,7 @@ router:
   name: xiaomiredax6000
 
 power_relay: {
-  '192.168.200.3': '12345678',
-  '192.168.200.4': '12345678'
+  '192.168.200.6': '7',
 }
 
 # test env control , should be rf , corner or both

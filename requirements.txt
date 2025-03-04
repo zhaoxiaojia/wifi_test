@@ -17,3 +17,4 @@ PyMySQL
 cryptography
 PyUserInput
 pysnmp
+roku

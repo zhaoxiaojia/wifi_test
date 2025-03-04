@@ -66,6 +66,7 @@ class telnet_tool(dut):
                     break
             return "".join(output)
 
+        reader, writer = '', ''
         try:
             reader, writer = await telnetlib3.open_connection(self.ip, self.port)
 

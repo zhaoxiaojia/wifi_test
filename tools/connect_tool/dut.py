@@ -179,6 +179,14 @@ class dut():
         except Exception:
             ...
 
+    def push_iperf(self):
+        if pytest.connect_type == 'telnet':
+            return
+        if self.checkoutput('[ -e /system/bin/iperf ] && echo yes || echo no').strip() != 'yes':
+            path = os.path.join(os.getcwd(), 'res/iperf')
+            self.push(path, '/system/bin')
+            self.checkoutput('chmod a+x /system/bin/iperf')
+
     def run_iperf(self, command, adb, direction='tx', iperf3=False):
 
         def telnet_iperf():
@@ -475,6 +483,20 @@ class dut():
                     output1 = self.checkoutput(forget_wifi_cmd)
                     if "successful" in output1:
                         logging.info(f"Network id {network_id[0]} closed")
+
+    def wifi_scan(self, ssid):
+        if pytest.connect_type == 'telnet':
+            return pytest.dut.roku.wifi_scan(ssid)
+        else:
+            for _ in range(5):
+                info = pytest.dut.checkoutput("cmd wifi start-scan;cmd wifi list-scan-results")
+                logging.info(info)
+                if ssid in info:
+                    return True
+                    break;
+                time.sleep(3)
+            else:
+                return False
 
     def connect_ssid(self, router=""):
         if pytest.connect_type == 'telnet':

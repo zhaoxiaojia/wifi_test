@@ -1,7 +1,5 @@
 #!/usr/bin/env python 
-# -*- coding: utf-8 -*- 
-
-
+# -*- coding: utf-8 -*-
 """
 # File       : conftest.py
 # Time       ：2023/6/29 13:36
@@ -26,8 +24,9 @@ from tools.connect_tool.host_os import host_os
 from tools.connect_tool.telnet_tool import telnet_tool
 from tools.TestResult import TestResult
 from tools.yamlTool import yamlTool
+from dut_control.roku_ctrl import roku_ctrl
 
-pytest_plugins = "util.report_plugin"
+# pytest_plugins = "util.report_plugin"
 test_results = []
 
 
@@ -66,6 +65,7 @@ def pytest_sessionstart(session):
         telnet_ip = pytest.config_yaml.get_note("connect_type")[pytest.connect_type]['ip']
         wildcard = pytest.config_yaml.get_note("connect_type")[pytest.connect_type]['wildcard']
         pytest.dut = telnet_tool(telnet_ip, wildcard)
+        pytest.dut.roku = roku_ctrl(telnet_ip)
     else:
         raise EnvironmentError("Not support connect type %s" % pytest.connect_type)
 
@@ -80,9 +80,8 @@ def pytest_sessionstart(session):
 
 
 def pytest_addoption(parser):
-    parser.addoption(
-        "--resultpath", action="store", default=None, help="Test result path"
-    )
+    parser.addoption("--resultpath", action="store", default=None, help="Test result path")
+    parser.addoption("--linux-only", action="store_true")
 
 
 def pytest_runtest_logreport(report):
@@ -125,11 +124,19 @@ def record_test_data(request):
     }})
 
 
-def pytest_collection_modifyitems(items):
+def pytest_collection_modifyitems(config, items):
     # item表示收集到的测试用例，对他进行重新编码处理
+    new_items = []
+    flag = config.getoption("--linux-only")
     for item in items:
         item.name = item.name.encode("utf-8").decode("unicode-escape")
         item._nodeid = item._nodeid.encode("utf-8").decode("unicode-escape")
+        func = item.function
+        if flag:
+            if not (func.__doc__ and "#linux" in func.__doc__):
+                continue
+            new_items.append(item)
+    if flag: items[:] = new_items
 
 
 @pytest.hookimpl(hookwrapper=True)
@@ -144,7 +151,7 @@ def pytest_runtest_makereport(item, call):
         logging.info(f"item {item._store['test_result']}")
         # 记录返回值
         if not report.failed:
-            return_value = getattr(call, "result", None) or item._store.get("return_value",None)
+            return_value = getattr(call, "result", None) or item._store.get("return_value", None)
             logging.info(f'record return value: {call.result}')
             item._store["return_value"] = return_value
 

@@ -148,7 +148,7 @@ class roku_ctrl(Roku):
     #         cls._instance = object.__new__(cls, *args, **kw)
     #     return cls._instance
 
-    def __init__(self,ip):
+    def __init__(self, ip):
         super().__init__(ip)
         self.ip = ip
         self.ptc_size, self.ptc_mode = '', ''
@@ -160,7 +160,6 @@ class roku_ctrl(Roku):
         self.logcat_check = False
         self._ser = ''
         logging.info('roku init done')
-
 
     def __setattr__(self, key, value):
         if key == 'ir_current_location':
@@ -359,7 +358,7 @@ class roku_ctrl(Roku):
                     logging.info(int(process_index.split(':')[0]) * 60 + int(process_index.split(":")[1]))
                     return int(process_index.split(':')[0]) * 60 + int(process_index.split(":")[1])
 
-    def get_ir_index(self, name, array, fuz_match=False):
+    def get_ir_index(self, name, item, fuz_match=False):
         '''
         从布局信息 二维数组中 获取 控件的下标
         Args:
@@ -369,10 +368,8 @@ class roku_ctrl(Roku):
         Returns:
 
         '''
-        if type(array) == str:
-            target_array = self.load_array(self.current_target_array + '.txt')
-        else:
-            target_array = array
+
+        target_array = self.get_launcher_element(item)
         # logging.info(f"Try to get index of  {name}")
         # logging.info(f'Target array {array}')
         for i in target_array:
@@ -386,17 +383,17 @@ class roku_ctrl(Roku):
                         # logging.info(f'Get location : {target_array.index(i)}  {i.index(y)} {len(i)}')
                         return (target_array.index(i), i.index(y)), len(i)
 
-        logging.warning(f"Can't find such this widget {name}")
+        logging.debug(f"Can't find such this widget {name}")
         return None, None
 
-    def ir_navigation(self, target, array, secret=False, fuz_match=False):
+    def ir_navigation(self, target, item, secret=False, fuz_match=False):
         '''
         页面导航
 
         通过获取页面控件信息, 移动遥控器光标 至目标控件
         Args:
             target: 目标控件
-            array: 当前页面布局信息 二维数组
+            item: 需要获取的标签的列表 item
             secret: 是否使用focus获取 当前控件
             fuz_match: 是否开启模糊匹配
         Returns:
@@ -407,8 +404,9 @@ class roku_ctrl(Roku):
         if target in self.ir_current_location:
             # 开启模糊匹配
             target = self.ir_current_location
-        current_index, _ = self.get_ir_index(self.ir_current_location, array, fuz_match=fuz_match)
-        target_index, list_len = self.get_ir_index(target, array, fuz_match=fuz_match)
+        current_index, _ = self.get_ir_index(self.ir_current_location, item, fuz_match=fuz_match)
+        target_index, list_len = self.get_ir_index(target, item, fuz_match=fuz_match)
+        array = self.get_launcher_element(item)
         if current_index and target_index and list_len:
             x_step = abs(target_index[0] - current_index[0])
             y_step = abs(target_index[1] - current_index[1])
@@ -430,9 +428,9 @@ class roku_ctrl(Roku):
                 for i in range(y_step):
                     self.left(time=1)
 
-        return self.ir_navigation(target, array)
+        return self.ir_navigation(target, item, secret=secret, fuz_match=fuz_match)
 
-    def ir_enter(self, target, array, secret=False, fuz_match=False):
+    def ir_enter(self, target, item, secret=False, fuz_match=False):
         '''
         导航 遥控器光标至目标 并进入
         Args:
@@ -443,7 +441,7 @@ class roku_ctrl(Roku):
         Returns:
 
         '''
-        self.ir_navigation(target, array, secret=secret, fuz_match=fuz_match)
+        self.ir_navigation(target, item, secret=secret, fuz_match=fuz_match)
         self.select(time=2)
 
     def media_playback(self, target, array):
@@ -934,9 +932,9 @@ class roku_ctrl(Roku):
         Returns:
 
         '''
-        self.ir_enter('Settings', self.get_launcher_element('LabelListNativeItem'))
-        self.ir_enter('Remotes & devices', self.get_launcher_element('ArrayGridItem'))
-        self.ir_enter('Wireless headphones', self.get_launcher_element('ArrayGridItem'))
+        self.ir_enter('Settings', 'LabelListNativeItem')
+        self.ir_enter('Remotes & devices', 'ArrayGridItem')
+        self.ir_enter('Wireless headphones', 'ArrayGridItem')
         self.select(time=1)
 
     def enter_wifi(self):
@@ -945,8 +943,9 @@ class roku_ctrl(Roku):
         Returns:
 
         '''
-        self.ir_enter('Settings', self.get_launcher_element('LabelListNativeItem'))
-        self.ir_enter('Network', self.get_launcher_element('ArrayGridItem'))
+        self.home(time=1)
+        self.ir_enter('Settings','LabelListNativeItem')
+        self.ir_enter('Network', 'ArrayGridItem')
 
     def check_conn(self):
         '''
@@ -955,7 +954,7 @@ class roku_ctrl(Roku):
 
         '''
         self.enter_wifi()
-        self.ir_enter('Check connection', self.get_launcher_element('LabelListItem'))
+        self.ir_enter('Check connection', 'LabelListItem')
         for _ in range(20):
             if 'Connection check was successful' in self._get_screen_xml():
                 return True
@@ -970,7 +969,7 @@ class roku_ctrl(Roku):
 
         '''
         self.enter_wifi()
-        self.ir_enter('Set up connection', self.get_launcher_element('LabelListItem'))
+        self.ir_enter('Set up connection','LabelListItem')
         if self.get_ir_focus() != 'Wireless':
             self.down()
         logging.info('check wireless')
@@ -985,7 +984,7 @@ class roku_ctrl(Roku):
         else:
             assert False, "Can't load wifi scan list"
 
-    def _wifi_scan(self, ssid):
+    def wifi_scan(self, ssid):
         '''
         通过ui导航 Setting -> Network -> Scan again to see all network
         Args:
@@ -1001,16 +1000,17 @@ class roku_ctrl(Roku):
                 if 'Looking for wireless networks...' not in self._get_screen_xml():
                     break
 
+        self.setup_conn()
         for i in range(5):
             if ssid in self._get_screen_xml():
                 logging.info('Find target ssid')
                 return True
             try:
                 if i == 0:
-                    self.ir_enter('Scan again to see all networks', self.get_launcher_element('ArrayGridItem'))
+                    self.ir_enter('Scan again to see all networks', 'ArrayGridItem', fuz_match=True)
                     wait()
                 else:
-                    self.ir_enter('Scan again', self.get_launcher_element('ArrayGridItem'))
+                    self.ir_enter('Scan again', 'ArrayGridItem', fuz_match=True)
                     wait()
             except TypeError:
                 ...
@@ -1020,7 +1020,7 @@ class roku_ctrl(Roku):
 
     @property
     def ser(self):
-        if self._ser == '':self._ser = serial_tool()
+        if self._ser == '': self._ser = serial_tool()
         return self._ser
 
     def wifi_conn(self, ssid, pwd='', band=5):
@@ -1034,9 +1034,9 @@ class roku_ctrl(Roku):
         Returns:
 
         '''
-        self.setup_conn()
-        self._wifi_scan(ssid)
-        self.ir_enter(ssid, self.get_launcher_element('ArrayGridItem'), fuz_match=True)
+        band = 5 if '5G' in ssid else 2
+        self.wifi_scan(ssid)
+        self.ir_enter(ssid, 'ArrayGridItem', fuz_match=True)
         if 'Recommended network found' in self._get_screen_xml():
             # 选择推荐
             if band == 2:
@@ -1060,7 +1060,7 @@ class roku_ctrl(Roku):
             time.sleep(1)
             ip = self.ser.get_ip_address('wlan0')
             if ip:
-                self = roku_ctrl(ip)
+                pytest.dut.roku = roku_ctrl(ip)
                 logging.info(f'roku ip {self.ip}')
                 break
         self.home()

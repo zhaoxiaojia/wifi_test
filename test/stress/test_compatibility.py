@@ -81,14 +81,7 @@ def router_setting(power_setting, request):
 @pytest.mark.dependency(name="scan")
 def test_scan(router_setting):
     pytest.dut.push_iperf()
-    result = 'FAIL'
-    for _ in range(5):
-        info = pytest.dut.checkoutput("cmd wifi start-scan;cmd wifi list-scan-results")
-        logging.info(info)
-        if router_setting.ssid in info:
-            result = 'PASS'
-            break;
-        time.sleep(3)
+    result = 'PASS' if pytest.dut.wifi_scan(router_setting.ssid) else 'FAIL'
     assert result == 'PASS', f"Can't scan target ssid {router_setting.ssid}"
 
 

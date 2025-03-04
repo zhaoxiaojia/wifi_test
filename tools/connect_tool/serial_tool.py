@@ -63,9 +63,9 @@ class serial_tool:
         '''
         ip, eth0Ip, wlanIp, ppp0Ip = '', '', '', ''
         logging.info('getting ip info through the serial port')
-        self.write('ifconfig')
+        self.write(f'ifconfig {inet}')
         time.sleep(1)
-        ipInfo = ''.join([i.decode('utf-8') for i in self.ser.readlines()]).split('TX bytes:')
+        ipInfo = ''.join([i.decode('utf-8',errors='ignore') for i in self.ser.readlines()]).split('TX bytes:')
         logging.info(ipInfo)
         if ipInfo == ['']:
             logging.info('no ip')
