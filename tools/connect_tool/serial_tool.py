@@ -38,7 +38,14 @@ class serial_tool:
         self.ethernet_ip = ''
         self.uboot_time = 0
         try:
-            self.ser = serial.Serial(self.serial_port, self.baud, timeout=0.25)
+            self.ser = serial.Serial(self.serial_port, self.baud,
+                                     bytesize=serial.EIGHTBITS,
+                                     parity=serial.PARITY_NONE,
+                                     stopbits=serial.STOPBITS_ONE,
+                                     xonxoff=False,
+                                     rtscts=False,
+                                     dsrdtr=False,
+                                     timeout=1)
             logging.info('*' * 80)
             logging.info(f'* Serial  {self.serial_port}-{self.baud} is opened  ')
             logging.info('*' * 80)
@@ -55,34 +62,29 @@ class serial_tool:
             logging.info('get ip ：%s' % self.ethernet_ip)
         logging.info('the status of serial port is {}'.format(self.status))
 
-    def get_ip_address(self, inet='ipv4'):
+    def get_ip_address(self, inet='wlan0',count = 10):
         '''
         get ip address
         @param inet: inet type ipv4 or ipv6
         @return:
         '''
-        ip, eth0Ip, wlanIp, ppp0Ip = '', '', '', ''
-        logging.info('getting ip info through the serial port')
+        if count == 0:
+            return None
+        self.ser.write(b'\x1A')
+        time.sleep(1)
         self.write(f'ifconfig {inet}')
         time.sleep(1)
-        ipInfo = ''.join([i.decode('utf-8',errors='ignore') for i in self.ser.readlines()]).split('TX bytes:')
-        logging.info(ipInfo)
-        if ipInfo == ['']:
-            logging.info('no ip')
-            return None
-        for i in ipInfo:
-            if 'eth0' in i:
-                if inet == 'ipv4':
-                    eth0Ip = re.findall(r'inet addr:(.*?)  Bcast', i, re.S)
-                if inet == 'ipv6':
-                    eth0Ip = re.findall(r'inet6 addr:(.*?)  Bcast', i, re.S)
-                return eth0Ip[0] if eth0Ip else None
-            if 'wlan0' in i:
-                wlanIp = re.findall(r'inet addr:(.*?)  Bcast', i, re.S)
-                return wlanIp[0] if wlanIp else None
-            if 'ppp0' in i:
-                ppp0Ip = re.findall(r'inet addr:(.*?)  P-t-P', i, re.S)
-                return ppp0Ip[0] if ppp0Ip else None
+        ipInfo = ''.join([i.decode('utf-8', errors='ignore') for i in self.ser.readlines()]).split('TX bytes:')[0]
+        if not ipInfo:
+            return self.get_ip_address(inet=inet, count=count - 1)
+        # logging.info(f'recv {ipInfo}')
+        ipaddress = re.findall(r'addr:(\d+\.\d+\.\d+\.\d+)', ipInfo, re.S)
+        if ipaddress:
+            # logging.info(f'recv {ipInfo}')
+            logging.info(f' ip address {ipaddress[0]}')
+            return ipaddress[0]
+        time.sleep(10)
+        return self.get_ip_address(inet=inet, count=count - 1)
 
     def write_pipe(self, command):
         '''

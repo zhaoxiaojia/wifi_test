@@ -18,3 +18,4 @@ cryptography
 PyUserInput
 pysnmp
 roku
+pytest-dependency

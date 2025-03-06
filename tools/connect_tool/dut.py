@@ -441,7 +441,9 @@ class dut():
 
     def wait_for_wifi_address(self, cmd: str = '', target=''):
         if pytest.connect_type == 'telnet':
-            return True
+            pytest.dut.roku.ser.write('iw wlan0 link')
+            logging.info(pytest.dut.roku.ser.recv())
+            return True, pytest.dut.roku.ser.get_ip_address('wlan0')
         else:
             # Wait for th wireless adapter to obtaion the ip address
             if not target:

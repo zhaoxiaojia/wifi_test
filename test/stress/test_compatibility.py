@@ -63,7 +63,7 @@ def power_setting(request):
 @pytest.fixture(scope='module', autouse=True, params=['2.4G', '5G'], ids=['2.4G', '5G'])
 def router_setting(power_setting, request):
     if not power_setting: raise ValueError("Pls check pdu ip address and router port")
-    pc_ip = pytest.host_os.dynamic_flush_network_card('eth0')
+    pc_ip = pytest.host_os.dynamic_flush_network_card('enx207bd29d4dcc')
     if pc_ip is None: assert False, "Can't get pc ip address"
     pytest.dut.ip_target = '.'.join(pc_ip.split('.')[:3])
     logging.info(f'pc_ip {pc_ip}')
@@ -75,6 +75,8 @@ def router_setting(power_setting, request):
                     authentication_method=router_set[band]['authentication'],
                     bandwidth=router_set[band]['bandwidth'], ssid=ssid[band], wpa_passwd=passwd,
                     expected_rate=f'{expect_tx} {expect_rx}')
+    if pytest.connect_type == 'telnet':
+        pytest.dut.roku.flush_ip()
     yield router
 
 

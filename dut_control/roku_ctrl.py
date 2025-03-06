@@ -944,7 +944,7 @@ class roku_ctrl(Roku):
 
         '''
         self.home(time=1)
-        self.ir_enter('Settings','LabelListNativeItem')
+        self.ir_enter('Settings', 'LabelListNativeItem')
         self.ir_enter('Network', 'ArrayGridItem')
 
     def check_conn(self):
@@ -969,7 +969,7 @@ class roku_ctrl(Roku):
 
         '''
         self.enter_wifi()
-        self.ir_enter('Set up connection','LabelListItem')
+        self.ir_enter('Set up connection', 'LabelListItem')
         if self.get_ir_focus() != 'Wireless':
             self.down()
         logging.info('check wireless')
@@ -1064,3 +1064,7 @@ class roku_ctrl(Roku):
                 logging.info(f'roku ip {self.ip}')
                 break
         self.home()
+
+    def flush_ip(self):
+        ip = self.ser.get_ip_address('wlan0')
+        pytest.dut.roku = roku_ctrl(ip)

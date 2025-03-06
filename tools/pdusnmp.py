@@ -134,7 +134,7 @@ class power_ctrl:
     @staticmethod
     def check_output(cmd):
         try:
-            info = subprocess.check_output(cmd, shell=True, text=True)
+            info = subprocess.check_output(cmd, shell=True)
             logging.info(info)
             return info
         except subprocess.CalledProcessError as e:
@@ -144,7 +144,7 @@ class power_ctrl:
     def switch(self, ip, port, status):
         logging.info(f'Setting power relay: {ip} port {port} {"on" if status == 1 else "off"}')
         cmd = self.SWITCH_CMD.format(ip, port, status)
-        # self.check_output(cmd)
+        self.check_output(cmd)
 
     def set_all(self, status):
         for k, v in self.power_ctrl.items():
