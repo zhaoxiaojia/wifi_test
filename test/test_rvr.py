@@ -18,7 +18,7 @@ import subprocess
 import threading
 import time
 from test import get_testdata
-
+from tools.rs_test import rs
 import pytest
 
 from tools.connect_tool.TelnetInterface import TelnetInterface
@@ -61,11 +61,14 @@ if rf_needed:
     rf_step_list = []
     rf_ip = ''
     model = wifi_yaml.get_note('rf_solution')['model']
-    if model != 'RADIORACK-4-220' and model != 'RC4DAT-8G-95':
+    if model not in ['RADIORACK-4-220', 'RC4DAT-8G-95', 'SH_NEW']:
         raise EnvironmentError("Doesn't support this model")
-    rf_ip = wifi_yaml.get_note('rf_solution')[model]['ip_address']
-    rf_tool = TelnetInterface(rf_ip)
-    logging.info(f'rf_ip {rf_ip}')
+    if model == 'SH_NEW':
+        rf_tool = rs()
+    else:
+        rf_ip = wifi_yaml.get_note('rf_solution')[model]['ip_address']
+        rf_tool = TelnetInterface(rf_ip)
+        logging.info(f'rf_ip {rf_ip}')
     rf_step_list = wifi_yaml.get_note('rf_solution')['step']
     rf_step_list = [i for i in range(*rf_step_list)][::8]
     logging.info(f'rf_step_list {rf_step_list}')
@@ -74,7 +77,10 @@ if corner_needed:
     corner_step_list = []
     # 配置衰减
     corner_ip = wifi_yaml.get_note('corner_angle')['ip_address']
-    corner_tool = TelnetInterface(corner_ip)
+    if corner_ip == '192.168.5.11':
+        corner_tool = rs()
+    else:
+        corner_tool = TelnetInterface(corner_ip)
     logging.info(f'corner_ip {corner_ip}')
     corner_step_list = wifi_yaml.get_note('corner_angle')['step']
     corner_step_list = [i for i in range(*corner_step_list)][::45]

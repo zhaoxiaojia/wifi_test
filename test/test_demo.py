@@ -20,7 +20,7 @@ def power_setting(request):
 
 @pytest.fixture(scope='module', autouse=True, params=['2.4G', '5G'], ids=['2.4G', '5G'])
 def router_setting(power_setting, request):
-    router = Router(band=request.param, wireless_mode='11AX', channel='default',
+    router = Router(ap='ASUS', band=request.param, wireless_mode='11AX', channel='default',
                     authentication_method='Open System',
                     bandwidth="40Mhz", ssid="coco is handsome",
                     expected_rate='0 0')

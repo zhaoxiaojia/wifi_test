@@ -71,7 +71,7 @@ def router_setting(power_setting, request):
     band = request.param
     expect_tx = handle_expectdata(router_set['ip'], router_set['port'], band, 'UL')
     expect_rx = handle_expectdata(router_set['ip'], router_set['port'], band, 'DL')
-    router = Router(band=band, wireless_mode=router_set[band]['mode'], channel='default',
+    router = Router(ap=router_set['mode'], band=band, wireless_mode=router_set[band]['mode'], channel='default',
                     authentication_method=router_set[band]['authentication'],
                     bandwidth=router_set[band]['bandwidth'], ssid=ssid[band], wpa_passwd=passwd,
                     expected_rate=f'{expect_tx} {expect_rx}')

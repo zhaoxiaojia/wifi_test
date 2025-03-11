@@ -162,22 +162,30 @@ def pytest_sessionfinish(session, exitstatus):
 
     # 生成表头
     row_data = []
+    temp_data = []
+    #  PDU  IP , PDU  Port ,AP Brand,Band,Ssid, WiFi  Mode ,Channel,Bandwidth,Security,Scan,Connect,Throught,TX(Mbps),Throught,RX(Mbps)
+    title_data = ['PDU IP', 'PDU Port', 'AP Brand', 'Band', 'Ssid', 'WiFi Mode', 'Channel', 'Bandwidth', 'Security',
+                  'Scan', 'Connect', 'Throught', 'TX(Mbps)', 'Throught', 'RX(Mbps)']
+    with open(csv_file, mode="w", newline="", encoding="utf-8") as file:
+        writer = csv.writer(file, quotechar=' ')
+        writer.writerow(title_data)
     logging.info(test_results)
     for test_result in test_results:
         test_name = sorted(test_result.keys())[0]
-        if test_name in row_data:
+        if test_name in temp_data:
             with open(csv_file, mode="a", newline="", encoding="utf-8") as file:
                 writer = csv.writer(file, quotechar=' ')
                 writer.writerow(row_data)  # 写入数据
             row_data.clear()
+            temp_data.clear()
         data = test_result[test_name]
         keys = sorted(data['fixtures'].keys())
         if data['fixtures'][keys[0]] not in row_data:
             for j in keys:
                 row_data.append(data['fixtures'][j])
-        row_data.append(test_name)
-        row_data.append(data['result'])
-        row_data.append(data['return_value'])
+        temp_data.append(test_name)
+        if data['result']: row_data.append(data['result'])
+        if data['return_value']: row_data.append(data['return_value'])
     with open(csv_file, mode="a", newline="", encoding="utf-8") as file:
         writer = csv.writer(file, quotechar=' ')
         writer.writerow(row_data)
