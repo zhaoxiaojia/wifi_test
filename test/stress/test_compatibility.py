@@ -105,7 +105,7 @@ def test_multi_throughtput_tx(router_setting, request):
     logging.info(f'tx_result {tx_result}')
     expect_data = float(router_setting.expected_rate[0])
     logging.info(f'expect_data {expect_data}')
-    request.node._store['return_value'] = tx_result
+    request.node._store['return_value'] = (expect_data, tx_result)
     assert all(float(x) > expect_data for x in tx_result)
 
 
@@ -118,5 +118,5 @@ def test_multi_throughtput_rx(router_setting, request):
     logging.info(f'rx_result {rx_result}')
     expect_data = float(router_setting.expected_rate[1])
     logging.info(f'expect_data {expect_data}')
-    request.node._store['return_value'] = rx_result
+    request.node._store['return_value'] = (expect_data, rx_result)
     assert all(float(x) > expect_data for x in rx_result)

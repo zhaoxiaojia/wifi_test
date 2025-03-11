@@ -25,7 +25,7 @@ from tools.connect_tool.telnet_tool import telnet_tool
 from tools.TestResult import TestResult
 from tools.yamlTool import yamlTool
 from dut_control.roku_ctrl import roku_ctrl
-
+from tools.router_tool.Router import Router
 # pytest_plugins = "util.report_plugin"
 test_results = []
 
@@ -165,7 +165,7 @@ def pytest_sessionfinish(session, exitstatus):
     temp_data = []
     #  PDU  IP , PDU  Port ,AP Brand,Band,Ssid, WiFi  Mode ,Channel,Bandwidth,Security,Scan,Connect,Throught,TX(Mbps),Throught,RX(Mbps)
     title_data = ['PDU IP', 'PDU Port', 'AP Brand', 'Band', 'Ssid', 'WiFi Mode', 'Channel', 'Bandwidth', 'Security',
-                  'Scan', 'Connect', 'Throught', 'TX(Mbps)', 'Throught', 'RX(Mbps)']
+                  'Scan', 'Connect', 'TX Result', 'TX Criteria', 'TX(Mbps)', 'RX Result', 'RX Criteria', 'RX(Mbps)']
     with open(csv_file, mode="w", newline="", encoding="utf-8") as file:
         writer = csv.writer(file, quotechar=' ')
         writer.writerow(title_data)
@@ -180,12 +180,18 @@ def pytest_sessionfinish(session, exitstatus):
             temp_data.clear()
         data = test_result[test_name]
         keys = sorted(data['fixtures'].keys())
-        if data['fixtures'][keys[0]] not in row_data:
+        if data['fixtures'][keys[0]][0] not in row_data:
             for j in keys:
-                row_data.append(data['fixtures'][j])
+                logging.info(type(data['fixtures'][j]))
+                if isinstance(data['fixtures'][j],Router):
+                    logging.info(f"iter {data['fixtures'][j]}")
+                    row_data.append(data['fixtures'][j])
+                else:
+                    logging.info(f"not iter {data['fixtures'][j]}")
+                    row_data.extend(data['fixtures'][j])
         temp_data.append(test_name)
         if data['result']: row_data.append(data['result'])
-        if data['return_value']: row_data.append(data['return_value'])
+        if data['return_value']: row_data.extend([*data['return_value']])
     with open(csv_file, mode="a", newline="", encoding="utf-8") as file:
         writer = csv.writer(file, quotechar=' ')
         writer.writerow(row_data)

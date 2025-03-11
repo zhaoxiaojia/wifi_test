@@ -42,11 +42,11 @@ def test_conn():
 @pytest.mark.dependency(depends=["connect"])
 def test_multi_throughtput_tx(request):
     tx_result = "100Mb/s"
-    request.node._store['return_value'] = tx_result
+    request.node._store['return_value'] =(100 ,tx_result)
 
 
 @pytest.mark.dependency(depends=["connect"])
 @pytest.mark.wifi_connect
 def test_multi_throughtput_rx(request):
     rx_result = "100Mb/s"
-    request.node._store['return_value'] = rx_result
+    request.node._store['return_value'] =(100 ,rx_result)
