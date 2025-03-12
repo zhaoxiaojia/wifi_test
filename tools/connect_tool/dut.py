@@ -133,7 +133,17 @@ class dut():
     @property
     def pc_ip(self):
         if self._pc_ip == '': self._pc_ip = self.get_pc_ip()
+        self.ip_target = '.'.join(self._pc_ip.split('.')[:3])
         return self._pc_ip
+
+    @property
+    def freq_num(self):
+        return self._freq_num
+
+    @freq_num.setter
+    def freq_num(self, value):
+        self._freq_num = int(value)
+        self.channel = int((self._freq_num - 2412) / 5 if self._freq_num < 3000 else (self._freq_num - 5000) / 5)
 
     def step(func):
         def wrapper(*args, **kwargs):
@@ -190,7 +200,7 @@ class dut():
     def run_iperf(self, command, adb, direction='tx', iperf3=False):
 
         def telnet_iperf():
-            tn = telnetlib.Telnet(pytest.dut.ip)
+            tn = telnetlib.Telnet(pytest.dut.dut_ip)
             tn.write(command.encode('ascii') + b'\n')
 
             while True:
@@ -289,7 +299,7 @@ class dut():
 
     def get_dut_ip(self):
         if pytest.connect_type == 'telnet':
-            return pytest.dut.ip
+            return pytest.dut.dut_ip
         dut_info = pytest.dut.checkoutput('ifconfig wlan0')
         dut_ip = re.findall(r'inet addr:(\d+\.\d+\.\d+\.\d+)', dut_info, re.S)
         if dut_ip:
@@ -522,10 +532,10 @@ class dut():
                 f.write('Wifi is not connected \n')
             assert False, "Wifi is not connected"
         try:
-            rssi_num = int(re.findall(r'signal:\s+(-?\d+)\s+dBm', rssi_info, re.S)[0])
-            # freq_num = int(re.findall(r'freq:\s+(\d+)\s+', rssi_info, re.S)[0])
+            self.rssi_num = int(re.findall(r'signal:\s+(-?\d+)\s+dBm', rssi_info, re.S)[0])
+            self.freq_num = int(re.findall(r'freq:\s+(\d+)\s+', rssi_info, re.S)[0])
             with open(pytest.testResult.detail_file, 'a') as f:
-                f.write(f'Rssi : {rssi_num}\n')
+                f.write(f'Rssi : {self.rssi_num}\n')
                 # f.write(f'Freq : {freq_num}\n')
         except IndexError as e:
             rssi_num = -1

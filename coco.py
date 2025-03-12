@@ -9,42 +9,18 @@
 # Description：
 """
 
-import itertools
+
+class coco:
+    @property
+    def freq_num(self):
+        return self._freq_num
+
+    @freq_num.setter
+    def freq_num(self, value):
+        self._freq_num = int(value)
+        self.channel = int((self._freq_num - 2412) / 5 if self._freq_num < 3000 else (self._freq_num - 5000) / 5)
 
 
-def handle_files(a,b,c,d):
-    arrays = [arr for arr in [a, b, c, d] if arr]
-
-    # 使用itertools.product遍历组合
-    for combination in itertools.product(*arrays):
-        print(combination)
-
-
-handle_files(['a','b','c','d'],[1,2,3],[],['coco','zues'])
-'''
-('a', 1, 'coco')
-('a', 1, 'zues')
-('a', 2, 'coco')
-('a', 2, 'zues')
-('a', 3, 'coco')
-('a', 3, 'zues')
-('b', 1, 'coco')
-('b', 1, 'zues')
-('b', 2, 'coco')
-('b', 2, 'zues')
-('b', 3, 'coco')
-('b', 3, 'zues')
-('c', 1, 'coco')
-('c', 1, 'zues')
-('c', 2, 'coco')
-('c', 2, 'zues')
-('c', 3, 'coco')
-('c', 3, 'zues')
-('d', 1, 'coco')
-('d', 1, 'zues')
-('d', 2, 'coco')
-('d', 2, 'zues')
-('d', 3, 'coco')
-('d', 3, 'zues')
-
-'''
+c = coco()
+c.freq_num = '5180'
+print(c.channel)

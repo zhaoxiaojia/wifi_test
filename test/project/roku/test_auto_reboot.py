@@ -29,7 +29,7 @@ Expected Result
 def test_auto_reboot():
     start = time.time()
     while (time.time() - start < 3600 * 24 * 4):
-        pytest.dut.tn.open(pytest.dut.ip, port=23)
+        pytest.dut.tn.open(pytest.dut.dut_ip, port=23)
         pytest.dut.checkoutput('reboot')
         time.sleep(60)
         pytest.dut.checkoutput('iw dev')

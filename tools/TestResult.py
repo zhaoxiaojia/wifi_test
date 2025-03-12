@@ -43,7 +43,7 @@ class TestResult():
         self.current_number = 0
         self.x_path = step
         self.x_length = len(self.x_path)
-
+        self.init_rvr_result()
 
     def init_rvr_result(self):
         self.rvr_excelfile = os.path.join(self.logdir, 'RvrCheckExcel.xlsx')
@@ -58,8 +58,9 @@ class TestResult():
             title = 'SerianNumber Test_Category	Sub_Category	Coex_Method	BT_WF_Isolation	Standard	Freq_Band	BW	Data_Rate	CH_Freq_MHz	Protocol	Direction	Total_Path_Loss	RxP DB	RSSI Angel	Data_RSSI MCS_Rate Throughput	'
             f.write(','.join(title.split()))
             f.write('\n')
-        with open(os.path.join(os.getcwd(), 'config\\rvr_wifi_setup.csv' if pytest.win_flag else 'config/rvr_wifi_setup.csv'),
-                  'r',encoding='utf-8') as f:
+        with open(os.path.join(os.getcwd(),
+                               'config\\rvr_wifi_setup.csv' if pytest.win_flag else 'config/rvr_wifi_setup.csv'),
+                  'r', encoding='utf-8') as f:
             reader = csv.reader(f)
             self.results_length = []
             for i in [j for j in reader][1:]:

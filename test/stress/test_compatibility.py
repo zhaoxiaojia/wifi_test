@@ -63,16 +63,15 @@ def power_setting(request):
 @pytest.fixture(scope='module', autouse=True, params=['2.4G', '5G'], ids=['2.4G', '5G'])
 def router_setting(power_setting, request):
     if not power_setting: raise ValueError("Pls check pdu ip address and router port")
-    pc_ip = pytest.host_os.dynamic_flush_network_card('enx207bd29d4dcc')
-    if pc_ip is None: assert False, "Can't get pc ip address"
-    pytest.dut.ip_target = '.'.join(pc_ip.split('.')[:3])
-    logging.info(f'pc_ip {pc_ip}')
+    pytest.dut.pc_ip = pytest.host_os.dynamic_flush_network_card('enx207bd29d4dcc')
+    if pytest.dut.pc_ip is None: assert False, "Can't get pc ip address"
+    logging.info(f'pc_ip {pytest.dut.pc_ip}')
     router_set = power_setting[0]
     band = request.param
     expect_tx = handle_expectdata(router_set['ip'], router_set['port'], band, 'UL')
     expect_rx = handle_expectdata(router_set['ip'], router_set['port'], band, 'DL')
-    router = Router(ap=router_set['mode'], band=band, wireless_mode=router_set[band]['mode'], channel='default',
-                    authentication_method=router_set[band]['authentication'],
+    router = Router(ap=router_set['mode'], band=band, wireless_mode=router_set[band]['mode'],
+                    channel=pytest.dut.channel, authentication_method=router_set[band]['authentication'],
                     bandwidth=router_set[band]['bandwidth'], ssid=ssid[band], wpa_passwd=passwd,
                     expected_rate=f'{expect_tx} {expect_rx}')
     if pytest.connect_type == 'telnet':

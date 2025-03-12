@@ -37,10 +37,10 @@ class telnet_tool(dut):
     def __init__(self, ip, wildcard):
         super().__init__()
 
-        self.ip = ip
+        self.dut_ip = ip
         self.port = 23
         logging.info('*' * 80)
-        logging.info(f'* Telnet {self.ip}')
+        logging.info(f'* Telnet {self.dut_ip}')
         logging.info('*' * 80)
         # self.wildcard = cmd_line_wildcard[wildcard] if type(wildcard) == str else wildcard
 
@@ -68,7 +68,7 @@ class telnet_tool(dut):
 
         reader, writer = '', ''
         try:
-            reader, writer = await telnetlib3.open_connection(self.ip, self.port)
+            reader, writer = await telnetlib3.open_connection(self.dut_ip, self.port)
 
             # 发送命令
             writer.write(command + "\n")

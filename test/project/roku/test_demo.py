@@ -17,7 +17,7 @@ import pytest
 
 from dut_control.roku_ctrl import roku_ctrl
 
-roku = roku_ctrl(pytest.dut.ip)
+roku = roku_ctrl(pytest.dut.dut_ip)
 
 
 def test_demo():

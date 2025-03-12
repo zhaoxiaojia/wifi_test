@@ -173,7 +173,7 @@ def setup(request):
                 connect_status = False
 
     if pytest.connect_type == 'telnet':
-        dut_ip = pytest.dut.ip
+        dut_ip = pytest.dut.dut_ip
     logging.info(f'dut_ip:{dut_ip}')
     connect_status = True
 
