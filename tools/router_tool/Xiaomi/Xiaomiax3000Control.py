@@ -209,10 +209,10 @@ class Xiaomiax3000Control(RouterTools):
             # 修改 bandwidth
             if router.bandwidth:
                 if router.band == self.BAND_2:
-                    target_dict = self.BANDWIDTH_2_LIST
+                    target_dict = self.BANDWIDTH_2
                     target = 'bandwidth_2g'
                 else:
-                    target_dict = self.BANDWIDTH_5_LIST
+                    target_dict = self.BANDWIDTH_5
                     target = 'bandwidth_5g'
                 if router.bandwidth not in target_dict: raise ConfigError('bandwidth element error')
                 self.driver.find_element(
@@ -250,7 +250,8 @@ class Xiaomiax3000Control(RouterTools):
                 wifi6_switch = self.driver.find_element(By.XPATH,
                                                         '//*[@id="WIFI6switch"]')
                 self.scroll_to(wifi6_switch)
-                if wifi6_switch.get_attribute("data-on") != {'11ax': '0', '11ac': '1'}[router.wireless_mode]:
+                if wifi6_switch.get_attribute("data-on") != {'11ax': '0', '11ac': '1', '11n': '1'}[
+                    router.wireless_mode]:
                     wifi6_switch.click()
                     time.sleep(35)
 

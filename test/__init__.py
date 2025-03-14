@@ -56,7 +56,7 @@ def get_testdata(router):
         reader = csv.reader(f)
         test_data = [Router(*[i.strip() for i in row]) for row in reader][1:]
 
-    logging.info(f'test_data {test_data}')
+    # logging.info(f'test_data {test_data}')
     ssid_verify = set()
 
     # 校验 csv 数据是否异常

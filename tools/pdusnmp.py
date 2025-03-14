@@ -147,25 +147,17 @@ class power_ctrl:
         self.check_output(cmd)
 
     def set_all(self, status):
-        for k, v in self.power_ctrl.items():
-            if v == '12345678':
-                cmd = self.SET_CMD.format(k, 0 if status else 1)
-                self.check_output(cmd)
-            else:
-                for i in self.ctrl:
-                    if k == i[0]:
-                        cmd = self.SWITCH_CMD.format(k, i[1], 1 if status else 2)
-                        self.check_output(cmd)
+        for k in ['192.168.200.3', '192.168.200.3', '192.168.200.5', '192.168.200.6']:
+            cmd = self.SET_CMD.format(k, 0 if status else 1)
+            self.check_output(cmd)
 
     def shutdown(self):
         logging.info('Shutting down all relays')
         self.set_all(False)
 
-    def poweron(self):
-        logging.info('Powering on all relays')
-        self.set_all(True)
-
-
+    # def poweron(self):
+    #     logging.info('Powering on all relays')
+    #     self.set_all(True)
 
 # s = PowerCtrl("192.168.50.230")
 # s.switch(2, True)

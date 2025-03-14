@@ -147,7 +147,7 @@ def pytest_runtest_makereport(item, call):
     outcome = yield
     report = outcome.get_result()
     if report.when == 'call':
-        item._store['test_result'] = "PASSED" if report.passed else "FAILED"
+        item._store['test_result'] = "PASSED" if report.passed else "FAILED" if report.failed else "SKIPPED"
         logging.info(f"item {item._store['test_result']}")
         # 记录返回值
         if not report.failed:
@@ -182,13 +182,19 @@ def pytest_sessionfinish(session, exitstatus):
         keys = sorted(data['fixtures'].keys())
         if data['fixtures'][keys[0]][0] not in row_data:
             for j in keys:
-                logging.info(type(data['fixtures'][j]))
-                if isinstance(data['fixtures'][j],Router):
-                    logging.info(f"iter {data['fixtures'][j]}")
-                    row_data.append(data['fixtures'][j])
-                else:
-                    logging.info(f"not iter {data['fixtures'][j]}")
-                    row_data.extend(data['fixtures'][j])
+                logging.info(f"fixture  {type(data['fixtures'][j])}")
+                if isinstance(data['fixtures'][j], dict):
+                    logging.info('dict')
+                    if data['fixtures'][j].get('ip') and data['fixtures'][j]['ip'] not in row_data: row_data.append(
+                        data['fixtures'][j]['ip'])
+                    if data['fixtures'][j].get('port') and data['fixtures'][j]['port'] not in row_data: row_data.append(
+                        data['fixtures'][j]['port'])
+                    if data['fixtures'][j].get(
+                            'brand') and f"{data['fixtures'][j]['brand']} {data['fixtures'][j]['model']}" not in row_data:
+                        row_data.append(f"{data['fixtures'][j]['brand']} {data['fixtures'][j]['model']}")
+                elif isinstance(data['fixtures'][j], Router):
+                    logging.info('router')
+                    if data['fixtures'][j] not in row_data: row_data.append(data['fixtures'][j])
         temp_data.append(test_name)
         if data['result']: row_data.append(data['result'])
         if data['return_value']: row_data.extend([*data['return_value']])

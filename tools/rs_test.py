@@ -18,8 +18,8 @@ from util.decorators import singleton
 @singleton
 class rs:
     def __init__(self):
-        self.rf_path = 'AmlACUControl.exe'
-        self.corner_path = 'AmlSunveyController.exe'
+        self.rf_path = 'res/AmlACUControl.exe'
+        self.corner_path = 'res/AmlSunveyController.exe'
 
     def execute_rf_cmd(self, num):
         exe_path = f'{self.rf_path} {num}'

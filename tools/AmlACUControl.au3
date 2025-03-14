@@ -30,6 +30,7 @@ Else
 EndIf
 
 ControlFocus($windowTitle,"","WindowsForms10.EDIT.app.0.141b42a_r8_ad11")
+ControlSend($windowTitle,"","WindowsForms10.EDIT.app.0.141b42a_r8_ad11","")
 ControlSend($windowTitle,"","WindowsForms10.EDIT.app.0.141b42a_r8_ad11",$CmdLine[1])
 Sleep(1000)
 ControlFocus($windowTitle,"","WindowsForms10.BUTTON.app.0.141b42a_r8_ad11")
@@ -46,7 +47,7 @@ While True
 
     ; 检查是否超时
     If TimerDiff($startTime) >= 5 * 1000 Then
-        MsgBox(16, "Error", "等待超时，未找到目标信息。")
+        MsgBox(16, "Error", "等待超时，未找到目标信息。",1)
         ExitLoop
     EndIf
 

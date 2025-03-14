@@ -45,6 +45,9 @@ class compatibility_router(json_mixin):
         self._instances.append(info)
         # 直接在 self.__dict__ 中创建嵌套字典
 
+    def __str__(self):
+        return self.to_dict()
+
     def save_expect(self):
         with open(f"{os.getcwd()}/config/compatibility_router.json", 'w') as f:
             json.dump(self._instances, f, indent=4, ensure_ascii=False)

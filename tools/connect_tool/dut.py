@@ -40,11 +40,11 @@ class dut():
     def iperf(args, command='iperf'):
         return f'{command} {args}'
 
-    IPERF_SERVER = {'TCP': iperf(' -s -w 4m -i 1'),
+    IPERF_SERVER = {'TCP': iperf(' -s -w 2m -i 1'),
                     'UDP': iperf(' -s -u -i 1 ')}
 
-    IPERF_CLIENT_REGU = {'TCP': {'tx': iperf(' -c {} -w 4m -i 1 -t {} -P{}'),
-                                 'rx': iperf(' -c {} -w 4m -i 1 -t {} -P{}')},
+    IPERF_CLIENT_REGU = {'TCP': {'tx': iperf(' -c {} -w 2m -i 1 -t {} -P{}'),
+                                 'rx': iperf(' -c {} -w 2m -i 1 -t {} -P{}')},
                          'UDP': {'tx': iperf(' -c {} -u -i1 -b 800M -t {} -P{}'),
                                  'rx': iperf(' -c {} -u -i1 -b 300M -t {} -P{}')}}
 
@@ -132,9 +132,14 @@ class dut():
 
     @property
     def pc_ip(self):
-        if self._pc_ip == '': self._pc_ip = self.get_pc_ip()
+        if self._pc_ip == '':
+            self._pc_ip = self.get_pc_ip()
         self.ip_target = '.'.join(self._pc_ip.split('.')[:3])
         return self._pc_ip
+
+    @pc_ip.setter
+    def pc_ip(self, value):
+        self._pc_ip = value
 
     @property
     def freq_num(self):
@@ -163,10 +168,15 @@ class dut():
         if not isinstance(command, list):
             command = command.split()
         try:
-            info = subprocess.check_output(command, encoding='gbk' if pytest.win_flag else 'utf-8')
-        except Exception:
-            info = ''
-        return info
+            result = subprocess.run(command, shell=True,
+                                    stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE,
+                                    timeout=35,
+                                    encoding='gb2312' if pytest.win_flag else "utf-8",
+                                    errors='ignore')
+            return result.stdout
+        except subprocess.TimeoutExpired:
+            return
 
     def kill_iperf(self):
         try:
@@ -248,7 +258,7 @@ class dut():
                     t.start()
                     return None
                 else:
-                    command = f'adb -s {pytest.dut.serialnumber} shell {command} '
+                    command = f'adb -s {pytest.dut.serialnumber} shell {command} &'
                     with open(f'rvr_log_{pytest.dut.serialnumber}.txt', 'w') as f:
                         process = subprocess.Popen(command.split(), stdout=f, encoding='utf-8')
                     return process
@@ -258,6 +268,7 @@ class dut():
                 return process
         else:
             if adb:
+                command += ' &'
                 pytest.dut.checkoutput(command)
             else:
                 subprocess.Popen(command.split())
@@ -538,8 +549,8 @@ class dut():
                 f.write(f'Rssi : {self.rssi_num}\n')
                 # f.write(f'Freq : {freq_num}\n')
         except IndexError as e:
-            rssi_num = -1
+            self.rssi_num = -1
             # freq_num = -1
-        return rssi_num
+        return self.rssi_num
 
     step = staticmethod(step)

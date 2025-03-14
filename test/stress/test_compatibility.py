@@ -56,26 +56,30 @@ def power_setting(request):
     ip, port = request.param
     power_delay.switch(ip, port, 1)
     time.sleep(60)
-    yield [x for x in filter(lambda x: x['port'] == port and x['ip'] == ip, compatibility_router._instances)]
+    info = [x for x in filter(lambda x: x['port'] == port and x['ip'] == ip, compatibility_router._instances)][0]
+    logging.info(f'power yield {info}')
+    yield info
+    logging.info('test done shutdown the router')
     power_delay.switch(ip, port, 2)
 
 
 @pytest.fixture(scope='module', autouse=True, params=['2.4G', '5G'], ids=['2.4G', '5G'])
 def router_setting(power_setting, request):
     if not power_setting: raise ValueError("Pls check pdu ip address and router port")
-    pytest.dut.pc_ip = pytest.host_os.dynamic_flush_network_card('enx207bd29d4dcc')
+    pytest.dut.pc_ip = pytest.host_os.dynamic_flush_network_card('eth1')
     if pytest.dut.pc_ip is None: assert False, "Can't get pc ip address"
     logging.info(f'pc_ip {pytest.dut.pc_ip}')
-    router_set = power_setting[0]
+    router_set = power_setting
     band = request.param
     expect_tx = handle_expectdata(router_set['ip'], router_set['port'], band, 'UL')
     expect_rx = handle_expectdata(router_set['ip'], router_set['port'], band, 'DL')
     router = Router(ap=router_set['mode'], band=band, wireless_mode=router_set[band]['mode'],
-                    channel=pytest.dut.channel, authentication_method=router_set[band]['authentication'],
+                    channel='default', authentication_method=router_set[band]['authentication'],
                     bandwidth=router_set[band]['bandwidth'], ssid=ssid[band], wpa_passwd=passwd,
                     expected_rate=f'{expect_tx} {expect_rx}')
     if pytest.connect_type == 'telnet':
         pytest.dut.roku.flush_ip()
+    logging.info(f'router yield {router}')
     yield router
 
 
@@ -92,17 +96,17 @@ def test_connect(router_setting):
     pytest.dut.forget_wifi()
     pytest.dut.connect_ssid(router_setting)
     result = 'PASS' if pytest.dut.wait_for_wifi_address()[0] else 'FAIL'
+    pytest.dut.get_rssi()
+    router_setting = router_setting._replace(channel=pytest.dut.channel)
     assert result == 'PASS', "Can't conect ssid"
 
 
 @pytest.mark.dependency(depends=["connect"])
 @pytest.mark.wifi_connect
 def test_multi_throughtput_tx(router_setting, request):
-    router_info = router_setting
-    rssi_num = pytest.dut.get_rssi()
-    tx_result = pytest.dut.get_tx_rate(router_info, rssi_num)
+    tx_result = pytest.dut.get_tx_rate(router_setting, pytest.dut.rssi_num)
     logging.info(f'tx_result {tx_result}')
-    expect_data = float(router_setting.expected_rate[0])
+    expect_data = float(router_setting.expected_rate.split(' ')[0])
     logging.info(f'expect_data {expect_data}')
     request.node._store['return_value'] = (expect_data, tx_result)
     assert all(float(x) > expect_data for x in tx_result)
@@ -111,11 +115,9 @@ def test_multi_throughtput_tx(router_setting, request):
 @pytest.mark.dependency(depends=["connect"])
 @pytest.mark.wifi_connect
 def test_multi_throughtput_rx(router_setting, request):
-    rssi_num = pytest.dut.get_rssi()
-    rx_result = pytest.dut.get_rx_rate(router_setting, rssi_num)
-    logging.info(router_setting)
+    rx_result = pytest.dut.get_rx_rate(router_setting, pytest.dut.rssi_num)
     logging.info(f'rx_result {rx_result}')
-    expect_data = float(router_setting.expected_rate[1])
+    expect_data = float(router_setting.expected_rate.split(' ')[1])
     logging.info(f'expect_data {expect_data}')
     request.node._store['return_value'] = (expect_data, rx_result)
     assert all(float(x) > expect_data for x in rx_result)

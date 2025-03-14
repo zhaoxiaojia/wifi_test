@@ -1,3 +1,4 @@
+import logging
 import os
 import re
 import subprocess
@@ -18,12 +19,13 @@ class host_os:
         self.host = self.config.get_note('host_os')
         self.user = self.host['user']
         self.passwd = self.host['password']
+        self.ip = ''
 
     def checkoutput(self, cmd):
         try:
             info = subprocess.check_output(cmd, shell=True, encoding='utf-8')
         except Exception as e:
-            return None
+            return ""
         else:
             return info
 
@@ -33,18 +35,19 @@ class host_os:
 
     def get_ipaddress(self, net_card=''):
         info = self.checkoutput(f'ifconfig {net_card}')
+        logging.info(f' ifconfig :{info}')
         info = re.findall(r'inet\s+(\d+\.\d+\.\d+\.\d+)', info, re.S)
-        if info:
+        if info :
             return info[0]
 
     def dynamic_flush_network_card(self, net_card=''):
-        self.checkoutput_root(f'dhclient -r {net_card}')
+        self.checkoutput_root(f'netplan apply')
         for i in range(30):
-            time.sleep(2)
-            self.checkoutput_root(f'dhclient {net_card}')
+            time.sleep(15)
             if self.get_ipaddress(net_card):
-                return self.get_ipaddress(net_card)
-            time.sleep(6)
+                self.ip = self.get_ipaddress(net_card)
+                logging.info(f'get pc ip {self.ip}')
+                return self.ip
 
 # host = host_os()
 # host.dynamic_flush_network_card()

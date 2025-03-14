@@ -124,7 +124,6 @@ logging.info(f'finally step_list {step_list}')
 
 # 配置 测试报告
 pytest.testResult.x_path = [] if (rf_needed and corner_needed) == 'both' else step_list
-pytest.testResult.init_rvr_result()
 rx_result, tx_result = '', ''
 tx_result_list, rx_result_list, tx_rssi_list, rx_rssi_list = [], [], [], []
 

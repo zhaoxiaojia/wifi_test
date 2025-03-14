@@ -64,6 +64,7 @@ class TelnetInterface():
             return list(map(int, re.findall(r'\s(\d+);', res)))
 
     def execute_turntable_cmd(self, type, angle=''):
+        angle = angle * 10
         if type not in ['gs', 'rt', 'gcp']:
             assert 0, 'type must be gs or tr or gcp'
         if type == 'rt':

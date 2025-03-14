@@ -1,8 +1,8 @@
 # This is yaml for DUT info
 connect_type:
-  type: telnet
+  type: adb
   adb:
-    device: 'ross6c3b8c8c66df08'
+    device: '63597700090000108'
   telnet:
     ip: '192.168.50.110'
     #    market area  sandia  list:sandia,sandia_latam,sandia_hkc,sandia_dvb
@@ -23,7 +23,7 @@ serial_port:
 router:
   # pls write down the router name .
   # It should be asusax86u,asusax88u,asusax5400,asusax6700,xiaomiredax6000,xiaomiax3000
-  name: xiaomiredax6000
+  name: xiaomiax3000
 
 power_relay: {
   '192.168.200.6': '7',
@@ -34,7 +34,7 @@ env_control: rf
 
 # Attenuation information. It should be RC4DAT-8G-95 or RADIORACK-4-220
 rf_solution:
-  model: RADIORACK-4-220
+  model: SH_NEW
   RC4DAT-8G-95:
     idVendor: 0x20ce
     idProduct: 0x0023
@@ -47,8 +47,8 @@ rf_solution:
 # Turntable information
 corner_angle:
   # angle step for corner, can be configured according to test requirements
-  ip_address: 192.168.50.18
-  step: [ 0, 360 ]
+  ip_address: 192.168.5.11
+  step: [ 0, 361 ]
 
 rvr:
   tool: iperf

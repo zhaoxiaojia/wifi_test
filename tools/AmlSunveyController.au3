@@ -14,7 +14,8 @@
 Func UpdateAngle($angle)
     ; 这里可以添加处理角度数据的逻辑
 	ControlFocus($windowTitle,"","WindowsForms10.EDIT.app.0.141b42a_r8_ad11")
-	ControlSend($windowTitle,"","WindowsForms10.EDIT.app.0.141b42a_r8_ad11", $angleData)
+	ControlSend($windowTitle,"","WindowsForms10.EDIT.app.0.141b42a_r8_ad11", "")
+		ControlSend($windowTitle,"","WindowsForms10.EDIT.app.0.141b42a_r8_ad11", $angleData)
 	ControlFocus($windowTitle,"","WindowsForms10.BUTTON.app.0.141b42a_r8_ad11")
 	ControlClick($windowTitle,"","WindowsForms10.BUTTON.app.0.141b42a_r8_ad11")
 EndFunc
@@ -23,6 +24,7 @@ EndFunc
 Func UpdateDistance($distance)
     ; 这里可以添加处理距离数据的逻辑
 	ControlFocus($windowTitle,"","WindowsForms10.EDIT.app.0.141b42a_r8_ad13")
+	ControlSend($windowTitle,"","WindowsForms10.EDIT.app.0.141b42a_r8_ad13", "")
 	ControlSend($windowTitle,"","WindowsForms10.EDIT.app.0.141b42a_r8_ad13", $distanceData)
 	ControlFocus($windowTitle,"","WindowsForms10.BUTTON.app.0.141b42a_r8_ad16")
 	ControlClick($windowTitle,"","WindowsForms10.BUTTON.app.0.141b42a_r8_ad16")
