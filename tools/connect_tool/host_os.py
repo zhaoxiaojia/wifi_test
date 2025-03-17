@@ -25,7 +25,7 @@ class host_os:
         try:
             info = subprocess.check_output(cmd, shell=True, encoding='utf-8')
         except Exception as e:
-            return ""
+            return None
         else:
             return info
 

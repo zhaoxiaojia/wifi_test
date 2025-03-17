@@ -130,10 +130,13 @@ class dut():
         if self._dut_ip == '': self._dut_ip = self.get_dut_ip()
         return self._dut_ip
 
+    @dut_ip.setter
+    def dut_ip(self, value):
+        self._dut_ip = value
+
     @property
     def pc_ip(self):
-        if self._pc_ip == '':
-            self._pc_ip = self.get_pc_ip()
+        if self._pc_ip == '': self._pc_ip = self.get_pc_ip()
         self.ip_target = '.'.join(self._pc_ip.split('.')[:3])
         return self._pc_ip
 
@@ -148,7 +151,7 @@ class dut():
     @freq_num.setter
     def freq_num(self, value):
         self._freq_num = int(value)
-        self.channel = int((self._freq_num - 2412) / 5 if self._freq_num < 3000 else (self._freq_num - 5000) / 5)
+        self.channel = int((self._freq_num - 2412) / 5 + 1 if self._freq_num < 3000 else (self._freq_num - 5000) / 5)
 
     def step(func):
         def wrapper(*args, **kwargs):
@@ -165,8 +168,6 @@ class dut():
 
     def checkoutput_term(self, command):
         logging.info(f"command:{command}")
-        if not isinstance(command, list):
-            command = command.split()
         try:
             result = subprocess.run(command, shell=True,
                                     stdout=subprocess.PIPE,
@@ -174,30 +175,35 @@ class dut():
                                     timeout=35,
                                     encoding='gb2312' if pytest.win_flag else "utf-8",
                                     errors='ignore')
-            return result.stdout
         except subprocess.TimeoutExpired:
-            return
+            logging.info("Command timed out")
+        logging.info(f'command {command} done')
+        return result.stdout
 
     def kill_iperf(self):
         try:
             pytest.dut.subprocess_run(pytest.dut.IPERF_KILL)
+        except Exception:
+            ...
+
+        try:
             pytest.dut.popen_term(pytest.dut.IPERF_KILL)
         except Exception:
             ...
-        try:
-            pytest.dut.subprocess_run(pytest.dut.IPERF_KILL.replace('iperf', 'iperf3'))
-            pytest.dut.popen_term(pytest.dut.IPERF_KILL.replace('iperf', 'iperf3'))
-        except Exception:
-            ...
+        # try:
+        #     pytest.dut.subprocess_run(pytest.dut.IPERF_KILL.replace('iperf', 'iperf3'))
+        #     pytest.dut.popen_term(pytest.dut.IPERF_KILL.replace('iperf', 'iperf3'))
+        # except Exception:
+        #     ...
 
         try:
             pytest.dut.popen_term(pytest.dut.IPERF_WIN_KILL)
         except Exception:
             ...
-        try:
-            pytest.dut.popen_term(pytest.dut.IPERF_WIN_KILL.replace('iperf', 'iperf3'))
-        except Exception:
-            ...
+        # try:
+        #     pytest.dut.popen_term(pytest.dut.IPERF_WIN_KILL.replace('iperf', 'iperf3'))
+        # except Exception:
+        #     ...
 
     def push_iperf(self):
         if pytest.connect_type == 'telnet':
@@ -258,19 +264,24 @@ class dut():
                     t.start()
                     return None
                 else:
+                    logging.info('server adb command')
                     command = f'adb -s {pytest.dut.serialnumber} shell {command} &'
                     with open(f'rvr_log_{pytest.dut.serialnumber}.txt', 'w') as f:
                         process = subprocess.Popen(command.split(), stdout=f, encoding='utf-8')
                     return process
             else:
+                logging.info('server pc command')
                 with open(f'rvr_log_{pytest.dut.serialnumber}.txt', 'w') as f:
                     process = subprocess.Popen(command.split(), stdout=f, encoding='utf-8')
                 return process
         else:
             if adb:
+                logging.info('client adb command')
                 command += ' &'
-                pytest.dut.checkoutput(command)
+                pytest.dut.checkoutput(f' timeout 35 {command}')
+                logging.info('client adb command done')
             else:
+                logging.info('client pc command')
                 subprocess.Popen(command.split())
 
     def get_logcat(self, pair, adb):
@@ -323,8 +334,8 @@ class dut():
         rx_result_list = []
         self.rvr_result = None
         try:
-            for _ in range(5):
-                logging.info('run rx')
+            for c in range(5):
+                logging.info(f'run rx {c} loop')
                 rx_result = 0
                 mcs_rx = 0
                 # clear mcs data
@@ -384,15 +395,15 @@ class dut():
             logging.info('writing')
             f.write(f'Rx {type} result : {rx_result}\n')
             f.write('-' * 40 + '\n\n')
-        return rx_result_list
+        return ','.join(map(str, rx_result_list)) if rx_result_list else 'N/A'
 
     @step
     def get_tx_rate(self, router_info, rssi_num, type='TCP', corner_tool=None, db_set=''):
         tx_result_list = []
         self.rvr_result = None
         try:
-            for _ in range(5):
-                logging.info('run tx ')
+            for c in range(5):
+                logging.info(f'run tx:  {c} loop ')
                 tx_result = 0
                 mcs_tx = 0
                 # pytest.dut.checkoutput(pytest.dut.CLEAR_DMESG_COMMAND)
@@ -458,7 +469,7 @@ class dut():
         with open(pytest.testResult.detail_file, 'a') as f:
             f.write(f'Tx {type} result : {tx_result}\n')
             f.write('-' * 40 + '\n\n')
-        return tx_result_list
+        return ','.join(map(str, tx_result_list)) if tx_result_list else 'N/A'
 
     def wait_for_wifi_address(self, cmd: str = '', target=''):
         if pytest.connect_type == 'telnet':
@@ -470,24 +481,27 @@ class dut():
             if not target:
                 target = self.ip_target
             logging.info(f"waiting for wifi {target}")
-            ip_address = self.subprocess_run('ifconfig wlan0 |egrep -o "inet [^ ]*"|cut -d " " -f 2')
-            # logging.info(ip_address)
             step = 0
             while True:
                 time.sleep(5)
                 step += 1
-                ip_address = self.subprocess_run('ifconfig wlan0 |egrep -o "inet [^ ]*"|cut -d " " -f 2')
+                info = self.checkoutput('ifconfig wlan0')
+                logging.info(f'info {info}')
+                ip_address = re.findall(r'inet addr:(\d+\.\d+\.\d+\.\d+)', info, re.S)
+                if ip_address:
+                    ip_address = ip_address[0]
+                logging.info(ip_address)
                 if target in ip_address:
+                    self.dut_ip = ip_address
                     break
                 if step == 2:
                     logging.info('repeat command')
                     if cmd:
-                        self.checkoutput(cmd)
+                        info = self.checkoutput('ifconfig wlan0')
                 if step > 10:
                     assert False, f"Can't catch the address:{target} "
             logging.info(f'ip address {ip_address}')
             return True, ip_address
-
     def forget_wifi(self):
         '''
         Remove the network mentioned by <networkId>
@@ -511,12 +525,12 @@ class dut():
         if pytest.connect_type == 'telnet':
             return pytest.dut.roku.wifi_scan(ssid)
         else:
+            logging.info('should be seen')
             for _ in range(5):
                 info = pytest.dut.checkoutput("cmd wifi start-scan;cmd wifi list-scan-results")
                 logging.info(info)
                 if ssid in info:
                     return True
-                    break;
                 time.sleep(3)
             else:
                 return False
@@ -547,10 +561,10 @@ class dut():
             self.freq_num = int(re.findall(r'freq:\s+(\d+)\s+', rssi_info, re.S)[0])
             with open(pytest.testResult.detail_file, 'a') as f:
                 f.write(f'Rssi : {self.rssi_num}\n')
-                # f.write(f'Freq : {freq_num}\n')
+                f.write(f'Freq : {self.freq_num}\n')
         except IndexError as e:
             self.rssi_num = -1
-            # freq_num = -1
+            self.freq_num = -1
         return self.rssi_num
 
     step = staticmethod(step)

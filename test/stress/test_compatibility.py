@@ -97,8 +97,10 @@ def test_connect(router_setting):
     pytest.dut.connect_ssid(router_setting)
     result = 'PASS' if pytest.dut.wait_for_wifi_address()[0] else 'FAIL'
     pytest.dut.get_rssi()
+    if router_setting.band == '5G': assert pytest.dut.freq_num > 5000
+    if router_setting.band == '2.5G': assert pytest.dut.freq_num < 5000
     router_setting = router_setting._replace(channel=pytest.dut.channel)
-    assert result == 'PASS', "Can't conect ssid"
+    assert result == 'PASS', "Can't connect ssid"
 
 
 @pytest.mark.dependency(depends=["connect"])
@@ -108,8 +110,8 @@ def test_multi_throughtput_tx(router_setting, request):
     logging.info(f'tx_result {tx_result}')
     expect_data = float(router_setting.expected_rate.split(' ')[0])
     logging.info(f'expect_data {expect_data}')
-    request.node._store['return_value'] = (expect_data, tx_result)
-    assert all(float(x) > expect_data for x in tx_result)
+    request.node._store['return_value'] = (pytest.dut.channel, pytest.dut.rssi_num, expect_data, tx_result)
+    assert all(float(x) > float(expect_data) for x in tx_result.split(','))
 
 
 @pytest.mark.dependency(depends=["connect"])
@@ -119,5 +121,5 @@ def test_multi_throughtput_rx(router_setting, request):
     logging.info(f'rx_result {rx_result}')
     expect_data = float(router_setting.expected_rate.split(' ')[1])
     logging.info(f'expect_data {expect_data}')
-    request.node._store['return_value'] = (expect_data, rx_result)
-    assert all(float(x) > expect_data for x in rx_result)
+    request.node._store['return_value'] = (pytest.dut.channel, pytest.dut.rssi_num, expect_data, rx_result)
+    assert all(float(x) > float(expect_data) for x in rx_result.split(','))

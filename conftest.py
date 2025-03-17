@@ -147,7 +147,7 @@ def pytest_runtest_makereport(item, call):
     outcome = yield
     report = outcome.get_result()
     if report.when == 'call':
-        item._store['test_result'] = "PASSED" if report.passed else "FAILED" if report.failed else "SKIPPED"
+        item._store['test_result'] = "PASS" if report.passed else "FAIL" if report.failed else "SKIPP"
         logging.info(f"item {item._store['test_result']}")
         # 记录返回值
         if not report.failed:
@@ -164,8 +164,10 @@ def pytest_sessionfinish(session, exitstatus):
     row_data = []
     temp_data = []
     #  PDU  IP , PDU  Port ,AP Brand,Band,Ssid, WiFi  Mode ,Channel,Bandwidth,Security,Scan,Connect,Throught,TX(Mbps),Throught,RX(Mbps)
-    title_data = ['PDU IP', 'PDU Port', 'AP Brand', 'Band', 'Ssid', 'WiFi Mode', 'Channel', 'Bandwidth', 'Security',
-                  'Scan', 'Connect', 'TX Result', 'TX Criteria', 'TX(Mbps)', 'RX Result', 'RX Criteria', 'RX(Mbps)']
+    title_data = ['PDU IP', 'PDU Port', 'AP Brand', 'Band', 'Ssid', 'WiFi Mode', 'Bandwidth', 'Security',
+                  'Scan', 'Connect', 'TX Result', 'Channel', 'RSSI', 'TX Criteria', 'TX  Throughtput(Mbps)',
+                  'RX  Result', 'Channel', 'RSSI',
+                  'RX Criteria', 'RX Throughtput(Mbps)']
     with open(csv_file, mode="w", newline="", encoding="utf-8") as file:
         writer = csv.writer(file, quotechar=' ')
         writer.writerow(title_data)
@@ -184,7 +186,6 @@ def pytest_sessionfinish(session, exitstatus):
             for j in keys:
                 logging.info(f"fixture  {type(data['fixtures'][j])}")
                 if isinstance(data['fixtures'][j], dict):
-                    logging.info('dict')
                     if data['fixtures'][j].get('ip') and data['fixtures'][j]['ip'] not in row_data: row_data.append(
                         data['fixtures'][j]['ip'])
                     if data['fixtures'][j].get('port') and data['fixtures'][j]['port'] not in row_data: row_data.append(
@@ -193,8 +194,8 @@ def pytest_sessionfinish(session, exitstatus):
                             'brand') and f"{data['fixtures'][j]['brand']} {data['fixtures'][j]['model']}" not in row_data:
                         row_data.append(f"{data['fixtures'][j]['brand']} {data['fixtures'][j]['model']}")
                 elif isinstance(data['fixtures'][j], Router):
-                    logging.info('router')
-                    if data['fixtures'][j] not in row_data: row_data.append(data['fixtures'][j])
+                    if str(data['fixtures'][j]).replace('default,', '') not in row_data: row_data.append(
+                        str(data['fixtures'][j]).replace('default,', ''))
         temp_data.append(test_name)
         if data['result']: row_data.append(data['result'])
         if data['return_value']: row_data.extend([*data['return_value']])

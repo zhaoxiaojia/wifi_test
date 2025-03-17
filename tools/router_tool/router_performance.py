@@ -17,10 +17,10 @@ from typing import Literal
 from util.mixin import json_mixin, nested_dict
 
 FPGA_CONFIG = {
-    'w1': {'mimo': '1X1', '2.4G': '11N', '5G': '11AC'},
-    'w1l': {'mimo': '1X1', '2.4G': '11N', '5G': '11AC'},
-    'w2': {'mimo': '2X2', '2.4G': '11AX', '5G': '11AX'},
-    'w2u': {'mimo': '2X2', '2.4G': '11AX', '5G': '11AX'}
+    'W1': {'mimo': '1X1', '2.4G': '11N', '5G': '11AC'},
+    'W1L': {'mimo': '1X1', '2.4G': '11N', '5G': '11AC'},
+    'W2': {'mimo': '2X2', '2.4G': '11AX', '5G': '11AX'},
+    'W2U': {'mimo': '2X2', '2.4G': '11AX', '5G': '11AX'}
 }
 dut_wifichip = 'w2_sdio'
 wifichip, interface = dut_wifichip.split('_')
@@ -83,7 +83,7 @@ class dut_standard(json_mixin):
             raise ValueError("The direction can only be set to 'UL','DL'")
         if authentication not in valid_auth:
             raise ValueError("The authenication can only be set to wpa3,wpa2,wep,open system,")
-        self[band][interface][mode][bandwidth][mimo][direction] = expect_data
+        self[band][interface.upper()][mode][bandwidth][mimo][direction] = expect_data
 
 
 a = compatibility_router()
@@ -212,32 +212,36 @@ a.set_info("192.168.200.3", '2', 'LINKSYS', 'E8450',
             '5G': {'mode': '11AX', 'authentication': 'wpa2', 'bandwidth': '80MHz'}})
 
 a.save_expect()
-
 dut = dut_standard()
-dut.set_expect('2.4G', 'sdio', '11N', 'wpa2', '20MHz', '2x2', 'UL', 90)
-dut.set_expect('2.4G', 'sdio', '11N', 'wpa2', '20MHz', '2x2', 'DL', 90)
-dut.set_expect('2.4G', 'usb', '11N', 'wpa2', '20MHz', '2x2', 'UL', 90)
-dut.set_expect('2.4G', 'usb', '11N', 'wpa2', '20MHz', '2x2', 'DL', 90)
-dut.set_expect('2.4G', 'pcie', '11N', 'wpa2', '20MHz', '2x2', 'UL', 90)
-dut.set_expect('2.4G', 'pcie', '11N', 'wpa2', '20MHz', '2x2', 'DL', 90)
-dut.set_expect('2.4G', 'sdio', '11AX', 'wpa2', '20MHz', '2x2', 'UL', 180)
-dut.set_expect('2.4G', 'sdio', '11AX', 'wpa2', '20MHz', '2x2', 'DL', 180)
-dut.set_expect('2.4G', 'usb', '11AX', 'wpa2', '20MHz', '2x2', 'UL', 180)
-dut.set_expect('2.4G', 'usb', '11AX', 'wpa2', '20MHz', '2x2', 'DL', 180)
-dut.set_expect('2.4G', 'pcie', '11AX', 'wpa2', '20MHz', '2x2', 'UL', 180)
-dut.set_expect('2.4G', 'pcie', '11AX', 'wpa2', '20MHz', '2x2', 'DL', 180)
-dut.set_expect('5G', 'sdio', '11AC', 'wpa2', '80MHz', '2x2', 'UL', 500)
-dut.set_expect('5G', 'sdio', '11AC', 'wpa2', '80MHz', '2x2', 'DL', 500)
-dut.set_expect('5G', 'usb', '11AC', 'wpa2', '80MHz', '2x2', 'UL', 300)
-dut.set_expect('5G', 'usb', '11AC', 'wpa2', '80MHz', '2x2', 'DL', 300)
-dut.set_expect('5G', 'pcie', '11AC', 'wpa2', '80MHz', '2x2', 'UL', 600)
-dut.set_expect('5G', 'pcie', '11AC', 'wpa2', '80MHz', '2x2', 'DL', 600)
-dut.set_expect('5G', 'sdio', '11AX', 'wpa2', '80MHz', '2x2', 'UL', 500)
-dut.set_expect('5G', 'sdio', '11AX', 'wpa2', '80MHz', '2x2', 'DL', 500)
-dut.set_expect('5G', 'usb', '11AX', 'wpa2', '80MHz', '2x2', 'UL', 300)
-dut.set_expect('5G', 'usb', '11AX', 'wpa2', '80MHz', '2x2', 'DL', 300)
-dut.set_expect('5G', 'pcie', '11AX', 'wpa2', '80MHz', '2x2', 'UL', 750)
-dut.set_expect('5G', 'pcie', '11AX', 'wpa2', '80MHz', '2x2', 'DL', 750)
+dut.set_expect('2.4G', 'sdio', '11N', 'wpa2', '20MHz', '1x1', 'UL', 42.8)
+dut.set_expect('2.4G', 'sdio', '11N', 'wpa2', '20MHz', '1x1', 'DL', 42.8)
+dut.set_expect('2.4G', 'sdio', '11N', 'wpa2', '20MHz', '2x2', 'UL', 85.5)
+dut.set_expect('2.4G', 'sdio', '11N', 'wpa2', '20MHz', '2x2', 'DL', 85.5)
+dut.set_expect('2.4G', 'usb', '11N', 'wpa2', '20MHz', '2x2', 'UL', 85.5)
+dut.set_expect('2.4G', 'usb', '11N', 'wpa2', '20MHz', '2x2', 'DL', 85.5)
+dut.set_expect('2.4G', 'pcie', '11N', 'wpa2', '20MHz', '2x2', 'UL', 85.5)
+dut.set_expect('2.4G', 'pcie', '11N', 'wpa2', '20MHz', '2x2', 'DL', 85.5)
+dut.set_expect('2.4G', 'sdio', '11AX', 'wpa2', '20MHz', '2x2', 'UL', 162.5)
+dut.set_expect('2.4G', 'sdio', '11AX', 'wpa2', '20MHz', '2x2', 'DL', 162.5)
+dut.set_expect('2.4G', 'usb', '11AX', 'wpa2', '20MHz', '2x2', 'UL', 162.5)
+dut.set_expect('2.4G', 'usb', '11AX', 'wpa2', '20MHz', '2x2', 'DL', 162.5)
+dut.set_expect('2.4G', 'pcie', '11AX', 'wpa2', '20MHz', '2x2', 'UL', 162.5)
+dut.set_expect('2.4G', 'pcie', '11AX', 'wpa2', '20MHz', '2x2', 'DL', 162.5)
+
+dut.set_expect('5G', 'sdio', '11AC', 'wpa2', '80MHz', '1x1', 'UL', 209)
+dut.set_expect('5G', 'sdio', '11AC', 'wpa2', '80MHz', '1x1', 'DL', 237.5)
+dut.set_expect('5G', 'sdio', '11AC', 'wpa2', '80MHz', '2x2', 'UL', 456)
+dut.set_expect('5G', 'sdio', '11AC', 'wpa2', '80MHz', '2x2', 'DL', 456)
+dut.set_expect('5G', 'usb', '11AC', 'wpa2', '80MHz', '2x2', 'UL', 266)
+dut.set_expect('5G', 'usb', '11AC', 'wpa2', '80MHz', '2x2', 'DL', 266)
+dut.set_expect('5G', 'pcie', '11AC', 'wpa2', '80MHz', '2x2', 'UL', 570)
+dut.set_expect('5G', 'pcie', '11AC', 'wpa2', '80MHz', '2x2', 'DL', 570)
+dut.set_expect('5G', 'sdio', '11AX', 'wpa2', '80MHz', '2x2', 'UL', 456)
+dut.set_expect('5G', 'sdio', '11AX', 'wpa2', '80MHz', '2x2', 'DL', 456)
+dut.set_expect('5G', 'usb', '11AX', 'wpa2', '80MHz', '2x2', 'UL', 266)
+dut.set_expect('5G', 'usb', '11AX', 'wpa2', '80MHz', '2x2', 'DL', 266)
+dut.set_expect('5G', 'pcie', '11AX', 'wpa2', '80MHz', '2x2', 'UL', 712.5)
+dut.set_expect('5G', 'pcie', '11AX', 'wpa2', '80MHz', '2x2', 'DL', 712.5)
 
 with open(f"{os.getcwd()}/config/compatibility_dut.json", 'w', encoding='utf-8') as f:
     json.dump(dut.to_dict(), f, indent=4, ensure_ascii=False)
