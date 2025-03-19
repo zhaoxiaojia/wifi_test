@@ -15,7 +15,7 @@ import re
 import subprocess
 import threading
 import time
-
+import asyncio
 import pytest
 import telnetlib
 from tools.ixchariot import ix
@@ -276,10 +276,37 @@ class dut():
                 return process
         else:
             if adb:
-                logging.info('client adb command')
-                command += ' &'
-                pytest.dut.checkoutput(f' timeout 35 {command}')
-                logging.info('client adb command done')
+                logging.info('run over async')
+                command = f'adb -s {pytest.dut.serialnumber} shell timeout 35 {command} '
+
+                async def run_adb_iperf():
+                    # 定义命令和参数
+                    # command = [
+                    # 	'adb', '-s', pytest.dut.serialnumber, 'shell',
+                    # 	'iperf', '-c',pytest.dut.pc_ip, '-w', '2m', '-i', '1', '-t',pytest.dut.IPERF_TEST_TIME, '-P5'
+                    # ]
+
+                    # 创建子进程
+                    process = await asyncio.create_subprocess_exec(
+                        *command.split(),  # 解包命令和参数
+                        stdout=asyncio.subprocess.PIPE,  # 捕获标准输出
+                        stderr=asyncio.subprocess.PIPE  # 捕获标准错误
+                    )
+
+                    try:
+                        # 等待命令完成，设置超时时间（例如 40 秒）
+                        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=35)
+                        print("Command output:", stdout.decode())  # 打印标准输出
+                        if stderr:
+                            print("Command error:", stderr.decode())  # 打印标准错误
+                    except asyncio.TimeoutError:
+                        print("Command timed out")
+                        process.terminate()  # 终止进程
+                        await process.wait()  # 等待进程完全终止
+
+                # 运行异步函数
+                asyncio.run(run_adb_iperf())
+                logging.info('run over async done')
             else:
                 logging.info('client pc command')
                 subprocess.Popen(command.split())
