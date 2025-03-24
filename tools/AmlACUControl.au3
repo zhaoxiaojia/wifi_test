@@ -31,6 +31,7 @@ EndIf
 
 ControlFocus($windowTitle,"","WindowsForms10.EDIT.app.0.141b42a_r8_ad11")
 ControlSend($windowTitle,"","WindowsForms10.EDIT.app.0.141b42a_r8_ad11","")
+Sleep(1000)
 ControlSend($windowTitle,"","WindowsForms10.EDIT.app.0.141b42a_r8_ad11",$CmdLine[1])
 Sleep(1000)
 ControlFocus($windowTitle,"","WindowsForms10.BUTTON.app.0.141b42a_r8_ad11")

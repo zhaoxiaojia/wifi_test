@@ -47,7 +47,7 @@ def handle_expectdata(ip, port, band, dir):
             authentication = data[band]['authentication']
             with open(f"{os.getcwd()}/config/compatibility_dut.json", 'r') as f:
                 dut_data = json.load(f)
-                return dut_data[band][interface][FPGA_CONFIG[wifichip][band]][bandwidth][FPGA_CONFIG[wifichip]['mimo']][
+                return dut_data[band][interface.upper()][FPGA_CONFIG[wifichip][band]][bandwidth][FPGA_CONFIG[wifichip]['mimo']][
                     dir]
 
 

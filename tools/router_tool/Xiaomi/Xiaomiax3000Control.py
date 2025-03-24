@@ -82,7 +82,8 @@ class Xiaomiax3000Control(RouterTools):
         '40MHz': '3'
     }
 
-    WIRELESS_MODE = ['11ac', '11ax']
+    WIRELESS_2 = ['11n', '11ax']
+    WIRELESS_5 = ['11ac', '11ax']
 
     def __init__(self):
         super().__init__('xiaomi_ax3000', display=True)

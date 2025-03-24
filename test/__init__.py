@@ -69,7 +69,7 @@ def get_testdata(router):
         if '5' in i.band:
             assert i.ssid not in ssid_verify, "5g ssid can't as the same as 2g , pls modify"
         assert i.band in ['2.4 GHz', '5 GHz'], "Pls check band info "
-        assert i.wireless_mode in {'2.4 GHz': router.WIRELESS_2_MODE, '5 GHz': router.WIRELESS_5_MODE}[
+        assert i.wireless_mode in {'2.4 GHz': router.WIRELESS_2, '5 GHz': router.WIRELESS_5}[
             i.band], "Pls check wireless info"
         assert i.channel in {'2.4 GHz': router.CHANNEL_2, '5 GHz': router.CHANNEL_5}[
             i.band], "Pls check channel info"

@@ -87,6 +87,10 @@ class dut_standard(json_mixin):
 
 
 a = compatibility_router()
+a.set_info("192.168.200.4", '2', 'ASUS', 'RT-AX88U Pro',
+           {'2.4G': {'mode': '11AX', 'authentication': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AX', 'authentication': 'wpa2', 'bandwidth': '80MHz'}})
+
 a.set_info("192.168.200.6", '7', 'Xiaomi', 'AX3000 RA80',
            {'2.4G': {'mode': '11AX', 'authentication': 'wpa2', 'bandwidth': '20MHz'},
             '5G': {'mode': '11AX', 'authentication': 'wpa2', 'bandwidth': '80MHz'}})
@@ -119,7 +123,7 @@ a.set_info("192.168.200.3", '6', 'TP-LINK', 'TL-7DR7230yizhanban',
            {'2.4G': {'mode': '11AX', 'authentication': 'wpa2', 'bandwidth': '20MHz'},
             '5G': {'mode': '11AX', 'authentication': 'wpa2', 'bandwidth': '80MHz'}})
 
-a.set_info("192.168.200.3", '4', 'ZTE', 'ZXSLC SR7410',
+a.set_info("192.168.200.3", '1', 'ZTE', 'ZXSLC SR7410',
            {'2.4G': {'mode': '11AX', 'authentication': 'wpa2', 'bandwidth': '20MHz'},
             '5G': {'mode': '11AX', 'authentication': 'wpa2', 'bandwidth': '80MHz'}})
 

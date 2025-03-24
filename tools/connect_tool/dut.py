@@ -228,7 +228,8 @@ class dut():
                             re.findall(r'.*?\d+\.\d*-\s*\d+\.\d*.*?(\d+\.*\d*)\s+Mbits/sec.*?', res.strip(), re.S)[0])
                         if data:
                             result_list.append(data)
-                if re.findall(r'\[SUM\]  0.0-[3|4|5]\d', res, re.S):
+                # if re.findall(r'\[SUM\]  0.0-[3|4|5]\d', res, re.S):
+                if len(result_list) > 30:
                     logging.info(f'result_list {result_list}')
                     break
             if result_list:

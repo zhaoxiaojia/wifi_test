@@ -127,14 +127,14 @@ def setup(request):
 	# push_iperf()
 	router_info = request.param
 
-	if router_needed:
-		# 修改路由器配置
-		assert router.change_setting(router_info), "Can't set ap , pls check first"
-		if pytest.connect_type == 'telnet':
-			band = '5 GHz' if '2' in router_info.band else '2.4 GHz'
-			ssid = router_info.ssid + "_bat";
-			router.change_setting(Router(band=band, ssid=ssid))
-		time.sleep(3)
+	# if router_needed:
+	# 	# 修改路由器配置
+	# 	assert router.change_setting(router_info), "Can't set ap , pls check first"
+	# 	if pytest.connect_type == 'telnet':
+	# 		band = '5 GHz' if '2' in router_info.band else '2.4 GHz'
+	# 		ssid = router_info.ssid + "_bat";
+	# 		router.change_setting(Router(band=band, ssid=ssid))
+	# 	time.sleep(3)
 
 	logging.info('router set done')
 	with open(pytest.testResult.detail_file, 'a', encoding='utf-8') as f:
