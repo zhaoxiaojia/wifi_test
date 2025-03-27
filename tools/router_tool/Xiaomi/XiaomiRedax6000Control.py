@@ -112,7 +112,10 @@ class XiaomiRedax6000Control(RouterTools):
         logging.info('Try to set router')
         # try:
         self.login()
-        self.driver.find_element(By.XPATH, '//*[@id="bd"]/div[2]/div/div[1]/div[1]/a').click()
+        WebDriverWait(driver=self.driver, timeout=10, poll_frequency=0.5).until(
+            EC.invisibility_of_element_located((By.CSS_SELECTOR, "div.mask-menu")))
+        element = self.driver.find_element(By.CSS_SELECTOR, "a.btn_wifi")
+        self.driver.execute_script("arguments[0].click();", element)
         # Wireless - Profession
         wait = WebDriverWait(driver=self.driver, timeout=5, poll_frequency=0.5)
         wait.until(EC.presence_of_element_located((By.XPATH, '//*[@id="wifiset24"]/div[1]')))
