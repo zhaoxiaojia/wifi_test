@@ -2,7 +2,7 @@
 connect_type:
   type: adb
   adb:
-    device: '63597700090000108'
+    device: 'ross809de10187502807'
   telnet:
     ip: '192.168.50.110'
     #    market area  sandia  list:sandia,sandia_latam,sandia_hkc,sandia_dvb

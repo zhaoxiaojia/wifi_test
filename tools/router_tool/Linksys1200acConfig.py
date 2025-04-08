@@ -6,10 +6,10 @@
 # @File    : Linksys1200acConfig.py
 # @Software: PyCharm
 
-from tools.router_tool.RouterConfig import RouterConfig
+from tools.router_tool.RouterControl import RouterTools
 
 
-class Linksys1200acConfig(RouterConfig):
+class Linksys1200acConfig(RouterTools):
     def __init__(self):
         super(Linksys1200acConfig, self).__init__()
 

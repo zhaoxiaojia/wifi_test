@@ -169,16 +169,17 @@ class dut():
     def checkoutput_term(self, command):
         logging.info(f"command:{command}")
         try:
-            result = subprocess.run(command, shell=True,
+            result = subprocess.Popen(command, shell=True,
                                     stdout=subprocess.PIPE,
                                     stderr=subprocess.PIPE,
-                                    timeout=35,
                                     encoding='gb2312' if pytest.win_flag else "utf-8",
                                     errors='ignore')
+            logging.info(f'{result.communicate()[0]}')
+            return result.communicate()[0]
         except subprocess.TimeoutExpired:
             logging.info("Command timed out")
-        logging.info(f'command {command} done')
-        return result.stdout
+            return None
+
 
     def kill_iperf(self):
         try:

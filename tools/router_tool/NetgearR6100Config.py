@@ -6,10 +6,10 @@
 # @File    : NetgearR6100Config.py
 # @Software: PyCharm
 
-from tools.router_tool.RouterConfig import RouterConfig
+from tools.router_tool.RouterControl import RouterTools
 
 
-class NetgearR6100Config(RouterConfig):
+class NetgearR6100Config(RouterTools):
     def __init__(self):
         super(NetgearR6100Config, self).__init__()
 

@@ -18,8 +18,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select, WebDriverWait
 
 from tools.router_tool.H3CBX54Config import H3CRouterConfig
-from tools.router_tool.RouterConfig import ConfigError
-from tools.router_tool.RouterControl import RouterTools
+from tools.router_tool.RouterControl import ConfigError,RouterTools
 
 
 class H3CBX54Control():

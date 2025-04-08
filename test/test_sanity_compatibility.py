@@ -49,7 +49,7 @@ class WifiCompatibilityResult:
             # self.log_file = f'{self.logdir}/WifiCompatibility_' + time.asctime() + '.csv'
             self.log_file = f'{self.logdir}/WifiCompatibility.csv'
         with open(self.log_file, 'a', encoding='utf-8') as f:
-            title = 'Serial Ap_Type	SSID Band Wireless_mode	Bandwidth Channel Authentication_Method Passwd Hide_Ssid PMF Theoretical_Rate Result'
+            title = 'Ap_Type	SSID Band Wireless_mode	Bandwidth Channel Authentication_Method Passwd Hide_Ssid PMF Theoretical_Rate Result'
             f.write(','.join(title.split()))
             f.write('\n')
 
@@ -87,17 +87,17 @@ test_data = []
 # 读取 测试配置
 # 配置文件需以 路由器类型命令
 # 测试文件中 不允许 出现空行
-# with open(os.getcwd() + '/config/wifi_compatibility_data/zteax5400.csv', 'r') as f:
-#     reader = csv.reader(f)
-#     test_data += [Router(*[i.strip() for i in row]) for row in reader][1:]
+with open(os.getcwd() + '/config/wifi_compatibility_data/zteax5400.csv', 'r',encoding='utf-8') as f:
+    reader = csv.reader(f)
+    test_data += [Router(*[i.strip() for i in row]) for row in reader][1:]
 #
 # with open(os.getcwd() + '/config/wifi_compatibility_data/linksys1200ac.csv', 'r') as f:
 #     reader = csv.reader(f)
 #     test_data += [Router(*[i.strip() for i in row]) for row in reader][1:]
 
-with open(os.getcwd() + '/config/wifi_compatibility_data/asusax5400.csv', 'r',encoding='utf-8') as f:
-    reader = csv.reader(f)
-    test_data += [Router(*[i.strip() for i in row]) for row in reader][1:]
+# with open(os.getcwd() + '/config/wifi_compatibility_data/asusax5400.csv', 'r',encoding='utf-8') as f:
+#     reader = csv.reader(f)
+#     test_data += [Router(*[i.strip() for i in row]) for row in reader][1:]
 
 # with open(os.getcwd() + '/config/wifi_compatibility_data/h3cbx54.csv', 'r') as f:
 #     reader = csv.reader(f)
@@ -172,16 +172,16 @@ def wifi_setup_teardown(request):
     #     target_ip = '192.168.9.1'
     if router_info.hide_ssid != '是':
         pytest.dut.checkoutput('cmd wifi start-scan')
-        scan_list = pytest.dut.checkoutput(f'cmd wifi list-scan-results |grep -F "{router_info.ssid}"')
+        scan_list = pytest.dut.checkoutput(f'"cmd wifi list-scan-results |grep {router_info.ssid}"')
         logging.info(scan_list)
         step = 0
         while ' ' + router_info.ssid + ' ' not in scan_list:
             time.sleep(5)
             logging.info('re scan')
             pytest.dut.checkoutput('cmd wifi start-scan')
-            scan_list = pytest.dut.checkoutput(f'cmd wifi list-scan-results |grep -F "{router_info.ssid}"')
+            scan_list = pytest.dut.checkoutput(f'"cmd wifi list-scan-results |grep {router_info.ssid}"')
             logging.info(scan_list)
-            if step > 3:
+            if step > 5:
                 change_result = False
                 break
             step += 1
@@ -189,7 +189,7 @@ def wifi_setup_teardown(request):
     wifiResult.write_to_excel()
 
 # @pytest.mark.flaky(reruns=3)
-def test_wifi(wifi_setup_teardown, ):
+def test_wifi(wifi_setup_teardown):
     # 路由信息
     router_info = wifi_setup_teardown[0]
     # 路由器型号
@@ -205,7 +205,7 @@ def test_wifi(wifi_setup_teardown, ):
     passwd = passwd if passwd else "none"
     # 集成 测试结果信息
     result = (
-        f'{router_info.serial},device,{router_type},{router_info.ssid},{router_info.band},{router_info.wireless_mode},'
+        f'device,{router_type},{router_info.ssid},{router_info.band},{router_info.wireless_mode},'
         f'{router_info.bandwidth},{router_info.channel},{router_info.authentication_method},'
         f'{passwd},{router_info.hide_ssid},NULL,')
 
@@ -223,12 +223,12 @@ def test_wifi(wifi_setup_teardown, ):
     pytest.dut.checkoutput(cmd)
 
     # 检测 网络是否 连接
-    check_ipaddress = 'ifconfig wlan0 |egrep -o "inet [^ ]*"|cut -f 2 -d :'
-    ip_address = pytest.dut.checkoutput(check_ipaddress)
+    check_ipaddress = "ifconfig wlan0 |grep 'inet [^ ]*'|cut -f 2 -d :|cut -f 1 -d ' '"
+    ip_address = pytest.dut.dut_ip
     # logging.info(ip_address)
     step = 0
     while not ip_address:
-        ip_address = pytest.dut.checkoutput(check_ipaddress)
+        ip_address = pytest.dut.dut_ip
         if step == 4:
             logging.info('repeat command')
             pytest.dut.checkoutput(cmd)

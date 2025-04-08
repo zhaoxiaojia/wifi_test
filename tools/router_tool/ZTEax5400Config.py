@@ -7,10 +7,10 @@
 # @Software: PyCharm
 
 
-from tools.router_tool.RouterConfig import RouterConfig
+from tools.router_tool.RouterControl import RouterTools
 
 
-class ZTEax5400Config(RouterConfig):
+class ZTEax5400Config(RouterTools):
     def __init__(self):
         super(ZTEax5400Config, self).__init__()
 
@@ -62,7 +62,7 @@ class ZTEax5400Config(RouterConfig):
 
     BANDWIDTH_5_DICT = {'20MHz': '1', '20MHz/40MHz': '2', '20MHz/40MHz/80MHz': '3', '20MHz/40MHz/80MHz/160MHz': '4'}
 
-    AUTHENTICATION_METHOD_DICT = {
+    AUTHENTICATION_METHOD = {
         'OPEN': '1',
         'WPA2(AES)-PSK': '2',
         'WPA-PSK/WPA2-PSK': '3',

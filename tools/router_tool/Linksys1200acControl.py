@@ -19,8 +19,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select, WebDriverWait
 
 from tools.router_tool.Linksys1200acConfig import Linksys1200acConfig
-from tools.router_tool.RouterConfig import ConfigError
-from tools.router_tool.RouterControl import RouterTools
+from tools.router_tool.RouterControl import RouterTools,ConfigError
 
 
 class Linksys1200acControl():

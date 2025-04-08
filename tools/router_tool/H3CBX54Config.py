@@ -5,10 +5,10 @@
 # @Site    :
 # @File    : H3CBX54Config.py
 # @Software: PyCharm
-from tools.router_tool.RouterConfig import RouterConfig
+from tools.router_tool.RouterControl import RouterTools
 
 
-class H3CRouterConfig(RouterConfig):
+class H3CRouterConfig(RouterTools):
     def __init__(self):
         super(H3CRouterConfig, self).__init__()
 

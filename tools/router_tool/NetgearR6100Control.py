@@ -17,8 +17,7 @@ from selenium.webdriver.support.select import Select
 from selenium.webdriver.support.wait import WebDriverWait
 
 from tools.router_tool.NetgearR6100Config import NetgearR6100Config
-from tools.router_tool.RouterConfig import ConfigError
-from tools.router_tool.RouterControl import RouterTools
+from tools.router_tool.RouterControl import RouterTools,ConfigError
 
 
 class NetgearR6100Control():

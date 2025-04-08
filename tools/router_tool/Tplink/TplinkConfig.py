@@ -7,10 +7,10 @@
 # @Software: PyCharm
 
 
-from tools.router_tool.RouterConfig import RouterConfig
+from tools.router_tool.RouterControl import RouterTools
 
 
-class TplinkRotuerConfig(RouterConfig):
+class TplinkRotuerConfig(RouterTools):
     def __init__(self):
         super(TplinkRotuerConfig, self).__init__()
 
