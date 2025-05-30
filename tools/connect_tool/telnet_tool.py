@@ -34,7 +34,7 @@ cmd_line_wildcard = {
 
 
 class telnet_tool(dut):
-    def __init__(self, ip, wildcard):
+    def __init__(self, ip):
         super().__init__()
 
         self.dut_ip = ip
@@ -43,6 +43,16 @@ class telnet_tool(dut):
         logging.info(f'* Telnet {self.dut_ip}')
         logging.info('*' * 80)
         # self.wildcard = cmd_line_wildcard[wildcard] if type(wildcard) == str else wildcard
+
+    def reboot(self):
+        self.checkoutput('reboot')
+        time.sleep(35)
+        for i in range(10):
+            if self.checkoutput('ls'):
+                break
+            time.sleep(5)
+        else:
+            raise Exception('Dut lost connect')
 
     def execute_cmd(self, cmd):
         self.tn.write(cmd.encode('ascii') + b'\n')

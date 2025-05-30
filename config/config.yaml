@@ -1,10 +1,10 @@
 # This is yaml for DUT info
 connect_type:
-  type: adb
+  type: telnet
   adb:
-    device: 'ross809de10187502807'
+    device: '66500800000000500'
   telnet:
-    ip: '192.168.50.110'
+    ip: '192.168.31.219'
     #    market area  sandia  list:sandia,sandia_latam,sandia_hkc,sandia_dvb
     wildcard: sandia_dvb
 
@@ -13,10 +13,10 @@ fpga: w2_sdio
 
 host_os:
   user: amlogic
-  password: '123456'
+  password: 'Linux2024'
 
 serial_port:
-  port: 'COM5'
+  port: 'COM6'
   baud: 961200
 
 # Router model
@@ -30,7 +30,7 @@ power_relay: {
 }
 
 # test env control , should be rf , corner or both
-env_control: rf
+env_control: corner
 
 # Attenuation information. It should be RC4DAT-8G-95 or RADIORACK-4-220
 rf_solution:

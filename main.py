@@ -13,7 +13,7 @@ import pytest
 from case_handle import testCase
 
 timestamp = datetime.datetime.now().strftime("%Y.%m.%d_%H.%M.%S")
-test_case = 'test/test_sanity_compatibility.py'
+test_case = 'test/project/roku/test_demo.py'
 # test_case = 'test/stress/test_2g_switch_channel_throughput.py'
 
 report_parent_path = test_case.replace('test', 'report', 1)
@@ -77,7 +77,7 @@ if __name__ == '__main__':
     testcase_handler = testCase()
     # caselist = coco.sync_testSuite(suite='stability', case=r'test_03_open_wifi.py')
     # test_case = [f'.\\{i}' for i in caselist]
-    cmd = ['-v', '--capture=sys', '--full-trace', f'--resultpath={timestamp}']
+    cmd = ['-v', '-s', '--capture=sys', '--full-trace', f'--resultpath={timestamp}']
     # cmd = ['-v', '--capture=sys', '--full-trace', '--html=report.html', f'--resultpath={timestamp}', allure_cmd];
     # print(" ".join(cmd))
     if type(test_case) == str:

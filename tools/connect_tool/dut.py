@@ -278,9 +278,6 @@ class dut():
                 return process
         else:
             if adb:
-                logging.info('run over async')
-                command = f'adb -s {pytest.dut.serialnumber} shell timeout 35 {command} '
-
                 async def run_adb_iperf():
                     # 定义命令和参数
                     # command = [
@@ -306,9 +303,14 @@ class dut():
                         process.terminate()  # 终止进程
                         await process.wait()  # 等待进程完全终止
 
-                # 运行异步函数
-                asyncio.run(run_adb_iperf())
-                logging.info('run over async done')
+                if pytest.connect_type == 'telnet':
+                    pytest.dut.checkoutput(command)
+                else:
+                    logging.info('run over async')
+                    command = f'adb -s {pytest.dut.serialnumber} shell timeout 35 {command} '
+                    # 运行异步函数
+                    asyncio.run(run_adb_iperf())
+                    logging.info('run over async done')
             else:
                 logging.info('client pc command')
                 subprocess.Popen(command.split())

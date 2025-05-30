@@ -198,7 +198,6 @@ def setup(request):
 
     if pytest.connect_type == 'telnet':
         dut_ip = pytest.dut.dut_ip
-    logging.info(f'dut_ip:{dut_ip}')
     connect_status = True
     logging.info(f'pc_ip:{pytest.dut.pc_ip}')
     logging.info('==== wifi env setup done')

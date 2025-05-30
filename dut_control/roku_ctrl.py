@@ -219,11 +219,8 @@ class roku_ctrl(Roku):
 
         try:
             return command
-        except requests.exceptions.ConnectionError:
-            ...
-        try:
-            return command
-        except requests.exceptions.ConnectionError:
+        except Exception:
+            time.sleep(0.5)
             return command
 
     def capture_screen(self, filename):
@@ -1002,9 +999,11 @@ class roku_ctrl(Roku):
 
         self.setup_conn()
         for i in range(5):
-            if ssid in self._get_screen_xml():
-                logging.info('Find target ssid')
-                return True
+            for info in self.get_launcher_element('ArrayGridItem'):
+                logging.info(info[0])
+                if ssid in info[0]:
+                    logging.info('Find target ssid')
+                    return True
             try:
                 if i == 0:
                     self.ir_enter('Scan again to see all networks', 'ArrayGridItem', fuz_match=True)
@@ -1060,6 +1059,7 @@ class roku_ctrl(Roku):
             time.sleep(1)
             ip = self.ser.get_ip_address('wlan0')
             if ip:
+                pytest.dut = telnet_tool(ip)
                 pytest.dut.roku = roku_ctrl(ip)
                 logging.info(f'roku ip {self.ip}')
                 break
