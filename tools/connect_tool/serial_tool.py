@@ -62,29 +62,54 @@ class serial_tool:
             logging.info('get ip ：%s' % self.ethernet_ip)
         logging.info('the status of serial port is {}'.format(self.status))
 
-    def get_ip_address(self, inet='wlan0',count = 10):
+    def get_ip_address(self, inet='wlan0', count=10):
+
         '''
+
         get ip address
-        @param inet: inet type ipv4 or ipv6
-        @return:
+
+        @param inet: network interface (default: wlan0)
+
+        @param count: maximum retry attempts
+
+        @return: IP address string or None if not found
+
         '''
-        if count == 0:
-            return None
-        self.ser.write(b'\x1A')
-        time.sleep(1)
-        self.write(f'ifconfig {inet}')
-        time.sleep(1)
-        ipInfo = ''.join([i.decode('utf-8', errors='ignore') for i in self.ser.readlines()]).split('TX bytes:')[0]
-        if not ipInfo:
-            return self.get_ip_address(inet=inet, count=count - 1)
-        # logging.info(f'recv {ipInfo}')
-        ipaddress = re.findall(r'addr:(\d+\.\d+\.\d+\.\d+)', ipInfo, re.S)
-        if ipaddress:
-            # logging.info(f'recv {ipInfo}')
-            logging.info(f' ip address {ipaddress[0]}')
-            return ipaddress[0]
-        time.sleep(10)
-        return self.get_ip_address(inet=inet, count=count - 1)
+
+        for attempt in range(count, 0, -1):
+
+            try:
+
+                # Clear serial buffer before sending command
+                self.ser.reset_input_buffer()
+                self.write('\x1A')
+                self.write('bg')
+                # Send command
+                self.write(f'ifconfig {inet}')
+                # Wait briefly for response
+                time.sleep(1)
+                # Read with timeout
+                ipInfo = ''
+                start_time = time.time()
+                while time.time() - start_time < 5:  # 5 second timeout
+                    if self.ser.in_waiting:
+                        ipInfo += self.ser.read(self.ser.in_waiting).decode('utf-8', errors='ignore')
+                        if 'TX bytes:' in ipInfo:
+                            break  # Stop reading if we see the marker
+                    time.sleep(0.1)
+                # Extract IP address
+                ipInfo = ipInfo.split('TX bytes:')[0]
+                ipaddress = re.findall(r'inet addr:(\d+\.\d+\.\d+\.\d+)', ipInfo)
+                if ipaddress:
+                    logging.info(f'IP address: {ipaddress[0]}')
+                    return ipaddress[0]
+            except Exception as e:
+                logging.warning(f'Error getting IP address: {str(e)}')
+            if attempt > 1:
+                logging.debug(f'Retrying... attempts left: {attempt - 1}')
+                time.sleep(2 if attempt % 2 == 0 else 1)  # Vary sleep time
+        logging.error('Failed to get IP address after maximum attempts')
+        return None
 
     def write_pipe(self, command):
         '''

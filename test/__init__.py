@@ -50,12 +50,16 @@ def get_testdata(router):
     wifi_yaml = yamlTool(os.getcwd() + '/config/config.yaml')
     router_name = wifi_yaml.get_note('router')['name']
     pc_ip, dut_ip = "", ""
-
+    logging.info('coco should be seen')
     # 读取 测试配置
     with open(os.getcwd() + '/config/rvr_wifi_setup.csv', 'r', encoding='utf-8') as f:
         reader = csv.reader(f)
-        test_data = [Router(*[i.strip() for i in row]) for row in reader][1:]
-
+        test_data = []
+        for i in  [j for j in reader][1:]:
+            logging.info(i)
+            if not i:
+                continue
+            test_data.append([Router(*i)])
     # logging.info(f'test_data {test_data}')
     ssid_verify = set()
 
@@ -80,7 +84,6 @@ def get_testdata(router):
         else:
             assert i.authentication_method in router.AUTHENTICATION_METHOD, "Pls check authentication info"
     return test_data
-
 
 
 

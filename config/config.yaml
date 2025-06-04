@@ -4,7 +4,7 @@ connect_type:
   adb:
     device: '66500800000000500'
   telnet:
-    ip: '192.168.31.219'
+    ip: '192.168.31.144'
     #    market area  sandia  list:sandia,sandia_latam,sandia_hkc,sandia_dvb
     wildcard: sandia_dvb
 
@@ -16,7 +16,7 @@ host_os:
   password: 'Linux2024'
 
 serial_port:
-  port: 'COM6'
+  port: 'COM5'
   baud: 961200
 
 # Router model

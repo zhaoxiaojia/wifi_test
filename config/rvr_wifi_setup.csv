@@ -3,3 +3,5 @@ serial,band,ssid ,wireless_mode,channel,bandwidth,authentication_method,wpa_pass
 1,2.4 GHz, XiaomiAX3000_2.4G,11ax ,6,40MHz ,超强加密(WPA3个人版) , 12345678,tx rx,TCP,5 ,10 10,on
 1,2.4 GHz, XiaomiAX3000_2.4G,11ax ,11,40MHz ,超强加密(WPA3个人版) , 12345678,tx rx,TCP,5 ,10 10,on
 1,2.4 GHz, XiaomiAX3000_2.4G,11ax ,6,20MHz ,超强加密(WPA3个人版) , 12345678,tx rx,TCP,5 ,10 10,on
+
+

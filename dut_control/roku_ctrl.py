@@ -213,7 +213,10 @@ class roku_ctrl(Roku):
                 else:
                     path = f"/keypress/{COMMANDS[name]}"
                     logging.info(f'Press key {COMMANDS[name]}')
-                self._post(path)
+                try:
+                    self._post(path)
+                except Exception:
+                    logging.warning("Can't touch roku server")
             if 'time' in kwargs.keys():
                 time.sleep(kwargs['time'])
 
@@ -1061,9 +1064,13 @@ class roku_ctrl(Roku):
             if ip:
                 pytest.dut = telnet_tool(ip)
                 pytest.dut.roku = roku_ctrl(ip)
+                self.ip = ip
                 logging.info(f'roku ip {self.ip}')
                 break
-        self.home()
+        pytest.dut.roku.home(time=3)
+        pytest.dut.roku.home(time=3)
+        pytest.dut.roku.home(time=3)
+        return True
 
     def flush_ip(self):
         ip = self.ser.get_ip_address('wlan0')

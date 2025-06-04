@@ -64,7 +64,8 @@ class TestResult():
             reader = csv.reader(f)
             self.results_length = []
             for i in [j for j in reader][1:]:
-                print(i)
+                if not i :
+                    continue
                 temp = 0
                 if 'tx' in i[-2]:
                     temp += self.x_length
