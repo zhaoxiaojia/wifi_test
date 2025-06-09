@@ -13,12 +13,12 @@
 ; 更新角度数据的方法
 Func UpdateAngle($angle)
     ; 这里可以添加处理角度数据的逻辑
-	ControlFocus($windowTitle,"","WindowsForms10.EDIT.app.0.141b42a_r8_ad11")
-	ControlSend($windowTitle,"","WindowsForms10.EDIT.app.0.141b42a_r8_ad11", "")
+	ControlFocus($windowTitle,"","WindowsForms10.EDIT.app.0.141b42a_r39_ad11")
+	ControlSend($windowTitle,"","WindowsForms10.EDIT.app.0.141b42a_r39_ad11", "")
 	Sleep(1000)
-	ControlSend($windowTitle,"","WindowsForms10.EDIT.app.0.141b42a_r8_ad11", $angleData)
-	ControlFocus($windowTitle,"","WindowsForms10.BUTTON.app.0.141b42a_r8_ad11")
-	ControlClick($windowTitle,"","WindowsForms10.BUTTON.app.0.141b42a_r8_ad11")
+	ControlSend($windowTitle,"","WindowsForms10.EDIT.app.0.141b42a_r39_ad11", $angleData)
+	ControlFocus($windowTitle,"","WindowsForms10.BUTTON.app.0.141b42a_r39_ad11")
+	ControlClick($windowTitle,"","WindowsForms10.BUTTON.app.0.141b42a_r39_ad11")
 EndFunc
 
 ; 更新距离数据的方法
@@ -33,8 +33,8 @@ Func UpdateDistance($distance)
 EndFunc
 
 Func GetAngle()
-	ControlClick($windowTitle,"","WindowsForms10.BUTTON.app.0.141b42a_r8_ad18")
-	Local $currentAngle = ControlGetText($windowTitle, "", "WindowsForms10.EDIT.app.0.141b42a_r8_ad11")
+	ControlClick($windowTitle,"","WindowsForms10.BUTTON.app.0.141b42a_r39_ad18")
+	Local $currentAngle = ControlGetText($windowTitle, "", "WindowsForms10.BUTTON.app.0.141b42a_r39_ad18")
 	Sleep(1000)
 	Return $currentAngle
 EndFunc

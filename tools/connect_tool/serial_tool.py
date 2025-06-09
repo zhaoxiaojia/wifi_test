@@ -15,6 +15,7 @@ import re
 import signal
 import time
 from time import sleep
+import threading
 
 import pytest
 import serial
@@ -31,7 +32,7 @@ class serial_tool:
         status : serial statuc
     '''
 
-    def __init__(self, serial_port='', baud=''):
+    def __init__(self, serial_port='', baud='', log_file="kernel_log.txt"):
         self.serial_port = serial_port or pytest.config_yaml.get_note('serial_port')['port']
         self.baud = baud or pytest.config_yaml.get_note('serial_port')['baud']
         logging.info(f'port {self.serial_port} baud {self.baud}')
@@ -54,44 +55,82 @@ class serial_tool:
             # self.write('setprop service.adb.tcp.port 5555')
         except serial.serialutil.SerialException as e:
             logging.info(f'not found serial:{e}')
-        if isinstance(self.ser, serial.Serial):
-            self.status = self.ser.isOpen()
-        else:
-            self.status = False
-        if self.ethernet_ip:
-            logging.info('get ip ：%s' % self.ethernet_ip)
+
+        self.status = self.ser.isOpen() if isinstance(self.ser, serial.Serial) else False
         logging.info('the status of serial port is {}'.format(self.status))
 
-    def get_ip_address(self, inet='wlan0', count=10):
+        # 日志文件和线程设置
+        self.log_file = log_file
+        self.keyword_flags = {}  # 存储关键字检测标志
+        self.keyword_flags_lock = threading.Lock()  # 用于线程安全
+
+        # 启动后台线程保存日志并检测关键字
+        self.log_thread = threading.Thread(target=self._save_and_detect_log)
+        self.log_thread.daemon = True
+        self.log_thread.start()
+
+    def _save_and_detect_log(self):
+        '''在保存日志的同时检测关键字'''
+        # try:
+        with open(self.log_file, 'w') as file:
+            while True:
+                data = self.ser.read(1024).decode('utf-8', errors='ignore')
+                if data:
+                    file.write(data)
+                    file.flush()  # 确保数据写入磁盘
+
+                    # 检查是否有关键字需要检测
+                    with self.keyword_flags_lock:
+                        for keyword in list(self.keyword_flags.keys()):
+                            if keyword in data:
+                                print(f'{keyword} is found')
+                                print(self.keyword_flags)
+                                self.keyword_flags[keyword] = True
+                    print(self.keyword_flags)
+
+        # except Exception as e:
+        #     logging.error(f"Logging thread error: {e}")
+
+    def start_keyword_detection(self, keyword):
+        '''开始检测指定关键字'''
+        with self.keyword_flags_lock:
+            self.keyword_flags[keyword] = False
+
+    def is_keyword_detected(self, keyword):
+        '''检查关键字是否被检测到'''
+        with self.keyword_flags_lock:
+            print(f'get {keyword} : {self.keyword_flags.get(keyword)} ')
+            return self.keyword_flags.get(keyword, False)
+
+    def clear_keyword(self, keyword):
+        '''清除关键字检测状态'''
+        with self.keyword_flags_lock:
+            if keyword in self.keyword_flags:
+                del self.keyword_flags[keyword]
+
+    def get_ip_address(self, inet='wlan0', count=20):
 
         '''
-
         get ip address
-
         @param inet: network interface (default: wlan0)
-
         @param count: maximum retry attempts
-
         @return: IP address string or None if not found
 
         '''
 
         for attempt in range(count, 0, -1):
-
             try:
-
                 # Clear serial buffer before sending command
                 self.ser.reset_input_buffer()
                 self.write('\x1A')
                 self.write('bg')
+                time.sleep(1)
                 # Send command
                 self.write(f'ifconfig {inet}')
-                # Wait briefly for response
-                time.sleep(1)
-                # Read with timeout
+                self.write(f'ifconfig {inet}')
                 ipInfo = ''
                 start_time = time.time()
-                while time.time() - start_time < 5:  # 5 second timeout
+                while time.time() - start_time < 10:  # 5 second timeout
                     if self.ser.in_waiting:
                         ipInfo += self.ser.read(self.ser.in_waiting).decode('utf-8', errors='ignore')
                         if 'TX bytes:' in ipInfo:
@@ -238,9 +277,38 @@ class serial_tool:
         except Exception as e:
             print("发生错误:", str(e))
 
+    def start_saving_kernel_log(self):
+        try:
+            with open(self.log_file, 'wb') as file:
+                while True:
+                    data = self.ser.read(1024)
+                    if data:
+                        file.write(data)
+                        file.flush()  # 强制刷新缓冲区
+        except serial.SerialException as e:
+            print("串口连接错误:", str(e))
+        except Exception as e:
+            print("发生错误:", str(e))
+
+    def search_keyword_in_log(self, keyword):
+        try:
+            with open(self.log_file, 'rb') as file:
+                file.seek(self.log_file_position)  # 从上次记录的位置开始读取
+                for line in file:
+                    if keyword.encode() in line:
+                        return True
+                self.log_file_position = file.tell()  # 更新读取位置
+            return False
+        except Exception as e:
+            print("发生错误:", str(e))
+            return False
+
     def __del__(self):
         try:
             self.ser.close()
             logging.info('close serial port %s' % self.ser)
         except AttributeError as e:
             logging.info('failed to open serial port,not need to close')
+
+
+
