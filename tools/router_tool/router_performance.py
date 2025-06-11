@@ -215,6 +215,46 @@ a.set_info("192.168.200.3", '2', 'LINKSYS', 'E8450',
            {'2.4G': {'mode': '11AX', 'authentication': 'wpa2', 'bandwidth': '20MHz'},
             '5G': {'mode': '11AX', 'authentication': 'wpa2', 'bandwidth': '80MHz'}})
 
+a.set_info("192.168.200.7", '1', 'ARRIS', 'TR4400',
+           {'2.4G': {'mode': '11N', 'authentication': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AC', 'authentication': 'wpa2', 'bandwidth': '80MHz'}})
+
+a.set_info("192.168.200.7", '2', 'ARRIS', 'SBR-AC1200P',
+           {'2.4G': {'mode': '11N', 'authentication': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AC', 'authentication': 'wpa2', 'bandwidth': '80MHz'}})
+
+a.set_info("192.168.200.7", '3', 'ARRIS', 'W21',
+           {'2.4G': {'mode': '11N', 'authentication': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AX', 'authentication': 'wpa2', 'bandwidth': '80MHz'}})
+
+a.set_info("192.168.200.7", '4', 'HUAWEI', 'BE7',
+           {'2.4G': {'mode': '11N', 'authentication': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AX', 'authentication': 'wpa2', 'bandwidth': '80MHz'}})
+
+a.set_info("192.168.200.7", '5', 'BAFFALO', 'WZR-1750DHP',
+           {'2.4G': {'mode': '11N', 'authentication': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AC', 'authentication': 'wpa2', 'bandwidth': '80MHz'}})
+
+a.set_info("192.168.200.7", '7', 'HUAWEI', 'BE3 PRO',
+           {'2.4G': {'mode': '11N', 'authentication': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AX', 'authentication': 'wpa2', 'bandwidth': '80MHz'}})
+
+a.set_info("192.168.200.7", '8', 'ARRIS', 'TG3452',
+           {'2.4G': {'mode': '11N', 'authentication': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11N', 'authentication': 'wpa2', 'bandwidth': '20MHz'}})
+
+a.set_info("192.168.200.8", '1', 'VANTIVA', 'SDX62',
+           {'2.4G': {'mode': '11N', 'authentication': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AX', 'authentication': 'wpa2', 'bandwidth': '80MHz'}})
+
+a.set_info("192.168.200.8", '2', 'PORTAL', '2AFZUSAP102',
+           {'2.4G': {'mode': '11N', 'authentication': 'wpa2', 'bandwidth': '40MHz'},
+            '5G': {'mode': '11AC', 'authentication': 'wpa2', 'bandwidth': '80MHz'}})
+
+a.set_info("192.168.200.8", '3', 'ARRIS', 'SBR-AC1750',
+           {'2.4G': {'mode': '11N', 'authentication': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AC', 'authentication': 'wpa2', 'bandwidth': '80MHz'}})
+
 a.save_expect()
 dut = dut_standard()
 dut.set_expect('2.4G', 'sdio', '11N', 'wpa2', '20MHz', '1x1', 'UL', 42.8)

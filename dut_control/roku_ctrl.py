@@ -1075,3 +1075,12 @@ class roku_ctrl(Roku):
     def flush_ip(self):
         ip = self.ser.get_ip_address('wlan0')
         pytest.dut.roku = roku_ctrl(ip)
+
+    def remote(self, button_list, idle=1):
+        button_dict = {'h': 'home', 'p': 'play', 's': 'select', 'l': 'left', 'r': 'right', 'd': 'down', 'u': 'up',
+                       'b': 'back', 'i': 'info'}
+        for i in button_list:
+            if i in COMMANDS:
+                getattr(self, button_dict[i])(time=idle)
+            else:
+                logging.info(f'{i} not in button_dict .pls check again')
