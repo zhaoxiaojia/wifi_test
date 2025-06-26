@@ -31,9 +31,9 @@ Expected ResulÍ
 #     pytest.dut.reboot()
 #     yield
 
-ssid = ['TNCAPFE09C7_5G', 'TNCAPFE09C7_2.4G']  # ,'Linksys-MR-5G','Linksys-MR-2.4G']
-# ssid = ['Linksys-MR-5G','Linksys-MR-2.4G']
-passwd = ['123456789', '123456789']  # ,'11112222','']
+# ssid = ['TNCAPFE09C7_5G', 'TNCAPFE09C7_2.4G']  # ,'Linksys-MR-5G','Linksys-MR-2.4G']
+# # ssid = ['Linksys-MR-5G','Linksys-MR-2.4G']
+# passwd = ['123456789', '123456789']  # ,'11112222','']
 
 target = [
     {'ssid': 'TNCAPFE09C7_5G', 'passwd': '123456789', 'ip': '192.168.0.102'},
@@ -65,6 +65,7 @@ def test_wifi_switch(request):
     # # 重启
 
     pytest.dut.reboot()
+    time.sleep(50)
     pytest.dut = telnet_tool(pytest.dut.dut_ip)
     pytest.dut.roku = roku_ctrl(pytest.dut.dut_ip)
     # 播放 player

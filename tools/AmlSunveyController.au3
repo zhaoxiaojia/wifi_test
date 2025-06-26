@@ -33,8 +33,8 @@ Func UpdateDistance($distance)
 EndFunc
 
 Func GetAngle()
-	ControlClick($windowTitle,"","WindowsForms10.BUTTON.app.0.141b42a_r39_ad18")
-	Local $currentAngle = ControlGetText($windowTitle, "", "WindowsForms10.BUTTON.app.0.141b42a_r39_ad18")
+	ControlClick($windowTitle,"","WindowsForms10.EDIT.app.0.141b42a_r39_ad11")
+	Local $currentAngle = ControlGetText($windowTitle, "", "WindowsForms10.EDIT.app.0.141b42a_r39_ad11")
 	Sleep(1000)
 	Return $currentAngle
 EndFunc

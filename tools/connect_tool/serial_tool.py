@@ -124,9 +124,10 @@ class serial_tool:
                 self.ser.reset_input_buffer()
                 self.write('\x1A')
                 self.write('bg')
-                time.sleep(1)
+                time.sleep(10)
                 # Send command
                 self.write(f'ifconfig {inet}')
+                time.sleep(1)
                 self.write(f'ifconfig {inet}')
                 ipInfo = ''
                 start_time = time.time()

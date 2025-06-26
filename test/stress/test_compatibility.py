@@ -85,6 +85,10 @@ def router_setting(power_setting, request):
 
 @pytest.mark.dependency(name="scan")
 def test_scan(router_setting):
+    result = 'FAIL'
+    if pytest.connect_type == 'telnet':
+        result = 'PASS' if pytest.dut.roku.flush_ip() else 'FAIL'
+        assert result == 'PASS', f"Can't be reconnected"
     pytest.dut.push_iperf()
     result = 'PASS' if pytest.dut.wifi_scan(router_setting.ssid) else 'FAIL'
     assert result == 'PASS', f"Can't scan target ssid {router_setting.ssid}"

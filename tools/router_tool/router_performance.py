@@ -20,7 +20,8 @@ FPGA_CONFIG = {
     'W1': {'mimo': '1X1', '2.4G': '11N', '5G': '11AC'},
     'W1L': {'mimo': '1X1', '2.4G': '11N', '5G': '11AC'},
     'W2': {'mimo': '2X2', '2.4G': '11AX', '5G': '11AX'},
-    'W2U': {'mimo': '2X2', '2.4G': '11AX', '5G': '11AX'}
+    'W2U': {'mimo': '2X2', '2.4G': '11AX', '5G': '11AX'},
+    'W2L': {'mimo': '2X2', '2.4G': '11AX', '5G': '11AX'}
 }
 dut_wifichip = 'w2_sdio'
 wifichip, interface = dut_wifichip.split('_')
@@ -214,7 +215,6 @@ a.set_info("192.168.200.6", '5', 'TP-LINK', 'TL-7DR3630yizhanban',
 a.set_info("192.168.200.3", '2', 'LINKSYS', 'E8450',
            {'2.4G': {'mode': '11AX', 'authentication': 'wpa2', 'bandwidth': '20MHz'},
             '5G': {'mode': '11AX', 'authentication': 'wpa2', 'bandwidth': '80MHz'}})
-
 a.set_info("192.168.200.7", '1', 'ARRIS', 'TR4400',
            {'2.4G': {'mode': '11N', 'authentication': 'wpa2', 'bandwidth': '20MHz'},
             '5G': {'mode': '11AC', 'authentication': 'wpa2', 'bandwidth': '80MHz'}})
@@ -235,7 +235,7 @@ a.set_info("192.168.200.7", '5', 'BAFFALO', 'WZR-1750DHP',
            {'2.4G': {'mode': '11N', 'authentication': 'wpa2', 'bandwidth': '20MHz'},
             '5G': {'mode': '11AC', 'authentication': 'wpa2', 'bandwidth': '80MHz'}})
 
-a.set_info("192.168.200.7", '7', 'HUAWEI', 'BE3 PRO',
+a.set_info("192.168.200.7", '6', 'HUAWEI', 'BE3 PRO',
            {'2.4G': {'mode': '11N', 'authentication': 'wpa2', 'bandwidth': '20MHz'},
             '5G': {'mode': '11AX', 'authentication': 'wpa2', 'bandwidth': '80MHz'}})
 
@@ -247,11 +247,11 @@ a.set_info("192.168.200.8", '1', 'VANTIVA', 'SDX62',
            {'2.4G': {'mode': '11N', 'authentication': 'wpa2', 'bandwidth': '20MHz'},
             '5G': {'mode': '11AX', 'authentication': 'wpa2', 'bandwidth': '80MHz'}})
 
-a.set_info("192.168.200.8", '2', 'PORTAL', '2AFZUSAP102',
-           {'2.4G': {'mode': '11N', 'authentication': 'wpa2', 'bandwidth': '40MHz'},
+a.set_info("192.168.200.8", '3', 'PORTAL', '2AFZUSAP102',
+           {'2.4G': {'mode': '11N', 'authentication': 'wpa2', 'bandwidth': '20MHz'},
             '5G': {'mode': '11AC', 'authentication': 'wpa2', 'bandwidth': '80MHz'}})
 
-a.set_info("192.168.200.8", '3', 'ARRIS', 'SBR-AC1750',
+a.set_info("192.168.200.8", '8', 'ARRIS', 'SBR-AC1750',
            {'2.4G': {'mode': '11N', 'authentication': 'wpa2', 'bandwidth': '20MHz'},
             '5G': {'mode': '11AC', 'authentication': 'wpa2', 'bandwidth': '80MHz'}})
 

@@ -36,7 +36,6 @@ cmd_line_wildcard = {
 class telnet_tool(dut):
     def __init__(self, ip):
         super().__init__()
-
         self.dut_ip = ip
         self.port = 23
         logging.info('*' * 80)

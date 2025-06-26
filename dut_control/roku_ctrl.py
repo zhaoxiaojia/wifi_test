@@ -1074,7 +1074,10 @@ class roku_ctrl(Roku):
 
     def flush_ip(self):
         ip = self.ser.get_ip_address('wlan0')
-        pytest.dut.roku = roku_ctrl(ip)
+        if ip:
+            pytest.dut = telnet_tool(ip)
+            pytest.dut.roku = roku_ctrl(ip)
+            return True
 
     def remote(self, button_list, idle=1):
         button_dict = {'h': 'home', 'p': 'play', 's': 'select', 'l': 'left', 'r': 'right', 'd': 'down', 'u': 'up',

@@ -364,8 +364,8 @@ class dut():
     def get_rx_rate(self, router_info, rssi_num, type='TCP', corner_tool=None, db_set=''):
         rx_result_list = []
         self.rvr_result = None
-        try:
-            for c in range(5):
+        for c in range(5):
+            try:
                 logging.info(f'run rx {c} loop')
                 rx_result = 0
                 mcs_rx = 0
@@ -412,8 +412,8 @@ class dut():
                 rx_result_list.append(rx_result)
                 if len(rx_result_list) > self.repest_times:
                     break
-        except Exception:
-            ...
+            except Exception:
+                ...
         corner = corner_tool.get_turntanle_current_angle() if corner_tool else ''
 
         rx_result_info = (
@@ -432,8 +432,9 @@ class dut():
     def get_tx_rate(self, router_info, rssi_num, type='TCP', corner_tool=None, db_set=''):
         tx_result_list = []
         self.rvr_result = None
-        try:
-            for c in range(5):
+
+        for c in range(5):
+            try:
                 logging.info(f'run tx:  {c} loop ')
                 tx_result = 0
                 mcs_tx = 0
@@ -486,8 +487,8 @@ class dut():
                 tx_result_list.append(tx_result)
                 if len(tx_result_list) > self.repest_times:
                     break
-        except Exception:
-            ...
+            except Exception:
+                ...
         corner = corner_tool.get_turntanle_current_angle() if corner_tool else ''
 
         tx_result_info = (

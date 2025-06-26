@@ -954,7 +954,7 @@ class adb(dut):
         @param command: command
         @return: feedback
         '''
-        command = 'shell ' + command
+        command = 'shell ' + f'"{command}"'
         return self.checkoutput_shell(command)
 
     @connect_again
