@@ -9,6 +9,9 @@ from tools.connect_tool.host_os import host_os
 
 
 class cmd_wpa:
+    '''
+    wpa_supplicant for linux
+    '''
     def __init__(self, host=None, dut=None):
         self.host_control = host
         # if self.host_control:
@@ -26,7 +29,7 @@ class cmd_wpa:
             logging.info(cmd)
             return self.dut.checkoutput(cmd)
 
-    def flush_wlan(self, target):
+    def  flush_wlan(self, target):
         if not self.send_cmd(f'ifconfig {self.interface} |egrep -o "inet [^ ]*"|cut -d " " -f 2', target):
             self.send_cmd(f'dhclient {self.interface}', target)
             time.sleep(5)

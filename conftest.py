@@ -26,6 +26,7 @@ from tools.TestResult import TestResult
 from tools.yamlTool import yamlTool
 from dut_control.roku_ctrl import roku_ctrl
 from tools.router_tool.Router import Router
+
 # pytest_plugins = "util.report_plugin"
 test_results = []
 
@@ -156,52 +157,87 @@ def pytest_runtest_makereport(item, call):
             item._store["return_value"] = return_value
 
 
-@pytest.hookimpl(trylast=True)
+pytest.hookimpl(trylast=True)
+
+
 def pytest_sessionfinish(session, exitstatus):
     csv_file = "test_results.csv"
+    global test_results  # 确保test_results在函数中可用
 
-    # 生成表头
-    row_data = []
-    temp_data = []
-    #  PDU  IP , PDU  Port ,AP Brand,Band,Ssid, WiFi  Mode ,Channel,Bandwidth,Security,Scan,Connect,Throught,TX(Mbps),Throught,RX(Mbps)
+    # 定义表头
     title_data = ['PDU IP', 'PDU Port', 'AP Brand', 'Band', 'Ssid', 'WiFi Mode', 'Bandwidth', 'Security',
                   'Scan', 'Connect', 'TX Result', 'Channel', 'RSSI', 'TX Criteria', 'TX  Throughtput(Mbps)',
                   'RX  Result', 'Channel', 'RSSI',
                   'RX Criteria', 'RX Throughtput(Mbps)']
+
+    # 写入表头
     with open(csv_file, mode="w", newline="", encoding="utf-8") as file:
         writer = csv.writer(file, quotechar=' ')
         writer.writerow(title_data)
+
     logging.info(test_results)
+
+    row_data = []
+    temp_data = []
+
+    # 处理每个测试结果
     for test_result in test_results:
-        test_name = sorted(test_result.keys())[0]
-        if test_name in temp_data:
-            with open(csv_file, mode="a", newline="", encoding="utf-8") as file:
-                writer = csv.writer(file, quotechar=' ')
-                writer.writerow(row_data)  # 写入数据
-            row_data.clear()
-            temp_data.clear()
-        data = test_result[test_name]
-        keys = sorted(data['fixtures'].keys())
-        if data['fixtures'][keys[0]][0] not in row_data:
-            for j in keys:
-                logging.info(f"fixture  {type(data['fixtures'][j])}")
-                if isinstance(data['fixtures'][j], dict):
-                    if data['fixtures'][j].get('ip') and data['fixtures'][j]['ip'] not in row_data: row_data.append(
-                        data['fixtures'][j]['ip'])
-                    if data['fixtures'][j].get('port') and data['fixtures'][j]['port'] not in row_data: row_data.append(
-                        data['fixtures'][j]['port'])
-                    if data['fixtures'][j].get(
-                            'brand') and f"{data['fixtures'][j]['brand']} {data['fixtures'][j]['model']}" not in row_data:
-                        row_data.append(f"{data['fixtures'][j]['brand']} {data['fixtures'][j]['model']}")
-                elif isinstance(data['fixtures'][j], Router):
-                    if str(data['fixtures'][j]).replace('default,', '') not in row_data: row_data.append(
-                        str(data['fixtures'][j]).replace('default,', ''))
-        temp_data.append(test_name)
-        if data['result']: row_data.append(data['result'])
-        if data['return_value']: row_data.extend([*data['return_value']])
-    with open(csv_file, mode="a", newline="", encoding="utf-8") as file:
-        writer = csv.writer(file, quotechar=' ')
-        writer.writerow(row_data)
+        try:
+            # 获取测试名称
+            test_name = sorted(test_result.keys())[0]
+
+            # 检查是否需要写入前一行数据
+            if test_name in temp_data:
+                if row_data:  # 确保有数据可写
+                    with open(csv_file, mode="a", newline="", encoding="utf-8") as file:
+                        writer = csv.writer(file, quotechar=' ')
+                        writer.writerow(row_data)
+                row_data.clear()
+                temp_data.clear()
+
+            # 获取测试数据
+            data = test_result[test_name]
+
+            # 处理fixtures数据
+            if 'fixtures' in data and data['fixtures']:
+                keys = sorted(data['fixtures'].keys())
+                if data['fixtures'][keys[0]][0] not in row_data:
+                    for j in keys:
+                        try:
+                            logging.info(f"fixture {type(data['fixtures'][j])}")
+                            if isinstance(data['fixtures'][j], dict):
+                                if data['fixtures'][j].get('ip') and data['fixtures'][j]['ip'] not in row_data:
+                                    row_data.append(data['fixtures'][j]['ip'])
+                                if data['fixtures'][j].get('port') and data['fixtures'][j]['port'] not in row_data:
+                                    row_data.append(data['fixtures'][j]['port'])
+                                if data['fixtures'][j].get('brand') and \
+                                        f"{data['fixtures'][j]['brand']} {data['fixtures'][j]['model']}" not in row_data:
+                                    row_data.append(f"{data['fixtures'][j]['brand']} {data['fixtures'][j]['model']}")
+                            elif isinstance(data['fixtures'][j], Router):
+                                router_str = str(data['fixtures'][j]).replace('default,', '')
+                                if router_str not in row_data:
+                                    row_data.append(router_str)
+                        except KeyError as e:
+                            logging.warning(f"KeyError in fixture processing: {e}")
+                            continue  # 继续处理下一个fixture
+
+            temp_data.append(test_name)
+
+            # 添加测试结果和返回值
+            if 'result' in data and data['result']:
+                row_data.append(data['result'])
+            if 'return_value' in data and data['return_value']:
+                row_data.extend([*data['return_value']])
+
+        except (KeyError, IndexError) as e:
+            logging.error(f"Error processing test result: {e}")
+            continue  # 继续处理下一个测试结果
+
+    # 写入最后一行数据
+    if row_data:
+        with open(csv_file, mode="a", newline="", encoding="utf-8") as file:
+            writer = csv.writer(file, quotechar=' ')
+            writer.writerow(row_data)
 
     shutil.copy("pytest.log", "debug.log")
     shutil.move("debug.log", pytest.testResult.logdir)

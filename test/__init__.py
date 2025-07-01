@@ -50,7 +50,6 @@ def get_testdata(router):
     wifi_yaml = yamlTool(os.getcwd() + '/config/config.yaml')
     router_name = wifi_yaml.get_note('router')['name']
     pc_ip, dut_ip = "", ""
-    logging.info('coco should be seen')
     # 读取 测试配置
     with open(os.getcwd() + '/config/rvr_wifi_setup.csv', 'r', encoding='utf-8') as f:
         reader = csv.reader(f)

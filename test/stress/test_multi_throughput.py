@@ -10,7 +10,7 @@ import re
 import subprocess
 import time
 from test import get_testdata
-from test.test_rvr import get_rx_rate, get_tx_rate, iperf_on, kill_iperf
+from test.test_wifi_rvr_rvo import get_rx_rate, get_tx_rate, iperf_on, kill_iperf
 
 import pytest
 

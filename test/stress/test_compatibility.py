@@ -56,7 +56,10 @@ def power_setting(request):
     ip, port = request.param
     power_delay.switch(ip, port, 1)
     time.sleep(60)
-    info = [x for x in filter(lambda x: x['port'] == port and x['ip'] == ip, compatibility_router._instances)][0]
+    try:
+        info = [x for x in filter(lambda x: x['port'] == port and x['ip'] == ip, compatibility_router._instances)][0]
+    except:
+        info = ''
     logging.info(f'power yield {info}')
     yield info
     logging.info('test done shutdown the router')

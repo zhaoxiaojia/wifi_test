@@ -235,7 +235,7 @@ a.set_info("192.168.200.7", '5', 'BAFFALO', 'WZR-1750DHP',
            {'2.4G': {'mode': '11N', 'authentication': 'wpa2', 'bandwidth': '20MHz'},
             '5G': {'mode': '11AC', 'authentication': 'wpa2', 'bandwidth': '80MHz'}})
 
-a.set_info("192.168.200.7", '6', 'HUAWEI', 'BE3 PRO',
+a.set_info("192.168.200.7", '7', 'HUAWEI', 'BE3 PRO',
            {'2.4G': {'mode': '11N', 'authentication': 'wpa2', 'bandwidth': '20MHz'},
             '5G': {'mode': '11AX', 'authentication': 'wpa2', 'bandwidth': '80MHz'}})
 

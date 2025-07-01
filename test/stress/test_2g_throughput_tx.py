@@ -9,7 +9,7 @@ import logging
 import re
 import time
 from test.stress import multi_stress
-from test.test_rvr import get_rx_rate, get_tx_rate, iperf_on, kill_iperf
+from test.test_wifi_rvr_rvo import get_rx_rate, get_tx_rate, iperf_on, kill_iperf
 
 import pytest
 

@@ -19,6 +19,7 @@ import threading
 
 import pytest
 import serial
+from queue import Queue, Empty
 
 
 class serial_tool:
@@ -32,7 +33,7 @@ class serial_tool:
         status : serial statuc
     '''
 
-    def __init__(self, serial_port='', baud='', log_file="kernel_log.txt"):
+    def __init__(self, serial_port='', baud='', log_file="kernel_log.txt", enable_log=True):
         self.serial_port = serial_port or pytest.config_yaml.get_note('serial_port')['port']
         self.baud = baud or pytest.config_yaml.get_note('serial_port')['baud']
         logging.info(f'port {self.serial_port} baud {self.baud}')
@@ -64,29 +65,29 @@ class serial_tool:
         self.keyword_flags = {}  # 存储关键字检测标志
         self.keyword_flags_lock = threading.Lock()  # 用于线程安全
 
-        # 启动后台线程保存日志并检测关键字
-        self.log_thread = threading.Thread(target=self._save_and_detect_log)
-        self.log_thread.daemon = True
-        self.log_thread.start()
+        # # 启动后台线程保存日志并检测关键字
+        self._rx_queue = Queue()  # <- 新增：线程安全缓冲
+        self._stop_flag = threading.Event()
+        if enable_log:
+            self.log_thread = threading.Thread(
+                target=self._save_and_detect_log, daemon=True)
+            self.log_thread.start()
 
     def _save_and_detect_log(self):
         '''在保存日志的同时检测关键字'''
         # try:
         with open(self.log_file, 'w') as file:
-            while True:
-                data = self.ser.read(1024).decode('utf-8', errors='ignore')
-                if data:
-                    file.write(data)
-                    file.flush()  # 确保数据写入磁盘
-
-                    # 检查是否有关键字需要检测
-                    with self.keyword_flags_lock:
-                        for keyword in list(self.keyword_flags.keys()):
-                            if keyword in data:
-                                print(f'{keyword} is found')
-                                print(self.keyword_flags)
-                                self.keyword_flags[keyword] = True
-                    print(self.keyword_flags)
+            while not self._stop_flag.is_set():
+                data = self.ser.read(1024)  # 不再立刻decode
+                if not data:
+                    continue
+                file.write(data.decode('utf-8', errors='ignore'))
+                self._rx_queue.put(data)  # <-- 喂给业务线程
+                # 检查是否有关键字需要检测
+                with self.keyword_flags_lock:
+                    for kw in list(self.keyword_flags):
+                        if kw.encode() in data:
+                            self.keyword_flags[kw] = True
 
         # except Exception as e:
         #     logging.error(f"Logging thread error: {e}")
@@ -223,21 +224,27 @@ class serial_tool:
         '''
         self.ser.write(bytes(command + '\r', encoding='utf-8'))
         logging.info(f'=> {command}')
+        print(f'=> {command}')
         sleep(0.1)
 
-    def recv(self):
-        '''
-        get feedback from buffer
-        @return: feedback
-        '''
-        while True:
-            data = self.ser.read_all()
-            time.sleep(5)
-            if data == '':
-                continue
-            else:
-                break
-        return data.decode('utf-8')
+    def recv(self, timeout=5, until_newline=False):
+        """
+        从内部队列取数据
+        :param timeout:   最长等待秒数
+        :param until_newline:  True -> 读到换行就返回
+        """
+        deadline = time.time() + timeout
+        buf = bytearray()
+
+        while time.time() < deadline:
+            try:
+                chunk = self._rx_queue.get(timeout=deadline - time.time())
+                buf.extend(chunk)
+                if until_newline and b'\n' in chunk:
+                    break
+            except Empty:
+                break  # 超时
+        return buf.decode('utf-8', errors='ignore')
 
     def recv_until_pattern(self, pattern=b'', timeout=60):
         '''
@@ -304,12 +311,17 @@ class serial_tool:
             print("发生错误:", str(e))
             return False
 
+    def close(self):
+        """安全关闭线程和串口"""
+        self._stop_flag.set()
+        if hasattr(self, 'log_thread') and self.log_thread.is_alive():
+            self.log_thread.join(timeout=1)
+        if getattr(self, 'ser', None):
+            self.ser.close()
+
     def __del__(self):
         try:
-            self.ser.close()
+            self.close()
             logging.info('close serial port %s' % self.ser)
         except AttributeError as e:
             logging.info('failed to open serial port,not need to close')
-
-
-

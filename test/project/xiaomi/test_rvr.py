@@ -4,7 +4,7 @@
 @author: chao.li
 @contact: chao.li@amlogic.com
 @software: pycharm
-@file: test_rvr.py 
+@file: test_wifi_rvr_rvo.py
 @time: 2024/12/4 15:19 
 @desc: 
 '''
@@ -19,7 +19,7 @@ import threading
 import time
 from copy import copy
 from test import get_testdata
-from test.test_rvr import corner_tool
+from test.test_wifi_rvr_rvo import corner_tool
 
 import openpyxl
 import psutil

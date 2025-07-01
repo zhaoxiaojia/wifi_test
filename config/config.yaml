@@ -29,8 +29,6 @@ power_relay: {
   '192.168.200.6': '7',
 }
 
-# test env control , should be rf , corner or both
-env_control: corner
 
 # Attenuation information. It should be RC4DAT-8G-95 or RADIORACK-4-220
 rf_solution:

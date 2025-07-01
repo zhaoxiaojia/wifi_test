@@ -2,7 +2,7 @@
 # -*-coding:utf-8 -*-
 
 """
-# File       : test_rvr.py
+# File       : test_wifi_rvr_rvo.py
 # Time       ：2023/9/15 14:03
 # Author     ：chao.li
 # version    ：python 3.9
@@ -29,78 +29,36 @@ from tools.yamlTool import yamlTool
 
 wifi_yaml = yamlTool(os.getcwd() + '/config/config.yaml')
 router_name = wifi_yaml.get_note('router')['name']
-env_control = wifi_yaml.get_note('env_control')
-# 设置为True 时 开启 衰减测试流程
-rf_needed = True if env_control in ['rf', 'both'] else False
-# 设置为True 时 开启 状态测试流程
-corner_needed = True if env_control in ['corner', 'both'] else False
-# 设置为True 时 开启 路由相关配置
-router_needed = True
 
-try:
-	# 实例路由器对象
-	router = get_router(router_name)
-except Exception as e:
-	logging.error('Router init with error')
-	router = ''
 
+# 实例路由器对象
+router = get_router(router_name)
 logging.info(f'router {router}')
 test_data = get_testdata(router)
-# 设置是否需要push iperf
-iperf_tool = False
-
-if pytest.connect_type == 'telnet':
-	third_dut = True
 
 sum_list_lock = threading.Lock()
 
 rvr_tool = wifi_yaml.get_note('rvr')['tool']
 
-# 初始化 衰减 & 转台 对象
-if rf_needed:
-	# 读取衰减 配置
-	rf_step_list = []
-	rf_ip = ''
-	model = wifi_yaml.get_note('rf_solution')['model']
-	if model not in ['RADIORACK-4-220', 'RC4DAT-8G-95', 'SH_NEW']:
-		raise EnvironmentError("Doesn't support this model")
-	if model == 'SH_NEW':
-		rf_tool = rs()
-	else:
-		rf_ip = wifi_yaml.get_note('rf_solution')[model]['ip_address']
-		rf_tool = TelnetInterface(rf_ip)
-		logging.info(f'rf_ip {rf_ip}')
-	rf_step_list = wifi_yaml.get_note('rf_solution')['step']
-	rf_step_list = [i for i in range(*rf_step_list)][::3]
-	logging.info(f'rf_step_list {rf_step_list}')
 
-if corner_needed:
-	corner_step_list = []
-	# 配置衰减
-	corner_ip = wifi_yaml.get_note('corner_angle')['ip_address']
-	if corner_ip == '192.168.5.11':
-		corner_tool = rs()
-	else:
-		corner_tool = TelnetInterface(corner_ip)
-	logging.info(f'corner_ip {corner_ip}')
-	corner_step_list = wifi_yaml.get_note('corner_angle')['step']
-	corner_step_list = [i for i in range(*corner_step_list)][::45]
-	logging.info(f'corner step_list {corner_step_list}')
+corner_step_list = []
+# 配置衰减
+corner_ip = wifi_yaml.get_note('corner_angle')['ip_address']
+if corner_ip == '192.168.5.11':
+	corner_tool = rs()
 else:
-	corner_tool = None
+	corner_tool = TelnetInterface(corner_ip)
+logging.info(f'corner_ip {corner_ip}')
+corner_step_list = wifi_yaml.get_note('corner_angle')['step']
+corner_step_list = [i for i in range(*corner_step_list)][::45]
+logging.info(f'corner step_list {corner_step_list}')
 
-step_list = [1]
-if rf_needed and rf_step_list:
-	step_list = rf_step_list
-if corner_needed and corner_step_list:
-	step_list = corner_step_list
-if rf_needed and corner_needed and rf_step_list and corner_step_list:
-	step_list = itertools.product(corner_step_list, rf_step_list)
-
+step_list = corner_step_list
 logging.info(f'finally step_list {step_list}')
 
+
 # 配置 测试报告
-pytest.testResult.x_path = [] if (rf_needed and corner_needed) == 'both' else step_list
+# pytest.testResult.x_path = [] if (rf_needed and corner_needed) == 'both' else step_list
 rx_result, tx_result = '', ''
 
 
@@ -109,32 +67,24 @@ def setup(request):
 	global rx_result, tx_result, pc_ip, dut_ip
 	logging.info('router setup start')
 
-	# 重置衰减&转台
-	# 衰减器置0
-	if rf_needed:
-		logging.info('Reset rf value')
-		rf_tool.execute_rf_cmd(0)
-		logging.info(rf_tool.get_rf_current_value())
-		time.sleep(30)
 
 	# 转台置0
-	if corner_needed:
-		logging.info('Reset corner')
-		corner_tool.set_turntable_zero()
-		logging.info(corner_tool.get_turntanle_current_angle())
-		time.sleep(3)
+
+	logging.info('Reset corner')
+	corner_tool.set_turntable_zero()
+	logging.info(corner_tool.get_turntanle_current_angle())
+	time.sleep(3)
 
 	# push_iperf()
 	router_info = request.param
 
-	if router_needed:
-		# 修改路由器配置
-		assert router.change_setting(router_info), "Can't set ap , pls check first"
-		if pytest.connect_type == 'telnet':
-			band = '5 GHz' if '2' in router_info.band else '2.4 GHz'
-			ssid = router_info.ssid + "_bat";
-			router.change_setting(Router(band=band, ssid=ssid))
-		time.sleep(3)
+	# 修改路由器配置
+	assert router.change_setting(router_info), "Can't set ap , pls check first"
+	if pytest.connect_type == 'telnet':
+		band = '5 GHz' if '2' in router_info.band else '2.4 GHz'
+		ssid = router_info.ssid + "_bat";
+		router.change_setting(Router(band=band, ssid=ssid))
+	time.sleep(3)
 
 	logging.info('router set done')
 	with open(pytest.testResult.detail_file, 'a', encoding='utf-8') as f:
@@ -143,13 +93,10 @@ def setup(request):
 	logging.info(f'dut try to connect {router_info.ssid}')
 	if pytest.connect_type == 'telnet':
 		connect_status = True
-		if router_needed:
-			time.sleep(90)
+		time.sleep(90)
 	else:
 		# 连接 网络 最多三次重试
 		for _ in range(3):
-			if not router_needed:
-				break
 			try:
 				type = 'wpa3' if 'WPA3' in router_info.authentication_method else 'wpa2'
 				if router_info.authentication_method.lower() in \
@@ -191,11 +138,6 @@ def setup(request):
 	yield connect_status, router_info
 	# 后置动作
 	pytest.dut.kill_iperf()
-	if rf_needed:
-		logging.info('Reset rf value')
-		rf_tool.execute_rf_cmd(0)
-		logging.info(rf_tool.get_rf_current_value())
-		time.sleep(10)
 
 
 # 生成 pdf
@@ -233,32 +175,21 @@ def test_rvr(setup, rf_value):
 
 	logging.info(f'rf_value {rf_value}')
 	# 执行 修改 步长
-	# 修改衰减
-	if rf_needed:
-		logging.info(f'set rf value {rf_value}')
-		value = rf_value[1] if type(rf_value) == tuple else rf_value
-		rf_tool.execute_rf_cmd(value)
-		# 获取当前衰减值
-		logging.info(rf_tool.get_rf_current_value())
 
-	if corner_needed:
-		logging.info('set corner value')
-		value = rf_value[0] if type(rf_value) == tuple else rf_value
-		corner_tool.execute_turntable_cmd('rt', angle=value)
-		# 获取转台角度
-		logging.info(corner_tool.get_turntanle_current_angle())
+	logging.info('set corner value')
+	value = rf_value[0] if type(rf_value) == tuple else rf_value
+	corner_tool.execute_turntable_cmd('rt', angle=value)
+	# 获取转台角度
+	logging.info(corner_tool.get_turntanle_current_angle())
 
 	with open(pytest.testResult.detail_file, 'a') as f:
 		f.write('-' * 40 + '\n')
 		info, corner_set = '', ''
 		db_set = 0
-		if rf_needed:
-			db_set = rf_value[1] if type(rf_value) == tuple else rf_value
-			info += 'db_set : ' + str(db_set) + '\n'
 
-		if corner_needed:
-			corner_set = rf_value[0] if type(rf_value) == tuple else rf_value
-			info += 'corner_set : ' + str(corner_set) + '\n'
+		info += 'db_set :  \n'
+		corner_set = rf_value[0] if type(rf_value) == tuple else rf_value
+		info += 'corner_set : ' + str(corner_set) + '\n'
 
 		f.write(info)
 	# time.sleep(1)

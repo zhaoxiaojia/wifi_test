@@ -21,6 +21,7 @@ import requests
 from roku import Roku
 
 from dut_control.ir import Ir
+from dut_control.roku_wpa import roku_wpa
 from tools.connect_tool.serial_tool import serial_tool
 from tools.connect_tool.telnet_tool import telnet_tool
 from tools.yamlTool import yamlTool
@@ -159,6 +160,7 @@ class roku_ctrl(Roku):
         self.ir_current_location = ''
         self.logcat_check = False
         self._ser = ''
+
         logging.info('roku init done')
 
     def __setattr__(self, key, value):
