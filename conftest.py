@@ -70,9 +70,6 @@ def pytest_sessionstart(session):
     else:
         raise EnvironmentError("Not support connect type %s" % pytest.connect_type)
 
-    # Create a test results folder
-    if not os.path.exists('results'):
-        os.mkdir('results')
     pytest.timestamp = session.config.getoption("--resultpath")
     pytest.result_path = os.getcwd() + '/report/' + pytest.timestamp
     pytest.testResult = TestResult(pytest.result_path, [])

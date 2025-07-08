@@ -128,12 +128,12 @@ class serial_tool:
                 time.sleep(10)
                 # Send command
                 self.write(f'ifconfig {inet}')
-                time.sleep(1)
-                self.write(f'ifconfig {inet}')
                 ipInfo = ''
                 start_time = time.time()
                 while time.time() - start_time < 10:  # 5 second timeout
                     if self.ser.in_waiting:
+                        self.write(f'ifconfig {inet}')
+                        time.sleep(1)
                         ipInfo += self.ser.read(self.ser.in_waiting).decode('utf-8', errors='ignore')
                         if 'TX bytes:' in ipInfo:
                             break  # Stop reading if we see the marker

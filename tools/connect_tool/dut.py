@@ -48,13 +48,18 @@ class dut():
                          'UDP': {'tx': iperf(' -c {} -u -i1 -b 800M -t {} -P{}'),
                                  'rx': iperf(' -c {} -u -i1 -b 300M -t {} -P{}')}}
 
-    IPERF_MULTI_SERVER = 'iperf -s -w 4m -i 1 {}&'
-    IPERF_MULTI_CLIENT_REGU = '.iperf -c {} -w 4m -i 1 -t 60 -p {}'
+    # IPERF_MULTI_SERVER = 'iperf -s -w 4m -i 1 {}&'
+    # IPERF_MULTI_CLIENT_REGU = '.iperf -c {} -w 4m -i 1 -t 60 -p {}'
 
-    IPERF3_CLIENT_UDP_REGU = 'iperf3 -c {} -i 1 -t 60 -u -b 120M -l63k -P {}'
+    # 新增 iperf3
+    IPERF3_SERVER = {'TCP': 'iperf3 -s -i 1', 'UDP': 'iperf3 -s -i 1'}
+    IPERF3_CLIENT_REGU = {
+        'TCP': {'tx': 'iperf3 -c {} -i 1 -t {} -P {} -R', 'rx': 'iperf3 -c {} -i 1 -t {} -P {}'},
+        'UDP': {'tx': 'iperf3 -c {} -i 1 -t {} -P {} -u', 'rx': 'iperf3 -c {} -i 1 -t {} -P {} -u'}
+    }
 
-    IPERF_KILL = 'killall -9 iperf'
-    IPERF_WIN_KILL = 'taskkill /im iperf.exe -f'
+    IPERF_KILL = 'killall -9 {}'
+    IPERF_WIN_KILL = 'taskkill /im {}.exe -f'
     IW_LINNK_COMMAND = 'iw dev wlan0 link'
     IX_ENDPOINT_COMMAND = "monkey -p com.ixia.ixchariot 1"
     STOP_IX_ENDPOINT_COMMAND = "am force-stop com.ixia.ixchariot"
@@ -170,25 +175,24 @@ class dut():
         logging.info(f"command:{command}")
         try:
             result = subprocess.Popen(command, shell=True,
-                                    stdout=subprocess.PIPE,
-                                    stderr=subprocess.PIPE,
-                                    encoding='gb2312' if pytest.win_flag else "utf-8",
-                                    errors='ignore')
-            logging.info(f'{result.communicate()[0]}')
+                                      stdout=subprocess.PIPE,
+                                      stderr=subprocess.PIPE,
+                                      encoding='gb2312' if pytest.win_flag else "utf-8",
+                                      errors='ignore')
+            # logging.info(f'{result.communicate()[0]}')
             return result.communicate()[0]
         except subprocess.TimeoutExpired:
             logging.info("Command timed out")
             return None
 
-
     def kill_iperf(self):
         try:
-            pytest.dut.subprocess_run(pytest.dut.IPERF_KILL)
+            pytest.dut.subprocess_run(pytest.dut.IPERF_KILL.format(self.test_tool))
         except Exception:
             ...
 
         try:
-            pytest.dut.popen_term(pytest.dut.IPERF_KILL)
+            pytest.dut.popen_term(pytest.dut.IPERF_KILL.format(self.test_tool))
         except Exception:
             ...
         # try:
@@ -198,7 +202,7 @@ class dut():
         #     ...
 
         try:
-            pytest.dut.popen_term(pytest.dut.IPERF_WIN_KILL)
+            pytest.dut.popen_term(pytest.dut.IPERF_WIN_KILL.format(self.test_tool))
         except Exception:
             ...
         # try:
@@ -245,17 +249,6 @@ class dut():
         if os.path.exists(f'rvr_log_{pytest.dut.serialnumber}.txt') and '-s' in command:
             os.remove(f'rvr_log_{pytest.dut.serialnumber}.txt')
             time.sleep(1)
-        # if adb:
-        #     if iperf3:
-        #         command = 'iperf3 -s -1'
-        #     if pytest.connect_type == 'adb':
-        #         command = f'adb -s {adb} shell ' + command
-        # else:
-        #     if iperf3:
-        #         command = f'iperf3 -c {pytest.dut.dut_ip} -i1 -t30 -P5'
-        #         if direction == 'tx':
-        #             command = f'iperf3 -c {pytest.dut.dut_ip} -i1 -t30 -P5 -R'
-        #
 
         if '-s' in command:
             if adb:
@@ -266,13 +259,13 @@ class dut():
                     t.start()
                     return None
                 else:
-                    logging.info('server adb command')
-                    command = f'adb -s {pytest.dut.serialnumber} shell {command} &'
+                    command = f'adb -s {pytest.dut.serialnumber} shell {command} '
+                    logging.info(f'server adb command {command}')
                     with open(f'rvr_log_{pytest.dut.serialnumber}.txt', 'w') as f:
-                        process = subprocess.Popen(command.split(), stdout=f, encoding='utf-8')
+                        process = subprocess.Popen(command.split(), stdout=f, stderr=f, stdin=f, encoding='utf-8', )
                     return process
             else:
-                logging.info('server pc command')
+                logging.info(f'server pc command {command}')
                 with open(f'rvr_log_{pytest.dut.serialnumber}.txt', 'w') as f:
                     process = subprocess.Popen(command.split(), stdout=f, encoding='utf-8')
                 return process
@@ -291,7 +284,6 @@ class dut():
                         stdout=asyncio.subprocess.PIPE,  # 捕获标准输出
                         stderr=asyncio.subprocess.PIPE  # 捕获标准错误
                     )
-
                     try:
                         # 等待命令完成，设置超时时间（例如 40 秒）
                         stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=35)
@@ -303,16 +295,17 @@ class dut():
                         process.terminate()  # 终止进程
                         await process.wait()  # 等待进程完全终止
 
+                logging.info('client adb command')
                 if pytest.connect_type == 'telnet':
                     pytest.dut.checkoutput(command)
                 else:
-                    logging.info('run over async')
                     command = f'adb -s {pytest.dut.serialnumber} shell timeout 35 {command} '
+                    logging.info(f'run over async {command}')
                     # 运行异步函数
                     asyncio.run(run_adb_iperf())
                     logging.info('run over async done')
             else:
-                logging.info('client pc command')
+                logging.info(f'client pc command {command}')
                 subprocess.Popen(command.split())
 
     def get_logcat(self, pair, adb):
@@ -324,7 +317,7 @@ class dut():
         if os.path.exists(f'rvr_log_{pytest.dut.serialnumber}.txt'):
             with open(f'rvr_log_{pytest.dut.serialnumber}.txt', 'r') as f:
                 for line in f.readlines():
-                    # if line.strip(): logging.info(f'line : {line.strip()}')
+                    if line.strip(): logging.info(f'line : {line.strip()}')
                     if pair != 1:
                         if '[SUM]' not in line:
                             continue
@@ -364,7 +357,7 @@ class dut():
     def get_rx_rate(self, router_info, rssi_num, type='TCP', corner_tool=None, db_set=''):
         rx_result_list = []
         self.rvr_result = None
-        for c in range(5):
+        for c in range(self.repest_times + 1):
             try:
                 logging.info(f'run rx {c} loop')
                 rx_result = 0
@@ -373,21 +366,27 @@ class dut():
                 # pytest.dut.checkoutput(pytest.dut.CLEAR_DMESG_COMMAND)
                 # pytest.dut.checkoutput(pytest.dut.MCS_RX_CLEAR_COMMAND)
                 # kill iperf
-                if self.rvr_tool == 'iperf':
+                if self.test_tool == 'iperf':
                     pytest.dut.kill_iperf()
                     terminal = pytest.dut.run_iperf(self.tool_path + pytest.dut.IPERF_SERVER[type], self.serialnumber)
                     time.sleep(1)
                     pytest.dut.run_iperf(
                         pytest.dut.IPERF_CLIENT_REGU[type]['rx'].format(
-                            self.dut_ip, pytest.dut.IPERF_TEST_TIME,
-                            self.pair), '', direction='rx')
-                    time.sleep(pytest.dut.IPERF_WAIT_TIME)
-                    if pytest.connect_type == 'telnet':
-                        time.sleep(15)
-                    rx_result = self.get_logcat(self.pair, self.serialnumber)
-                    logging.info(f'termainal {terminal}')
-                    if isinstance(terminal, subprocess.Popen):
-                        terminal.terminate()
+                            self.dut_ip, pytest.dut.IPERF_TEST_TIME, self.pair), '', direction='rx')
+                elif self.test_tool == 'iperf3':
+                    pytest.dut.kill_iperf()
+                    time.sleep(1)
+                    terminal = pytest.dut.run_iperf(pytest.dut.IPERF3_SERVER[type], self.serialnumber)
+                    time.sleep(1)
+                    pytest.dut.run_iperf(pytest.dut.IPERF3_CLIENT_REGU[type]['rx'].format(
+                        self.dut_ip, pytest.dut.IPERF_TEST_TIME, self.pair), '')
+                time.sleep(pytest.dut.IPERF_WAIT_TIME)
+                if pytest.connect_type == 'telnet':
+                    time.sleep(15)
+                rx_result = self.get_logcat(self.pair, self.serialnumber)
+                logging.info(f'termainal {terminal.returncode}')
+                if isinstance(terminal, subprocess.Popen):
+                    terminal.terminate()
                 if self.rvr_tool == 'ixchariot':
                     ix.ep1 = self.pc_ip
                     ix.ep2 = self.dut_ip
@@ -433,7 +432,7 @@ class dut():
         tx_result_list = []
         self.rvr_result = None
 
-        for c in range(5):
+        for c in range(self.repest_times + 1):
             try:
                 logging.info(f'run tx:  {c} loop ')
                 tx_result = 0
@@ -441,31 +440,30 @@ class dut():
                 # pytest.dut.checkoutput(pytest.dut.CLEAR_DMESG_COMMAND)
                 # pytest.dut.checkoutput(pytest.dut.MCS_TX_KEEP_GET_COMMAND)
                 # kill iperf
-                if self.rvr_tool == 'iperf':
+                if self.test_tool == 'iperf':
                     pytest.dut.kill_iperf()
                     time.sleep(1)
-                    # if self.test_tool == 'iperf3':
-                    #     adb_popen = pytest.dut.run_iperf(self.tool_path + pytest.dut.IPERF_CLIENT_REGU[type]['tx'].format(
-                    #         self.pc_ip,
-                    #         pytest.dut.IPERF_TEST_TIME,
-                    #         self.pair), self.serialnumber)
-                    #     pc_popen = pytest.dut.run_iperf(pytest.dut.IPERF_SERVER[type], '')
-                    # else:
                     terminal = pytest.dut.run_iperf(pytest.dut.IPERF_SERVER[type], '')
                     time.sleep(1)
                     pytest.dut.run_iperf(self.tool_path + pytest.dut.IPERF_CLIENT_REGU[type]['tx'].format(
                         self.pc_ip,
                         pytest.dut.IPERF_TEST_TIME,
                         self.pair), self.serialnumber)
-
-                    time.sleep(pytest.dut.IPERF_WAIT_TIME)
-                    if pytest.connect_type == 'telnet':
-                        time.sleep(15)
-                    time.sleep(3)
-                    tx_result = self.get_logcat(self.pair if type == 'TCP' else 1, self.serialnumber)
-                    logging.info(f'termainal {terminal}')
-                    if isinstance(terminal, subprocess.Popen):
-                        terminal.terminate()
+                elif self.test_tool == 'iperf3':
+                    pytest.dut.kill_iperf()
+                    time.sleep(1)
+                    terminal = pytest.dut.run_iperf(pytest.dut.IPERF3_SERVER[type], self.serialnumber)
+                    time.sleep(1)
+                    pytest.dut.run_iperf(pytest.dut.IPERF3_CLIENT_REGU[type]['tx'].format(
+                        self.dut_ip, pytest.dut.IPERF_TEST_TIME, self.pair), '')
+                time.sleep(pytest.dut.IPERF_WAIT_TIME)
+                if pytest.connect_type == 'telnet':
+                    time.sleep(15)
+                time.sleep(3)
+                tx_result = self.get_logcat(self.pair if type == 'TCP' else 1, self.serialnumber)
+                logging.info(f'termainal {terminal.returncode}')
+                if isinstance(terminal, subprocess.Popen):
+                    terminal.terminate()
                 if self.rvr_tool == 'ixchariot':
                     ix.ep1 = self.dut_ip
                     ix.ep2 = self.pc_ip
@@ -534,6 +532,7 @@ class dut():
                     assert False, f"Can't catch the address:{target} "
             logging.info(f'ip address {ip_address}')
             return True, ip_address
+
     def forget_wifi(self):
         '''
         Remove the network mentioned by <networkId>

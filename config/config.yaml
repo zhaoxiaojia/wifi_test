@@ -1,8 +1,8 @@
 # This is yaml for DUT info
 connect_type:
-  type: telnet
+  type: adb
   adb:
-    device: '66500800000000500'
+    device: '64063700090000059'
   telnet:
     ip: '192.168.31.144'
     #    market area  sandia  list:sandia,sandia_latam,sandia_hkc,sandia_dvb

@@ -14,7 +14,7 @@ from case_handle import testCase
 
 timestamp = datetime.datetime.now().strftime("%Y.%m.%d_%H.%M.%S")
 # test_case = 'test/project/roku/test_demo.py'
-test_case = 'test/test_wifi_rvr_rvo.py'
+test_case = 'test/test_wifi_peak_throughput.py'
 
 report_parent_path = test_case.replace('test', 'report', 1)
 

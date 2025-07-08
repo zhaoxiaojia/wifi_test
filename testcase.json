@@ -1895,5 +1895,29 @@
         "desc": "xxx",
         "priority": "P0",
         "path": "test/project/xiaomi/test_str_reconnect.py"
+    },
+    "test_wifi_peak_throughput.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test/test_wifi_peak_throughput.py"
+    },
+    "test_wifi_rvo.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test/test_wifi_rvo.py"
+    },
+    "test_wifi_rvr.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test/test_wifi_rvr.py"
+    },
+    "test_wifi_rvr_rvo.py": {
+        "id": 1,
+        "desc": "xxx",
+        "priority": "P0",
+        "path": "test/test_wifi_rvr_rvo.py"
     }
 }
