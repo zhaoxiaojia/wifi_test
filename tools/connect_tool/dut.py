@@ -556,13 +556,12 @@ class dut():
         if pytest.connect_type == 'telnet':
             return pytest.dut.roku.wifi_scan(ssid)
         else:
-            logging.info('should be seen')
             for _ in range(5):
-                info = pytest.dut.checkoutput("cmd wifi start-scan;cmd wifi list-scan-results")
+                info = pytest.dut.checkoutput("cmd wifi start-scan;sleep 5;cmd wifi list-scan-results")
                 logging.info(info)
                 if ssid in info:
                     return True
-                time.sleep(3)
+                time.sleep(1)
             else:
                 return False
 

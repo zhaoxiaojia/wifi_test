@@ -113,44 +113,58 @@ class Asusax88uControl(RouterTools):
             self.yaml_info = yamlTool(os.getcwd() + f'\\config\\router_xpath\\asus_xpath.yaml')
         else:
             self.yaml_info = yamlTool(os.getcwd() + '/config/router_xpath/asus_xpath.yaml')
-        self.yaml_info = yamlTool(r'D:\PycharmProjects\wifi_test\config\router_xpath\asus_xpath.yaml')
+        self.yaml_info = yamlTool(
+            r'C:\Users\SH171300-1522\PycharmProjects\wifi_test\config\router_xpath\asus_xpath.yaml')
         self.xpath = self.yaml_info.get_note('asus')
         self.port = 23
-        self.host = '192.168.51.1'
-        self.tn = telnetlib.Telnet(self.host, self.port)
-        self.tn.read_until(b'login:')
-        self.tn.write("admin".encode('ascii') + b'\n')
-        self.tn.read_until(b'Password:')
-        self.tn.write(str(self.xpath['passwd']).encode("ascii") + b'\n')
-        self.tn.read_until(b'admin@RT-AX88U-D8C0:/tmp/home/root#')
+        self.host = '192.168.50.1'
+        self.prompt = b'admin@RT-AX88U-D8C0:/tmp/home/root#'  # 命令提示符
+        self.tn = self._init_telnet()
+
+    def _init_telnet(self):
+        """初始化Telnet连接并登录"""
+        tn = telnetlib.Telnet(self.host, self.port, timeout=10)
+        tn.read_until(b'login:')
+        tn.write("admin".encode('ascii') + b'\n')
+        tn.read_until(b'Password:')
+        tn.write(str(self.xpath['passwd']).encode("ascii") + b'\n')
+        tn.read_until(self.prompt)  # 等待登录成功
+        return tn
 
     def telnet_write(self, cmd, max_retries=3):
-        logging.info(cmd)
+        """使用已建立的Telnet连接执行命令（修复：复用连接）"""
+        logging.info(f"Executing command: {cmd}")
+        print(f"Executing command: {cmd}")
         retries = 0
         while retries < max_retries:
             try:
-                # 建立Telnet连接
-                tn = telnetlib.Telnet(self.host, self.port, timeout=10)
-
-                # 登录过程（根据实际情况修改）
-                tn.read_until(b"login: ")
-                tn.write(b"admin\n")
-                tn.read_until(b"Password: ")
-                tn.write(str(self.xpath['passwd']).encode("ascii") + b'\n')
-
-                # 执行命令
-                tn.write(cmd.encode('ascii'))
-                time.sleep(0.5)  # 等待命令执行
-                output = tn.read_very_eager().decode('ascii', errors='ignore')
-
-                # 关闭连接
-                tn.close()
+                self.tn.write(cmd.encode('ascii') + b'\n')  # 发送命令
+                output = self.tn.read_until(self.prompt, timeout=10).decode('ascii', errors='ignore')
+                if "error" in output.lower():
+                    logging.warning(f"Command error: {output}")
                 return output
-            except ConnectionAbortedError as e:
-                print(f"连接中止，尝试重连 ({retries + 1}/{max_retries}): {e}")
+            except Exception as e:
+                logging.warning(f"Connection error, retrying ({retries + 1}/{max_retries}): {e}")
                 retries += 1
-                time.sleep(1)  # 等待一段时间后重试
+                # 重新连接
+                self.tn.close()
+                self.tn = self._init_telnet()
         return None
+
+    def kill_telnet_connections(self):
+        """强制终止路由器上的Telnet相关进程，释放端口"""
+        try:
+            # 终止所有Telnet服务进程（包括残留连接）
+            output = self.telnet_write("killall telnetd\n")
+            logging.info(f"终止Telnet进程输出: {output}")
+            time.sleep(2)  # 等待进程终止
+
+            # 重新启动Telnet服务
+            output = self.telnet_write("telnetd\n")
+            logging.info(f"重启Telnet服务输出: {output}")
+            print("Telnet连接已释放，端口23可用")
+        except Exception as e:
+            print(f"执行命令失败（可能已无法建立连接）: {e}")
 
     def quit(self):
         try:
@@ -297,7 +311,7 @@ class Asusax88uControl(RouterTools):
 
         # 修改 wpa_passwd
         if router.wpa_passwd:
-            self.set_2g_wpa_passwd(router.wpa_passwd) if '2' in router.band else self.set_2g_wpa_passwd(
+            self.set_2g_wpa_passwd(router.wpa_passwd) if '2' in router.band else self.set_5g_wpa_passwd(
                 router.wpa_passwd)
 
         # 修改 authentication_method
@@ -362,19 +376,20 @@ class Asusax88uControl(RouterTools):
         except Exception as e:
             logging.info('country code set with error')
 
+
 # ['Open System', 'WPA2-Personal', 'WPA3-Personal', 'WPA/WPA2-Personal', 'WPA2/WPA3-Personal',
 #                              'WPA2-Enterprise', 'WPA/WPA2-Enterprise']
 # fields = ['serial', 'band', 'ssid', 'wireless_mode', 'channel', 'bandwidth', 'authentication_method',
 #           'wpa_passwd', 'test_type', 'protocol_type', 'wep_encrypt', 'wep_passwd',
 #           'hide_ssid', 'hide_type', 'wpa_encrypt', 'passwd_index', 'protect_frame',
 #           'smart_connect', 'country_code']
-# ssid = 'ATC_ASUS_AX88U_2G'
+# ssid = 'coco'
 # passwd = '12345678'
 # Router = namedtuple('Router', fields, defaults=[None, ] * len(fields))
-# router = Router(band='2.4 GHz', ssid=ssid, wireless_mode='11ax', channel='11', bandwidth='20 MHz',
-#                 authentication_method='WPA3-Personal',wpa_passwd='12345678')
+# router = Router(band='5 GHz', ssid=ssid, wireless_mode='11ax', channel='36', bandwidth='80 MHz',
+#                 authentication_method='WPA2-Personal', wpa_passwd='12345678')
 # control = Asusax88uControl()
 # control.change_setting(router)
-
+# control.quit()
 # # control.change_country(router)
 # # control.router_control.reboot_router()
