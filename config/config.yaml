@@ -1,53 +1,50 @@
-# This is yaml for DUT info
+# 选择dut 连接方式 目前是二选一 adb 或者 telnet 选择后分别获取对应属性
 connect_type:
   type: adb
   adb:
     device: '64063700090000059'
   telnet:
     ip: '192.168.31.144'
-    #    market area  sandia  list:sandia,sandia_latam,sandia_hkc,sandia_dvb
-    wildcard: sandia_dvb
 
-# model such as w1 w1u w2 w2l
+# 芯片信息 字符串格式就行
 fpga: w2_sdio
 
-host_os:
-  user: amlogic
-  password: 'Linux2024'
-
+# 串口 选用
 serial_port:
   port: 'COM5'
   baud: 961200
 
-# Router model
+# 配测路由器
 router:
-  # pls write down the router name .
-  # It should be asusax86u,asusax88u,asusax5400,asusax6700,xiaomiredax6000,xiaomiax3000
+  # 做成下拉列表吧  支持这些asusax86u,asusax88u,asusax5400,asusax6700,xiaomiredax6000,xiaomiax3000
   name: xiaomiax3000
 
+# 仅在测试test_compatibility用例时配置
+# 字典键为 ip地址 ，值为该ip上的端口
 power_relay: {
   '192.168.200.6': '7',
 }
 
-
-# Attenuation information. It should be RC4DAT-8G-95 or RADIORACK-4-220
+# 仅在用例命中出现rvr 时才启用 下拉列表 支持三个信号 XIN-YI，RC4DAT-8G-95，RADIORACK-4-220
 rf_solution:
-  model: SH_NEW
+  model: XIN-YI
   RC4DAT-8G-95:
     idVendor: 0x20ce
     idProduct: 0x0023
     ip_address: 192.168.50.10
   RADIORACK-4-220:
     ip_address: 192.168.50.19
-  # reduction step for rf signal, can be configured according to test requirements
+  # 获取一个区间值
   step: [ 0,50 ]
 
-# Turntable information
+# 仅在用例命中出现rvo时才启用
 corner_angle:
-  # angle step for corner, can be configured according to test requirements
+  # 设备ip
   ip_address: 192.168.5.11
+  # 获取一个区间值
   step: [ 0, 361 ]
 
+# 仅在仅在用例命中出现rvr 时才启用
 rvr:
   tool: iperf
   iperf:
@@ -61,29 +58,7 @@ rvr:
   # re-test count , type 0 means don't repeat test once ,type 1 means repeat one time,totally get two test result totally
   repeat: 0
 
-
-# Number of channels played
-pair_num:
-  ax:
-    '2': { 'tx': [ 15,10,6,4,2 ],'rx': [ 15,10,6,4,2 ] }
-    '5': { 'tx': [ 35,35,15,6,4,2 ],'rx': [ 35,35,15,6,4,2 ] }
-  ac:
-    '5': { 'tx': [ 15,10,6,4,2 ],'rx': [ 15,10,6,4,2 ] }
-  'auto':
-    '2': { 'tx': [ 15,10,6,4,2 ],'rx': [ 15,10,6,4,2 ] }
-    '5': { 'tx': [ 15,15,15,6,4,2 ],'rx': [ 15,15,15,6,4,2 ] }
-  n:
-    '2': { 'tx': [ 15,10,6,4,2 ],'rx': [ 15,10,6,4,2 ] }
-    '5': { 'tx': [ 15,15,10,6,4,2 ],'rx': [ 15,15,10,6,4,2 ] }
-
-#
+# 可选配置
 concomitant_dut:
   status: False
   device_number: aq2228019431943b23a0d
-
-
-mysql:
-  host: 192.168.50.169
-  user: visitor
-  passwd: 123456
-  database: wifi_test

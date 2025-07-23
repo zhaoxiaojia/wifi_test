@@ -30,6 +30,7 @@ from tools.yamlTool import yamlTool
 wifi_yaml = yamlTool(os.getcwd() + '/config/config.yaml')
 router_name = wifi_yaml.get_note('router')['name']
 
+
 # 实例路由器对象
 router = get_router(router_name)
 logging.info(f'router {router}')
@@ -45,9 +46,9 @@ rvr_tool = wifi_yaml.get_note('rvr')['tool']
 rf_step_list = []
 rf_ip = ''
 model = wifi_yaml.get_note('rf_solution')['model']
-if model not in ['RADIORACK-4-220', 'RC4DAT-8G-95', 'SH_NEW']:
+if model not in ['RADIORACK-4-220', 'RC4DAT-8G-95', 'XIN-YI']:
     raise EnvironmentError("Doesn't support this model")
-if model == 'SH_NEW':
+if model == 'XIN-YI':
     rf_tool = rs()
 else:
     rf_ip = wifi_yaml.get_note('rf_solution')[model]['ip_address']
@@ -57,19 +58,8 @@ rf_step_list = wifi_yaml.get_note('rf_solution')['step']
 rf_step_list = [i for i in range(*rf_step_list)][::3]
 logging.info(f'rf_step_list {rf_step_list}')
 
-corner_step_list = []
-# 配置衰减
-corner_ip = wifi_yaml.get_note('corner_angle')['ip_address']
-if corner_ip == '192.168.5.11':
-    corner_tool = rs()
-else:
-    corner_tool = TelnetInterface(corner_ip)
-logging.info(f'corner_ip {corner_ip}')
-corner_step_list = wifi_yaml.get_note('corner_angle')['step']
-corner_step_list = [i for i in range(*corner_step_list)][::45]
-logging.info(f'corner step_list {corner_step_list}')
+step_list = rf_step_list
 
-step_list = itertools.product(corner_step_list, rf_step_list)
 
 logging.info(f'finally step_list {step_list}')
 
@@ -90,15 +80,6 @@ def setup(request):
     rf_tool.execute_rf_cmd(0)
     logging.info(rf_tool.get_rf_current_value())
     time.sleep(30)
-
-    # 转台置0
-
-    logging.info('Reset corner')
-    corner_tool.set_turntable_zero()
-    logging.info(corner_tool.get_turntanle_current_angle())
-    time.sleep(3)
-
-    # push_iperf()
     router_info = request.param
 
     # 修改路由器配置
@@ -117,6 +98,7 @@ def setup(request):
     if pytest.connect_type == 'telnet':
         connect_status = True
         time.sleep(90)
+
     else:
         # 连接 网络 最多三次重试
         for _ in range(3):
@@ -211,22 +193,14 @@ def test_rvr(setup, rf_value):
     # 获取当前衰减值
     logging.info(rf_tool.get_rf_current_value())
 
-    logging.info('set corner value')
-    value = rf_value[0] if type(rf_value) == tuple else rf_value
-    corner_tool.execute_turntable_cmd('rt', angle=value)
-    # 获取转台角度
-    logging.info(corner_tool.get_turntanle_current_angle())
-
     with open(pytest.testResult.detail_file, 'a') as f:
         f.write('-' * 40 + '\n')
         info, corner_set = '', ''
-        db_set, corner_set = 0, 0
+        db_set = 0
 
         db_set = rf_value[1] if type(rf_value) == tuple else rf_value
         info += 'db_set : ' + str(db_set) + '\n'
-
-        corner_set = rf_value[0] if type(rf_value) == tuple else rf_value
-        info += 'corner_set : ' + str(corner_set) + '\n'
+        info += 'corner_set : \n'
 
         f.write(info)
     # time.sleep(1)
@@ -243,11 +217,9 @@ def test_rvr(setup, rf_value):
         pair = wifi_yaml.get_note('rvr')['pair']
         logging.info(f'rssi : {rssi_num} pair : {pair}')
         pytest.dut.get_tx_rate(router_info, rssi_num, protocol,
-                               corner_tool=corner_tool,
                                db_set=db_set)
     if 'rx' in router_info.test_type:
         pair = wifi_yaml.get_note('rvr')['pair']
         logging.info(f'rssi : {rssi_num} pair : {pair}')
         pytest.dut.get_rx_rate(router_info, rssi_num, protocol,
-                               corner_tool=corner_tool,
                                db_set=db_set)

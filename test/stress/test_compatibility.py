@@ -1,3 +1,14 @@
+#!/usr/bin/env python 
+# encoding: utf-8 
+'''
+@author: chao.li
+@contact: chao.li@amlogic.com
+@software: pycharm
+@file: test_compatibility.py
+@time: 2025/7/22 21:40 
+@desc: 
+'''
+
 import logging
 import re
 import subprocess
@@ -47,7 +58,8 @@ def handle_expectdata(ip, port, band, dir):
             authentication = data[band]['authentication']
             with open(f"{os.getcwd()}/config/compatibility_dut.json", 'r') as f:
                 dut_data = json.load(f)
-                return dut_data[band][interface.upper()][FPGA_CONFIG[wifichip][band]][bandwidth][FPGA_CONFIG[wifichip]['mimo']][
+                return dut_data[band][interface.upper()][FPGA_CONFIG[wifichip][band]][bandwidth][
+                    FPGA_CONFIG[wifichip]['mimo']][
                     dir]
 
 

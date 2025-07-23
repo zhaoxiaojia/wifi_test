@@ -13,20 +13,17 @@ import itertools
 import logging
 import os
 import re
-import signal
-import subprocess
 import threading
 import time
 from copy import copy
 from test import get_testdata
-from test.test_wifi_rvr_rvo import corner_tool
+from test.performance.test_wifi_rvr_rvo import corner_tool
 
 import openpyxl
 import psutil
 import pytest
 
 from tools.connect_tool.TelnetInterface import TelnetInterface
-from tools.ixchariot import ix
 from tools.router_tool.Router import Router
 from tools.router_tool.router_factory import get_router
 from tools.yamlTool import yamlTool

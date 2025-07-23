@@ -10,14 +10,13 @@ import re
 import subprocess
 import time
 from test import get_testdata
-from test.test_wifi_rvr_rvo import get_rx_rate, get_tx_rate, iperf_on, kill_iperf
+from test.performance.test_wifi_rvr_rvo import get_rx_rate, get_tx_rate, iperf_on, kill_iperf
 
 import pytest
 
 from tools.connect_tool.adb import adb
 from tools.pdusnmp import power_ctrl
 from tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
-from tools.router_tool.Router import Router
 
 test_data = get_testdata()
 ipfoncig_info = subprocess.check_output('ifconfig', shell=True, encoding='utf-8').strip()

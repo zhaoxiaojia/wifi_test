@@ -64,7 +64,6 @@ def pytest_sessionstart(session):
     elif pytest.connect_type == 'telnet':
         # Create telnet obj
         telnet_ip = pytest.config_yaml.get_note("connect_type")[pytest.connect_type]['ip']
-        wildcard = pytest.config_yaml.get_note("connect_type")[pytest.connect_type]['wildcard']
         pytest.dut = telnet_tool(telnet_ip)
         pytest.dut.roku = roku_ctrl(telnet_ip)
     else:
