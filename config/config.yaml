@@ -1,64 +1,44 @@
-# 选择dut 连接方式 目前是二选一 adb 或者 telnet 选择后分别获取对应属性
+concomitant_dut:
+  device_number: aq2228019431943b23a0d
+  status: false
 connect_type:
-  type: adb
   adb:
     device: '64063700090000059'
   telnet:
-    ip: '192.168.31.144'
-
-# 芯片信息 字符串格式就行
+    ip: 192.168.31.144
+  type: adb
+corner_angle:
+  ip_address: 192.168.5.11
+  step:
+  - 0
+  - 360
 fpga: w2_sdio
-
-# 串口 选用
-serial_port:
-  port: 'COM5'
-  baud: 961200
-
-# 配测路由器
-router:
-  # 做成下拉列表吧  支持这些asusax86u,asusax88u,asusax5400,asusax6700,xiaomiredax6000,xiaomiax3000
-  name: xiaomiax3000
-
-# 仅在测试test_compatibility用例时配置
-# 字典键为 ip地址 ，值为该ip上的端口
-power_relay: {
-  '192.168.200.6': '7',
-}
-
-# 仅在用例命中出现rvr 时才启用 下拉列表 支持三个信号 XIN-YI，RC4DAT-8G-95，RADIORACK-4-220
+power_relay:
+  192.168.200.6: '7'
 rf_solution:
-  model: XIN-YI
-  RC4DAT-8G-95:
-    idVendor: 0x20ce
-    idProduct: 0x0023
-    ip_address: 192.168.50.10
   RADIORACK-4-220:
     ip_address: 192.168.50.19
-  # 获取一个区间值
-  step: [ 0,50 ]
-
-# 仅在用例命中出现rvo时才启用
-corner_angle:
-  # 设备ip
-  ip_address: 192.168.5.11
-  # 获取一个区间值
-  step: [ 0, 361 ]
-
-# 仅在仅在用例命中出现rvr 时才启用
+  RC4DAT-8G-95:
+    idProduct: '35'
+    idVendor: '8398'
+    ip_address: 192.168.50.10
+  model: XIN-YI
+  step:
+  - 0
+  - 14
+router:
+  name: asusax86u
 rvr:
-  tool: iperf
   iperf:
-    # should be iperf or iperf3
+    path: ''
     version: iperf
-    # dut iperf path
-    path:
   ixchariot:
     path: D:/Program Files (x86)/Ixia/IxChariot
-  pair: 2
-  # re-test count , type 0 means don't repeat test once ,type 1 means repeat one time,totally get two test result totally
-  repeat: 0
-
-# 可选配置
-concomitant_dut:
-  status: False
-  device_number: aq2228019431943b23a0d
+  pair: '2'
+  repeat: '0'
+  tool: iperf
+serial_port:
+  baud: '961200'
+  port: COM5
+  status: false
+text_case: C:/Users/SH171300-1522/PycharmProjects/wifi_test/test/performance/test_wifi_rvr.py

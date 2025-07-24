@@ -19,5 +19,3 @@ PyUserInput
 pysnmp
 roku
 pytest-dependency
-PyQt5
-PyQt-Fluent-Widgets

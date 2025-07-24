@@ -10,42 +10,27 @@
 '''
 from __future__ import annotations
 
-"""
-windows_case_config.py – Fix-3
-==============================
-* **Folder nodes still wouldn’t expand** when clicked.  Root cause was
-  that qfluentwidgets `TreeView` requires us to *explicitly* toggle
-  expansion if we intercept the *clicked* signal.  The previous handler
-  returned early for directories, so the default expand/collapse logic
-  never ran.
-* **Wrong import path** – `QFileSystemModel` lives in
-  **PyQt6.QtWidgets** (not *QtGui*) – this is now fixed.
-* **Root-index initialisation** – we now reuse the `QModelIndex`
-  returned by `setRootPath()` (Qt’s recommended way) instead of calling
-  `index(root_dir)` again.
-
-Copy the whole file below and overwrite your existing one.
-"""
-
-
-
 import os
 import yaml
 
-from PyQt6.QtCore import (
+from PyQt5.QtCore import (
     Qt,
     QSignalBlocker,
     QTimer,
     QDir,
+    QSortFilterProxyModel,
+    QModelIndex
 )
-from PyQt6.QtWidgets import (
+from PyQt5.QtWidgets import (
     QWidget,
     QHBoxLayout,
     QVBoxLayout,
     QFormLayout,
     QGroupBox,
     QLabel,
+    QFileSystemModel
 )
+
 from qfluentwidgets import (
     CardWidget,
     TreeView,
@@ -54,7 +39,32 @@ from qfluentwidgets import (
     ComboBox,
     FluentIcon, TextEdit,
 )
-from PyQt6.QtGui import QFileSystemModel
+
+
+class TestFileFilterModel(QSortFilterProxyModel):
+    def filterAcceptsRow(self, source_row, source_parent):
+        index = self.sourceModel().index(source_row, 0, source_parent)
+        file_name = self.sourceModel().fileName(index)
+        is_dir = self.sourceModel().isDir(index)
+
+        # 过滤 __pycache__ 文件夹 和 __init__.py 文件
+        if is_dir and file_name == "__pycache__":
+            return False
+        if not is_dir:
+            if not file_name.startswith("test_") or not file_name.endswith(".py"):
+                return False
+            if file_name == "__init__.py":
+                return False
+        return True
+
+    def hasChildren(self, parent: QModelIndex) -> bool:
+        """修复文件夹无法展开的问题：即使子项被过滤，也认为目录有子节点"""
+        src_parent = self.mapToSource(parent)
+        # 原始模型中的节点是否是目录
+        if not self.sourceModel().isDir(src_parent):
+            return False
+        # 强制认为目录有子项（即便都被过滤了）
+        return True
 
 
 class CaseConfigPage(CardWidget):
@@ -70,7 +80,6 @@ class CaseConfigPage(CardWidget):
             os.path.join(os.path.dirname(__file__), "../config/config.yaml")
         )
         self.config: dict = self._load_config()
-
         # -------------------- state --------------------
         self._refreshing = False
         self._pending_path: str | None = None
@@ -121,9 +130,13 @@ class CaseConfigPage(CardWidget):
             QDir.Filter.AllDirs | QDir.Filter.NoDotAndDotDot | QDir.Filter.Files
         )
 
-        self.case_tree.setModel(self.fs_model)
-        self.case_tree.setRootIndex(root_index)
-        # hide size/type/modified columns
+        self.proxy_model = TestFileFilterModel()
+        self.proxy_model.setSourceModel(self.fs_model)
+        self.case_tree.setModel(self.proxy_model)
+        self.case_tree.setRootIndex(self.proxy_model.mapFromSource(root_index))
+
+        # 隐藏非名称列
+        self.case_tree.header().hide()
         for col in range(1, self.fs_model.columnCount()):
             self.case_tree.hideColumn(col)
 
@@ -167,6 +180,9 @@ class CaseConfigPage(CardWidget):
         self.rvr_iperf_group.setVisible(tool == "iperf")
         self.rvr_ix_group.setVisible(tool == "ixchariot")
 
+    def on_serial_enabled_changed(self, text: str):
+        self.serial_cfg_group.setVisible(text == "True")
+
     def render_all_fields(self):
         """
         自动渲染config.yaml中的所有一级字段。
@@ -174,8 +190,20 @@ class CaseConfigPage(CardWidget):
         字段映射到 self.field_widgets，方便后续操作。
         """
         for key, value in self.config.items():
+            if key == "text_case":
+                group = QGroupBox("Test Case")
+                group.setStyleSheet(
+                    "QGroupBox{border:1px solid #d0d0d0;border-radius:4px;margin-top:6px;}"
+                    "QGroupBox::title{left:8px;padding:0 3px;}")
+                vbox = QVBoxLayout(group)
+                self.test_case_edit = LineEdit(self)
+                self.test_case_edit.setText(value or "")  # 默认值
+                self.test_case_edit.setReadOnly(True)  # 只读，由左侧树刷新
+                vbox.addWidget(self.test_case_edit)
+                self.form.insertRow(0, group)  # ← 插到最上面
+                self.field_widgets["text_case"] = self.test_case_edit
+                continue
             if key == "connect_type":
-                from PyQt6.QtWidgets import QGroupBox, QVBoxLayout, QLabel
                 group = QGroupBox("连接方式")
                 vbox = QVBoxLayout(group)
                 self.connect_type_combo = ComboBox(self)
@@ -183,7 +211,6 @@ class CaseConfigPage(CardWidget):
                 self.connect_type_combo.setCurrentText(value.get('type', 'adb'))
                 self.connect_type_combo.currentTextChanged.connect(self.on_connect_type_changed)
                 vbox.addWidget(self.connect_type_combo)
-
                 # 只为每个子类型建独立的参数区
                 self.adb_group = QWidget()
                 adb_vbox = QVBoxLayout(self.adb_group)
@@ -211,10 +238,8 @@ class CaseConfigPage(CardWidget):
                 self.field_widgets["connect_type.telnet.ip"] = self.telnet_ip_edit
                 continue
             if key == "rf_solution":
-                from PyQt6.QtWidgets import QGroupBox, QVBoxLayout, QLabel
                 group = QGroupBox("RF Solution")
                 vbox = QVBoxLayout(group)
-
                 # -------- 下拉：选择型号 --------
                 self.rf_model_combo = ComboBox(self)
                 self.rf_model_combo.addItems(["XIN-YI", "RC4DAT-8G-95", "RADIORACK-4-220"])
@@ -263,7 +288,7 @@ class CaseConfigPage(CardWidget):
 
                 # -------- 通用字段：step --------
                 self.rf_step_edit = LineEdit(self)
-                self.rf_step_edit.setPlaceholderText("step (逗号分隔)")
+                self.rf_step_edit.setPlaceholderText("rf step (逗号分隔) : 0,50")
                 self.rf_step_edit.setText(",".join(map(str, value.get("step", []))))
                 vbox.addWidget(QLabel("Step:"))
                 vbox.addWidget(self.rf_step_edit)
@@ -283,7 +308,6 @@ class CaseConfigPage(CardWidget):
             if key == "rvr":
                 group = QGroupBox("RVR 配置")  # 外层分组
                 vbox = QVBoxLayout(group)
-
                 # Tool 下拉
                 self.rvr_tool_combo = ComboBox(self)
                 self.rvr_tool_combo.addItems(["iperf", "ixchariot"])
@@ -348,9 +372,7 @@ class CaseConfigPage(CardWidget):
                 continue  # 跳过默认 LineEdit 处理
 
                 # ---------- 其余简单字段 ----------
-            # ---------- corner_angle ----------
             if key == "corner_angle":
-                from PyQt6.QtWidgets import QGroupBox, QVBoxLayout, QLabel
                 group = QGroupBox("Corner Angle")
                 vbox = QVBoxLayout(group)
 
@@ -376,13 +398,75 @@ class CaseConfigPage(CardWidget):
                 self.field_widgets["corner_angle.ip_address"] = self.corner_ip_edit
                 self.field_widgets["corner_angle.step"] = self.corner_step_edit
                 continue  # 跳过后面的通用处理
+            if key == "router":
+                group = QGroupBox("Router")
+                vbox = QVBoxLayout(group)
+
+                self.router_name_combo = ComboBox(self)
+                self.router_name_combo.addItems([
+                    "asusax86u", "asusax88u", "asusax5400",
+                    "asusax6700", "xiaomiredax6000", "xiaomiax3000"
+                ])
+                self.router_name_combo.setCurrentText(value.get("name", "xiaomiax3000"))
+
+                vbox.addWidget(QLabel("Name:"))
+                vbox.addWidget(self.router_name_combo)
+                self.form.addRow(group)
+
+                # 注册控件
+                self.field_widgets["router.name"] = self.router_name_combo
+                continue  # ← 继续下一顶层 key
+            if key == "serial_port":
+                group = QGroupBox("Serial Port")
+                vbox = QVBoxLayout(group)
+
+                # 开关（True/False 下拉，同一套保存逻辑即可）
+                self.serial_enable_combo = ComboBox(self)
+                self.serial_enable_combo.addItems(["False", "True"])
+                self.serial_enable_combo.setCurrentText(
+                    str(value.get("status", False))
+                )
+                self.serial_enable_combo.currentTextChanged.connect(
+                    self.on_serial_enabled_changed
+                )
+                vbox.addWidget(QLabel("Enable:"))
+                vbox.addWidget(self.serial_enable_combo)
+
+                # —— 子参数区 ——（默认隐藏，开关=True 时可见）
+                self.serial_cfg_group = QWidget()
+                cfg_box = QVBoxLayout(self.serial_cfg_group)
+
+                self.serial_port_edit = LineEdit(self)
+                self.serial_port_edit.setPlaceholderText("port (e.g. COM5)")
+                self.serial_port_edit.setText(value.get("port", ""))
+
+                self.serial_baud_edit = LineEdit(self)
+                self.serial_baud_edit.setPlaceholderText("baud (e.g. 115200)")
+                self.serial_baud_edit.setText(str(value.get("baud", "")))
+
+                cfg_box.addWidget(QLabel("Port:"))
+                cfg_box.addWidget(self.serial_port_edit)
+                cfg_box.addWidget(QLabel("Baud:"))
+                cfg_box.addWidget(self.serial_baud_edit)
+
+                vbox.addWidget(self.serial_cfg_group)
+                self.form.addRow(group)
+
+                # 初始化显隐
+                self.on_serial_enabled_changed(self.serial_enable_combo.currentText())
+
+                # 注册控件
+                self.field_widgets["serial_port.status"] = self.serial_enable_combo
+                self.field_widgets["serial_port.port"] = self.serial_port_edit
+                self.field_widgets["serial_port.baud"] = self.serial_baud_edit
+                continue
 
     def populate_case_tree(self, root_dir):
         """
         遍历 test 目录，只将 test_ 开头的 .py 文件作为节点加入树结构。
         其它 py 文件不显示。
         """
-        from PyQt6.QtGui import QStandardItemModel, QStandardItem
+        from PyQt5.QtGui import QStandardItemModel, QStandardItem
         model = QStandardItemModel()
         model.setHorizontalHeaderLabels(['请选择测试用例'])  # 可选，设置表头显示
 
@@ -392,6 +476,7 @@ class CaseConfigPage(CardWidget):
 
         def add_items(parent_item, dir_path):
             for fname in sorted(os.listdir(dir_path)):
+                print(f'fname {fname}')
                 if fname == '__pycache__' or fname.startswith('.'):
                     continue
                 path = os.path.join(dir_path, fname)
@@ -399,13 +484,8 @@ class CaseConfigPage(CardWidget):
                     dir_item = QStandardItem(fname)
                     dir_item.setData(path)
                     parent_item.appendRow(dir_item)
-                    # 递归前检查是否是 stress
-                    if fname == "performance":
-                        # 记下 performance 目录在 parent_item 的 row
-                        self.performance_row = parent_item.rowCount() - 1
-                        self.performance_item = dir_item
                     add_items(dir_item, path)
-                elif fname.startswith("test_") and fname.endswith(".py"):
+                elif os.path.isfile(path):
                     file_item = QStandardItem(fname)
                     file_item.setData(path)
                     parent_item.appendRow(file_item)
@@ -416,67 +496,43 @@ class CaseConfigPage(CardWidget):
         # 展开根节点
         self.case_tree.expand(model.index(0, 0))
 
-        # 展开 stress_test 节点（如果存在）
-        if hasattr(self, 'performance_item'):
-            # 找到 stress_test 节点的 QModelIndex
-            index = self.performance_item.index()
-            self.case_tree.expand(index)
-
-    def on_case_tree_clicked(self, idx):
+    def on_case_tree_clicked(self, proxy_idx):
         """
-        当用户点击左侧用例树节点时触发。
-        1. 如果是有效的 test_ 开头的 Python 文件，则自动填入路径并刷新可编辑字段逻辑。
-        2. 否则清空用例路径，并将所有字段设为只读。
+        proxy_idx: 用户在界面点击到的索引（始终是代理模型的）
         """
-
         model = self.case_tree.model()
-        # -------- QFileSystemModel branch --------
-        if isinstance(model, QFileSystemModel):
-            path = model.filePath(idx)
-            if os.path.isdir(path):
-                # user clicked a folder – toggle expansion manually
-                if self.case_tree.isExpanded(idx):
-                    self.case_tree.collapse(idx)
-                else:
-                    self.case_tree.expand(idx)
-                self.set_fields_editable(set())
-                return
 
-            # not a valid test file → disable fields
-            if not (
-                os.path.isfile(path)
-                and os.path.basename(path).startswith("test_")
-                and path.endswith(".py")
-            ):
-                self.set_fields_editable(set())
-                return
-        else:  # -------- legacy QStandardItemModel branch --------
-            item = model.itemFromIndex(idx)
-            if item is None:
-                return
-            path = item.data()
-            if os.path.isdir(path):
-                if self.case_tree.isExpanded(idx):
-                    self.case_tree.collapse(idx)
-                else:
-                    self.case_tree.expand(idx)
-                self.set_fields_editable(set())
-                return
-            if not (
-                os.path.isfile(path)
-                and os.path.basename(path).startswith("test_")
-                and path.endswith(".py")
-            ):
-                self.set_fields_editable(set())
-                return
+        # —— 用源索引只负责取真实文件路径 ——
+        source_idx = (
+            model.mapToSource(proxy_idx)
+            if isinstance(model, QSortFilterProxyModel) else proxy_idx
+        )
+        path = self.fs_model.filePath(source_idx)
 
-        # at this point we have a valid test_* file
+        # ---------- 目录：只负责展开/折叠 ----------
+        if os.path.isdir(path):
+            if self.case_tree.isExpanded(proxy_idx):
+                self.case_tree.collapse(proxy_idx)
+            else:
+                self.case_tree.expand(proxy_idx)
+            self.set_fields_editable(set())
+            return
+
+        # ---------- 非 test_*.py 直接禁用 ----------
+        if not (os.path.isfile(path)
+                and os.path.basename(path).startswith("test_")
+                and path.endswith(".py")):
+            self.set_fields_editable(set())
+            return
+
+        if hasattr(self, "test_case_edit"):
+            self.test_case_edit.setText(path)
+
+        # ---------- 有效用例 ----------
         if self._refreshing:
             self._pending_path = path
             return
         self.apply_case_logic(path)
-
-
 
     def get_editable_fields(self, case_path):
         """
@@ -491,7 +547,11 @@ class CaseConfigPage(CardWidget):
             "connect_type.type",
             "connect_type.adb.device",
             "connect_type.telnet.ip",
-            "connect_type.telnet.wildcard"
+            "connect_type.telnet.wildcard",
+            "router.name",
+            "serial_port.status",
+            "serial_port.port",
+            "serial_port.baud"
         }
         if basename == "test_compatibility.py":
             editable |= {"fpga", "power_relay"}
@@ -507,7 +567,11 @@ class CaseConfigPage(CardWidget):
                 "rf_solution.step"
             }
         if "rvo" in basename:
-            editable |= {"corner_angle"}
+            editable |= {
+                "corner_angle",
+                "corner_angle.ip_address",
+                "corner_angle.step"
+            }
         # 如果你需要所有字段都可编辑，直接 return set(self.field_widgets.keys())
         return editable
 
@@ -557,24 +621,41 @@ class CaseConfigPage(CardWidget):
             QTimer.singleShot(0, lambda: self.apply_case_logic(path))
 
     def on_run(self):
-        # 收集参数区所有值
+        # 将字段值更新到 self.config（保持结构）
         for key, widget in self.field_widgets.items():
+            # key 可能是 'connect_type.adb.device' → 拆成层级
+            parts = key.split('.')
+            ref = self.config
+            for part in parts[:-1]:
+                ref = ref.setdefault(part, {})  # 保证嵌套结构存在
+            leaf = parts[-1]
+
             if isinstance(widget, LineEdit):
                 val = widget.text()
-                if ':' in val and isinstance(self.config.get(key), dict):
-                    # 对于dict类型，自动解析 key:val
-                    k, v = val.split(':', 1)
-                    self.config[key] = {k.strip(): v.strip()}
-                elif isinstance(self.config.get(key), list):
-                    self.config[key] = [x.strip() for x in val.split(',') if x.strip()]
+                # 判断当前字段是否为 list 且不是字符串形式表示的
+                old_val = ref.get(leaf)
+                if isinstance(old_val, list):
+                    # 判断是否是纯数字，如果都是数字，则保留为 int，否则保留字符串
+                    items = [x.strip() for x in val.split(',') if x.strip()]
+                    if all(i.isdigit() for i in items):
+                        ref[leaf] = [int(i) for i in items]
+                    else:
+                        ref[leaf] = items
                 else:
-                    self.config[key] = val
+                    ref[leaf] = val.strip()
             elif isinstance(widget, ComboBox):
                 text = widget.currentText()
-                if text in ['True', 'False']:
-                    self.config[key] = (text == 'True')
-                else:
-                    self.config[key] = text
-        # 写回yaml
-        with open(self.config_path, "w", encoding="utf-8") as f:
-            yaml.safe_dump(self.config, f, allow_unicode=True)
+                ref[leaf] = True if text == 'True' else False if text == 'False' else text
+        # 保存配置
+        self._save_config()
+        case_path = self.field_widgets["text_case"].text().strip()
+        # 触发主窗口跳转到 run 页面
+        selected_index = self.case_tree.currentIndex()
+        proxy_idx = self.case_tree.currentIndex()
+        if isinstance(self.case_tree.model(), QSortFilterProxyModel):
+            src_idx = self.case_tree.model().mapToSource(proxy_idx)
+        else:
+            src_idx = proxy_idx
+        case_path = self.fs_model.filePath(src_idx)
+        if os.path.isfile(case_path) and case_path.endswith(".py"):
+            self.on_run_callback(case_path, self.config)

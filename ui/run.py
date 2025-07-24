@@ -11,15 +11,19 @@
 
 # ui/run.py
 
-from PyQt6.QtWidgets import QVBoxLayout
+from PyQt5.QtWidgets import QVBoxLayout
 from qfluentwidgets import CardWidget, StrongBodyLabel, PushButton, ProgressBar, InfoBar, InfoBarPosition
-from PyQt6.QtWidgets import QTextEdit
+from PyQt5.QtWidgets import QTextEdit
 from qfluentwidgets import FluentIcon
 import threading
 import time
+import subprocess
+import datetime
+
 
 class RunPage(CardWidget):
     """运行页"""
+
     def __init__(self, case_path, config, on_back_callback):
         super().__init__()
         self.setObjectName("runPage")
@@ -42,7 +46,7 @@ class RunPage(CardWidget):
         layout.addWidget(self.log_area)
 
         self.back_btn = PushButton("返回", self)
-        self.back_btn.setIcon(FluentIcon.BACK)
+        self.back_btn.setIcon(FluentIcon.LEFT_ARROW)
         self.back_btn.clicked.connect(self.on_back)
         layout.addWidget(self.back_btn)
         self.setLayout(layout)
@@ -53,11 +57,25 @@ class RunPage(CardWidget):
         self.log_area.append(msg)
 
     def run_case(self):
-        def fake_run():
-            for i in range(0, 101, 10):
-                self.progress.setValue(i)
-                self.append_log(f"<b style='color:#2770FF;'>进度: {i}%</b>")
-                time.sleep(0.15)
+        def execute_case():
+            timestamp = datetime.datetime.now().strftime("%Y.%m.%d_%H.%M.%S")
+            report_path = fr'./report/{timestamp}'
+            cmd = ["pytest", "-v", '-s', '--capture=sys', '--html=report.html', '--full-trace',
+                   f'--resultpath={timestamp}', self.case_path]
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                universal_newlines=True,
+                bufsize=1
+            )
+
+            # 实时读取输出
+            for line in process.stdout:
+                self.append_log(line.rstrip())
+            process.stdout.close()
+            process.wait()
+
             self.append_log("<b style='color:green;'>运行完成！</b>")
             InfoBar.success(
                 title="完成",
@@ -66,7 +84,8 @@ class RunPage(CardWidget):
                 position=InfoBarPosition.TOP,
                 duration=1800
             )
-        threading.Thread(target=fake_run, daemon=True).start()
+
+        threading.Thread(target=execute_case, daemon=True).start()
 
     def on_back(self):
         self.on_back_callback()
