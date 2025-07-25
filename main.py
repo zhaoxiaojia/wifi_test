@@ -40,6 +40,30 @@ class MainWindow(FluentWindow):
         setTheme(Theme.LIGHT)  # 或 Theme.LIGHT
         # self.setMicaEffectEnabled(True)  # Win11下生效毛玻璃
 
+    def removeSubInterface(self, page):
+        """Remove the given page from the navigation if possible."""
+        if hasattr(self, "navigationInterface"):
+            for name in ("removeSubInterface", "removeInterface", "removeItem"):
+                func = getattr(self.navigationInterface, name, None)
+                if callable(func):
+                    try:
+                        func(page)
+                        return
+                    except Exception:
+                        pass
+        # Fallback: detach widget
+        if hasattr(page, "setParent"):
+            page.setParent(None)
+
+    def clear_run_page(self):
+        if self.run_page:
+            try:
+                self.removeSubInterface(self.run_page)
+            except Exception as e:
+                print("removeSubInterface failed:", e)
+            # 千万不要手动 setParent(None) 或 deleteLater()
+            self.run_page = None
+
     def center_window(self):
         # 获取屏幕的几何信息
         screen_geometry = QGuiApplication.primaryScreen().availableGeometry()
@@ -52,13 +76,17 @@ class MainWindow(FluentWindow):
         # 确保窗口顶部不会超出屏幕
         self.move(window_geometry.topLeft())
 
-    def show_case_config(self):
-        self.setCurrentIndex(self.case_config_page)
+    def setCurrentIndex(self, page_widget):
+        # print("setCurrentIndex dir:", dir(self))
+        try:
+            self.stackedWidget.setCurrentWidget(page_widget)
+            print(f"FluentWindow.setCurrentWidget({page_widget}) success")
+        except Exception as e:
+            print(f"FluentWindow.setCurrentWidget error: {e}")
 
     def on_run(self, case_path, config):
-        # 切换到run页面（传参）
-        if self.run_page:
-            self.removeSubInterface(self.run_page)
+        # print("on_run dir:", dir(self))
+        self.clear_run_page()
         self.run_page = RunPage(case_path, config, self.show_case_config)
         self.addSubInterface(
             self.run_page,
@@ -67,6 +95,13 @@ class MainWindow(FluentWindow):
             position=NavigationItemPosition.BOTTOM
         )
         self.setCurrentIndex(self.run_page)
+        print("Switched to RunPage:", self.run_page)
+
+    def show_case_config(self):
+        # print("show_case_config dir:", dir(self))
+        self.clear_run_page()
+        self.setCurrentIndex(self.case_config_page)
+        print("Switched to CaseConfigPage")
 
 
 if __name__ == "__main__":

@@ -20,7 +20,7 @@ import psutil
 import pytest
 import csv
 from tools.connect_tool.adb import adb
-from tools.connect_tool.host_os import host_os
+# from tools.connect_tool.host_os import host_os
 from tools.connect_tool.telnet_tool import telnet_tool
 from tools.TestResult import TestResult
 from tools.yamlTool import yamlTool
@@ -38,7 +38,7 @@ def pytest_sessionstart(session):
     :return:
     '''
     # get host os
-    pytest.host_os = host_os()
+    # pytest.host_os = host_os()
     # get the pc system
     if ('win32' or 'win64') in sys.platform:
         pytest.win_flag = True

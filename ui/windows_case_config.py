@@ -37,7 +37,10 @@ from qfluentwidgets import (
     LineEdit,
     PushButton,
     ComboBox,
-    FluentIcon, TextEdit,
+    FluentIcon,
+    TextEdit,
+    InfoBar,
+    InfoBarPosition,
 )
 
 
@@ -113,10 +116,6 @@ class CaseConfigPage(CardWidget):
 
         # connect signals AFTER UI ready
         self.case_tree.clicked.connect(self.on_case_tree_clicked)
-
-        # window hints
-        self.setMinimumSize(1100, 700)
-        self.setMaximumWidth(1800)
         self.case_tree.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.apply_case_logic("")
 
@@ -649,13 +648,20 @@ class CaseConfigPage(CardWidget):
         # 保存配置
         self._save_config()
         case_path = self.field_widgets["text_case"].text().strip()
-        # 触发主窗口跳转到 run 页面
-        selected_index = self.case_tree.currentIndex()
+        # 若树状视图中选择了有效用例，则覆盖默认路径
         proxy_idx = self.case_tree.currentIndex()
-        if isinstance(self.case_tree.model(), QSortFilterProxyModel):
-            src_idx = self.case_tree.model().mapToSource(proxy_idx)
-        else:
-            src_idx = proxy_idx
-        case_path = self.fs_model.filePath(src_idx)
+        model = self.case_tree.model()
+        src_idx = model.mapToSource(proxy_idx) if isinstance(model, QSortFilterProxyModel) else proxy_idx
+        selected_path = self.fs_model.filePath(src_idx)
+        if os.path.isfile(selected_path) and selected_path.endswith(".py"):
+            case_path = selected_path
         if os.path.isfile(case_path) and case_path.endswith(".py"):
             self.on_run_callback(case_path, self.config)
+        else:
+            InfoBar.warning(
+                title="提示",
+                content="请选择一个测试用例后再运行",
+                parent=self,
+                position=InfoBarPosition.TOP,
+                duration=1800
+            )

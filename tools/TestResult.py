@@ -43,7 +43,6 @@ class TestResult():
         self.current_number = 0
         self.x_path = step
         self.x_length = len(self.x_path)
-        self.init_rvr_result()
 
     def init_rvr_result(self):
         self.rvr_excelfile = os.path.join(self.logdir, 'RvrCheckExcel.xlsx')
