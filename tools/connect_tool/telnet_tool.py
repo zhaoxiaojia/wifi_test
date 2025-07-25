@@ -41,7 +41,6 @@ class telnet_tool(dut):
         logging.info('*' * 80)
         logging.info(f'* Telnet {self.dut_ip}')
         logging.info('*' * 80)
-        # self.wildcard = cmd_line_wildcard[wildcard] if type(wildcard) == str else wildcard
 
     def reboot(self):
         self.checkoutput('reboot')
@@ -85,7 +84,6 @@ class telnet_tool(dut):
 
             # 读取命令执行结果
             result = await read_all(reader)
-            logging.info(f"Telnet Command Output: {result}")
             return result
         except Exception as e:
             logging.error(f"Telnet error: {e}")

@@ -5,8 +5,8 @@ connect_type:
   adb:
     device: '64063700090000059'
   telnet:
-    ip: 192.168.31.144
-  type: adb
+    ip: 192.168.1.101
+  type: telnet
 corner_angle:
   ip_address: 192.168.5.11
   step:
@@ -27,7 +27,7 @@ rf_solution:
   - 0
   - 14
 router:
-  name: asusax86u
+  name: xiaomiredax6000
 rvr:
   iperf:
     path: ''
@@ -41,4 +41,4 @@ serial_port:
   baud: '961200'
   port: COM5
   status: false
-text_case: C:/Users/SH171300-1522/PycharmProjects/wifi_test/test/performance/test_wifi_rvr.py
+text_case: C:/Users/SH171300-1522/PycharmProjects/wifi_test/test/performance/test_wifi_peak_throughput.py

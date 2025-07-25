@@ -226,7 +226,7 @@ class dut():
 
             while True:
                 res = tn.read_until(b'Mbits/sec').decode('gbk')
-                logging.info(f'res {res.strip()}')
+                if res.strip(): logging.info(f'line : {res.strip()}')
                 with lock:
                     if '[SUM]' in res:
                         data = float(

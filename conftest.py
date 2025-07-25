@@ -30,6 +30,17 @@ from tools.router_tool.Router import Router
 # pytest_plugins = "util.report_plugin"
 test_results = []
 
+import logging
+import sys
+
+logging.basicConfig(
+    level=logging.INFO,
+    handlers=[logging.StreamHandler(sys.stdout)],
+    format="%(asctime)s | %(levelname)s | %(filename)s:%(funcName)s(line:%(lineno)d) |  %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+    force=True
+)
+
 
 def pytest_sessionstart(session):
     '''
@@ -79,6 +90,12 @@ def pytest_sessionstart(session):
 def pytest_addoption(parser):
     parser.addoption("--resultpath", action="store", default=None, help="Test result path")
     parser.addoption("--linux-only", action="store_true")
+
+
+def pytest_collection_finish(session):
+    # 收集完毕，记录总用例数
+    session.total_test_count = len(session.items)
+    logging.info(f"[PYQT_TOTAL]{session.total_test_count}")
 
 
 def pytest_runtest_logreport(report):
@@ -143,10 +160,17 @@ def pytest_runtest_makereport(item, call):
     """
     outcome = yield
     report = outcome.get_result()
+
     if report.when == 'call':
+        session = item.session
+        if not hasattr(session, 'pyqt_finished'):
+            session.pyqt_finished = 0
+        session.pyqt_finished += 1
+        total = getattr(session, 'total_test_count', None)
+        if total:
+            logging.info(f"[PYQT_PROGRESS] {session.pyqt_finished}/{total}")
+
         item._store['test_result'] = "PASS" if report.passed else "FAIL" if report.failed else "SKIPP"
-        logging.info(f"item {item._store['test_result']}")
-        # 记录返回值
         if not report.failed:
             return_value = getattr(call, "result", None) or item._store.get("return_value", None)
             logging.info(f'record return value: {call.result}')

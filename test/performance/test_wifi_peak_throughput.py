@@ -116,25 +116,6 @@ def setup(request):
     pytest.dut.kill_iperf()
 
 
-# 生成 pdf
-# if step_list != [0]:
-#     pytest.testResult.write_to_excel()
-#     if test_type == 'rf':
-#         # 重置衰减
-#         if not rf_debug:
-#             rf_tool.execute_rf_cmd(0)
-#         # 生成折线图
-#         pytest.testResult.write_attenuation_data_to_pdf()
-#     elif test_type == 'corner':
-#         # 转台重置
-#         if not rf_debug:
-#             corner_tool.set_turntable_zero()
-#         # 生成雷达图
-#         pytest.testResult.write_corner_data_to_pdf()
-#     else:
-#         ...
-
-
 # 测试 iperf
 @pytest.mark.parametrize("rf_value", step_list)
 def test_rvr(setup, rf_value):

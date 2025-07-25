@@ -21,7 +21,7 @@ from PyQt5.QtGui import QGuiApplication
 class MainWindow(FluentWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Amlogic Wi-Fi Test Tool")
+        self.setWindowTitle("FAE-QA  Wi-Fi Test Tool")
         self.resize(1200, 1300)
         self.setMinimumSize(1200, 1300)
         self.center_window()

@@ -40,6 +40,7 @@ class TestResult():
 
     def __init__(self, logdir, step):
         self.logdir = logdir
+        os.mkdir(self.logdir)
         self.current_number = 0
         self.x_path = step
         self.x_length = len(self.x_path)
@@ -57,20 +58,20 @@ class TestResult():
             title = 'SerianNumber Test_Category	Sub_Category	Coex_Method	BT_WF_Isolation	Standard	Freq_Band	BW	Data_Rate	CH_Freq_MHz	Protocol	Direction	Total_Path_Loss	RxP DB	RSSI Angel	Data_RSSI MCS_Rate Throughput	'
             f.write(','.join(title.split()))
             f.write('\n')
-        with open(os.path.join(os.getcwd(),
-                               'config\\rvr_wifi_setup.csv' if pytest.win_flag else 'config/rvr_wifi_setup.csv'),
-                  'r', encoding='utf-8') as f:
-            reader = csv.reader(f)
-            self.results_length = []
-            for i in [j for j in reader][1:]:
-                if not i :
-                    continue
-                temp = 0
-                if 'tx' in i[-2]:
-                    temp += self.x_length
-                if 'rx' in i[-2]:
-                    temp += self.x_length
-                self.results_length.append(temp)
+        # with open(os.path.join(os.getcwd(),
+        #                        'config\\rvr_wifi_setup.csv' if pytest.win_flag else 'config/rvr_wifi_setup.csv'),
+        #           'r', encoding='utf-8') as f:
+        #     reader = csv.reader(f)
+        #     self.results_length = []
+        #     for i in [j for j in reader][1:]:
+        #         if not i:
+        #             continue
+        #         temp = 0
+        #         if 'tx' in i[-2]:
+        #             temp += self.x_length
+        #         if 'rx' in i[-2]:
+        #             temp += self.x_length
+        #         self.results_length.append(temp)
 
     def save_result(self, result):
         '''
