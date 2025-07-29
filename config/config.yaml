@@ -41,4 +41,4 @@ serial_port:
   baud: '961200'
   port: COM5
   status: false
-text_case: C:/Users/SH171300-1522/PycharmProjects/wifi_test/test/performance/test_wifi_peak_throughput.py
+text_case: C:/Users/SH171300-1522/PycharmProjects/wifi_test/src/test/performance/test_wifi_peak_throughput.py
