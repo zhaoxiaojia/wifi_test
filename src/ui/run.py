@@ -30,8 +30,9 @@ import sys
 import re
 from io import StringIO
 import pytest
-
-
+import time
+import os
+import random
 class CaseRunner(QThread):
     """Thread to run pytest and emit log output"""
 
@@ -45,12 +46,21 @@ class CaseRunner(QThread):
         self._should_stop = False
 
     def run(self) -> None:
+
+        report_root = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "../../report")
+        )
+        os.makedirs(report_root, exist_ok=True)
+
+        # 2. 唯一子目录名
         timestamp = datetime.datetime.now().strftime("%Y.%m.%d_%H.%M.%S")
-        # 构造 pytest 参数（与原命令一致）
+        timestamp = f"{timestamp}_{random.randint(1000, 9999)}"
+        report_dir = os.path.join(report_root, timestamp)
+        os.makedirs(report_dir, exist_ok=True)
         pytest_args = [
             "-v", "-s",
             "--full-trace",
-            f"--resultpath={timestamp}",
+            f"--resultpath={report_dir}",
             self.case_path,
         ]
 
@@ -87,7 +97,7 @@ class RunPage(CardWidget):
     """运行页"""
 
     def __init__(self, case_path, config, on_back_callback, parent=None):
-        super().__init__()
+        super().__init__(parent)
         self.setObjectName("runPage")
         self.case_path = case_path
         self.config = config

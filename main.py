@@ -12,7 +12,7 @@ from src.ui.windows_case_config import CaseConfigPage
 from src.ui.run import RunPage
 from qfluentwidgets import setTheme, Theme
 from PyQt5.QtGui import QGuiApplication
-from PyQt5.QtCore import QTimer
+from PyQt5.QtCore import QTimer, QCoreApplication
 
 
 class MainWindow(FluentWindow):
@@ -54,47 +54,47 @@ class MainWindow(FluentWindow):
 
     def clear_run_page(self):
         if self.run_page:
-            # 1. 先断开所有可能的信号连接（防止残留事件）
-            try:
-                # 断开RunPage自身的所有信号
-                self.run_page.disconnect()
-            except TypeError:
-                pass  # 无连接时忽略
+            # 强制彻底移除所有 RunPage（防止 Qt 内部引用悬挂）
+            for i in reversed(range(self.stackedWidget.count())):
+                widget = self.stackedWidget.widget(i)
+                # 防止多余实例
+                if widget is self.run_page or widget.__class__.__name__ == "RunPage":
+                    print(f"remove RunPage from stackedWidget: {widget}")
+                    self.stackedWidget.removeWidget(widget)
+                    widget.setParent(None)
+                    widget.deleteLater()
+            QCoreApplication.processEvents()  # 保证deleteLater执行
 
-            # 2. 从导航栏移除（更彻底的方式）
+            # 从导航栏彻底移除
             try:
-                # 直接使用removeSubInterface方法移除
                 self.removeSubInterface(self.run_page)
             except Exception as e:
-                print(f"移除导航项时出错: {e}")
-            # 3. 从堆叠窗口移除
-            index = self.stackedWidget.indexOf(self.run_page)
-            if index != -1:
-                self.stackedWidget.removeWidget(self.run_page)
+                print(f"removeSubInterface error: {e}")
 
-            # 4. 断开所有信号连接
+            # 断开所有信号和线程
             if hasattr(self.run_page, "runner") and self.run_page.runner:
                 runner = self.run_page.runner
                 try:
                     runner.log_signal.disconnect(self.run_page._append_log)
-                except (TypeError, RuntimeError):
+                except Exception:
                     pass
                 try:
                     runner.progress_signal.disconnect(self.run_page.update_progress)
-                except (TypeError, RuntimeError):
+                except Exception:
                     pass
                 try:
                     runner.finished.disconnect()
-                except (TypeError, RuntimeError):
+                except Exception:
                     pass
-                # 停止线程
-                if runner.isRunning():
-                    runner.stop()
-                    runner.wait()  # 等待线程真正结束
-            # 5. 强制销毁并清除引用
-            self.run_page.setParent(None)  # 先解除父对象关联
-            self.run_page.deleteLater()
-            self.run_page = None  # 关键：清除引用
+                try:
+                    if runner.isRunning():
+                        runner.stop()
+                        runner.wait()
+                except Exception:
+                    pass
+
+            self.run_page = None
+            print("RunPage cleared!")
 
     def center_window(self):
         # 获取屏幕的几何信息
@@ -136,9 +136,9 @@ class MainWindow(FluentWindow):
         print("Switched to RunPage:", self.run_page)
 
     def show_case_config(self):
-        # print("show_case_config dir:", dir(self))
-        self.clear_run_page()
         self.setCurrentIndex(self.case_config_page)
+        QCoreApplication.processEvents()  # 强制事件刷新
+        self.clear_run_page()
         print("Switched to CaseConfigPage")
 
 

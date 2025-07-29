@@ -15,12 +15,8 @@ import numpy as np
 import pandas as pd
 from matplotlib.backends.backend_pdf import PdfPages
 
-from src.util.decorators import singleton
-
 plt.rcParams['font.family'] = ['SimHei']
 
-
-@singleton
 class TestResult():
     '''
     Singleton class,should not be inherited
@@ -38,7 +34,6 @@ class TestResult():
 
     def __init__(self, logdir, step):
         self.logdir = logdir
-        os.mkdir(self.logdir)
         self.current_number = 0
         self.x_path = step
         self.x_length = len(self.x_path)

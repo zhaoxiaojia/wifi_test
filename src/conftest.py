@@ -75,10 +75,7 @@ def pytest_sessionstart(session):
         pytest.dut.roku = roku_ctrl(telnet_ip)
     else:
         raise EnvironmentError("Not support connect type %s" % pytest.connect_type)
-
-    pytest.timestamp = session.config.getoption("--resultpath")
-    pytest.result_path = os.getcwd() + '/report/' + pytest.timestamp
-    pytest.testResult = TestResult(pytest.result_path, [])
+    pytest.testResult = TestResult(session.config.getoption("--resultpath"), [])
     if os.path.exists('temp.txt'):
         os.remove('temp.txt')
 
