@@ -87,7 +87,8 @@ class RunPage(CardWidget):
     """运行页"""
 
     def __init__(self, case_path, config, on_back_callback, parent=None):
-        super().__init__()
+        # 确保正确设置父对象，避免切换页面后对象提前被销毁
+        super().__init__(parent)
         self.setObjectName("runPage")
         self.case_path = case_path
         self.config = config
