@@ -21,9 +21,13 @@ class MainWindow(FluentWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("FAE-QA  Wi-Fi Test Tool")
-        self.resize(1200, 1300)
-        self.setMinimumSize(1200, 1300)
+        screen = QGuiApplication.primaryScreen().availableGeometry()
+        width = int(screen.width() * 0.8)
+        height = int(screen.height() * 0.8)
+        self.resize(width, height)
+        self.setMinimumSize(width, height)
         self.center_window()
+        self.show()
 
         # 页面实例化
         self.case_config_page = CaseConfigPage(self.on_run)
@@ -145,15 +149,15 @@ class MainWindow(FluentWindow):
 
 
 if __name__ == "__main__":
-    # app = QApplication(sys.argv)
-    # window = MainWindow()
-    # window.show()
-    # sys.exit(app.exec())
-    import datetime
-    import random
-    import os
-    timestamp = datetime.datetime.now().strftime("%Y.%m.%d_%H.%M.%S")
-    timestamp = f"{timestamp}_{random.randint(1000, 9999)}"
-    report_dir = os.path.join('report', timestamp)
-    testcase = "src/test/project/roku/UI/Connectivity Doctor/test_T6473243.py"
-    pytest.main(['-v','-s',testcase,f"--resultpath={report_dir}"])
+    app = QApplication(sys.argv)
+    window = MainWindow()
+    window.show()
+    sys.exit(app.exec())
+    # import datetime
+    # import random
+    # import os
+    # timestamp = datetime.datetime.now().strftime("%Y.%m.%d_%H.%M.%S")
+    # timestamp = f"{timestamp}_{random.randint(1000, 9999)}"
+    # report_dir = os.path.join('report', timestamp)
+    # testcase = "src/test/project/roku/UI/Connectivity Doctor/test_T6473243.py"
+    # pytest.main(['-v','-s',testcase,f"--resultpath={report_dir}"])

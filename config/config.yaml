@@ -3,15 +3,15 @@ concomitant_dut:
   status: false
 connect_type:
   adb:
-    device: '64063700090000059'
+    device: coco_aaaaaa
   telnet:
     ip: 192.168.1.100
-  type: telnet
+  type: adb
 corner_angle:
   ip_address: 192.168.5.11
   step:
   - 0
-  - 360
+  - 320
 fpga: w2_sdio
 power_relay:
   192.168.200.6: '7'
@@ -25,21 +25,20 @@ rf_solution:
   model: XIN-YI
   step:
   - 0
-  - 14
+  - 19
 router:
-  name: xiaomiredax6000
+  name: asusax88u
 rvr:
   iperf:
     path: ''
-    version: iperf
+    version: iperf3
   ixchariot:
     path: D:/Program Files (x86)/Ixia/IxChariot
-  pair: '2'
+  pair: '5'
   repeat: '0'
   tool: iperf
 serial_port:
   baud: '961200'
   port: COM5
   status: false
-text_case: C:/Users/SH171300-1522/PycharmProjects/wifi_test/src/test/project/roku/UI/Connectivity
-  Doctor/test_T6473243.py
+text_case: C:/Users/SH171300-1522/PycharmProjects/wifi_test/src/test/performance/test_wifi_rvr_rvo.py
