@@ -42,6 +42,7 @@ from qfluentwidgets import (
     TextEdit,
     InfoBar,
     InfoBarPosition,
+    ScrollArea
 )
 
 
@@ -111,7 +112,10 @@ class CaseConfigPage(CardWidget):
         main_layout.addWidget(self.case_tree, 3)
 
         # ----- right: parameters & run button -----
-        right = QVBoxLayout()
+        scroll_area = ScrollArea(self)
+        scroll_area.setWidgetResizable(True)
+        container = QWidget()
+        right = QVBoxLayout(container)
         self.form = QFormLayout()
         right.addLayout(self.form)
 
@@ -119,7 +123,8 @@ class CaseConfigPage(CardWidget):
         self.run_btn.setIcon(FluentIcon.PLAY)
         self.run_btn.clicked.connect(self.on_run)
         right.addWidget(self.run_btn)
-        main_layout.addLayout(right, 4)
+        scroll_area.setWidget(container)
+        main_layout.addWidget(scroll_area, 4)
 
         # render form fields from yaml
         self.render_all_fields()
@@ -127,7 +132,7 @@ class CaseConfigPage(CardWidget):
         # connect signals AFTER UI ready
         self.case_tree.clicked.connect(self.on_case_tree_clicked)
         self.case_tree.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.apply_case_logic("")
+        QTimer.singleShot(0, lambda: self.apply_case_logic(""))
 
     def _init_case_tree(self, root_dir: str) -> None:
         self.fs_model = QFileSystemModel(self.case_tree)
