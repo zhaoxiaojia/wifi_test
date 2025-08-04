@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import os
+import sys
 import yaml
 
 from PyQt5.QtCore import (
@@ -79,9 +80,18 @@ class CaseConfigPage(CardWidget):
         self.on_run_callback = on_run_callback
 
         # -------------------- load yaml --------------------
-        self.config_path = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), "../../config/config.yaml")
-        )
+        if hasattr(sys, "_MEIPASS"):
+            bundle_path = os.path.join(sys._MEIPASS, "config", "config.yaml")
+            if os.path.exists(bundle_path):
+                self.config_path = os.path.abspath(bundle_path)
+            else:
+                self.config_path = os.path.abspath(
+                    os.path.join(os.getcwd(), "config", "config.yaml")
+                )
+        else:
+            self.config_path = os.path.abspath(
+                os.path.join(os.getcwd(), "config", "config.yaml")
+            )
         self.config: dict = self._load_config()
         # -------------------- state --------------------
         self._refreshing = False
@@ -141,20 +151,55 @@ class CaseConfigPage(CardWidget):
 
     def _load_config(self) -> dict:
         if not os.path.exists(self.config_path):
+            QTimer.singleShot(
+                0,
+                lambda: InfoBar.warning(
+                    title="提示",
+                    content="未找到配置文件",
+                    parent=self,
+                    position=InfoBarPosition.TOP,
+                ),
+            )
             return {}
         try:
             with open(self.config_path, "r", encoding="utf-8") as f:
                 return yaml.safe_load(f) or {}
         except Exception as exc:
-            print(f"[WARN] Failed to load config.yaml – {exc}")
+            QTimer.singleShot(
+                0,
+                lambda: InfoBar.error(
+                    title="错误",
+                    content=f"读取配置失败: {exc}",
+                    parent=self,
+                    position=InfoBarPosition.TOP,
+                ),
+            )
             return {}
 
     def _save_config(self):
         try:
             with open(self.config_path, "w", encoding="utf-8") as f:
                 yaml.safe_dump(self.config, f, allow_unicode=True)
+            self.config = self._load_config()
+            QTimer.singleShot(
+                0,
+                lambda: InfoBar.success(
+                    title="提示",
+                    content="配置已保存", 
+                    parent=self,
+                    position=InfoBarPosition.TOP,
+                ),
+            )
         except Exception as exc:
-            print(f"[WARN] Failed to save config.yaml – {exc}")
+            QTimer.singleShot(
+                0,
+                lambda: InfoBar.error(
+                    title="错误",
+                    content=f"保存配置失败: {exc}",
+                    parent=self,
+                    position=InfoBarPosition.TOP,
+                ),
+            )
 
     def on_connect_type_changed(self, type_str):
         """
