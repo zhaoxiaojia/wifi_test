@@ -5,6 +5,8 @@
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).parent))
 from PyQt5.QtWidgets import QApplication
 from qfluentwidgets import FluentIcon, FluentWindow, NavigationItemPosition
@@ -143,7 +145,15 @@ class MainWindow(FluentWindow):
 
 
 if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    window = MainWindow()
-    window.show()
-    sys.exit(app.exec())
+    # app = QApplication(sys.argv)
+    # window = MainWindow()
+    # window.show()
+    # sys.exit(app.exec())
+    import datetime
+    import random
+    import os
+    timestamp = datetime.datetime.now().strftime("%Y.%m.%d_%H.%M.%S")
+    timestamp = f"{timestamp}_{random.randint(1000, 9999)}"
+    report_dir = os.path.join('report', timestamp)
+    testcase = "src/test/project/roku/UI/Connectivity Doctor/test_T6473243.py"
+    pytest.main(['-v','-s',testcase,f"--resultpath={report_dir}"])

@@ -552,7 +552,7 @@ class roku_ctrl(Roku):
                             text = child_2.attrib['text']
                             if text and [text] not in node_list:
                                 node_list.append([child_2.attrib['text']])
-        logging.info(f'node_list {node_list}')
+        # logging.info(f'node_list {node_list}')
         return node_list
 
     @classmethod

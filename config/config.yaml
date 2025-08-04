@@ -5,7 +5,7 @@ connect_type:
   adb:
     device: '64063700090000059'
   telnet:
-    ip: 192.168.1.101
+    ip: 192.168.1.100
   type: telnet
 corner_angle:
   ip_address: 192.168.5.11
@@ -41,4 +41,5 @@ serial_port:
   baud: '961200'
   port: COM5
   status: false
-text_case: C:/Users/SH171300-1522/PycharmProjects/wifi_test/src/test/performance/test_wifi_peak_throughput.py
+text_case: C:/Users/SH171300-1522/PycharmProjects/wifi_test/src/test/project/roku/UI/Connectivity
+  Doctor/test_T6473243.py

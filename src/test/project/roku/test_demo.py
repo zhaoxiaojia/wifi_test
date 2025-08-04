@@ -8,9 +8,9 @@
 @time: 2025/2/12 10:58 
 @desc: 
 '''
+
 import logging
 import time
-
 import pytest
 from src.dut_control.roku_ctrl import roku_ctrl
 from src.tools.connect_tool.telnet_tool import telnet_tool
