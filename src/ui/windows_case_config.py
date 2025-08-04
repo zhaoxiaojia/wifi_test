@@ -184,7 +184,7 @@ class CaseConfigPage(CardWidget):
     def _save_config(self):
         try:
             with open(self.config_path, "w", encoding="utf-8") as f:
-                yaml.safe_dump(self.config, f, allow_unicode=True)
+                yaml.safe_dump(self.config, f, allow_unicode=True, sort_keys=False, width=4096)
             self.config = self._load_config()
             QTimer.singleShot(
                 0,
@@ -509,7 +509,14 @@ class CaseConfigPage(CardWidget):
                 self.field_widgets["serial_port.port"] = self.serial_port_edit
                 self.field_widgets["serial_port.baud"] = self.serial_baud_edit
                 continue
-
+            # ------- 默认处理：创建 LineEdit 保存未覆盖字段 -------
+            group = QGroupBox(key)
+            vbox = QVBoxLayout(group)
+            edit = LineEdit(self)
+            edit.setText(str(value) if value is not None else "")
+            vbox.addWidget(edit)
+            self.form.addRow(group)
+            self.field_widgets[key] = edit
     def populate_case_tree(self, root_dir):
         """
         遍历 test 目录，只将 test_ 开头的 .py 文件作为节点加入树结构。
@@ -695,8 +702,6 @@ class CaseConfigPage(CardWidget):
             elif isinstance(widget, ComboBox):
                 text = widget.currentText()
                 ref[leaf] = True if text == 'True' else False if text == 'False' else text
-        # 保存配置
-        self._save_config()
         case_path = self.field_widgets["text_case"].text().strip()
         # 若树状视图中选择了有效用例，则覆盖默认路径
         proxy_idx = self.case_tree.currentIndex()
@@ -705,6 +710,10 @@ class CaseConfigPage(CardWidget):
         selected_path = self.fs_model.filePath(src_idx)
         if os.path.isfile(selected_path) and selected_path.endswith(".py"):
             case_path = selected_path
+        # 将最终运行的用例路径写入配置
+        self.config["text_case"] = case_path
+        # 保存配置
+        self._save_config()
         if os.path.isfile(case_path) and case_path.endswith(".py"):
             self.on_run_callback(case_path, self.config)
         else:
