@@ -1,20 +1,17 @@
-concomitant_dut:
-  device_number: aq2228019431943b23a0d
-  status: false
+concomitant_dut: '{''device_number'': ''aq2228019431943b23a0d'', ''status'': False}'
 connect_type:
   adb:
     device: coco_aaaaaa
   telnet:
-    ip: 192.168.1.100
-  type: adb
+    ip: 192.168.1.102
+  type: telnet
 corner_angle:
   ip_address: 192.168.5.11
   step:
   - 0
   - 320
 fpga: w2_sdio
-power_relay:
-  192.168.200.6: '7'
+power_relay: '{''192.168.200.6'': ''7''}'
 rf_solution:
   RADIORACK-4-220:
     ip_address: 192.168.50.19
@@ -27,7 +24,7 @@ rf_solution:
   - 0
   - 19
 router:
-  name: asusax88u
+  name: asusax5400
 rvr:
   iperf:
     path: ''
@@ -41,4 +38,4 @@ serial_port:
   baud: '961200'
   port: COM5
   status: false
-text_case: C:/Users/SH171300-1522/PycharmProjects/wifi_test/src/test/performance/test_wifi_rvr_rvo.py
+text_case: C:/Users/SH171300-1522/PycharmProjects/wifi_test/src/test/performance/test_wifi_rvr.py
