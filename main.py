@@ -95,7 +95,10 @@ class MainWindow(FluentWindow):
                 try:
                     if runner.isRunning():
                         runner.stop()
-                        runner.wait()
+                        if not runner.wait(3000):
+                            runner.quit()
+                            if not runner.wait(1000):
+                                print("runner thread did not finish in time")
                 except Exception:
                     pass
 
