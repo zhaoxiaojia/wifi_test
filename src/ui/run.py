@@ -26,10 +26,7 @@ from PyQt5.QtGui import QTextCursor
 from PyQt5.QtWidgets import QProgressBar
 import subprocess
 import datetime
-import sys
 import re
-from io import StringIO
-import pytest
 import time
 import os
 import random
@@ -58,39 +55,70 @@ class CaseRunner(QThread):
         report_dir = os.path.join(report_root, timestamp)
         os.makedirs(report_dir, exist_ok=True)
         pytest_args = [
-            "-v", "-s",
+            "-v",
+            "-s",
             "--full-trace",
             f"--resultpath={report_dir}",
             self.case_path,
         ]
 
-        # 重定向 stdout 以捕获 pytest 输出
-        original_stdout = sys.stdout
-        sys.stdout = captured_output = StringIO()
-
         try:
-            # 执行 pytest（通过 API，而非命令行）
-            pytest.main(pytest_args)
-            # 读取捕获的输出并发送到日志
-            output = captured_output.getvalue()
-            for line in output.splitlines():
-                self.log_signal.emit(line.rstrip())
-                # 进度条解析逻辑保持不变
+            self._process = subprocess.Popen(
+                ["pytest", *pytest_args],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+            )
+
+            while True:
+                if self._should_stop:
+                    self.log_signal.emit("<b style='color:orange;'>检测到停止信号，正在终止...</b>")
+                    if self._process.poll() is None:
+                        self._process.terminate()
+                        try:
+                            self._process.wait(timeout=5)
+                        except subprocess.TimeoutExpired:
+                            self._process.kill()
+                    break
+
+                line = self._process.stdout.readline()
+                if not line:
+                    if self._process.poll() is not None:
+                        break
+                    time.sleep(0.1)
+                    continue
+
+                line = line.rstrip()
+                self.log_signal.emit(line)
                 match = re.search(r"\[PYQT_PROGRESS\]\s+(\d+)/(\d+)", line)
                 if match:
                     finished = int(match.group(1))
                     total = int(match.group(2))
                     percent = int(finished / total * 100)
                     self.progress_signal.emit(percent)
-            self.log_signal.emit("<b style='color:green;'>运行完成！</b>")
+
+            if not self._should_stop:
+                self.log_signal.emit("<b style='color:green;'>运行完成！</b>")
+            else:
+                self.log_signal.emit("<b style='color:red;'>运行已终止！</b>")
         except Exception as e:
             self.log_signal.emit(f"<b style='color:red;'>执行失败：{str(e)}</b>")
         finally:
-            # 恢复 stdout
-            sys.stdout = original_stdout
+            if self._process and self._process.poll() is None:
+                try:
+                    self._process.terminate()
+                except Exception:
+                    pass
+            self._process = None
 
     def stop(self):
         self._should_stop = True
+        if self._process and self._process.poll() is None:
+            try:
+                self._process.terminate()
+            except Exception:
+                pass
 
 
 class RunPage(CardWidget):
@@ -200,9 +228,14 @@ class RunPage(CardWidget):
 
     def on_back(self):
         if hasattr(self, "runner") and self.runner:
-            # 停止线程并等待结束
+            # 停止线程并等待有限时间
             self.runner.stop()
-            self.runner.wait()  # 新增：等待线程彻底结束
+            finished = self.runner.wait(3000)
+            if not finished:
+                # 若仍未结束，尝试强制退出
+                self.runner.quit()
+                if not self.runner.wait(1000):
+                    self._append_log("<b style='color:red;'>线程结束超时，可能仍在后台运行</b>")
             # 断开所有信号
             try:
                 self.runner.log_signal.disconnect(self._append_log)
