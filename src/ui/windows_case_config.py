@@ -169,7 +169,39 @@ class CaseConfigPage(CardWidget):
             return {}
         try:
             with open(self.config_path, "r", encoding="utf-8") as f:
-                return yaml.safe_load(f) or {}
+                config = yaml.safe_load(f) or {}
+
+            app_base = self._get_application_base()
+            changed = False
+            path = config.get("text_case", "")
+            if path:
+                abs_path = path if os.path.isabs(path) else os.path.join(app_base, path)
+                if os.path.exists(abs_path) and os.path.commonpath([abs_path, app_base]) == app_base:
+                    rel_path = os.path.relpath(abs_path, app_base)
+                    if rel_path != path:
+                        config["text_case"] = rel_path
+                        changed = True
+                else:
+                    config["text_case"] = ""
+                    changed = True
+            else:
+                config["text_case"] = ""
+
+            if changed:
+                try:
+                    with open(self.config_path, "w", encoding="utf-8") as wf:
+                        yaml.safe_dump(config, wf, allow_unicode=True, sort_keys=False, width=4096)
+                except Exception as exc:
+                    QTimer.singleShot(
+                        0,
+                        lambda: InfoBar.error(
+                            title="错误",
+                            content=f"保存配置失败: {exc}",
+                            parent=self,
+                            position=InfoBarPosition.TOP,
+                        ),
+                    )
+            return config
         except Exception as exc:
             QTimer.singleShot(
                 0,
