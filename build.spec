@@ -12,7 +12,7 @@ a = Analysis(
     ['src/main.py'],  # 入口文件
     pathex=['.'],
     binaries=[],
-    datas=[],
+    datas=[('src/*', 'src')],
     hiddenimports=[
         # 手动添加PyQt5和自定义模块的隐藏依赖
         'PyQt5',
