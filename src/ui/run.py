@@ -8,6 +8,7 @@
 @time: 2025/7/22 22:02 
 @desc: 
 '''
+import logging
 
 # ui/run.py
 
@@ -33,68 +34,65 @@ import random
 import sys
 from pathlib import Path
 import traceback
+import threading
+import pytest
+import io
+
+
+class LiveLogWriter:
+    """自定义stdout/err实时回调到信号"""
+
+    def __init__(self, emit_func):
+        self.emit_func = emit_func
+        self._lock = threading.Lock()
+        self._buffer = ""
+
+    def write(self, msg):
+        # 保证分行和进度信号捕获
+        with self._lock:
+            self._buffer += msg
+            while '\n' in self._buffer:
+                line, self._buffer = self._buffer.split('\n', 1)
+                self.emit_func(line.rstrip('\r'))
+
+    def flush(self):
+        pass  # 兼容file接口
+
+    def isatty(self):
+        return False  # 必须加上这个
+
+    def fileno(self):
+        raise io.UnsupportedOperation("Not a real file")
 
 
 class CaseRunner(QThread):
-    """Thread to run pytest and emit log output"""
-
     log_signal = pyqtSignal(str)
-    progress_signal = pyqtSignal(int)  # 新增：用于进度条
+    progress_signal = pyqtSignal(int)
 
     def __init__(self, case_path: str, parent=None):
         super().__init__(parent)
         self.case_path = case_path
-        self._process = None  # 保存子进程对象
         self._should_stop = False
 
-    def run(self) -> None:
-
-
-
-        # 2. 唯一子目录名
-        timestamp = datetime.datetime.now().strftime("%Y.%m.%d_%H.%M.%S")
-        timestamp = f"{timestamp}_{random.randint(1000, 9999)}"
-        report_dir = os.path.join(os.getcwd(), f'/report/{timestamp}')
-        os.makedirs(report_dir, exist_ok=True)
-        pytest_args = [
-            "-v",
-            "-s",
-            "--full-trace",
-            f"--resultpath={report_dir}",
-            self.case_path,
-        ]
+    def run(self):
+        # 日志、进度写到窗口
         try:
-            env = os.environ.copy()
-            env["PYTHONUNBUFFERED"] = "1"
-            self._process = subprocess.Popen(
-                [sys.executable, "-m", "pytest", *pytest_args],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1,
-                env=env
-            )
+            timestamp = datetime.datetime.now().strftime("%Y.%m.%d_%H.%M.%S")
+            timestamp = f"{timestamp}_{random.randint(1000, 9999)}"
+            report_dir = os.path.abspath(os.path.join(os.getcwd(), f"report/{timestamp}"))
+            os.makedirs(report_dir, exist_ok=True)
+            pytest_args = [
+                "-v",
+                "-s",
+                "--full-trace",
+                f"--resultpath={report_dir}",
+                self.case_path,
+            ]
 
-            while True:
-                if self._should_stop:
-                    self.log_signal.emit("<b style='color:orange;'>检测到停止信号，正在终止...</b>")
-                    if self._process.poll() is None:
-                        self._process.terminate()
-                        try:
-                            self._process.wait(timeout=5)
-                        except subprocess.TimeoutExpired:
-                            self._process.kill()
-                    break
-
-                line = self._process.stdout.readline()
-                if not line:
-                    if self._process.poll() is not None:
-                        break
-                    time.sleep(0.1)
-                    continue
-
-                line = line.rstrip()
+            # 实时日志到窗口
+            def emit_log(line):
                 self.log_signal.emit(line)
+                # 解析进度
                 match = re.search(r"\[PYQT_PROGRESS\]\s+(\d+)/(\d+)", line)
                 if match:
                     finished = int(match.group(1))
@@ -102,28 +100,32 @@ class CaseRunner(QThread):
                     percent = int(finished / total * 100)
                     self.progress_signal.emit(percent)
 
-            if not self._should_stop:
-                self.log_signal.emit("<b style='color:green;'>运行完成！</b>")
-            else:
-                self.log_signal.emit("<b style='color:red;'>运行已终止！</b>")
+            writer = LiveLogWriter(emit_log)
+            old_stdout, old_stderr = sys.stdout, sys.stderr
+            sys.stdout = sys.stderr = writer
+
+            # 主线程里定期检查_should_stop可实现停止功能
+            try:
+                self.log_signal.emit(f"<b style='color:blue;'>开始执行pytest: {' '.join(pytest_args)}</b>")
+                code = pytest.main(pytest_args)
+                if not self._should_stop:
+                    self.log_signal.emit("<b style='color:green;'>运行完成！</b>")
+                else:
+                    self.log_signal.emit("<b style='color:red;'>运行已终止！</b>")
+            finally:
+                logging.info(traceback.format_exc())
+                sys.stdout = old_stdout
+                sys.stderr = old_stderr
+
         except Exception as e:
-            traceback.print_exc()
+            tb = traceback.format_exc()
             self.log_signal.emit(f"<b style='color:red;'>执行失败：{str(e)}</b>")
-        finally:
-            if self._process and self._process.poll() is None:
-                try:
-                    self._process.terminate()
-                except Exception:
-                    pass
-            self._process = None
+            self.log_signal.emit(f"<pre>{tb}</pre>")
 
     def stop(self):
+        # NOTE: pytest没有优雅的“中止”API，通常不能强停，最优雅还是用子进程方案
         self._should_stop = True
-        if self._process and self._process.poll() is None:
-            try:
-                self._process.terminate()
-            except Exception:
-                pass
+        # 这里没有强制中止机制（如果用例本身卡死会无效）
 
 
 class RunPage(CardWidget):
