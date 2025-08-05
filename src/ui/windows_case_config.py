@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import os
 import sys
+from pathlib import Path
 import yaml
 
 from PyQt5.QtCore import (
@@ -205,6 +206,16 @@ class CaseConfigPage(CardWidget):
                     position=InfoBarPosition.TOP,
                 ),
             )
+
+    def _get_application_base(self) -> str:
+        """获取应用根路径"""
+        return getattr(sys, "_MEIPASS", str(Path(__file__).resolve().parent.parent))
+
+    def _resolve_case_path(self, path: str) -> str:
+        """将相对用例路径转换为绝对路径"""
+        if not path:
+            return ""
+        return path if os.path.isabs(path) else os.path.join(self._get_application_base(), path)
 
     def on_connect_type_changed(self, type_str):
         """
@@ -703,19 +714,25 @@ class CaseConfigPage(CardWidget):
                 text = widget.currentText()
                 ref[leaf] = True if text == 'True' else False if text == 'False' else text
         case_path = self.field_widgets["text_case"].text().strip()
+        app_base = self._get_application_base()
         # 若树状视图中选择了有效用例，则覆盖默认路径
         proxy_idx = self.case_tree.currentIndex()
         model = self.case_tree.model()
         src_idx = model.mapToSource(proxy_idx) if isinstance(model, QSortFilterProxyModel) else proxy_idx
         selected_path = self.fs_model.filePath(src_idx)
         if os.path.isfile(selected_path) and selected_path.endswith(".py"):
-            case_path = selected_path
-        # 将最终运行的用例路径写入配置
+            try:
+                case_path = os.path.relpath(selected_path, app_base)
+            except ValueError:
+                case_path = selected_path
+        # 将最终运行的用例路径写入配置（尽量保持相对路径）
         self.config["text_case"] = case_path
+        # 解析成绝对路径
+        abs_case_path = self._resolve_case_path(case_path)
         # 保存配置
         self._save_config()
-        if os.path.isfile(case_path) and case_path.endswith(".py"):
-            self.on_run_callback(case_path, self.config)
+        if os.path.isfile(abs_case_path) and abs_case_path.endswith(".py"):
+            self.on_run_callback(abs_case_path, self.config)
         else:
             InfoBar.warning(
                 title="提示",
