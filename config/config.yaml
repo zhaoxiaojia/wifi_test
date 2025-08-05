@@ -38,4 +38,4 @@ serial_port:
   baud: '961200'
   port: COM5
   status: false
-text_case: C:/Users/SH171300-1522/PycharmProjects/wifi_test/src/test/performance/test_wifi_rvr.py
+text_case: src/test/performance/test_wifi_rvr.py
