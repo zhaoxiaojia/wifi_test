@@ -134,14 +134,22 @@ class RunPage(CardWidget):
         self.on_back_callback = on_back_callback
         self.main_window = parent  # 保存主窗口引用（用于InfoBar父窗口）
 
-        if display_case_path is None:
+        needs_recalc = False
+        if not display_case_path:
+            needs_recalc = True
+        else:
+            p = Path(display_case_path)
+            if ".." in p.parts or p.drive or p.is_absolute():
+                needs_recalc = True
+        if needs_recalc:
             app_base = self._get_application_base()
             display_case_path = os.path.relpath(os.path.abspath(case_path), app_base)
+        display_case_path = display_case_path.replace("\\", "/")
         self.display_case_path = display_case_path
 
         layout = QVBoxLayout(self)
         layout.setSpacing(16)
-        layout.addWidget(StrongBodyLabel(f"正在运行：{self.display_case_path}"))
+        layout.addWidget(StrongBodyLabel(self.display_case_path))
 
         self.progress = ProgressBar(self)
         self.progress.setValue(0)
