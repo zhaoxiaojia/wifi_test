@@ -175,12 +175,21 @@ class CaseConfigPage(CardWidget):
             changed = False
             path = config.get("text_case", "")
             if path:
-                abs_path = path if os.path.isabs(path) else os.path.join(app_base, path)
-                if os.path.exists(abs_path) and os.path.commonpath([abs_path, app_base]) == app_base:
-                    rel_path = os.path.relpath(abs_path, app_base)
-                    if rel_path != path:
-                        config["text_case"] = rel_path
+                abs_path = Path(path)
+                if not abs_path.is_absolute():
+                    abs_path = app_base / abs_path
+                abs_path = abs_path.resolve()
+                if abs_path.exists():
+                    try:
+                        rel_path = abs_path.relative_to(app_base)
+                    except ValueError:
+                        config["text_case"] = ""
                         changed = True
+                    else:
+                        rel_str = rel_path.as_posix()
+                        if rel_str != path:
+                            config["text_case"] = rel_str
+                            changed = True
                 else:
                     config["text_case"] = ""
                     changed = True
@@ -239,15 +248,16 @@ class CaseConfigPage(CardWidget):
                 ),
             )
 
-    def _get_application_base(self) -> str:
+    def _get_application_base(self) -> Path:
         """获取应用根路径"""
-        return getattr(sys, "_MEIPASS", str(Path(__file__).resolve().parent.parent))
+        return Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent)).resolve()
 
     def _resolve_case_path(self, path: str) -> str:
         """将相对用例路径转换为绝对路径"""
         if not path:
             return ""
-        return path if os.path.isabs(path) else os.path.join(self._get_application_base(), path)
+        p = Path(path)
+        return str(p) if p.is_absolute() else str(self._get_application_base() / p)
 
     def on_connect_type_changed(self, type_str):
         """
