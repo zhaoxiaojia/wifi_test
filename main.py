@@ -125,10 +125,10 @@ class MainWindow(FluentWindow):
         except Exception as e:
             print(f"FluentWindow.setCurrentWidget error: {e}")
 
-    def on_run(self, case_path, config):
+    def on_run(self, case_path, display_case_path, config):
         self.clear_run_page()
         # 传递主窗口自身作为RunPage的父窗口
-        self.run_page = RunPage(case_path, config, self.show_case_config, parent=self)
+        self.run_page = RunPage(case_path, display_case_path, config, self.show_case_config, parent=self)
         # 确保添加到导航栏和堆叠窗口
         self.addSubInterface(
             self.run_page,

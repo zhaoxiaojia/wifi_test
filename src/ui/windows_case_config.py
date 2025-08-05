@@ -753,10 +753,11 @@ class CaseConfigPage(CardWidget):
         src_idx = model.mapToSource(proxy_idx) if isinstance(model, QSortFilterProxyModel) else proxy_idx
         selected_path = self.fs_model.filePath(src_idx)
         if os.path.isfile(selected_path) and selected_path.endswith(".py"):
+            selected_path = Path(selected_path).resolve()
             try:
-                case_path = os.path.relpath(selected_path, app_base)
+                case_path = os.path.relpath(str(selected_path), app_base)
             except ValueError:
-                case_path = selected_path
+                case_path = str(selected_path)
         # 将最终运行的用例路径写入配置（尽量保持相对路径）
         self.config["text_case"] = case_path
         # 解析成绝对路径
@@ -764,7 +765,7 @@ class CaseConfigPage(CardWidget):
         # 保存配置
         self._save_config()
         if os.path.isfile(abs_case_path) and abs_case_path.endswith(".py"):
-            self.on_run_callback(abs_case_path, self.config)
+            self.on_run_callback(abs_case_path, case_path, self.config)
         else:
             InfoBar.warning(
                 title="提示",
