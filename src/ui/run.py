@@ -108,6 +108,21 @@ class CaseRunner(QThread):
             old_stdout, old_stderr = sys.stdout, sys.stderr
             sys.stdout = sys.stderr = writer
 
+            # 重新配置 logging，将输出重定向到 writer
+            root_logger = logging.getLogger()
+            old_handlers = root_logger.handlers[:]
+            old_level = root_logger.level
+            for h in old_handlers:
+                root_logger.removeHandler(h)
+            stream_handler = logging.StreamHandler(writer)
+            formatter = logging.Formatter(
+                "%(asctime)s | %(levelname)s | %(filename)s:%(funcName)s(line:%(lineno)d) |  %(message)s",
+                "%Y-%m-%d %H:%M:%S",
+            )
+            stream_handler.setFormatter(formatter)
+            root_logger.addHandler(stream_handler)
+            root_logger.setLevel(logging.INFO)
+
             # 主线程里定期检查_should_stop可实现停止功能
             try:
                 self.log_signal.emit(f"<b style='color:blue;'>开始执行pytest: {' '.join(pytest_args)}</b>")
@@ -118,8 +133,12 @@ class CaseRunner(QThread):
                     self.log_signal.emit("<b style='color:red;'>运行已终止！</b>")
             finally:
                 logging.info(traceback.format_exc())
-                sys.stdout.flush()
-                sys.stderr.flush()
+                for h in root_logger.handlers[:]:
+                    root_logger.removeHandler(h)
+                for h in old_handlers:
+                    root_logger.addHandler(h)
+                root_logger.setLevel(old_level)
+
                 sys.stdout = old_stdout
                 sys.stderr = old_stderr
 
