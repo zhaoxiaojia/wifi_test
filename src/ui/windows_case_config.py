@@ -83,17 +83,13 @@ class CaseConfigPage(CardWidget):
 
         # -------------------- load yaml --------------------
         if hasattr(sys, "_MEIPASS"):
-            bundle_path = os.path.join(sys._MEIPASS, "config", "config.yaml")
-            if os.path.exists(bundle_path):
-                self.config_path = os.path.abspath(bundle_path)
+            bundle_path = Path(sys._MEIPASS) / "config" / "config.yaml"
+            if bundle_path.exists():
+                self.config_path = bundle_path.resolve()
             else:
-                self.config_path = os.path.abspath(
-                    os.path.join(os.getcwd(), "config", "config.yaml")
-                )
+                self.config_path = (Path.cwd() / "config" / "config.yaml").resolve()
         else:
-            self.config_path = os.path.abspath(
-                os.path.join(os.getcwd(), "config", "config.yaml")
-            )
+            self.config_path = (Path.cwd() / "config" / "config.yaml").resolve()
         self.config: dict = self._load_config()
         # -------------------- state --------------------
         self._refreshing = False
@@ -156,7 +152,7 @@ class CaseConfigPage(CardWidget):
             self.case_tree.hideColumn(col)
 
     def _load_config(self) -> dict:
-        if not os.path.exists(self.config_path):
+        if not self.config_path.exists():
             QTimer.singleShot(
                 0,
                 lambda: InfoBar.warning(
@@ -168,7 +164,7 @@ class CaseConfigPage(CardWidget):
             )
             return {}
         try:
-            with open(self.config_path, "r", encoding="utf-8") as f:
+            with self.config_path.open("r", encoding="utf-8") as f:
                 config = yaml.safe_load(f) or {}
 
             app_base = self._get_application_base()
@@ -198,7 +194,7 @@ class CaseConfigPage(CardWidget):
 
             if changed:
                 try:
-                    with open(self.config_path, "w", encoding="utf-8") as wf:
+                    with self.config_path.open("w", encoding="utf-8") as wf:
                         yaml.safe_dump(config, wf, allow_unicode=True, sort_keys=False, width=4096)
                 except Exception as exc:
                     QTimer.singleShot(
@@ -225,7 +221,7 @@ class CaseConfigPage(CardWidget):
 
     def _save_config(self):
         try:
-            with open(self.config_path, "w", encoding="utf-8") as f:
+            with self.config_path.open("w", encoding="utf-8") as f:
                 yaml.safe_dump(self.config, f, allow_unicode=True, sort_keys=False, width=4096)
             self.config = self._load_config()
             QTimer.singleShot(
@@ -255,15 +251,16 @@ class CaseConfigPage(CardWidget):
             if hasattr(sys, "_MEIPASS")
             else Path(__file__).resolve().parent.parent
         )
-        return str(base.resolve())
+        return base.resolve()
 
-    def _resolve_case_path(self, path: str) -> str:
+    def _resolve_case_path(self, path: str | Path) -> Path:
         """将相对用例路径转换为绝对路径"""
         if not path:
-            return ""
+            return Path()
         p = Path(path)
         base = Path(self._get_application_base())
         return str(p) if p.is_absolute() else str((base / p).resolve())
+
 
     def on_connect_type_changed(self, type_str):
         """
@@ -770,6 +767,7 @@ class CaseConfigPage(CardWidget):
         case_path = Path(case_path).as_posix() if case_path else ""
         abs_case_path = (
             (base / case_path).resolve().as_posix() if case_path else ""
+
         )
 
         # 若树状视图中选择了有效用例，则覆盖默认路径
@@ -785,6 +783,7 @@ class CaseConfigPage(CardWidget):
             abs_path = Path(selected_path).resolve()
             display_path = os.path.relpath(abs_path, base)
             case_path = Path(display_path).as_posix()
+
             abs_case_path = abs_path.as_posix()
 
         # 将最终运行的用例路径写入配置（尽量保持相对路径）
