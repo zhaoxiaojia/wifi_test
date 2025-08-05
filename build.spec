@@ -8,17 +8,11 @@ def get_requirements():
         return [line.strip().split('==')[0] for line in f if line.strip() and not line.startswith('#')]
 
 requirements = get_requirements()
-project_path = os.path.dirname(os.path.abspath(sys.argv[0]))
 a = Analysis(
-    ['main.py'],  # 入口文件
-    pathex=[project_path],
+    ['src/main.py'],  # 入口文件
+    pathex=['.'],
     binaries=[],
-    datas=[
-        ('config/*','config'),         # 保留配置文件目录
-        ('res/*','res'),            # 其他资源文件
-        ('requirements.txt', '.'),
-        ('src/*', 'src')
-    ],
+    datas=[],
     hiddenimports=[
         # 手动添加PyQt5和自定义模块的隐藏依赖
         'PyQt5',
