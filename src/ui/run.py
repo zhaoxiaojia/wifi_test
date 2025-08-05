@@ -56,7 +56,11 @@ class LiveLogWriter:
                 self.emit_func(line.rstrip('\r'))
 
     def flush(self):
-        pass  # 兼容file接口
+        """将缓冲区剩余内容输出"""
+        with self._lock:
+            if self._buffer:
+                self.emit_func(self._buffer.rstrip('\r'))
+                self._buffer = ""
 
     def isatty(self):
         return False  # 必须加上这个
@@ -114,6 +118,8 @@ class CaseRunner(QThread):
                     self.log_signal.emit("<b style='color:red;'>运行已终止！</b>")
             finally:
                 logging.info(traceback.format_exc())
+                sys.stdout.flush()
+                sys.stderr.flush()
                 sys.stdout = old_stdout
                 sys.stderr = old_stderr
 
