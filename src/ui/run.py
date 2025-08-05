@@ -143,8 +143,14 @@ class RunPage(CardWidget):
                 needs_recalc = True
         if needs_recalc:
             app_base = self._get_application_base()
-            display_case_path = os.path.relpath(os.path.abspath(case_path), app_base)
-        display_case_path = display_case_path.replace("\\", "/")
+            display_case_path = Path(case_path).resolve()
+            try:
+                display_case_path = display_case_path.relative_to(app_base)
+            except ValueError:
+                pass
+            display_case_path = display_case_path.as_posix()
+        else:
+            display_case_path = display_case_path.replace("\\", "/")
         self.display_case_path = display_case_path
 
         layout = QVBoxLayout(self)
@@ -274,11 +280,11 @@ class RunPage(CardWidget):
 
         self.on_back_callback()  # 调用返回配置页的回调
 
-    def _get_application_base(self) -> str:
+    def _get_application_base(self) -> Path:
         """获取应用根路径"""
         base = (
             Path(sys._MEIPASS) / "src"
             if hasattr(sys, "_MEIPASS")
             else Path(__file__).resolve().parent.parent
         )
-        return str(base.resolve())
+        return base.resolve()
