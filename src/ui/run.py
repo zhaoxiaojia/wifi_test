@@ -32,6 +32,9 @@ import os
 import random
 import sys
 from pathlib import Path
+import traceback
+
+
 class CaseRunner(QThread):
     """Thread to run pytest and emit log output"""
 
@@ -46,15 +49,12 @@ class CaseRunner(QThread):
 
     def run(self) -> None:
 
-        report_root = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), "../../report")
-        )
-        os.makedirs(report_root, exist_ok=True)
+
 
         # 2. 唯一子目录名
         timestamp = datetime.datetime.now().strftime("%Y.%m.%d_%H.%M.%S")
         timestamp = f"{timestamp}_{random.randint(1000, 9999)}"
-        report_dir = os.path.join(report_root, timestamp)
+        report_dir = os.path.join(os.getcwd(), f'/report/{timestamp}')
         os.makedirs(report_dir, exist_ok=True)
         pytest_args = [
             "-v",
@@ -63,14 +63,16 @@ class CaseRunner(QThread):
             f"--resultpath={report_dir}",
             self.case_path,
         ]
-
         try:
+            env = os.environ.copy()
+            env["PYTHONUNBUFFERED"] = "1"
             self._process = subprocess.Popen(
-                ["pytest", *pytest_args],
+                [sys.executable, "-m", "pytest", *pytest_args],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
                 bufsize=1,
+                env=env
             )
 
             while True:
@@ -105,6 +107,7 @@ class CaseRunner(QThread):
             else:
                 self.log_signal.emit("<b style='color:red;'>运行已终止！</b>")
         except Exception as e:
+            traceback.print_exc()
             self.log_signal.emit(f"<b style='color:red;'>执行失败：{str(e)}</b>")
         finally:
             if self._process and self._process.poll() is None:

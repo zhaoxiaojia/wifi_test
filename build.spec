@@ -30,6 +30,7 @@ a = Analysis(
         'serial.tools.list_ports',  # 常用子模块（如果用到）
         # 确保项目中引用 serial 的模块也被包含
         'src.tools.connect_tool.serial_tool',
+        'pytest',
         'pytest_html',
         'pytest_html.plugin',  # pytest-html的核心插件模块
         'pytest_reportlog',    # 可能关联的报告模块
