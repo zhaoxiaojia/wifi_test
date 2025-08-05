@@ -268,4 +268,9 @@ class RunPage(CardWidget):
 
     def _get_application_base(self) -> str:
         """获取应用根路径"""
-        return getattr(sys, "_MEIPASS", str(Path(__file__).resolve().parent.parent))
+        base = (
+            Path(sys._MEIPASS) / "src"
+            if hasattr(sys, "_MEIPASS")
+            else Path(__file__).resolve().parent.parent
+        )
+        return str(base.resolve())
