@@ -747,21 +747,33 @@ class CaseConfigPage(CardWidget):
                 ref[leaf] = True if text == 'True' else False if text == 'False' else text
         case_path = self.field_widgets["text_case"].text().strip()
         app_base = self._get_application_base()
+
+        # 默认将现有路径解析成 POSIX 字符串
+        case_path = Path(case_path).as_posix() if case_path else ""
+        abs_case_path = (
+            Path(self._resolve_case_path(case_path)).as_posix() if case_path else ""
+        )
+
         # 若树状视图中选择了有效用例，则覆盖默认路径
         proxy_idx = self.case_tree.currentIndex()
         model = self.case_tree.model()
-        src_idx = model.mapToSource(proxy_idx) if isinstance(model, QSortFilterProxyModel) else proxy_idx
+        src_idx = (
+            model.mapToSource(proxy_idx)
+            if isinstance(model, QSortFilterProxyModel)
+            else proxy_idx
+        )
         selected_path = self.fs_model.filePath(src_idx)
         if os.path.isfile(selected_path) and selected_path.endswith(".py"):
-            selected_path = Path(selected_path).resolve()
+            abs_path = Path(selected_path).resolve()
             try:
-                case_path = os.path.relpath(str(selected_path), app_base)
+                display_path = abs_path.relative_to(Path(app_base))
             except ValueError:
-                case_path = str(selected_path)
+                display_path = Path(abs_path.name)
+            case_path = display_path.as_posix()
+            abs_case_path = abs_path.as_posix()
+
         # 将最终运行的用例路径写入配置（尽量保持相对路径）
         self.config["text_case"] = case_path
-        # 解析成绝对路径
-        abs_case_path = self._resolve_case_path(case_path)
         # 保存配置
         self._save_config()
         if os.path.isfile(abs_case_path) and abs_case_path.endswith(".py"):
