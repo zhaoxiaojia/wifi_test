@@ -1,10 +1,11 @@
 # !/usr/bin/env python
 # -*-coding:utf-8 -*-
 
-
 import sys
 import os
 from pathlib import Path
+import traceback
+import logging
 
 import pytest
 
@@ -16,6 +17,10 @@ from src.ui.run import RunPage
 from qfluentwidgets import setTheme, Theme
 from PyQt5.QtGui import QGuiApplication
 from PyQt5.QtCore import QTimer, QCoreApplication
+
+
+def log_exception(exc_type, exc_value, exc_tb):
+    logging.error("".join(traceback.format_exception(exc_type, exc_value, exc_tb)))
 
 
 class MainWindow(FluentWindow):
@@ -162,6 +167,8 @@ def get_base_dir():
 BASE_DIR = get_base_dir()
 CONFIG_DIR = os.path.join(BASE_DIR, "config")  # 共享的 config 目录
 RES_DIR = os.path.join(BASE_DIR, "res")       # 共享的 res 目录
+
+sys.excepthook = log_exception
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
