@@ -30,6 +30,8 @@ import re
 import time
 import os
 import random
+import sys
+from pathlib import Path
 class CaseRunner(QThread):
     """Thread to run pytest and emit log output"""
 
@@ -124,7 +126,7 @@ class CaseRunner(QThread):
 class RunPage(CardWidget):
     """运行页"""
 
-    def __init__(self, case_path, config, on_back_callback, parent=None):
+    def __init__(self, case_path, display_case_path=None, config=None, on_back_callback=None, parent=None):
         super().__init__(parent)
         self.setObjectName("runPage")
         self.case_path = case_path
@@ -132,9 +134,14 @@ class RunPage(CardWidget):
         self.on_back_callback = on_back_callback
         self.main_window = parent  # 保存主窗口引用（用于InfoBar父窗口）
 
+        if display_case_path is None:
+            app_base = self._get_application_base()
+            display_case_path = os.path.relpath(os.path.abspath(case_path), app_base)
+        self.display_case_path = display_case_path
+
         layout = QVBoxLayout(self)
         layout.setSpacing(16)
-        layout.addWidget(StrongBodyLabel(f"正在运行：{case_path}"))
+        layout.addWidget(StrongBodyLabel(f"正在运行：{self.display_case_path}"))
 
         self.progress = ProgressBar(self)
         self.progress.setValue(0)
@@ -258,3 +265,7 @@ class RunPage(CardWidget):
             pass
 
         self.on_back_callback()  # 调用返回配置页的回调
+
+    def _get_application_base(self) -> str:
+        """获取应用根路径"""
+        return getattr(sys, "_MEIPASS", str(Path(__file__).resolve().parent.parent))
