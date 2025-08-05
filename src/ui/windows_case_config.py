@@ -241,7 +241,12 @@ class CaseConfigPage(CardWidget):
 
     def _get_application_base(self) -> str:
         """获取应用根路径"""
-        return getattr(sys, "_MEIPASS", str(Path(__file__).resolve().parent.parent))
+        base = (
+            Path(sys._MEIPASS) / "src"
+            if hasattr(sys, "_MEIPASS")
+            else Path(__file__).resolve().parent.parent
+        )
+        return str(base.resolve())
 
     def _resolve_case_path(self, path: str) -> str:
         """将相对用例路径转换为绝对路径"""
