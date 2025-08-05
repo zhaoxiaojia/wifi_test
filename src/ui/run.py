@@ -56,7 +56,11 @@ class LiveLogWriter:
                 self.emit_func(line.rstrip('\r'))
 
     def flush(self):
-        pass  # 兼容file接口
+        """将缓冲区剩余内容输出"""
+        with self._lock:
+            if self._buffer:
+                self.emit_func(self._buffer.rstrip('\r'))
+                self._buffer = ""
 
     def isatty(self):
         return False  # 必须加上这个
@@ -134,6 +138,7 @@ class CaseRunner(QThread):
                 for h in old_handlers:
                     root_logger.addHandler(h)
                 root_logger.setLevel(old_level)
+
                 sys.stdout = old_stdout
                 sys.stderr = old_stderr
 
