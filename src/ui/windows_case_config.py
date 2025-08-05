@@ -262,7 +262,8 @@ class CaseConfigPage(CardWidget):
         if not path:
             return ""
         p = Path(path)
-        return str(p) if p.is_absolute() else str(self._get_application_base() / p)
+        base = Path(self._get_application_base())
+        return str(p) if p.is_absolute() else str((base / p).resolve())
 
     def on_connect_type_changed(self, type_str):
         """
@@ -622,6 +623,8 @@ class CaseConfigPage(CardWidget):
             if isinstance(model, QSortFilterProxyModel) else proxy_idx
         )
         path = self.fs_model.filePath(source_idx)
+        base = Path(self._get_application_base())
+        display_path = os.path.relpath(path, base)
 
         # ---------- 目录：只负责展开/折叠 ----------
         if os.path.isdir(path):
@@ -640,7 +643,7 @@ class CaseConfigPage(CardWidget):
             return
 
         if hasattr(self, "test_case_edit"):
-            self.test_case_edit.setText(path)
+            self.test_case_edit.setText(display_path)
 
         # ---------- 有效用例 ----------
         if self._refreshing:
@@ -761,12 +764,12 @@ class CaseConfigPage(CardWidget):
                 text = widget.currentText()
                 ref[leaf] = True if text == 'True' else False if text == 'False' else text
         case_path = self.field_widgets["text_case"].text().strip()
-        app_base = self._get_application_base()
+        base = Path(self._get_application_base())
 
         # 默认将现有路径解析成 POSIX 字符串
         case_path = Path(case_path).as_posix() if case_path else ""
         abs_case_path = (
-            Path(self._resolve_case_path(case_path)).as_posix() if case_path else ""
+            (base / case_path).resolve().as_posix() if case_path else ""
         )
 
         # 若树状视图中选择了有效用例，则覆盖默认路径
@@ -780,11 +783,8 @@ class CaseConfigPage(CardWidget):
         selected_path = self.fs_model.filePath(src_idx)
         if os.path.isfile(selected_path) and selected_path.endswith(".py"):
             abs_path = Path(selected_path).resolve()
-            try:
-                display_path = abs_path.relative_to(Path(app_base))
-            except ValueError:
-                display_path = Path(abs_path.name)
-            case_path = display_path.as_posix()
+            display_path = os.path.relpath(abs_path, base)
+            case_path = Path(display_path).as_posix()
             abs_case_path = abs_path.as_posix()
 
         # 将最终运行的用例路径写入配置（尽量保持相对路径）
