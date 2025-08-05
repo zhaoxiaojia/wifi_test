@@ -3,6 +3,7 @@
 
 
 import sys
+import os
 from pathlib import Path
 
 import pytest
@@ -150,6 +151,17 @@ class MainWindow(FluentWindow):
         self.clear_run_page()
         print("Switched to CaseConfigPage")
 
+def get_base_dir():
+    """返回程序所在的基础目录（打包后是 exe 所在目录）"""
+    if getattr(sys, 'frozen', False):
+        return os.path.dirname(sys.executable)  # 打包后的路径
+    else:
+        return os.path.dirname(os.path.dirname(__file__))  # 开发时的项目根目录
+
+# 关键路径定义
+BASE_DIR = get_base_dir()
+CONFIG_DIR = os.path.join(BASE_DIR, "config")  # 共享的 config 目录
+RES_DIR = os.path.join(BASE_DIR, "res")       # 共享的 res 目录
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
