@@ -11,7 +11,7 @@ from pathlib import Path
 
 import yaml
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QVBoxLayout, QTableWidgetItem
+from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout, QTableWidgetItem
 from qfluentwidgets import (
     CardWidget,
     TableWidget,
@@ -66,6 +66,22 @@ class RvrWifiConfigPage(CardWidget):
         self.router_combo.setCurrentText(self.router_name)
         self.router_combo.currentTextChanged.connect(self.set_router)
         layout.addWidget(self.router_combo)
+
+        # control bar
+        control = QHBoxLayout()
+        self.attr_combo = ComboBox(self)
+        self.attr_combo.addItems(getattr(self.router, "BAND_LIST", ["2.4 GHz", "5 GHz"]))
+        control.addWidget(self.attr_combo)
+
+        self.add_btn = PushButton("添加", self)
+        self.add_btn.clicked.connect(self.add_row)
+        control.addWidget(self.add_btn)
+
+        self.del_btn = PushButton("删除", self)
+        self.del_btn.clicked.connect(self.delete_row)
+        control.addWidget(self.del_btn)
+
+        layout.addLayout(control)
 
         self.table = TableWidget(self)
         self._init_table()
@@ -223,6 +239,9 @@ class RvrWifiConfigPage(CardWidget):
             # TODO: 路由器需补充 BAND_LIST 字段
             pass
 
+        self.attr_combo.clear()
+        self.attr_combo.addItems(band_options)
+
         band_col = self.headers.index("band") + 1
         for r in range(self.table.rowCount()):
             band_widget = self.table.cellWidget(r, band_col)
@@ -263,6 +282,40 @@ class RvrWifiConfigPage(CardWidget):
                         pass
                 widget.addItems(options)
                 widget.blockSignals(False)
+
+    def add_row(self):
+        band = self.attr_combo.currentText()
+        row_data = {h: "" for h in self.headers}
+        if "band" in row_data:
+            row_data["band"] = band
+        if "ssid" in row_data:
+            row_data["ssid"] = self.ssid_2g if band == "2.4 GHz" else self.ssid_5g
+        if "wpa_passwd" in row_data:
+            row_data["wpa_passwd"] = self.passwd_2g if band == "2.4 GHz" else self.passwd_5g
+        if "wireless_mode" in row_data:
+            options = getattr(self.router, "WIRELESS_2" if band == "2.4 GHz" else "WIRELESS_5", [])
+            row_data["wireless_mode"] = options[0] if options else ""
+        if "channel" in row_data:
+            options = getattr(self.router, "CHANNEL_2" if band == "2.4 GHz" else "CHANNEL_5", [])
+            row_data["channel"] = options[0] if options else ""
+        if "bandwidth" in row_data:
+            options = getattr(self.router, "BANDWIDTH_2" if band == "2.4 GHz" else "BANDWIDTH_5", [])
+            row_data["bandwidth"] = options[0] if options else ""
+        if "authentication_method" in row_data:
+            options = getattr(self.router, "AUTHENTICATION_METHOD", [])
+            row_data["authentication_method"] = options[0] if options else ""
+        if "wifi6" in row_data:
+            row_data["wifi6"] = "on"
+        self.rows.append(row_data)
+        self.table.clear()
+        self._init_table()
+
+    def delete_row(self):
+        row = self.table.currentRow()
+        if 0 <= row < len(self.rows):
+            self.rows.pop(row)
+            self.table.clear()
+            self._init_table()
 
     def set_router_credentials(self, ssid: str, passwd: str) -> None:
         try:
