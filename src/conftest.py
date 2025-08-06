@@ -8,7 +8,8 @@
 # Description：
 """
 
-import os
+import os, sys
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import re
 import shutil
 import subprocess
@@ -27,7 +28,6 @@ from src.tools.router_tool.Router import Router
 test_results = []
 
 import logging
-import sys
 
 logging.basicConfig(
     level=logging.INFO,
