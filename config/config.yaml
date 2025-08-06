@@ -3,7 +3,7 @@ connect_type:
   adb:
     device: coco_aaaaaa
   telnet:
-    ip: 192.168.1.102
+    ip: 192.168.1.101
   type: telnet
 corner_angle:
   ip_address: 192.168.5.11
