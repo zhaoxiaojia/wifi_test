@@ -101,7 +101,13 @@ class RvrWifiConfigPage(CardWidget):
                 reader = csv.DictReader(f)
                 headers = [h.strip() for h in reader.fieldnames]
                 for row in reader:
-                    rows.append({k.strip(): (v.strip() if isinstance(v, str) else v) for k, v in row.items()})
+                    rows.append(
+                        {
+                            k.strip(): (v.strip() if isinstance(v, str) else v)
+                            for k, v in row.items()
+                            if k.strip() != "serial"
+                        }
+                    )
         return headers, rows
 
     def _apply_wifi_info(self):
@@ -132,12 +138,12 @@ class RvrWifiConfigPage(CardWidget):
                 row["wpa_passwd"] = passwd_5g
             # update widgets
             if "ssid" in self.headers:
-                col = self.headers.index("ssid") + 1
+                col = self.headers.index("ssid")
                 widget = self.table.cellWidget(r, col)
                 if isinstance(widget, LineEdit):
                     widget.setText(row["ssid"])
             if "wpa_passwd" in self.headers:
-                col = self.headers.index("wpa_passwd") + 1
+                col = self.headers.index("wpa_passwd")
                 widget = self.table.cellWidget(r, col)
                 if isinstance(widget, LineEdit):
                     widget.setText(row["wpa_passwd"])
@@ -146,26 +152,19 @@ class RvrWifiConfigPage(CardWidget):
     # 表格
     def _init_table(self):
         self.table.setRowCount(len(self.rows))
-        self.table.setColumnCount(len(self.headers) + 1)
-        self.table.setHorizontalHeaderLabels([""] + self.headers)
+        self.table.setColumnCount(len(self.headers))
+        self.table.setHorizontalHeaderLabels(self.headers)
         self.table.verticalHeader().setVisible(False)
 
         for r, row in enumerate(self.rows):
-            check_item = QTableWidgetItem()
-            check_item.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
-            check_item.setCheckState(Qt.Unchecked)
-            self.table.setItem(r, 0, check_item)
-
             for c, header in enumerate(self.headers):
                 value = row.get(header, "")
                 widget = self._create_widget(header, value, r)
                 if widget:
-                    self.table.setCellWidget(r, c + 1, widget)
+                    self.table.setCellWidget(r, c, widget)
                 else:
                     item = QTableWidgetItem(value)
-                    if header == "serial":
-                        item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
-                    self.table.setItem(r, c + 1, item)
+                    self.table.setItem(r, c, item)
 
     def _create_widget(self, header: str, value: str, row: int):
         if header == "band":
@@ -214,7 +213,7 @@ class RvrWifiConfigPage(CardWidget):
         return None
 
     def _band_of_row(self, row: int) -> str:
-        col = self.headers.index("band") + 1
+        col = self.headers.index("band")
         widget = self.table.cellWidget(row, col)
         if isinstance(widget, ComboBox):
             return widget.currentText()
@@ -230,7 +229,7 @@ class RvrWifiConfigPage(CardWidget):
             # TODO: 路由器需补充 BAND_LIST 字段
             pass
 
-        band_col = self.headers.index("band") + 1
+        band_col = self.headers.index("band")
         for r in range(self.table.rowCount()):
             band_widget = self.table.cellWidget(r, band_col)
             if isinstance(band_widget, ComboBox):
@@ -253,7 +252,7 @@ class RvrWifiConfigPage(CardWidget):
             "authentication_method": "AUTHENTICATION_METHOD",
         }
         for name, attr in mapping.items():
-            col = self.headers.index(name) + 1
+            col = self.headers.index(name)
             widget = self.table.cellWidget(row, col)
             if isinstance(widget, ComboBox):
                 widget.blockSignals(True)
@@ -273,8 +272,8 @@ class RvrWifiConfigPage(CardWidget):
 
     def set_router_credentials(self, ssid: str, passwd: str) -> None:
         try:
-            ssid_col = self.headers.index("ssid") + 1
-            passwd_col = self.headers.index("wpa_passwd") + 1
+            ssid_col = self.headers.index("ssid")
+            passwd_col = self.headers.index("wpa_passwd")
         except ValueError:
             return
         for r in range(self.table.rowCount()):
@@ -292,13 +291,13 @@ class RvrWifiConfigPage(CardWidget):
         for r in range(self.table.rowCount()):
             row_data = {}
             for c, header in enumerate(self.headers):
-                cell = self.table.cellWidget(r, c + 1)
+                cell = self.table.cellWidget(r, c)
                 if isinstance(cell, ComboBox):
                     text = cell.currentText()
                 elif isinstance(cell, LineEdit):
                     text = cell.text()
                 else:
-                    item = self.table.item(r, c + 1)
+                    item = self.table.item(r, c)
                     text = item.text() if item else ""
                 row_data[header] = text
             data.append(row_data)

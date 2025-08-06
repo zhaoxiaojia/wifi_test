@@ -1,17 +1,17 @@
-serial,band,ssid ,wireless_mode,channel,bandwidth,authentication_method,wpa_passwd,test_type,protocol_type,data_row,expected_rate,wifi6
-1,5 GHz, coco,11ax ,36,40MHz ,强加密(WPA2个人版) ,12345678,tx rx,TCP,5 ,10 10,on
-1,2.4 GHz, coco,11ax ,13,40MHz ,强加密(WPA2个人版) ,12345678,tx rx,TCP,5 ,10 10,on
-1,2.4 GHz, coco,11ax ,13,40MHz ,强加密(WPA2个人版) ,12345678,tx rx,TCP,5 ,10 10,on
-1,2.4 GHz, coco,11ax ,13,40MHz ,强加密(WPA2个人版) ,12345678,tx rx,TCP,5 ,10 10,on
-1,2.4 GHz, coco,11ax ,13,40MHz ,强加密(WPA2个人版) ,12345678,tx rx,TCP,5 ,10 10,on
-1,2.4 GHz, coco,11ax ,13,40MHz ,强加密(WPA2个人版) ,12345678,tx rx,TCP,5 ,10 10,on
-1,2.4 GHz, coco,11ax ,13,40MHz ,强加密(WPA2个人版) ,12345678,tx rx,TCP,5 ,10 10,on
-1,2.4 GHz, coco,11ax ,13,40MHz ,强加密(WPA2个人版) ,12345678,tx rx,TCP,5 ,10 10,on
-1,2.4 GHz, coco,11ax ,13,40MHz ,强加密(WPA2个人版) ,12345678,tx rx,TCP,5 ,10 10,on
-1,2.4 GHz, coco,11ax ,13,40MHz ,强加密(WPA2个人版) ,12345678,tx rx,TCP,5 ,10 10,on
-1,2.4 GHz, coco,11ax ,13,40MHz ,强加密(WPA2个人版) ,12345678,tx rx,TCP,5 ,10 10,on
-1,2.4 GHz, coco,11ax ,13,40MHz ,强加密(WPA2个人版) ,12345678,tx rx,TCP,5 ,10 10,on
-1,2.4 GHz, coco,11ax ,13,40MHz ,强加密(WPA2个人版) ,12345678,tx rx,TCP,5 ,10 10,on
-1,2.4 GHz, coco,11ax ,13,40MHz ,强加密(WPA2个人版) ,12345678,tx rx,TCP,5 ,10 10,on
-1,2.4 GHz, coco,11ax ,13,40MHz ,强加密(WPA2个人版) ,12345678,tx rx,TCP,5 ,10 10,on
-1,2.4 GHz, coco,11ax ,13,40MHz ,强加密(WPA2个人版) ,12345678,tx rx,TCP,5 ,10 10,on
+band,ssid,wireless_mode,channel,bandwidth,authentication_method,wpa_passwd,test_type,protocol_type,data_row,expected_rate,wifi6
+5 GHz,coco,11ax,36,40MHz,强加密(WPA2个人版),12345678,tx rx,TCP,5,10 10,on
+2.4 GHz,coco,11ax,13,40MHz,强加密(WPA2个人版),12345678,tx rx,TCP,5,10 10,on
+2.4 GHz,coco,11ax,13,40MHz,强加密(WPA2个人版),12345678,tx rx,TCP,5,10 10,on
+2.4 GHz,coco,11ax,13,40MHz,强加密(WPA2个人版),12345678,tx rx,TCP,5,10 10,on
+2.4 GHz,coco,11ax,13,40MHz,强加密(WPA2个人版),12345678,tx rx,TCP,5,10 10,on
+2.4 GHz,coco,11ax,13,40MHz,强加密(WPA2个人版),12345678,tx rx,TCP,5,10 10,on
+2.4 GHz,coco,11ax,13,40MHz,强加密(WPA2个人版),12345678,tx rx,TCP,5,10 10,on
+2.4 GHz,coco,11ax,13,40MHz,强加密(WPA2个人版),12345678,tx rx,TCP,5,10 10,on
+2.4 GHz,coco,11ax,13,40MHz,强加密(WPA2个人版),12345678,tx rx,TCP,5,10 10,on
+2.4 GHz,coco,11ax,13,40MHz,强加密(WPA2个人版),12345678,tx rx,TCP,5,10 10,on
+2.4 GHz,coco,11ax,13,40MHz,强加密(WPA2个人版),12345678,tx rx,TCP,5,10 10,on
+2.4 GHz,coco,11ax,13,40MHz,强加密(WPA2个人版),12345678,tx rx,TCP,5,10 10,on
+2.4 GHz,coco,11ax,13,40MHz,强加密(WPA2个人版),12345678,tx rx,TCP,5,10 10,on
+2.4 GHz,coco,11ax,13,40MHz,强加密(WPA2个人版),12345678,tx rx,TCP,5,10 10,on
+2.4 GHz,coco,11ax,13,40MHz,强加密(WPA2个人版),12345678,tx rx,TCP,5,10 10,on
+2.4 GHz,coco,11ax,13,40MHz,强加密(WPA2个人版),12345678,tx rx,TCP,5,10 10,on
