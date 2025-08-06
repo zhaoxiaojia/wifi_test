@@ -513,13 +513,37 @@ class CaseConfigPage(CardWidget):
                     "asusax6700", "xiaomiredax6000", "xiaomiax3000"
                 ])
                 self.router_name_combo.setCurrentText(value.get("name", "xiaomiax3000"))
+                self.ssid_2g_edit = LineEdit(self)
+                self.ssid_2g_edit.setPlaceholderText("2.4G SSID")
+                self.ssid_2g_edit.setText(value.get("ssid_2g", ""))
+                self.passwd_2g_edit = LineEdit(self)
+                self.passwd_2g_edit.setPlaceholderText("2.4G 密码(空=开放网络)")
+                self.passwd_2g_edit.setText(value.get("passwd_2g", ""))
+                self.ssid_5g_edit = LineEdit(self)
+                self.ssid_5g_edit.setPlaceholderText("5G SSID")
+                self.ssid_5g_edit.setText(value.get("ssid_5g", ""))
+                self.passwd_5g_edit = LineEdit(self)
+                self.passwd_5g_edit.setPlaceholderText("5G 密码(空=开放网络)")
+                self.passwd_5g_edit.setText(value.get("passwd_5g", ""))
 
                 vbox.addWidget(QLabel("Name:"))
                 vbox.addWidget(self.router_name_combo)
+                vbox.addWidget(QLabel("SSID 2G:"))
+                vbox.addWidget(self.ssid_2g_edit)
+                vbox.addWidget(QLabel("Password 2G:"))
+                vbox.addWidget(self.passwd_2g_edit)
+                vbox.addWidget(QLabel("SSID 5G:"))
+                vbox.addWidget(self.ssid_5g_edit)
+                vbox.addWidget(QLabel("Password 5G:"))
+                vbox.addWidget(self.passwd_5g_edit)
                 self.form.addRow(group)
 
                 # 注册控件
                 self.field_widgets["router.name"] = self.router_name_combo
+                self.field_widgets["router.ssid_2g"] = self.ssid_2g_edit
+                self.field_widgets["router.passwd_2g"] = self.passwd_2g_edit
+                self.field_widgets["router.ssid_5g"] = self.ssid_5g_edit
+                self.field_widgets["router.passwd_5g"] = self.passwd_5g_edit
                 continue  # ← 继续下一顶层 key
             if key == "serial_port":
                 group = QGroupBox("Serial Port")
@@ -663,6 +687,10 @@ class CaseConfigPage(CardWidget):
             "connect_type.telnet.ip",
             "connect_type.telnet.wildcard",
             "router.name",
+            "router.ssid_2g",
+            "router.passwd_2g",
+            "router.ssid_5g",
+            "router.passwd_5g",
             "serial_port.status",
             "serial_port.port",
             "serial_port.baud"
@@ -756,7 +784,11 @@ class CaseConfigPage(CardWidget):
                     else:
                         ref[leaf] = items
                 else:
-                    ref[leaf] = val.strip()
+                    val = val.strip()
+                    if len(parts) >= 2 and parts[-2] == "router" and leaf.startswith("passwd") and not val:
+                        ref[leaf] = ""  # 空密码表示开放网络
+                    else:
+                        ref[leaf] = val
             elif isinstance(widget, ComboBox):
                 text = widget.currentText()
                 ref[leaf] = True if text == 'True' else False if text == 'False' else text
