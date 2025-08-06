@@ -77,7 +77,7 @@ class TestFileFilterModel(QSortFilterProxyModel):
 class CaseConfigPage(CardWidget):
     """用例配置主页面"""
 
-    routerInfoChanged = pyqtSignal(str, str, str, str)
+    routerInfoChanged = pyqtSignal()
 
     def __init__(self, on_run_callback):
         super().__init__()
@@ -312,7 +312,7 @@ class CaseConfigPage(CardWidget):
 
     def on_router_changed(self, name: str):
         self._load_router_wifi_info(name)
-        self.routerInfoChanged.emit(*self.get_router_wifi_info())
+        self.routerInfoChanged.emit()
 
     def render_all_fields(self):
         """

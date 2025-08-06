@@ -24,18 +24,22 @@ from qfluentwidgets import (
 )
 
 from src.tools.router_tool.router_factory import get_router
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .windows_case_config import CaseConfigPage
 
 
 class RvrWifiConfigPage(CardWidget):
     """配置 RVR Wi-Fi 测试参数"""
 
-    def __init__(self, ssid_2g: str = "", passwd_2g: str = "", ssid_5g: str = "", passwd_5g: str = ""):
+    def __init__(self, case_config_page: "CaseConfigPage"):
         super().__init__()
         self.setObjectName("rvrWifiConfigPage")
-        self.ssid_2g = ssid_2g
-        self.passwd_2g = passwd_2g
-        self.ssid_5g = ssid_5g
-        self.passwd_5g = passwd_5g
+        self.case_config_page = case_config_page
+        self.ssid_2g, self.passwd_2g, self.ssid_5g, self.passwd_5g = (
+            case_config_page.get_router_wifi_info()
+        )
 
         # -------------------- paths --------------------
         base = Path.cwd()
@@ -110,7 +114,10 @@ class RvrWifiConfigPage(CardWidget):
                 row["ssid"] = self.ssid_5g
                 row["wpa_passwd"] = self.passwd_5g
 
-    def update_wifi_info(self, ssid_2g: str, passwd_2g: str, ssid_5g: str, passwd_5g: str):
+    def update_wifi_info(self):
+        ssid_2g, passwd_2g, ssid_5g, passwd_5g = (
+            self.case_config_page.get_router_wifi_info()
+        )
         self.ssid_2g = ssid_2g
         self.passwd_2g = passwd_2g
         self.ssid_5g = ssid_5g
