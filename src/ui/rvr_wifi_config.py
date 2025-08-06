@@ -95,7 +95,7 @@ class RvrWifiConfigPage(CardWidget):
         if self.csv_path.exists():
             with open(self.csv_path, newline="", encoding="utf-8") as f:
                 reader = csv.DictReader(f)
-                headers = [h.strip() for h in reader.fieldnames if h.strip() != "serial"]
+                headers = [h.strip() for h in reader.fieldnames]
                 for row in reader:
                     rows.append(
                         {
