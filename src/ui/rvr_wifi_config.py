@@ -43,11 +43,25 @@ class RvrWifiConfigPage(CardWidget):
         self.config_path = (base / "config" / "config.yaml").resolve()
 
         # -------------------- router options --------------------
-        self.router = self._load_router()
+        self.router, self.router_name = self._load_router()
         self.headers, self.rows = self._load_csv()
 
         # -------------------- layout --------------------
         layout = QVBoxLayout(self)
+        # router selector
+        self.router_combo = ComboBox(self)
+        self.router_combo.addItems([
+            "asusax86u",
+            "asusax88u",
+            "asusax5400",
+            "asusax6700",
+            "xiaomiredax6000",
+            "xiaomiax3000",
+        ])
+        self.router_combo.setCurrentText(self.router_name)
+        self.router_combo.currentTextChanged.connect(self.set_router)
+        layout.addWidget(self.router_combo)
+
         self.table = TableWidget(self)
         self._init_table()
         layout.addWidget(self.table)
@@ -66,8 +80,9 @@ class RvrWifiConfigPage(CardWidget):
             router = get_router(router_name)
         except Exception as e:
             print(f"load router error: {e}")
-            router = get_router("asusax86u")  # fallback
-        return router
+            router_name = "asusax86u"
+            router = get_router(router_name)  # fallback
+        return router, router_name
 
     def _load_csv(self):
         headers = []
@@ -157,11 +172,36 @@ class RvrWifiConfigPage(CardWidget):
         item = self.table.item(row, col)
         return item.text() if item else ""
 
+    def set_router(self, router_name: str):
+        """切换路由器时刷新所有相关选项"""
+        self.router = get_router(router_name)
+        self.router_name = router_name
+        band_options = getattr(self.router, "BAND_LIST", ["2.4 GHz", "5 GHz"])
+        if not hasattr(self.router, "BAND_LIST"):
+            # TODO: 路由器需补充 BAND_LIST 字段
+            pass
+
+        band_col = self.headers.index("band") + 1
+        for r in range(self.table.rowCount()):
+            band_widget = self.table.cellWidget(r, band_col)
+            if isinstance(band_widget, ComboBox):
+                band_widget.blockSignals(True)
+                current = band_widget.currentText()
+                band_widget.clear()
+                band_widget.addItems(band_options)
+                if current in band_options:
+                    band_widget.setCurrentText(current)
+                else:
+                    band_widget.setCurrentIndex(0)
+                band_widget.blockSignals(False)
+                self._update_band_dependent(r, band_widget.currentText())
+
     def _update_band_dependent(self, row: int, band: str):
         mapping = {
             "wireless_mode": "WIRELESS",
             "channel": "CHANNEL",
             "bandwidth": "BANDWIDTH",
+            "authentication_method": "AUTHENTICATION_METHOD",
         }
         for name, attr in mapping.items():
             col = self.headers.index(name) + 1
@@ -169,7 +209,16 @@ class RvrWifiConfigPage(CardWidget):
             if isinstance(widget, ComboBox):
                 widget.blockSignals(True)
                 widget.clear()
-                options = getattr(self.router, f"{attr}_2" if band == "2.4 GHz" else f"{attr}_5", [])
+                if name == "authentication_method":
+                    options = getattr(self.router, attr, [])
+                    if not options:
+                        # TODO: 若路由器区分频段的认证方式，请补充相关字段
+                        pass
+                else:
+                    options = getattr(self.router, f"{attr}_2" if band == "2.4 GHz" else f"{attr}_5", [])
+                    if not options:
+                        # TODO: 补充路由器的 {attr}_2/{attr}_5 配置
+                        pass
                 widget.addItems(options)
                 widget.blockSignals(False)
 
