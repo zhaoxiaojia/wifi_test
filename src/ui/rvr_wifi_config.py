@@ -89,6 +89,18 @@ class RvrWifiConfigPage(CardWidget):
 
         self.table = TableWidget(self)
         self._init_table()
+
+        self.property_widgets: dict[str, object] = {}
+
+        self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.table.setDragDropMode(QAbstractItemView.InternalMove)
+        self.table.setDragEnabled(True)
+        self.table.setAcceptDrops(True)
+        self.table.setDropIndicatorShown(True)
+        self.table.setDragDropOverwriteMode(False)
+        self.table.setDefaultDropAction(Qt.MoveAction)
+        self.table.itemSelectionChanged.connect(self._on_selection_changed)
+
         layout.addWidget(self.table)
 
         self.save_btn = PushButton(FluentIcon.SAVE, "保存", self)
@@ -235,6 +247,28 @@ class RvrWifiConfigPage(CardWidget):
             return widget.currentText()
         item = self.table.item(row, col)
         return item.text() if item else ""
+
+    def _on_selection_changed(self) -> None:
+        row = self.table.currentRow()
+        if row < 0:
+            return
+        for c, header in enumerate(self.headers):
+            widget = self.property_widgets.get(header)
+            if not widget:
+                continue
+            cell = self.table.cellWidget(row, c + 1)
+            text = ""
+            if isinstance(cell, ComboBox):
+                text = cell.currentText()
+            elif isinstance(cell, LineEdit):
+                text = cell.text()
+            else:
+                item = self.table.item(row, c + 1)
+                text = item.text() if item else ""
+            if isinstance(widget, ComboBox):
+                widget.setCurrentText(text)
+            elif isinstance(widget, LineEdit):
+                widget.setText(text)
 
     def set_router(self, router_name: str):
         """切换路由器时刷新所有相关选项"""
