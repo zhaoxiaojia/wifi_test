@@ -21,7 +21,8 @@ from PyQt5.QtCore import (
     QTimer,
     QDir,
     QSortFilterProxyModel,
-    QModelIndex
+    QModelIndex,
+    pyqtSignal,
 )
 from PyQt5.QtWidgets import (
     QWidget,
@@ -76,6 +77,8 @@ class TestFileFilterModel(QSortFilterProxyModel):
 class CaseConfigPage(CardWidget):
     """用例配置主页面"""
 
+    routerInfoChanged = pyqtSignal(str, str, str, str)
+
     def __init__(self, on_run_callback):
         super().__init__()
         self.setObjectName("caseConfigPage")
@@ -95,6 +98,10 @@ class CaseConfigPage(CardWidget):
         self._refreshing = False
         self._pending_path: str | None = None
         self.field_widgets: dict[str, QWidget] = {}
+        self.router_ssid_2g = ""
+        self.router_passwd_2g = ""
+        self.router_ssid_5g = ""
+        self.router_passwd_5g = ""
 
         # -------------------- layout --------------------
         main_layout = QHBoxLayout(self)
@@ -287,6 +294,25 @@ class CaseConfigPage(CardWidget):
 
     def on_serial_enabled_changed(self, text: str):
         self.serial_cfg_group.setVisible(text == "True")
+
+    def _load_router_wifi_info(self, name: str):
+        cfg = self.config.get("router", {})
+        self.router_ssid_2g = cfg.get("ssid_2g", f"{name}_2g")
+        self.router_passwd_2g = cfg.get("passwd_2g", "")
+        self.router_ssid_5g = cfg.get("ssid_5g", f"{name}_5g")
+        self.router_passwd_5g = cfg.get("passwd_5g", "")
+
+    def get_router_wifi_info(self):
+        return (
+            self.router_ssid_2g,
+            self.router_passwd_2g,
+            self.router_ssid_5g,
+            self.router_passwd_5g,
+        )
+
+    def on_router_changed(self, name: str):
+        self._load_router_wifi_info(name)
+        self.routerInfoChanged.emit(*self.get_router_wifi_info())
 
     def render_all_fields(self):
         """
@@ -513,6 +539,7 @@ class CaseConfigPage(CardWidget):
                     "asusax6700", "xiaomiredax6000", "xiaomiax3000"
                 ])
                 self.router_name_combo.setCurrentText(value.get("name", "xiaomiax3000"))
+                self.router_name_combo.currentTextChanged.connect(self.on_router_changed)
 
                 vbox.addWidget(QLabel("Name:"))
                 vbox.addWidget(self.router_name_combo)
@@ -520,6 +547,8 @@ class CaseConfigPage(CardWidget):
 
                 # 注册控件
                 self.field_widgets["router.name"] = self.router_name_combo
+                # 初始化 Wi-Fi 信息
+                self.on_router_changed(self.router_name_combo.currentText())
                 continue  # ← 继续下一顶层 key
             if key == "serial_port":
                 group = QGroupBox("Serial Port")
