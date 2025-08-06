@@ -130,9 +130,12 @@ class MainWindow(FluentWindow):
         # 确保窗口顶部不会超出屏幕
         self.move(window_geometry.topLeft())
 
-    def setCurrentIndex(self, page_widget):
+    def setCurrentIndex(self, page_widget, ssid: str | None = None, passwd: str | None = None):
         # print("setCurrentIndex dir:", dir(self))
         try:
+            if page_widget is self.rvr_wifi_config_page and (ssid or passwd):
+                if hasattr(self.rvr_wifi_config_page, "set_router_credentials"):
+                    self.rvr_wifi_config_page.set_router_credentials(ssid or "", passwd or "")
             self.stackedWidget.setCurrentWidget(page_widget)
             print(f"FluentWindow.setCurrentWidget({page_widget}) success")
         except Exception as e:

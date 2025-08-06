@@ -264,6 +264,20 @@ class RvrWifiConfigPage(CardWidget):
                 widget.addItems(options)
                 widget.blockSignals(False)
 
+    def set_router_credentials(self, ssid: str, passwd: str) -> None:
+        try:
+            ssid_col = self.headers.index("ssid") + 1
+            passwd_col = self.headers.index("wpa_passwd") + 1
+        except ValueError:
+            return
+        for r in range(self.table.rowCount()):
+            ssid_cell = self.table.cellWidget(r, ssid_col)
+            if isinstance(ssid_cell, LineEdit):
+                ssid_cell.setText(ssid)
+            passwd_cell = self.table.cellWidget(r, passwd_col)
+            if isinstance(passwd_cell, LineEdit):
+                passwd_cell.setText(passwd)
+
     # ------------------------------------------------------------------
     # 保存
     def save_csv(self):
