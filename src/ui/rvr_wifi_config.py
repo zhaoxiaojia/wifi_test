@@ -29,9 +29,13 @@ from src.tools.router_tool.router_factory import get_router
 class RvrWifiConfigPage(CardWidget):
     """配置 RVR Wi-Fi 测试参数"""
 
-    def __init__(self):
+    def __init__(self, ssid_2g: str = "", passwd_2g: str = "", ssid_5g: str = "", passwd_5g: str = ""):
         super().__init__()
         self.setObjectName("rvrWifiConfigPage")
+        self.ssid_2g = ssid_2g
+        self.passwd_2g = passwd_2g
+        self.ssid_5g = ssid_5g
+        self.passwd_5g = passwd_5g
 
         # -------------------- paths --------------------
         base = Path.cwd()
@@ -45,6 +49,7 @@ class RvrWifiConfigPage(CardWidget):
         # -------------------- router options --------------------
         self.router = self._load_router()
         self.headers, self.rows = self._load_csv()
+        self._apply_wifi_info()
 
         # -------------------- layout --------------------
         layout = QVBoxLayout(self)
@@ -79,6 +84,41 @@ class RvrWifiConfigPage(CardWidget):
                 for row in reader:
                     rows.append({k.strip(): (v.strip() if isinstance(v, str) else v) for k, v in row.items()})
         return headers, rows
+
+    def _apply_wifi_info(self):
+        for row in self.rows:
+            band = row.get("band", "")
+            if band == "2.4 GHz":
+                row["ssid"] = self.ssid_2g
+                row["wpa_passwd"] = self.passwd_2g
+            elif band == "5 GHz":
+                row["ssid"] = self.ssid_5g
+                row["wpa_passwd"] = self.passwd_5g
+
+    def update_wifi_info(self, ssid_2g: str, passwd_2g: str, ssid_5g: str, passwd_5g: str):
+        self.ssid_2g = ssid_2g
+        self.passwd_2g = passwd_2g
+        self.ssid_5g = ssid_5g
+        self.passwd_5g = passwd_5g
+        for r, row in enumerate(self.rows):
+            band = row.get("band", "")
+            if band == "2.4 GHz":
+                row["ssid"] = ssid_2g
+                row["wpa_passwd"] = passwd_2g
+            elif band == "5 GHz":
+                row["ssid"] = ssid_5g
+                row["wpa_passwd"] = passwd_5g
+            # update widgets
+            if "ssid" in self.headers:
+                col = self.headers.index("ssid") + 1
+                widget = self.table.cellWidget(r, col)
+                if isinstance(widget, LineEdit):
+                    widget.setText(row["ssid"])
+            if "wpa_passwd" in self.headers:
+                col = self.headers.index("wpa_passwd") + 1
+                widget = self.table.cellWidget(r, col)
+                if isinstance(widget, LineEdit):
+                    widget.setText(row["wpa_passwd"])
 
     # ------------------------------------------------------------------
     # 表格
@@ -141,6 +181,8 @@ class RvrWifiConfigPage(CardWidget):
         elif header in {"ssid", "wpa_passwd", "test_type", "protocol_type", "data_row", "expected_rate"}:
             line = LineEdit(self.table)
             line.setText(value)
+            if header in {"ssid", "wpa_passwd"}:
+                line.setReadOnly(True)
             return line
         elif header == "wifi6":
             combo = ComboBox(self.table)
