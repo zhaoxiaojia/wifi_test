@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from PyQt5.QtWidgets import QApplication
 from qfluentwidgets import FluentIcon, FluentWindow, NavigationItemPosition
 from src.ui.windows_case_config import CaseConfigPage
+from src.ui.rvr_wifi_config import RvrWifiConfigPage
 from src.ui.run import RunPage
 from qfluentwidgets import setTheme, Theme
 from PyQt5.QtGui import QGuiApplication
@@ -37,11 +38,15 @@ class MainWindow(FluentWindow):
 
         # 页面实例化
         self.case_config_page = CaseConfigPage(self.on_run)
+        self.rvr_wifi_config_page = RvrWifiConfigPage()
         self.run_page = None  # 运行窗口动态加载
 
         # 添加侧边导航（页面，图标，标题，描述）
         self.addSubInterface(
             self.case_config_page, FluentIcon.SETTING, "用例配置", "Case Config"
+        )
+        self.addSubInterface(
+            self.rvr_wifi_config_page, FluentIcon.WIFI, "RVR Wi-Fi配置", "RVR Wi-Fi Config"
         )
         # 可加更多页面，比如“历史记录”“关于”等
 
