@@ -125,7 +125,7 @@ class CaseRunner(QThread):
 
             # 主线程里定期检查_should_stop可实现停止功能
             try:
-                self.log_signal.emit(f"<b style='color:blue;'>开始执行pytest: {' '.join(pytest_args)}</b>")
+                self.log_signal.emit(f"<b style='color:blue;'>开始执行pytest</b>")
                 code = pytest.main(pytest_args)
                 if not self._should_stop:
                     self.log_signal.emit("<b style='color:green;'>运行完成！</b>")
