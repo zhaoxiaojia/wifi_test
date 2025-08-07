@@ -82,7 +82,6 @@ def pytest_sessionstart(session):
 
 def pytest_addoption(parser):
     parser.addoption("--resultpath", action="store", default=None, help="Test result path")
-    parser.addoption("--linux-only", action="store_true")
 
 
 def pytest_collection_finish(session):
