@@ -112,6 +112,8 @@ class RvrWifiConfigPage(CardWidget):
         self.rx_check = QCheckBox("rx", test_widget)
         test_layout.addWidget(self.tx_check)
         test_layout.addWidget(self.rx_check)
+        self.tx_check.stateChanged.connect(self._update_tx_rx)
+        self.rx_check.stateChanged.connect(self._update_tx_rx)
         form_layout.addRow("test_type", test_widget)
 
         self.data_row_edit = LineEdit(form_box)
@@ -262,6 +264,28 @@ class RvrWifiConfigPage(CardWidget):
             data.append(row)
         self.rows = data
 
+    def _update_tx_rx(self, state: int):
+        row = self.table.currentRow()
+        if row < 0:
+            return
+        sender = self.sender()
+        if sender not in (self.tx_check, self.rx_check):
+            return
+        col_name = "tx" if sender is self.tx_check else "rx"
+        try:
+            col = self.headers.index(col_name)
+        except ValueError:
+            return
+        value = "1" if state == Qt.Checked else "0"
+        item = self.table.item(row, col)
+        if item is None:
+            item = QTableWidgetItem(value)
+            item.setFlags(Qt.ItemIsEnabled)
+            self.table.setItem(row, col, item)
+        else:
+            item.setText(value)
+        self._sync_rows()
+
     def add_row(self):
         row = {
             "band": self.band_combo.currentText(),
@@ -275,6 +299,8 @@ class RvrWifiConfigPage(CardWidget):
         }
         self.rows.append(row)
         self.refresh_table()
+        if self.rows:
+            self.table.selectRow(len(self.rows) - 1)
 
     def delete_row(self):
         self._collect_table_data()
