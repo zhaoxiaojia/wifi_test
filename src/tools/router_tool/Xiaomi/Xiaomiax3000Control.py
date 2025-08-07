@@ -159,18 +159,18 @@ class Xiaomiax3000Control(RouterTools):
             else:
                 if target.is_selected():
                     target.click()
-            # 修改 authentication_method
-            if router.authentication_method:
+            # 修改 authentication
+            if router.authentication:
                 try:
-                    index = self.AUTHENTICATION_METHOD[router.authentication_method]
+                    index = self.AUTHENTICATION_METHOD[router.authentication]
                 except ConfigError:
                     raise ConfigError('authentication method element error')
-                target = 'authentication_method_2g' if self.BAND_2 == router.band else 'authentication_method_5g'
+                target = 'authentication_2g' if self.BAND_2 == router.band else 'authentication_5g'
                 self.driver.find_element(
-                    By.XPATH, self.xpath['authentication_method_select_element'][target]).click()
+                    By.XPATH, self.xpath['authentication_select_element'][target]).click()
                 # //*[@id="dummydata"]/a[3]/span
                 self.driver.find_element(
-                    By.XPATH, self.xpath['authentication_method_regu_element'].format(index)).click()
+                    By.XPATH, self.xpath['authentication_regu_element'].format(index)).click()
 
             # 修改密码
             if router.wpa_passwd:
@@ -264,15 +264,15 @@ class Xiaomiax3000Control(RouterTools):
             logging.info(e)
             return False
 
-# fields = ['serial', 'band', 'ssid', 'wireless_mode', 'channel', 'bandwidth', 'authentication_method', 'wpa_passwd',
+# fields = ['serial', 'band', 'ssid', 'wireless_mode', 'channel', 'bandwidth', 'authentication', 'wpa_passwd',
 #           'test_type',
 #           'wep_encrypt', 'passwd_index', 'wep_passwd', 'protect_frame', 'wpa_encrypt', 'hide_ssid']
 # Router = namedtuple('Router', fields, defaults=[None, ] * len(fields))
 # router5 = Router(serial='1', band='5 GHz', ssid='XiaomiAX3000_2.4G', channel='36', wireless_mode='11ax',
-#                  bandwidth='80MHz', authentication_method='超强加密(WPA3个人版)', wpa_passwd='12345678',
+#                  bandwidth='80MHz', authentication='超强加密(WPA3个人版)', wpa_passwd='12345678',
 #                  hide_ssid='否')
 # router2 = Router(serial='1', band='2.4 GHz', ssid='XiaomiAX3000_2.4G', channel='1', wireless_mode='11ac',
-#                  bandwidth='40MHz', authentication_method='超强加密(WPA3个人版)', wpa_passwd='12345678',
+#                  bandwidth='40MHz', authentication='超强加密(WPA3个人版)', wpa_passwd='12345678',
 #                  hide_ssid='否')
 # control = Xiaomiax3000Control()
 # control.change_setting(router2)

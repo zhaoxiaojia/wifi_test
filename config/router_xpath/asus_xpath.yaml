@@ -51,7 +51,7 @@ asus:
     asus_6700: //*[@id="WLgeneral"]/tbody/tr[9]/td/select
   bandwidth_element: //*[@id="wl_bw_field"]/td/select
 
-  authentication_method_element:
+  authentication_element:
     asus_5400: //*[@id="WLgeneral"]/tbody/tr[13]/td/div[1]/select
     asus_86u: //*[@id="WLgeneral"]/tbody/tr[13]/td/div[1]/select
     asus_88u: //*[@id="WLgeneral"]/tbody/tr[13]/td/div[1]/select

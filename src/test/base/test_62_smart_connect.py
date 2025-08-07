@@ -22,7 +22,7 @@ from src.tools.router_tool.Router import Router
 ssid = 'ATC_ASUS_AX88U'
 passwd = 'test1234'
 router = Router(band='2.4 GHz', ssid=ssid, wireless_mode='Legacy', channel='自动', bandwidth='20 MHz',
-                authentication_method='WPA2-Personal', wpa_passwd=passwd,
+                authentication='WPA2-Personal', wpa_passwd=passwd,
                 smart_connect=True)
 
 

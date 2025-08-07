@@ -24,7 +24,7 @@ Connect an AP which channel is 14
 ssid = 'ATC_ASUS_AX88U_2G'
 passwd = 'Abc@123456'
 router_2g = Router(band='2.4 GHz', ssid=ssid, wireless_mode='自动', channel='11', bandwidth='20/40 MHz',
-                   authentication_method='WPA/WPA2-Personal', wpa_passwd=passwd, country_code='中国 (默认值)')
+                   authentication='WPA/WPA2-Personal', wpa_passwd=passwd, country_code='中国 (默认值)')
 
 
 @pytest.fixture(scope='function', autouse=True)

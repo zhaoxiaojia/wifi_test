@@ -206,11 +206,11 @@ def test_wifi(wifi_setup_teardown):
     # 集成 测试结果信息
     result = (
         f'device,{router_type},{router_info.ssid},{router_info.band},{router_info.wireless_mode},'
-        f'{router_info.bandwidth},{router_info.channel},{router_info.authentication_method},'
+        f'{router_info.bandwidth},{router_info.channel},{router_info.authentication},'
         f'{passwd},{router_info.hide_ssid},NULL,')
 
-    type = 'wpa3' if 'WPA3' in router_info.authentication_method else 'wpa2'
-    if router_info.authentication_method.lower() in \
+    type = 'wpa3' if 'WPA3' in router_info.authentication else 'wpa2'
+    if router_info.authentication.lower() in \
             ['open', '不加密', '无', 'open system', '无加密(允许所有人连接)', 'none']:
         logging.info('no passwd')
         cmd = pytest.dut.CMD_WIFI_CONNECT.format(router_info.ssid,"open","")

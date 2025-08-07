@@ -28,7 +28,7 @@ channel 157
 ssid = 'ATC_ASUS_AX88U_5G'
 passwd = 'Abc@123456'
 router_5g = Router(band='5 GHz', ssid=ssid, wireless_mode='自动', channel='157', bandwidth='20/40/80 MHz',
-                   authentication_method='WPA2-Personal', wpa_passwd=passwd, hide_ssid='是')
+                   authentication='WPA2-Personal', wpa_passwd=passwd, hide_ssid='是')
 
 
 

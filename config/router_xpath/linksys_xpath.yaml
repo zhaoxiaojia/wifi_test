@@ -23,7 +23,7 @@ linksys:
     bandwidth_2g: //*[@id="RADIO_2.4GHz"]/div/div[4]/select/option[{}]
     bandwidth_5g: //*[@id="RADIO_5GHz"]/div/div[4]/select/option[{}]
 
-  authentication_method_regu_element:
+  authentication_regu_element:
     authtication_2g: //*[@id="RADIO_2.4GHz"]/div/div[2]/select/option[{}]
     authtication_5g: //*[@id="RADIO_5GHz"]/div/div[2]/select/option[{}]
   wpa_passwd:

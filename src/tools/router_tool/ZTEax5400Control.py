@@ -82,10 +82,10 @@ class ZTEax5400Control():
             if not select.get_attribute('checked'):
                 element.click()
 
-        # 修改 authentication_method
-        if (router.authentication_method):
+        # 修改 authentication
+        if (router.authentication):
             try:
-                index = ZTEax5400Config.AUTHENTICATION_METHOD[router.authentication_method]
+                index = ZTEax5400Config.AUTHENTICATION_METHOD[router.authentication]
             except ConfigError:
                 raise ConfigError('authentication method element error')
             # //*[@id="ssid_enc"]/option[1]
@@ -95,7 +95,7 @@ class ZTEax5400Control():
                 target_element = 'authtication_5g'
             self.router_control.driver.find_element(
                 By.XPATH,
-                self.router_control.xpath['authentication_method_regu_element'][target_element].format(
+                self.router_control.xpath['authentication_regu_element'][target_element].format(
                     index)).click()
 
         # 修改密码
@@ -190,12 +190,12 @@ class ZTEax5400Control():
         # finally:
         #     self.router_control.driver.quit()
 
-# fields = ['band', 'ssid', 'wireless_mode', 'channel', 'bandwidth', 'authentication_method',
+# fields = ['band', 'ssid', 'wireless_mode', 'channel', 'bandwidth', 'authentication',
 #           'wpa_passwd', 'test_type', 'wep_encrypt', 'passwd_index', 'wep_passwd',
 #           'protect_frame', 'wpa_encrypt', 'hide_ssid']
 # Router = namedtuple('Router', fields, defaults=[None, ] * len(fields))
 # router_zte = Router(band='5 GHz', ssid='ZTEax5400_5G', wireless_mode='802.11 a/n/ac', channel='161', bandwidth='20MHz/40MHz/80MHz',
-#                    authentication_method='WPA-PSK/WPA2-PSK', wpa_passwd='12345678')
+#                    authentication='WPA-PSK/WPA2-PSK', wpa_passwd='12345678')
 # control = ZTEax5400Control()
 # control.change_setting(router_zte)
 # control.reboot_router()

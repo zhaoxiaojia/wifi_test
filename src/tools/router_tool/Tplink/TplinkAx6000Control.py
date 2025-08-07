@@ -129,9 +129,9 @@ class TplinkAx6000Control:
                     By.ID, self.router_control.xpath['wpa_passwd'][target_element]).send_keys(router.wpa_passwd)
 
             time.sleep(2)
-            if (router.authentication_method):
+            if (router.authentication):
                 try:
-                    index = TplinkAx6000Config.AUTHENTICATION_METHOD_DICT[router.authentication_method]
+                    index = TplinkAx6000Config.AUTHENTICATION_METHOD_DICT[router.authentication]
                 except ConfigError:
                     raise ConfigError('authentication method key error')
 
@@ -140,11 +140,11 @@ class TplinkAx6000Control:
                 else:
                     target_element = 'authtication_5g'
                 wait_for = self.router_control.driver.find_element(
-                    By.XPATH, self.router_control.xpath['authentication_method_select_element'][target_element])
+                    By.XPATH, self.router_control.xpath['authentication_select_element'][target_element])
                 self.router_control.scroll_to(wait_for)
                 wait_for.click()
                 self.router_control.driver.find_element(
-                    By.XPATH, self.router_control.xpath['authentication_method_regu_element'][
+                    By.XPATH, self.router_control.xpath['authentication_regu_element'][
                         target_element].format(index)).click()
 
             # 修改 channel
@@ -257,12 +257,12 @@ class TplinkAx6000Control:
             self.router_control.driver.quit()
 
 
-# fields = ['band', 'ssid', 'wireless_mode', 'channel', 'bandwidth', 'authentication_method',
+# fields = ['band', 'ssid', 'wireless_mode', 'channel', 'bandwidth', 'authentication',
 #           'wpa_passwd', 'test_type', 'wep_encrypt', 'passwd_index', 'wep_passwd', 'protect_frame',
 #           'wpa_encrypt', 'hide_ssid']
 # Router = namedtuple('Router', fields, defaults=[None, ] * len(fields))
 # router = Router(band='5 GHz', ssid='Tplinkax6000_5G_123', wireless_mode='11a/n mixed', channel='52',
-#                 bandwidth='20MHz', authentication_method='WPA2-PSK/WPA3-SAE', wpa_passwd='amlogic_wifi123@')
+#                 bandwidth='20MHz', authentication='WPA2-PSK/WPA3-SAE', wpa_passwd='amlogic_wifi123@')
 # control = TplinkAx6000Control()
 # control.change_setting(router)
 # control.reboot_router()

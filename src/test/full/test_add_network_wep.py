@@ -28,7 +28,7 @@ WEP加密方式
 ssid = 'ATC_ASUS_AX88U_2G'
 passwd = '12345'
 router_2g = Router(band='2.4 GHz', ssid=ssid, wireless_mode='Legacy', channel='1', bandwidth='20 MHz',
-                   authentication_method='Shared Key', wep_passwd=passwd,wep_encrypt='WEP-64bits')
+                   authentication='Shared Key', wep_passwd=passwd,wep_encrypt='WEP-64bits')
 
 
 

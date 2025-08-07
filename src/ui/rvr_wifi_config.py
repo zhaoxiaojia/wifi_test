@@ -103,7 +103,7 @@ class RvrWifiConfigPage(CardWidget):
 
         self.auth_combo = ComboBox(form_box)
         self.auth_combo.addItems(getattr(self.router, "AUTHENTICATION_METHOD", []))
-        form_layout.addRow("authentication_method", self.auth_combo)
+        form_layout.addRow("authentication", self.auth_combo)
 
         test_widget = QWidget(form_box)
         test_layout = QHBoxLayout(test_widget)
@@ -176,7 +176,7 @@ class RvrWifiConfigPage(CardWidget):
             "wireless_mode",
             "channel",
             "bandwidth",
-            "authentication_method",
+            "authentication",
             "tx",
             "rx",
             "data_row",
@@ -274,7 +274,7 @@ class RvrWifiConfigPage(CardWidget):
             "wireless_mode": self.wireless_combo.currentText(),
             "channel": self.channel_combo.currentText(),
             "bandwidth": self.bandwidth_combo.currentText(),
-            "authentication_method": self.auth_combo.currentText(),
+            "authentication": self.auth_combo.currentText(),
             "tx": "1" if self.tx_check.isChecked() else "0",
             "rx": "1" if self.rx_check.isChecked() else "0",
             "data_row": self.data_row_edit.text(),

@@ -15,7 +15,7 @@ from src.tools.router_tool.Router import Router
 
 ssid_2g = 'ATC_ASUS_AX88U_2G'
 router_2g = Router(band='2.4 GHz', ssid=ssid_2g, wireless_mode='11n', channel='1', bandwidth='40 MHz',
-                   authentication_method='Open System')
+                   authentication='Open System')
 
 '''
 Test step

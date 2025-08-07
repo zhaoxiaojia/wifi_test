@@ -211,7 +211,7 @@ class Asusax88uControl(RouterTools):
         cmd = 'nvram set wl1_wpa_psk={};'
         self.telnet_write(cmd.format(passwd))
 
-    def set_2g_authentication_method(self, method):
+    def set_2g_authentication(self, method):
         cmd = 'nvram set wl0_auth_mode_x={};'
         mode_list = self.AUTHENTICATION_METHOD if method != 'Legacy' \
             else self.AUTHENTICATION_METHOD_LEGCY
@@ -221,7 +221,7 @@ class Asusax88uControl(RouterTools):
         if method == 'Open System':
             self.set_2g_wep_encrypt('None')
 
-    def set_5g_authentication_method(self, method):
+    def set_5g_authentication(self, method):
         cmd = 'nvram set wl1_auth_mode_x={};'
         mode_list = self.AUTHENTICATION_METHOD if method != 'Legacy' \
             else self.AUTHENTICATION_METHOD_LEGCY
@@ -310,11 +310,11 @@ class Asusax88uControl(RouterTools):
             self.set_2g_wpa_passwd(router.wpa_passwd) if '2' in router.band else self.set_5g_wpa_passwd(
                 router.wpa_passwd)
 
-        # 修改 authentication_method
-        if router.authentication_method:
-            self.set_2g_authentication_method(
-                router.authentication_method) if '2' in router.band else self.set_5g_authentication_method(
-                router.authentication_method)
+        # 修改 authentication
+        if router.authentication:
+            self.set_2g_authentication(
+                router.authentication) if '2' in router.band else self.set_5g_authentication(
+                router.authentication)
 
         # 修改channel
         if router.channel:
@@ -375,7 +375,7 @@ class Asusax88uControl(RouterTools):
 
 # ['Open System', 'WPA2-Personal', 'WPA3-Personal', 'WPA/WPA2-Personal', 'WPA2/WPA3-Personal',
 #                              'WPA2-Enterprise', 'WPA/WPA2-Enterprise']
-# fields = ['serial', 'band', 'ssid', 'wireless_mode', 'channel', 'bandwidth', 'authentication_method',
+# fields = ['serial', 'band', 'ssid', 'wireless_mode', 'channel', 'bandwidth', 'authentication',
 #           'wpa_passwd', 'test_type', 'protocol_type', 'wep_encrypt', 'wep_passwd',
 #           'hide_ssid', 'hide_type', 'wpa_encrypt', 'passwd_index', 'protect_frame',
 #           'smart_connect', 'country_code']
@@ -383,7 +383,7 @@ class Asusax88uControl(RouterTools):
 # passwd = '12345678'
 # Router = namedtuple('Router', fields, defaults=[None, ] * len(fields))
 # router = Router(band='5 GHz', ssid=ssid, wireless_mode='11ax', channel='36', bandwidth='80 MHz',
-#                 authentication_method='WPA2-Personal', wpa_passwd='12345678')
+#                 authentication='WPA2-Personal', wpa_passwd='12345678')
 # control = Asusax88uControl()
 # control.change_setting(router)
 # control.quit()

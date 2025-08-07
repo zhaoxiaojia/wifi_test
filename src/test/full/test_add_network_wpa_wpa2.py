@@ -29,7 +29,7 @@ WPA/WPA2-Personal加密
 ssid = 'ATC_ASUS_AX88U_2G'
 passwd = '12345678'
 router_2g = Router(band='2.4 GHz', ssid=ssid, wireless_mode='Legacy', channel='1', bandwidth='20 MHz',
-                   authentication_method='WPA/WPA2-Personal', wpa_passwd=passwd,protect_frame='停用')
+                   authentication='WPA/WPA2-Personal', wpa_passwd=passwd,protect_frame='停用')
 
 
 

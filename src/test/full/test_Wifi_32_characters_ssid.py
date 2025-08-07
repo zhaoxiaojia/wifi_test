@@ -26,7 +26,7 @@ SSID最大长度检查
 ssid = '12345678901234567890123456789012'
 passwd = '12345678'
 router_2g = Router(band='2.4 GHz', ssid=ssid, wireless_mode='N only', channel='1', bandwidth='40 MHz',
-                   authentication_method='WPA2-Personal', wpa_passwd=passwd)
+                   authentication='WPA2-Personal', wpa_passwd=passwd)
 
 
 @pytest.fixture(autouse=True)

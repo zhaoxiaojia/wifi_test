@@ -50,20 +50,20 @@ tplink:
       bandwidth_5g: //*[@id="selOptsUlwlanWidth5g"]/li[{}]
     wr842: /html/body/center/form/table/tbody/tr[2]/td/table/tbody/tr[1]/td[2]/table[2]/tbody/tr[1]/td/table/tbody/tr[5]/td[2]/select/option[{}]
 
-  authentication_method_select_element:
+  authentication_select_element:
     authtication_2g: //*[@id="auth2gDiv"]/ul[1]/li
     authtication_5g: //*[@id="auth5gDiv"]/ul[1]/li
-  authentication_method_regu_element:
+  authentication_regu_element:
     authtication_2g: //*[@id="selOptsUlauth"]/li[{}]
     authtication_5g: //*[@id="selOptsUlauth5g"]/li[{}]
 
-  wr842_authentication_method_element:
+  wr842_authentication_element:
     WPA-PSK/WPA2-PSK: /html/body/center/form/table/tbody/tr[2]/td/table/tbody/tr[1]/td[2]/table[4]/tbody/tr[1]/td/input
     WPA/WPA2: /html/body/center/form/table/tbody/tr[2]/td/table/tbody/tr[1]/td[2]/table[6]/tbody/tr[1]/td/input
     WEP: /html/body/center/form/table/tbody/tr[2]/td/table/tbody/tr[1]/td[2]/table[8]/tbody/tr[1]/td/input
     NONE: /html/body/center/form/table/tbody/tr[2]/td/table/tbody/tr[1]/td[2]/table[3]/tbody/tr/td/input
 
-  wr842_authentication_method_select_element:
+  wr842_authentication_select_element:
     WPA-PSK/WPA2-PSK: /html/body/center/form/table/tbody/tr[2]/td/table/tbody/tr[1]/td[2]/table[4]/tbody/tr[2]/td[2]/select/option[{}]
     WPA/WPA2: /html/body/center/form/table/tbody/tr[2]/td/table/tbody/tr[1]/td[2]/table[6]/tbody/tr[2]/td[2]/select/option[{}]
     WEP: /html/body/center/form/table/tbody/tr[2]/td/table/tbody/tr[1]/td[2]/table[8]/tbody/tr[2]/td[2]/select/option[{}]

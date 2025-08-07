@@ -14,7 +14,7 @@ import pytest
 # ssid = 'ATC_ASUS_AX88U_5G'
 # passwd = 'test1234'
 # router_ausu = Router(band='5 GHz', ssid=ssid, wireless_mode='自动', channel='自动', bandwidth='20 MHz',
-#                      authentication_method='WPA2-Personal', wpa_passwd=passwd)
+#                      authentication='WPA2-Personal', wpa_passwd=passwd)
 #
 #
 # @pytest.fixture(autouse=True, scope='session')

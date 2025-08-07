@@ -27,9 +27,9 @@ from src.tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
 ssid_name = 'ATC_ASUS_AX88U'
 passwd = 'test1234'
 router_2g = Router(band='2.4 GHz', ssid=ssid_name, wireless_mode='自动', channel='自动', bandwidth='20 MHz',
-                   authentication_method='WPA2-Personal', wpa_passwd=passwd)
+                   authentication='WPA2-Personal', wpa_passwd=passwd)
 router_5g = Router(band='5 GHz', ssid=ssid_name, wireless_mode='自动', channel='自动', bandwidth='20 MHz',
-                   authentication_method='WPA2-Personal', wpa_passwd=passwd)
+                   authentication='WPA2-Personal', wpa_passwd=passwd)
 
 
 

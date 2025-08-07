@@ -25,10 +25,10 @@ xiaomi:
   bandwidth_select_element:
     bandwidth_2g: //*[@id="wifiset24"]/div[7]/span/div
     bandwidth_5g: //*[@id="wifiset50"]/div[7]/span/div
-  authentication_method_regu_element: //*[@id="dummydata"]/a[{}]/span
-  authentication_method_select_element:
-    authentication_method_2g: //*[@id="wifiset24"]/div[4]/span/div
-    authentication_method_5g: //*[@id="wifiset50"]/div[4]/span/div
+  authentication_regu_element: //*[@id="dummydata"]/a[{}]/span
+  authentication_select_element:
+    authentication_2g: //*[@id="wifiset24"]/div[4]/span/div
+    authentication_5g: //*[@id="wifiset50"]/div[4]/span/div
 
   passwd_element:
     passwd_2g: //*[@id="wifiset24"]/div[5]/span/input

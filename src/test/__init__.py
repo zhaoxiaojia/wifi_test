@@ -41,9 +41,9 @@ def get_testdata(router):
         assert i.bandwidth  in {'2.4 GHz': router.BANDWIDTH_2, '5 GHz': router.BANDWIDTH_5}[
             i.band], "Pls check bandwidth info"
         if 'Legacy' in i.wireless_mode:
-            assert i.authentication_method  in router.AUTHENTICATION_METHOD_LEGCY, "Pls check authentication info"
+            assert i.authentication  in router.AUTHENTICATION_METHOD_LEGCY, "Pls check authentication info"
         else:
-            assert i.authentication_method  in router.AUTHENTICATION_METHOD, "Pls check authentication info"
+            assert i.authentication  in router.AUTHENTICATION_METHOD, "Pls check authentication info"
     return test_data
 
 

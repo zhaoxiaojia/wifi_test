@@ -27,7 +27,7 @@ channel 157
 
 ssid = 'ATC_ASUS_AX88U_5G'
 router_2g = Router(band='5 GHz', ssid=ssid, wireless_mode='自动', channel='157', bandwidth='80 MHz',
-                   authentication_method='Open System', hide_ssid='是')
+                   authentication='Open System', hide_ssid='是')
 
 
 @pytest.fixture(scope='function', autouse=True)

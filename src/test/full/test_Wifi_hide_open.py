@@ -27,7 +27,7 @@ channel 1
 
 ssid = 'ATC_ASUS_AX88U_2G'
 router_2g = Router(band='2.4 GHz', ssid=ssid, wireless_mode='自动', channel='1', bandwidth='20 MHz',
-                   authentication_method='Open System', hide_ssid='是')
+                   authentication='Open System', hide_ssid='是')
 
 
 @pytest.fixture(scope='function', autouse=True)

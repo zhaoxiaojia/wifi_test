@@ -28,11 +28,11 @@ from src.tools.router_tool.Router import Router
 ssid = 'ATC_ASUS_AX88U_5G'
 passwd = '12345678'
 router_open = Router(band='5 GHz', ssid=ssid, wireless_mode='N/AC/AX mixed', channel='36', bandwidth='40 MHz',
-                     authentication_method='Open System')
+                     authentication='Open System')
 router_wpa = Router(band='5 GHz', ssid=ssid, wireless_mode='Legacy', channel='40', bandwidth='20 MHz',
-                    authentication_method='WPA2-Personal', wpa_passwd=passwd)
+                    authentication='WPA2-Personal', wpa_passwd=passwd)
 router_wpa2 = Router(band='5 GHz', ssid=ssid, wireless_mode='自动', channel='44', bandwidth='40 MHz',
-                     authentication_method='WPA2-Personal', wpa_passwd=passwd)
+                     authentication='WPA2-Personal', wpa_passwd=passwd)
 
 ax88uControl = Asusax88uControl()
 
@@ -59,7 +59,7 @@ def test_change_ap():
         time.sleep(1)
         # for j in devices_list:
         #     pytest.execyter.serialnumber = j
-        if i.authentication_method == 'Open System':
+        if i.authentication == 'Open System':
             pytest.dut.checkoutput(pytest.dut.CMD_WIFI_CONNECT_OPEN.format(ssid))
         else:
             pytest.dut.checkoutput(pytest.dut.CMD_WIFI_CONNECT.format(ssid, 'wpa2', passwd))

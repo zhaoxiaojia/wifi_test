@@ -24,11 +24,11 @@ from src.tools.router_tool.Router import Router
 ssid = 'ATC_ASUS_AX88U_5G'
 passwd = '12345678'
 router_open = Router(band='5 GHz', ssid=ssid, wireless_mode='N/AC/AX mixed', channel='36', bandwidth='40 MHz',
-                     authentication_method='Open System')
+                     authentication='Open System')
 router_legacy = Router(band='5 GHz', ssid=ssid, wireless_mode='Legacy', channel='40', bandwidth='20 MHz',
-                       authentication_method='WPA2-Personal', wpa_passwd=passwd)
+                       authentication='WPA2-Personal', wpa_passwd=passwd)
 router_auto = Router(band='5 GHz', ssid=ssid, wireless_mode='自动', channel='44', bandwidth='40 MHz',
-                     authentication_method='WPA2-Personal', wpa_passwd=passwd)
+                     authentication='WPA2-Personal', wpa_passwd=passwd)
 
 ax88uControl = Asusax88uControl()
 
