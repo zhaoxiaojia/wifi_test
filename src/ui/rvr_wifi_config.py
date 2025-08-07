@@ -11,14 +11,21 @@ from pathlib import Path
 
 import yaml
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout, QTableWidgetItem
+from PyQt5.QtWidgets import (
+    QHBoxLayout,
+    QTableWidgetItem,
+    QGroupBox,
+    QFormLayout,
+    QWidget,
+    QCheckBox,
+    QAbstractItemView,
+)
 from qfluentwidgets import (
     CardWidget,
     TableWidget,
     ComboBox,
     LineEdit,
     PushButton,
-    FluentIcon,
     InfoBar,
     InfoBarPosition,
 )
@@ -37,11 +44,7 @@ class RvrWifiConfigPage(CardWidget):
         super().__init__()
         self.setObjectName("rvrWifiConfigPage")
         self.case_config_page = case_config_page
-        self.ssid_2g, self.passwd_2g, self.ssid_5g, self.passwd_5g = (
-            case_config_page.get_router_wifi_info()
-        )
 
-        # -------------------- paths --------------------
         base = Path.cwd()
         if hasattr(sys, "_MEIPASS"):
             base = Path(sys._MEIPASS)
@@ -50,48 +53,68 @@ class RvrWifiConfigPage(CardWidget):
         self.csv_path = (base / "config" / "rvr_wifi_setup.csv").resolve()
         self.config_path = (base / "config" / "config.yaml").resolve()
 
-        # -------------------- router options --------------------
         self.router, self.router_name = self._load_router()
+
         self.headers, self.rows = self._load_csv()
-        self._apply_wifi_info()
 
-        # -------------------- layout --------------------
-        layout = QVBoxLayout(self)
-        # router selector
-        self.router_combo = ComboBox(self)
-        self.router_combo.addItems([
-            "asusax86u",
-            "asusax88u",
-            "asusax5400",
-            "asusax6700",
-            "xiaomiredax6000",
-            "xiaomiax3000",
-        ])
-        self.router_combo.setCurrentText(self.router_name)
-        self.router_combo.currentTextChanged.connect(self.set_router)
-        layout.addWidget(self.router_combo)
+        main_layout = QHBoxLayout(self)
 
-        # control bar
-        control = QHBoxLayout()
-        self.attr_combo = ComboBox(self)
-        self.attr_combo.addItems(getattr(self.router, "BAND_LIST", ["2.4 GHz", "5 GHz"]))
-        control.addWidget(self.attr_combo)
+        form_box = QGroupBox(self)
+        form_layout = QFormLayout(form_box)
 
-        self.add_btn = PushButton("添加", self)
+        self.band_combo = ComboBox(form_box)
+        self.band_combo.addItems(getattr(self.router, "BAND_LIST", ["2.4 GHz", "5 GHz"]))
+        form_layout.addRow("band", self.band_combo)
+
+        self.wireless_combo = ComboBox(form_box)
+        form_layout.addRow("wireless_mode", self.wireless_combo)
+
+        self.channel_combo = ComboBox(form_box)
+        form_layout.addRow("channel", self.channel_combo)
+
+        self.bandwidth_combo = ComboBox(form_box)
+        form_layout.addRow("bandwidth", self.bandwidth_combo)
+
+        self.auth_combo = ComboBox(form_box)
+        self.auth_combo.addItems(getattr(self.router, "AUTHENTICATION_METHOD", []))
+        form_layout.addRow("authentication_method", self.auth_combo)
+
+        test_widget = QWidget(form_box)
+        test_layout = QHBoxLayout(test_widget)
+        test_layout.setContentsMargins(0, 0, 0, 0)
+        self.tx_check = QCheckBox("tx", test_widget)
+        self.rx_check = QCheckBox("rx", test_widget)
+        test_layout.addWidget(self.tx_check)
+        test_layout.addWidget(self.rx_check)
+        form_layout.addRow("test_type", test_widget)
+
+        self.data_row_edit = LineEdit(form_box)
+        form_layout.addRow("data_row", self.data_row_edit)
+
+        self.expected_rate_tx_edit = LineEdit(form_box)
+        form_layout.addRow("expected_rate_tx", self.expected_rate_tx_edit)
+
+        self.expected_rate_rx_edit = LineEdit(form_box)
+        form_layout.addRow("expected_rate_rx", self.expected_rate_rx_edit)
+
+        btn_widget = QWidget(form_box)
+        btn_layout = QHBoxLayout(btn_widget)
+        btn_layout.setContentsMargins(0, 0, 0, 0)
+        self.add_btn = PushButton("添加", btn_widget)
         self.add_btn.clicked.connect(self.add_row)
-        control.addWidget(self.add_btn)
-
-        self.del_btn = PushButton("删除", self)
+        btn_layout.addWidget(self.add_btn)
+        self.del_btn = PushButton("删除", btn_widget)
         self.del_btn.clicked.connect(self.delete_row)
-        control.addWidget(self.del_btn)
+        btn_layout.addWidget(self.del_btn)
+        self.save_btn = PushButton("保存", btn_widget)
+        self.save_btn.clicked.connect(self.save_csv)
+        btn_layout.addWidget(self.save_btn)
+        form_layout.addRow(btn_widget)
 
-        layout.addLayout(control)
+        main_layout.addWidget(form_box)
 
         self.table = TableWidget(self)
-        self._init_table()
-
-        self.property_widgets: dict[str, object] = {}
-
+        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setDragDropMode(QAbstractItemView.InternalMove)
         self.table.setDragEnabled(True)
@@ -99,16 +122,14 @@ class RvrWifiConfigPage(CardWidget):
         self.table.setDropIndicatorShown(True)
         self.table.setDragDropOverwriteMode(False)
         self.table.setDefaultDropAction(Qt.MoveAction)
-        self.table.itemSelectionChanged.connect(self._on_selection_changed)
+        main_layout.addWidget(self.table)
 
-        layout.addWidget(self.table)
+        self.band_combo.currentTextChanged.connect(self._update_band_options)
+        self._update_band_options(self.band_combo.currentText())
 
-        self.save_btn = PushButton(FluentIcon.SAVE, "保存", self)
-        self.save_btn.clicked.connect(self.save_csv)
-        layout.addWidget(self.save_btn, alignment=Qt.AlignRight)
+        self.refresh_table()
 
     # ------------------------------------------------------------------
-    # 初始化
     def _load_router(self):
         try:
             with open(self.config_path, "r", encoding="utf-8") as f:
@@ -118,278 +139,92 @@ class RvrWifiConfigPage(CardWidget):
         except Exception as e:
             print(f"load router error: {e}")
             router_name = "asusax86u"
-            router = get_router(router_name)  # fallback
+            router = get_router(router_name)
         return router, router_name
 
     def _load_csv(self):
-        headers = []
+        headers = [
+            "band",
+            "wireless_mode",
+            "channel",
+            "bandwidth",
+            "authentication_method",
+            "tx",
+            "rx",
+            "data_row",
+            "expected_rate_tx",
+            "expected_rate_rx",
+        ]
         rows: list[dict[str, str]] = []
         if self.csv_path.exists():
             with open(self.csv_path, newline="", encoding="utf-8") as f:
                 reader = csv.DictReader(f)
-                headers = [h.strip() for h in reader.fieldnames]
                 for row in reader:
-                    rows.append(
-                        {
-                            k.strip(): (v.strip() if isinstance(v, str) else v)
-                            for k, v in row.items()
-                            if k.strip() != "serial"
-                        }
-                    )
+                    rows.append({h: row.get(h, "") for h in headers})
         return headers, rows
 
-    def _apply_wifi_info(self):
-        for row in self.rows:
-            band = row.get("band", "")
-            if band == "2.4 GHz":
-                row["ssid"] = self.ssid_2g
-                row["wpa_passwd"] = self.passwd_2g
-            elif band == "5 GHz":
-                row["ssid"] = self.ssid_5g
-                row["wpa_passwd"] = self.passwd_5g
+    def _update_band_options(self, band: str):
+        wireless = getattr(self.router, "WIRELESS_2" if band == "2.4 GHz" else "WIRELESS_5", [])
+        channel = getattr(self.router, "CHANNEL_2" if band == "2.4 GHz" else "CHANNEL_5", [])
+        bandwidth = getattr(self.router, "BANDWIDTH_2" if band == "2.4 GHz" else "BANDWIDTH_5", [])
+        self.wireless_combo.clear()
+        self.wireless_combo.addItems(wireless)
+        self.channel_combo.clear()
+        self.channel_combo.addItems(channel)
+        self.bandwidth_combo.clear()
+        self.bandwidth_combo.addItems(bandwidth)
 
-    def update_wifi_info(self):
-        ssid_2g, passwd_2g, ssid_5g, passwd_5g = (
-            self.case_config_page.get_router_wifi_info()
-        )
-        self.ssid_2g = ssid_2g
-        self.passwd_2g = passwd_2g
-        self.ssid_5g = ssid_5g
-        self.passwd_5g = passwd_5g
-        for r, row in enumerate(self.rows):
-            band = row.get("band", "")
-            if band == "2.4 GHz":
-                row["ssid"] = ssid_2g
-                row["wpa_passwd"] = passwd_2g
-            elif band == "5 GHz":
-                row["ssid"] = ssid_5g
-                row["wpa_passwd"] = passwd_5g
-            # update widgets
-            if "ssid" in self.headers:
-                col = self.headers.index("ssid")
-                widget = self.table.cellWidget(r, col)
-                if isinstance(widget, LineEdit):
-                    widget.setText(row["ssid"])
-            if "wpa_passwd" in self.headers:
-                col = self.headers.index("wpa_passwd")
-                widget = self.table.cellWidget(r, col)
-                if isinstance(widget, LineEdit):
-                    widget.setText(row["wpa_passwd"])
-
-    # ------------------------------------------------------------------
-    # 表格
-    def _init_table(self):
+    def refresh_table(self):
+        self.table.clear()
         self.table.setRowCount(len(self.rows))
         self.table.setColumnCount(len(self.headers))
         self.table.setHorizontalHeaderLabels(self.headers)
         self.table.verticalHeader().setVisible(False)
-
         for r, row in enumerate(self.rows):
-            for c, header in enumerate(self.headers):
-                value = row.get(header, "")
-                widget = self._create_widget(header, value, r)
-                if widget:
-                    self.table.setCellWidget(r, c, widget)
-                else:
-                    item = QTableWidgetItem(value)
-                    self.table.setItem(r, c, item)
+            for c, h in enumerate(self.headers):
+                item = QTableWidgetItem(str(row.get(h, "")))
+                self.table.setItem(r, c, item)
 
-    def _create_widget(self, header: str, value: str, row: int):
-        if header == "band":
-            combo = ComboBox(self.table)
-            combo.addItems(getattr(self.router, "BAND_LIST", ["2.4 GHz", "5 GHz"]))
-            combo.setCurrentText(value)
-            combo.currentTextChanged.connect(lambda text, r=row: self._update_band_dependent(r, text))
-            return combo
-        elif header == "wireless_mode":
-            combo = ComboBox(self.table)
-            band = self._band_of_row(row)
-            options = getattr(self.router, "WIRELESS_2" if band == "2.4 GHz" else "WIRELESS_5", [])
-            combo.addItems(options)
-            combo.setCurrentText(value)
-            return combo
-        elif header == "channel":
-            combo = ComboBox(self.table)
-            band = self._band_of_row(row)
-            options = getattr(self.router, "CHANNEL_2" if band == "2.4 GHz" else "CHANNEL_5", [])
-            combo.addItems(options)
-            combo.setCurrentText(value)
-            return combo
-        elif header == "bandwidth":
-            combo = ComboBox(self.table)
-            band = self._band_of_row(row)
-            options = getattr(self.router, "BANDWIDTH_2" if band == "2.4 GHz" else "BANDWIDTH_5", [])
-            combo.addItems(options)
-            combo.setCurrentText(value)
-            return combo
-        elif header == "authentication_method":
-            combo = ComboBox(self.table)
-            combo.addItems(getattr(self.router, "AUTHENTICATION_METHOD", []))
-            combo.setCurrentText(value)
-            return combo
-        elif header in {"ssid", "wpa_passwd", "test_type", "protocol_type", "data_row", "expected_rate"}:
-            line = LineEdit(self.table)
-            line.setText(value)
-            if header in {"ssid", "wpa_passwd"}:
-                line.setReadOnly(True)
-            return line
-        elif header == "wifi6":
-            combo = ComboBox(self.table)
-            combo.addItems(["on", "off"])
-            combo.setCurrentText(value)
-            return combo
-        return None
-
-    def _band_of_row(self, row: int) -> str:
-        col = self.headers.index("band")
-        widget = self.table.cellWidget(row, col)
-        if isinstance(widget, ComboBox):
-            return widget.currentText()
-        item = self.table.item(row, col)
-        return item.text() if item else ""
-
-    def _on_selection_changed(self) -> None:
-        row = self.table.currentRow()
-        if row < 0:
-            return
-        for c, header in enumerate(self.headers):
-            widget = self.property_widgets.get(header)
-            if not widget:
-                continue
-            cell = self.table.cellWidget(row, c + 1)
-            text = ""
-            if isinstance(cell, ComboBox):
-                text = cell.currentText()
-            elif isinstance(cell, LineEdit):
-                text = cell.text()
-            else:
-                item = self.table.item(row, c + 1)
-                text = item.text() if item else ""
-            if isinstance(widget, ComboBox):
-                widget.setCurrentText(text)
-            elif isinstance(widget, LineEdit):
-                widget.setText(text)
-
-    def set_router(self, router_name: str):
-        """切换路由器时刷新所有相关选项"""
-        self.router = get_router(router_name)
-        self.router_name = router_name
-        band_options = getattr(self.router, "BAND_LIST", ["2.4 GHz", "5 GHz"])
-        if not hasattr(self.router, "BAND_LIST"):
-            # TODO: 路由器需补充 BAND_LIST 字段
-            pass
-
-        band_col = self.headers.index("band")
+    def _collect_table_data(self):
+        data: list[dict[str, str]] = []
         for r in range(self.table.rowCount()):
-            band_widget = self.table.cellWidget(r, band_col)
-            if isinstance(band_widget, ComboBox):
-                band_widget.blockSignals(True)
-                current = band_widget.currentText()
-                band_widget.clear()
-                band_widget.addItems(band_options)
-                if current in band_options:
-                    band_widget.setCurrentText(current)
-                else:
-                    band_widget.setCurrentIndex(0)
-                band_widget.blockSignals(False)
-                self._update_band_dependent(r, band_widget.currentText())
-
-    def _update_band_dependent(self, row: int, band: str):
-        mapping = {
-            "wireless_mode": "WIRELESS",
-            "channel": "CHANNEL",
-            "bandwidth": "BANDWIDTH",
-            "authentication_method": "AUTHENTICATION_METHOD",
-        }
-        for name, attr in mapping.items():
-            col = self.headers.index(name)
-            widget = self.table.cellWidget(row, col)
-            if isinstance(widget, ComboBox):
-                widget.blockSignals(True)
-                widget.clear()
-                if name == "authentication_method":
-                    options = getattr(self.router, attr, [])
-                    if not options:
-                        # TODO: 若路由器区分频段的认证方式，请补充相关字段
-                        pass
-                else:
-                    options = getattr(self.router, f"{attr}_2" if band == "2.4 GHz" else f"{attr}_5", [])
-                    if not options:
-                        # TODO: 补充路由器的 {attr}_2/{attr}_5 配置
-                        pass
-                widget.addItems(options)
-                widget.blockSignals(False)
+            row: dict[str, str] = {}
+            for c, h in enumerate(self.headers):
+                item = self.table.item(r, c)
+                row[h] = item.text() if item else ""
+            data.append(row)
+        self.rows = data
 
     def add_row(self):
-        band = self.attr_combo.currentText()
-        row_data = {h: "" for h in self.headers}
-        if "band" in row_data:
-            row_data["band"] = band
-        if "ssid" in row_data:
-            row_data["ssid"] = self.ssid_2g if band == "2.4 GHz" else self.ssid_5g
-        if "wpa_passwd" in row_data:
-            row_data["wpa_passwd"] = self.passwd_2g if band == "2.4 GHz" else self.passwd_5g
-        if "wireless_mode" in row_data:
-            options = getattr(self.router, "WIRELESS_2" if band == "2.4 GHz" else "WIRELESS_5", [])
-            row_data["wireless_mode"] = options[0] if options else ""
-        if "channel" in row_data:
-            options = getattr(self.router, "CHANNEL_2" if band == "2.4 GHz" else "CHANNEL_5", [])
-            row_data["channel"] = options[0] if options else ""
-        if "bandwidth" in row_data:
-            options = getattr(self.router, "BANDWIDTH_2" if band == "2.4 GHz" else "BANDWIDTH_5", [])
-            row_data["bandwidth"] = options[0] if options else ""
-        if "authentication_method" in row_data:
-            options = getattr(self.router, "AUTHENTICATION_METHOD", [])
-            row_data["authentication_method"] = options[0] if options else ""
-        if "wifi6" in row_data:
-            row_data["wifi6"] = "on"
-        self.rows.append(row_data)
-        self.table.clear()
-        self._init_table()
+        row = {
+            "band": self.band_combo.currentText(),
+            "wireless_mode": self.wireless_combo.currentText(),
+            "channel": self.channel_combo.currentText(),
+            "bandwidth": self.bandwidth_combo.currentText(),
+            "authentication_method": self.auth_combo.currentText(),
+            "tx": "1" if self.tx_check.isChecked() else "0",
+            "rx": "1" if self.rx_check.isChecked() else "0",
+            "data_row": self.data_row_edit.text(),
+            "expected_rate_tx": self.expected_rate_tx_edit.text(),
+            "expected_rate_rx": self.expected_rate_rx_edit.text(),
+        }
+        self.rows.append(row)
+        self.refresh_table()
 
     def delete_row(self):
+        self._collect_table_data()
         row = self.table.currentRow()
         if 0 <= row < len(self.rows):
             self.rows.pop(row)
-            self.table.clear()
-            self._init_table()
+            self.refresh_table()
 
-    def set_router_credentials(self, ssid: str, passwd: str) -> None:
-        try:
-            ssid_col = self.headers.index("ssid")
-            passwd_col = self.headers.index("wpa_passwd")
-        except ValueError:
-            return
-        for r in range(self.table.rowCount()):
-            ssid_cell = self.table.cellWidget(r, ssid_col)
-            if isinstance(ssid_cell, LineEdit):
-                ssid_cell.setText(ssid)
-            passwd_cell = self.table.cellWidget(r, passwd_col)
-            if isinstance(passwd_cell, LineEdit):
-                passwd_cell.setText(passwd)
-
-    # ------------------------------------------------------------------
-    # 保存
     def save_csv(self):
-        data = []
-        for r in range(self.table.rowCount()):
-            row_data = {}
-            for c, header in enumerate(self.headers):
-                cell = self.table.cellWidget(r, c)
-                if isinstance(cell, ComboBox):
-                    text = cell.currentText()
-                elif isinstance(cell, LineEdit):
-                    text = cell.text()
-                else:
-                    item = self.table.item(r, c)
-                    text = item.text() if item else ""
-                row_data[header] = text
-            data.append(row_data)
+        self._collect_table_data()
         try:
             with open(self.csv_path, "w", newline="", encoding="utf-8") as f:
                 writer = csv.DictWriter(f, fieldnames=self.headers)
                 writer.writeheader()
-                writer.writerows(data)
+                writer.writerows(self.rows)
             InfoBar.success(title="提示", content="保存成功", parent=self, position=InfoBarPosition.TOP)
         except Exception as e:
             InfoBar.error(title="错误", content=str(e), parent=self, position=InfoBarPosition.TOP)
