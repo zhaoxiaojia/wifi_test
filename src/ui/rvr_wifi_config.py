@@ -154,6 +154,9 @@ class RvrWifiConfigPage(CardWidget):
 
         self.refresh_table()
 
+        # 监听主配置页面的路由器信息变化
+        self.case_config_page.routerInfoChanged.connect(self.reload_router)
+
     # ------------------------------------------------------------------
     def _load_router(self):
         try:
@@ -187,6 +190,37 @@ class RvrWifiConfigPage(CardWidget):
                 for row in reader:
                     rows.append({h: row.get(h, "") for h in headers})
         return headers, rows
+
+    def reload_router(self):
+        """重新加载路由器配置并刷新频段相关选项"""
+        name = ""
+        combo = getattr(self.case_config_page, "router_name_combo", None)
+        if combo is not None:
+            name = combo.currentText()
+        else:
+            cfg = getattr(self.case_config_page, "config", {})
+            if isinstance(cfg, dict):
+                name = cfg.get("router", {}).get("name", self.router_name)
+        try:
+            self.router = get_router(name)
+            self.router_name = name
+        except Exception as e:
+            print(f"reload router error: {e}")
+            return
+
+        band_list = getattr(self.router, "BAND_LIST", ["2.4 GHz", "5 GHz"])
+        current_band = self.band_combo.currentText()
+        if current_band not in band_list:
+            current_band = band_list[0] if band_list else ""
+
+        self.band_combo.blockSignals(True)
+        self.band_combo.clear()
+        self.band_combo.addItems(band_list)
+        if current_band:
+            self.band_combo.setCurrentText(current_band)
+        self.band_combo.blockSignals(False)
+
+        self._update_band_options(current_band)
 
     def _update_band_options(self, band: str):
         wireless = {"2.4 GHz": getattr(self.router, "WIRELESS_2", []),
