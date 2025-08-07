@@ -43,13 +43,18 @@ class WifiTableWidget(TableWidget):
     def __init__(self, page: "RvrWifiConfigPage"):
         super().__init__(page)
         self.page = page
-        # 行内数据不允许单独选中
-        self.setSelectionMode(QAbstractItemView.NoSelection)
+        # 仅允许单行选择并整行高亮
+        self.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.setSelectionBehavior(QAbstractItemView.SelectRows)
         # 垂直表头允许拖动以调整行顺序
         vh = self.verticalHeader()
         vh.setVisible(True)
         vh.setSectionsMovable(True)
         vh.sectionMoved.connect(lambda *_: self.page._sync_rows())
+        # 启用内部拖拽排序
+        self.setDragDropMode(QAbstractItemView.InternalMove)
+        self.setDragEnabled(True)
+        self.setAcceptDrops(True)
 
     # 仍保留 dropEvent 以兼容内部拖拽
     def dropEvent(self, event):  # type: ignore[override]
