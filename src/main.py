@@ -48,14 +48,29 @@ class MainWindow(FluentWindow):
         self.addSubInterface(
             self.case_config_page, FluentIcon.SETTING, "用例配置", "Case Config"
         )
-        self.addSubInterface(
-            self.rvr_wifi_config_page, FluentIcon.WIFI, "RVR Wi-Fi配置", "RVR Wi-Fi Config"
-        )
+        # 初始不展示 RVR Wi-Fi 配置页
         # 可加更多页面，比如“历史记录”“关于”等
 
         # FluentWindow自带自定义颜色与主题
         setTheme(Theme.LIGHT)  # 或 Theme.LIGHT
         # self.setMicaEffectEnabled(True)  # Win11下生效毛玻璃
+
+    def show_rvr_wifi_config(self):
+        """在导航栏中显示 RVR Wi-Fi 配置页"""
+        if self.stackedWidget.indexOf(self.rvr_wifi_config_page) == -1:
+            self.addSubInterface(
+                self.rvr_wifi_config_page,
+                FluentIcon.WIFI,
+                "RVR Wi-Fi配置",
+                "RVR Wi-Fi Config",
+            )
+
+    def hide_rvr_wifi_config(self):
+        """从导航栏移除 RVR Wi-Fi 配置页"""
+        self.removeSubInterface(self.rvr_wifi_config_page)
+        index = self.stackedWidget.indexOf(self.rvr_wifi_config_page)
+        if index != -1:
+            self.stackedWidget.removeWidget(self.rvr_wifi_config_page)
 
     def removeSubInterface(self, page):
         """Remove the given page from the navigation if possible."""
