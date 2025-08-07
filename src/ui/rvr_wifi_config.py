@@ -43,7 +43,15 @@ class WifiTableWidget(TableWidget):
     def __init__(self, page: "RvrWifiConfigPage"):
         super().__init__(page)
         self.page = page
+        # 行内数据不允许单独选中
+        self.setSelectionMode(QAbstractItemView.NoSelection)
+        # 垂直表头允许拖动以调整行顺序
+        vh = self.verticalHeader()
+        vh.setVisible(True)
+        vh.setSectionsMovable(True)
+        vh.sectionMoved.connect(lambda *_: self.page._sync_rows())
 
+    # 仍保留 dropEvent 以兼容内部拖拽
     def dropEvent(self, event):  # type: ignore[override]
         super().dropEvent(event)
         self.page._sync_rows()
@@ -122,21 +130,17 @@ class RvrWifiConfigPage(CardWidget):
         btn_layout.addWidget(self.save_btn)
         form_layout.addRow(btn_widget)
 
-        main_layout.addWidget(form_box)
+        main_layout.addWidget(form_box, 1)
 
-        self.table = TableWidget(self)
+        self.table = WifiTableWidget(self)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.table.setDragDropMode(QAbstractItemView.InternalMove)
-        self.table.setDragEnabled(True)
-        self.table.setAcceptDrops(True)
-        self.table.setDropIndicatorShown(True)
-        self.table.setDragDropOverwriteMode(False)
-        self.table.setDefaultDropAction(Qt.MoveAction)
-        main_layout.addWidget(self.table)
+        main_layout.addWidget(self.table, 2)
 
         self.band_combo.currentTextChanged.connect(self._update_band_options)
+        self.wireless_combo.currentTextChanged.connect(self._update_auth_options)
         self._update_band_options(self.band_combo.currentText())
+        self._update_auth_options(self.wireless_combo.currentText())
 
         self.refresh_table()
 
@@ -184,17 +188,28 @@ class RvrWifiConfigPage(CardWidget):
         self.channel_combo.addItems(channel)
         self.bandwidth_combo.clear()
         self.bandwidth_combo.addItems(bandwidth)
+        self._update_auth_options(self.wireless_combo.currentText())
+
+    def _update_auth_options(self, wireless: str):
+        self.auth_combo.clear()
+        if "Legacy" in wireless:
+            self.auth_combo.addItems(getattr(self.router, "AUTHENTICATION_METHOD_LEGCY", []))
+        else:
+            self.auth_combo.addItems(getattr(self.router, "AUTHENTICATION_METHOD", []))
 
     def refresh_table(self):
         self.table.clear()
         self.table.setRowCount(len(self.rows))
         self.table.setColumnCount(len(self.headers))
         self.table.setHorizontalHeaderLabels(self.headers)
-        self.table.verticalHeader().setVisible(False)
         for r, row in enumerate(self.rows):
             for c, h in enumerate(self.headers):
                 item = QTableWidgetItem(str(row.get(h, "")))
+                item.setFlags(Qt.ItemIsEnabled)
                 self.table.setItem(r, c, item)
+
+    def _sync_rows(self):
+        self._collect_table_data()
 
     def _collect_table_data(self):
         data: list[dict[str, str]] = []
