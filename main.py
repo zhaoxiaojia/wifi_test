@@ -39,9 +39,6 @@ class MainWindow(FluentWindow):
         # 页面实例化
         self.case_config_page = CaseConfigPage(self.on_run)
         self.rvr_wifi_config_page = RvrWifiConfigPage(self.case_config_page)
-        self.case_config_page.routerInfoChanged.connect(
-            self.rvr_wifi_config_page.update_wifi_info
-        )
         self.run_page = None  # 运行窗口动态加载
 
         # 添加侧边导航（页面，图标，标题，描述）

@@ -1,6 +1,5 @@
 pytest
 uiautomator2
-telnetlib
 telnetlib3
 selenium
 PyYAML
