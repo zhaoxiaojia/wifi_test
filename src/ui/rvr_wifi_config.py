@@ -11,7 +11,12 @@ from pathlib import Path
 
 import yaml
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout, QTableWidgetItem
+from PyQt5.QtWidgets import (
+    QVBoxLayout,
+    QHBoxLayout,
+    QTableWidgetItem,
+    QAbstractItemView,
+)
 from qfluentwidgets import (
     CardWidget,
     TableWidget,
@@ -28,6 +33,18 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .windows_case_config import CaseConfigPage
+
+
+class WifiTableWidget(TableWidget):
+    """支持拖拽排序并通知父页面同步行顺序的表格"""
+
+    def __init__(self, page: "RvrWifiConfigPage"):
+        super().__init__(page)
+        self.page = page
+
+    def dropEvent(self, event):  # type: ignore[override]
+        super().dropEvent(event)
+        self.page._sync_rows()
 
 
 class RvrWifiConfigPage(CardWidget):
@@ -87,7 +104,7 @@ class RvrWifiConfigPage(CardWidget):
 
         layout.addLayout(control)
 
-        self.table = TableWidget(self)
+        self.table = WifiTableWidget(self)
         self._init_table()
 
         self.property_widgets: dict[str, object] = {}
@@ -179,6 +196,7 @@ class RvrWifiConfigPage(CardWidget):
     # ------------------------------------------------------------------
     # 表格
     def _init_table(self):
+        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.setRowCount(len(self.rows))
         self.table.setColumnCount(len(self.headers))
         self.table.setHorizontalHeaderLabels(self.headers)
@@ -319,8 +337,27 @@ class RvrWifiConfigPage(CardWidget):
                         pass
                 widget.addItems(options)
                 widget.blockSignals(False)
+                
+    def _sync_rows(self):
+        """根据当前表格内容同步内部行数据"""
+        data = []
+        for r in range(self.table.rowCount()):
+            row_data = {}
+            for c, header in enumerate(self.headers):
+                cell = self.table.cellWidget(r, c)
+                if isinstance(cell, ComboBox):
+                    text = cell.currentText()
+                elif isinstance(cell, LineEdit):
+                    text = cell.text()
+                else:
+                    item = self.table.item(r, c)
+                    text = item.text() if item else ""
+                row_data[header] = text
+            data.append(row_data)
+        self.rows = data
 
     def add_row(self):
+        self._sync_rows()
         band = self.attr_combo.currentText()
         row_data = {h: "" for h in self.headers}
         if "band" in row_data:
@@ -348,6 +385,7 @@ class RvrWifiConfigPage(CardWidget):
         self._init_table()
 
     def delete_row(self):
+        self._sync_rows()
         row = self.table.currentRow()
         if 0 <= row < len(self.rows):
             self.rows.pop(row)
