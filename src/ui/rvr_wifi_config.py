@@ -117,12 +117,6 @@ class RvrWifiConfigPage(CardWidget):
         self.data_row_edit = LineEdit(form_box)
         form_layout.addRow("data_row", self.data_row_edit)
 
-        self.expected_rate_tx_edit = LineEdit(form_box)
-        form_layout.addRow("expected_rate_tx", self.expected_rate_tx_edit)
-
-        self.expected_rate_rx_edit = LineEdit(form_box)
-        form_layout.addRow("expected_rate_rx", self.expected_rate_rx_edit)
-
         btn_widget = QWidget(form_box)
         btn_layout = QHBoxLayout(btn_widget)
         btn_layout.setContentsMargins(0, 0, 0, 0)
@@ -278,8 +272,6 @@ class RvrWifiConfigPage(CardWidget):
             "tx": "1" if self.tx_check.isChecked() else "0",
             "rx": "1" if self.rx_check.isChecked() else "0",
             "data_row": self.data_row_edit.text(),
-            "expected_rate_tx": self.expected_rate_tx_edit.text(),
-            "expected_rate_rx": self.expected_rate_rx_edit.text(),
         }
         self.rows.append(row)
         self.refresh_table()
