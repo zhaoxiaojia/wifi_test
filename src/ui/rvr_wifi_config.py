@@ -137,15 +137,17 @@ class RvrWifiConfigPage(CardWidget):
         main_layout.addWidget(form_box, 1)
 
         self.table = WifiTableWidget(self)
+        # 禁用交替行颜色并避免样式表重新启用
+        self.table.setAlternatingRowColors(False)
+        self.table.setStyleSheet(
+            self.table.styleSheet()
+            + "QTableView {alternate-background-color: transparent;}"
+        )
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.Stretch)
         header.setStretchLastSection(True)
-        self.table.horizontalHeader().setSectionResizeMode(
-            self.headers.index("authentication"), QHeaderView.ResizeToContents
-        )
-        self.table.setColumnWidth(self.headers.index("authentication"), 150)
         main_layout.addWidget(self.table, 2)
 
         self.band_combo.currentTextChanged.connect(self._update_band_options)
@@ -250,6 +252,10 @@ class RvrWifiConfigPage(CardWidget):
         self.table.setRowCount(len(self.rows))
         self.table.setColumnCount(len(self.headers))
         self.table.setHorizontalHeaderLabels(self.headers)
+        header = self.table.horizontalHeader()
+        idx = self.headers.index("authentication")
+        header.setSectionResizeMode(idx, QHeaderView.ResizeToContents)
+        self.table.setColumnWidth(idx, 150)
         for r, row in enumerate(self.rows):
             for c, h in enumerate(self.headers):
                 item = QTableWidgetItem(str(row.get(h, "")))
