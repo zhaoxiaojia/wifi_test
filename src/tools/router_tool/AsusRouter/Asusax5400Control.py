@@ -19,7 +19,16 @@ from src.tools.router_tool.RouterControl import ConfigError, RouterTools
 
 class Asusax5400Control:
     def __init__(self):
-        self.router_control = RouterTools('asus_5400',display=True)
+        self.router_control = RouterTools('asus_5400', display=True)
+        # 暴露 RouterTools 中的常量供 UI 使用
+        attrs = [
+            'BAND_LIST', 'WIRELESS_2', 'WIRELESS_5', 'CHANNEL_2', 'CHANNEL_5',
+            'BANDWIDTH_2', 'BANDWIDTH_5', 'AUTHENTICATION_METHOD',
+            'AUTHENTICATION_METHOD_LEGCY', 'WEP_ENCRYPT', 'WPA_ENCRYPT',
+            'PASSWD_INDEX_DICT', 'PROTECT_FRAME'
+        ]
+        for attr in attrs:
+            setattr(self, attr, getattr(self.router_control, attr))
 
     def change_setting(self, router):
         '''
@@ -36,15 +45,15 @@ class Asusax5400Control:
                 EC.presence_of_element_located((By.ID, 'FormTitle')))
 
             # 修改 band
-            if (router.band):
-                if router.band not in Asus5400Config.BAND_LIST: raise ConfigError('band element error')
+            if router.band:
+                if router.band not in self.BAND_LIST:
+                    raise ConfigError('band element error')
                 self.router_control.change_band(router.band)
 
             # 修改 wireless_mode
-            if (router.wireless_mode):
-                try:
-                    assert router.wireless_mode in Asus5400Config.WIRELESS_MODE
-                except ConfigError:
+            if router.wireless_mode:
+                target_list = self.WIRELESS_2 if router.band == '2.4 GHz' else self.WIRELESS_5
+                if router.wireless_mode not in target_list:
                     raise ConfigError('channel element error')
                 self.router_control.change_wireless_mode(router.wireless_mode)
                 if 'AX only' == router.wireless_mode:
@@ -65,51 +74,40 @@ class Asusax5400Control:
             else:
                 self.router_control.driver.find_element(By.XPATH, ".//input[@type='radio' and @value='0']").click()
 
-            # 修改 channel //*[@id="WLgeneral"]/tbody/tr[11]/td/select
-            # //*[@id="WLgeneral"]/tbody/tr[11]/td/select/option[1] 2.4G Auto
-            # //*[@id="WLgeneral"]/tbody/tr[11]/td/select/option[14] 2.4G 13
-            # //*[@id="WLgeneral"]/tbody/tr[11]/td/select/option[1] 5G Auto
-            # //*[@id="WLgeneral"]/tbody/tr[11]/td/select/option[6] 5G 165
-            if (router.channel):
+            # 修改 channel
+            if router.channel:
                 channel = str(router.channel)
-                # try:
-                #     channel_index = (
-                #         Asus5400Config.CHANNEL_2_DICT[channel] if router.band == '2.4 GHz' else
-                #         Asus5400Config.CHANNEL_5_DICT[channel])
-                # except ConfigError:
-                #     raise ConfigError('channel element error')
-                # //*[@id="WLgeneral"]/tbody/tr[11]/td/select/option[22]
                 self.router_control.change_channel(channel)
 
             # 修改 bandwidth
-            if (router.bandwidth):
-                if router.bandwidth not in \
-                        {'2.4 GHz': Asus5400Config.BANDWIDTH_2, '5 GHz': Asus5400Config.BANDWIDTH_5_LIST}[
-                            router.band]: raise ConfigError('bandwidth element error')
+            if router.bandwidth:
+                if router.bandwidth not in {
+                    '2.4 GHz': self.BANDWIDTH_2,
+                    '5 GHz': self.BANDWIDTH_5,
+                }[router.band]:
+                    raise ConfigError('bandwidth element error')
                 self.router_control.change_bandwidth(router.bandwidth)
 
             # 修改 authentication_method
-            # //*[@id="WLgeneral"]/tbody/tr[13]/td/div[1]/select/option[1]
-            # //*[@id="WLgeneral"]/tbody/tr[13]/td/div[1]/select/option[5]
-            if (router.authentication_method):
-
+            if router.authentication_method:
                 self.router_control.change_authentication_method(router.authentication_method)
 
             # 修改 wep_encrypt
-            if (router.wep_encrypt):
-                if router.wep_encrypt not in Asus5400Config.WEP_ENCRYPT: raise ConfigError('wep encrypt elemenr error')
-                self.router_control.change_wep_encrypt(Asus5400Config.WEP_ENCRYPT[router.wep_encrypt])
+            if router.wep_encrypt:
+                if router.wep_encrypt not in self.WEP_ENCRYPT:
+                    raise ConfigError('wep encrypt elemenr error')
+                self.router_control.change_wep_encrypt(self.WEP_ENCRYPT[router.wep_encrypt])
 
             # 修改 wpa_encrypt
-            if (router.wpa_encrypt):
-                if router.wpa_encrypt not in Asus5400Config.WPA_ENCRYPT: raise ConfigError('wpa encrypt elemenr error')
-                self.router_control.change_wpa_encrypt(Asus5400Config.WPA_ENCRYPT[router.wpa_encrypt])
+            if router.wpa_encrypt:
+                if router.wpa_encrypt not in self.WPA_ENCRYPT:
+                    raise ConfigError('wpa encrypt elemenr error')
+                self.router_control.change_wpa_encrypt(self.WPA_ENCRYPT[router.wpa_encrypt])
 
             # 修改 passwd_index
-            # //*[@id="WLgeneral"]/tbody/tr[17]/td/select/option[1]
-            if (router.passwd_index):
-                if router.passwd_index not in Asus5400Config.PASSWD_INDEX_DICT: raise ConfigError(
-                    'passwd index element error')
+            if router.passwd_index:
+                if router.passwd_index not in self.PASSWD_INDEX_DICT:
+                    raise ConfigError('passwd index element error')
                 self.router_control.change_passwd_index(router.passwd_index)
 
             # 修改 wep_passwd
@@ -117,15 +115,14 @@ class Asusax5400Control:
                 self.router_control.change_wep_passwd(router.wep_passwd)
 
             # 修改 wpa_passwd
-            if (router.wpa_passwd):
+            if router.wpa_passwd:
                 self.router_control.change_wpa_passwd(router.wpa_passwd)
 
             # 修改 受保护的管理帧
-            # //*[@id="WLgeneral"]/tbody/tr[26]/td/select/option[1]
-            if (router.protect_frame):
-                if router.protect_frame not in Asus5400Config.PROTECT_FRAME: raise ConfigError(
-                    'protect frame element error')
-                self.router_control.change_protect_frame(Asus5400Config.PROTECT_FRAME[router.protect_frame])
+            if router.protect_frame:
+                if router.protect_frame not in self.PROTECT_FRAME:
+                    raise ConfigError('protect frame element error')
+                self.router_control.change_protect_frame(self.PROTECT_FRAME[router.protect_frame])
 
             time.sleep(5)
             # 点击apply

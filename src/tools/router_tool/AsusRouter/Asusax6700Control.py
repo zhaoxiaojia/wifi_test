@@ -21,6 +21,15 @@ class Asusax6700Control:
     def __init__(self):
         self.router_info = 'asus_6700'
         self.router_control = RouterTools(self.router_info)
+        # 暴露 RouterTools 中的常量供 UI 使用
+        attrs = [
+            'BAND_LIST', 'WIRELESS_2', 'WIRELESS_5', 'CHANNEL_2', 'CHANNEL_5',
+            'BANDWIDTH_2', 'BANDWIDTH_5', 'AUTHENTICATION_METHOD',
+            'AUTHENTICATION_METHOD_LEGCY', 'WEP_ENCRYPT', 'WPA_ENCRYPT',
+            'PASSWD_INDEX_DICT', 'PROTECT_FRAME'
+        ]
+        for attr in attrs:
+            setattr(self, attr, getattr(self.router_control, attr))
 
     def change_setting(self, router):
         '''
@@ -44,15 +53,15 @@ class Asusax6700Control:
                 self.router_control.driver.find_element(By.XPATH, element.format(index)).click()
 
             # 修改 wireless_mode
-            if (router.wireless_mode):
-                target_dict = self.WIRELESS_2 if router.band == '2.4 GHz' else self.WIRELESS_5
-                try:
-                    assert router.wireless_mode in target_dict
-                except ConfigError:
+            if router.wireless_mode:
+                target_list = self.WIRELESS_2 if router.band == '2.4 GHz' else self.WIRELESS_5
+                if router.wireless_mode not in target_list:
                     raise ConfigError('channel element error')
-                index = target_dict[router.wireless_mode]
+                index = target_list.index(router.wireless_mode) + 1
                 self.router_control.driver.find_element(
-                    By.XPATH, self.router_control.xpath['wireless_mode_element'][self.router_info].format(index)).click()
+                    By.XPATH,
+                    self.router_control.xpath['wireless_mode_element'][self.router_info].format(index)
+                ).click()
 
             # 修改 ssid
             if (router.ssid):
@@ -93,16 +102,13 @@ class Asusax6700Control:
                 self.router_control.change_bandwidth(router.bandwidth)
 
             # 修改 authentication_method
-            # //*[@id="WLgeneral"]/tbody/tr[13]/td/div[1]/select/option[1]
-            # //*[@id="WLgeneral"]/tbody/tr[13]/td/div[1]/select/option[5]
-            if (router.authentication_method):
-                try:
-                    index = (self.AUTHENTICATION_METHOD[router.authentication_method]
-                             if router.wireless_mode != 'Legacy' else
-                             self.AUTHENTICATION_METHOD_LEGCY[router.authentication_method])
-                except ConfigError:
+            if router.authentication_method:
+                auth_list = (self.AUTHENTICATION_METHOD
+                             if router.wireless_mode != 'Legacy'
+                             else self.AUTHENTICATION_METHOD_LEGCY)
+                if router.authentication_method not in auth_list:
                     raise ConfigError('authentication method element error')
-                self.router_control.change_authentication_method(index)
+                self.router_control.change_authentication_method(router.authentication_method)
 
             # 修改 wep_encrypt
             if (router.wep_encrypt):
