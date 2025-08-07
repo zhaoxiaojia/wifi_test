@@ -103,6 +103,7 @@ class RvrWifiConfigPage(CardWidget):
 
         self.auth_combo = ComboBox(form_box)
         self.auth_combo.addItems(getattr(self.router, "AUTHENTICATION_METHOD", []))
+        self.auth_combo.setMinimumWidth(150)
         form_layout.addRow("authentication", self.auth_combo)
 
         test_widget = QWidget(form_box)
@@ -141,6 +142,10 @@ class RvrWifiConfigPage(CardWidget):
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.Stretch)
         header.setStretchLastSection(True)
+        self.table.horizontalHeader().setSectionResizeMode(
+            self.headers.index("authentication"), QHeaderView.ResizeToContents
+        )
+        self.table.setColumnWidth(self.headers.index("authentication"), 150)
         main_layout.addWidget(self.table, 2)
 
         self.band_combo.currentTextChanged.connect(self._update_band_options)
