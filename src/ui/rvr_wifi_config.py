@@ -37,6 +37,18 @@ if TYPE_CHECKING:
     from .windows_case_config import CaseConfigPage
 
 
+class WifiTableWidget(TableWidget):
+    """支持拖拽排序并通知父页面同步行顺序的表格"""
+
+    def __init__(self, page: "RvrWifiConfigPage"):
+        super().__init__(page)
+        self.page = page
+
+    def dropEvent(self, event):  # type: ignore[override]
+        super().dropEvent(event)
+        self.page._sync_rows()
+
+
 class RvrWifiConfigPage(CardWidget):
     """配置 RVR Wi-Fi 测试参数"""
 
@@ -61,7 +73,6 @@ class RvrWifiConfigPage(CardWidget):
 
         form_box = QGroupBox(self)
         form_layout = QFormLayout(form_box)
-
         self.band_combo = ComboBox(form_box)
         self.band_combo.addItems(getattr(self.router, "BAND_LIST", ["2.4 GHz", "5 GHz"]))
         form_layout.addRow("band", self.band_combo)
