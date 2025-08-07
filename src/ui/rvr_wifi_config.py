@@ -82,7 +82,8 @@ class RvrWifiConfigPage(CardWidget):
         form_box = QGroupBox(self)
         form_layout = QFormLayout(form_box)
         self.band_combo = ComboBox(form_box)
-        self.band_combo.addItems(getattr(self.router, "BAND_LIST", ["2.4 GHz", "5 GHz"]))
+        band_list = getattr(self.router, "BAND_LIST", ["2.4 GHz", "5 GHz"])
+        self.band_combo.addItems(band_list)
         form_layout.addRow("band", self.band_combo)
 
         self.wireless_combo = ComboBox(form_box)
@@ -179,9 +180,12 @@ class RvrWifiConfigPage(CardWidget):
         return headers, rows
 
     def _update_band_options(self, band: str):
-        wireless = getattr(self.router, "WIRELESS_2" if band == "2.4 GHz" else "WIRELESS_5", [])
-        channel = getattr(self.router, "CHANNEL_2" if band == "2.4 GHz" else "CHANNEL_5", [])
-        bandwidth = getattr(self.router, "BANDWIDTH_2" if band == "2.4 GHz" else "BANDWIDTH_5", [])
+        wireless = {"2.4 GHz": getattr(self.router, "WIRELESS_2", []),
+                    "5 GHz": getattr(self.router, "WIRELESS_5", [])}[band]
+        channel = {"2.4 GHz": getattr(self.router, "CHANNEL_2", []),
+                   "5 GHz": getattr(self.router, "CHANNEL_5", [])}[band]
+        bandwidth = {"2.4 GHz": getattr(self.router, "BANDWIDTH_2", []),
+                     "5 GHz": getattr(self.router, "BANDWIDTH_5", [])}[band]
         self.wireless_combo.clear()
         self.wireless_combo.addItems(wireless)
         self.channel_combo.clear()
