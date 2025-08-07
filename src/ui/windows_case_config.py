@@ -787,6 +787,7 @@ class CaseConfigPage(CardWidget):
         base = Path(self._get_application_base())
         perf_dir = (base / "test" / "performance").resolve()
         case_abs = Path(case_path).resolve() if case_path else None
+        main_window = self.window()
         if case_abs and perf_dir in case_abs.parents:
             ssid = ""
             passwd = ""
@@ -796,9 +797,15 @@ class CaseConfigPage(CardWidget):
             passwd_widget = self.field_widgets.get("router.wpa_passwd")
             if isinstance(passwd_widget, LineEdit):
                 passwd = passwd_widget.text()
-            main_window = self.window()
+            if hasattr(main_window, "show_rvr_wifi_config"):
+                main_window.show_rvr_wifi_config()
             if hasattr(main_window, "setCurrentIndex"):
                 main_window.setCurrentIndex(main_window.rvr_wifi_config_page, ssid, passwd)
+        else:
+            if hasattr(main_window, "hide_rvr_wifi_config"):
+                main_window.hide_rvr_wifi_config()
+            if hasattr(main_window, "setCurrentIndex"):
+                main_window.setCurrentIndex(main_window.case_config_page)
 
         # 若用户在刷新过程中又点了别的用例，延迟 0 ms 处理它
         if self._pending_path:
