@@ -53,8 +53,8 @@ def check_iperf():
 
 
 def handle_wifi_cmd(router_info):
-    type = 'wpa3' if 'WPA3' in router_info.authentication_method else 'wpa2'
-    if router_info.authentication_method.lower() in \
+    type = 'wpa3' if 'WPA3' in router_info.authentication else 'wpa2'
+    if router_info.authentication.lower() in \
             ['open', '不加密', '无', 'open system', '无加密(允许所有人连接)', 'none']:
         cmd = pytest.dut.CMD_WIFI_CONNECT.format(router_info.ssid, "open", "")
     else:

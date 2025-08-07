@@ -23,7 +23,7 @@ from src.tools.router_tool.Router import Router
 
 ssid = 'ATC_ASUS_AX88U_2G'
 router_2g = Router(band='2.4 GHz', ssid=ssid, wireless_mode='自动', channel='自动', bandwidth='20 MHz',
-                   authentication_method='Open System')
+                   authentication='Open System')
 
 
 @pytest.fixture(autouse=True)

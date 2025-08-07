@@ -18,7 +18,7 @@ h3c:
   channel_regu_element:
     h3c_bx54: //*[@id="wlanChannel"]/option[{}]
   bandwidth_element: //*[@id="wlanWidth"]
-  authentication_method_regu_element:
+  authentication_regu_element:
     h3c_bx54: //*[@id="ssid_enc"]/option[{}]
   passwd_element: wpa_key
   wep_encrypt_regu_element: //*[@id="WLgeneral"]/tbody/tr[16]/td/select/option[{}]

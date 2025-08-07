@@ -29,7 +29,7 @@ def setup_and_teardown(request):
 def test_wifi_connect_compatibility(setup_and_teardown):
     router = setup_and_teardown
     connect_command = wifi.CMD_WIFI_CONNECT.format(router.ssid,
-                                                   'wpa3' if 'sae' in router.authentication_method else 'wpa2',
+                                                   'wpa3' if 'sae' in router.authentication else 'wpa2',
                                                    router.passwd)
     logging.info(connect_command)
     wifi.checkoutput(connect_command)

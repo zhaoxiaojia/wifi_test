@@ -23,7 +23,7 @@ from src.tools.router_tool.Router import Router
 ssid = 'ATC_ASUS_AX88U_5G'
 passwd = 'Abc@123456'
 router_5g = Router(band='5 GHz', ssid=ssid, wireless_mode='自动', channel='149', bandwidth='20/40/80 MHz',
-                   authentication_method='WPA2/WPA3-Personal', wpa_passwd=passwd, protect_frame='非强制启用',
+                   authentication='WPA2/WPA3-Personal', wpa_passwd=passwd, protect_frame='非强制启用',
                    wpa_encrypt='AES')
 
 

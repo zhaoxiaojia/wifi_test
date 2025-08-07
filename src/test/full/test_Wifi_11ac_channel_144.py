@@ -25,7 +25,7 @@ Connect an AP which channel is 5G ac40-band 144
 ssid = 'ATC_ASUS_AX88U_5G'
 passwd = 'Abc@123456'
 router_5g = Router(band='5 GHz', ssid=ssid, wireless_mode='N/AC/AX mixed', channel='144', bandwidth='40 MHz',
-                   authentication_method='WPA2-Personal', wpa_passwd=passwd)
+                   authentication='WPA2-Personal', wpa_passwd=passwd)
 
 
 @pytest.fixture(scope='function', autouse=True)

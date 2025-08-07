@@ -27,7 +27,7 @@ PMF 强制启用 WPA3加密
 ssid = 'ATC_ASUS_AX88U_2G'
 passwd = '12345678'
 router_2g = Router(band='2.4 GHz', ssid=ssid, wireless_mode='自动', channel='1', bandwidth='20 MHz',
-                   authentication_method='WPA3-Personal', wpa_passwd=passwd,protect_frame='强制启用')
+                   authentication='WPA3-Personal', wpa_passwd=passwd,protect_frame='强制启用')
 
 
 

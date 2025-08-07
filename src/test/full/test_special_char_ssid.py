@@ -27,7 +27,7 @@ ssid = "SAP_12345678_"
 
 
 router_2g = Router(band='2.4 GHz', ssid=ssid, wireless_mode='N only', channel='自动', bandwidth='20 MHz',
-                   authentication_method='Open System')
+                   authentication='Open System')
 
 
 @pytest.fixture(autouse=True)

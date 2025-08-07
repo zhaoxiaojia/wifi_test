@@ -1,4 +1,4 @@
-serial    ,band   ,ssid        ,wireless_mode,channel,bandwidth,authentication_method,wpa_passwd,test_type,protocol_type,wep_encrypt,wep_passwd,hide_ssid,hide_type
+serial    ,band   ,ssid        ,wireless_mode,channel,bandwidth,authentication,wpa_passwd,test_type,protocol_type,wep_encrypt,wep_passwd,hide_ssid,hide_type
 1,2.4 GHz,Linksys1200ac_2.4G,混合模式,1,仅使用20 MHz,无,,tx rx,TCP,,,否,
 2,2.4 GHz,Linksys1200ac_2.4G,混合模式,1,仅使用20 MHz,WPA2个人,12345678,tx rx,TCP,,,否,
 3,2.4 GHz,Linksys1200ac_2.4G,混合模式,2,仅使用20 MHz,WPA2/WPA混合个人模式,12345678,tx rx,TCP,,,是,PSK

@@ -27,7 +27,7 @@ from src.tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
 
 ssid = 'ATC_ASUS_AX88U_5G'
 router_2g = Router(band='5 GHz', ssid=ssid, wireless_mode='自动', channel='157', bandwidth='80 MHz',
-                   authentication_method='Open System')
+                   authentication='Open System')
 
 
 @pytest.fixture(scope='function', autouse=True)

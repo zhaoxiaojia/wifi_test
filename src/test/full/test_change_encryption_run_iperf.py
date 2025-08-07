@@ -30,11 +30,11 @@ TPS正常，无掉零，无断流
 ssid = 'ATC_ASUS_AX88U_2G'
 passwd = 'Abc@123456'
 router_wpa1 = Router(band='2.4 GHz', ssid=ssid, wireless_mode='自动', channel='1', bandwidth='20/40 MHz',
-                     authentication_method='WPA2-Personal', wpa_passwd=passwd)
+                     authentication='WPA2-Personal', wpa_passwd=passwd)
 router_wpa2 = Router(band='2.4 GHz', ssid=ssid, wireless_mode='自动', channel='6', bandwidth='20/40 MHz',
-                     authentication_method='WPA3-Personal', wpa_passwd=passwd)
+                     authentication='WPA3-Personal', wpa_passwd=passwd)
 router_open = Router(band='2.4 GHz', ssid=ssid, wireless_mode='自动', channel='11', bandwidth='20/40 MHz',
-                     authentication_method='Open System', wpa_passwd=passwd)
+                     authentication='Open System', wpa_passwd=passwd)
 
 ax88uControl = Asusax88uControl()
 
@@ -53,7 +53,7 @@ def test_change_encryption_iperf():
     for i in [router_wpa1, router_wpa2, router_open] * 7:
         ax88uControl.change_setting(i)
         logging.info(pytest.dut.CMD_WIFI_CONNECT.format(ssid, 'wpa2', passwd))
-        if i.authentication_method == 'Open System':
+        if i.authentication == 'Open System':
             pytest.dut.checkoutput(pytest.dut.CMD_WIFI_CONNECT_OPEN.format(ssid))
         else:
             pytest.dut.checkoutput(pytest.dut.CMD_WIFI_CONNECT.format(ssid, 'wpa2', passwd))

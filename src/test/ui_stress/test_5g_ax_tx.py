@@ -33,7 +33,7 @@ ssid = 'ATC_ASUS_AX88U_5G'
 passwd = 'Abc@123456'
 
 router = Router(band='5 GHz', ssid=ssid, wireless_mode='AX only', channel='36', bandwidth='40 MHz',
-                authentication_method='WPA2-Personal', wpa_passwd=passwd)
+                authentication='WPA2-Personal', wpa_passwd=passwd)
 
 ax88uControl = Asusax88uControl()
 iperf = Iperf()

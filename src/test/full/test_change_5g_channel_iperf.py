@@ -27,11 +27,11 @@ from src.tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
 ssid = 'ATC_ASUS_AX88U_5G'
 passwd = 'Abc@123456'
 router_ch36 = Router(band='5 GHz', ssid=ssid, wireless_mode='自动', channel='36', bandwidth='40 MHz',
-                   authentication_method='WPA2-Personal', wpa_passwd=passwd)
+                   authentication='WPA2-Personal', wpa_passwd=passwd)
 router_ch100 = Router(band='5 GHz', ssid=ssid, wireless_mode='自动', channel='100', bandwidth='40 MHz',
-                   authentication_method='WPA2-Personal', wpa_passwd=passwd)
+                   authentication='WPA2-Personal', wpa_passwd=passwd)
 router_ch161 = Router(band='5 GHz', ssid=ssid, wireless_mode='自动', channel='161', bandwidth='40 MHz',
-                   authentication_method='WPA2-Personal', wpa_passwd=passwd)
+                   authentication='WPA2-Personal', wpa_passwd=passwd)
 
 
 ax88uControl = Asusax88uControl()

@@ -23,10 +23,10 @@ asus_ssid_name = 'ATC_ASUS_AX88U_2G'
 zte_ssid_name = 'ZTEax5400_2G'
 passwd = 'test1234'
 router_ausu = Router(band='2.4 GHz', ssid=asus_ssid_name, wireless_mode='自动', channel='自动', bandwidth='20 MHz',
-                     authentication_method='WPA2-Personal', wpa_passwd=passwd)
+                     authentication='WPA2-Personal', wpa_passwd=passwd)
 router_zte = Router(band='2.4 GHz', ssid=zte_ssid_name, wireless_mode='802.11 b/g/n', channel='1',
                     bandwidth='20MHz/40MHz',
-                    authentication_method='WPA-PSK/WPA2-PSK', wpa_passwd=passwd)
+                    authentication='WPA-PSK/WPA2-PSK', wpa_passwd=passwd)
 
 
 @pytest.fixture(autouse=True,scope='session')

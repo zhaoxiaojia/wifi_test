@@ -28,7 +28,7 @@ channel 157
 ssid = 'ATC_ASUS_AX88U_5G'
 passwd = 'Abc1234567'
 router_5g = Router(band='5 GHz', ssid=ssid, wireless_mode='Legacy', channel='157', bandwidth='20 MHz',
-                   authentication_method='Shared Key', wep_passwd=passwd, wep_encrypt='WEP-128bits', passwd_index='1',hide_ssid='是')
+                   authentication='Shared Key', wep_passwd=passwd, wep_encrypt='WEP-128bits', passwd_index='1',hide_ssid='是')
 
 
 @pytest.fixture(scope='function', autouse=True)

@@ -22,7 +22,7 @@ zte:
   bandwidth_element:
     bandwidth_2g: //*[@id="wifi_channel_bandwidth"]/option[{}]
     bandwidth_5g: //*[@id="wifi_channel_bandwidth_5g"]/option[{}]
-  authentication_method_regu_element:
+  authentication_regu_element:
     authtication_2g: //*[@id="securityMode"]/option[{}]
     authtication_5g: //*[@id="securityMode_5G"]/option[{}]
   wep_passwd:

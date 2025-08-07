@@ -159,40 +159,40 @@ class TplinkWr842Control:
             time.sleep(1)
             wait_for = self.router_control.driver.find_element(By.ID, "help")
             target_element = ''
-            if (router.authentication_method):
-                if router.authentication_method not in TplinkWr842Config.AUTHENTICATION_METHOD_LIST:
+            if (router.authentication):
+                if router.authentication not in TplinkWr842Config.AUTHENTICATION_METHOD_LIST:
                     raise ConfigError('authentication method key error')
 
-                if router.authentication_method in 'WPA/WPA2':
+                if router.authentication in 'WPA/WPA2':
                     target_element = 'WPA/WPA2'
-                elif router.authentication_method in 'WPA-PSK/WPA2-PSK':
+                elif router.authentication in 'WPA-PSK/WPA2-PSK':
                     target_element = 'WPA-PSK/WPA2-PSK'
-                elif router.authentication_method == 'OPEN':
+                elif router.authentication == 'OPEN':
                     target_element = 'NONE'
                 else:
                     target_element = 'WEP'
                     self.router_control.scroll_to(wait_for)
 
                 self.router_control.driver.find_element(
-                    By.XPATH, self.router_control.xpath['wr842_authentication_method_element'][target_element]).click()
+                    By.XPATH, self.router_control.xpath['wr842_authentication_element'][target_element]).click()
                 if target_element != 'NONE':
-                    if router.authentication_method == 'WPA/WPA2' or router.authentication_method == 'WPA-PSK/WPA2-PSK':
-                        authentication_method = '自动'
+                    if router.authentication == 'WPA/WPA2' or router.authentication == 'WPA-PSK/WPA2-PSK':
+                        authentication = '自动'
                     else:
-                        authentication_method = router.authentication_method
+                        authentication = router.authentication
                     target_dict = {
                         'WPA/WPA2': TplinkWr842Config.WPA_DICT,
                         'WPA-PSK/WPA2-PSK': TplinkWr842Config.PSK_DICT,
                         'WEP': TplinkWr842Config.WEP_DICT
                     }
-                    index = target_dict[target_element][authentication_method]
+                    index = target_dict[target_element][authentication]
                     # /html/body/center/form/table/tbody/tr[2]/td/table/tbody/tr[1]/td[2]/table[8]/tbody/tr[2]/td[2]/select/option[1]
                     self.router_control.driver.find_element(
                         By.XPATH,
-                        self.router_control.xpath['wr842_authentication_method_select_element'][target_element].format(
+                        self.router_control.xpath['wr842_authentication_select_element'][target_element].format(
                             index)).click()
                     # self.router_control.driver.find_element(
-                    #     By.XPATH, self.router_control.xpath['authentication_method_regu_element'][
+                    #     By.XPATH, self.router_control.xpath['authentication_regu_element'][
                     #         target_element].format(index)).click()
 
             # 修改wpa加密方式
@@ -263,12 +263,12 @@ class TplinkWr842Control:
             self.router_control.driver.quit()
 
 
-# fields = ['band', 'ssid', 'wireless_mode', 'channel', 'bandwidth', 'authentication_method',
+# fields = ['band', 'ssid', 'wireless_mode', 'channel', 'bandwidth', 'authentication',
 #           'wpa_passwd', 'test_type', 'wep_encrypt', 'passwd_index', 'wep_passwd', 'protect_frame',
 #           'wpa_encrypt', 'hide_ssid']
 # Router = namedtuple('Router', fields, defaults=[None, ] * len(fields))
 # router = Router(band='2.4 GHz', ssid='Tplinkwr842_2.4G#$', wireless_mode='11bgn mixed', channel='12',
-#                 bandwidth='40MHz', authentication_method='共享秘钥', wep_encrypt='ASCII码', wep_passwd='1234567890123')
+#                 bandwidth='40MHz', authentication='共享秘钥', wep_encrypt='ASCII码', wep_passwd='1234567890123')
 # control = TplinkWr842Control()
 # control.change_setting(router)
 # control.reboot_router()

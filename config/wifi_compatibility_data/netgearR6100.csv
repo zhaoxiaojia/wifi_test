@@ -1,4 +1,4 @@
-serial,band,ssid,wireless_mode,channel,bandwidth,authentication_method,wpa_passwd,test_type,protocol_type,wep_encrypt,wep_passwd,hide_ssid,hide_type
+serial,band,ssid,wireless_mode,channel,bandwidth,authentication,wpa_passwd,test_type,protocol_type,wep_encrypt,wep_passwd,hide_ssid,hide_type
 1,2.4 GHz,NetgearR6100_2G,54Mbps,AUTO,,None,,tx rx,TCP,,,否,
 2,2.4 GHz,NetgearR6100_2G,54Mbps,1,,WEP,,tx rx,TCP,wep-64,12345,否,
 3,2.4 GHz,NetgearR6100_2G,54Mbps,2,,WEP,,tx rx,TCP,wep-128,12345678901234567890123456,否,

@@ -23,7 +23,7 @@ from src.tools.router_tool.Router import Router
 ssid = 'ATC_ASUS_AX88U_2G'
 passwd = 'Abc@123456'
 router_2g = Router(band='2.4 GHz', ssid=ssid, wireless_mode='自动', channel='自动', bandwidth='20/40 MHz',
-                   authentication_method='WPA2-Personal', wpa_passwd=passwd, protect_frame='强制启用', wpa_encrypt='AES')
+                   authentication='WPA2-Personal', wpa_passwd=passwd, protect_frame='强制启用', wpa_encrypt='AES')
 
 
 @pytest.fixture(autouse=True)

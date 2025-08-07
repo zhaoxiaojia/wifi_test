@@ -27,7 +27,7 @@ Platform connect the AP successful
 ssid_name = 'ATC_ASUS_AX88U_2G'
 passwd = '0123456789'
 router_2g = Router(band='2.4 GHz', ssid=ssid_name, wireless_mode='Legacy', channel='自动', bandwidth='20 MHz',
-                   authentication_method='Shared Key', wep_passwd=passwd,wep_encrypt='WEP-64bits')
+                   authentication='Shared Key', wep_passwd=passwd,wep_encrypt='WEP-64bits')
 
 
 

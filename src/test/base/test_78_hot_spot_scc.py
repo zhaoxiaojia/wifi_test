@@ -25,7 +25,7 @@ from src.tools.router_tool.Router import Router
 4.手机通过softap连接DUT上网后播放在线视频。
 '''
 router_5g = Router(band='5 GHz', ssid='ATC_ASUS_AX88U_5G', wireless_mode='自动', channel='自动', bandwidth='20 MHz',
-                   authentication_method='WPA2-Personal', wpa_passwd='12345678')
+                   authentication='WPA2-Personal', wpa_passwd='12345678')
 
 
 @pytest.fixture(autouse=True)

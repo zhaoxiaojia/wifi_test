@@ -274,14 +274,14 @@ class RouterTools(RouterControl):
 
         assert bandwidth_select.first_selected_option.text == bandwidth, "Band width mode not selected"
 
-    def change_authentication_method(self, mode):
+    def change_authentication(self, mode):
         '''
-        change authentication_method
+        change authentication
         @param index: should be html source code
         @return:
         '''
         select = Select(self.driver.find_element(
-            By.XPATH, self.xpath['authentication_method_element'][self.router_info]))
+            By.XPATH, self.xpath['authentication_element'][self.router_info]))
         select.select_by_visible_text(mode)
 
         assert select.first_selected_option.text == mode, "Authentication mode not selected"

@@ -101,14 +101,14 @@ class Asusax6700Control:
                             router.band]: raise ConfigError('bandwidth element error')
                 self.router_control.change_bandwidth(router.bandwidth)
 
-            # 修改 authentication_method
-            if router.authentication_method:
+            # 修改 authentication
+            if router.authentication:
                 auth_list = (self.AUTHENTICATION_METHOD
                              if router.wireless_mode != 'Legacy'
                              else self.AUTHENTICATION_METHOD_LEGCY)
-                if router.authentication_method not in auth_list:
+                if router.authentication not in auth_list:
                     raise ConfigError('authentication method element error')
-                self.router_control.change_authentication_method(router.authentication_method)
+                self.router_control.change_authentication(router.authentication)
 
             # 修改 wep_encrypt
             if (router.wep_encrypt):
@@ -167,11 +167,11 @@ class Asusax6700Control:
             self.router_control.driver.quit()
 
 
-# fields = ['serial', 'band', 'ssid', 'wireless_mode', 'channel', 'bandwidth', 'authentication_method', 'wep_encrypt',
+# fields = ['serial', 'band', 'ssid', 'wireless_mode', 'channel', 'bandwidth', 'authentication', 'wep_encrypt',
 #           'passwd_index', 'wep_passwd', 'wpa_passwd', 'protect_frame', 'wpa_encrypt', 'hide_ssid', 'hide_type']
 # Router = namedtuple('Router', fields, defaults=[None, ] * len(fields))
 # router = Router(serial='1', band='5 GHz', ssid='ASUSAX6700_5G', wireless_mode='Legacy',
-#                 channel='40', bandwidth='20 MHz', authentication_method='Shared Key',hide_ssid='否',
+#                 channel='40', bandwidth='20 MHz', authentication='Shared Key',hide_ssid='否',
 #                 wep_passwd='12345678',wep_encrypt='WEP-128bits',passwd_index='2')
 # control = Asusea6700Control()
 # control.change_setting(router)

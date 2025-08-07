@@ -128,9 +128,9 @@ class Linksys1200acControl():
                         By.XPATH, self.router_control.xpath['ssid_element_5g']).send_keys(router.ssid)
 
             #
-            if (router.authentication_method):
+            if (router.authentication):
                 try:
-                    index = Linksys1200acConfig.AUTHENTICATION_METHOD_DICT[router.authentication_method]
+                    index = Linksys1200acConfig.AUTHENTICATION_METHOD_DICT[router.authentication]
                 except ConfigError:
                     raise ConfigError('authentication method element error')
                 # //*[@id="ssid_enc"]/option[1]
@@ -140,7 +140,7 @@ class Linksys1200acControl():
                     target_element = 'authtication_5g'
                 self.router_control.driver.find_element(
                     By.XPATH,
-                    self.router_control.xpath['authentication_method_regu_element'][target_element].format(
+                    self.router_control.xpath['authentication_regu_element'][target_element].format(
                         index)).click()
                 try:
                     self.router_control.driver.find_element(By.ID, "error-dialog-wrapper") \
@@ -244,12 +244,12 @@ class Linksys1200acControl():
         finally:
             self.router_control.driver.quit()
 
-# fields = ['serial', 'band', 'ssid', 'wireless_mode', 'channel', 'bandwidth', 'authentication_method',
+# fields = ['serial', 'band', 'ssid', 'wireless_mode', 'channel', 'bandwidth', 'authentication',
 #           'wpa_passwd', 'test_type', 'wep_encrypt', 'passwd_index', 'wep_passwd',
 #           'protect_frame', 'wpa_encrypt', 'hide_ssid']
 # Router = namedtuple('Router', fields, defaults=[None, ] * len(fields))
 # router = Router(serial='1', band='2.4 GHz', ssid='Linksys1200ac_2.4G', wireless_mode='混合模式',
-#                 channel='1', bandwidth='仅使用20 MHz', authentication_method='无',)
+#                 channel='1', bandwidth='仅使用20 MHz', authentication='无',)
 #                 # wep_encrypt='104/128位（26个十六进制数字）',
 #                 # wep_passwd='01234567890123456789012345')
 # control = Linksys1200acControl()

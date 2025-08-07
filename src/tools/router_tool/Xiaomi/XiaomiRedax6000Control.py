@@ -151,18 +151,18 @@ class XiaomiRedax6000Control(RouterTools):
         else:
             if target.is_selected():
                 target.click()
-        # 修改 authentication_method
-        if router.authentication_method:
+        # 修改 authentication
+        if router.authentication:
             try:
-                index = self.AUTHENTICATION_METHOD[router.authentication_method]
+                index = self.AUTHENTICATION_METHOD[router.authentication]
             except ConfigError:
                 raise ConfigError('authentication method element error')
-            target = 'authentication_method_2g' if self.BAND_2 == router.band else 'authentication_method_5g'
+            target = 'authentication_2g' if self.BAND_2 == router.band else 'authentication_5g'
             self.driver.find_element(
-                By.XPATH, self.xpath['authentication_method_select_element'][target]).click()
+                By.XPATH, self.xpath['authentication_select_element'][target]).click()
             # //*[@id="dummydata"]/a[3]/span
             self.driver.find_element(
-                By.XPATH, self.xpath['authentication_method_regu_element'].format(index)).click()
+                By.XPATH, self.xpath['authentication_regu_element'].format(index)).click()
 
         # 修改密码
         if router.wpa_passwd:

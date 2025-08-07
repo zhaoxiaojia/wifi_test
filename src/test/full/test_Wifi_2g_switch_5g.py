@@ -29,9 +29,9 @@ from src.tools.router_tool.Xiaomi.Xiaomiax3000Control import Xiaomiax3000Control
 
 passwd = '12345678'
 router_2g = Router(band='2.4 GHz', ssid='ATC_ASUS_AX88U_2G', wireless_mode='自动', channel='自动', bandwidth='20 MHz',
-                   authentication_method='WPA2-Personal', wpa_passwd=passwd)
+                   authentication='WPA2-Personal', wpa_passwd=passwd)
 router_5g = Router(serial='1', band='5 GHz', ssid='XiaomiAX3000_5G', channel='自动',
-                bandwidth='40MHz', authentication_method='超强加密(WPA3个人版)', wpa_passwd=passwd)
+                bandwidth='40MHz', authentication='超强加密(WPA3个人版)', wpa_passwd=passwd)
 
 
 @pytest.fixture(autouse=True)
