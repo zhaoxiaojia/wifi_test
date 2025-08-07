@@ -19,6 +19,7 @@ from PyQt5.QtWidgets import (
     QWidget,
     QCheckBox,
     QAbstractItemView,
+    QHeaderView,
 )
 from qfluentwidgets import (
     CardWidget,
@@ -141,6 +142,9 @@ class RvrWifiConfigPage(CardWidget):
         self.table = WifiTableWidget(self)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.Stretch)
+        header.setStretchLastSection(True)
         main_layout.addWidget(self.table, 2)
 
         self.band_combo.currentTextChanged.connect(self._update_band_options)
