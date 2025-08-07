@@ -9,7 +9,7 @@ def get_requirements():
 
 requirements = get_requirements()
 a = Analysis(
-    ['src/main.py'],  # 入口文件
+    ['main.py'],  # 入口文件
     pathex=['.'],
     binaries=[],
     datas=[('src/*', 'src')],
