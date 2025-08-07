@@ -171,7 +171,7 @@ class RvrWifiConfigPage(CardWidget):
         return router, router_name
 
     def _load_csv(self):
-        headers = [
+        default_headers = [
             "band",
             "wireless_mode",
             "channel",
@@ -180,13 +180,13 @@ class RvrWifiConfigPage(CardWidget):
             "tx",
             "rx",
             "data_row",
-            "expected_rate_tx",
-            "expected_rate_rx",
         ]
+        headers = default_headers
         rows: list[dict[str, str]] = []
         if self.csv_path.exists():
             with open(self.csv_path, newline="", encoding="utf-8") as f:
                 reader = csv.DictReader(f)
+                headers = reader.fieldnames or default_headers
                 for row in reader:
                     rows.append({h: row.get(h, "") for h in headers})
         return headers, rows
