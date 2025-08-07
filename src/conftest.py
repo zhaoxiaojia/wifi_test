@@ -133,16 +133,10 @@ def record_test_data(request):
 def pytest_collection_modifyitems(config, items):
     # item表示收集到的测试用例，对他进行重新编码处理
     new_items = []
-    flag = config.getoption("--linux-only")
     for item in items:
         item.name = item.name.encode("utf-8").decode("unicode-escape")
         item._nodeid = item._nodeid.encode("utf-8").decode("unicode-escape")
         func = item.function
-        if flag:
-            if not (func.__doc__ and "#linux" in func.__doc__):
-                continue
-            new_items.append(item)
-    if flag: items[:] = new_items
 
 
 @pytest.hookimpl(hookwrapper=True)
