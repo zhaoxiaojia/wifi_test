@@ -190,6 +190,8 @@ class RvrWifiConfigPage(CardWidget):
             "channel",
             "bandwidth",
             "authentication",
+            "ssid",
+            "password",
             "tx",
             "rx",
             "data_row",
@@ -344,12 +346,19 @@ class RvrWifiConfigPage(CardWidget):
             item.setText(value)
 
     def add_row(self):
+        band = self.band_combo.currentText()
+        if band == "2.4 GHz":
+            ssid = self.case_config_page.ssid_2g_edit.text()
+        else:
+            ssid = self.case_config_page.ssid_5g_edit.text()
         row = {
-            "band": self.band_combo.currentText(),
+            "band": band,
             "wireless_mode": self.wireless_combo.currentText(),
             "channel": self.channel_combo.currentText(),
             "bandwidth": self.bandwidth_combo.currentText(),
             "authentication": self.auth_combo.currentText(),
+            "ssid": ssid,
+            "password": self.passwd_edit.text(),
             "tx": "1" if self.tx_check.isChecked() else "0",
             "rx": "1" if self.rx_check.isChecked() else "0",
             "data_row": self.data_row_edit.text(),
