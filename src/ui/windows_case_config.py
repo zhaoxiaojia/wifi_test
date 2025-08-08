@@ -99,9 +99,7 @@ class CaseConfigPage(CardWidget):
         self._pending_path: str | None = None
         self.field_widgets: dict[str, QWidget] = {}
         self.router_ssid_2g = ""
-        self.router_passwd_2g = ""
         self.router_ssid_5g = ""
-        self.router_passwd_5g = ""
 
         # -------------------- layout --------------------
         main_layout = QHBoxLayout(self)
@@ -298,16 +296,12 @@ class CaseConfigPage(CardWidget):
     def _load_router_wifi_info(self, name: str):
         cfg = self.config.get("router", {})
         self.router_ssid_2g = cfg.get("ssid_2g", f"{name}_2g")
-        self.router_passwd_2g = cfg.get("passwd_2g", "")
         self.router_ssid_5g = cfg.get("ssid_5g", f"{name}_5g")
-        self.router_passwd_5g = cfg.get("passwd_5g", "")
 
     def get_router_wifi_info(self):
         return (
             self.router_ssid_2g,
-            self.router_passwd_2g,
             self.router_ssid_5g,
-            self.router_passwd_5g,
         )
 
     def on_router_changed(self, name: str):
@@ -542,35 +536,23 @@ class CaseConfigPage(CardWidget):
                 self.ssid_2g_edit = LineEdit(self)
                 self.ssid_2g_edit.setPlaceholderText("2.4G SSID")
                 self.ssid_2g_edit.setText(value.get("ssid_2g", ""))
-                self.passwd_2g_edit = LineEdit(self)
-                self.passwd_2g_edit.setPlaceholderText("2.4G 密码(空=开放网络)")
-                self.passwd_2g_edit.setText(value.get("passwd_2g", ""))
                 self.ssid_5g_edit = LineEdit(self)
                 self.ssid_5g_edit.setPlaceholderText("5G SSID")
                 self.ssid_5g_edit.setText(value.get("ssid_5g", ""))
-                self.passwd_5g_edit = LineEdit(self)
-                self.passwd_5g_edit.setPlaceholderText("5G 密码(空=开放网络)")
-                self.passwd_5g_edit.setText(value.get("passwd_5g", ""))
 
 
                 vbox.addWidget(QLabel("Name:"))
                 vbox.addWidget(self.router_name_combo)
                 vbox.addWidget(QLabel("SSID 2G:"))
                 vbox.addWidget(self.ssid_2g_edit)
-                vbox.addWidget(QLabel("Password 2G:"))
-                vbox.addWidget(self.passwd_2g_edit)
                 vbox.addWidget(QLabel("SSID 5G:"))
                 vbox.addWidget(self.ssid_5g_edit)
-                vbox.addWidget(QLabel("Password 5G:"))
-                vbox.addWidget(self.passwd_5g_edit)
                 self.form.addRow(group)
 
                 # 注册控件
                 self.field_widgets["router.name"] = self.router_name_combo
                 self.field_widgets["router.ssid_2g"] = self.ssid_2g_edit
-                self.field_widgets["router.passwd_2g"] = self.passwd_2g_edit
                 self.field_widgets["router.ssid_5g"] = self.ssid_5g_edit
-                self.field_widgets["router.passwd_5g"] = self.passwd_5g_edit
 
                 continue  # ← 继续下一顶层 key
             if key == "serial_port":
@@ -716,9 +698,7 @@ class CaseConfigPage(CardWidget):
             "connect_type.telnet.wildcard",
             "router.name",
             "router.ssid_2g",
-            "router.passwd_2g",
             "router.ssid_5g",
-            "router.passwd_5g",
             "serial_port.status",
             "serial_port.port",
             "serial_port.baud"

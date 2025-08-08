@@ -78,11 +78,10 @@ class RvrWifiConfigPage(CardWidget):
                 base = Path.cwd()
         self.csv_path = (base / "config" / "rvr_wifi_setup.csv").resolve()
         self.config_path = (base / "config" / "config.yaml").resolve()
-
         self.router, self.router_name = self._load_router()
-
         self.headers, self.rows = self._load_csv()
-
+        # 当前页面使用的路由器 SSID
+        self.ssid: str = ""
         main_layout = QHBoxLayout(self)
 
         form_box = QGroupBox(self)
@@ -105,6 +104,9 @@ class RvrWifiConfigPage(CardWidget):
         self.auth_combo.addItems(getattr(self.router, "AUTHENTICATION_METHOD", []))
         self.auth_combo.setMinimumWidth(150)
         form_layout.addRow("authentication", self.auth_combo)
+        # 密码输入框，用于自动填充和测试流程引用
+        self.passwd_edit = LineEdit(form_box)
+        form_layout.addRow("password", self.passwd_edit)
 
         test_widget = QWidget(form_box)
         test_layout = QHBoxLayout(test_widget)
@@ -160,7 +162,15 @@ class RvrWifiConfigPage(CardWidget):
         # 监听主配置页面的路由器信息变化
         self.case_config_page.routerInfoChanged.connect(self.reload_router)
 
-    # ------------------------------------------------------------------
+    def set_router_credentials(self, ssid: str, passwd: str) -> None:
+        """设置路由器凭据并自动填充密码输入框"""
+        self.ssid = ssid
+        self.passwd_edit.setText(passwd)
+
+    def get_router_credentials(self) -> tuple[str, str]:
+        """返回当前页面的路由器 SSID 和密码"""
+        return self.ssid, self.passwd_edit.text()
+
     def _load_router(self):
         try:
             with open(self.config_path, "r", encoding="utf-8") as f:
@@ -330,4 +340,3 @@ class RvrWifiConfigPage(CardWidget):
             InfoBar.success(title="提示", content="保存成功", parent=self, position=InfoBarPosition.TOP)
         except Exception as e:
             InfoBar.error(title="错误", content=str(e), parent=self, position=InfoBarPosition.TOP)
-
