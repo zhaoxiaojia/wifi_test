@@ -1,4 +1,4 @@
 band,ssid,wireless_mode,channel,bandwidth,authentication,password,tx,rx,data_row
 5 GHz,coco,11ax,36,40MHz,强加密(WPA2个人版),12345678,1,0,5
-2.4 GHz,coco,11ax,13,40MHz,强加密(WPA2个人版),12345678,1,1,5
-2.4 GHz,coco,11ax,13,40MHz,强加密(WPA2个人版),12345678,1,1,5
+2.4 GHz,,11ax,自动,20/40 MHz,Open System,,0,1,5
+2.4 GHz,,11ax,10,20/40 MHz,Open System,,1,0,5
