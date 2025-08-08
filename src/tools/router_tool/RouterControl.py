@@ -126,7 +126,7 @@ class RouterTools(RouterControl):
         '澳大利亚': '8'
     }
 
-    def __init__(self, router_info, display=False):
+    def __init__(self, router_info, display=True):
         # 路由器品牌
         self.router_type = router_info.split("_")[0]
         # 路由器完整信息
@@ -146,14 +146,14 @@ class RouterTools(RouterControl):
         self.ping_address = re.findall(r"\d+\.\d+\.\d+\.\d+", self.address)[0]
         # 实例 driver 用于对浏览器进行操作
         self.option = webdriver.ChromeOptions()
-        if display == True:
-            self.option.add_argument("--start-maximized")  # 窗口最大化
-            self.option.add_experimental_option("detach", True)  # 不自动关闭浏览器
-            # self.service = Service(executable_path=r"C:\Users\yu.zeng\ChromeWebDriver\chromedriver.exe")
-            self.driver = webdriver.Chrome(options=self.option)
-        else:
-            self.option.add_argument(argument='headless')
-            self.driver = webdriver.Chrome(options=self.option)
+        # if display == True:
+        #     self.option.add_argument("--start-maximized")  # 窗口最大化
+        #     self.option.add_experimental_option("detach", True)  # 不自动关闭浏览器
+        #     # self.service = Service(executable_path=r"C:\Users\yu.zeng\ChromeWebDriver\chromedriver.exe")
+        #     self.driver = webdriver.Chrome(options=self.option)
+        # else:
+        self.option.add_argument(argument='headless')
+        self.driver = webdriver.Chrome(options=self.option)
 
         # 全局等待3秒 （当driver 去查询 控件时生效）
         self.driver.implicitly_wait(3)

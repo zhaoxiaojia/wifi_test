@@ -233,7 +233,7 @@ class CaseConfigPage(CardWidget):
                 0,
                 lambda: InfoBar.success(
                     title="提示",
-                    content="配置已保存", 
+                    content="配置已保存",
                     parent=self,
                     position=InfoBarPosition.TOP,
                 ),
@@ -266,7 +266,6 @@ class CaseConfigPage(CardWidget):
         base = Path(self._get_application_base())
         return str(p) if p.is_absolute() else str((base / p).resolve())
 
-
     def on_connect_type_changed(self, type_str):
         """
         切换连接方式时，仅展示对应参数组
@@ -295,8 +294,12 @@ class CaseConfigPage(CardWidget):
 
     def _load_router_wifi_info(self, name: str):
         cfg = self.config.get("router", {})
-        self.router_ssid_2g = cfg.get("ssid_2g", f"{name}_2g")
-        self.router_ssid_5g = cfg.get("ssid_5g", f"{name}_5g")
+        if cfg.get("name") == name:
+            self.router_ssid_2g = cfg.get("ssid_2g", f"{name}_2g")
+            self.router_ssid_5g = cfg.get("ssid_5g", f"{name}_5g")
+        else:
+            self.router_ssid_2g = f"{name}_2g"
+            self.router_ssid_5g = f"{name}_5g"
 
     def get_router_wifi_info(self):
         return (
@@ -306,6 +309,8 @@ class CaseConfigPage(CardWidget):
 
     def on_router_changed(self, name: str):
         self._load_router_wifi_info(name)
+        self.ssid_2g_edit.setText(self.router_ssid_2g)
+        self.ssid_5g_edit.setText(self.router_ssid_5g)
         self.routerInfoChanged.emit()
 
     def render_all_fields(self):
@@ -540,7 +545,6 @@ class CaseConfigPage(CardWidget):
                 self.ssid_5g_edit.setPlaceholderText("5G SSID")
                 self.ssid_5g_edit.setText(value.get("ssid_5g", ""))
 
-
                 vbox.addWidget(QLabel("Name:"))
                 vbox.addWidget(self.router_name_combo)
                 vbox.addWidget(QLabel("SSID 2G:"))
@@ -548,13 +552,14 @@ class CaseConfigPage(CardWidget):
                 vbox.addWidget(QLabel("SSID 5G:"))
                 vbox.addWidget(self.ssid_5g_edit)
                 self.form.addRow(group)
-
                 # 注册控件
                 self.field_widgets["router.name"] = self.router_name_combo
                 self.field_widgets["router.ssid_2g"] = self.ssid_2g_edit
                 self.field_widgets["router.ssid_5g"] = self.ssid_5g_edit
-
+                self.router_name_combo.currentTextChanged.connect(self.on_router_changed)
+                self.on_router_changed(self.router_name_combo.currentText())
                 continue  # ← 继续下一顶层 key
+
             if key == "serial_port":
                 group = QGroupBox("Serial Port")
                 vbox = QVBoxLayout(group)
@@ -607,6 +612,7 @@ class CaseConfigPage(CardWidget):
             vbox.addWidget(edit)
             self.form.addRow(group)
             self.field_widgets[key] = edit
+
     def populate_case_tree(self, root_dir):
         """
         遍历 test 目录，只将 test_ 开头的 .py 文件作为节点加入树结构。
