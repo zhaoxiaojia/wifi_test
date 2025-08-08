@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 import yaml
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QSignalBlocker
 from PyQt5.QtWidgets import (
     QHBoxLayout,
     QTableWidgetItem,
@@ -150,13 +150,13 @@ class RvrWifiConfigPage(CardWidget):
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.Stretch)
         header.setStretchLastSection(True)
+        self.table.itemSelectionChanged.connect(self._load_row_to_form)
         main_layout.addWidget(self.table, 2)
 
         self.band_combo.currentTextChanged.connect(self._update_band_options)
         self.wireless_combo.currentTextChanged.connect(self._update_auth_options)
         self._update_band_options(self.band_combo.currentText())
         self._update_auth_options(self.wireless_combo.currentText())
-
         self.refresh_table()
 
         # 监听主配置页面的路由器信息变化
@@ -258,6 +258,7 @@ class RvrWifiConfigPage(CardWidget):
             self.auth_combo.addItems(getattr(self.router, "AUTHENTICATION_METHOD", []))
 
     def refresh_table(self):
+        current = self.table.currentRow()
         self.table.clear()
         self.table.setRowCount(len(self.rows))
         self.table.setColumnCount(len(self.headers))
@@ -269,8 +270,14 @@ class RvrWifiConfigPage(CardWidget):
         for r, row in enumerate(self.rows):
             for c, h in enumerate(self.headers):
                 item = QTableWidgetItem(str(row.get(h, "")))
-                item.setFlags(Qt.ItemIsEnabled)
+                item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
                 self.table.setItem(r, c, item)
+        if 0 <= current < self.table.rowCount():
+            self.table.selectRow(current)
+        elif self.table.rowCount():
+            self.table.selectRow(0)
+        else:
+            self._load_row_to_form()
 
     def _sync_rows(self):
         self._collect_table_data()
@@ -285,19 +292,49 @@ class RvrWifiConfigPage(CardWidget):
             data.append(row)
         self.rows = data
 
+    def _load_row_to_form(self):
+        row_index = self.table.currentRow()
+        if not (0 <= row_index < len(self.rows)):
+            return
+        data = self.rows[row_index]
+
+        band = data.get("band", "")
+        with QSignalBlocker(self.band_combo):
+            self.band_combo.setCurrentText(band)
+        self._update_band_options(band)
+
+        with QSignalBlocker(self.wireless_combo):
+            self.wireless_combo.setCurrentText(data.get("wireless_mode", ""))
+        self._update_auth_options(self.wireless_combo.currentText())
+
+        with QSignalBlocker(self.channel_combo):
+            self.channel_combo.setCurrentText(data.get("channel", ""))
+        with QSignalBlocker(self.bandwidth_combo):
+            self.bandwidth_combo.setCurrentText(data.get("bandwidth", ""))
+        with QSignalBlocker(self.auth_combo):
+            self.auth_combo.setCurrentText(data.get("authentication", ""))
+
+        with QSignalBlocker(self.tx_check):
+            self.tx_check.setChecked(data.get("tx", "0") == "1")
+        with QSignalBlocker(self.rx_check):
+            self.rx_check.setChecked(data.get("rx", "0") == "1")
+
+        self.data_row_edit.setText(data.get("data_row", ""))
+
     def _update_tx_rx(self, state: int):
         row = self.table.currentRow()
-        if row < 0:
+        if not (0 <= row < len(self.rows)):
             return
         sender = self.sender()
         if sender not in (self.tx_check, self.rx_check):
             return
         col_name = "tx" if sender is self.tx_check else "rx"
+        value = "1" if state == Qt.Checked else "0"
+        self.rows[row][col_name] = value
         try:
             col = self.headers.index(col_name)
         except ValueError:
             return
-        value = "1" if state == Qt.Checked else "0"
         item = self.table.item(row, col)
         if item is None:
             item = QTableWidgetItem(value)
@@ -305,7 +342,6 @@ class RvrWifiConfigPage(CardWidget):
             self.table.setItem(row, col, item)
         else:
             item.setText(value)
-        self._sync_rows()
 
     def add_row(self):
         row = {
