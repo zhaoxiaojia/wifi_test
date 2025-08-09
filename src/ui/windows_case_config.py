@@ -836,9 +836,9 @@ class CaseConfigPage(CardWidget):
                 passwd = passwd_widget.text()
             if hasattr(main_window, "show_rvr_wifi_config"):
                 main_window.show_rvr_wifi_config()
-            if hasattr(main_window, "rvr_wifi_config_page") and hasattr(main_window.rvr_wifi_config_page,
-                                                                        "set_router_credentials"):
-                main_window.rvr_wifi_config_page.set_router_credentials(ssid, passwd)
+            # if hasattr(main_window, "rvr_wifi_config_page") and hasattr(main_window.rvr_wifi_config_page,
+            #                                                             "set_router_credentials"):
+            #     main_window.rvr_wifi_config_page.set_router_credentials(ssid, passwd)
             if hasattr(main_window, "setCurrentIndex"):
                 main_window.setCurrentIndex(main_window.case_config_page)
             self.csv_combo.setEnabled(True)
@@ -860,6 +860,12 @@ class CaseConfigPage(CardWidget):
     def on_csv_changed(self, text: str) -> None:
         """记录当前选择的 CSV 文件路径"""
         self.selected_csv_path = self.csv_combo.currentData() if text else None
+        main_window = self.window()
+        if self.selected_csv_path and hasattr(main_window, "rvr_wifi_config_page"):
+            page = main_window.rvr_wifi_config_page
+            page.csv_path = Path(self.selected_csv_path)
+            if hasattr(page, "reload_csv"):
+                page.reload_csv()
 
     def on_run(self):
         # 将字段值更新到 self.config（保持结构）
