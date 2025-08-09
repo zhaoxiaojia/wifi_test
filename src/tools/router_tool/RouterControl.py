@@ -144,19 +144,9 @@ class RouterTools(RouterControl):
         self.address = self.xpath['address'][router_info.split("_")[1]]
         logging.info(self.address)
         self.ping_address = re.findall(r"\d+\.\d+\.\d+\.\d+", self.address)[0]
-        # 实例 driver 用于对浏览器进行操作
-        self.option = webdriver.ChromeOptions()
-        # if display == True:
-        #     self.option.add_argument("--start-maximized")  # 窗口最大化
-        #     self.option.add_experimental_option("detach", True)  # 不自动关闭浏览器
-        #     # self.service = Service(executable_path=r"C:\Users\yu.zeng\ChromeWebDriver\chromedriver.exe")
-        #     self.driver = webdriver.Chrome(options=self.option)
-        # else:
-        self.option.add_argument(argument='headless')
-        self.driver = webdriver.Chrome(options=self.option)
 
         # 全局等待3秒 （当driver 去查询 控件时生效）
-        self.driver.implicitly_wait(3)
+
         logging.info('*' * 80)
         logging.info(f'* Router {self.router_info}')
         logging.info('*' * 80)
@@ -169,25 +159,18 @@ class RouterTools(RouterControl):
         login in router
         @return:
         '''
-        try:
-            # driver 连接 登录地址
-            self.driver.get(self.address)
-            time.sleep(3)
-            # input username
-            self.driver.find_element(By.ID, self.xpath['username_element']).click()
-            self.driver.find_element(By.ID, self.xpath['username_element']).send_keys(self.xpath['account'])
-            # input passwd
-            self.driver.find_element(By.NAME, self.xpath['password_element']).click()
-            self.driver.find_element(By.NAME, self.xpath['password_element']).send_keys(self.xpath['passwd'])
-            # click login
-            self.driver.find_element(By.XPATH, self.xpath['signin_element'][self.router_info]).click()
-            # wait for login in done
-            WebDriverWait(driver=self.driver, timeout=10, poll_frequency=0.5).until(
-                EC.presence_of_element_located((By.ID, self.xpath['signin_done_element'])))
-            time.sleep(1)
-        except Exception as e:
-            # logging.info(e)
-            ...
+        # 实例 driver 用于对浏览器进行操作
+        self.option = webdriver.ChromeOptions()
+        # if display == True:
+        self.option.add_argument("--start-maximized")  # 窗口最大化
+        self.option.add_experimental_option("detach", True)  # 不自动关闭浏览器
+        # self.service = Service(executable_path=r"C:\Users\yu.zeng\ChromeWebDriver\chromedriver.exe")
+        self.driver = webdriver.Chrome(options=self.option)
+        # else:
+        # self.option.add_argument(argument='headless')
+        # self.driver = webdriver.Chrome(options=self.option)
+        self.driver.implicitly_wait(3)
+
 
     def change_setting(self, router):
         ...
@@ -334,7 +317,7 @@ class RouterTools(RouterControl):
 
         assert element.get_property('value') == passwd, "Wep password set error"
 
-    def change_wpa_passwd(self, passwd):
+    def change_passwd(self, passwd):
         '''
         change wpa passwd
         @param passwd:

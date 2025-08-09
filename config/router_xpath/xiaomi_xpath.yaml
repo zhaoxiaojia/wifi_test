@@ -2,7 +2,7 @@
 
 xiaomi:
   address:
-#    ax3000: http://192.168.31.1/cgi-bin/luci/web
+    be7000: http://192.168.31.1/cgi-bin/luci/web
 #    ax3000: http://192.168.5.1/cgi-bin/luci/web
     ax3000: http://192.168.1.1/
   passwd: 12345678

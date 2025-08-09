@@ -8,7 +8,3 @@
 @time: 2025/7/23 14:48 
 @desc: 
 '''
-
-import pytest
-
-pytest.testResult.init_rvr_result()
