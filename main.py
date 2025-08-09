@@ -7,7 +7,7 @@ from pathlib import Path
 import traceback
 import logging
 
-import pytest
+from contextlib import suppress
 
 sys.path.insert(0, str(Path(__file__).parent))
 from PyQt5.QtWidgets import QApplication
@@ -17,7 +17,7 @@ from src.ui.rvr_wifi_config import RvrWifiConfigPage
 from src.ui.run import RunPage
 from qfluentwidgets import setTheme, Theme
 from PyQt5.QtGui import QGuiApplication
-from PyQt5.QtCore import QTimer, QCoreApplication
+from PyQt5.QtCore import QCoreApplication
 
 
 def log_exception(exc_type, exc_value, exc_tb):
@@ -64,10 +64,7 @@ class MainWindow(FluentWindow):
 
     def hide_rvr_wifi_config(self):
         """从导航栏移除 RVR Wi-Fi 配置页"""
-        self.removeSubInterface(self.rvr_wifi_config_page)
-        index = self.stackedWidget.indexOf(self.rvr_wifi_config_page)
-        if index != -1:
-            self.stackedWidget.removeWidget(self.rvr_wifi_config_page)
+        self._remove_interface(self.rvr_wifi_config_page)
 
     def removeSubInterface(self, page):
         """Remove the given page from the navigation if possible."""
@@ -84,51 +81,23 @@ class MainWindow(FluentWindow):
         if hasattr(page, "setParent"):
             page.setParent(None)
 
+    def _remove_interface(self, widget):
+        """移除堆叠窗口和导航项中的页面"""
+        for i in reversed(range(self.stackedWidget.count())):
+            w = self.stackedWidget.widget(i)
+            if w is widget or w.__class__ == widget.__class__:
+                self.stackedWidget.removeWidget(w)
+                w.setParent(None)
+                w.deleteLater()
+        QCoreApplication.processEvents()
+        with suppress(Exception):
+            self.removeSubInterface(widget)
+
     def clear_run_page(self):
         if self.run_page:
-            # 强制彻底移除所有 RunPage（防止 Qt 内部引用悬挂）
-            for i in reversed(range(self.stackedWidget.count())):
-                widget = self.stackedWidget.widget(i)
-                # 防止多余实例
-                if widget is self.run_page or widget.__class__.__name__ == "RunPage":
-                    print(f"remove RunPage from stackedWidget: {widget}")
-                    self.stackedWidget.removeWidget(widget)
-                    widget.setParent(None)
-                    widget.deleteLater()
-            QCoreApplication.processEvents()  # 保证deleteLater执行
-
-            # 从导航栏彻底移除
-            try:
-                self.removeSubInterface(self.run_page)
-            except Exception as e:
-                print(f"removeSubInterface error: {e}")
-
-            # 断开所有信号和线程
-            if hasattr(self.run_page, "runner") and self.run_page.runner:
-                runner = self.run_page.runner
-                try:
-                    runner.log_signal.disconnect(self.run_page._append_log)
-                except Exception:
-                    pass
-                try:
-                    runner.progress_signal.disconnect(self.run_page.update_progress)
-                except Exception:
-                    pass
-                try:
-                    runner.finished.disconnect()
-                except Exception:
-                    pass
-                try:
-                    if runner.isRunning():
-                        runner.stop()
-                        if not runner.wait(3000):
-                            runner.quit()
-                            if not runner.wait(1000):
-                                print("runner thread did not finish in time")
-                except Exception:
-                    pass
-
-            self.run_page = None
+            with suppress(Exception):
+                self.run_page.cleanup()
+            self._remove_interface(self.run_page)
             print("RunPage cleared!")
 
     def center_window(self):
@@ -179,6 +148,7 @@ class MainWindow(FluentWindow):
         self.clear_run_page()
         print("Switched to CaseConfigPage")
 
+
 def get_base_dir():
     """返回程序所在的基础目录（打包后是 exe 所在目录）"""
     if getattr(sys, 'frozen', False):
@@ -186,10 +156,11 @@ def get_base_dir():
     else:
         return os.path.dirname(os.path.dirname(__file__))  # 开发时的项目根目录
 
+
 # 关键路径定义
 BASE_DIR = get_base_dir()
 CONFIG_DIR = os.path.join(BASE_DIR, "config")  # 共享的 config 目录
-RES_DIR = os.path.join(BASE_DIR, "res")       # 共享的 res 目录
+RES_DIR = os.path.join(BASE_DIR, "res")  # 共享的 res 目录
 
 sys.excepthook = log_exception
 
