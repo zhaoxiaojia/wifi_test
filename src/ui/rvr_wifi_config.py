@@ -215,6 +215,11 @@ class RvrWifiConfigPage(CardWidget):
                     rows.append({h: row.get(h, "") for h in headers})
         return headers, rows
 
+    def reload_csv(self):
+        """重新读取当前 CSV 并刷新表格"""
+        self.headers, self.rows = self._load_csv()
+        self.refresh_table()
+
     def reload_router(self):
         """重新加载路由器配置并刷新频段相关选项"""
         name = ""
@@ -378,17 +383,17 @@ class RvrWifiConfigPage(CardWidget):
         if not (0 <= row < len(self.rows)):
             return
         band = self.band_combo.currentText()
-        if band == "2.4 GHz":
-            ssid = self.case_config_page.ssid_2g_edit.text()
-        else:
-            ssid = self.case_config_page.ssid_5g_edit.text()
+        # if band == "2.4 GHz":
+        #     ssid = self.case_config_page.ssid_2g_edit.text()
+        # else:
+        #     ssid = self.case_config_page.ssid_5g_edit.text()
         data = {
             "band": band,
             "wireless_mode": self.wireless_combo.currentText(),
             "channel": self.channel_combo.currentText(),
             "bandwidth": self.bandwidth_combo.currentText(),
             "authentication": self.auth_combo.currentText(),
-            "ssid": ssid,
+            # "ssid": ssid,
             "password": self.passwd_edit.text(),
             "data_row": self.data_row_edit.text(),
         }

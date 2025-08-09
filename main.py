@@ -54,6 +54,8 @@ class MainWindow(FluentWindow):
 
     def show_rvr_wifi_config(self):
         """在导航栏中显示 RVR Wi-Fi 配置页"""
+        if hasattr(self.rvr_wifi_config_page, "reload_csv"):
+            self.rvr_wifi_config_page.reload_csv()
         if self.stackedWidget.indexOf(self.rvr_wifi_config_page) == -1:
             self.addSubInterface(
                 self.rvr_wifi_config_page,
