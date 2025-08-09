@@ -24,11 +24,13 @@ from PyQt5.QtCore import (
     QModelIndex,
     pyqtSignal,
 )
+
 from PyQt5.QtWidgets import (
+    QSizePolicy,
     QWidget,
     QHBoxLayout,
     QVBoxLayout,
-    QFormLayout,
+    QGridLayout,
     QGroupBox,
     QLabel,
     QFileSystemModel
@@ -103,11 +105,11 @@ class CaseConfigPage(CardWidget):
 
         # -------------------- layout --------------------
         main_layout = QHBoxLayout(self)
-        main_layout.setSpacing(20)
-
+        main_layout.setSpacing(10)
+        main_layout.setContentsMargins(5, 5, 5, 5)
         # ----- left: case tree -----
         self.case_tree = TreeView(self)
-        self.case_tree.setFixedWidth(400)
+        self.case_tree.setFixedWidth(300)
         self._init_case_tree(
             os.path.abspath(os.path.join(os.path.dirname(__file__), "../test"))
         )
@@ -118,16 +120,30 @@ class CaseConfigPage(CardWidget):
         scroll_area.setWidgetResizable(True)
         container = QWidget()
         right = QVBoxLayout(container)
-        self.form = QFormLayout()
-        right.addLayout(self.form)
+        right.setContentsMargins(5, 5, 5, 5)
+        right.setSpacing(5)
+        self._columns_widget = QWidget()
+        cols = QHBoxLayout(self._columns_widget)
+        cols.setSpacing(8)
+        cols.setContentsMargins(0, 0, 0, 0)
+        self._left_col = QVBoxLayout()
+        self._left_col.setSpacing(8)
+        self._left_col.setAlignment(Qt.AlignTop)
+        self._right_col = QVBoxLayout()
+        self._right_col.setSpacing(8)
+        self._right_col.setAlignment(Qt.AlignTop)
+        cols.addLayout(self._left_col, 1)
+        cols.addLayout(self._right_col, 1)
+        right.addWidget(self._columns_widget)
 
         self.run_btn = PushButton("Test", self)
         self.run_btn.setIcon(FluentIcon.PLAY)
+        self.run_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.run_btn.clicked.connect(self.on_run)
         right.addWidget(self.run_btn)
         scroll_area.setWidget(container)
         main_layout.addWidget(scroll_area, 4)
-
+        self._col_weight = [0, 0]
         # render form fields from yaml
         self.render_all_fields()
 
@@ -313,13 +329,28 @@ class CaseConfigPage(CardWidget):
         self.ssid_5g_edit.setText(self.router_ssid_5g)
         self.routerInfoChanged.emit()
 
+    def _estimate_group_weight(self, group: QWidget) -> int:
+        """粗略估算分组高度：以输入型子控件数量为权重"""
+        from PyQt5.QtWidgets import (
+            QLineEdit, QComboBox, QTextEdit, QSpinBox, QDoubleSpinBox, QCheckBox
+        )
+        inputs = group.findChildren((QLineEdit, QComboBox, QTextEdit, QSpinBox, QDoubleSpinBox, QCheckBox))
+        return max(1, len(inputs))
+
+    def _add_group(self, group: QWidget, weight: int | None = None):
+        """把 group 放到当前更“轻”的一列"""
+        w = self._estimate_group_weight(group) if weight is None else weight
+        ci = 0 if self._col_weight[0] <= self._col_weight[1] else 1
+        (self._left_col if ci == 0 else self._right_col).addWidget(group)
+        self._col_weight[ci] += w
+
     def render_all_fields(self):
         """
         自动渲染config.yaml中的所有一级字段。
         控件支持 LineEdit / ComboBox（可扩展 Checkbox）。
         字段映射到 self.field_widgets，方便后续操作。
         """
-        for key, value in self.config.items():
+        for i, (key, value) in enumerate(self.config.items()):
             if key == "text_case":
                 group = QGroupBox("Test Case")
                 group.setStyleSheet(
@@ -330,7 +361,7 @@ class CaseConfigPage(CardWidget):
                 self.test_case_edit.setText(value or "")  # 默认值
                 self.test_case_edit.setReadOnly(True)  # 只读，由左侧树刷新
                 vbox.addWidget(self.test_case_edit)
-                self.form.insertRow(0, group)  # ← 插到最上面
+                self._add_group(group)
                 self.field_widgets["text_case"] = self.test_case_edit
                 continue
             if key == "connect_type":
@@ -358,7 +389,7 @@ class CaseConfigPage(CardWidget):
                 # 只添加到布局，隐藏未选中的
                 vbox.addWidget(self.adb_group)
                 vbox.addWidget(self.telnet_group)
-                self.form.addRow(group)
+                self._add_group(group)
                 # 初始化
                 self.adb_device_edit.setText(value.get("adb", {}).get("device", ""))
                 self.telnet_ip_edit.setText(value.get("telnet", {}).get("ip", ""))
@@ -424,7 +455,7 @@ class CaseConfigPage(CardWidget):
                 vbox.addWidget(self.rf_step_edit)
 
                 # ---- 加入表单 & 初始化可见性 ----
-                self.form.addRow(group)
+                self._add_group(group)
                 self.on_rf_model_changed(self.rf_model_combo.currentText())
 
                 # ---- 注册控件 ----
@@ -487,7 +518,7 @@ class CaseConfigPage(CardWidget):
                 vbox.addWidget(self.repeat_combo)
 
                 # 加入表单
-                self.form.addRow(group)
+                self._add_group(group)
 
                 # 字段注册（供启用/禁用和收集参数用）
                 self.field_widgets["rvr.tool"] = self.rvr_tool_combo
@@ -522,7 +553,7 @@ class CaseConfigPage(CardWidget):
                 vbox.addWidget(self.corner_step_edit)
 
                 # 加入表单
-                self.form.addRow(group)
+                self._add_group(group)
 
                 # 注册控件（用于启用/禁用、保存回 YAML）
                 self.field_widgets["corner_angle.ip_address"] = self.corner_ip_edit
@@ -548,7 +579,7 @@ class CaseConfigPage(CardWidget):
                 vbox.addWidget(self.ssid_2g_edit)
                 vbox.addWidget(QLabel("SSID 5G:"))
                 vbox.addWidget(self.ssid_5g_edit)
-                self.form.addRow(group)
+                self._add_group(group)
                 # 注册控件
                 self.field_widgets["router.name"] = self.router_name_combo
                 self.field_widgets["router.ssid_2g"] = self.ssid_2g_edit
@@ -591,7 +622,7 @@ class CaseConfigPage(CardWidget):
                 cfg_box.addWidget(self.serial_baud_edit)
 
                 vbox.addWidget(self.serial_cfg_group)
-                self.form.addRow(group)
+                self._add_group(group)
 
                 # 初始化显隐
                 self.on_serial_enabled_changed(self.serial_enable_combo.currentText())
@@ -607,7 +638,7 @@ class CaseConfigPage(CardWidget):
             edit = LineEdit(self)
             edit.setText(str(value) if value is not None else "")
             vbox.addWidget(edit)
-            self.form.addRow(group)
+            self._add_group(group)
             self.field_widgets[key] = edit
 
     def populate_case_tree(self, root_dir):
@@ -710,8 +741,8 @@ class CaseConfigPage(CardWidget):
         if basename == "test_compatibility.py":
             editable |= {"Power relay"}
         if basename == "test_wifi_peak_throughput.py":
-            editable |= { "rvr", "rvr.tool", "rvr.iperf.version", "rvr.iperf.path", "rvr.ixchariot.path",
-                "rvr.pair", "rvr.repeat",}
+            editable |= {"rvr", "rvr.tool", "rvr.iperf.version", "rvr.iperf.path", "rvr.ixchariot.path",
+                         "rvr.pair", "rvr.repeat", }
         if "rvr" in basename:
             editable |= {
                 "rvr", "rvr.tool", "rvr.iperf.version", "rvr.iperf.path", "rvr.ixchariot.path",
