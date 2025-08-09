@@ -21,8 +21,8 @@ def router_str(self):
 
 RUN_SETTING_ACTIVITY = 'am start -n com.android.tv.settings/.MainSettings'
 
-fields = ['ap', 'band', 'ssid', 'wireless_mode', 'channel', 'bandwidth', 'authentication',
-          'wpa_passwd', 'test_type', 'protocol_type', 'data_row', 'expected_rate', 'wifi6', 'wep_encrypt', 'wep_passwd',
+fields = ['band', 'ssid', 'wireless_mode', 'channel', 'bandwidth', 'authentication',
+          'password', 'tx', 'rx', 'data_row', 'expected_rate', 'wifi6', 'wep_encrypt',
           'hide_ssid', 'hide_type', 'wpa_encrypt', 'passwd_index', 'protect_frame',
           'smart_connect', 'country_code']
 

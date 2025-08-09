@@ -105,15 +105,10 @@ class Asusax88uControl(RouterTools):
     }
 
     def __init__(self):
-        if pytest.win_flag:
-            self.yaml_info = yamlTool(os.getcwd() + f'\\config\\router_xpath\\asus_xpath.yaml')
-        else:
-            self.yaml_info = yamlTool(os.getcwd() + '/config/router_xpath/asus_xpath.yaml')
-        self.yaml_info = yamlTool(
-            r'C:\Users\SH171300-1522\PycharmProjects\wifi_test\config\router_xpath\asus_xpath.yaml')
+        self.yaml_info = yamlTool(os.getcwd() + f'\\config\\router_xpath\\asus_xpath.yaml')
         self.xpath = self.yaml_info.get_note('asus')
         self.port = 23
-        self.host = '192.168.50.1'
+        self.host = self.xpath['address']['88u']
         self.prompt = b'admin@RT-AX88U-D8C0:/tmp/home/root#'  # 命令提示符
         self.tn = self._init_telnet()
 

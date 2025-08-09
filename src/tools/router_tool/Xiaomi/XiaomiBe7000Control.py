@@ -19,7 +19,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from src.tools.router_tool.RouterControl import ConfigError, RouterTools
 
 
-class XiaomiRedax6000Control(RouterTools):
+class XiaomiBe7000Control(RouterTools):
     BAND_2 = '2.4 GHz'
     BAND_5 = '5 GHz'
     CHANNEL_2 = {
@@ -81,9 +81,10 @@ class XiaomiRedax6000Control(RouterTools):
     WIRELESS_5 = ['11ac', '11ax']
 
     def __init__(self):
-        super().__init__('xiaomi_ax3000', display=True)
+        super().__init__('xiaomi_be7000', display=True)
 
     def login(self):
+        super().login()
         # try:
         self.driver.get(self.address)
         # input passwd
@@ -119,7 +120,8 @@ class XiaomiRedax6000Control(RouterTools):
         wait.until(EC.presence_of_element_located((By.XPATH, '//*[@id="wifiset24"]/div[1]')))
 
         if router.band == self.BAND_5:
-            wait_for = self.driver.find_element(By.XPATH, '//*[@id="bd"]/div[4]/div[1]/h3')
+            # //*[@id="wifiset50"]/div[1]/span[1]
+            wait_for = self.driver.find_element(By.XPATH, '//*[@id="wifiset50"]/div[1]/span[1]')
             self.scroll_to(wait_for)
 
         # 修改 ssid
@@ -165,7 +167,7 @@ class XiaomiRedax6000Control(RouterTools):
                 By.XPATH, self.xpath['authentication_regu_element'].format(index)).click()
 
         # 修改密码
-        if router.wpa_passwd:
+        if router.password:
             if self.BAND_2 == router.band:
                 target = 'passwd_2g'
             else:
@@ -173,7 +175,7 @@ class XiaomiRedax6000Control(RouterTools):
             self.driver.find_element(
                 By.XPATH, self.xpath['passwd_element'][target]).clear()
             self.driver.find_element(
-                By.XPATH, self.xpath['passwd_element'][target]).send_keys(router.wpa_passwd)
+                By.XPATH, self.xpath['passwd_element'][target]).send_keys(router.password)
 
         if router.channel:
             channel = str(router.channel)
@@ -220,11 +222,6 @@ class XiaomiRedax6000Control(RouterTools):
                     By.XPATH, self.xpath['bandwidth_element'].format(index)).click()
 
         time.sleep(5)
-        # 点击apply
-        # if self.BAND_2 == router.band:
-        #     target = 'apply_2g'
-        # else:
-        #     target = 'apply_5g'
         wait_for = self.driver.find_element(
             By.XPATH, self.xpath['apply_element']['apply_5g'])
         self.scroll_to(wait_for)
@@ -233,14 +230,15 @@ class XiaomiRedax6000Control(RouterTools):
         time.sleep(3)
         # 修改wiremode
         if router.wireless_mode:
-            wifi6_switch = self.driver.find_element(By.XPATH,
-                                                    '/html/body/div[1]/div[2]/div[4]/div[1]/div/a')
+            # //*[@id="WIFI6switch"]
+            wifi6_switch = self.driver.find_element(By.XPATH, '//*[@id="WIFI6switch"]')
             self.scroll_to(wifi6_switch)
-            if wifi6_switch.get_attribute("data-on") != {'11ax': '0', '11ac': '1'}[router.wireless_mode]:
+            if wifi6_switch.get_attribute("data-on") != {'11ax': '0', '11ac': '1', '11n': '1'}[router.wireless_mode]:
                 wifi6_switch.click()
                 time.sleep(15)
 
         logging.info('Router setting done')
+        self.driver.quit()
         return True
         # except Exception as e:
         #     logging.info('Router change setting with error')

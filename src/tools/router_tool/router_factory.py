@@ -14,13 +14,13 @@ from src.tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
 from src.tools.router_tool.AsusRouter.Asusax5400Control import Asusax5400Control
 from src.tools.router_tool.AsusRouter.Asusax6700Control import Asusax6700Control
 from src.tools.router_tool.Xiaomi.Xiaomiax3000Control import Xiaomiax3000Control
-from src.tools.router_tool.Xiaomi.XiaomiRedax6000Control import \
-    XiaomiRedax6000Control
+from src.tools.router_tool.Xiaomi.XiaomiBe7000Control import XiaomiBe7000Control
 
+router_list = {'asusax86u': Asusax86uControl, 'asusax88u': Asusax88uControl, 'asusax5400': Asusax5400Control,
+          'asusax6700': Asusax6700Control, 'xiaomibe7000': XiaomiBe7000Control,
+          'xiaomiax3000': Xiaomiax3000Control}
 
 def get_router(router_name):
-    router = {'asusax86u': Asusax86uControl, 'asusax88u': Asusax88uControl, 'asusax5400': Asusax5400Control,
-              'asusax6700': Asusax6700Control, 'xiaomiredax6000': XiaomiRedax6000Control,
-              'xiaomiax3000': Xiaomiax3000Control}
-    if router_name not in router.keys(): raise ValueError("Doesn't support this router")
-    return router[router_name]()
+
+    if router_name not in router_list.keys(): raise ValueError("Doesn't support this router")
+    return router_list[router_name]()

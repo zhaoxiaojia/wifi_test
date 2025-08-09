@@ -202,7 +202,7 @@ if __name__ == "__main__":
     # import random
     # import os
     # timestamp = datetime.datetime.now().strftime("%Y.%m.%d_%H.%M.%S")
-    # timestamp = f"{timestamp}_{random.randint(1000, 9999)}"
     # report_dir = os.path.join('report', timestamp)
-    # testcase = "src/test/project/roku/UI/Connectivity Doctor/test_T6473243.py"
+    # # testcase = "src/test/project/roku/UI/Connectivity Doctor/test_T6473243.py"
+    # testcase = "src/test/performance/test_wifi_peak_throughtput.py"
     # pytest.main(['-v','-s',testcase,f"--resultpath={report_dir}"])

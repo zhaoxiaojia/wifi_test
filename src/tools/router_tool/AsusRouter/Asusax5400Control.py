@@ -116,7 +116,7 @@ class Asusax5400Control:
 
             # 修改 wpa_passwd
             if router.wpa_passwd:
-                self.router_control.change_wpa_passwd(router.wpa_passwd)
+                self.router_control.change_passwd(router.wpa_passwd)
 
             # 修改 受保护的管理帧
             if router.protect_frame:

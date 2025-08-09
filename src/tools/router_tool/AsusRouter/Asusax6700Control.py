@@ -133,7 +133,7 @@ class Asusax6700Control:
 
             # 修改 wpa_passwd
             if (router.wpa_passwd):
-                self.router_control.change_wpa_passwd(router.wpa_passwd)
+                self.router_control.change_passwd(router.wpa_passwd)
 
             # 修改 受保护的管理帧
             # //*[@id="WLgeneral"]/tbody/tr[26]/td/select/option[1]

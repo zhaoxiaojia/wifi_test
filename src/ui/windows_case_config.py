@@ -14,7 +14,7 @@ import os
 import sys
 from pathlib import Path
 import yaml
-
+from src.tools.router_tool.router_factory import router_list
 from PyQt5.QtCore import (
     Qt,
     QSignalBlocker,
@@ -121,7 +121,7 @@ class CaseConfigPage(CardWidget):
         self.form = QFormLayout()
         right.addLayout(self.form)
 
-        self.run_btn = PushButton("运行", self)
+        self.run_btn = PushButton("Test", self)
         self.run_btn.setIcon(FluentIcon.PLAY)
         self.run_btn.clicked.connect(self.on_run)
         right.addWidget(self.run_btn)
@@ -161,8 +161,8 @@ class CaseConfigPage(CardWidget):
             QTimer.singleShot(
                 0,
                 lambda: InfoBar.warning(
-                    title="提示",
-                    content="未找到配置文件",
+                    title="Error",
+                    content="Failed to find config",
                     parent=self,
                     position=InfoBarPosition.TOP,
                 ),
@@ -205,8 +205,8 @@ class CaseConfigPage(CardWidget):
                     QTimer.singleShot(
                         0,
                         lambda: InfoBar.error(
-                            title="错误",
-                            content=f"保存配置失败: {exc}",
+                            title="Error",
+                            content=f"Failed to write config: {exc}",
                             parent=self,
                             position=InfoBarPosition.TOP,
                         ),
@@ -216,8 +216,8 @@ class CaseConfigPage(CardWidget):
             QTimer.singleShot(
                 0,
                 lambda: InfoBar.error(
-                    title="错误",
-                    content=f"读取配置失败: {exc}",
+                    title="Error",
+                    content=f"Failed to load config : {exc}",
                     parent=self,
                     position=InfoBarPosition.TOP,
                 ),
@@ -232,8 +232,8 @@ class CaseConfigPage(CardWidget):
             QTimer.singleShot(
                 0,
                 lambda: InfoBar.success(
-                    title="提示",
-                    content="配置已保存",
+                    title="Hint",
+                    content="Configuration has been saved",
                     parent=self,
                     position=InfoBarPosition.TOP,
                 ),
@@ -242,8 +242,8 @@ class CaseConfigPage(CardWidget):
             QTimer.singleShot(
                 0,
                 lambda: InfoBar.error(
-                    title="错误",
-                    content=f"保存配置失败: {exc}",
+                    title="Error",
+                    content=f"Failed to save config : {exc}",
                     parent=self,
                     position=InfoBarPosition.TOP,
                 ),
@@ -334,7 +334,7 @@ class CaseConfigPage(CardWidget):
                 self.field_widgets["text_case"] = self.test_case_edit
                 continue
             if key == "connect_type":
-                group = QGroupBox("连接方式")
+                group = QGroupBox("Connect Type")
                 vbox = QVBoxLayout(group)
                 self.connect_type_combo = ComboBox(self)
                 self.connect_type_combo.addItems(["adb", "telnet"])
@@ -381,7 +381,7 @@ class CaseConfigPage(CardWidget):
                 # ========== ① XIN-YI 参数区（目前无额外字段，可放提醒文字） ==========
                 self.xin_group = QWidget()
                 xin_box = QVBoxLayout(self.xin_group)
-                xin_box.addWidget(QLabel("XIN-YI 当前无需额外配置"))
+                xin_box.addWidget(QLabel("SH - New Wi-Fi full-wave anechoic chamber "))
                 vbox.addWidget(self.xin_group)
 
                 # ========== ② RC4DAT-8G-95 参数区 ==========
@@ -401,7 +401,7 @@ class CaseConfigPage(CardWidget):
                 rc4_box.addWidget(self.rc4_vendor_edit)
                 rc4_box.addWidget(QLabel("idProduct:"));
                 rc4_box.addWidget(self.rc4_product_edit)
-                rc4_box.addWidget(QLabel("IP 地址:"));
+                rc4_box.addWidget(QLabel("IP address :"));
                 rc4_box.addWidget(self.rc4_ip_edit)
                 vbox.addWidget(self.rc4_group)
 
@@ -412,13 +412,13 @@ class CaseConfigPage(CardWidget):
                 self.rack_ip_edit = LineEdit(self)
                 self.rack_ip_edit.setPlaceholderText("ip_address")
                 self.rack_ip_edit.setText(rack_cfg.get("ip_address", ""))
-                rack_box.addWidget(QLabel("IP 地址:"))
+                rack_box.addWidget(QLabel("IP address :"))
                 rack_box.addWidget(self.rack_ip_edit)
                 vbox.addWidget(self.rack_group)
 
                 # -------- 通用字段：step --------
                 self.rf_step_edit = LineEdit(self)
-                self.rf_step_edit.setPlaceholderText("rf step (逗号分隔) : 0,50")
+                self.rf_step_edit.setPlaceholderText("rf step; such as  0,50")
                 self.rf_step_edit.setText(",".join(map(str, value.get("step", []))))
                 vbox.addWidget(QLabel("Step:"))
                 vbox.addWidget(self.rf_step_edit)
@@ -436,7 +436,7 @@ class CaseConfigPage(CardWidget):
                 self.field_widgets["rf_solution.step"] = self.rf_step_edit
                 continue  # 跳过后面的通用字段处理
             if key == "rvr":
-                group = QGroupBox("RVR 配置")  # 外层分组
+                group = QGroupBox("RVR Config")  # 外层分组
                 vbox = QVBoxLayout(group)
                 # Tool 下拉
                 self.rvr_tool_combo = ComboBox(self)
@@ -455,7 +455,7 @@ class CaseConfigPage(CardWidget):
                 self.iperf_version_combo.setCurrentText(
                     value.get("iperf", {}).get("version", "iperf"))
                 self.iperf_path_edit = LineEdit(self)
-                self.iperf_path_edit.setPlaceholderText("iperf 路径 (DUT)")
+                self.iperf_path_edit.setPlaceholderText("iperf path (DUT)")
                 self.iperf_path_edit.setText(value.get("iperf", {}).get("path", ""))
 
                 iperf_box.addWidget(QLabel("Version:"))
@@ -468,7 +468,7 @@ class CaseConfigPage(CardWidget):
                 self.rvr_ix_group = QWidget()
                 ix_box = QVBoxLayout(self.rvr_ix_group)
                 self.ix_path_edit = LineEdit(self)
-                self.ix_path_edit.setPlaceholderText("IxChariot 安装路径")
+                self.ix_path_edit.setPlaceholderText("IxChariot path")
                 self.ix_path_edit.setText(value.get("ixchariot", {}).get("path", ""))
                 ix_box.addWidget(self.ix_path_edit)
                 vbox.addWidget(self.rvr_ix_group)
@@ -513,10 +513,10 @@ class CaseConfigPage(CardWidget):
 
                 # —— 角度步进 ——
                 self.corner_step_edit = LineEdit(self)
-                self.corner_step_edit.setPlaceholderText("step (逗号分隔，如 0,361)")
+                self.corner_step_edit.setPlaceholderText("step; such as 0,361")
                 self.corner_step_edit.setText(",".join(map(str, value.get("step", []))))
 
-                vbox.addWidget(QLabel("IP 地址:"))
+                vbox.addWidget(QLabel("IP address:"))
                 vbox.addWidget(self.corner_ip_edit)
                 vbox.addWidget(QLabel("Step:"))
                 vbox.addWidget(self.corner_step_edit)
@@ -533,10 +533,7 @@ class CaseConfigPage(CardWidget):
                 vbox = QVBoxLayout(group)
 
                 self.router_name_combo = ComboBox(self)
-                self.router_name_combo.addItems([
-                    "asusax86u", "asusax88u", "asusax5400",
-                    "asusax6700", "xiaomiredax6000", "xiaomiax3000"
-                ])
+                self.router_name_combo.addItems(router_list.keys())
                 self.router_name_combo.setCurrentText(value.get("name", "xiaomiax3000"))
                 self.ssid_2g_edit = LineEdit(self)
                 self.ssid_2g_edit.setPlaceholderText("2.4G SSID")
@@ -620,7 +617,7 @@ class CaseConfigPage(CardWidget):
         """
         from PyQt5.QtGui import QStandardItemModel, QStandardItem
         model = QStandardItemModel()
-        model.setHorizontalHeaderLabels(['请选择测试用例'])  # 可选，设置表头显示
+        model.setHorizontalHeaderLabels(['Pls select test case '])  # 可选，设置表头显示
 
         # 正确设置根节点为 'test' 或实际目录名
         root_item = QStandardItem(os.path.basename(root_dir))
@@ -707,10 +704,14 @@ class CaseConfigPage(CardWidget):
             "router.ssid_5g",
             "serial_port.status",
             "serial_port.port",
-            "serial_port.baud"
+            "serial_port.baud",
+            "fpga"
         }
         if basename == "test_compatibility.py":
-            editable |= {"fpga", "power_relay"}
+            editable |= {"Power relay"}
+        if basename == "test_wifi_peak_throughput.py":
+            editable |= { "rvr", "rvr.tool", "rvr.iperf.version", "rvr.iperf.path", "rvr.ixchariot.path",
+                "rvr.pair", "rvr.repeat",}
         if "rvr" in basename:
             editable |= {
                 "rvr", "rvr.tool", "rvr.iperf.version", "rvr.iperf.path", "rvr.ixchariot.path",
@@ -863,8 +864,8 @@ class CaseConfigPage(CardWidget):
             self.on_run_callback(abs_case_path, case_path, self.config)
         else:
             InfoBar.warning(
-                title="提示",
-                content="请选择一个测试用例后再运行",
+                title="Hint",
+                content="Pls select a test case before test",
                 parent=self,
                 position=InfoBarPosition.TOP,
                 duration=1800

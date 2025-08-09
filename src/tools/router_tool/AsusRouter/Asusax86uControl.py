@@ -53,14 +53,14 @@ class Asusax86uControl(RouterTools):
         logging.info('Try to set router')
         try:
             self.login()
-            # self.driver.find_element(By.ID, 'Advanced_Wireless_Content_menu').click()
-            self.driver.find_element(By.CSS_SELECTOR, '#Advanced_Wireless_Content_menu').click()
+            self.driver.find_element(By.ID, 'Advanced_Wireless_Content_menu').click()
+            # self.driver.find_element(By.CSS_SELECTOR, '#Advanced_Wireless_Content_menu').click()
             # Wireless - General
             WebDriverWait(driver=self.driver, timeout=5, poll_frequency=0.5).until(
                 EC.presence_of_element_located((By.ID, 'FormTitle')))
 
             # 修改 band
-            if (router.band):
+            if router.band:
                 if router.band not in self.BAND_LIST: raise ConfigError('band element error')
                 self.change_band(router.band)
 
@@ -136,13 +136,9 @@ class Asusax86uControl(RouterTools):
             if (router.passwd_index):
                 self.change_passwd_index(router.passwd_index)
 
-            # 修改 wep_passwd
-            if (router.wep_passwd):
-                self.change_wep_passwd(router.wep_passwd)
-
-            # 修改 wpa_passwd
-            if (router.wpa_passwd):
-                self.change_wpa_passwd(router.wpa_passwd)
+            # 修改 password
+            if router.password:
+                self.change_passwd(router.password)
 
             # 修改 受保护的管理帧
             # //*[@id="WLgeneral"]/tbody/tr[26]/td/select/option[1]
@@ -170,10 +166,10 @@ class Asusax86uControl(RouterTools):
             logging.info('Router change setting with error')
             logging.info(e)
             return False
-        # finally:
-        #     self.driver.quit()
+        finally:
+            self.driver.quit()
 
-# fields = ['band', 'ssid', 'wireless_mode', 'channel', 'bandwidth', 'authentication', 'wpa_passwd', 'test_type',
+# fields = ['band', 'ssid', 'wireless_mode', 'channel', 'bandwidth', 'authentication', 'password', 'test_type',
 #           'wep_encrypt', 'passwd_index', 'wep_passwd', 'protect_frame', 'wpa_encrypt', 'hide_ssid', 'wifi6']
 # Router = namedtuple('Router', fields, defaults=[None, ] * len(fields))
 # router = Router(band='5 GHz', ssid='ATC_ASUS_AX88U_5G', wireless_mode='AX only', channel='100', bandwidth='20 MHz',

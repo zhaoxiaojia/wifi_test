@@ -3,7 +3,7 @@ connect_type:
   adb:
     device: coco_aaaaaa
   telnet:
-    ip: 192.168.1.101
+    ip: 192.168.31.21
   type: telnet
 corner_angle:
   ip_address: 192.168.5.11
@@ -24,15 +24,15 @@ rf_solution:
   - 0
   - 19
 router:
-  name: asusax5400
-  ssid_2g: asus_2g
-  passwd_2g: "12345678"
-  ssid_5g: asus_5g
-  passwd_5g: "12345678"
+  name: xiaomibe7000
+  ssid_2g: xiaomibe7000_5g
+  passwd_2g: '12345678'
+  ssid_5g: xiaomibe7000_5g
+  passwd_5g: '12345678'
 rvr:
   iperf:
     path: ''
-    version: iperf3
+    version: iperf
   ixchariot:
     path: D:/Program Files (x86)/Ixia/IxChariot
   pair: '5'

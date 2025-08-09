@@ -234,17 +234,16 @@ def test_rvr(setup, rf_value):
     # handle iperf pair count
     logging.info('start test tx/rx')
     logging.info(f'router_info: {router_info}')
-    protocol = 'TCP' if 'TCP' in router_info.protocol_type else 'UDP'
     # iperf  打流
     if 'tx' in router_info.test_type:
         pair = wifi_yaml.get_note('rvr')['pair']
         logging.info(f'rssi : {rssi_num} pair : {pair}')
-        pytest.dut.get_tx_rate(router_info, rssi_num, protocol,
+        pytest.dut.get_tx_rate(router_info, rssi_num, 'TCP',
                                corner_tool=corner_tool,
                                db_set=db_set)
     if 'rx' in router_info.test_type:
         pair = wifi_yaml.get_note('rvr')['pair']
         logging.info(f'rssi : {rssi_num} pair : {pair}')
-        pytest.dut.get_rx_rate(router_info, rssi_num, protocol,
+        pytest.dut.get_rx_rate(router_info, rssi_num, 'TCP',
                                corner_tool=corner_tool,
                                db_set=db_set)

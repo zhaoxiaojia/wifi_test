@@ -17,6 +17,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 
 plt.rcParams['font.family'] = ['SimHei']
 
+
 class TestResult():
     '''
     Singleton class,should not be inherited
@@ -37,20 +38,22 @@ class TestResult():
         self.current_number = 0
         self.x_path = step
         self.x_length = len(self.x_path)
+        self.init_rvr_result()
 
     def init_rvr_result(self):
         self.rvr_excelfile = os.path.join(self.logdir, 'RvrCheckExcel.xlsx')
         if not hasattr(self, 'logFile'):
             self.log_file = os.path.join(self.logdir,
                                          'Rvr' + time.asctime().replace(' ', '_').replace(':', '_') + '.csv')
-        if not hasattr(self, 'detialFile'):
+            with open(self.log_file, 'a', encoding='utf-8') as f:
+                title = 'SerianNumber Test_Category	Sub_Category	Coex_Method	BT_WF_Isolation	Standard	Freq_Band	BW	Data_Rate	CH_Freq_MHz	Protocol	Direction	Total_Path_Loss	RxP DB	RSSI Angel	Data_RSSI MCS_Rate Throughput	'
+                f.write(','.join(title.split()))
+                f.write('\n')
+        if not hasattr(self, 'detail_file'):
             self.detail_file = os.path.join(self.logdir, 'Rvr_Detial.log')
             with open(self.detail_file, 'a', encoding='utf-8') as f:
                 f.write("This is rvr test detial data\n")
-        with open(self.log_file, 'a', encoding='utf-8') as f:
-            title = 'SerianNumber Test_Category	Sub_Category	Coex_Method	BT_WF_Isolation	Standard	Freq_Band	BW	Data_Rate	CH_Freq_MHz	Protocol	Direction	Total_Path_Loss	RxP DB	RSSI Angel	Data_RSSI MCS_Rate Throughput	'
-            f.write(','.join(title.split()))
-            f.write('\n')
+
         # with open(os.path.join(os.getcwd(),
         #                        'config\\rvr_wifi_setup.csv' if pytest.win_flag else 'config/rvr_wifi_setup.csv'),
         #           'r', encoding='utf-8') as f:

@@ -107,6 +107,7 @@ class RvrWifiConfigPage(CardWidget):
         # 密码输入框，用于自动填充和测试流程引用
         self.passwd_edit = LineEdit(form_box)
         form_layout.addRow("password", self.passwd_edit)
+        self.auth_combo.currentTextChanged.connect(self._on_auth_changed)
 
         test_widget = QWidget(form_box)
         test_layout = QHBoxLayout(test_widget)
@@ -157,6 +158,7 @@ class RvrWifiConfigPage(CardWidget):
         self.wireless_combo.currentTextChanged.connect(self._update_auth_options)
         self._update_band_options(self.band_combo.currentText())
         self._update_auth_options(self.wireless_combo.currentText())
+        self._on_auth_changed(self.auth_combo.currentText())
         self.refresh_table()
 
         # 监听主配置页面的路由器信息变化
@@ -258,6 +260,14 @@ class RvrWifiConfigPage(CardWidget):
             self.auth_combo.addItems(getattr(self.router, "AUTHENTICATION_METHOD_LEGCY", []))
         else:
             self.auth_combo.addItems(getattr(self.router, "AUTHENTICATION_METHOD", []))
+        self._on_auth_changed(self.auth_combo.currentText())
+
+    def _on_auth_changed(self, auth: str):
+        # 调整密码框逻辑
+        need_password = auth not in ("Open System", "无加密（允许所有人连接）")
+        self.passwd_edit.setEnabled(need_password)
+        if not need_password:
+            self.passwd_edit.clear()
 
     def refresh_table(self):
         current = self.table.currentRow()
@@ -267,8 +277,11 @@ class RvrWifiConfigPage(CardWidget):
         self.table.setHorizontalHeaderLabels(self.headers)
         header = self.table.horizontalHeader()
         idx = self.headers.index("authentication")
+        ssid = self.headers.index("ssid")
         header.setSectionResizeMode(idx, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(ssid, QHeaderView.ResizeToContents)
         self.table.setColumnWidth(idx, 150)
+        self.table.setColumnWidth(ssid, 150)
         for r, row in enumerate(self.rows):
             for c, h in enumerate(self.headers):
                 item = QTableWidgetItem(str(row.get(h, "")))
@@ -308,7 +321,7 @@ class RvrWifiConfigPage(CardWidget):
         with QSignalBlocker(self.wireless_combo):
             self.wireless_combo.setCurrentText(data.get("wireless_mode", ""))
         self._update_auth_options(self.wireless_combo.currentText())
-
+        self._on_auth_changed(self.auth_combo.currentText())
         with QSignalBlocker(self.channel_combo):
             self.channel_combo.setCurrentText(data.get("channel", ""))
         with QSignalBlocker(self.bandwidth_combo):
@@ -347,6 +360,10 @@ class RvrWifiConfigPage(CardWidget):
 
     def add_row(self):
         band = self.band_combo.currentText()
+        auth = self.auth_combo.currentText()
+        if auth not in ("Open System", "无加密（允许所有人连接）") and not self.passwd_edit.text():
+            InfoBar.error(title="错误", content="请输入密码", parent=self, position=InfoBarPosition.TOP)
+            return
         if band == "2.4 GHz":
             ssid = self.case_config_page.ssid_2g_edit.text()
         else:
