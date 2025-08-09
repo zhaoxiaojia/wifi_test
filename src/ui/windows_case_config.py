@@ -136,14 +136,6 @@ class CaseConfigPage(CardWidget):
         cols.addLayout(self._left_col, 1)
         cols.addLayout(self._right_col, 1)
         right.addWidget(self._columns_widget)
-        self.csv_combo = ComboBox(self)
-        self.csv_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        csv_dir = Path.cwd() / "config"
-        for csv_file in sorted(csv_dir.glob("*.csv")):
-            self.csv_combo.addItem(csv_file.name, str(csv_file.resolve()))
-        self.csv_combo.setEnabled(False)
-        self.csv_combo.currentTextChanged.connect(self.on_csv_changed)
-        right.addWidget(self.csv_combo)
         self.run_btn = PushButton("Test", self)
         self.run_btn.setIcon(FluentIcon.PLAY)
         self.run_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -154,7 +146,8 @@ class CaseConfigPage(CardWidget):
         self._col_weight = [0, 0]
         # render form fields from yaml
         self.render_all_fields()
-
+        self.routerInfoChanged.connect(self._update_csv_options)
+        self._update_csv_options()
         # connect signals AFTER UI ready
         self.case_tree.clicked.connect(self.on_case_tree_clicked)
         self.case_tree.setFocusPolicy(Qt.FocusPolicy.NoFocus)
@@ -337,6 +330,28 @@ class CaseConfigPage(CardWidget):
         self.ssid_5g_edit.setText(self.router_ssid_5g)
         self.routerInfoChanged.emit()
 
+    def _update_csv_options(self):
+        """根据路由器名称刷新 CSV 下拉框"""
+        if not hasattr(self, "csv_combo"):
+            return
+        router_name = ""
+        if hasattr(self, "router_name_combo"):
+            router_name = self.router_name_combo.currentText().lower()
+        base_dir = Path.cwd() / "config" / "performance_test_csv"
+        if "asus" in router_name:
+            csv_dir = base_dir / "asus"
+        elif "xiaomi" in router_name:
+            csv_dir = base_dir / "xiaomi"
+        else:
+            csv_dir = None
+        with QSignalBlocker(self.csv_combo):
+            self.csv_combo.clear()
+            if csv_dir and csv_dir.exists():
+                for csv_file in sorted(csv_dir.glob("*.csv")):
+                    self.csv_combo.addItem(csv_file.name, str(csv_file.resolve()))
+                self.csv_combo.setCurrentIndex(-1)
+        self.selected_csv_path = None
+
     def _estimate_group_weight(self, group: QWidget) -> int:
         """粗略估算分组高度：以输入型子控件数量为权重"""
         from PyQt5.QtWidgets import (
@@ -506,13 +521,10 @@ class CaseConfigPage(CardWidget):
                 # ----- ixchariot 子组 -----
                 self.rvr_ix_group = QWidget()
                 ix_box = QVBoxLayout(self.rvr_ix_group)
-                # CSV 选择框：列出 config 目录下所有 CSV 文件
+                # CSV 选择框
                 vbox.addWidget(QLabel("Select config csv file"))
                 self.csv_combo = ComboBox(self)
                 self.csv_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-                csv_dir = Path.cwd() / "config"
-                for csv_file in sorted(csv_dir.glob("*.csv")):
-                    self.csv_combo.addItem(csv_file.name, str(csv_file.resolve()))
                 self.csv_combo.setEnabled(False)
                 self.csv_combo.currentTextChanged.connect(self.on_csv_changed)
                 vbox.addWidget(self.csv_combo)

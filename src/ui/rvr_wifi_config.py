@@ -74,10 +74,21 @@ class RvrWifiConfigPage(CardWidget):
         base = Path.cwd()
         if hasattr(sys, "_MEIPASS"):
             base = Path(sys._MEIPASS)
-            if not (base / "config" / "rvr_wifi_setup.csv").exists():
+            if not (base / "config").exists():
                 base = Path.cwd()
-        self.csv_path = (base / "config" / "rvr_wifi_setup.csv").resolve()
         self.config_path = (base / "config" / "config.yaml").resolve()
+        router_name = ""
+        combo = getattr(self.case_config_page, "router_name_combo", None)
+        if combo is not None:
+            router_name = combo.currentText().lower()
+        csv_base = base / "config" / "performance_test_csv"
+        if "asus" in router_name:
+            csv_base = csv_base / "asus"
+        elif "xiaomi" in router_name:
+            csv_base = csv_base / "xiaomi"
+        else:
+            csv_base = base / "config"
+        self.csv_path = (csv_base / "rvr_wifi_setup.csv").resolve()
         self.router, self.router_name = self._load_router()
         self.headers, self.rows = self._load_csv()
         # 当前页面使用的路由器 SSID
