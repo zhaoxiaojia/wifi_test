@@ -126,13 +126,13 @@ class RvrWifiConfigPage(CardWidget):
         btn_widget = QWidget(form_box)
         btn_layout = QHBoxLayout(btn_widget)
         btn_layout.setContentsMargins(0, 0, 0, 0)
-        self.add_btn = PushButton("添加", btn_widget)
+        self.add_btn = PushButton("Add", btn_widget)
         self.add_btn.clicked.connect(self.add_row)
         btn_layout.addWidget(self.add_btn)
-        self.del_btn = PushButton("删除", btn_widget)
+        self.del_btn = PushButton("Del", btn_widget)
         self.del_btn.clicked.connect(self.delete_row)
         btn_layout.addWidget(self.del_btn)
-        self.save_btn = PushButton("保存", btn_widget)
+        self.save_btn = PushButton("Save", btn_widget)
         self.save_btn.clicked.connect(self.save_csv)
         btn_layout.addWidget(self.save_btn)
         form_layout.addRow(btn_widget)
@@ -154,8 +154,15 @@ class RvrWifiConfigPage(CardWidget):
         self.table.itemSelectionChanged.connect(self._load_row_to_form)
         main_layout.addWidget(self.table, 2)
 
-        self.band_combo.currentTextChanged.connect(self._update_band_options)
+        self.band_combo.currentTextChanged.connect(self._on_band_changed)
         self.wireless_combo.currentTextChanged.connect(self._update_auth_options)
+        self.wireless_combo.currentTextChanged.connect(self._update_current_row)
+        self.channel_combo.currentTextChanged.connect(self._update_current_row)
+        self.bandwidth_combo.currentTextChanged.connect(self._update_current_row)
+        self.auth_combo.currentTextChanged.connect(self._on_auth_changed)
+        self.auth_combo.currentTextChanged.connect(self._update_current_row)
+        self.passwd_edit.textChanged.connect(self._update_current_row)
+        self.data_row_edit.textChanged.connect(self._update_current_row)
         self._update_band_options(self.band_combo.currentText())
         self._update_auth_options(self.wireless_combo.currentText())
         self._on_auth_changed(self.auth_combo.currentText())
@@ -254,6 +261,10 @@ class RvrWifiConfigPage(CardWidget):
         self.bandwidth_combo.addItems(bandwidth)
         self._update_auth_options(self.wireless_combo.currentText())
 
+    def _on_band_changed(self, band: str):
+        self._update_band_options(band)
+        self._update_current_row()
+
     def _update_auth_options(self, wireless: str):
         self.auth_combo.clear()
         if "Legacy" in wireless:
@@ -264,7 +275,7 @@ class RvrWifiConfigPage(CardWidget):
 
     def _on_auth_changed(self, auth: str):
         # 调整密码框逻辑
-        need_password = auth not in ("Open System", "无加密（允许所有人连接）")
+        need_password = auth not in ("Open System", "无加密(允许所有人连接)")
         self.passwd_edit.setEnabled(need_password)
         if not need_password:
             self.passwd_edit.clear()
@@ -328,13 +339,17 @@ class RvrWifiConfigPage(CardWidget):
             self.bandwidth_combo.setCurrentText(data.get("bandwidth", ""))
         with QSignalBlocker(self.auth_combo):
             self.auth_combo.setCurrentText(data.get("authentication", ""))
+        self._on_auth_changed(self.auth_combo.currentText())
 
+        with QSignalBlocker(self.passwd_edit):
+            self.passwd_edit.setText(data.get("password", ""))
         with QSignalBlocker(self.tx_check):
             self.tx_check.setChecked(data.get("tx", "0") == "1")
         with QSignalBlocker(self.rx_check):
             self.rx_check.setChecked(data.get("rx", "0") == "1")
 
-        self.data_row_edit.setText(data.get("data_row", ""))
+        with QSignalBlocker(self.data_row_edit):
+            self.data_row_edit.setText(data.get("data_row", ""))
 
     def _update_tx_rx(self, state: int):
         row = self.table.currentRow()
@@ -358,11 +373,44 @@ class RvrWifiConfigPage(CardWidget):
         else:
             item.setText(value)
 
+    def _update_current_row(self, *args):
+        row = self.table.currentRow()
+        if not (0 <= row < len(self.rows)):
+            return
+        band = self.band_combo.currentText()
+        if band == "2.4 GHz":
+            ssid = self.case_config_page.ssid_2g_edit.text()
+        else:
+            ssid = self.case_config_page.ssid_5g_edit.text()
+        data = {
+            "band": band,
+            "wireless_mode": self.wireless_combo.currentText(),
+            "channel": self.channel_combo.currentText(),
+            "bandwidth": self.bandwidth_combo.currentText(),
+            "authentication": self.auth_combo.currentText(),
+            "ssid": ssid,
+            "password": self.passwd_edit.text(),
+            "data_row": self.data_row_edit.text(),
+        }
+        self.rows[row].update(data)
+        for key, value in data.items():
+            try:
+                col = self.headers.index(key)
+            except ValueError:
+                continue
+            item = self.table.item(row, col)
+            if item is None:
+                item = QTableWidgetItem(value)
+                item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+                self.table.setItem(row, col, item)
+            else:
+                item.setText(value)
+
     def add_row(self):
         band = self.band_combo.currentText()
         auth = self.auth_combo.currentText()
         if auth not in ("Open System", "无加密（允许所有人连接）") and not self.passwd_edit.text():
-            InfoBar.error(title="错误", content="请输入密码", parent=self, position=InfoBarPosition.TOP)
+            InfoBar.error(title="Error", content="Pls input password", parent=self, position=InfoBarPosition.TOP)
             return
         if band == "2.4 GHz":
             ssid = self.case_config_page.ssid_2g_edit.text()
@@ -393,12 +441,17 @@ class RvrWifiConfigPage(CardWidget):
             self.refresh_table()
 
     def save_csv(self):
+        band = self.band_combo.currentText()
+        auth = self.auth_combo.currentText()
+        if auth not in ("Open System", "无加密（允许所有人连接）") and not self.passwd_edit.text():
+            InfoBar.error(title="Error", content="Pls input password", parent=self, position=InfoBarPosition.TOP)
+            return
         self._collect_table_data()
         try:
             with open(self.csv_path, "w", newline="", encoding="utf-8") as f:
                 writer = csv.DictWriter(f, fieldnames=self.headers)
                 writer.writeheader()
                 writer.writerows(self.rows)
-            InfoBar.success(title="提示", content="保存成功", parent=self, position=InfoBarPosition.TOP)
+            InfoBar.success(title="Hint", content="Saved", parent=self, position=InfoBarPosition.TOP)
         except Exception as e:
-            InfoBar.error(title="错误", content=str(e), parent=self, position=InfoBarPosition.TOP)
+            InfoBar.error(title="Error", content=str(e), parent=self, position=InfoBarPosition.TOP)
