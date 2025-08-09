@@ -102,6 +102,7 @@ class CaseConfigPage(CardWidget):
         self.field_widgets: dict[str, QWidget] = {}
         self.router_ssid_2g = ""
         self.router_ssid_5g = ""
+        self.selected_csv_path: str | None = None
 
         # -------------------- layout --------------------
         main_layout = QHBoxLayout(self)
@@ -135,7 +136,14 @@ class CaseConfigPage(CardWidget):
         cols.addLayout(self._left_col, 1)
         cols.addLayout(self._right_col, 1)
         right.addWidget(self._columns_widget)
-
+        self.csv_combo = ComboBox(self)
+        self.csv_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        csv_dir = Path.cwd() / "config"
+        for csv_file in sorted(csv_dir.glob("*.csv")):
+            self.csv_combo.addItem(csv_file.name, str(csv_file.resolve()))
+        self.csv_combo.setEnabled(False)
+        self.csv_combo.currentTextChanged.connect(self.on_csv_changed)
+        right.addWidget(self.csv_combo)
         self.run_btn = PushButton("Test", self)
         self.run_btn.setIcon(FluentIcon.PLAY)
         self.run_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -498,6 +506,17 @@ class CaseConfigPage(CardWidget):
                 # ----- ixchariot 子组 -----
                 self.rvr_ix_group = QWidget()
                 ix_box = QVBoxLayout(self.rvr_ix_group)
+                # CSV 选择框：列出 config 目录下所有 CSV 文件
+                vbox.addWidget(QLabel("Select config csv file"))
+                self.csv_combo = ComboBox(self)
+                self.csv_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+                csv_dir = Path.cwd() / "config"
+                for csv_file in sorted(csv_dir.glob("*.csv")):
+                    self.csv_combo.addItem(csv_file.name, str(csv_file.resolve()))
+                self.csv_combo.setEnabled(False)
+                self.csv_combo.currentTextChanged.connect(self.on_csv_changed)
+                vbox.addWidget(self.csv_combo)
+
                 self.ix_path_edit = LineEdit(self)
                 self.ix_path_edit.setPlaceholderText("IxChariot path")
                 self.ix_path_edit.setText(value.get("ixchariot", {}).get("path", ""))
@@ -817,19 +836,30 @@ class CaseConfigPage(CardWidget):
                 passwd = passwd_widget.text()
             if hasattr(main_window, "show_rvr_wifi_config"):
                 main_window.show_rvr_wifi_config()
+            if hasattr(main_window, "rvr_wifi_config_page") and hasattr(main_window.rvr_wifi_config_page,
+                                                                        "set_router_credentials"):
+                main_window.rvr_wifi_config_page.set_router_credentials(ssid, passwd)
             if hasattr(main_window, "setCurrentIndex"):
-                main_window.setCurrentIndex(main_window.rvr_wifi_config_page, ssid, passwd)
+                main_window.setCurrentIndex(main_window.case_config_page)
+            self.csv_combo.setEnabled(True)
         else:
             if hasattr(main_window, "hide_rvr_wifi_config"):
                 main_window.hide_rvr_wifi_config()
             if hasattr(main_window, "setCurrentIndex"):
                 main_window.setCurrentIndex(main_window.case_config_page)
-
+            with QSignalBlocker(self.csv_combo):
+                self.csv_combo.setCurrentIndex(-1)
+            self.csv_combo.setEnabled(False)
+            self.selected_csv_path = None
         # 若用户在刷新过程中又点了别的用例，延迟 0 ms 处理它
         if self._pending_path:
             path = self._pending_path
             self._pending_path = None
             QTimer.singleShot(0, lambda: self.apply_case_logic(path))
+
+    def on_csv_changed(self, text: str) -> None:
+        """记录当前选择的 CSV 文件路径"""
+        self.selected_csv_path = self.csv_combo.currentData() if text else None
 
     def on_run(self):
         # 将字段值更新到 self.config（保持结构）

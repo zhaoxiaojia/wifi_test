@@ -37,6 +37,7 @@ import traceback
 import threading
 import pytest
 import io
+from contextlib import suppress
 
 
 class LiveLogWriter:
@@ -277,38 +278,31 @@ class RunPage(CardWidget):
         )
         self.runner.start()
 
-    def on_back(self):
+    def cleanup(self):
         if hasattr(self, "runner") and self.runner:
             # 停止线程并等待有限时间
-            self.runner.stop()
-            finished = self.runner.wait(3000)
+            runner = self.runner
+            runner.stop()
+            finished = runner.wait(3000)
             if not finished:
                 # 若仍未结束，尝试强制退出
-                self.runner.quit()
-                if not self.runner.wait(1000):
+                runner.quit()
+                if not runner.wait(1000):
                     self._append_log("<b style='color:red;'>线程结束超时，可能仍在后台运行</b>")
-            # 断开所有信号
-            try:
-                self.runner.log_signal.disconnect(self._append_log)
-            except (TypeError, RuntimeError):
-                pass
-            try:
-                self.runner.progress_signal.disconnect(self.update_progress)
-            except (TypeError, RuntimeError):
-                pass
-            try:
-                self.runner.finished.disconnect()
-            except (TypeError, RuntimeError):
-                pass
-            self.runner = None  # 清除引用
-
-        # 先断开自身所有信号再返回
-        try:
+                with suppress((TypeError, RuntimeError)):
+                    runner.log_signal.disconnect(self._append_log)
+                with suppress((TypeError, RuntimeError)):
+                    runner.progress_signal.disconnect(self.update_progress)
+                with suppress((TypeError, RuntimeError)):
+                    runner.finished.disconnect()
+                self.runner = None
+        with suppress(TypeError):
             self.disconnect()
-        except TypeError:
-            pass
 
-        self.on_back_callback()  # 调用返回配置页的回调
+    def on_back(self):
+        self.cleanup()
+        if self.on_back_callback:
+            self.on_back_callback()  # 调用返回配置页的回调
 
     def _get_application_base(self) -> Path:
         """获取应用根路径"""

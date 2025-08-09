@@ -12,37 +12,47 @@ import threading
 import time
 from functools import wraps
 
+def _async_raise(tid, exctype):
+    """raise exctype in the thread with id tid"""
+    if not inspect.isclass(exctype):
+        exctype = type(exctype)
+    res = ctypes.pythonapi.PyThreadState_SetAsyncExc(ctypes.c_long(tid), ctypes.py_object(exctype))
+    if res == 0:
+        raise ValueError("invalid thread id")
+    elif res > 1:
+        ctypes.pythonapi.PyThreadState_SetAsyncExc(ctypes.c_long(tid), 0)
+        raise SystemError("PyThreadState_SetAsyncExc failed")
 
 class MyThead(threading.Thread):
     def __init__(self, target, args=()):
-        super(MyThead, self).__init__()
+        super().__init__()
         self.func = target
         self.args = args
+        self.result = None
 
     def run(self):
-        self.a = self.func(*self.args)
+        self.result = self.func(*self.args)
+
+    def stop(self):
+        if self.ident:
+            _async_raise(self.ident, SystemExit)
 
     def get_result(self):
-        try:
-            return self.a
-        except Exception:
-            return None
+        return self.result
 
 
 def set_timeout(limit_time):
     def functions(func):
-        # 执行操作
+        @wraps(func)
         def run(*params):
             thre_func = MyThead(target=func, args=params)
-            # 主线程结束(超出时长),则线程方法结束
-            thre_func.setDaemon(True)
+            thre_func.daemon = True
             thre_func.start()
-            time.sleep(limit_time)
-            # 最终返回值(不论线程是否已结束)
-            if thre_func.get_result():
-                return thre_func.get_result()
-            else:
-                raise False
+            thre_func.join(limit_time)
+            if thre_func.is_alive():
+                thre_func.stop()
+                raise TimeoutError(f"{func.__name__} timeout")
+            return thre_func.get_result()
 
         return run
 
@@ -57,11 +67,16 @@ def count_down(duration):
     '''
 
     def wrapper(func):
+        res = None
         def inner(*args, **kwargs):
-            global res
+            nonlocal res
             start = time.time()
             while time.time() - start < duration:
-                res = func(*args, **kwargs)
+                try:
+                    res = func(*args, **kwargs)
+                except Exception as err:
+                    logging.exception("count_down wrapped function raised an exception: %s", err)
+                    break
             return res
 
         return inner

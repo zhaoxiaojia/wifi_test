@@ -6,18 +6,27 @@
 
 import json
 import logging
+from pathlib import Path
 import os
-
 import yaml
 
 
-class testCase:
+class testcaseManager:
     def __init__(self, path='test'):
-        self.test_path = path
-        self.case_json = 'testcase.json'
-        self.suite_yaml = 'testsuite.yaml'
-        self.sute_dict = {}
+        self.test_path = Path(path)
+        self.case_json = Path('testcase.json')
+        self.suite_yaml = Path('testsuite.yaml')
+        self.suite_dict = {}
         self.sync_caseJson()
+
+    def _ensure_case(self, filepath, filename):
+        path = Path(filepath, filename).as_posix()
+        if filename not in self.case_dict:
+            logging.info("新增: %s", path)
+        self.case_dict.setdefault(
+            filename,
+            {"id": 1, "desc": "xxx", "priority": "P0", "path": path},
+        )
 
     def load_caseJson(self):
         '''
@@ -26,16 +35,17 @@ class testCase:
 
         '''
         self.case_dict = {}
-        with open(self.case_json, 'r') as f:
-            content = f.read()
-        if content:
-            self.case_dict = json.loads(content)
+        with self.case_json.open('r') as f:
+            try:
+                self.case_dict = json.load(f)
+            except json.JSONDecodeError:
+                self.case_dict = {}
 
     def update_caseJson(self, case, **kwargs):
         self.case_dict[case].update(**kwargs)
         logging.info(self.case_dict)
-        with open(self.case_json, 'w') as f:
-            f.write(json.dumps(self.case_dict, indent=4))
+        with self.case_json.open('w') as f:
+            json.dump(self.case_dict, f, indent=4)
 
     def sync_caseJson(self):
         '''
@@ -44,20 +54,15 @@ class testCase:
 
         '''
         self.load_caseJson()
-        for filepath, dirnames, filenames in os.walk(self.test_path):
+        for filepath, _, filenames in os.walk(self.test_path):
             if '__pycache__' in filepath:
                 continue
             for filename in filenames:
                 if '__init__.py' in filename:
                     continue
-                if filename not in self.case_dict.keys():
-                    logging.info(f'新增: {os.path.join(filepath, filename)}')
-                    logging.info('新增:', os.path.join(filepath, filename).replace('\\', '/'))
-                    self.case_dict[filename] = {'id': 1, 'desc': 'xxx', 'priority': 'P0',
-                                                'path': os.path.join(filepath, filename).replace('\\', '/')}
-
+                self._ensure_case(filepath, filename)
         json_str = json.dumps(self.case_dict, indent=4, ensure_ascii=False)
-        with open(self.case_json, 'w') as f:
+        with self.case_json.open('w') as f:
             f.write(json_str)
 
     def load_suiteYaml(self, suite=''):
@@ -72,7 +77,7 @@ class testCase:
         with open(self.suite_yaml, 'r') as f:
             yaml_data = yaml.load(f, Loader=yaml.FullLoader)
         if yaml_data:
-            self.sute_dict = yaml_data
+            self.suite_dict = yaml_data
             if suite in yaml_data:
                 test_case = yaml_data[suite]
                 return test_case
@@ -98,11 +103,11 @@ class testCase:
             else:
                 case_list.append(self.case_dict[case]['path'])
             data = {
-                **self.sute_dict, **{suite: case_list}
+                **self.suite_dict, **{suite: case_list}
             }
         else:
             data = {suite: [self.case_dict[case]['path']]}
 
-        with open(self.suite_yaml, 'w') as f:
+        with self.suite_yaml.open('w') as f:
             yaml.dump(data, stream=f, indent=4)
         return case_list
