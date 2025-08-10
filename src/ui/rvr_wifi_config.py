@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 
 import yaml
+import logging
 from contextlib import ExitStack
 from PyQt5.QtCore import Qt, QSignalBlocker
 from PyQt5.QtWidgets import (
@@ -71,28 +72,12 @@ class RvrWifiConfigPage(CardWidget):
         super().__init__()
         self.setObjectName("rvrWifiConfigPage")
         self.case_config_page = case_config_page
-        self._loading = False
-        base = Path.cwd()
-        if hasattr(sys, "_MEIPASS"):
-            base = Path(sys._MEIPASS)
-            if not (base / "config").exists():
-                base = Path.cwd()
+        base = self._get_base_dir()
         self.config_path = (base / "config" / "config.yaml").resolve()
-        router_name = ""
         combo = getattr(self.case_config_page, "router_name_combo", None)
-        if combo is not None:
-            router_name = combo.currentText().lower()
-        csv_base = base / "config" / "performance_test_csv"
-        if "asus" in router_name:
-            csv_base = csv_base / "asus"
-        elif "xiaomi" in router_name:
-            csv_base = csv_base / "xiaomi"
-        else:
-            csv_base = base / "config"
-        self.csv_path = (csv_base / "rvr_wifi_setup.csv").resolve()
-        print(f"reload_router: selected router={name}, csv_path={self.csv_path}")
-        print(f"reload_router: rows before reload_csv {self.rows}")
-        self.router, self.router_name = self._load_router()
+        router_name = combo.currentText().lower() if combo is not None else ""
+        self.csv_path = self._compute_csv_path(router_name)
+        self.router, self.router_name = self._load_router(router_name)
         self.headers, self.rows = self._load_csv()
         # 当前页面使用的路由器 SSID
         self.ssid: str = ""
@@ -188,6 +173,26 @@ class RvrWifiConfigPage(CardWidget):
         self.case_config_page.routerInfoChanged.connect(self.reload_router)
         self.case_config_page.csvFileChanged.connect(self.on_csv_file_changed)
 
+    def _get_base_dir(self) -> Path:
+        base = Path.cwd()
+        if hasattr(sys, "_MEIPASS"):
+            candidate = Path(sys._MEIPASS)
+            if (candidate / "config").exists():
+                base = candidate
+        return base
+
+    def _compute_csv_path(self, router_name: str) -> Path:
+        base = self._get_base_dir()
+        csv_base = base / "config" / "performance_test_csv"
+        name = router_name.lower()
+        if "asus" in name:
+            csv_base /= "asus"
+        elif "xiaomi" in name:
+            csv_base /= "xiaomi"
+        else:
+            csv_base = base / "config"
+        return (csv_base / "rvr_wifi_setup.csv").resolve()
+
     def set_router_credentials(self, ssid: str, passwd: str) -> None:
         """设置路由器凭据并自动填充密码输入框"""
         self.ssid = ssid
@@ -197,15 +202,15 @@ class RvrWifiConfigPage(CardWidget):
         """返回当前页面的路由器 SSID 和密码"""
         return self.ssid, self.passwd_edit.text()
 
-    def _load_router(self):
+    def _load_router(self, name: str | None = None):
         try:
             with open(self.config_path, "r", encoding="utf-8") as f:
                 cfg = yaml.safe_load(f) or {}
-            router_name = cfg.get("router", {}).get("name")
+            router_name = name or cfg.get("router", {}).get("name", "asusax86u")
             router = get_router(router_name)
         except Exception as e:
-            print(f"load router error: {e}")
-            router_name = "asusax86u"
+            logging.error("load router error: %s", e)
+            router_name = name or "asusax86u"
             router = get_router(router_name)
         return router, router_name
 
@@ -230,73 +235,32 @@ class RvrWifiConfigPage(CardWidget):
                 headers = reader.fieldnames or default_headers
                 for row in reader:
                     rows.append({h: row.get(h, "") for h in headers})
-        print(f"_load_csv: router={self.router_name}, csv_path={self.csv_path}")
-        print(f"_load_csv: headers={headers}, rows_count={len(rows)}")
         return headers, rows
 
     def reload_csv(self):
         """重新读取当前 CSV 并刷新表格"""
-        print(f"reload_csv: router={self.router_name}, csv_path={self.csv_path}")
         self.headers, self.rows = self._load_csv()
-        print(f"reload_csv: headers={self.headers}, rows_count={len(self.rows)}")
-        print(f"reload_csv: before refresh_table rows={self.rows}")
         self.refresh_table()
-        print(f"reload_csv: after refresh_table rows={self.rows}")
 
     def reload_router(self):
         """重新加载路由器配置并刷新频段相关选项"""
-        name = ""
         combo = getattr(self.case_config_page, "router_name_combo", None)
-        if combo is not None:
-            name = combo.currentText().lower()
-        else:
-            cfg = getattr(self.case_config_page, "config", {})
-            if isinstance(cfg, dict):
-                name = cfg.get("router", {}).get("name", self.router_name).lower()
-        # 根据路由器名称重新计算 CSV 路径
-        base = Path.cwd()
-        if hasattr(sys, "_MEIPASS"):
-            base = Path(sys._MEIPASS)
-            if not (base / "config").exists():
-                base = Path.cwd()
-        csv_base = base / "config" / "performance_test_csv"
-        if "asus" in name:
-            csv_base = csv_base / "asus"
-        elif "xiaomi" in name:
-            csv_base = csv_base / "xiaomi"
-        else:
-            csv_base = base / "config"
-        self.csv_path = (csv_base / "rvr_wifi_setup.csv").resolve()
-
+        name = combo.currentText().lower() if combo is not None else self.router_name
+        self.csv_path = self._compute_csv_path(name)
         try:
             self.router = get_router(name)
             self.router_name = name
         except Exception as e:
-            print(f"reload router error: {e}")
+            logging.error("reload router error: %s", e)
             return
-        base = self.config_path.parent.parent
-        csv_base = base / "config" / "performance_test_csv"
-        router_name = name.lower()
-        if "asus" in router_name:
-            csv_base = csv_base / "asus"
-        elif "xiaomi" in router_name:
-            csv_base = csv_base / "xiaomi"
-        else:
-            csv_base = base / "config"
-        self.csv_path = (csv_base / "rvr_wifi_setup.csv").resolve()
-        print(f"reload_router: selected router={name}, csv_path={self.csv_path}")
-        print(f"reload_router: rows before reload_csv {self.rows}")
         band_list = getattr(self.router, "BAND_LIST", ["2.4 GHz", "5 GHz"])
         self.band_combo.blockSignals(True)
         self.band_combo.clear()
         self.band_combo.addItems(band_list)
-        current_band = band_list[0] if band_list else ""
-        if current_band:
-            self.band_combo.setCurrentText(current_band)
+        if band_list:
+            self.band_combo.setCurrentText(band_list[0])
         self.band_combo.blockSignals(False)
         self.reload_csv()
-        print(f"reload_router: headers={self.headers}, rows_count={len(self.rows)}")
-        print(f"reload_router: rows after reload_csv {self.rows}")
         self._loading = True
         try:
             self._load_row_to_form()
@@ -318,11 +282,7 @@ class RvrWifiConfigPage(CardWidget):
         if not path:
             return
         self.csv_path = Path(path)
-        print(f"on_csv_file_changed: router={self.router_name}, csv_path={self.csv_path}")
-        print(f"on_csv_file_changed: rows before reload_csv {self.rows}")
         self.reload_csv()
-        print(f"on_csv_file_changed: headers={self.headers}, rows_count={len(self.rows)}")
-        print(f"on_csv_file_changed: rows after reload_csv {self.rows}")
         self._loading = True
         try:
             self._load_row_to_form()
@@ -330,7 +290,6 @@ class RvrWifiConfigPage(CardWidget):
             self._loading = False
 
     def _update_band_options(self, band: str):
-        print(f'_update_band_options {self.router}')
         wireless = {
             "2.4 GHz": getattr(self.router, "WIRELESS_2", []),
             "5 GHz": getattr(self.router, "WIRELESS_5", []),

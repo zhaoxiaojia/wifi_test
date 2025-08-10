@@ -14,6 +14,7 @@ import os
 import sys
 from pathlib import Path
 import yaml
+import logging
 from src.tools.router_tool.router_factory import router_list
 from PyQt5.QtCore import (
     Qt,
@@ -345,7 +346,7 @@ class CaseConfigPage(CardWidget):
             csv_dir = base_dir / "xiaomi"
         else:
             csv_dir = None
-        print(f'_update_csv_options {csv_dir}')
+        logging.debug("_update_csv_options %s", csv_dir)
         with QSignalBlocker(self.csv_combo):
             self.csv_combo.clear()
             if csv_dir and csv_dir.exists():
@@ -689,7 +690,7 @@ class CaseConfigPage(CardWidget):
 
         def add_items(parent_item, dir_path):
             for fname in sorted(os.listdir(dir_path)):
-                print(f'fname {fname}')
+                logging.debug("fname %s", fname)
                 if fname == '__pycache__' or fname.startswith('.'):
                     continue
                 path = os.path.join(dir_path, fname)
@@ -755,7 +756,7 @@ class CaseConfigPage(CardWidget):
         你可以完善/替换成自己的判断规则。
         """
         basename = os.path.basename(case_path)
-        print(f'tesecase name {basename}')
+        logging.debug("testcase name %s", basename)
         editable = set()
         # 永远让 connect_type 可编辑
         editable |= {
