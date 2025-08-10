@@ -353,7 +353,12 @@ class CaseConfigPage(CardWidget):
             if csv_dir and csv_dir.exists():
                 for csv_file in sorted(csv_dir.glob("*.csv")):
                     print(f"found csv: {csv_file}")
-                    self.csv_combo.addItem(csv_file.name, str(csv_file.resolve()))
+                    # qfluentwidgets.ComboBox 在 Qt5 和 Qt6 下对 userData 的处理不一致，
+                    # 直接通过 addItem(text, userData) 可能导致无法获取到数据。
+                    # 因此先添加文本，再显式设置 UserRole 数据，确保 itemData 能正确返回文件路径。
+                    self.csv_combo.addItem(csv_file.name)
+                    idx = self.csv_combo.count() - 1
+                    self.csv_combo.setItemData(idx, str(csv_file.resolve()), Qt.UserRole)
                 self.csv_combo.setCurrentIndex(-1)
         self.selected_csv_path = None
 
@@ -886,7 +891,8 @@ class CaseConfigPage(CardWidget):
         if index < 0:
             self.selected_csv_path = None
             return
-        data = self.csv_combo.itemData(index)
+        # 明确使用 UserRole 获取数据，避免在不同 Qt 版本下默认角色不一致
+        data = self.csv_combo.itemData(index, Qt.UserRole)
         print(f"on_csv_changed index={index} data={data}")
         new_path = str(Path(data).resolve()) if data else None
         if not force and new_path == self.selected_csv_path:
