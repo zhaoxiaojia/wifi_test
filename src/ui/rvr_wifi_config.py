@@ -281,7 +281,8 @@ class RvrWifiConfigPage(CardWidget):
         """响应 CSV 文件变更"""
         if not path:
             return
-        self.csv_path = Path(path)
+        # 确保使用绝对路径加载 CSV，避免目录切换引起的混淆
+        self.csv_path = Path(path).resolve()
         self.reload_csv()
         self._loading = True
         try:
