@@ -140,8 +140,7 @@ def test_rvr(setup, rf_value):
     # handle iperf pair count
     logging.info('start test tx/rx')
     logging.info(f'router_info: {router_info}')
-    print(f'router.tx {router_info.tx}')
-    print(f'router.rx {router_info.rx}')
+
     # iperf  打流
     if router_info.tx:
         pair = wifi_yaml.get_note('rvr')['pair']
