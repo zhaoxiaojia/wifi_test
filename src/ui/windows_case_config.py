@@ -531,7 +531,9 @@ class CaseConfigPage(CardWidget):
                 self.csv_combo = ComboBox(self)
                 self.csv_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
                 self.csv_combo.setEnabled(False)
+                # currentIndexChanged 在选择相同项时不会触发，activated 每次用户点击都会触发
                 self.csv_combo.currentIndexChanged.connect(self.on_csv_changed)
+                self.csv_combo.activated.connect(self.on_csv_activated)
                 vbox.addWidget(self.csv_combo)
 
                 self.ix_path_edit = LineEdit(self)
@@ -874,14 +876,23 @@ class CaseConfigPage(CardWidget):
             self._pending_path = None
             QTimer.singleShot(0, lambda: self.apply_case_logic(path))
 
-    def on_csv_changed(self, index: int) -> None:
+    def on_csv_activated(self, index: int) -> None:
+        """用户手动点击同一项时也需要重新加载"""
+        print(f"on_csv_activated index={index}")
+        self.on_csv_changed(index, force=True)
+
+    def on_csv_changed(self, index: int, force: bool = False) -> None:
         """记录当前选择的 CSV 文件路径并发出信号"""
         if index < 0:
             self.selected_csv_path = None
             return
-        # 统一转换为绝对路径，避免重复文件名导致加载错误
         data = self.csv_combo.itemData(index)
-        self.selected_csv_path = str(Path(data).resolve()) if data else None
+        print(f"on_csv_changed index={index} data={data}")
+        new_path = str(Path(data).resolve()) if data else None
+        if not force and new_path == self.selected_csv_path:
+            return
+        self.selected_csv_path = new_path
+        print(f"selected_csv_path={self.selected_csv_path}")
         self.csvFileChanged.emit(self.selected_csv_path or "")
 
     def on_run(self):
