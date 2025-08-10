@@ -877,8 +877,10 @@ class CaseConfigPage(CardWidget):
         if index < 0:
             self.selected_csv_path = None
             return
-        self.selected_csv_path = self.csv_combo.itemData(index)
-        self.csvFileChanged.emit(self.selected_csv_path)
+        # 统一转换为绝对路径，避免重复文件名导致加载错误
+        data = self.csv_combo.itemData(index)
+        self.selected_csv_path = str(Path(data).resolve()) if data else None
+        self.csvFileChanged.emit(self.selected_csv_path or "")
 
     def on_run(self):
         # 将字段值更新到 self.config（保持结构）
