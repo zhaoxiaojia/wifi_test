@@ -12,7 +12,7 @@ import os
 import telnetlib
 import time
 
-import pytest
+from urllib.parse import urlparse
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
@@ -107,10 +107,11 @@ class Asusax88uControl(RouterTools):
     def __init__(self):
         self.yaml_info = yamlTool(os.getcwd() + f'\\config\\router_xpath\\asus_xpath.yaml')
         self.xpath = self.yaml_info.get_note('asus')
+        addr = self.xpath['address']['88u']
+        self.host = urlparse(addr).hostname or addr
         self.port = 23
-        self.host = self.xpath['address']['88u']
         self.prompt = b'admin@RT-AX88U-D8C0:/tmp/home/root#'  # 命令提示符
-        self.tn = self._init_telnet()
+        self.tn = None
 
     def _init_telnet(self):
         """初始化Telnet连接并登录"""
@@ -129,6 +130,8 @@ class Asusax88uControl(RouterTools):
         retries = 0
         while retries < max_retries:
             try:
+                if self.tn is None:
+                    self.tn = self._init_telnet()
                 self.tn.write(cmd.encode('ascii') + b'\n')  # 发送命令
                 output = self.tn.read_until(self.prompt, timeout=10).decode('ascii', errors='ignore')
                 if "error" in output.lower():
@@ -137,9 +140,9 @@ class Asusax88uControl(RouterTools):
             except Exception as e:
                 logging.warning(f"Connection error, retrying ({retries + 1}/{max_retries}): {e}")
                 retries += 1
-                # 重新连接
-                self.tn.close()
-                self.tn = self._init_telnet()
+                if self.tn is not None:
+                    self.tn.close()
+                    self.tn = None
         return None
 
     def kill_telnet_connections(self):
@@ -159,11 +162,11 @@ class Asusax88uControl(RouterTools):
 
     def quit(self):
         try:
-            # 退出 Telnet 连接
-            self.tn.write(b"exit\n")
-            logging.info(self.tn.read_all().decode('ascii'))
+            if self.tn:
+                self.tn.write(b"exit\n")
+                logging.info(self.tn.read_all().decode('ascii'))
         except Exception as e:
-            logging.info("Error:", str(e))
+            logging.info("Error: %s", str(e))
 
     def set_2g_ssid(self, ssid):
         cmd = 'nvram set wl0_ssid={};'

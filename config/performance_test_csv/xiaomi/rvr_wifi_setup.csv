@@ -1,3 +1,2 @@
 band,ssid,wireless_mode,channel,bandwidth,authentication,password,tx,rx,data_row
-5 GHz,xiaomibe7000_5g,11ac,自动,160/80/40/20MHz,强加密(WPA2个人版),12345678,1,1,
-2.4 GHz,xiaomibe7000_5g,11n,自动,20MHz,超强加密(WPA3个人版),12345678,1,1,
+2.4 GHz,xiaomibe7000_5g,11n,自动,20MHz,强加密(WPA2个人版),12345678,0,1,

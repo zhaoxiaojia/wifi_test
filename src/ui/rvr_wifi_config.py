@@ -240,11 +240,11 @@ class RvrWifiConfigPage(CardWidget):
         name = ""
         combo = getattr(self.case_config_page, "router_name_combo", None)
         if combo is not None:
-            name = combo.currentText()
+            name = combo.currentText().lower()
         else:
             cfg = getattr(self.case_config_page, "config", {})
             if isinstance(cfg, dict):
-                name = cfg.get("router", {}).get("name", self.router_name)
+                name = cfg.get("router", {}).get("name", self.router_name).lower()
         # 根据路由器名称重新计算 CSV 路径
         base = Path.cwd()
         if hasattr(sys, "_MEIPASS"):
@@ -252,10 +252,9 @@ class RvrWifiConfigPage(CardWidget):
             if not (base / "config").exists():
                 base = Path.cwd()
         csv_base = base / "config" / "performance_test_csv"
-        lower = name.lower()
-        if "asus" in lower:
+        if "asus" in name:
             csv_base = csv_base / "asus"
-        elif "xiaomi" in lower:
+        elif "xiaomi" in name:
             csv_base = csv_base / "xiaomi"
         else:
             csv_base = base / "config"
