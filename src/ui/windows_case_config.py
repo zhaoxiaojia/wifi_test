@@ -347,10 +347,12 @@ class CaseConfigPage(CardWidget):
         else:
             csv_dir = None
         logging.debug("_update_csv_options %s", csv_dir)
+        print(f"_update_csv_options router={router_name} dir={csv_dir}")
         with QSignalBlocker(self.csv_combo):
             self.csv_combo.clear()
             if csv_dir and csv_dir.exists():
                 for csv_file in sorted(csv_dir.glob("*.csv")):
+                    print(f"found csv: {csv_file}")
                     self.csv_combo.addItem(csv_file.name, str(csv_file.resolve()))
                 self.csv_combo.setCurrentIndex(-1)
         self.selected_csv_path = None
@@ -877,8 +879,12 @@ class CaseConfigPage(CardWidget):
         if index < 0:
             self.selected_csv_path = None
             return
-        self.selected_csv_path = self.csv_combo.itemData(index)
-        self.csvFileChanged.emit(self.selected_csv_path)
+        # 统一转换为绝对路径，避免重复文件名导致加载错误
+        data = self.csv_combo.itemData(index)
+        print(f"on_csv_changed index={index} data={data}")
+        self.selected_csv_path = str(Path(data).resolve()) if data else None
+        print(f"selected_csv_path={self.selected_csv_path}")
+        self.csvFileChanged.emit(self.selected_csv_path or "")
 
     def on_run(self):
         # 将字段值更新到 self.config（保持结构）
