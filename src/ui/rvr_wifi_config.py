@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 
 import yaml
+from contextlib import ExitStack
 from PyQt5.QtCore import Qt, QSignalBlocker
 from PyQt5.QtWidgets import (
     QHBoxLayout,
@@ -70,7 +71,7 @@ class RvrWifiConfigPage(CardWidget):
         super().__init__()
         self.setObjectName("rvrWifiConfigPage")
         self.case_config_page = case_config_page
-
+        self._loading = False
         base = Path.cwd()
         if hasattr(sys, "_MEIPASS"):
             base = Path(sys._MEIPASS)
@@ -93,6 +94,8 @@ class RvrWifiConfigPage(CardWidget):
         self.headers, self.rows = self._load_csv()
         # 当前页面使用的路由器 SSID
         self.ssid: str = ""
+        # 标记是否处于数据加载阶段，用于屏蔽信号回调
+        self._loading = False
         main_layout = QHBoxLayout(self)
 
         form_box = QGroupBox(self)
@@ -283,9 +286,20 @@ class RvrWifiConfigPage(CardWidget):
             self.band_combo.setCurrentText(current_band)
         self.band_combo.blockSignals(False)
         self.reload_csv()
+        self._loading = True
+        try:
+            self._load_row_to_form()
+        finally:
+            self._loading = False
         if not self.rows:
-            self._update_band_options(self.band_combo.currentText())
-            self._update_auth_options(self.wireless_combo.currentText())
+            with ExitStack() as stack:
+                for w in (self.wireless_combo, self.channel_combo, self.bandwidth_combo, self.auth_combo):
+                    stack.enter_context(QSignalBlocker(w))
+                self._update_band_options(self.band_combo.currentText())
+            with ExitStack() as stack:
+                stack.enter_context(QSignalBlocker(self.auth_combo))
+                stack.enter_context(QSignalBlocker(self.passwd_edit))
+                self._update_auth_options(self.wireless_combo.currentText())
             self._on_auth_changed(self.auth_combo.currentText())
 
     def on_csv_file_changed(self, path: str) -> None:
@@ -295,34 +309,55 @@ class RvrWifiConfigPage(CardWidget):
         self.csv_path = Path(path)
         print(f'on_csv_file_changed {self.csv_path}')
         self.reload_csv()
+        self._loading = True
+        try:
+            self._load_row_to_form()
+        finally:
+            self._loading = False
 
     def _update_band_options(self, band: str):
         print(f'_update_band_options {self.router}')
-        wireless = {"2.4 GHz": getattr(self.router, "WIRELESS_2", []),
-                    "5 GHz": getattr(self.router, "WIRELESS_5", [])}[band]
-        channel = {"2.4 GHz": getattr(self.router, "CHANNEL_2", []),
-                   "5 GHz": getattr(self.router, "CHANNEL_5", [])}[band]
-        bandwidth = {"2.4 GHz": getattr(self.router, "BANDWIDTH_2", []),
-                     "5 GHz": getattr(self.router, "BANDWIDTH_5", [])}[band]
-        self.wireless_combo.clear()
-        self.wireless_combo.addItems(wireless)
-        self.channel_combo.clear()
-        self.channel_combo.addItems(channel)
-        self.bandwidth_combo.clear()
-        self.bandwidth_combo.addItems(bandwidth)
-        self._update_auth_options(self.wireless_combo.currentText())
+        wireless = {
+            "2.4 GHz": getattr(self.router, "WIRELESS_2", []),
+            "5 GHz": getattr(self.router, "WIRELESS_5", []),
+        }[band]
+        channel = {
+            "2.4 GHz": getattr(self.router, "CHANNEL_2", []),
+            "5 GHz": getattr(self.router, "CHANNEL_5", []),
+        }[band]
+        bandwidth = {
+            "2.4 GHz": getattr(self.router, "BANDWIDTH_2", []),
+            "5 GHz": getattr(self.router, "BANDWIDTH_5", []),
+        }[band]
+        with QSignalBlocker(self.wireless_combo), QSignalBlocker(self.channel_combo), QSignalBlocker(
+            self.bandwidth_combo
+        ):
+            self.wireless_combo.clear()
+            self.wireless_combo.addItems(wireless)
+            self.channel_combo.clear()
+            self.channel_combo.addItems(channel)
+            self.bandwidth_combo.clear()
+            self.bandwidth_combo.addItems(bandwidth)
+        if not self._loading:
+            self._update_auth_options(self.wireless_combo.currentText())
 
     def _on_band_changed(self, band: str):
         self._update_band_options(band)
         self._update_current_row()
 
     def _update_auth_options(self, wireless: str):
-        self.auth_combo.clear()
-        if "Legacy" in wireless:
-            self.auth_combo.addItems(getattr(self.router, "AUTHENTICATION_METHOD_LEGCY", []))
-        else:
-            self.auth_combo.addItems(getattr(self.router, "AUTHENTICATION_METHOD", []))
-        self._on_auth_changed(self.auth_combo.currentText())
+        with QSignalBlocker(self.auth_combo):
+            self.auth_combo.clear()
+            if "Legacy" in wireless:
+                self.auth_combo.addItems(
+                    getattr(self.router, "AUTHENTICATION_METHOD_LEGCY", [])
+                )
+            else:
+                self.auth_combo.addItems(
+                    getattr(self.router, "AUTHENTICATION_METHOD", [])
+                )
+        if not self._loading:
+            self._on_auth_changed(self.auth_combo.currentText())
 
     def _on_auth_changed(self, auth: str):
         # 调整密码框逻辑
@@ -370,37 +405,52 @@ class RvrWifiConfigPage(CardWidget):
         self.rows = data
 
     def _load_row_to_form(self):
-        row_index = self.table.currentRow()
-        if not (0 <= row_index < len(self.rows)):
-            return
-        data = self.rows[row_index]
+        self._loading = True
+        try:
+            row_index = self.table.currentRow()
+            if not (0 <= row_index < len(self.rows)):
+                return
+            data = self.rows[row_index]
 
-        band = data.get("band", "")
-        with QSignalBlocker(self.band_combo):
-            self.band_combo.setCurrentText(band)
-        self._update_band_options(band)
+            band = data.get("band", "")
+            with QSignalBlocker(self.band_combo):
+                self.band_combo.setCurrentText(band)
+            with ExitStack() as stack:
+                for w in (
+                        self.wireless_combo,
+                        self.channel_combo,
+                        self.bandwidth_combo,
+                        self.auth_combo,
+                        self.passwd_edit,
+                ):
+                    stack.enter_context(QSignalBlocker(w))
+                self._update_band_options(band)
 
-        with QSignalBlocker(self.wireless_combo):
-            self.wireless_combo.setCurrentText(data.get("wireless_mode", ""))
-        self._update_auth_options(self.wireless_combo.currentText())
-        self._on_auth_changed(self.auth_combo.currentText())
-        with QSignalBlocker(self.channel_combo):
-            self.channel_combo.setCurrentText(data.get("channel", ""))
-        with QSignalBlocker(self.bandwidth_combo):
-            self.bandwidth_combo.setCurrentText(data.get("bandwidth", ""))
-        with QSignalBlocker(self.auth_combo):
-            self.auth_combo.setCurrentText(data.get("authentication", ""))
-        self._on_auth_changed(self.auth_combo.currentText())
-
-        with QSignalBlocker(self.passwd_edit):
-            self.passwd_edit.setText(data.get("password", ""))
-        with QSignalBlocker(self.tx_check):
-            self.tx_check.setChecked(data.get("tx", "0") == "1")
-        with QSignalBlocker(self.rx_check):
-            self.rx_check.setChecked(data.get("rx", "0") == "1")
-
-        with QSignalBlocker(self.data_row_edit):
-            self.data_row_edit.setText(data.get("data_row", ""))
+            with QSignalBlocker(self.wireless_combo):
+                self.wireless_combo.setCurrentText(data.get("wireless_mode", ""))
+            with ExitStack() as stack:
+                stack.enter_context(QSignalBlocker(self.auth_combo))
+                stack.enter_context(QSignalBlocker(self.passwd_edit))
+                self._update_auth_options(self.wireless_combo.currentText())
+                self._on_auth_changed(self.auth_combo.currentText())
+            with QSignalBlocker(self.channel_combo):
+                self.channel_combo.setCurrentText(data.get("channel", ""))
+            with QSignalBlocker(self.bandwidth_combo):
+                self.bandwidth_combo.setCurrentText(data.get("bandwidth", ""))
+            with QSignalBlocker(self.auth_combo):
+                self.auth_combo.setCurrentText(data.get("authentication", ""))
+            with QSignalBlocker(self.passwd_edit):
+                self._on_auth_changed(self.auth_combo.currentText())
+            with QSignalBlocker(self.passwd_edit):
+                self.passwd_edit.setText(data.get("password", ""))
+            with QSignalBlocker(self.tx_check):
+                self.tx_check.setChecked(data.get("tx", "0") == "1")
+            with QSignalBlocker(self.rx_check):
+                self.rx_check.setChecked(data.get("rx", "0") == "1")
+            with QSignalBlocker(self.data_row_edit):
+                self.data_row_edit.setText(data.get("data_row", ""))
+        finally:
+            self._loading = False
 
     def _update_tx_rx(self, state: int):
         row = self.table.currentRow()
@@ -425,6 +475,8 @@ class RvrWifiConfigPage(CardWidget):
             item.setText(value)
 
     def _update_current_row(self, *args):
+        if self._loading:
+            return
         row = self.table.currentRow()
         if not (0 <= row < len(self.rows)):
             return
