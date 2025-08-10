@@ -80,6 +80,7 @@ class CaseConfigPage(CardWidget):
     """用例配置主页面"""
 
     routerInfoChanged = pyqtSignal()
+    csvFileChanged = pyqtSignal(str)
 
     def __init__(self, on_run_callback):
         super().__init__()
@@ -344,6 +345,7 @@ class CaseConfigPage(CardWidget):
             csv_dir = base_dir / "xiaomi"
         else:
             csv_dir = None
+        print(f'_update_csv_options {csv_dir}')
         with QSignalBlocker(self.csv_combo):
             self.csv_combo.clear()
             if csv_dir and csv_dir.exists():
@@ -526,7 +528,7 @@ class CaseConfigPage(CardWidget):
                 self.csv_combo = ComboBox(self)
                 self.csv_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
                 self.csv_combo.setEnabled(False)
-                self.csv_combo.currentTextChanged.connect(self.on_csv_changed)
+                self.csv_combo.currentIndexChanged.connect(self.on_csv_changed)
                 vbox.addWidget(self.csv_combo)
 
                 self.ix_path_edit = LineEdit(self)
@@ -869,15 +871,13 @@ class CaseConfigPage(CardWidget):
             self._pending_path = None
             QTimer.singleShot(0, lambda: self.apply_case_logic(path))
 
-    def on_csv_changed(self, text: str) -> None:
-        """记录当前选择的 CSV 文件路径"""
-        self.selected_csv_path = self.csv_combo.currentData() if text else None
-        main_window = self.window()
-        if self.selected_csv_path and hasattr(main_window, "rvr_wifi_config_page"):
-            page = main_window.rvr_wifi_config_page
-            page.csv_path = Path(self.selected_csv_path)
-            if hasattr(page, "reload_csv"):
-                page.reload_csv()
+    def on_csv_changed(self, index: int) -> None:
+        """记录当前选择的 CSV 文件路径并发出信号"""
+        if index < 0:
+            self.selected_csv_path = None
+            return
+        self.selected_csv_path = self.csv_combo.itemData(index)
+        self.csvFileChanged.emit(self.selected_csv_path)
 
     def on_run(self):
         # 将字段值更新到 self.config（保持结构）

@@ -179,8 +179,9 @@ class RvrWifiConfigPage(CardWidget):
         self._on_auth_changed(self.auth_combo.currentText())
         self.refresh_table()
 
-        # 监听主配置页面的路由器信息变化
+        # 监听主配置页面信号
         self.case_config_page.routerInfoChanged.connect(self.reload_router)
+        self.case_config_page.csvFileChanged.connect(self.on_csv_file_changed)
 
     def set_router_credentials(self, ssid: str, passwd: str) -> None:
         """设置路由器凭据并自动填充密码输入框"""
@@ -241,28 +242,62 @@ class RvrWifiConfigPage(CardWidget):
             cfg = getattr(self.case_config_page, "config", {})
             if isinstance(cfg, dict):
                 name = cfg.get("router", {}).get("name", self.router_name)
+        # 根据路由器名称重新计算 CSV 路径
+        base = Path.cwd()
+        if hasattr(sys, "_MEIPASS"):
+            base = Path(sys._MEIPASS)
+            if not (base / "config").exists():
+                base = Path.cwd()
+        csv_base = base / "config" / "performance_test_csv"
+        lower = name.lower()
+        if "asus" in lower:
+            csv_base = csv_base / "asus"
+        elif "xiaomi" in lower:
+            csv_base = csv_base / "xiaomi"
+        else:
+            csv_base = base / "config"
+        self.csv_path = (csv_base / "rvr_wifi_setup.csv").resolve()
+
         try:
             self.router = get_router(name)
             self.router_name = name
         except Exception as e:
             print(f"reload router error: {e}")
             return
-
+        base = self.config_path.parent.parent
+        csv_base = base / "config" / "performance_test_csv"
+        router_name = name.lower()
+        if "asus" in router_name:
+            csv_base = csv_base / "asus"
+        elif "xiaomi" in router_name:
+            csv_base = csv_base / "xiaomi"
+        else:
+            csv_base = base / "config"
+        self.csv_path = (csv_base / "rvr_wifi_setup.csv").resolve()
         band_list = getattr(self.router, "BAND_LIST", ["2.4 GHz", "5 GHz"])
-        current_band = self.band_combo.currentText()
-        if current_band not in band_list:
-            current_band = band_list[0] if band_list else ""
-
         self.band_combo.blockSignals(True)
         self.band_combo.clear()
         self.band_combo.addItems(band_list)
+        current_band = band_list[0] if band_list else ""
         if current_band:
             self.band_combo.setCurrentText(current_band)
         self.band_combo.blockSignals(False)
+        self.reload_csv()
+        if not self.rows:
+            self._update_band_options(self.band_combo.currentText())
+            self._update_auth_options(self.wireless_combo.currentText())
+            self._on_auth_changed(self.auth_combo.currentText())
 
-        self._update_band_options(current_band)
+    def on_csv_file_changed(self, path: str) -> None:
+        """响应 CSV 文件变更"""
+        if not path:
+            return
+        self.csv_path = Path(path)
+        print(f'on_csv_file_changed {self.csv_path}')
+        self.reload_csv()
 
     def _update_band_options(self, band: str):
+        print(f'_update_band_options {self.router}')
         wireless = {"2.4 GHz": getattr(self.router, "WIRELESS_2", []),
                     "5 GHz": getattr(self.router, "WIRELESS_5", [])}[band]
         channel = {"2.4 GHz": getattr(self.router, "CHANNEL_2", []),
