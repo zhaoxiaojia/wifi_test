@@ -881,9 +881,7 @@ class CaseConfigPage(CardWidget):
             return
         # 统一转换为绝对路径，避免重复文件名导致加载错误
         data = self.csv_combo.itemData(index)
-        print(f"on_csv_changed index={index} data={data}")
         self.selected_csv_path = str(Path(data).resolve()) if data else None
-        print(f"selected_csv_path={self.selected_csv_path}")
         self.csvFileChanged.emit(self.selected_csv_path or "")
 
     def on_run(self):
