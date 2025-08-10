@@ -196,12 +196,11 @@ class RunPage(CardWidget):
             border-radius: 4px;
         """)
         self.progress_chunk.setFixedWidth(0)
-        self.back_btn = PushButton("返回", self)
+        self.back_btn = PushButton("Exit", self)
         self.back_btn.setIcon(FluentIcon.LEFT_ARROW)
         self.back_btn.clicked.connect(self.on_back)
         layout.addWidget(self.back_btn)
         self.setLayout(layout)
-
         self.run_case()
 
     def _append_log(self, msg: str):

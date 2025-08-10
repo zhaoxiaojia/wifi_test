@@ -100,6 +100,7 @@ class MainWindow(FluentWindow):
             with suppress(Exception):
                 self.run_page.cleanup()
             self._remove_interface(self.run_page)
+            self.run_page = None
             print("RunPage cleared!")
 
     def center_window(self):
@@ -128,7 +129,7 @@ class MainWindow(FluentWindow):
     def on_run(self, case_path, display_case_path, config):
         self.clear_run_page()
         # 传递主窗口自身作为RunPage的父窗口
-        self.run_page = RunPage(case_path, display_case_path, config, self.show_case_config, parent=self)
+        self.run_page = RunPage(case_path, display_case_path, config, self.stop_run_and_show_case_config, parent=self)
         # 确保添加到导航栏和堆叠窗口
         self.addSubInterface(
             self.run_page,
@@ -145,6 +146,10 @@ class MainWindow(FluentWindow):
         print("Switched to RunPage:", self.run_page)
 
     def show_case_config(self):
+        self.setCurrentIndex(self.case_config_page)
+        print("Switched to CaseConfigPage")
+
+    def stop_run_and_show_case_config(self):
         self.setCurrentIndex(self.case_config_page)
         QCoreApplication.processEvents()  # 强制事件刷新
         self.clear_run_page()
