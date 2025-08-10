@@ -24,12 +24,8 @@ from qfluentwidgets import (
 )
 from PyQt5.QtCore import QThread, pyqtSignal
 from PyQt5.QtGui import QTextCursor
-from PyQt5.QtWidgets import QProgressBar
-import subprocess
 import datetime
 import re
-import time
-import os
 import random
 import sys
 from pathlib import Path
@@ -84,8 +80,8 @@ class CaseRunner(QThread):
         try:
             timestamp = datetime.datetime.now().strftime("%Y.%m.%d_%H.%M.%S")
             timestamp = f"{timestamp}_{random.randint(1000, 9999)}"
-            report_dir = os.path.abspath(os.path.join(os.getcwd(), f"report/{timestamp}"))
-            os.makedirs(report_dir, exist_ok=True)
+            report_dir = (Path.cwd() / "report" / timestamp).resolve()
+            report_dir.mkdir(parents=True, exist_ok=True)
             pytest_args = [
                 "-v",
                 "-s",
@@ -165,24 +161,7 @@ class RunPage(CardWidget):
         self.on_back_callback = on_back_callback
         self.main_window = parent  # 保存主窗口引用（用于InfoBar父窗口）
 
-        needs_recalc = False
-        if not display_case_path:
-            needs_recalc = True
-        else:
-            p = Path(display_case_path)
-            if ".." in p.parts or p.drive or p.is_absolute():
-                needs_recalc = True
-        if needs_recalc:
-            app_base = self._get_application_base()
-            display_case_path = Path(case_path).resolve()
-            try:
-                display_case_path = display_case_path.relative_to(app_base)
-            except ValueError:
-                pass
-            display_case_path = display_case_path.as_posix()
-        else:
-            display_case_path = display_case_path.replace("\\", "/")
-        self.display_case_path = display_case_path
+        self.display_case_path = self._calc_display_path(case_path, display_case_path)
 
         layout = QVBoxLayout(self)
         layout.setSpacing(16)
@@ -226,15 +205,9 @@ class RunPage(CardWidget):
         self.run_case()
 
     def _append_log(self, msg: str):
-        color = None
         upper_msg = msg.upper()
-        if "ERROR" in upper_msg:
-            color = "red"
-        elif "WARNING" in upper_msg:
-            color = "orange"
-        elif "INFO" in upper_msg:
-            color = "blue"
-
+        colors = {"ERROR": "red", "WARNING": "orange", "INFO": "blue"}
+        color = next((c for k, c in colors.items() if k in upper_msg), None)
         html = f"<span style='color:{color};'>{msg}</span>" if color else msg
         self.log_area.append(html)
 
@@ -279,23 +252,23 @@ class RunPage(CardWidget):
         self.runner.start()
 
     def cleanup(self):
-        if hasattr(self, "runner") and self.runner:
-            # 停止线程并等待有限时间
-            runner = self.runner
-            runner.stop()
-            finished = runner.wait(3000)
-            if not finished:
-                # 若仍未结束，尝试强制退出
-                runner.quit()
-                if not runner.wait(1000):
-                    self._append_log("<b style='color:red;'>线程结束超时，可能仍在后台运行</b>")
-                with suppress((TypeError, RuntimeError)):
-                    runner.log_signal.disconnect(self._append_log)
-                with suppress((TypeError, RuntimeError)):
-                    runner.progress_signal.disconnect(self.update_progress)
-                with suppress((TypeError, RuntimeError)):
-                    runner.finished.disconnect()
-                self.runner = None
+        runner = getattr(self, "runner", None)
+        if not runner:
+            return
+        runner.stop()
+        if not runner.wait(3000):
+            runner.quit()
+            if not runner.wait(1000):
+                self._append_log("<b style='color:red;'>线程结束超时，可能仍在后台运行</b>")
+        for signal, slot in (
+            (runner.log_signal, self._append_log),
+            (runner.progress_signal, self.update_progress),
+        ):
+            with suppress((TypeError, RuntimeError)):
+                signal.disconnect(slot)
+        with suppress((TypeError, RuntimeError)):
+            runner.finished.disconnect()
+        self.runner = None
         with suppress(TypeError):
             self.disconnect()
 
@@ -312,3 +285,15 @@ class RunPage(CardWidget):
             else Path(__file__).resolve().parent.parent
         )
         return base.resolve()
+
+    def _calc_display_path(self, case_path: str, display_case_path: str | None) -> str:
+        """计算用于显示的用例路径"""
+        if display_case_path:
+            p = Path(display_case_path)
+            if ".." not in p.parts and not p.drive and not p.is_absolute():
+                return display_case_path.replace("\\", "/")
+        app_base = self._get_application_base()
+        display_case_path = Path(case_path).resolve()
+        with suppress(ValueError):
+            display_case_path = display_case_path.relative_to(app_base)
+        return display_case_path.as_posix()
