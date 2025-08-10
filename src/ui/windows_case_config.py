@@ -347,10 +347,12 @@ class CaseConfigPage(CardWidget):
         else:
             csv_dir = None
         logging.debug("_update_csv_options %s", csv_dir)
+        print(f"_update_csv_options router={router_name} dir={csv_dir}")
         with QSignalBlocker(self.csv_combo):
             self.csv_combo.clear()
             if csv_dir and csv_dir.exists():
                 for csv_file in sorted(csv_dir.glob("*.csv")):
+                    print(f"found csv: {csv_file}")
                     self.csv_combo.addItem(csv_file.name, str(csv_file.resolve()))
                 self.csv_combo.setCurrentIndex(-1)
         self.selected_csv_path = None
