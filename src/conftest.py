@@ -144,19 +144,15 @@ def pytest_runtest_makereport(item, call):
     outcome = yield
     report = outcome.get_result()
 
-    # 只在第一次统计这个 item
-    if not hasattr(item, '_counted_progress'):
+    if report.when == 'call':
         session = item.session
         if not hasattr(session, 'pyqt_finished'):
             session.pyqt_finished = 0
         session.pyqt_finished += 1
-        item._counted_progress = True  # 避免重复统计
         total = getattr(session, 'total_test_count', None)
         if total:
             print(f"[PYQT_PROGRESS] {session.pyqt_finished}/{total}", flush=True)
 
-    # 原有返回值逻辑保留
-    if report.when == 'call':
         item._store['test_result'] = "PASS" if report.passed else "FAIL" if report.failed else "SKIPP"
         if not report.failed:
             return_value = getattr(call, "result", None) or item._store.get("return_value", None)

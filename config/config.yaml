@@ -24,10 +24,10 @@ rf_solution:
   - 0
   - 19
 router:
-  name: asusax88u
-  ssid_2g: asusax88u_2g
+  name: xiaomibe7000
+  ssid_2g: xiaomibe7000_2g
   passwd_2g: '12345678'
-  ssid_5g: asusax88u_5g
+  ssid_5g: xiaomibe7000_5g
   passwd_5g: '12345678'
 rvr:
   iperf:
