@@ -105,7 +105,6 @@ class CaseConfigPage(CardWidget):
         self.router_ssid_2g = ""
         self.router_ssid_5g = ""
         self.selected_csv_path: str | None = None
-
         # -------------------- layout --------------------
         main_layout = QHBoxLayout(self)
         main_layout.setSpacing(10)
@@ -154,6 +153,24 @@ class CaseConfigPage(CardWidget):
         self.case_tree.clicked.connect(self.on_case_tree_clicked)
         self.case_tree.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         QTimer.singleShot(0, lambda: self.apply_case_logic(""))
+
+    def _is_performance_case(self, abs_case_path) -> bool:
+        """
+        判断 abs_case_path 是否位于 test/performance 目录（任何层级都算）。
+        不依赖工程根路径，只看路径片段。
+        """
+        if not abs_case_path:
+            return False
+        try:
+            from pathlib import Path
+            p = Path(abs_case_path).resolve()
+            # 检查父链中是否出现 .../test/performance
+            for node in (p, *p.parents):
+                if node.name == "performance" and node.parent.name == "test":
+                    return True
+            return False
+        except Exception:
+            return False
 
     def _init_case_tree(self, root_dir: str) -> None:
         self.fs_model = QFileSystemModel(self.case_tree)
@@ -358,7 +375,7 @@ class CaseConfigPage(CardWidget):
                     # 因此先添加文本，再显式设置 UserRole 数据，确保 itemData 能正确返回文件路径。
                     self.csv_combo.addItem(csv_file.name)
                     idx = self.csv_combo.count() - 1
-                    self.csv_combo.setItemData(idx, str(csv_file.resolve()), Qt.UserRole)
+                    self.csv_combo.setItemData(idx, str(csv_file.resolve()))
                 self.csv_combo.setCurrentIndex(-1)
         self.selected_csv_path = None
 
@@ -892,7 +909,7 @@ class CaseConfigPage(CardWidget):
             self.selected_csv_path = None
             return
         # 明确使用 UserRole 获取数据，避免在不同 Qt 版本下默认角色不一致
-        data = self.csv_combo.itemData(index, Qt.UserRole)
+        data = self.csv_combo.itemData(index)
         print(f"on_csv_changed index={index} data={data}")
         new_path = str(Path(data).resolve()) if data else None
         if not force and new_path == self.selected_csv_path:
@@ -940,7 +957,26 @@ class CaseConfigPage(CardWidget):
             (base / case_path).resolve().as_posix() if case_path else ""
 
         )
-
+        try:
+            if self._is_performance_case(abs_case_path) and not getattr(self, "selected_csv_path", None):
+                try:
+                    # 如果你工程里有 InfoBar（QFluentWidgets），用这个更友好
+                    InfoBar.warning(
+                        title="Hint",
+                        content="This is a performance test. Please select a CSV file before running.",
+                        parent=self,
+                        position=InfoBarPosition.TOP,
+                        duration=3000
+                    )
+                except Exception:
+                    # 没有 InfoBar 就退化到标准对话框
+                    from PyQt5.QtWidgets import QMessageBox
+                    QMessageBox.warning(self, "Hint",
+                                        "This is a performance test.\nPlease select a CSV file before running.")
+                return
+        except Exception:
+            # 兜底避免因为路径解析等异常导致崩溃
+            pass
         # 若树状视图中选择了有效用例，则覆盖默认路径
         proxy_idx = self.case_tree.currentIndex()
         model = self.case_tree.model()
