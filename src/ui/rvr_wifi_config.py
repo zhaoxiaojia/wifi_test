@@ -90,6 +90,8 @@ class RvrWifiConfigPage(CardWidget):
         else:
             csv_base = base / "config"
         self.csv_path = (csv_base / "rvr_wifi_setup.csv").resolve()
+        print(f"reload_router: selected router={name}, csv_path={self.csv_path}")
+        print(f"reload_router: rows before reload_csv {self.rows}")
         self.router, self.router_name = self._load_router()
         self.headers, self.rows = self._load_csv()
         # 当前页面使用的路由器 SSID
@@ -228,12 +230,18 @@ class RvrWifiConfigPage(CardWidget):
                 headers = reader.fieldnames or default_headers
                 for row in reader:
                     rows.append({h: row.get(h, "") for h in headers})
+        print(f"_load_csv: router={self.router_name}, csv_path={self.csv_path}")
+        print(f"_load_csv: headers={headers}, rows_count={len(rows)}")
         return headers, rows
 
     def reload_csv(self):
         """重新读取当前 CSV 并刷新表格"""
+        print(f"reload_csv: router={self.router_name}, csv_path={self.csv_path}")
         self.headers, self.rows = self._load_csv()
+        print(f"reload_csv: headers={self.headers}, rows_count={len(self.rows)}")
+        print(f"reload_csv: before refresh_table rows={self.rows}")
         self.refresh_table()
+        print(f"reload_csv: after refresh_table rows={self.rows}")
 
     def reload_router(self):
         """重新加载路由器配置并刷新频段相关选项"""
@@ -277,6 +285,8 @@ class RvrWifiConfigPage(CardWidget):
         else:
             csv_base = base / "config"
         self.csv_path = (csv_base / "rvr_wifi_setup.csv").resolve()
+        print(f"reload_router: selected router={name}, csv_path={self.csv_path}")
+        print(f"reload_router: rows before reload_csv {self.rows}")
         band_list = getattr(self.router, "BAND_LIST", ["2.4 GHz", "5 GHz"])
         self.band_combo.blockSignals(True)
         self.band_combo.clear()
@@ -286,6 +296,8 @@ class RvrWifiConfigPage(CardWidget):
             self.band_combo.setCurrentText(current_band)
         self.band_combo.blockSignals(False)
         self.reload_csv()
+        print(f"reload_router: headers={self.headers}, rows_count={len(self.rows)}")
+        print(f"reload_router: rows after reload_csv {self.rows}")
         self._loading = True
         try:
             self._load_row_to_form()
@@ -307,8 +319,11 @@ class RvrWifiConfigPage(CardWidget):
         if not path:
             return
         self.csv_path = Path(path)
-        print(f'on_csv_file_changed {self.csv_path}')
+        print(f"on_csv_file_changed: router={self.router_name}, csv_path={self.csv_path}")
+        print(f"on_csv_file_changed: rows before reload_csv {self.rows}")
         self.reload_csv()
+        print(f"on_csv_file_changed: headers={self.headers}, rows_count={len(self.rows)}")
+        print(f"on_csv_file_changed: rows after reload_csv {self.rows}")
         self._loading = True
         try:
             self._load_row_to_form()
