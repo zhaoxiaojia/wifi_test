@@ -2,7 +2,6 @@
 # -*-coding:utf-8 -*-
 
 import sys
-import os
 from pathlib import Path
 import traceback
 import logging
@@ -18,6 +17,7 @@ from src.ui.run import RunPage
 from qfluentwidgets import setTheme, Theme
 from PyQt5.QtGui import QGuiApplication
 from PyQt5.QtCore import QCoreApplication
+from src.util.constants import Paths
 
 
 def log_exception(exc_type, exc_value, exc_tb):
@@ -154,20 +154,6 @@ class MainWindow(FluentWindow):
         QCoreApplication.processEvents()  # 强制事件刷新
         self.clear_run_page()
         print("Switched to CaseConfigPage")
-
-
-def get_base_dir():
-    """返回程序所在的基础目录（打包后是 exe 所在目录）"""
-    if getattr(sys, 'frozen', False):
-        return os.path.dirname(sys.executable)  # 打包后的路径
-    else:
-        return os.path.dirname(os.path.dirname(__file__))  # 开发时的项目根目录
-
-
-# 关键路径定义
-BASE_DIR = get_base_dir()
-CONFIG_DIR = os.path.join(BASE_DIR, "config")  # 共享的 config 目录
-RES_DIR = os.path.join(BASE_DIR, "res")  # 共享的 res 目录
 
 sys.excepthook = log_exception
 
