@@ -18,7 +18,7 @@ from src.test import get_testdata
 from src.tools.rs_test import rs
 import pytest
 
-from src.tools.connect_tool.TelnetInterface import TelnetInterface
+from src.tools.connect_tool.lab_device_controller import LabDeviceController
 from src.tools.router_tool.Router import Router
 from src.tools.router_tool.router_factory import get_router
 from src.tools.yamlTool import yamlTool
@@ -48,7 +48,7 @@ if model == 'XIN-YI':
     rf_tool = rs()
 else:
     rf_ip = wifi_yaml.get_note('rf_solution')[model]['ip_address']
-    rf_tool = TelnetInterface(rf_ip)
+    rf_tool = LabDeviceController(rf_ip)
     logging.info(f'rf_ip {rf_ip}')
 rf_step_list = wifi_yaml.get_note('rf_solution')['step']
 rf_step_list = [i for i in range(*rf_step_list)][::3]
