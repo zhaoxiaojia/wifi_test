@@ -565,15 +565,9 @@ class CaseConfigPage(CardWidget):
                 vbox.addWidget(self.rvr_ix_group)
 
                 # ----- 其它通用字段 -----
-                self.pair_edit = LineEdit(self)
-                self.pair_edit.setPlaceholderText("pair")
-                self.pair_edit.setText(str(value.get("pair", "")))
-
                 self.repeat_combo = LineEdit()
                 self.repeat_combo.setText(str(value.get("repeat", 0)))
 
-                vbox.addWidget(QLabel("Pair:"))
-                vbox.addWidget(self.pair_edit)
                 vbox.addWidget(QLabel("Repeat:"))
                 vbox.addWidget(self.repeat_combo)
 
@@ -585,7 +579,6 @@ class CaseConfigPage(CardWidget):
                 self.field_widgets["rvr.iperf.version"] = self.iperf_version_combo
                 self.field_widgets["rvr.iperf.path"] = self.iperf_path_edit
                 self.field_widgets["rvr.ixchariot.path"] = self.ix_path_edit
-                self.field_widgets["rvr.pair"] = self.pair_edit
                 self.field_widgets["rvr.repeat"] = self.repeat_combo
 
                 # 根据当前 Tool 值隐藏/显示子组
@@ -801,12 +794,10 @@ class CaseConfigPage(CardWidget):
         if basename == "test_compatibility.py":
             editable |= {"Power relay"}
         if basename == "test_wifi_peak_throughput.py":
-            editable |= {"rvr", "rvr.tool", "rvr.iperf.version", "rvr.iperf.path", "rvr.ixchariot.path",
-                         "rvr.pair", "rvr.repeat", }
+            editable |= {"rvr", "rvr.tool", "rvr.iperf.version", "rvr.iperf.path", "rvr.ixchariot.path", "rvr.repeat", }
         if "rvr" in basename:
             editable |= {
-                "rvr", "rvr.tool", "rvr.iperf.version", "rvr.iperf.path", "rvr.ixchariot.path",
-                "rvr.pair", "rvr.repeat",
+                "rvr", "rvr.tool", "rvr.iperf.version", "rvr.iperf.path", "rvr.ixchariot.path", "rvr.repeat",
                 "rf_solution.model",
                 "rf_solution.RC4DAT-8G-95.idVendor",
                 "rf_solution.RC4DAT-8G-95.idProduct",

@@ -3,7 +3,7 @@ connect_type:
   adb:
     device: coco_aaaaaa
   telnet:
-    ip: 192.168.31.21
+    ip: 192.168.50.21
   type: telnet
 corner_angle:
   ip_address: 192.168.5.11
@@ -35,11 +35,10 @@ rvr:
     version: iperf
   ixchariot:
     path: D:/Program Files (x86)/Ixia/IxChariot
-  pair: '5'
   repeat: '0'
   tool: iperf
 serial_port:
   baud: '961200'
   port: COM5
   status: false
-text_case: test/performance/test_wifi_rvr.py
+text_case: test/performance/test_wifi_peak_throughput.py
