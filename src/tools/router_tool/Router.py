@@ -10,6 +10,8 @@
 
 from collections import namedtuple
 
+from src.util.constants import RouterConst
+
 
 def _info(info):
     return 'Default' if info == None else info
@@ -19,12 +21,9 @@ def router_str(self):
     return f'{_info(self.band)},{_info(self.ssid)},{_info(self.wireless_mode)},{_info(self.channel)},{_info(self.bandwidth)},{_info(self.authentication)}'
 
 
-RUN_SETTING_ACTIVITY = 'am start -n com.android.tv.settings/.MainSettings'
+RUN_SETTING_ACTIVITY = RouterConst.RUN_SETTING_ACTIVITY
 
-fields = ['band', 'ssid', 'wireless_mode', 'channel', 'bandwidth', 'authentication',
-          'password', 'tx', 'rx', 'data_row', 'expected_rate', 'wifi6', 'wep_encrypt',
-          'hide_ssid', 'hide_type', 'wpa_encrypt', 'passwd_index', 'protect_frame',
-          'smart_connect', 'country_code']
+fields = RouterConst.fields
 
 Router = namedtuple('Router', fields, defaults=(None,) * len(fields))
 Router.__str__ = router_str

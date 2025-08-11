@@ -15,16 +15,9 @@ import os
 import json
 from typing import Literal
 from src.util.mixin import json_mixin, nested_dict
+from src.util.constants import RouterConst
 
-FPGA_CONFIG = {
-    'W1': {'mimo': '1X1', '2.4G': '11N', '5G': '11AC'},
-    'W1L': {'mimo': '1X1', '2.4G': '11N', '5G': '11AC'},
-    'W2': {'mimo': '2X2', '2.4G': '11AX', '5G': '11AX'},
-    'W2U': {'mimo': '2X2', '2.4G': '11AX', '5G': '11AX'},
-    'W2L': {'mimo': '2X2', '2.4G': '11AX', '5G': '11AX'}
-}
-dut_wifichip = 'w2_sdio'
-wifichip, interface = dut_wifichip.split('_')
+wifichip, interface = RouterConst.dut_wifichip.split('_')
 
 
 @dataclass
@@ -337,7 +330,7 @@ def handle_expectdata(ip, port, band, dir):
             authentication = data[band]['authentication']
             with open(f"{os.getcwd()}/config/compatibility_dut.json", 'r') as f:
                 dut_data = json.load(f)
-                return dut_data[band][interface][FPGA_CONFIG[wifichip][band]][bandwidth][FPGA_CONFIG[wifichip]['mimo']][
-                    dir]
+                return dut_data[band][interface][RouterConst.FPGA_CONFIG[wifichip][band]][bandwidth][
+                    RouterConst.FPGA_CONFIG[wifichip]['mimo']][dir]
 
 # print(handle_expectdata("192.168.200.6", "7", '2.4G', 'UL'))
