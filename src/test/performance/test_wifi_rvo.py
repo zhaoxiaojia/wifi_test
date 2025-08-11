@@ -10,7 +10,6 @@
 """
 
 import logging
-import os
 import re
 import threading
 import time
@@ -21,10 +20,10 @@ import pytest
 from src.tools.connect_tool.lab_device_controller import LabDeviceController
 from src.tools.router_tool.Router import Router
 from src.tools.router_tool.router_factory import get_router
-from src.tools.yamlTool import yamlTool
+from src.tools.config_loader import load_config
 
-wifi_yaml = yamlTool(os.getcwd() + '/config/config.yaml')
-router_name = wifi_yaml.get_note('router')['name']
+cfg = load_config()
+router_name = cfg['router']['name']
 
 
 # 实例路由器对象
@@ -34,18 +33,18 @@ test_data = get_testdata(router)
 
 sum_list_lock = threading.Lock()
 
-rvr_tool = wifi_yaml.get_note('rvr')['tool']
+rvr_tool = cfg['rvr']['tool']
 
 
 corner_step_list = []
 # 配置衰减
-corner_ip = wifi_yaml.get_note('corner_angle')['ip_address']
+corner_ip = cfg['corner_angle']['ip_address']
 if corner_ip == '192.168.5.11':
-	corner_tool = rs()
+        corner_tool = rs()
 else:
      corner_tool = LabDeviceController(corner_ip)
 logging.info(f'corner_ip {corner_ip}')
-corner_step_list = wifi_yaml.get_note('corner_angle')['step']
+corner_step_list = cfg['corner_angle']['step']
 corner_step_list = [i for i in range(*corner_step_list)][::45]
 logging.info(f'corner step_list {corner_step_list}')
 

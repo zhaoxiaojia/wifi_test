@@ -10,7 +10,6 @@
 """
 
 import logging
-import os
 import re
 import threading
 import time
@@ -19,10 +18,10 @@ import pytest
 
 from src.tools.router_tool.Router import Router
 from src.tools.router_tool.router_factory import get_router
-from src.tools.yamlTool import yamlTool
+from src.tools.config_loader import load_config
 
-wifi_yaml = yamlTool(os.getcwd() + '/config/config.yaml')
-router_name = wifi_yaml.get_note('router')['name']
+cfg = load_config()
+router_name = cfg['router']['name']
 # 实例路由器对象
 router = get_router(router_name)
 logging.info(f'router {router}')
@@ -30,7 +29,7 @@ test_data = get_testdata(router)
 
 sum_list_lock = threading.Lock()
 
-rvr_tool = wifi_yaml.get_note('rvr')['tool']
+rvr_tool = cfg['rvr']['tool']
 
 step_list = [0]
 
