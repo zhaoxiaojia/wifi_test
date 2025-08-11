@@ -570,7 +570,12 @@ class CaseConfigPage(CardWidget):
 
                 vbox.addWidget(QLabel("Repeat:"))
                 vbox.addWidget(self.repeat_combo)
+                self.rvr_threshold_edit = LineEdit()
+                self.rvr_threshold_edit.setPlaceholderText("throughput threshold")
+                self.rvr_threshold_edit.setText(str(value.get("throughput_threshold", 0)))
 
+                vbox.addWidget(QLabel("Throughput threshold:"))
+                vbox.addWidget(self.rvr_threshold_edit)
                 # 加入表单
                 self._add_group(group)
 
@@ -580,7 +585,7 @@ class CaseConfigPage(CardWidget):
                 self.field_widgets["rvr.iperf.path"] = self.iperf_path_edit
                 self.field_widgets["rvr.ixchariot.path"] = self.ix_path_edit
                 self.field_widgets["rvr.repeat"] = self.repeat_combo
-
+                self.field_widgets["rvr.throughput_threshold"] = self.rvr_threshold_edit
                 # 根据当前 Tool 值隐藏/显示子组
                 self.on_rvr_tool_changed(self.rvr_tool_combo.currentText())
                 continue  # 跳过默认 LineEdit 处理
@@ -640,7 +645,6 @@ class CaseConfigPage(CardWidget):
                 self.router_name_combo.currentTextChanged.connect(self.on_router_changed)
                 self.on_router_changed(self.router_name_combo.currentText())
                 continue  # ← 继续下一顶层 key
-
             if key == "serial_port":
                 group = QGroupBox("Serial Port")
                 vbox = QVBoxLayout(group)
@@ -798,12 +802,13 @@ class CaseConfigPage(CardWidget):
         if "rvr" in basename:
             editable |= {
                 "rvr", "rvr.tool", "rvr.iperf.version", "rvr.iperf.path", "rvr.ixchariot.path", "rvr.repeat",
+                "rvr.throughput_threshold",
                 "rf_solution.model",
                 "rf_solution.RC4DAT-8G-95.idVendor",
                 "rf_solution.RC4DAT-8G-95.idProduct",
                 "rf_solution.RC4DAT-8G-95.ip_address",
                 "rf_solution.RADIORACK-4-220.ip_address",
-                "rf_solution.step"
+                "rf_solution.step",
             }
         if "rvo" in basename:
             editable |= {

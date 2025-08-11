@@ -43,7 +43,7 @@ class MainWindow(FluentWindow):
 
         # 添加侧边导航（页面，图标，标题，描述）
         self.addSubInterface(
-            self.case_config_page, FluentIcon.SETTING, "用例配置", "Case Config"
+            self.case_config_page, FluentIcon.SETTING, "Config Setup", "Case Config"
         )
         # 初始不展示 RVR Wi-Fi 配置页
         # 可加更多页面，比如“历史记录”“关于”等
@@ -60,7 +60,7 @@ class MainWindow(FluentWindow):
             self.addSubInterface(
                 self.rvr_wifi_config_page,
                 FluentIcon.WIFI,
-                "RVR Wi-Fi配置",
+                "RVR Scenario Config",
                 "RVR Wi-Fi Config",
             )
 
@@ -134,7 +134,7 @@ class MainWindow(FluentWindow):
         self.addSubInterface(
             self.run_page,
             FluentIcon.PLAY,
-            "运行",
+            "Test",
             position=NavigationItemPosition.BOTTOM
         )
         # 强制刷新堆叠窗口并切换（移除QTimer，直接同步切换）
