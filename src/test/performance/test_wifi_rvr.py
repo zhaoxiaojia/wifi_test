@@ -10,7 +10,6 @@
 """
 
 import logging
-import os
 import re
 import threading
 import time
@@ -21,10 +20,10 @@ import pytest
 from src.tools.connect_tool.lab_device_controller import LabDeviceController
 from src.tools.router_tool.Router import Router
 from src.tools.router_tool.router_factory import get_router
-from src.tools.yamlTool import yamlTool
+from src.tools.config_loader import load_config
 
-wifi_yaml = yamlTool(os.getcwd() + '/config/config.yaml')
-router_name = wifi_yaml.get_note('router')['name']
+cfg = load_config()
+router_name = cfg['router']['name']
 
 # 实例路由器对象
 router = get_router(router_name)
@@ -33,23 +32,24 @@ test_data = get_testdata(router)
 
 sum_list_lock = threading.Lock()
 
-rvr_tool = wifi_yaml.get_note('rvr')['tool']
+rvr_tool = cfg['rvr']['tool']
 
 # 初始化 衰减 & 转台 对象
 
 # 读取衰减 配置
 rf_step_list = []
 rf_ip = ''
-model = wifi_yaml.get_note('rf_solution')['model']
+rf_solution = cfg['rf_solution']
+model = rf_solution['model']
 if model not in ['RADIORACK-4-220', 'RC4DAT-8G-95', 'XIN-YI']:
     raise EnvironmentError("Doesn't support this model")
 if model == 'XIN-YI':
     rf_tool = rs()
 else:
-    rf_ip = wifi_yaml.get_note('rf_solution')[model]['ip_address']
+    rf_ip = rf_solution[model]['ip_address']
     rf_tool = LabDeviceController(rf_ip)
     logging.info(f'rf_ip {rf_ip}')
-rf_step_list = wifi_yaml.get_note('rf_solution')['step']
+rf_step_list = rf_solution['step']
 rf_step_list = [i for i in range(*rf_step_list)][::3]
 logging.info(f'rf_step_list {rf_step_list}')
 
@@ -60,7 +60,7 @@ logging.info(f'finally step_list {step_list}')
 # 配置 测试报告
 # pytest.testResult.x_path = [] if (rf_needed and corner_needed) == 'both' else step_list
 rx_result, tx_result = '', ''
-throughput_threshold = float(wifi_yaml.get_note('rvr').get('throughput_threshold', 0))
+throughput_threshold = float(cfg['rvr'].get('throughput_threshold', 0))
 skip_tx = False
 skip_rx = False
 
