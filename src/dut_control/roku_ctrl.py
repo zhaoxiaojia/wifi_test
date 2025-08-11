@@ -23,48 +23,7 @@ from roku import Roku
 from src.tools.connect_tool.serial_tool import serial_tool
 from src.tools.connect_tool.telnet_tool import telnet_tool
 from src.tools.yamlTool import yamlTool
-
-COMMANDS = {
-    # Standard Keys
-    "home": "Home",
-    "reverse": "Rev",
-    "forward": "Fwd",
-    "play": "Play",
-    "select": "Select",
-    "left": "Left",
-    "right": "Right",
-    "down": "Down",
-    "up": "Up",
-    "back": "Back",
-    "replay": "InstantReplay",
-    "info": "Info",
-    "backspace": "Backspace",
-    "search": "Search",
-    "enter": "Enter",
-    "literal": "Lit",
-    # For devices that support "Find Remote"
-    "find_remote": "FindRemote",
-    # For Roku TV
-    "volume_down": "VolumeDown",
-    "volume_up": "VolumeUp",
-    "volume_mute": "VolumeMute",
-    # For Roku TV while on TV tuner channel
-    "channel_up": "ChannelUp",
-    "channel_down": "ChannelDown",
-    # For Roku TV current input
-    "input_tuner": "InputTuner",
-    "input_hdmi1": "InputHDMI1",
-    "input_hdmi2": "InputHDMI2",
-    "input_hdmi3": "InputHDMI3",
-    "input_hdmi4": "InputHDMI4",
-    "input_av1": "InputAV1",
-    # For devices that support being turned on/off
-    "power": "Power",
-    "poweroff": "PowerOff",
-    "poweron": "PowerOn",
-}
-
-SENSORS = ("acceleration", "magnetic", "orientation", "rotation")
+from src.util.constants import RokuConst
 
 # roku_lux = YamlTool(os.getcwd() + '/config/roku/roku_changhong.yaml')
 roku_config = yamlTool(os.getcwd() + '/config/config.yaml')
@@ -189,17 +148,17 @@ class roku_ctrl(Roku):
     #                                 ['Legal notices'], ['Privacy'], ['Help'], ['System']]
 
     def __getattr__(self, name):
-        # if name not in COMMANDS and name not in SENSORS:
+        # if name not in RokuConst.COMMANDS and name not in RokuConst.SENSORS:
         #     raise AttributeError(f"{name} is not a valid method")
 
         def command(*args, **kwargs):
-            if name in SENSORS:
+            if name in RokuConst.SENSORS:
                 keys = [f"{name}.{axis}" for axis in ("x", "y", "z")]
                 params = dict(zip(keys, args))
                 self.input(params)
             elif name == "literal":
                 for char in args[0]:
-                    path = f"/keypress/{COMMANDS[name]}_{quote_plus(char)}"
+                    path = f"/keypress/{RokuConst.COMMANDS[name]}_{quote_plus(char)}"
                     self._post(path)
             elif name == "search":
                 path = "/search/browse"
@@ -207,11 +166,11 @@ class roku_ctrl(Roku):
                 self._post(path, params=params)
             else:
                 if len(args) > 0 and (args[0] == "keydown" or args[0] == "keyup"):
-                    path = f"/{args[0]}/{COMMANDS[name]}"
+                    path = f"/{args[0]}/{RokuConst.COMMANDS[name]}"
                     logging.info(f'key {args[0]}')
                 else:
-                    path = f"/keypress/{COMMANDS[name]}"
-                    logging.info(f'Press key {COMMANDS[name]}')
+                    path = f"/keypress/{RokuConst.COMMANDS[name]}"
+                    logging.info(f'Press key {RokuConst.COMMANDS[name]}')
                 try:
                     self._post(path)
                 except Exception:
@@ -1082,7 +1041,7 @@ class roku_ctrl(Roku):
         button_dict = {'h': 'home', 'p': 'play', 's': 'select', 'l': 'left', 'r': 'right', 'd': 'down', 'u': 'up',
                        'b': 'back', 'i': 'info'}
         for i in button_list:
-            if i in COMMANDS:
+            if i in RokuConst.COMMANDS:
                 getattr(self, button_dict[i])(time=idle)
             else:
                 logging.info(f'{i} not in button_dict .pls check again')

@@ -17,7 +17,8 @@ import pytest
 
 from src.tools.pdusnmp import power_ctrl
 from src.tools.router_tool.Router import Router
-from src.tools.router_tool.router_performance import FPGA_CONFIG, compatibility_router
+from src.tools.router_tool.router_performance import compatibility_router
+from src.util.constants import RouterConst
 
 power_delay = power_ctrl()
 power_ctrl = power_delay.ctrl
@@ -56,8 +57,8 @@ def handle_expectdata(ip, port, band, dir):
             authentication = data[band]['authentication']
             with open(f"{os.getcwd()}/config/compatibility_dut.json", 'r') as f:
                 dut_data = json.load(f)
-                return dut_data[band][interface.upper()][FPGA_CONFIG[wifichip][band]][bandwidth][
-                    FPGA_CONFIG[wifichip]['mimo']][
+                return dut_data[band][interface.upper()][RouterConst.FPGA_CONFIG[wifichip][band]][bandwidth][
+                    RouterConst.FPGA_CONFIG[wifichip]['mimo']][
                     dir]
 
 
