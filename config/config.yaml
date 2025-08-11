@@ -18,16 +18,16 @@ rf_solution:
   RC4DAT-8G-95:
     idProduct: '35'
     idVendor: '8398'
-    ip_address: 192.168.50.10
-  model: XIN-YI
+    ip_address: 192.168.50.35
+  model: RC4DAT-8G-95
   step:
   - 0
-  - 19
+  - 3
 router:
-  name: xiaomibe7000
-  ssid_2g: xiaomibe7000_2g
+  name: xiaomiax3600
+  ssid_2g: xiaomiax3600_2g
   passwd_2g: '12345678'
-  ssid_5g: xiaomibe7000_5g
+  ssid_5g: xiaomiax3600_5g
   passwd_5g: '12345678'
 rvr:
   iperf:
@@ -42,4 +42,4 @@ serial_port:
   baud: '961200'
   port: COM5
   status: false
-text_case: test/performance/test_wifi_peak_throughput.py
+text_case: test/performance/test_wifi_rvr.py

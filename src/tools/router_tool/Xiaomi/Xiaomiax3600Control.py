@@ -3,7 +3,7 @@
 # @Time    : 2022/11/3 09:42
 # @Author  : chao.li
 # @Site    :
-# @File    : Xiaomiax3000Control.py
+# @File    : Xiaomiax3600Control.py
 # @Software: PyCharm
 
 
@@ -17,7 +17,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from src.tools.router_tool.RouterControl import ConfigError, RouterTools
 
 
-class Xiaomiax3000Control(RouterTools):
+class Xiaomiax3600Control(RouterTools):
     '''
 
     rvr
@@ -84,7 +84,7 @@ class Xiaomiax3000Control(RouterTools):
     WIRELESS_5 = ['11ac', '11ax']
 
     def __init__(self):
-        super().__init__('xiaomi_ax3000', display=True)
+        super().__init__('xiaomi_ax3600', display=True)
 
     def login(self):
         '''
@@ -93,6 +93,7 @@ class Xiaomiax3000Control(RouterTools):
 
         '''
         # try:
+        super().login()
         self.driver.get(self.address)
         # input passwd
         self.driver.find_element(By.ID, self.xpath['password_element']).click()
