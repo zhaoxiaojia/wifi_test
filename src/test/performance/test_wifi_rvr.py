@@ -26,7 +26,6 @@ from src.tools.yamlTool import yamlTool
 wifi_yaml = yamlTool(os.getcwd() + '/config/config.yaml')
 router_name = wifi_yaml.get_note('router')['name']
 
-
 # 实例路由器对象
 router = get_router(router_name)
 logging.info(f'router {router}')
@@ -56,17 +55,21 @@ logging.info(f'rf_step_list {rf_step_list}')
 
 step_list = rf_step_list
 
-
 logging.info(f'finally step_list {step_list}')
 
 # 配置 测试报告
 # pytest.testResult.x_path = [] if (rf_needed and corner_needed) == 'both' else step_list
 rx_result, tx_result = '', ''
+throughput_threshold = float(wifi_yaml.get_note('rvr').get('throughput_threshold', 0))
+skip_tx = False
+skip_rx = False
 
 
 @pytest.fixture(scope='session', params=test_data, ids=[str(i) for i in test_data])
 def setup(request):
-    global rx_result, tx_result, pc_ip, dut_ip
+    global rx_result, tx_result, pc_ip, dut_ip, skip_rx, skip_tx
+    skip_tx = False
+    skip_rx = False
     logging.info('router setup start')
 
     # 重置衰减&转台
@@ -146,29 +149,10 @@ def setup(request):
     time.sleep(10)
 
 
-# 生成 pdf
-# if step_list != [0]:
-#     pytest.testResult.write_to_excel()
-#     if test_type == 'rf':
-#         # 重置衰减
-#         if not rf_debug:
-#             rf_tool.execute_rf_cmd(0)
-#         # 生成折线图
-#         pytest.testResult.write_attenuation_data_to_pdf()
-#     elif test_type == 'corner':
-#         # 转台重置
-#         if not rf_debug:
-#             corner_tool.set_turntable_zero()
-#         # 生成雷达图
-#         pytest.testResult.write_corner_data_to_pdf()
-#     else:
-#         ...
-
-
 # 测试 iperf
 @pytest.mark.parametrize("rf_value", step_list)
 def test_rvr(setup, rf_value):
-    global rx_result, tx_result
+    global rx_result, tx_result, skip_tx, skip_rx, throughput_threshold
     # 判断板子是否存在  ip
     if not setup[0]:
         logging.info("Can't connect wifi ,input 0")
@@ -178,41 +162,56 @@ def test_rvr(setup, rf_value):
             f.write("\n Can't connect wifi , skip this loop\n\n")
         return
     router_info = setup[1]
-
-    logging.info(f'rf_value {rf_value}')
     # 执行 修改 步长
     # 修改衰减
-
     logging.info(f'set rf value {rf_value}')
-    value = rf_value[1] if type(rf_value) == tuple else rf_value
-    rf_tool.execute_rf_cmd(value)
-    # 获取当前衰减值
+    db_set = rf_value[1] if type(rf_value) == tuple else rf_value
+    rf_tool.execute_rf_cmd(db_set)
     logging.info(rf_tool.get_rf_current_value())
-
     with open(pytest.testResult.detail_file, 'a') as f:
         f.write('-' * 40 + '\n')
-        info, corner_set = '', ''
-        db_set = 0
-
-        db_set = rf_value[1] if type(rf_value) == tuple else rf_value
+        info = ''
         info += 'db_set : ' + str(db_set) + '\n'
         info += 'corner_set : \n'
-
         f.write(info)
-    # time.sleep(1)
 
-    # 获取rssi
-    rssi_num = pytest.dut.get_rssi()
-
+    pytest.dut.get_rssi()
+    if skip_tx:
+        tx_result_info = (
+            f'{pytest.dut.serialnumber} Throughput Standalone NULL Null {router_info.wireless_mode.split()[0]} '
+            f'{router_info.band.split()[0]} {router_info.bandwidth.split()[0]} Rate_Adaptation '
+            f'{router_info.channel} {type} UL NULL NULL {db_set} {pytest.dut.rssi_num} NULL NULL '
+            f'"NULL" {",".join(map(str, [0]))}')
+        logging.info(tx_result_info)
+        pytest.testResult.save_result(tx_result_info.replace(' ', ','))
+    if skip_rx:
+        rx_result_info = (
+            f'{pytest.dut.serialnumber} Throughput Standalone NULL Null {router_info.wireless_mode.split()[0]} '
+            f'{router_info.band.split()[0]} {router_info.bandwidth.split()[0]} Rate_Adaptation '
+            f'{router_info.channel} {type} DL NULL NULL {db_set} {pytest.dut.rssi_num} NULL NULL '
+            f'"NULL" {",".join(map(str, [0]))}')
+        pytest.testResult.save_result(rx_result_info.replace(' ', ','))
+    if skip_tx and skip_rx:
+        return
     # handle iperf pair count
-    logging.info('start test tx/rx')
+    logging.info('start test iperf')
     logging.info(f'router_info: {router_info}')
     # iperf  打流
-    if 'tx' in router_info.test_type:
-        logging.info(f'rssi : {rssi_num}')
-        pytest.dut.get_tx_rate(router_info, rssi_num, 'TCP',
-                               db_set=db_set)
-    if 'rx' in router_info.test_type:
-        logging.info(f'rssi : {rssi_num}')
-        pytest.dut.get_rx_rate(router_info, rssi_num, 'TCP',
-                               db_set=db_set)
+    if 'tx' in router_info.test_type and not skip_tx:
+        logging.info(f'rssi : {pytest.dut.rssi_num}')
+        tx_result = pytest.dut.get_tx_rate(router_info, 'TCP', db_set=db_set)
+        try:
+            tx_val = float(tx_result.split(',')[0])
+        except Exception:
+            tx_val = 0
+        if tx_val < throughput_threshold:
+            skip_tx = True
+    if 'rx' in router_info.test_type and not skip_rx:
+        logging.info(f'rssi : {pytest.dut.rssi_num}')
+        rx_result = pytest.dut.get_rx_rate(router_info, 'TCP', db_set=db_set)
+        try:
+            rx_val = float(rx_result.split(',')[0])
+        except Exception:
+            rx_val = 0
+        if rx_val < throughput_threshold:
+            skip_rx = True
