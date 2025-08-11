@@ -23,7 +23,7 @@ from src.tools.router_tool.Linksys1200acControl import Linksys1200acControl
 # from tools.router_tool.NetgearR6100Control import NetgearR6100Control
 from src.tools.router_tool.Tplink.TplinkAx6000Control import TplinkAx6000Control
 from src.tools.router_tool.Tplink.TplinkWr842Control import TplinkWr842Control
-from src.tools.router_tool.Xiaomi.Xiaomiax3000Control import Xiaomiax3000Control
+from src.tools.router_tool.Xiaomi.Xiaomiax3600Control import Xiaomiax3600Control
 from src.tools.router_tool.ZTEax5400Control import ZTEax5400Control
 
 # import threadpool
@@ -147,7 +147,7 @@ def wifi_setup_teardown(request):
         change_result = router.change_setting(router_info)
         target_ip = '192.168.5.1'
     if 'XiaomiAX3000' in router_info.ssid:
-        router = Xiaomiax3000Control()
+        router = Xiaomiax3600Control()
         change_result = router.change_setting(router_info)
         target_ip = '192.168.6.1'
     if 'Tplinkwr842' in router_info.ssid:

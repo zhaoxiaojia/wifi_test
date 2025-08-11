@@ -14,7 +14,7 @@ from src.test import (Router, connect_save_ssid, connect_ssid, find_ssid,
 import pytest
 
 from src.tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
-from src.tools.router_tool.Xiaomi.Xiaomiax3000Control import Xiaomiax3000Control
+from src.tools.router_tool.Xiaomi.Xiaomiax3600Control import Xiaomiax3600Control
 
 '''
 测试步骤
@@ -40,7 +40,7 @@ def setup_teardown():
     ax88uControl = Asusax88uControl()
     ax88uControl.change_setting(router_ausu)
     time.sleep(1)
-    xiaomiControl = Xiaomiax3000Control()
+    xiaomiControl = Xiaomiax3600Control()
     xiaomiControl.change_setting(router_xiaomi)
     ax88uControl.router_control.driver.quit()
     xiaomiControl.router_control.driver.quit()

@@ -13,6 +13,7 @@ import telnetlib
 import time
 
 import pytest
+from cffi.cffi_opcode import PRIM_INT
 
 
 class TelnetInterface():
@@ -46,6 +47,7 @@ class TelnetInterface():
             assert 0, 'value must be in range 1-110'
         logging.info(f'Set rf value to {value}')
         if self.model == 'RC4DAT-8G-95':
+            print(f":CHAN:1:2:3:4:SETATT:{value};")
             self.tn.write(f":CHAN:1:2:3:4:SETATT:{value};".encode('ascii') + b'\r\n')
             self.tn.read_some()
         else:
@@ -57,6 +59,7 @@ class TelnetInterface():
             self.tn.write("ATT?;".encode('ascii') + b'\r')
             # self.tn.read_some().decode('ascii')
             res = self.tn.read_some().decode('ascii')
+            print(res)
             return res.split()[0]
         else:
             self.tn.write("ATT".encode('ascii') + b'\r\n')

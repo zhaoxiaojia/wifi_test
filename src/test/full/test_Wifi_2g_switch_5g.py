@@ -14,7 +14,7 @@ from src.test import (Router, connect_save_ssid, connect_ssid, forget_network_cm
 import pytest
 
 from src.tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
-from src.tools.router_tool.Xiaomi.Xiaomiax3000Control import Xiaomiax3000Control
+from src.tools.router_tool.Xiaomi.Xiaomiax3600Control import Xiaomiax3600Control
 
 '''
 测试步骤
@@ -37,7 +37,7 @@ router_5g = Router(serial='1', band='5 GHz', ssid='XiaomiAX3000_5G', channel='�
 @pytest.fixture(autouse=True)
 def setup_teardown():
     ax88uControl = Asusax88uControl()
-    xiaomiControl = Xiaomiax3000Control()
+    xiaomiControl = Xiaomiax3600Control()
     ax88uControl.change_setting(router_2g)
     # ax88uControl.router_control.driver.quit()
     time.sleep(1)
