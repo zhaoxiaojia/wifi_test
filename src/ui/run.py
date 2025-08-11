@@ -86,6 +86,7 @@ class CaseRunner(QThread):
                 "-v",
                 "-s",
                 "--full-trace",
+                "--rootdir=.",
                 f"--resultpath={report_dir}",
                 self.case_path,
             ]
