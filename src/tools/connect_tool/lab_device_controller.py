@@ -1,38 +1,35 @@
-#!/usr/bin/env python 
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 # @Time    : 2022/1/10 10:02
 # @Author  : chao.li
 # @Site    :
-# @File    : TelnetInterface.py
+# @File    : lab_device_controller.py
 # @Software: PyCharm
 
 
 import logging
 import re
-import telnetlib
 import time
 
 import pytest
-from cffi.cffi_opcode import PRIM_INT
+
+from .telnet_tool import telnet_tool
 
 
-class TelnetInterface():
+class LabDeviceController:
     def __init__(self, ip):
         self.ip = ip
         self.model = pytest.config_yaml.get_note('rf_solution')['model']
         try:
             logging.info(f'Try to connect {ip}')
-            self.tn = telnetlib.Telnet()
-            self.tn.open(self.ip, port=23)
+            self.tn = telnet_tool(self.ip)
             logging.info('*' * 80)
             logging.info(f'* ip   : {ip}')
             logging.info(f'* port: 23')
             logging.info('*' * 80)
-            # print('telnet init done')
-
         except Exception as f:
             logging.info(f)
-            return None
+            self.tn = None
 
     def turn_table_init(self):
         # self.tn.write('gcp'.encode('ascii') + b'\r\n')
@@ -47,23 +44,21 @@ class TelnetInterface():
             assert 0, 'value must be in range 1-110'
         logging.info(f'Set rf value to {value}')
         if self.model == 'RC4DAT-8G-95':
-            print(f":CHAN:1:2:3:4:SETATT:{value};")
-            self.tn.write(f":CHAN:1:2:3:4:SETATT:{value};".encode('ascii') + b'\r\n')
-            self.tn.read_some()
+            cmd = f":CHAN:1:2:3:4:SETATT:{value};"
+            print(cmd)
+            self.tn.checkoutput(cmd)
         else:
-            self.tn.write(f"ATT 1 {value};2 {value};3 {value};4 {value};".encode('ascii') + b'\r')
+            cmd = f"ATT 1 {value};2 {value};3 {value};4 {value};"
+            self.tn.checkoutput(cmd)
         time.sleep(2)
 
     def get_rf_current_value(self):
         if self.model == 'RC4DAT-8G-95':
-            self.tn.write("ATT?;".encode('ascii') + b'\r')
-            # self.tn.read_some().decode('ascii')
-            res = self.tn.read_some().decode('ascii')
+            res = self.tn.checkoutput("ATT?;")
             print(res)
             return res.split()[0]
         else:
-            self.tn.write("ATT".encode('ascii') + b'\r\n')
-            res = self.tn.read_some().decode('utf-8')
+            res = self.tn.checkoutput("ATT")
             return list(map(int, re.findall(r'\s(\d+);', res)))
 
     def execute_turntable_cmd(self, type, angle=''):
@@ -74,13 +69,13 @@ class TelnetInterface():
             if angle == '':
                 angle += self.get_turntanle_current_angle() + 30 * 10
             if angle != self.get_turntanle_current_angle():
-                self.tn.write(f"{type} {angle % 3600}".encode('ascii') + b'\r\n')
+                self.tn.checkoutput(f"{type} {angle % 3600}")
         else:
-            self.tn.write(f"{type}".encode('ascii') + b'\r\n')
+            self.tn.checkoutput(f"{type}")
         self.wait_standyby()
 
     def set_turntable_zero(self):
-        self.tn.write('rt 0'.encode('ascii') + b'\r\n')
+        self.tn.checkoutput('rt 0')
         time.sleep(2)
         logging.info('try to wait ')
         self.wait_standyby()
@@ -88,20 +83,18 @@ class TelnetInterface():
     def wait_standyby(self):
         start = time.time()
         while time.time() - start < 60:
-            self.tn.write('gs'.encode('ascii') + b'\r\n')
-            log = self.tn.read_some().decode('utf-8').strip()
+            log = self.tn.checkoutput('gs').strip()
             time.sleep(1)
             if 'standby' in log:
-                self.tn.write('gcp'.encode('ascii') + b'\r\n')
-                self.tn.read_some().decode('utf-8')
+                self.tn.checkoutput('gcp')
                 return
         assert 0, 'wait for standby over time'
 
     def get_turntanle_current_angle(self):
         logging.info('Try to get status')
         # self.tn.read_some().decode('utf-8')
-        self.tn.write('gcp'.encode('ascii') + b'\r\n')
-        current_angle = int(self.tn.read_some().decode('utf-8'))
+        res = self.tn.checkoutput('gcp')
+        current_angle = int(res)
         self.angle = int(current_angle)
         return self.angle
 

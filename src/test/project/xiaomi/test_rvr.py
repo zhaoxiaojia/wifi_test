@@ -22,7 +22,7 @@ from src.test.performance.test_wifi_rvr_rvo import corner_tool
 import openpyxl
 import pytest
 
-from src.tools.connect_tool.TelnetInterface import TelnetInterface
+from src.tools.connect_tool.lab_device_controller import LabDeviceController
 from src.tools.router_tool.Router import Router
 from src.tools.router_tool.router_factory import get_router
 from src.tools.yamlTool import yamlTool
@@ -89,7 +89,7 @@ if rf_needed:
 
     rf_ip = wifi_yaml.get_note('rf_solution')[model]['ip_address']
     logging.info('test rf')
-    rf_tool = TelnetInterface(rf_ip)
+    rf_tool = LabDeviceController(rf_ip)
     logging.info(f'rf_ip {rf_ip}')
     rf_step_list = wifi_yaml.get_note('rf_solution')['step']
     rf_step_list = [i for i in range(*rf_step_list)][::8]
@@ -100,7 +100,7 @@ if corner_needed:
     # 配置衰减
     corner_ip = wifi_yaml.get_note('corner_angle')['ip_address']
     logging.info('test corner')
-    corner_tool = TelnetInterface(corner_ip)
+    corner_tool = LabDeviceController(corner_ip)
     logging.info(f'corner_ip {corner_ip}')
     corner_step_list = wifi_yaml.get_note('corner_angle')['step']
     corner_step_list = [i for i in range(*corner_step_list)][::45]
