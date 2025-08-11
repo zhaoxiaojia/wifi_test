@@ -49,12 +49,12 @@ def setup(request):
     # push_iperf()
     router_info = request.param
     # 修改路由器配置
-    assert router.change_setting(router_info), "Can't set ap , pls check first"
-    if pytest.connect_type == 'telnet':
-        band = '5 GHz' if '2' in router_info.band else '2.4 GHz'
-        ssid = router_info.ssid + "_bat";
-        router.change_setting(Router(band=band, ssid=ssid))
-    time.sleep(3)
+    # assert router.change_setting(router_info), "Can't set ap , pls check first"
+    # if pytest.connect_type == 'telnet':
+    #     band = '5 GHz' if '2' in router_info.band else '2.4 GHz'
+    #     ssid = router_info.ssid + "_bat";
+    #     router.change_setting(Router(band=band, ssid=ssid))
+    # time.sleep(3)
 
     logging.info('router set done')
     with open(pytest.testResult.detail_file, 'a', encoding='utf-8') as f:
@@ -63,7 +63,7 @@ def setup(request):
     logging.info(f'dut try to connect {router_info.ssid}')
     if pytest.connect_type == 'telnet':
         connect_status = True
-        time.sleep(90)
+        # time.sleep(90)
     else:
         # 连接 网络 最多三次重试
         for _ in range(3):
@@ -143,12 +143,10 @@ def test_rvr(setup, rf_value):
 
     # iperf  打流
     if router_info.tx:
-        pair = wifi_yaml.get_note('rvr')['pair']
-        logging.info(f'rssi : {pytest.dut.rssi_num} pair : {pair}')
+        logging.info(f'rssi : {pytest.dut.rssi_num}')
         pytest.dut.get_tx_rate(router_info , 'TCP',
                                db_set=db_set)
     if router_info.rx:
-        pair = wifi_yaml.get_note('rvr')['pair']
-        logging.info(f'rssi : {pytest.dut.rssi_num} pair : {pair}')
+        logging.info(f'rssi : {pytest.dut.rssi_num}')
         pytest.dut.get_rx_rate(router_info, 'TCP',
                                db_set=db_set)

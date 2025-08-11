@@ -209,12 +209,10 @@ def test_rvr(setup, rf_value):
     logging.info(f'router_info: {router_info}')
     # iperf  打流
     if 'tx' in router_info.test_type:
-        pair = wifi_yaml.get_note('rvr')['pair']
-        logging.info(f'rssi : {rssi_num} pair : {pair}')
+        logging.info(f'rssi : {rssi_num}')
         pytest.dut.get_tx_rate(router_info, rssi_num, 'TCP',
                                db_set=db_set)
     if 'rx' in router_info.test_type:
-        pair = wifi_yaml.get_note('rvr')['pair']
-        logging.info(f'rssi : {rssi_num} pair : {pair}')
+        logging.info(f'rssi : {rssi_num}')
         pytest.dut.get_rx_rate(router_info, rssi_num, 'TCP',
                                db_set=db_set)

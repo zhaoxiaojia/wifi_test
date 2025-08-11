@@ -111,7 +111,7 @@ class dut():
     def __init__(self):
         self.serialnumber = 'executer'
         self.rvr_tool = pytest.config_yaml.get_note('rvr')['tool']
-        self.pair = pytest.config_yaml.get_note('rvr')['pair']
+        self.pair = 5
         self.repest_times = int(pytest.config_yaml.get_note('rvr')['repeat'])
         self._dut_ip = ''
         self._pc_ip = ''
@@ -294,10 +294,8 @@ class dut():
     def _get_logcat(self, lines):
         result_list = []
         for line in lines:
-            if self.pair != 1:
-                if '[SUM]' not in line:
-                    continue
-            print(line)
+            if '[SUM]' not in line:
+                continue
             if self.rssi_num > -60:
                 data = re.findall('\s0\.0-\s*3\d+\.\d*.*?(\d+\.*\d*)\s+Mbits/sec.*?', line.strip(), re.S)
                 if data:
@@ -316,7 +314,7 @@ class dut():
             result = 0
         return round(result, 1)
 
-    def get_logcat(self, pair, adb):
+    def get_logcat(self):
         # pytest.dut.kill_iperf()
         # 分析 iperf 测试结果
         if self.rvr_result is not None:
@@ -374,7 +372,7 @@ class dut():
             time.sleep(pytest.dut.IPERF_WAIT_TIME)
             if pytest.connect_type == 'telnet':
                 time.sleep(15)
-            rx_result = self.get_logcat(self.pair, self.serialnumber)
+            rx_result = self.get_logcat()
             if isinstance(terminal, subprocess.Popen):
                 terminal.terminate()
             if self.rvr_tool == 'ixchariot':
@@ -447,7 +445,7 @@ class dut():
             if pytest.connect_type == 'telnet':
                 time.sleep(15)
             time.sleep(3)
-            tx_result = self.get_logcat(self.pair if type == 'TCP' else 1, self.serialnumber)
+            tx_result = self.get_logcat()
             if isinstance(terminal, subprocess.Popen):
                 terminal.terminate()
             if self.rvr_tool == 'ixchariot':
