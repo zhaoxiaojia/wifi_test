@@ -201,11 +201,11 @@ class Asusax88uControl(RouterTools):
             raise ConfigError('wireless elemenr error')
         self.telnet_write(cmd[mode])
 
-    def set_2g_wpa_passwd(self, passwd):
+    def set_2g_password(self, passwd):
         cmd = 'nvram set wl0_wpa_psk={};'
         self.telnet_write(cmd.format(passwd))
 
-    def set_5g_wpa_passwd(self, passwd):
+    def set_5g_password(self, passwd):
         cmd = 'nvram set wl1_wpa_psk={};'
         self.telnet_write(cmd.format(passwd))
 
@@ -303,10 +303,10 @@ class Asusax88uControl(RouterTools):
             self.set_2g_wireless(router.wireless_mode) if '2' in router.band else self.set_5g_wireless(
                 router.wireless_mode)
 
-        # 修改 wpa_passwd
-        if router.wpa_passwd:
-            self.set_2g_wpa_passwd(router.wpa_passwd) if '2' in router.band else self.set_5g_wpa_passwd(
-                router.wpa_passwd)
+        # 修改 password
+        if router.password:
+            self.set_2g_password(router.password) if '2' in router.band else self.set_5g_password(
+                router.password)
 
         # 修改 authentication
         if router.authentication:
@@ -374,14 +374,14 @@ class Asusax88uControl(RouterTools):
 # ['Open System', 'WPA2-Personal', 'WPA3-Personal', 'WPA/WPA2-Personal', 'WPA2/WPA3-Personal',
 #                              'WPA2-Enterprise', 'WPA/WPA2-Enterprise']
 # fields = ['serial', 'band', 'ssid', 'wireless_mode', 'channel', 'bandwidth', 'authentication',
-#           'wpa_passwd', 'test_type', 'protocol_type', 'wep_encrypt', 'wep_passwd',
+#           'password', 'test_type', 'protocol_type', 'wep_encrypt', 'wep_passwd',
 #           'hide_ssid', 'hide_type', 'wpa_encrypt', 'passwd_index', 'protect_frame',
 #           'smart_connect', 'country_code']
 # ssid = 'coco'
 # passwd = '12345678'
 # Router = namedtuple('Router', fields, defaults=[None, ] * len(fields))
 # router = Router(band='5 GHz', ssid=ssid, wireless_mode='11ax', channel='36', bandwidth='80 MHz',
-#                 authentication='WPA2-Personal', wpa_passwd='12345678')
+#                 authentication='WPA2-Personal', password='12345678')
 # control = Asusax88uControl()
 # control.change_setting(router)
 # control.quit()

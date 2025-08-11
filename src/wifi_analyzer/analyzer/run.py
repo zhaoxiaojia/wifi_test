@@ -13,12 +13,13 @@
 # -*- coding: utf-8 -*-
 import argparse, glob, json
 from pathlib import Path
-from tshark_extract import load_fields_map, run_tshark_tsv
-from event_builder import build_events
-from checks_psk import check_psk
-from checks_sae import check_sae
-from checks_eap import check_eap_enterprise
-from report.gen_report import render_html
+
+from src.wifi_analyzer.analyzer.tshark_extract import load_fields_map, run_tshark_tsv
+from src.wifi_analyzer.analyzer.event_builder import build_events
+from src.wifi_analyzer.analyzer.checks_psk import check_psk
+from src.wifi_analyzer.analyzer.checks_sae import check_sae
+from src.wifi_analyzer.analyzer.checks_eap import check_eap_enterprise
+from src.wifi_analyzer.report.gen_report import render_html
 
 def main():
     ap = argparse.ArgumentParser()
