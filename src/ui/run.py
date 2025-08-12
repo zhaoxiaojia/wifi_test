@@ -34,7 +34,8 @@ import threading
 import pytest
 import io
 from contextlib import suppress
-from src.util.constants import Paths
+from src.util.constants import Paths, get_src_base
+from src.util.pytest_redact import install_redactor_for_current_process
 
 class LiveLogWriter:
     """自定义stdout/err实时回调到信号"""
@@ -82,14 +83,18 @@ class CaseRunner(QThread):
             timestamp = f"{timestamp}_{random.randint(1000, 9999)}"
             report_dir = (Path.cwd() / "report" / timestamp).resolve()
             report_dir.mkdir(parents=True, exist_ok=True)
+            plugin = install_redactor_for_current_process()
             pytest_args = [
                 "-v",
                 "-s",
                 "--full-trace",
                 "--rootdir=.",
+                "--import-mode=importlib",
                 f"--resultpath={report_dir}",
                 self.case_path,
             ]
+            import sys
+            sys.modules.pop("src.conftest", None)  # 移除已加载的旧模块
 
             # 实时日志到窗口
             def emit_log(line):
@@ -124,7 +129,7 @@ class CaseRunner(QThread):
             # 主线程里定期检查_should_stop可实现停止功能
             try:
                 self.log_signal.emit(f"<b style='color:blue;'>开始执行pytest</b>")
-                code = pytest.main(pytest_args)
+                code = pytest.main(pytest_args,plugins=[plugin])
                 if not self._should_stop:
                     self.log_signal.emit("<b style='color:green;'>运行完成！</b>")
                 else:
@@ -261,8 +266,8 @@ class RunPage(CardWidget):
             if not runner.wait(1000):
                 self._append_log("<b style='color:red;'>线程结束超时，可能仍在后台运行</b>")
         for signal, slot in (
-            (runner.log_signal, self._append_log),
-            (runner.progress_signal, self.update_progress),
+                (runner.log_signal, self._append_log),
+                (runner.progress_signal, self.update_progress),
         ):
             with suppress((TypeError, RuntimeError)):
                 signal.disconnect(slot)
@@ -279,7 +284,7 @@ class RunPage(CardWidget):
 
     def _get_application_base(self) -> Path:
         """获取应用根路径"""
-        return Path(Paths.BASE_DIR).resolve()
+        return Path(get_src_base()).resolve()
 
     def _calc_display_path(self, case_path: str, display_case_path: str | None) -> str:
         """计算用于显示的用例路径"""

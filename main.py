@@ -18,9 +18,11 @@ from qfluentwidgets import setTheme, Theme
 from PyQt5.QtGui import QGuiApplication
 from PyQt5.QtCore import QCoreApplication
 from src.util.constants import Paths
+from src.util.constants import Paths, cleanup_temp_dir
 
 # 确保工作目录为可执行文件所在目录
 os.chdir(Paths.BASE_DIR)
+
 
 def log_exception(exc_type, exc_value, exc_tb):
     logging.error("".join(traceback.format_exception(exc_type, exc_value, exc_tb)))
@@ -161,10 +163,13 @@ class MainWindow(FluentWindow):
 sys.excepthook = log_exception
 
 if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    window = MainWindow()
-    window.show()
-    sys.exit(app.exec())
+    try:
+        app = QApplication(sys.argv)
+        window = MainWindow()
+        window.show()
+        sys.exit(app.exec())
+    finally:
+        cleanup_temp_dir()
     # import datetime
     # import random
     # import os

@@ -22,7 +22,7 @@ rf_solution:
   model: RC4DAT-8G-95
   step:
   - 0
-  - 3
+  - 2
 router:
   name: asusax88u
   ssid_2g: asusax88u_2g
@@ -42,4 +42,5 @@ serial_port:
   baud: '961200'
   port: COM5
   status: false
-text_case: src/test/performance/test_wifi_rvr_rvo.py
+text_case: test/performance/test_wifi_rvr.py
+csv_path: ../config/performance_test_csv/asus/rvr_wifi_setup_demo.csv
