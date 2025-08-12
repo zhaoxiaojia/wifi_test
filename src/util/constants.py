@@ -1,7 +1,12 @@
 import os
 import sys
+import shutil
+import tempfile
+import signal
+import atexit
 from pathlib import Path
 from typing import Final
+from contextlib import suppress
 
 
 def get_config_base() -> Path:
@@ -17,6 +22,43 @@ def get_config_base() -> Path:
     return Path(__file__).resolve().parents[2] / "config"
 
 
+_SRC_TEMP_DIR: Path | None = None
+
+
+def get_src_base() -> Path:
+    """获取 src 解压后的目录。
+
+    打包后会将 ``src`` 目录解压到系统临时目录，
+    在开发环境下直接返回源码目录。
+    """
+    global _SRC_TEMP_DIR
+    if getattr(sys, "frozen", False):
+        if _SRC_TEMP_DIR is None:
+            tmp_root = Path(tempfile.mkdtemp(prefix="wifi_src_"))
+            shutil.copytree(Path(sys._MEIPASS) / "src", tmp_root / "src", dirs_exist_ok=True)
+            if str(tmp_root) not in sys.path:
+                sys.path.insert(0, str(tmp_root))
+
+            def _cleanup():
+                shutil.rmtree(tmp_root, ignore_errors=True)
+
+            atexit.register(_cleanup)
+            for sig in (signal.SIGTERM, signal.SIGINT):
+                with suppress(Exception):
+                    signal.signal(sig, lambda s, f: (_cleanup(), sys.exit(0)))
+            _SRC_TEMP_DIR = tmp_root / "src"
+        return _SRC_TEMP_DIR
+    return Path(__file__).resolve().parents[2] / "src"
+
+
+def cleanup_temp_dir() -> None:
+    """手动清理临时 src 目录"""
+    global _SRC_TEMP_DIR
+    if _SRC_TEMP_DIR and _SRC_TEMP_DIR.exists():
+        shutil.rmtree(_SRC_TEMP_DIR.parent, ignore_errors=True)
+        _SRC_TEMP_DIR = None
+
+
 class Paths:
     """项目路径常量"""
     if getattr(sys, "frozen", False):
@@ -26,6 +68,7 @@ class Paths:
         BASE_DIR: Final[str] = str(Path(__file__).resolve().parents[2])
     CONFIG_DIR: Final[str] = os.path.join(BASE_DIR, "config")
     RES_DIR: Final[str] = os.path.join(BASE_DIR, "res")
+    SRC_DIR: Final[str] = str(get_src_base())
 
 
 class RouterConst:

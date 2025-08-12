@@ -24,7 +24,7 @@ from src.tools.config_loader import load_config
 
 cfg = load_config()
 router_name = cfg['router']['name']
-
+print(f'router_name {router_name}')
 # 实例路由器对象
 router = get_router(router_name)
 logging.info(f'router {router}')
@@ -109,10 +109,10 @@ def setup(request):
                     cmd = pytest.dut.CMD_WIFI_CONNECT.format(router_info.ssid, "open", "")
                 else:
                     cmd = pytest.dut.CMD_WIFI_CONNECT.format(router_info.ssid, type,
-                                                             router_info.passwd)
+                                                             router_info.password)
                 if router_info.hide_ssid == '是':
                     cmd += pytest.dut.CMD_WIFI_HIDE
-
+                logging.info(f"Try to connect {cmd}")
                 pytest.dut.checkoutput(cmd)
                 time.sleep(5)
 

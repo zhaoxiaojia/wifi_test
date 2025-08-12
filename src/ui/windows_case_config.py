@@ -17,7 +17,7 @@ import logging
 from dataclasses import dataclass, field
 from src.tools.router_tool.router_factory import router_list
 from src.util.constants import Paths
-from src.util.constants import get_config_base
+from src.util.constants import get_config_base, get_src_base
 from src.tools.config_loader import load_config
 from PyQt5.QtCore import (
     Qt,
@@ -295,7 +295,7 @@ class CaseConfigPage(CardWidget):
 
     def _get_application_base(self) -> Path:
         """获取应用根路径"""
-        return Path(Paths.BASE_DIR).resolve()
+        return Path(get_src_base()).resolve()
 
     def _resolve_case_path(self, path: str | Path) -> Path:
         """将相对用例路径转换为绝对路径"""
@@ -1029,6 +1029,12 @@ class CaseConfigPage(CardWidget):
 
         # 将最终运行的用例路径写入配置（尽量保持相对路径）
         self.config["text_case"] = case_path
+        # 将选择的 CSV 路径写入配置（相对路径存储）
+        if self.selected_csv_path:
+            rel_csv = os.path.relpath(Path(self.selected_csv_path).resolve(), base)
+            self.config["csv_path"] = Path(rel_csv).as_posix()
+        else:
+            self.config.pop("csv_path", None)
         # 保存配置
         self._save_config()
         if os.path.isfile(abs_case_path) and abs_case_path.endswith(".py"):
