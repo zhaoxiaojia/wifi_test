@@ -163,7 +163,9 @@ class CaseConfigPage(CardWidget):
         判断 abs_case_path 是否位于 test/performance 目录（任何层级都算）。
         不依赖工程根路径，只看路径片段。
         """
+        print(f"_is_performance_case path={abs_case_path}")
         if not abs_case_path:
+            print("_is_performance_case: empty path -> False")
             return False
         try:
             from pathlib import Path
@@ -171,9 +173,12 @@ class CaseConfigPage(CardWidget):
             # 检查父链中是否出现 .../test/performance
             for node in (p, *p.parents):
                 if node.name == "performance" and node.parent.name == "test":
+                    print("_is_performance_case: True")
                     return True
+                print("_is_performance_case: False")
             return False
-        except Exception:
+        except Exception as e:
+            print(f"_is_performance_case exception: {e}")
             return False
 
     def _init_case_tree(self, root_dir: str) -> None:
@@ -244,7 +249,7 @@ class CaseConfigPage(CardWidget):
                 except Exception as exc:
                     QTimer.singleShot(
                         0,
-                        lambda: InfoBar.error(
+                        lambda exc=exc: InfoBar.error(
                             title="Error",
                             content=f"Failed to write config: {exc}",
                             parent=self,
@@ -255,7 +260,7 @@ class CaseConfigPage(CardWidget):
         except Exception as exc:
             QTimer.singleShot(
                 0,
-                lambda: InfoBar.error(
+                lambda exc=exc: InfoBar.error(
                     title="Error",
                     content=f"Failed to load config : {exc}",
                     parent=self,
@@ -281,7 +286,7 @@ class CaseConfigPage(CardWidget):
         except Exception as exc:
             QTimer.singleShot(
                 0,
-                lambda: InfoBar.error(
+                lambda exc=exc: InfoBar.error(
                     title="Error",
                     content=f"Failed to save config : {exc}",
                     parent=self,
@@ -746,7 +751,8 @@ class CaseConfigPage(CardWidget):
         path = self.fs_model.filePath(source_idx)
         base = Path(self._get_application_base())
         display_path = os.path.relpath(path, base)
-
+        print(f"on_case_tree_clicked path={path} display={display_path}")
+        print(f"on_case_tree_clicked is_performance={self._is_performance_case(path)}")
         # ---------- 目录：只负责展开/折叠 ----------
         if os.path.isdir(path):
             if self.case_tree.isExpanded(proxy_idx):
@@ -776,6 +782,7 @@ class CaseConfigPage(CardWidget):
         """根据用例名与路径返回可编辑字段以及相关 UI 使能状态"""
         basename = os.path.basename(case_path)
         logging.debug("testcase name %s", basename)
+        print(f"_compute_editable_info case_path={case_path} basename={basename}")
         rvr_keys = {
             "rvr",
             "rvr.tool",
@@ -819,6 +826,8 @@ class CaseConfigPage(CardWidget):
             }
         if self._is_performance_case(case_path):
             info.fields |= rvr_keys
+            info.enable_csv = True
+            info.enable_rvr_wifi = True
         if "rvo" in basename:
             info.fields |= {
                 "corner_angle",
@@ -829,17 +838,23 @@ class CaseConfigPage(CardWidget):
         base = Path(self._get_application_base())
         perf_dir = (base / "test" / "performance").resolve()
         case_abs = Path(case_path).resolve() if case_path else None
+        print(f"_compute_editable_info perf_dir={perf_dir} case_abs={case_abs}")
         if case_abs and perf_dir in case_abs.parents:
             info.enable_csv = True
             info.enable_rvr_wifi = True
-
+        print(
+            f"_compute_editable_info enable_csv={info.enable_csv} "
+            f"enable_rvr_wifi={info.enable_rvr_wifi}"
+        )
         # 如果你需要所有字段都可编辑，直接 return EditableInfo(set(self.field_widgets.keys()), True, True)
         return info
 
     def get_editable_fields(self, case_path) -> EditableInfo:
         """选中用例后控制字段可编辑性并返回相关信息"""
+        print(f"get_editable_fields case_path={case_path}")
         if self._refreshing:
             # 极少见：递归进入，直接丢弃
+            print("get_editable_fields: refreshing, return empty")
             return EditableInfo()
 
         # ---------- 进入刷新 ----------
@@ -849,6 +864,10 @@ class CaseConfigPage(CardWidget):
 
         try:
             info = self._compute_editable_info(case_path)
+            print(f"get_editable_fields enable_csv={info.enable_csv}")
+            # 若 csv 下拉框尚未创建，则视为不支持 CSV 功能
+            if info.enable_csv and not hasattr(self, "csv_combo"):
+                info.enable_csv = False
             self.set_fields_editable(info.fields)
         finally:
             # ---------- 刷新结束 ----------
@@ -874,13 +893,17 @@ class CaseConfigPage(CardWidget):
         else:
             if hasattr(main_window, "hide_rvr_wifi_config"):
                 main_window.hide_rvr_wifi_config()
-        if info.enable_csv:
-            self.csv_combo.setEnabled(True)
+        if hasattr(self, "csv_combo"):
+            if info.enable_csv:
+                self.csv_combo.setEnabled(True)
+            else:
+                with QSignalBlocker(self.csv_combo):
+                    self.csv_combo.setCurrentIndex(-1)
+                self.csv_combo.setEnabled(False)
+                self.selected_csv_path = None
         else:
-            with QSignalBlocker(self.csv_combo):
-                self.csv_combo.setCurrentIndex(-1)
-            self.csv_combo.setEnabled(False)
             self.selected_csv_path = None
+            print("csv_combo disabled")
         # 若用户在刷新过程中又点了别的用例，延迟 0 ms 处理它
         if self._pending_path:
             path = self._pending_path
