@@ -19,7 +19,7 @@ from .telnet_tool import telnet_tool
 class LabDeviceController:
     def __init__(self, ip):
         self.ip = ip
-        self.model = pytest.config_yaml.get_note('rf_solution')['model']
+        self.model = pytest.config.get('rf_solution')['model']
         try:
             logging.info(f'Try to connect {ip}')
             self.tn = telnet_tool(self.ip)

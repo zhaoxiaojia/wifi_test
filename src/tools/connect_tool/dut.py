@@ -110,20 +110,20 @@ class dut():
 
     def __init__(self):
         self.serialnumber = 'executer'
-        self.rvr_tool = pytest.config_yaml.get_note('rvr')['tool']
+        self.rvr_tool = pytest.config.get('rvr')['tool']
         self.pair = 5
-        self.repest_times = int(pytest.config_yaml.get_note('rvr')['repeat'])
+        self.repest_times = int(pytest.config.get('rvr')['repeat'])
         self._dut_ip = ''
         self._pc_ip = ''
         self.rvr_result = None
         if self.rvr_tool == 'iperf':
-            self.test_tool = pytest.config_yaml.get_note('rvr')[self.rvr_tool]['version']
-            self.tool_path = pytest.config_yaml.get_note('rvr')[self.rvr_tool]['path'] or ''
+            self.test_tool = pytest.config.get('rvr')[self.rvr_tool]['version']
+            self.tool_path = pytest.config.get('rvr')[self.rvr_tool]['path'] or ''
             logging.info(f'test_tool {self.test_tool}')
 
         if self.rvr_tool == 'ixchariot':
             self.ix = ix()
-            self.test_tool = pytest.config_yaml.get_note('rvr')[self.rvr_tool]
+            self.test_tool = pytest.config.get('rvr')[self.rvr_tool]
             self.script_path = self.test_tool['path']
             logging.info(f'path {self.script_path}')
             logging.info(f'test_tool {self.test_tool}')

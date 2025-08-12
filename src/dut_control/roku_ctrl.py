@@ -22,13 +22,13 @@ from roku import Roku
 
 from src.tools.connect_tool.serial_tool import serial_tool
 from src.tools.connect_tool.telnet_tool import telnet_tool
-from src.tools.yamlTool import yamlTool
+from src.tools.config_loader import load_config
 from src.util.constants import RokuConst
 
 # roku_lux = YamlTool(os.getcwd() + '/config/roku/roku_changhong.yaml')
-roku_config = yamlTool(os.getcwd() + '/config/config.yaml')
-roku_ip = roku_config.get_note("connect_type")['telnet']['ip']
-# roku_ser = roku_config.get_note('dut_serial')
+roku_config = load_config()
+roku_ip = roku_config.get("connect_type")['telnet']['ip']
+# roku_ser = roku_config.get('dut_serial')
 
 lock = threading.Lock()
 

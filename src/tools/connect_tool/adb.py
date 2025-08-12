@@ -1608,9 +1608,8 @@ class adb(dut):
         return cmd
 
 
-from src.tools.yamlTool import yamlTool
 
-# concomitant_dut_config = yamlTool(os.getcwd() + '/config/config.yaml').get_note('concomitant_dut')
+# concomitant_dut_config = load_config().get('concomitant_dut')
 # if concomitant_dut_config['status']:
 #     accompanying_dut = adb(concomitant_dut_config['device_number'])
 #     accompanying_dut.root()
