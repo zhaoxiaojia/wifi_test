@@ -156,7 +156,7 @@ class CaseConfigPage(CardWidget):
         # connect signals AFTER UI ready
         self.case_tree.clicked.connect(self.on_case_tree_clicked)
         self.case_tree.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        QTimer.singleShot(0, lambda: self.apply_case_logic(""))
+        QTimer.singleShot(0, lambda: self.get_editable_fields(""))
 
     def _is_performance_case(self, abs_case_path) -> bool:
         """
@@ -770,9 +770,9 @@ class CaseConfigPage(CardWidget):
         if self._refreshing:
             self._pending_path = path
             return
-        self.apply_case_logic(path)
+        self.get_editable_fields(path)
 
-    def get_editable_fields(self, case_path) -> EditableInfo:
+    def _compute_editable_info(self, case_path) -> EditableInfo:
         """根据用例名与路径返回可编辑字段以及相关 UI 使能状态"""
         basename = os.path.basename(case_path)
         logging.debug("testcase name %s", basename)
@@ -823,7 +823,6 @@ class CaseConfigPage(CardWidget):
             info.fields |= {
                 "corner_angle",
                 "corner_angle.ip_address",
-                "corner_angle.step"
                 "corner_angle.step",
             }
         # 根据路径判断是否需要启用 CSV 与 RVR WiFi 配置
@@ -837,30 +836,11 @@ class CaseConfigPage(CardWidget):
         # 如果你需要所有字段都可编辑，直接 return EditableInfo(set(self.field_widgets.keys()), True, True)
         return info
 
-    def set_fields_editable(self, editable_fields: set[str]) -> None:
-        """批量控制字段可编辑状态（高效且不触发级联信号）"""
-        # 暂停窗口刷新，提升批量操作速度
-        self.setUpdatesEnabled(False)
-        try:
-            for key, widget in self.field_widgets.items():
-                desired = key in editable_fields
-                if widget.isEnabled() == desired:
-                    continue  # 状态没变就别动
-
-                # 屏蔽 widget 自己的信号，避免 setEnabled 时触发槽函数
-                with QSignalBlocker(widget):
-                    widget.setEnabled(desired)
-        finally:
-            self.setUpdatesEnabled(True)
-            self.update()  # 确保一次性刷新到屏幕
-
-    def apply_case_logic(self, case_path):
-        """
-        选中用例后自动控制字段可编辑性和填充值。
-        """
+    def get_editable_fields(self, case_path) -> EditableInfo:
+        """选中用例后控制字段可编辑性并返回相关信息"""
         if self._refreshing:
             # 极少见：递归进入，直接丢弃
-            return
+            return EditableInfo()
 
         # ---------- 进入刷新 ----------
         self._refreshing = True
@@ -868,7 +848,7 @@ class CaseConfigPage(CardWidget):
         self.setUpdatesEnabled(False)  # 暂停全局重绘
 
         try:
-            info = self.get_editable_fields(case_path)
+            info = self._compute_editable_info(case_path)
             self.set_fields_editable(info.fields)
         finally:
             # ---------- 刷新结束 ----------
@@ -894,18 +874,36 @@ class CaseConfigPage(CardWidget):
         else:
             if hasattr(main_window, "hide_rvr_wifi_config"):
                 main_window.hide_rvr_wifi_config()
-            if info.enable_csv:
-                self.csv_combo.setEnabled(True)
-            else:
-                with QSignalBlocker(self.csv_combo):
-                    self.csv_combo.setCurrentIndex(-1)
+        if info.enable_csv:
+            self.csv_combo.setEnabled(True)
+        else:
+            with QSignalBlocker(self.csv_combo):
+                self.csv_combo.setCurrentIndex(-1)
             self.csv_combo.setEnabled(False)
             self.selected_csv_path = None
         # 若用户在刷新过程中又点了别的用例，延迟 0 ms 处理它
         if self._pending_path:
             path = self._pending_path
             self._pending_path = None
-            QTimer.singleShot(0, lambda: self.apply_case_logic(path))
+            QTimer.singleShot(0, lambda: self.get_editable_fields(path))
+        return info
+
+    def set_fields_editable(self, editable_fields: set[str]) -> None:
+        """批量控制字段可编辑状态（高效且不触发级联信号）"""
+        # 暂停窗口刷新，提升批量操作速度
+        self.setUpdatesEnabled(False)
+        try:
+            for key, widget in self.field_widgets.items():
+                desired = key in editable_fields
+                if widget.isEnabled() == desired:
+                    continue  # 状态没变就别动
+
+                # 屏蔽 widget 自己的信号，避免 setEnabled 时触发槽函数
+                with QSignalBlocker(widget):
+                    widget.setEnabled(desired)
+        finally:
+            self.setUpdatesEnabled(True)
+            self.update()  # 确保一次性刷新到屏幕
 
     def on_csv_activated(self, index: int) -> None:
         """用户手动点击同一项时也需要重新加载"""
