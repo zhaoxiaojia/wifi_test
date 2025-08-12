@@ -3,15 +3,15 @@ import logging
 import os
 
 import pytest
-from pathlib import Path
 from src.tools.router_tool.Router import Router
-from src.tools.yamlTool import yamlTool
+from src.tools.config_loader import load_config
 from src.util.constants import get_config_base
+
+config_yaml = load_config()
 
 def get_testdata(router):
     config_base = get_config_base()
-    wifi_yaml = yamlTool(config_base / "config.yaml")
-    router_name = wifi_yaml.get_note('router')['name']
+    router_name = config_yaml.get('router')['name']
     base = config_base / "performance_test_csv"
     if "asus" in router_name:
         csv_path = base / "asus" / "rvr_wifi_setup.csv"

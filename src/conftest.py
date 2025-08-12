@@ -20,7 +20,7 @@ from src.tools.connect_tool.adb import adb
 # from tools.connect_tool.host_os import host_os
 from src.tools.connect_tool.telnet_tool import telnet_tool
 from src.tools.TestResult import TestResult
-from src.tools.yamlTool import yamlTool
+from src.tools.config_loader import load_config
 from src.dut_control.roku_ctrl import roku_ctrl
 from src.tools.router_tool.Router import Router
 
@@ -52,16 +52,13 @@ def pytest_sessionstart(session):
     else:
         pytest.win_flag = False
     # The configuration information of  DUT
-    if pytest.win_flag:
-        pytest.config_yaml = yamlTool(os.getcwd() + '\\config\\config.yaml')
-    else:
-        pytest.config_yaml = yamlTool(os.getcwd() + '/config/config.yaml')
+    pytest.config = load_config()
     # The connection method to the product to DUT
-    pytest.chip_info = pytest.config_yaml.get_note('fpga')
-    pytest.connect_type = pytest.config_yaml.get_note('connect_type')['type']
+    pytest.chip_info = pytest.config.get('fpga')
+    pytest.connect_type = pytest.config.get('connect_type')['type']
     if pytest.connect_type == 'adb':
         # Create adb obj
-        device = pytest.config_yaml.get_note("connect_type")[pytest.connect_type]['device']
+        device = pytest.config.get("connect_type")[pytest.connect_type]['device']
         if device is None:
             # Obtain the device number dynamically
             info = subprocess.check_output("adb devices", shell=True, encoding='utf-8')
@@ -70,7 +67,7 @@ def pytest_sessionstart(session):
         pytest.dut = adb(serialnumber=device if device else '')
     elif pytest.connect_type == 'telnet':
         # Create telnet obj
-        telnet_ip = pytest.config_yaml.get_note("connect_type")[pytest.connect_type]['ip']
+        telnet_ip = pytest.config.get("connect_type")[pytest.connect_type]['ip']
         pytest.dut = telnet_tool(telnet_ip)
         pytest.dut.roku = roku_ctrl(telnet_ip)
     else:
