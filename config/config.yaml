@@ -4,7 +4,7 @@ connect_type:
     device: coco_aaaaaa
   telnet:
     ip: 192.168.50.21
-  type: telnet
+  type: adb
 corner_angle:
   ip_address: 192.168.5.11
   step:
@@ -18,16 +18,16 @@ rf_solution:
   RC4DAT-8G-95:
     idProduct: '35'
     idVendor: '8398'
-    ip_address: 192.168.50.35
+    ip_address: 192.168.5.75
   model: RC4DAT-8G-95
   step:
   - 0
   - 3
 router:
-  name: xiaomiax3600
-  ssid_2g: xiaomiax3600_2g
+  name: asusax88u
+  ssid_2g: asusax88u_2g
   passwd_2g: '12345678'
-  ssid_5g: xiaomiax3600_5g
+  ssid_5g: asusax88u_5g
   passwd_5g: '12345678'
 rvr:
   iperf:
@@ -42,4 +42,4 @@ serial_port:
   baud: '961200'
   port: COM5
   status: false
-text_case: test/performance/test_wifi_rvr.py
+text_case: ''

@@ -6,18 +6,19 @@ import pytest
 from pathlib import Path
 from src.tools.router_tool.Router import Router
 from src.tools.yamlTool import yamlTool
-
+from src.util.constants import get_config_base
 
 def get_testdata(router):
-    wifi_yaml = yamlTool(os.getcwd() + '/config/config.yaml')
+    config_base = get_config_base()
+    wifi_yaml = yamlTool(config_base / "config.yaml")
     router_name = wifi_yaml.get_note('router')['name']
-    base = Path(os.getcwd()) / "config" / "performance_test_csv"
+    base = config_base / "performance_test_csv"
     if "asus" in router_name:
         csv_path = base / "asus" / "rvr_wifi_setup.csv"
     elif "xiaomi" in router_name:
         csv_path = base / "xiaomi" / "rvr_wifi_setup.csv"
     else:
-        csv_path = Path(os.getcwd()) / "config" / "rvr_wifi_setup.csv"
+        csv_path = config_base / "rvr_wifi_setup.csv"
 
     print(f"router_name: {router_name}, csv_path: {csv_path}")
     pc_ip, dut_ip = "", ""

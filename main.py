@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 import traceback
 import logging
-
+import os
 from contextlib import suppress
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -19,6 +19,8 @@ from PyQt5.QtGui import QGuiApplication
 from PyQt5.QtCore import QCoreApplication
 from src.util.constants import Paths
 
+# 确保工作目录为可执行文件所在目录
+os.chdir(Paths.BASE_DIR)
 
 def log_exception(exc_type, exc_value, exc_tb):
     logging.error("".join(traceback.format_exception(exc_type, exc_value, exc_tb)))
@@ -154,6 +156,7 @@ class MainWindow(FluentWindow):
         QCoreApplication.processEvents()  # 强制事件刷新
         self.clear_run_page()
         print("Switched to CaseConfigPage")
+
 
 sys.excepthook = log_exception
 

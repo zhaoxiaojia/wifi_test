@@ -100,7 +100,7 @@ def setup(request):
 					cmd = pytest.dut.CMD_WIFI_CONNECT.format(router_info.ssid, "open", "")
 				else:
 					cmd = pytest.dut.CMD_WIFI_CONNECT.format(router_info.ssid, type,
-					                                         router_info.wpa_passwd)
+					                                         router_info.password)
 				if router_info.hide_ssid == '是':
 					cmd += pytest.dut.CMD_WIFI_HIDE
 

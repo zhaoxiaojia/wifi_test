@@ -4,7 +4,7 @@
 @author: chao.li
 @contact: chao.li@amlogic.com
 @software: pycharm
-@file: conftest.py 
+@file: demo_.py
 @time: 8/11/2025 11:52 AM 
 @desc: 
 '''

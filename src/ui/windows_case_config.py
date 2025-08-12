@@ -11,11 +11,12 @@
 from __future__ import annotations
 
 import os
-import sys
 from pathlib import Path
 import yaml
 import logging
 from src.tools.router_tool.router_factory import router_list
+from src.util.constants import Paths
+from src.util.constants import get_config_base
 from PyQt5.QtCore import (
     Qt,
     QSignalBlocker,
@@ -89,14 +90,7 @@ class CaseConfigPage(CardWidget):
         self.on_run_callback = on_run_callback
 
         # -------------------- load yaml --------------------
-        if hasattr(sys, "_MEIPASS"):
-            bundle_path = Path(sys._MEIPASS) / "config" / "config.yaml"
-            if bundle_path.exists():
-                self.config_path = bundle_path.resolve()
-            else:
-                self.config_path = (Path.cwd() / "config" / "config.yaml").resolve()
-        else:
-            self.config_path = (Path.cwd() / "config" / "config.yaml").resolve()
+        self.config_path = (Path(Paths.CONFIG_DIR) / "config.yaml").resolve()
         self.config: dict = self._load_config()
         # -------------------- state --------------------
         self._refreshing = False
@@ -287,12 +281,7 @@ class CaseConfigPage(CardWidget):
 
     def _get_application_base(self) -> Path:
         """获取应用根路径"""
-        base = (
-            Path(sys._MEIPASS) / "src"
-            if hasattr(sys, "_MEIPASS")
-            else Path(__file__).resolve().parent.parent
-        )
-        return base.resolve()
+        return Path(Paths.BASE_DIR).resolve()
 
     def _resolve_case_path(self, path: str | Path) -> Path:
         """将相对用例路径转换为绝对路径"""
@@ -356,7 +345,7 @@ class CaseConfigPage(CardWidget):
         router_name = ""
         if hasattr(self, "router_name_combo"):
             router_name = self.router_name_combo.currentText().lower()
-        base_dir = Path.cwd() / "config" / "performance_test_csv"
+        base_dir = get_config_base() / "performance_test_csv"
         if "asus" in router_name:
             csv_dir = base_dir / "asus"
         elif "xiaomi" in router_name:
