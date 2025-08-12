@@ -6,10 +6,10 @@
 # @File    : yamlTool.py
 # @Software: PyCharm
 import logging
-import os
-
+from pathlib import Path
+from typing import Union
 import yaml
-
+from src.util.constants import get_config_base
 '''
 yaml 格式现在校验网站
 https://www.bejson.com/validators/yaml_editor/
@@ -17,9 +17,15 @@ https://www.bejson.com/validators/yaml_editor/
 
 
 class yamlTool:
-    def __init__(self, path):
+    def __init__(self, path: Union[str, Path, None] = None):
+        if path is None:
+            path = get_config_base() / "config.yaml"
+        else:
+            path = Path(path)
+            if not path.is_absolute():
+                path = get_config_base() / path
         self.path = path
-        with open(path, encoding='gbk') as a_yaml_file:
+        with open(self.path, encoding="gbk") as a_yaml_file:
             # 解析yaml
             self.parsed_yaml_file = yaml.load(a_yaml_file, Loader=yaml.FullLoader)
 

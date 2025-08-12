@@ -6,13 +6,13 @@ RVR Wi-Fi configuration page
 from __future__ import annotations
 
 import csv
-import sys
 from pathlib import Path
 
 import yaml
 import logging
 from contextlib import ExitStack
 from PyQt5.QtCore import Qt, QSignalBlocker
+from src.util.constants import Paths
 from PyQt5.QtWidgets import (
     QHBoxLayout,
     QTableWidgetItem,
@@ -72,8 +72,7 @@ class RvrWifiConfigPage(CardWidget):
         super().__init__()
         self.setObjectName("rvrWifiConfigPage")
         self.case_config_page = case_config_page
-        base = self._get_base_dir()
-        self.config_path = (base / "config" / "config.yaml").resolve()
+        self.config_path = (Path(Paths.CONFIG_DIR) / "config.yaml").resolve()
         combo = getattr(self.case_config_page, "router_name_combo", None)
         router_name = combo.currentText().lower() if combo is not None else ""
         self.csv_path = self._compute_csv_path(router_name)
@@ -174,23 +173,17 @@ class RvrWifiConfigPage(CardWidget):
         self.case_config_page.csvFileChanged.connect(self.on_csv_file_changed)
 
     def _get_base_dir(self) -> Path:
-        base = Path.cwd()
-        if hasattr(sys, "_MEIPASS"):
-            candidate = Path(sys._MEIPASS)
-            if (candidate / "config").exists():
-                base = candidate
-        return base
+        return Path(Paths.BASE_DIR)
 
     def _compute_csv_path(self, router_name: str) -> Path:
-        base = self._get_base_dir()
-        csv_base = base / "config" / "performance_test_csv"
+        csv_base = Path(Paths.CONFIG_DIR) / "performance_test_csv"
         name = router_name.lower()
         if "asus" in name:
             csv_base /= "asus"
         elif "xiaomi" in name:
             csv_base /= "xiaomi"
         else:
-            csv_base = base / "config"
+            csv_base = Path(Paths.CONFIG_DIR)
         return (csv_base / "rvr_wifi_setup.csv").resolve()
 
     def set_router_credentials(self, ssid: str, passwd: str) -> None:

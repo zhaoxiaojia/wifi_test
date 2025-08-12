@@ -34,7 +34,7 @@ import threading
 import pytest
 import io
 from contextlib import suppress
-
+from src.util.constants import Paths
 
 class LiveLogWriter:
     """自定义stdout/err实时回调到信号"""
@@ -279,12 +279,7 @@ class RunPage(CardWidget):
 
     def _get_application_base(self) -> Path:
         """获取应用根路径"""
-        base = (
-            Path(sys._MEIPASS) / "src"
-            if hasattr(sys, "_MEIPASS")
-            else Path(__file__).resolve().parent.parent
-        )
-        return base.resolve()
+        return Path(Paths.BASE_DIR).resolve()
 
     def _calc_display_path(self, case_path: str, display_case_path: str | None) -> str:
         """计算用于显示的用例路径"""

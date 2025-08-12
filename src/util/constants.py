@@ -4,10 +4,24 @@ from pathlib import Path
 from typing import Final
 
 
+def get_config_base() -> Path:
+    """获取配置目录路径。
+
+    优先返回可执行文件同目录下的 ``config`` 目录；若不存在，
+    则回退到 ``Path(sys._MEIPASS) / 'config'``。
+    """
+    exe_dir = Path(sys.executable).resolve().parent
+    candidate = exe_dir / "config"
+    if candidate.exists():
+        return candidate
+    return Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[2])) / "config"
+
+
 class Paths:
     """项目路径常量"""
     if getattr(sys, "frozen", False):
-        BASE_DIR: Final[str] = os.path.dirname(sys.executable)
+        # sys.executable 指向临时 _MEI 目录，改用 sys.argv[0] 获取真实 exe 路径
+        BASE_DIR: Final[str] = os.path.dirname(os.path.abspath(sys.argv[0]))
     else:
         BASE_DIR: Final[str] = str(Path(__file__).resolve().parents[2])
     CONFIG_DIR: Final[str] = os.path.join(BASE_DIR, "config")

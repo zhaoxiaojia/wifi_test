@@ -130,7 +130,7 @@ def setup(request):
                     cmd = pytest.dut.CMD_WIFI_CONNECT.format(router_info.ssid, "open", "")
                 else:
                     cmd = pytest.dut.CMD_WIFI_CONNECT.format(router_info.ssid, type,
-                                                             router_info.wpa_passwd)
+                                                             router_info.password)
                 if router_info.hide_ssid == '是':
                     cmd += pytest.dut.CMD_WIFI_HIDE
 
@@ -227,7 +227,7 @@ def test_rvr(setup, rf_value):
     logging.info('start test iperf')
     logging.info(f'router_info: {router_info}')
     # iperf  打流
-    if 'tx' in router_info.test_type and not skip_tx:
+    if router_info.tx and not skip_tx:
         logging.info(f'rssi : {pytest.dut.rssi_num}')
         tx_result = pytest.dut.get_tx_rate(router_info, 'TCP', corner_tool=corner_tool, db_set=db_set)
         try:
@@ -236,7 +236,7 @@ def test_rvr(setup, rf_value):
             tx_val = 0
         if tx_val < throughput_threshold:
             skip_tx = True
-    if 'rx' in router_info.test_type and not skip_rx:
+    if router_info.rx and not skip_rx:
         logging.info(f'rssi : {pytest.dut.rssi_num}')
         rx_result = pytest.dut.get_rx_rate(router_info, 'TCP', corner_tool=corner_tool, db_set=db_set)
         try:

@@ -328,9 +328,9 @@ class Asusax88uControl(RouterTools):
                 router.wep_encrypt)
 
         # 修改 wep_passwd
-        if router.wep_passwd:
-            self.set_2g_wep_passwd(router.wep_passwd) if '2' in router.band else self.set_5g_wep_passwd(
-                router.wep_passwd)
+        # if router.wep_passwd:
+        #     self.set_2g_wep_passwd(router.wep_passwd) if '2' in router.band else self.set_5g_wep_passwd(
+        #         router.wep_passwd)
 
         self.commit()
         time.sleep(3)
