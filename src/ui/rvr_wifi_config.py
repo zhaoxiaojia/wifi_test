@@ -32,11 +32,11 @@ from qfluentwidgets import (
     InfoBarPosition,
 )
 
-    from src.tools.router_tool.router_factory import get_router
-    from typing import TYPE_CHECKING
+from src.tools.router_tool.router_factory import get_router
+from typing import TYPE_CHECKING
 
-    if TYPE_CHECKING:
-        from .windows_case_config import CaseConfigPage
+if TYPE_CHECKING:
+    from .windows_case_config import CaseConfigPage
 
 
 class WifiTableWidget(TableWidget):
