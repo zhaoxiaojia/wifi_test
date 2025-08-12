@@ -9,7 +9,7 @@ import os
 from contextlib import suppress
 
 sys.path.insert(0, str(Path(__file__).parent))
-from PyQt5.QtWidgets import QApplication
+from PyQt5.QtWidgets import QApplication, QAbstractButton
 from qfluentwidgets import FluentIcon, FluentWindow, NavigationItemPosition
 from src.ui.windows_case_config import CaseConfigPage
 from src.ui.rvr_wifi_config import RvrWifiConfigPage
@@ -44,6 +44,7 @@ class MainWindow(FluentWindow):
         self.case_config_page = CaseConfigPage(self.on_run)
         self.rvr_wifi_config_page = RvrWifiConfigPage(self.case_config_page)
         self.run_page = None  # 运行窗口动态加载
+        self._run_nav_button = None  # 记录 RunPage 的导航按钮
 
         # 添加侧边导航（页面，图标，标题，描述）
         self.addSubInterface(
@@ -105,7 +106,20 @@ class MainWindow(FluentWindow):
                 self.run_page.cleanup()
             self._remove_interface(self.run_page)
             self.run_page = None
+            self._run_nav_button = None
             print("RunPage cleared!")
+
+    def _set_nav_buttons_enabled(self, enabled: bool):
+        """启用或禁用除 RunPage 外的导航按钮"""
+        nav = getattr(self, "navigationInterface", None)
+        if not nav:
+            return
+        buttons = nav.findChildren(QAbstractButton)
+        for btn in buttons:
+            if btn is self._run_nav_button:
+                continue
+            btn.setEnabled(enabled)
+            btn.setStyleSheet("color: gray;" if not enabled else "")
 
     def center_window(self):
         # 获取屏幕的几何信息
@@ -132,8 +146,15 @@ class MainWindow(FluentWindow):
 
     def on_run(self, case_path, display_case_path, config):
         self.clear_run_page()
+        prev_buttons = set(self.navigationInterface.findChildren(QAbstractButton))
         # 传递主窗口自身作为RunPage的父窗口
-        self.run_page = RunPage(case_path, display_case_path, config, self.stop_run_and_show_case_config, parent=self)
+        self.run_page = RunPage(
+            case_path,
+            display_case_path,
+            config,
+            on_stop_callback=self.stop_run_and_show_case_config,
+            parent=self,
+        )
         # 确保添加到导航栏和堆叠窗口
         self.addSubInterface(
             self.run_page,
@@ -141,12 +162,19 @@ class MainWindow(FluentWindow):
             "Test",
             position=NavigationItemPosition.BOTTOM
         )
+        all_buttons = set(self.navigationInterface.findChildren(QAbstractButton))
+        new_buttons = all_buttons - prev_buttons
+        self._run_nav_button = next(iter(new_buttons), None)
+        self._set_nav_buttons_enabled(False)
         # 强制刷新堆叠窗口并切换（移除QTimer，直接同步切换）
         if self.stackedWidget.indexOf(self.run_page) == -1:
             self.stackedWidget.addWidget(self.run_page)
         # 直接切换，不使用延迟
         if self.run_page:  # 额外检查对象是否有效
             self.switchTo(self.run_page)
+        runner = getattr(self.run_page, "runner", None)
+        if runner:
+            runner.finished.connect(lambda: self._set_nav_buttons_enabled(True))
         print("Switched to RunPage:", self.run_page)
 
     def show_case_config(self):
@@ -156,6 +184,7 @@ class MainWindow(FluentWindow):
     def stop_run_and_show_case_config(self):
         self.setCurrentIndex(self.case_config_page)
         QCoreApplication.processEvents()  # 强制事件刷新
+        self._set_nav_buttons_enabled(True)
         self.clear_run_page()
         print("Switched to CaseConfigPage")
 
