@@ -1031,7 +1031,11 @@ class CaseConfigPage(CardWidget):
         self.config["text_case"] = case_path
         # 将选择的 CSV 路径写入配置（相对路径存储）
         if self.selected_csv_path:
-            rel_csv = os.path.relpath(Path(self.selected_csv_path).resolve(), base)
+            base = get_config_base()
+            try:
+                rel_csv = os.path.relpath(Path(self.selected_csv_path).resolve(), base)
+            except ValueError:
+                rel_csv = Path(self.selected_csv_path).resolve().as_posix()
             self.config["csv_path"] = Path(rel_csv).as_posix()
         else:
             self.config.pop("csv_path", None)

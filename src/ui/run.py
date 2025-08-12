@@ -37,6 +37,7 @@ from contextlib import suppress
 from src.util.constants import Paths, get_src_base
 from src.util.pytest_redact import install_redactor_for_current_process
 
+
 class LiveLogWriter:
     """自定义stdout/err实时回调到信号"""
 
@@ -129,7 +130,7 @@ class CaseRunner(QThread):
             # 主线程里定期检查_should_stop可实现停止功能
             try:
                 self.log_signal.emit(f"<b style='color:blue;'>开始执行pytest</b>")
-                code = pytest.main(pytest_args,plugins=[plugin])
+                code = pytest.main(pytest_args, plugins=[plugin])
                 if not self._should_stop:
                     self.log_signal.emit("<b style='color:green;'>运行完成！</b>")
                 else:
@@ -159,12 +160,12 @@ class CaseRunner(QThread):
 class RunPage(CardWidget):
     """运行页"""
 
-    def __init__(self, case_path, display_case_path=None, config=None, on_back_callback=None, parent=None):
+    def __init__(self, case_path, display_case_path=None, config=None, on_stop_callback=None, parent=None):
         super().__init__(parent)
         self.setObjectName("runPage")
         self.case_path = case_path
         self.config = config
-        self.on_back_callback = on_back_callback
+        self.on_stop_callback = on_stop_callback
         self.main_window = parent  # 保存主窗口引用（用于InfoBar父窗口）
 
         self.display_case_path = self._calc_display_path(case_path, display_case_path)
@@ -202,10 +203,10 @@ class RunPage(CardWidget):
             border-radius: 4px;
         """)
         self.progress_chunk.setFixedWidth(0)
-        self.back_btn = PushButton("Exit", self)
-        self.back_btn.setIcon(FluentIcon.LEFT_ARROW)
-        self.back_btn.clicked.connect(self.on_back)
-        layout.addWidget(self.back_btn)
+        self.stop_btn = PushButton("Stop", self)
+        self.stop_btn.setIcon(FluentIcon.CLOSE)
+        self.stop_btn.clicked.connect(self.on_stop)
+        layout.addWidget(self.stop_btn)
         self.setLayout(layout)
         self.run_case()
 
@@ -277,10 +278,10 @@ class RunPage(CardWidget):
         with suppress(TypeError):
             self.disconnect()
 
-    def on_back(self):
+    def on_stop(self):
         self.cleanup()
-        if self.on_back_callback:
-            self.on_back_callback()  # 调用返回配置页的回调
+        if self.on_stop_callback:
+            self.on_stop_callback()  # 调用返回配置页的回调
 
     def _get_application_base(self) -> Path:
         """获取应用根路径"""
