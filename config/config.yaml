@@ -1,7 +1,7 @@
 concomitant_dut: '{''device_number'': ''aq2228019431943b23a0d'', ''status'': False}'
 connect_type:
   adb:
-    device: coco_aaaaaa
+    device: coco5c6788c23f1804
   telnet:
     ip: 192.168.50.21
   type: adb
@@ -42,4 +42,4 @@ serial_port:
   baud: '961200'
   port: COM5
   status: false
-text_case: src/test/performance/test_wifi_rvr.py
+text_case: src/test/performance/test_wifi_rvr_rvo.py

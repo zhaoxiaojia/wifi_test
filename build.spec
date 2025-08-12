@@ -58,10 +58,9 @@ a = Analysis(
     excludes=[],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
-    noarchive=False
+    noarchive=False,
 )
 a.datas += Tree('src', prefix='src')
-a.datas += Tree('config', prefix='config')
 pyz = PYZ(a.pure, a.zipped_data)
 exe = EXE(
     pyz,

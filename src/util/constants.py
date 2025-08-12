@@ -8,13 +8,13 @@ def get_config_base() -> Path:
     """获取配置目录路径。
 
     优先返回可执行文件同目录下的 ``config`` 目录；若不存在，
-    则回退到 ``Path(sys._MEIPASS) / 'config'``。
+        则回退到源码目录 ``Path(__file__).resolve().parents[2] / 'config'``。
     """
-    exe_dir = Path(sys.executable).resolve().parent
+    exe_dir = Path(sys.argv[0]).resolve().parent
     candidate = exe_dir / "config"
     if candidate.exists():
         return candidate
-    return Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[2])) / "config"
+    return Path(__file__).resolve().parents[2] / "config"
 
 
 class Paths:
