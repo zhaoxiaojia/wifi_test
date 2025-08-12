@@ -15,7 +15,7 @@ a = Analysis(
     datas=[
         ('src/pytest.ini', 'src'),
         ('src/test', 'src/test'),
-        Tree('src', prefix='src'),
+        ('config/performance_test_csv', 'config/performance_test_csv'),
     ],
     hiddenimports=[
         # 手动添加PyQt5和自定义模块的隐藏依赖
@@ -60,8 +60,9 @@ a = Analysis(
     win_private_assemblies=False,
     noarchive=False
 )
+a.datas += Tree('src', prefix='src')
+a.datas += Tree('config', prefix='config')
 pyz = PYZ(a.pure, a.zipped_data)
-
 exe = EXE(
     pyz,
     a.scripts,
