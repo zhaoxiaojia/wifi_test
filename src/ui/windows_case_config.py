@@ -14,6 +14,7 @@ import os
 from pathlib import Path
 import yaml
 import logging
+from dataclasses import dataclass, field
 from src.tools.router_tool.router_factory import router_list
 from src.util.constants import Paths
 from src.util.constants import get_config_base
@@ -51,6 +52,14 @@ from qfluentwidgets import (
     InfoBarPosition,
     ScrollArea
 )
+
+
+@dataclass
+class EditableInfo:
+    """描述某个用例的可编辑字段及相关 UI 使能状态"""
+    fields: set[str] = field(default_factory=set)
+    enable_csv: bool = False
+    enable_rvr_wifi: bool = False
 
 
 class TestFileFilterModel(QSortFilterProxyModel):
@@ -763,16 +772,28 @@ class CaseConfigPage(CardWidget):
             return
         self.apply_case_logic(path)
 
-    def get_editable_fields(self, case_path):
-        """
-        根据用例名返回哪些字段可以编辑。
-        你可以完善/替换成自己的判断规则。
-        """
+    def get_editable_fields(self, case_path) -> EditableInfo:
+        """根据用例名与路径返回可编辑字段以及相关 UI 使能状态"""
         basename = os.path.basename(case_path)
         logging.debug("testcase name %s", basename)
-        editable = set()
+        rvr_keys = {
+            "rvr",
+            "rvr.tool",
+            "rvr.iperf.version",
+            "rvr.iperf.path",
+            "rvr.ixchariot.path",
+            "rvr.repeat",
+            "rvr.throughput_threshold",
+            "rf_solution.model",
+            "rf_solution.RC4DAT-8G-95.idVendor",
+            "rf_solution.RC4DAT-8G-95.idProduct",
+            "rf_solution.RC4DAT-8G-95.ip_address",
+            "rf_solution.RADIORACK-4-220.ip_address",
+            "rf_solution.step",
+        }
+        info = EditableInfo()
         # 永远让 connect_type 可编辑
-        editable |= {
+        info.fields |= {
             "connect_type.type",
             "connect_type.adb.device",
             "connect_type.telnet.ip",
@@ -783,31 +804,38 @@ class CaseConfigPage(CardWidget):
             "serial_port.status",
             "serial_port.port",
             "serial_port.baud",
-            "fpga"
+            "fpga",
         }
         if basename == "test_compatibility.py":
-            editable |= {"Power relay"}
+            info.fields |= {"Power relay"}
         if basename == "test_wifi_peak_throughput.py":
-            editable |= {"rvr", "rvr.tool", "rvr.iperf.version", "rvr.iperf.path", "rvr.ixchariot.path", "rvr.repeat", }
-        if "rvr" in basename:
-            editable |= {
-                "rvr", "rvr.tool", "rvr.iperf.version", "rvr.iperf.path", "rvr.ixchariot.path", "rvr.repeat",
-                "rvr.throughput_threshold",
-                "rf_solution.model",
-                "rf_solution.RC4DAT-8G-95.idVendor",
-                "rf_solution.RC4DAT-8G-95.idProduct",
-                "rf_solution.RC4DAT-8G-95.ip_address",
-                "rf_solution.RADIORACK-4-220.ip_address",
-                "rf_solution.step",
+            info.fields |= {
+                "rvr",
+                "rvr.tool",
+                "rvr.iperf.version",
+                "rvr.iperf.path",
+                "rvr.ixchariot.path",
+                "rvr.repeat",
             }
+        if self._is_performance_case(case_path):
+            info.fields |= rvr_keys
         if "rvo" in basename:
-            editable |= {
+            info.fields |= {
                 "corner_angle",
                 "corner_angle.ip_address",
                 "corner_angle.step"
+                "corner_angle.step",
             }
-        # 如果你需要所有字段都可编辑，直接 return set(self.field_widgets.keys())
-        return editable
+        # 根据路径判断是否需要启用 CSV 与 RVR WiFi 配置
+        base = Path(self._get_application_base())
+        perf_dir = (base / "test" / "performance").resolve()
+        case_abs = Path(case_path).resolve() if case_path else None
+        if case_abs and perf_dir in case_abs.parents:
+            info.enable_csv = True
+            info.enable_rvr_wifi = True
+
+        # 如果你需要所有字段都可编辑，直接 return EditableInfo(set(self.field_widgets.keys()), True, True)
+        return info
 
     def set_fields_editable(self, editable_fields: set[str]) -> None:
         """批量控制字段可编辑状态（高效且不触发级联信号）"""
@@ -840,19 +868,19 @@ class CaseConfigPage(CardWidget):
         self.setUpdatesEnabled(False)  # 暂停全局重绘
 
         try:
-            editable = self.get_editable_fields(case_path)
-            self.set_fields_editable(editable)
+            info = self.get_editable_fields(case_path)
+            self.set_fields_editable(info.fields)
         finally:
             # ---------- 刷新结束 ----------
             self.setUpdatesEnabled(True)
             self.case_tree.setEnabled(True)
             self._refreshing = False
 
-        base = Path(self._get_application_base())
-        perf_dir = (base / "test" / "performance").resolve()
-        case_abs = Path(case_path).resolve() if case_path else None
         main_window = self.window()
-        if case_abs and perf_dir in case_abs.parents:
+        if hasattr(main_window, "setCurrentIndex"):
+            main_window.setCurrentIndex(main_window.case_config_page)
+
+        if info.enable_rvr_wifi:
             ssid = ""
             passwd = ""
             ssid_widget = self.field_widgets.get("router.ssid")
@@ -863,19 +891,14 @@ class CaseConfigPage(CardWidget):
                 passwd = passwd_widget.text()
             if hasattr(main_window, "show_rvr_wifi_config"):
                 main_window.show_rvr_wifi_config()
-            # if hasattr(main_window, "rvr_wifi_config_page") and hasattr(main_window.rvr_wifi_config_page,
-            #                                                             "set_router_credentials"):
-            #     main_window.rvr_wifi_config_page.set_router_credentials(ssid, passwd)
-            if hasattr(main_window, "setCurrentIndex"):
-                main_window.setCurrentIndex(main_window.case_config_page)
-            self.csv_combo.setEnabled(True)
         else:
             if hasattr(main_window, "hide_rvr_wifi_config"):
                 main_window.hide_rvr_wifi_config()
-            if hasattr(main_window, "setCurrentIndex"):
-                main_window.setCurrentIndex(main_window.case_config_page)
-            with QSignalBlocker(self.csv_combo):
-                self.csv_combo.setCurrentIndex(-1)
+            if info.enable_csv:
+                self.csv_combo.setEnabled(True)
+            else:
+                with QSignalBlocker(self.csv_combo):
+                    self.csv_combo.setCurrentIndex(-1)
             self.csv_combo.setEnabled(False)
             self.selected_csv_path = None
         # 若用户在刷新过程中又点了别的用例，延迟 0 ms 处理它
