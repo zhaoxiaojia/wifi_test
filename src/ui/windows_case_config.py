@@ -17,6 +17,7 @@ import logging
 from src.tools.router_tool.router_factory import router_list
 from src.util.constants import Paths
 from src.util.constants import get_config_base
+from src.tools.config_loader import load_config
 from PyQt5.QtCore import (
     Qt,
     QSignalBlocker,
@@ -199,8 +200,8 @@ class CaseConfigPage(CardWidget):
             )
             return {}
         try:
-            with self.config_path.open("r", encoding="utf-8") as f:
-                config = yaml.safe_load(f) or {}
+            load_config.cache_clear()
+            config = load_config() or {}
 
             app_base = self._get_application_base()
             changed = False

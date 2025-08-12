@@ -34,8 +34,8 @@ class serial_tool:
     '''
 
     def __init__(self, serial_port='', baud='', log_file="kernel_log.txt", enable_log=True):
-        self.serial_port = serial_port or pytest.config_yaml.get_note('serial_port')['port']
-        self.baud = baud or pytest.config_yaml.get_note('serial_port')['baud']
+        self.serial_port = serial_port or pytest.config.get('serial_port')['port']
+        self.baud = baud or pytest.config.get('serial_port')['baud']
         logging.info(f'port {self.serial_port} baud {self.baud}')
         self.ethernet_ip = ''
         self.uboot_time = 0

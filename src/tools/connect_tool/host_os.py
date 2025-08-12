@@ -4,7 +4,7 @@ import re
 import subprocess
 import time
 
-from src.tools.yamlTool import yamlTool
+from src.tools.config_loader import load_config
 
 
 class host_os:
@@ -14,8 +14,8 @@ class host_os:
         return host_os._instance
 
     def __init__(self):
-        self.config = yamlTool(os.getcwd() + '/config/config.yaml')
-        self.host = self.config.get_note('host_os')
+        self.config = load_config()
+        self.host = self.config.get('host_os')
         self.user = self.host['user']
         self.passwd = self.host['password']
         self.ip = ''

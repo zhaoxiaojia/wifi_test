@@ -11,7 +11,6 @@
 
 import itertools
 import logging
-import os
 import re
 import threading
 import time
@@ -25,7 +24,7 @@ import pytest
 from src.tools.connect_tool.lab_device_controller import LabDeviceController
 from src.tools.router_tool.Router import Router
 from src.tools.router_tool.router_factory import get_router
-from src.tools.yamlTool import yamlTool
+from src.tools.config_loader import load_config
 
 # 小米极限测试 记录
 filename = 'XiaoMi-Rvr.xlsx'
@@ -55,8 +54,8 @@ def writeInExcelArea(value, row_num, col_num):
         new_sheet.cell(row=row_num, column=i + col_num, value=value[i])
 
 
-wifi_yaml = yamlTool(os.getcwd() + '/config/config.yaml')
-router_name = wifi_yaml.get_note('router')['name']
+wifi_yaml = load_config()
+router_name = wifi_yaml.get('router')['name']
 
 # 设置为True 时 开启 衰减测试流程
 rf_needed = False
@@ -75,34 +74,34 @@ if pytest.connect_type == 'telnet':
 
 sum_list_lock = threading.Lock()
 
-rvr_tool = wifi_yaml.get_note('rvr')['tool']
-# env_control = wifi_yaml.get_note('env_control')
+rvr_tool = wifi_yaml.get('rvr')['tool']
+# env_control = wifi_yaml.get('env_control')
 
 # 初始化 衰减 & 转台 对象
 if rf_needed:
     # 读取衰减 配置
     rf_step_list = []
     rf_ip = ''
-    model = wifi_yaml.get_note('rf_solution')['model']
+    model = wifi_yaml.get('rf_solution')['model']
     if model != 'RADIORACK-4-220' and model != 'RC4DAT-8G-95':
         raise EnvironmentError("Doesn't support this model")
 
-    rf_ip = wifi_yaml.get_note('rf_solution')[model]['ip_address']
+    rf_ip = wifi_yaml.get('rf_solution')[model]['ip_address']
     logging.info('test rf')
     rf_tool = LabDeviceController(rf_ip)
     logging.info(f'rf_ip {rf_ip}')
-    rf_step_list = wifi_yaml.get_note('rf_solution')['step']
+    rf_step_list = wifi_yaml.get('rf_solution')['step']
     rf_step_list = [i for i in range(*rf_step_list)][::8]
     logging.info(f'rf_step_list {rf_step_list}')
 
 if corner_needed:
     corner_step_list = []
     # 配置衰减
-    corner_ip = wifi_yaml.get_note('corner_angle')['ip_address']
+    corner_ip = wifi_yaml.get('corner_angle')['ip_address']
     logging.info('test corner')
     corner_tool = LabDeviceController(corner_ip)
     logging.info(f'corner_ip {corner_ip}')
-    corner_step_list = wifi_yaml.get_note('corner_angle')['step']
+    corner_step_list = wifi_yaml.get('corner_angle')['step']
     corner_step_list = [i for i in range(*corner_step_list)][::45]
     logging.info(f'corner step_list {corner_step_list}')
 else:
@@ -327,7 +326,7 @@ def test_xiaomi_rvr(setup, rf_value):
     # iperf  打流
     if 'tx' in router_info.test_type:
         # 动态匹配 打流通道数
-        pair = wifi_yaml.get_note('rvr')['pair']
+          pair = wifi_yaml.get('rvr')['pair']
         logging.info(f'rssi : {rssi_num} pair : {pair}')
         pytest.dut.get_tx_rate(router_info, rssi_num, protocol,
                                corner_tool=corner_tool,
@@ -335,7 +334,7 @@ def test_xiaomi_rvr(setup, rf_value):
     # 获取rssi
     rssi_num = pytest.dut.get_rssi()
     if 'rx' in router_info.test_type:
-        pair = wifi_yaml.get_note('rvr')['pair']
+          pair = wifi_yaml.get('rvr')['pair']
         logging.info(f'rssi : {rssi_num} pair : {pair}')
         pytest.dut.get_rx_rate(router_info, rssi_num, protocol,
                                corner_tool=corner_tool,

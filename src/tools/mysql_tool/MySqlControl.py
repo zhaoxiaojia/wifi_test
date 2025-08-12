@@ -4,15 +4,14 @@
 # @Author  : chao.li
 # @File    : MySqlControl.py
 import logging
-import os
 
 import pymysql
 
-from src.tools.yamlTool import yamlTool
+from src.tools.config_loader import load_config
 
 try:
-    config= yamlTool(os.getcwd() + '/config/config.yaml')
-    mysql_config = config.get_note('mysql')
+    config = load_config()
+    mysql_config = config.get('mysql')
     my_sqldb_config_param = {
         "host": mysql_config['host'],
         "port": 3306,

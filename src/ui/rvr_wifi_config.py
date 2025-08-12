@@ -8,7 +8,6 @@ from __future__ import annotations
 import csv
 from pathlib import Path
 
-import yaml
 import logging
 from contextlib import ExitStack
 from PyQt5.QtCore import Qt, QSignalBlocker
@@ -33,11 +32,11 @@ from qfluentwidgets import (
     InfoBarPosition,
 )
 
-from src.tools.router_tool.router_factory import get_router
-from typing import TYPE_CHECKING
+    from src.tools.router_tool.router_factory import get_router
+    from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from .windows_case_config import CaseConfigPage
+    if TYPE_CHECKING:
+        from .windows_case_config import CaseConfigPage
 
 
 class WifiTableWidget(TableWidget):
@@ -72,7 +71,6 @@ class RvrWifiConfigPage(CardWidget):
         super().__init__()
         self.setObjectName("rvrWifiConfigPage")
         self.case_config_page = case_config_page
-        self.config_path = (Path(Paths.CONFIG_DIR) / "config.yaml").resolve()
         combo = getattr(self.case_config_page, "router_name_combo", None)
         router_name = combo.currentText().lower() if combo is not None else ""
         self.csv_path = self._compute_csv_path(router_name)
@@ -196,9 +194,11 @@ class RvrWifiConfigPage(CardWidget):
         return self.ssid, self.passwd_edit.text()
 
     def _load_router(self, name: str | None = None):
+        from src.tools.config_loader import load_config
+
         try:
-            with open(self.config_path, "r", encoding="utf-8") as f:
-                cfg = yaml.safe_load(f) or {}
+            load_config.cache_clear()
+            cfg = load_config() or {}
             router_name = name or cfg.get("router", {}).get("name", "asusax86u")
             router = get_router(router_name)
         except Exception as e:
