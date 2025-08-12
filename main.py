@@ -152,7 +152,6 @@ class MainWindow(FluentWindow):
             case_path,
             display_case_path,
             config,
-            on_stop_callback=self.stop_run_and_show_case_config,
             parent=self,
         )
         # 确保添加到导航栏和堆叠窗口
@@ -172,6 +171,8 @@ class MainWindow(FluentWindow):
         # 直接切换，不使用延迟
         if self.run_page:  # 额外检查对象是否有效
             self.switchTo(self.run_page)
+        # 统一通过 run_case 启动测试
+        self.run_page.run_case()
         runner = getattr(self.run_page, "runner", None)
         if runner:
             runner.finished.connect(lambda: self._set_nav_buttons_enabled(True))
@@ -185,7 +186,6 @@ class MainWindow(FluentWindow):
         self.setCurrentIndex(self.case_config_page)
         QCoreApplication.processEvents()  # 强制事件刷新
         self._set_nav_buttons_enabled(True)
-        self.clear_run_page()
         print("Switched to CaseConfigPage")
 
 
