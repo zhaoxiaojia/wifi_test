@@ -37,7 +37,8 @@ from PyQt5.QtWidgets import (
     QGridLayout,
     QGroupBox,
     QLabel,
-    QFileSystemModel
+    QFileSystemModel,
+    QCheckBox
 )
 
 from qfluentwidgets import (
@@ -116,9 +117,7 @@ class CaseConfigPage(CardWidget):
         # ----- left: case tree -----
         self.case_tree = TreeView(self)
         self.case_tree.setFixedWidth(300)
-        self._init_case_tree(
-            os.path.abspath(os.path.join(os.path.dirname(__file__), "../test"))
-        )
+        self._init_case_tree(Path(self._get_application_base()) / "test")
         main_layout.addWidget(self.case_tree, 3)
 
         # ----- right: parameters & run button -----
@@ -181,9 +180,9 @@ class CaseConfigPage(CardWidget):
             print(f"_is_performance_case exception: {e}")
             return False
 
-    def _init_case_tree(self, root_dir: str) -> None:
+    def _init_case_tree(self, root_dir: Path) -> None:
         self.fs_model = QFileSystemModel(self.case_tree)
-        root_index = self.fs_model.setRootPath(root_dir)  # ← use return value
+        root_index = self.fs_model.setRootPath(str(root_dir))  # ← use return value
         self.fs_model.setNameFilters(["test_*.py"])
         # show directories regardless of filter
         self.fs_model.setNameFilterDisables(True)
@@ -750,7 +749,10 @@ class CaseConfigPage(CardWidget):
         )
         path = self.fs_model.filePath(source_idx)
         base = Path(self._get_application_base())
-        display_path = os.path.relpath(path, base)
+        try:
+            display_path = os.path.relpath(path, base)
+        except ValueError:
+            display_path = path
         print(f"on_case_tree_clicked path={path} display={display_path}")
         print(f"on_case_tree_clicked is_performance={self._is_performance_case(path)}")
         # ---------- 目录：只负责展开/折叠 ----------
@@ -978,6 +980,8 @@ class CaseConfigPage(CardWidget):
             elif isinstance(widget, ComboBox):
                 text = widget.currentText()
                 ref[leaf] = True if text == 'True' else False if text == 'False' else text
+            elif isinstance(widget, QCheckBox):
+                ref[leaf] = widget.isChecked()
         case_path = self.field_widgets["text_case"].text().strip()
         base = Path(self._get_application_base())
 
