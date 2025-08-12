@@ -154,18 +154,18 @@ class CaseRunner(QThread):
     def stop(self):
         # NOTE: pytest没有优雅的“中止”API，通常不能强停，最优雅还是用子进程方案
         self._should_stop = True
-        # 这里没有强制中止机制（如果用例本身卡死会无效）
+        if self.isRunning():
+            self.terminate()
 
 
 class RunPage(CardWidget):
     """运行页"""
 
-    def __init__(self, case_path, display_case_path=None, config=None, on_stop_callback=None, parent=None):
+    def __init__(self, case_path, display_case_path=None, config=None, parent=None):
         super().__init__(parent)
         self.setObjectName("runPage")
         self.case_path = case_path
         self.config = config
-        self.on_stop_callback = on_stop_callback
         self.main_window = parent  # 保存主窗口引用（用于InfoBar父窗口）
 
         self.display_case_path = self._calc_display_path(case_path, display_case_path)
@@ -203,10 +203,10 @@ class RunPage(CardWidget):
             border-radius: 4px;
         """)
         self.progress_chunk.setFixedWidth(0)
-        self.stop_btn = PushButton("Stop", self)
-        self.stop_btn.setIcon(FluentIcon.CLOSE)
-        self.stop_btn.clicked.connect(self.on_stop)
-        layout.addWidget(self.stop_btn)
+        self.action_btn = PushButton("Exit", self)
+        self.action_btn.setIcon(FluentIcon.CLOSE)
+        self.action_btn.clicked.connect(self.on_stop)
+        layout.addWidget(self.action_btn)
         self.setLayout(layout)
         self.run_case()
 
@@ -235,37 +235,46 @@ class RunPage(CardWidget):
             pass
 
     def update_progress(self, percent):
-        self.progress_text.setText(f"当前进度 {percent}%")
+        self.progress_text.setText(f"Process :  {percent}%")
         total_width = self.progress_container.width() or 300  # 默认宽度
         progress_width = int(total_width * percent / 100)
         # 更新进度块宽度
         self.progress_chunk.setFixedWidth(progress_width)
 
     def run_case(self):
+        self.cleanup()
+        self.log_area.clear()
+        self.progress.setValue(0)
+        self.update_progress(0)
+
+        self.action_btn.setText("Exit")
+        self.action_btn.setIcon(FluentIcon.CLOSE)
+        with suppress(TypeError):
+            self.action_btn.clicked.disconnect()
+        self.action_btn.clicked.connect(self.on_stop)
         self.runner = CaseRunner(self.case_path)
         self.runner.log_signal.connect(self._append_log)
         self.runner.progress_signal.connect(self.update_progress)
         # 关键修改：InfoBar的父窗口改为主窗口（而非RunPage自身）
-        self.runner.finished.connect(
-            lambda: InfoBar.success(
-                title="完成",
-                content="用例运行已完成",
-                parent=self.main_window,  # 这里改为主窗口
-                position=InfoBarPosition.TOP,
-                duration=1800,
-            )
-        )
+        # self.runner.finished.connect(
+        #     lambda: InfoBar.success(
+        #         title="Done",
+        #         content="Test Done",
+        #         parent=self.main_window,  # 这里改为主窗口
+        #         position=InfoBarPosition.TOP,
+        #         duration=1800,
+        #     )
+        # )
         self.runner.start()
 
-    def cleanup(self):
+    def cleanup(self, disconnect_page: bool = True):
         runner = getattr(self, "runner", None)
         if not runner:
             return
         runner.stop()
         if not runner.wait(3000):
-            runner.quit()
-            if not runner.wait(1000):
-                self._append_log("<b style='color:red;'>线程结束超时，可能仍在后台运行</b>")
+            runner.terminate()
+            runner.wait()
         for signal, slot in (
                 (runner.log_signal, self._append_log),
                 (runner.progress_signal, self.update_progress),
@@ -275,13 +284,17 @@ class RunPage(CardWidget):
         with suppress((TypeError, RuntimeError)):
             runner.finished.disconnect()
         self.runner = None
-        with suppress(TypeError):
-            self.disconnect()
+        if disconnect_page:
+            with suppress(TypeError):
+                self.disconnect()
 
     def on_stop(self):
         self.cleanup()
-        if self.on_stop_callback:
-            self.on_stop_callback()  # 调用返回配置页的回调
+        self.action_btn.setText("Test")
+        self.action_btn.setIcon(FluentIcon.PLAY)
+        with suppress(TypeError):
+            self.action_btn.clicked.disconnect()
+        self.action_btn.clicked.connect(self.run_case)
 
     def _get_application_base(self) -> Path:
         """获取应用根路径"""
