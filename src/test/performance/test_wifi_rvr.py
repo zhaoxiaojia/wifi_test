@@ -66,7 +66,7 @@ skip_rx = False
 
 @pytest.fixture(scope='session', params=test_data, ids=[str(i) for i in test_data])
 def setup(request):
-    global rx_result, tx_result, pc_ip, dut_ip, skip_rx, skip_tx
+    global rx_result, tx_result, skip_rx, skip_tx
     skip_tx = False
     skip_rx = False
     logging.info('router setup start')
@@ -92,40 +92,32 @@ def setup(request):
     with open(pytest.testResult.detail_file, 'a', encoding='utf-8') as f:
         f.write(f'Testing {router_info} \n')
 
+    logging.info(f'pc_ip:{pytest.dut.pc_ip}')
     logging.info(f'dut try to connect {router_info.ssid}')
     if pytest.connect_type == 'telnet':
         connect_status = True
         time.sleep(90)
-
     else:
         # 连接 网络 最多三次重试
         for _ in range(3):
-            try:
-                type = 'wpa3' if 'WPA3' in router_info.authentication else 'wpa2'
-                if router_info.authentication.lower() in \
-                        ['open', '不加密', '无', 'open system', '无加密(允许所有人连接)', 'none']:
-                    logging.info('no passwd')
-                    cmd = pytest.dut.CMD_WIFI_CONNECT.format(router_info.ssid, "open", "")
-                else:
-                    cmd = pytest.dut.CMD_WIFI_CONNECT.format(router_info.ssid, type,
-                                                             router_info.password)
-                if router_info.hide_ssid == '是':
-                    cmd += pytest.dut.CMD_WIFI_HIDE
-                logging.info(f"Try to connect {cmd}")
-                pytest.dut.checkoutput(cmd)
-                time.sleep(5)
-
-                if pytest.dut.wait_for_wifi_address(target=re.findall(r'(\d+\.\d+\.\d+\.)', dut_ip)[0]):
-                    connect_status = True
-                    break
-            except Exception as e:
-                logging.info(e)
-                connect_status = False
+            type = 'wpa3' if 'WPA3' in router_info.authentication else 'wpa2'
+            if router_info.authentication.lower() in \
+                    ['open', '不加密', '无', 'open system', '无加密(允许所有人连接)', 'none']:
+                logging.info('no passwd')
+                cmd = pytest.dut.CMD_WIFI_CONNECT.format(router_info.ssid, "open", "")
+            else:
+                cmd = pytest.dut.CMD_WIFI_CONNECT.format(router_info.ssid, type,
+                                                         router_info.password)
+            if router_info.hide_ssid == '是':
+                cmd += pytest.dut.CMD_WIFI_HIDE
+            logging.info(f"Try to connect {cmd}")
+            pytest.dut.checkoutput(cmd)
+            time.sleep(5)
+            if pytest.dut.wait_for_wifi_address(target=re.findall(r'(\d+\.\d+\.\d+\.)',pytest.dut.pc_ip)[0]):
+                connect_status = True
+                break
 
     logging.info(f'dut_ip:{pytest.dut.dut_ip}')
-    connect_status = True
-
-    logging.info(f'pc_ip:{pytest.dut.pc_ip}')
     logging.info('dut connected')
 
     if rvr_tool == 'ixchariot':
