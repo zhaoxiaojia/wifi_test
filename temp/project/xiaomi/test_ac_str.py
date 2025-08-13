@@ -1,12 +1,12 @@
 # !/usr/bin/env python
 # -*- coding: utf-8 -*-
-# @Time    : 2024/10/23 17:25
+# @Time    : 2024/10/23 16:58
 # @Author  : chao.li
-# @File    : test_ac.py
+# @File    : test_ac_str.py
 
 
 import time
-from src.test.stress import multi_stress
+from src.test import multi_stress
 
 import pytest
 
@@ -14,6 +14,8 @@ from src.tools.usb_relay import UsbRelay
 
 # the control by power usb
 power = UsbRelay("COM9")
+# the control by bt remote usb
+bt = UsbRelay("COM6")
 
 # set time to power on
 power_on = 5
@@ -21,15 +23,14 @@ power_on = 5
 power_off = 10
 # how many times to repeat
 repeat = 1000
-# test address
-address = "192.168.50.1"
 
 '''
 Test step
 
 1:Dut power off few seconds
 2:Dut power on few seconds 
-3:Ping 
+3:Dut str on
+
 repeat 1-3
 '''
 
@@ -38,13 +39,14 @@ repeat 1-3
 def setup_teardown():
     yield
     power.close()
+    bt.close()
 
 
 @multi_stress
-def test_ac(device):
+def test_ac_str_switch(device):
     for _ in range(repeat):
         power.power_control('off', power_off)
         power.power_control('on', power_on)
         time.sleep(1)
-        device.ping(address)
+        bt.break_make()
         time.sleep(10)

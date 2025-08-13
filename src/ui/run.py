@@ -208,7 +208,6 @@ class RunPage(CardWidget):
         self.action_btn.clicked.connect(self.on_stop)
         layout.addWidget(self.action_btn)
         self.setLayout(layout)
-        self.run_case()
 
     def _append_log(self, msg: str):
         upper_msg = msg.upper()

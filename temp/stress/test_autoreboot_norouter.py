@@ -8,7 +8,7 @@
 
 
 import time
-from src.test.stress import multi_stress
+from src.test import multi_stress
 
 '''
 Test step

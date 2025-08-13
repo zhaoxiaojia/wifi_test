@@ -16,7 +16,6 @@ import time
 from src.test import get_testdata
 import pytest
 
-from src.tools.router_tool.Router import Router
 from src.tools.router_tool.router_factory import get_router
 from src.tools.config_loader import load_config
 
