@@ -3,7 +3,7 @@ import re
 import subprocess
 import time
 from src.test import get_testdata
-from src.test.stress import device_list
+from src.test import device_list
 from src.test.performance.test_wifi_rvr_rvo import get_rx_rate, get_tx_rate, iperf_on, kill_iperf
 
 import pytest

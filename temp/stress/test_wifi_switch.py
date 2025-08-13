@@ -5,7 +5,7 @@
 # @File    : test_wifi_switch.py
 
 import time
-from src.test.stress import multi_stress
+from src.test import multi_stress
 
 import pytest
 

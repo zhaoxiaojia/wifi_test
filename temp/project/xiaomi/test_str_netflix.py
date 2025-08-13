@@ -1,19 +1,18 @@
 # !/usr/bin/env python
 # -*- coding: utf-8 -*-
-# @Time    : 2024/10/23 17:31
+# @Time    : 2024/11/25 16:59
 # @Author  : chao.li
-# @File    : test_str.py
-
+# @File    : test_str_netflix.py
 
 import time
-from src.test.stress import multi_stress
+from src.test import multi_stress
 
 import pytest
 
 from src.tools.usb_relay import UsbRelay
 
 # the control by power usb
-bt = UsbRelay("COM6")
+bt = UsbRelay("COM10")
 
 # set time to power on
 str_sleep = 5
@@ -43,8 +42,10 @@ def setup_teardown():
 @multi_stress
 def test_str(device):
     for _ in range(repeat):
-        bt.break_make()
+        bt.break_make(port=2)
         time.sleep(str_sleep)
-        bt.break_make()
+        bt.break_make(port=2)
         time.sleep(str_wake)
         device.ping(address)
+        bt.break_make(port=1)
+        time.sleep(15)

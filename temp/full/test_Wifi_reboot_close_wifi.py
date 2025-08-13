@@ -7,7 +7,7 @@
 # @Software: PyCharm
 
 
-from src.test import (close_wifi, config_yaml, enter_wifi_activity, open_wifi,
+from src.test import (close_wifi, enter_wifi_activity, open_wifi,
                       wait_for_wifi_service)
 
 import pytest

@@ -1,15 +1,15 @@
 # !/usr/bin/env python
 # -*- coding: utf-8 -*-
-# @Time    : 2024/10/18 15:52
+# @Time    : 2024/10/21 10:24
 # @Author  : chao.li
-# @File    : test_2g_switch_channel_throughput.py
+# @File    : test_2g_switch_bandwidth_throughput.py
 
 
 import logging
 import re
 import threading
 import time
-from src.test.stress import multi_stress
+from src.test import multi_stress
 from src.test.performance.test_wifi_rvr_rvo import get_rx_rate, get_tx_rate, iperf_on, kill_iperf
 
 import pytest
@@ -18,25 +18,23 @@ from src.tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
 from src.tools.router_tool.Router import Router
 
 ssid = 'ATC_ASUS_AX88U_2G'
-router_ch1 = Router(band='2.4 GHz', ssid=ssid, wireless_mode='11ax', channel='1', bandwidth='40 MHz',
-                    authentication='Open System')
-router_ch6 = Router(band='2.4 GHz', ssid=ssid, wireless_mode='11ax', channel='6', bandwidth='40 MHz',
-                    authentication='Open System')
-router_ch11 = Router(band='2.4 GHz', ssid=ssid, wireless_mode='11ax', channel='11', bandwidth='40 MHz',
+router_bw20 = Router(band='2.4 GHz', ssid=ssid, wireless_mode='11ax', channel='1', bandwidth='20 MHz',
+                     authentication='Open System')
+router_bw40 = Router(band='2.4 GHz', ssid=ssid, wireless_mode='11ax', channel='1', bandwidth='40 MHz',
                      authentication='Open System')
 
 lock = threading.Lock()
 test_result = {}
 '''
 Test step
-1.Set 2.4G bandwidth 40M, channel 1,others keep defealt
+1.Set 2.4G bandwidth 40M, channel 11,others keep defealt
 2.Connect DUT to 2.4G SSID and run iperf tx and rx traffic
-3.Switch channels in(1,6,11),and run iperf tx and rx after switch channel
+3.Switch bandwidth in(20M,40M),and run iperf tx and rx after switch channel
 4.Repeate step3 10times
-5.Compared througput value of channel 1, 6, 11
+5.Compared throughput value after each round of switching
 
 Expected Result
-5.After switch channel, throuhput should not have much gap for every channels
+5.Throughput should be similar in each round
 
 '''
 
@@ -45,7 +43,7 @@ dut_ip = re.findall(r'inet addr:(\d+\.\d+\.\d+\.\d+)', dut_info, re.S)[0]
 
 
 @pytest.mark.wifi_connect
-@pytest.fixture(autouse=True, params=[router_ch1, router_ch6, router_ch11] * 10)
+@pytest.fixture(autouse=True, params=[router_bw20, router_bw40] * 10)
 def setup_teardown(request):
     router = request.param
     logging.info(router)
@@ -66,10 +64,10 @@ def test_2g_throughtput(device):
     device.wait_for_wifi_address()
     ipfoncig_info = device.checkoutput_term('ipconfig').strip()
     pc_ip = re.findall(r'IPv4 地址.*?(\d+\.\d+\.\d+\.\d+)', ipfoncig_info, re.S)[0]
-    tx_result = get_tx_rate(pc_ip, dut_ip, device_number, router_ch1, 4, "", "", "TCP")
+    tx_result = get_tx_rate(pc_ip, dut_ip, device_number, router_bw20, 4, "", "", "TCP")
     with lock:
         test_result[device_number]['tx'].append(tx_result)
-    rx_result = get_rx_rate(pc_ip, dut_ip, device_number, router_ch1, 4, "", "", "TCP")
+    rx_result = get_rx_rate(pc_ip, dut_ip, device_number, router_bw20, 4, "", "", "TCP")
     with lock:
         test_result[device_number]['rx'].append(rx_result)
     logging.info(test_result)

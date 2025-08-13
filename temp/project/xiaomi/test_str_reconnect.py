@@ -1,11 +1,12 @@
 # !/usr/bin/env python
 # -*- coding: utf-8 -*-
-# @Time    : 2024/11/25 16:59
+# @Time    : 2024/11/25 19:07
 # @Author  : chao.li
-# @File    : test_str_netflix.py
+# @File    : test_str_reconnect.py
+
 
 import time
-from src.test.stress import multi_stress
+from src.test import multi_stress
 
 import pytest
 
@@ -23,6 +24,9 @@ repeat = 1000
 # test address
 address = "192.168.50.1"
 
+ssid = 'AX88U-2G'
+passwd = '12345678'
+security = 'wpa2'
 '''
 Test step
 
@@ -42,10 +46,10 @@ def setup_teardown():
 @multi_stress
 def test_str(device):
     for _ in range(repeat):
+        device.forget_wifi()
         bt.break_make(port=2)
         time.sleep(str_sleep)
         bt.break_make(port=2)
         time.sleep(str_wake)
+        device.connect_wifi(ssid, passwd, security)
         device.ping(address)
-        bt.break_make(port=1)
-        time.sleep(15)
