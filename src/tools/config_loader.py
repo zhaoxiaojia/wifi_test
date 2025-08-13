@@ -22,7 +22,22 @@ def load_config(refresh: bool = False):
         print(f"配置缓存已清理，重新加载: {config_path}")
     else:
         print(f"加载配置文件（缓存未清理）: {config_path}")
-    return _cached_load_config()
+
+    config = _cached_load_config()
+
+    if refresh:
+        try:
+            print(f"config_path: {config_path}")
+            print(f"rf_solution['step']: {config['rf_solution']['step']}")
+        except Exception as e:
+            print(f"无法获取 rf_solution['step']: {e}")
+        try:
+            with open(config_path, encoding="utf-8") as f:
+                print(f"配置文件内容:\n{f.read()}")
+        except Exception as e:
+            print(f"无法读取配置文件内容: {e}")
+
+    return config
 
 
 # 兼容外部直接调用 ``load_config.cache_clear``
