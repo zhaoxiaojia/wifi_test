@@ -265,7 +265,25 @@ class RunPage(CardWidget):
         #         duration=1800,
         #     )
         # )
+        self.runner.finished.connect(self._finalize_runner)
         self.runner.start()
+
+    def _finalize_runner(self):
+        runner = getattr(self, "runner", None)
+        if not runner:
+            self.on_runner_finished()
+            return
+        for signal, slot in (
+                (runner.log_signal, self._append_log),
+                (runner.progress_signal, self.update_progress),
+        ):
+            with suppress((TypeError, RuntimeError)):
+                signal.disconnect(slot)
+        with suppress((TypeError, RuntimeError)):
+            runner.finished.disconnect(self._finalize_runner)
+        runner.deleteLater()
+        self.runner = None
+        self.on_runner_finished()
 
     def cleanup(self, disconnect_page: bool = True):
         runner = getattr(self, "runner", None)
@@ -282,11 +300,19 @@ class RunPage(CardWidget):
             with suppress((TypeError, RuntimeError)):
                 signal.disconnect(slot)
         with suppress((TypeError, RuntimeError)):
-            runner.finished.disconnect()
+            runner.finished.disconnect(self.on_runner_finished)
         self.runner = None
         if disconnect_page:
             with suppress(TypeError):
                 self.disconnect()
+
+    def on_runner_finished(self):
+        self.cleanup()
+        self.action_btn.setText("Test")
+        self.action_btn.setIcon(FluentIcon.PLAY)
+        with suppress(TypeError):
+            self.action_btn.clicked.disconnect()
+        self.action_btn.clicked.connect(self.run_case)
 
     def on_stop(self):
         self.cleanup()

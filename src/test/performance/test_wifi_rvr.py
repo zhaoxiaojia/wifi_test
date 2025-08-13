@@ -31,7 +31,6 @@ logging.info(f'router {router}')
 test_data = get_testdata(router)
 
 sum_list_lock = threading.Lock()
-
 rvr_tool = cfg['rvr']['tool']
 
 # 初始化 衰减 & 转台 对象
