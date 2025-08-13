@@ -4,8 +4,22 @@ import yaml
 
 
 @lru_cache()
-def load_config():
-    """加载 config.yaml 并缓存结果。"""
+def _cached_load_config():
+    """实际读取 config.yaml 并缓存结果。"""
     config_path = get_config_base() / "config.yaml"
     with config_path.open(encoding="utf-8") as f:
         return yaml.safe_load(f)
+
+
+def load_config(refresh: bool = False):
+    """加载 config.yaml。
+
+    默认返回缓存内容；当 ``refresh=True`` 时清除缓存并重新读取文件。
+    """
+    if refresh:
+        load_config.cache_clear()
+    return _cached_load_config()
+
+
+# 兼容外部直接调用 ``load_config.cache_clear``
+load_config.cache_clear = _cached_load_config.cache_clear

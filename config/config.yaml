@@ -21,8 +21,8 @@ rf_solution:
     ip_address: 192.168.5.75
   model: RC4DAT-8G-95
   step:
-  - 70
-  - 71
+  - 80
+  - 81
 router:
   name: asusax88u
   ssid_2g: asusax88u_2g

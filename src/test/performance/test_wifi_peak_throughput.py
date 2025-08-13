@@ -19,8 +19,7 @@ import pytest
 from src.tools.router_tool.router_factory import get_router
 from src.tools.config_loader import load_config
 
-cfg = load_config()
-router_name = cfg['router']['name']
+router_name = load_config(refresh=True)['router']['name']
 # 实例路由器对象
 router = get_router(router_name)
 logging.info(f'router {router}')
@@ -28,7 +27,6 @@ test_data = get_testdata(router)
 
 sum_list_lock = threading.Lock()
 
-rvr_tool = cfg['rvr']['tool']
 
 step_list = [0]
 
@@ -43,7 +41,8 @@ rx_result, tx_result = '', ''
 def setup(request):
     global rx_result, tx_result, pc_ip, dut_ip
     logging.info('router setup start')
-
+    cfg = load_config(refresh=True)
+    rvr_tool = cfg['rvr']['tool']
     # push_iperf()
     router_info = request.param
     # 修改路由器配置

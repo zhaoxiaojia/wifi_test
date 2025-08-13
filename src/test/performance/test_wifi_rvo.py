@@ -22,8 +22,7 @@ from src.tools.router_tool.Router import Router
 from src.tools.router_tool.router_factory import get_router
 from src.tools.config_loader import load_config
 
-cfg = load_config()
-router_name = cfg['router']['name']
+router_name = load_config(refresh=True)['router']['name']
 
 
 # 实例路由器对象
@@ -33,18 +32,16 @@ test_data = get_testdata(router)
 
 sum_list_lock = threading.Lock()
 
-rvr_tool = cfg['rvr']['tool']
-
 
 corner_step_list = []
 # 配置衰减
-corner_ip = cfg['corner_angle']['ip_address']
+corner_ip = load_config(refresh=True)['corner_angle']['ip_address']
 if corner_ip == '192.168.5.11':
         corner_tool = rs()
 else:
      corner_tool = LabDeviceController(corner_ip)
 logging.info(f'corner_ip {corner_ip}')
-corner_step_list = cfg['corner_angle']['step']
+corner_step_list = load_config(refresh=True)['corner_angle']['step']
 corner_step_list = [i for i in range(*corner_step_list)][::45]
 logging.info(f'corner step_list {corner_step_list}')
 
@@ -60,16 +57,15 @@ rx_result, tx_result = '', ''
 @pytest.fixture(scope='session', params=test_data, ids=[str(i) for i in test_data])
 def setup(request):
 	global rx_result, tx_result, pc_ip, dut_ip
+	cfg = load_config(refresh=True)
+	rvr_tool = cfg['rvr']['tool']
+	global rx_result, tx_result, pc_ip, dut_ip
 	logging.info('router setup start')
-
-
-	# 转台置0
 
 	logging.info('Reset corner')
 	corner_tool.set_turntable_zero()
 	logging.info(corner_tool.get_turntanle_current_angle())
 	time.sleep(3)
-
 	# push_iperf()
 	router_info = request.param
 

@@ -7,7 +7,7 @@ from src.tools.router_tool.Router import Router
 from src.tools.config_loader import load_config
 from src.util.constants import get_config_base
 
-config_yaml = load_config()
+config_yaml = load_config(refresh=True)
 
 
 def get_testdata(router):
