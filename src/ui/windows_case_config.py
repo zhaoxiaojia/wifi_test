@@ -189,7 +189,7 @@ class CaseConfigPage(CardWidget):
         self.fs_model.setFilter(
             QDir.Filter.AllDirs | QDir.Filter.NoDotAndDotDot | QDir.Filter.Files
         )
-
+        print(f"[on_run] before performance check abs_case_path={abs_case_path} csv={self.selected_csv_path}")
         self.proxy_model = TestFileFilterModel()
         self.proxy_model.setSourceModel(self.fs_model)
         self.case_tree.setModel(self.proxy_model)
@@ -269,9 +269,11 @@ class CaseConfigPage(CardWidget):
             return {}
 
     def _save_config(self):
+        print(f"[save] path={self.config_path} data={self.config}")
         try:
             with self.config_path.open("w", encoding="utf-8") as f:
                 yaml.safe_dump(self.config, f, allow_unicode=True, sort_keys=False, width=4096)
+                print("[save] config saved")
             self.config = self._load_config()
             QTimer.singleShot(
                 0,
@@ -283,6 +285,7 @@ class CaseConfigPage(CardWidget):
                 ),
             )
         except Exception as exc:
+            print(f"[save] failed: {exc}")
             QTimer.singleShot(
                 0,
                 lambda exc=exc: InfoBar.error(
@@ -951,6 +954,10 @@ class CaseConfigPage(CardWidget):
         self.csvFileChanged.emit(self.selected_csv_path or "")
 
     def on_run(self):
+        print(
+            f"[on_run] start case={self.field_widgets['text_case'].text().strip()} "
+            f"csv={self.selected_csv_path} config={self.config}"
+        )
         # 将字段值更新到 self.config（保持结构）
         for key, widget in self.field_widgets.items():
             # key 可能是 'connect_type.adb.device' → 拆成层级
@@ -982,35 +989,26 @@ class CaseConfigPage(CardWidget):
                 ref[leaf] = True if text == 'True' else False if text == 'False' else text
             elif isinstance(widget, QCheckBox):
                 ref[leaf] = widget.isChecked()
-        case_path = self.field_widgets["text_case"].text().strip()
         base = Path(self._get_application_base())
-
+        case_path = self.field_widgets["text_case"].text().strip()
         # 默认将现有路径解析成 POSIX 字符串
         case_path = Path(case_path).as_posix() if case_path else ""
         abs_case_path = (
             (base / case_path).resolve().as_posix() if case_path else ""
-
         )
-        try:
-            if self._is_performance_case(abs_case_path) and not getattr(self, "selected_csv_path", None):
-                try:
-                    # 如果你工程里有 InfoBar（QFluentWidgets），用这个更友好
-                    InfoBar.warning(
-                        title="Hint",
-                        content="This is a performance test. Please select a CSV file before running.",
-                        parent=self,
-                        position=InfoBarPosition.TOP,
-                        duration=3000
-                    )
-                except Exception:
-                    # 没有 InfoBar 就退化到标准对话框
-                    from PyQt5.QtWidgets import QMessageBox
-                    QMessageBox.warning(self, "Hint",
-                                        "This is a performance test.\nPlease select a CSV file before running.")
-                return
-        except Exception:
-            # 兜底避免因为路径解析等异常导致崩溃
-            pass
+        print(f"[on_run] before performance check abs_case_path={abs_case_path} csv={self.selected_csv_path}")
+        # 先将当前用例路径及 CSV 选择写入配置
+        self.config["text_case"] = case_path
+        if self.selected_csv_path:
+            base_cfg = get_config_base()
+            try:
+                rel_csv = os.path.relpath(Path(self.selected_csv_path).resolve(), base_cfg)
+            except ValueError:
+                rel_csv = Path(self.selected_csv_path).resolve().as_posix()
+            self.config["csv_path"] = Path(rel_csv).as_posix()
+        else:
+            self.config.pop("csv_path", None)
+        print(f"[on_run] after performance check abs_case_path={abs_case_path} csv={self.selected_csv_path}")
         # 若树状视图中选择了有效用例，则覆盖默认路径
         proxy_idx = self.case_tree.currentIndex()
         model = self.case_tree.model()
@@ -1026,21 +1024,36 @@ class CaseConfigPage(CardWidget):
             case_path = Path(display_path).as_posix()
 
             abs_case_path = abs_path.as_posix()
-
-        # 将最终运行的用例路径写入配置（尽量保持相对路径）
+            # 更新配置中的用例路径
         self.config["text_case"] = case_path
-        # 将选择的 CSV 路径写入配置（相对路径存储）
-        if self.selected_csv_path:
-            base = get_config_base()
-            try:
-                rel_csv = os.path.relpath(Path(self.selected_csv_path).resolve(), base)
-            except ValueError:
-                rel_csv = Path(self.selected_csv_path).resolve().as_posix()
-            self.config["csv_path"] = Path(rel_csv).as_posix()
-        else:
-            self.config.pop("csv_path", None)
         # 保存配置
+        print("[on_run] before _save_config")
         self._save_config()
+        print("[on_run] after _save_config")
+        try:
+            if self._is_performance_case(abs_case_path) and not getattr(self, "selected_csv_path", None):
+                try:
+                    # 如果你工程里有 InfoBar（QFluentWidgets），用这个更友好
+                    InfoBar.warning(
+                        title="Hint",
+                        content="This is a performance test. Please select a CSV file before running.",
+                        parent=self,
+                        position=InfoBarPosition.TOP,
+                        duration=3000
+                    )
+                except Exception:
+                    # 没有 InfoBar 就退化到标准对话框
+                    from PyQt5.QtWidgets import QMessageBox
+                    QMessageBox.warning(
+                        self,
+                        "Hint",
+                        "This is a performance test.\nPlease select a CSV file before running."
+                    )
+                return
+        except Exception:
+            # 兜底避免因为路径解析等异常导致崩溃
+            pass
+
         if os.path.isfile(abs_case_path) and abs_case_path.endswith(".py"):
             self.on_run_callback(abs_case_path, case_path, self.config)
         else:
