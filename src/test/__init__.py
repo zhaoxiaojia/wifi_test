@@ -7,11 +7,10 @@ from src.tools.router_tool.Router import Router
 from src.tools.config_loader import load_config
 from src.util.constants import get_config_base
 
-config_yaml = load_config(refresh=True)
-
 
 def get_testdata(router):
-    config = load_config() or {}
+    logging.info("加载最新测试配置")
+    config = load_config(refresh=True) or {}
     config_base = get_config_base()
     router_name = config.get('router', {}).get('name', '')
     csv_path = config.get('csv_path')
