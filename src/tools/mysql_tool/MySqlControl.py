@@ -4,28 +4,37 @@
 # @Author  : chao.li
 # @File    : MySqlControl.py
 import logging
+from typing import Optional, Dict
 
 import pymysql
 
 from src.tools.config_loader import load_config
 
-try:
-    config = load_config()
-    mysql_config = config.get('mysql')
-    my_sqldb_config_param = {
-        "host": mysql_config['host'],
-        "port": 3306,
-        "user":  mysql_config['user'] ,
-        "password": mysql_config['passwd'],
-        "database": mysql_config['database'],
-        "charset": "utf8"
-    }
-except Exception as e:
-    logging.warning("Can't get mysql config")
+
+def _load_mysql_config() -> dict:
+    """加载最新的 MySQL 配置"""
+    try:
+        cfg = load_config(refresh=True) or {}
+        mysql_cfg = cfg.get("mysql", {})
+        params = {
+            "host": mysql_cfg.get("host"),
+            "port": 3306,
+            "user": mysql_cfg.get("user"),
+            "password": mysql_cfg.get("passwd"),
+            "database": mysql_cfg.get("database"),
+            "charset": "utf8"
+        }
+        logging.info(f"读取 MySQL 配置: {params}")
+        return params
+    except Exception as e:
+        logging.warning(f"Can't get mysql config: {e}")
+        return {}
 
 
 class MySql:
-    def __init__(self, operate_tablename: str, my_sqldb_config_param: dict):
+    def __init__(self, operate_tablename: str, my_sqldb_config_param: Optional[Dict] = None):
+        if my_sqldb_config_param is None:
+            my_sqldb_config_param = _load_mysql_config()
         assert isinstance(my_sqldb_config_param, dict), "请以字典类型的格式传入！"
         self._operate_tablename = operate_tablename
         try:
