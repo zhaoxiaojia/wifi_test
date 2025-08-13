@@ -16,8 +16,12 @@ def load_config(refresh: bool = False):
 
     默认返回缓存内容；当 ``refresh=True`` 时清除缓存并重新读取文件。
     """
+    config_path = get_config_base() / "config.yaml"
     if refresh:
         load_config.cache_clear()
+        print(f"配置缓存已清理，重新加载: {config_path}")
+    else:
+        print(f"加载配置文件（缓存未清理）: {config_path}")
     return _cached_load_config()
 
 

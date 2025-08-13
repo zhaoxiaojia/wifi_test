@@ -11,7 +11,7 @@ config_yaml = load_config(refresh=True)
 
 
 def get_testdata(router):
-    config = load_config() or {}
+    config = load_config(refresh=True) or {}
     config_base = get_config_base()
     router_name = config.get('router', {}).get('name', '')
     csv_path = config.get('csv_path')
