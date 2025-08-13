@@ -17,3 +17,4 @@ PyUserInput
 pysnmp
 roku
 pytest-dependency
+scapy
