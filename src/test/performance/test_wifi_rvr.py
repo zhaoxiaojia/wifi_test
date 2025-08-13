@@ -22,11 +22,7 @@ from src.tools.router_tool.Router import Router
 from src.tools.router_tool.router_factory import get_router
 from src.tools.config_loader import load_config
 
-router_name = load_config(refresh=True)['router']['name']
-# 实例路由器对象
-router = get_router(router_name)
-logging.info(f'router {router}')
-test_data = get_testdata(router)
+test_data = get_testdata(get_router(load_config(refresh=True)['router']['name']))
 
 sum_list_lock = threading.Lock()
 
@@ -47,6 +43,9 @@ def setup(request):
     skip_rx = False
     logging.info('router setup start')
     cfg = load_config(refresh=True)
+    router_name = cfg['router']['name']
+    router = get_router(router_name)
+    logging.info(f'router {router}')
     rf_solution = cfg['rf_solution']
     print(f"rf_solution['step']: {rf_solution['step']}")
     model = rf_solution['model']
