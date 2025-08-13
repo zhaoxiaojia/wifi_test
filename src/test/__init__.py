@@ -9,7 +9,6 @@ from src.util.constants import get_config_base
 
 
 def get_testdata(router):
-    logging.info("加载最新测试配置")
     config = load_config(refresh=True) or {}
     config_base = get_config_base()
     router_name = config.get('router', {}).get('name', '')
