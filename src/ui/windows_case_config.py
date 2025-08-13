@@ -189,7 +189,6 @@ class CaseConfigPage(CardWidget):
         self.fs_model.setFilter(
             QDir.Filter.AllDirs | QDir.Filter.NoDotAndDotDot | QDir.Filter.Files
         )
-        print(f"[on_run] before performance check abs_case_path={abs_case_path} csv={self.selected_csv_path}")
         self.proxy_model = TestFileFilterModel()
         self.proxy_model.setSourceModel(self.fs_model)
         self.case_tree.setModel(self.proxy_model)
