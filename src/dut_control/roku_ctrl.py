@@ -15,6 +15,7 @@ import time
 from threading import Thread
 from urllib.parse import quote_plus
 from xml.etree import ElementTree as ET
+from typing import Optional
 
 import pytest
 import requests
@@ -25,10 +26,13 @@ from src.tools.connect_tool.telnet_tool import telnet_tool
 from src.tools.config_loader import load_config
 from src.util.constants import RokuConst
 
-# roku_lux = YamlTool(os.getcwd() + '/config/roku/roku_changhong.yaml')
-roku_config = load_config()
-roku_ip = roku_config.get("connect_type")['telnet']['ip']
-# roku_ser = roku_config.get('dut_serial')
+
+def _get_roku_ip():
+    """加载最新的 ROKU IP 配置"""
+    cfg = load_config(refresh=True) or {}
+    ip = cfg.get("connect_type", {}).get("telnet", {}).get("ip")
+    logging.info(f"读取 ROKU IP: {ip}")
+    return ip
 
 lock = threading.Lock()
 
@@ -105,7 +109,9 @@ class roku_ctrl(Roku):
     #         cls._instance = object.__new__(cls, *args, **kw)
     #     return cls._instance
 
-    def __init__(self, ip):
+    def __init__(self, ip: Optional[str] = None):
+        if ip is None:
+            ip = _get_roku_ip()
         super().__init__(ip)
         self.ip = ip
         self.ptc_size, self.ptc_mode = '', ''
