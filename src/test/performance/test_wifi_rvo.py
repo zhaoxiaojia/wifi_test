@@ -32,22 +32,7 @@ test_data = get_testdata(router)
 
 sum_list_lock = threading.Lock()
 
-
-corner_step_list = []
-# 配置衰减
-corner_ip = load_config(refresh=True)['corner_angle']['ip_address']
-if corner_ip == '192.168.5.11':
-        corner_tool = rs()
-else:
-     corner_tool = LabDeviceController(corner_ip)
-logging.info(f'corner_ip {corner_ip}')
-corner_step_list = load_config(refresh=True)['corner_angle']['step']
-corner_step_list = [i for i in range(*corner_step_list)][::45]
-logging.info(f'corner step_list {corner_step_list}')
-
-step_list = corner_step_list
-logging.info(f'finally step_list {step_list}')
-
+corner_tool = None
 
 # 配置 测试报告
 # pytest.testResult.x_path = [] if (rf_needed and corner_needed) == 'both' else step_list
@@ -56,79 +41,86 @@ rx_result, tx_result = '', ''
 
 @pytest.fixture(scope='session', params=test_data, ids=[str(i) for i in test_data])
 def setup(request):
-	global rx_result, tx_result, pc_ip, dut_ip
-	cfg = load_config(refresh=True)
-	rvr_tool = cfg['rvr']['tool']
-	global rx_result, tx_result, pc_ip, dut_ip
-	logging.info('router setup start')
+        global rx_result, tx_result, pc_ip, dut_ip, corner_tool
+        cfg = load_config(refresh=True)
+        rvr_tool = cfg['rvr']['tool']
+        logging.info('router setup start')
 
-	logging.info('Reset corner')
-	corner_tool.set_turntable_zero()
-	logging.info(corner_tool.get_turntanle_current_angle())
-	time.sleep(3)
-	# push_iperf()
-	router_info = request.param
+        corner_ip = cfg['corner_angle']['ip_address']
+        if corner_ip == '192.168.5.11':
+                corner_tool = rs()
+        else:
+                corner_tool = LabDeviceController(corner_ip)
+        logging.info(f'corner_ip {corner_ip}')
+        corner_step = cfg['corner_angle']['step']
+        print(f"corner_step: {corner_step}")
+        corner_step_list = [i for i in range(*corner_step)][::45]
+        print(f'corner_step_list {corner_step_list}')
 
-	# 修改路由器配置
-	assert router.change_setting(router_info), "Can't set ap , pls check first"
-	if pytest.connect_type == 'telnet':
-		band = '5 GHz' if '2' in router_info.band else '2.4 GHz'
-		ssid = router_info.ssid + "_bat";
-		router.change_setting(Router(band=band, ssid=ssid))
-	time.sleep(3)
+        logging.info('Reset corner')
+        corner_tool.set_turntable_zero()
+        logging.info(corner_tool.get_turntanle_current_angle())
+        time.sleep(3)
+        router_info = request.param
 
-	logging.info('router set done')
-	with open(pytest.testResult.detail_file, 'a', encoding='utf-8') as f:
-		f.write(f'Testing {router_info} \n')
+        # 修改路由器配置
+        assert router.change_setting(router_info), "Can't set ap , pls check first"
+        if pytest.connect_type == 'telnet':
+                band = '5 GHz' if '2' in router_info.band else '2.4 GHz'
+                ssid = router_info.ssid + "_bat";
+                router.change_setting(Router(band=band, ssid=ssid))
+        time.sleep(3)
 
-	logging.info(f'dut try to connect {router_info.ssid}')
-	if pytest.connect_type == 'telnet':
-		connect_status = True
-		time.sleep(90)
-	else:
-		# 连接 网络 最多三次重试
-		for _ in range(3):
-			try:
-				type = 'wpa3' if 'WPA3' in router_info.authentication else 'wpa2'
-				if router_info.authentication.lower() in \
-						['open', '不加密', '无', 'open system', '无加密(允许所有人连接)', 'none']:
-					logging.info('no passwd')
-					cmd = pytest.dut.CMD_WIFI_CONNECT.format(router_info.ssid, "open", "")
-				else:
-					cmd = pytest.dut.CMD_WIFI_CONNECT.format(router_info.ssid, type,
-					                                         router_info.password)
-				if router_info.hide_ssid == '是':
-					cmd += pytest.dut.CMD_WIFI_HIDE
+        logging.info('router set done')
+        with open(pytest.testResult.detail_file, 'a', encoding='utf-8') as f:
+                f.write(f'Testing {router_info} \n')
 
-				pytest.dut.checkoutput(cmd)
-				time.sleep(5)
+        logging.info(f'dut try to connect {router_info.ssid}')
+        if pytest.connect_type == 'telnet':
+                connect_status = True
+                time.sleep(90)
+        else:
+                for _ in range(3):
+                        try:
+                                type = 'wpa3' if 'WPA3' in router_info.authentication else 'wpa2'
+                                if router_info.authentication.lower() in \
+                                                ['open', '不加密', '无', 'open system', '无加密(允许所有人连接)', 'none']:
+                                        logging.info('no passwd')
+                                        cmd = pytest.dut.CMD_WIFI_CONNECT.format(router_info.ssid, "open", "")
+                                else:
+                                        cmd = pytest.dut.CMD_WIFI_CONNECT.format(router_info.ssid, type,
+                                                                                 router_info.password)
+                                if router_info.hide_ssid == '是':
+                                        cmd += pytest.dut.CMD_WIFI_HIDE
 
-				if pytest.dut.wait_for_wifi_address(target=re.findall(r'(\d+\.\d+\.\d+\.)', dut_ip)[0]):
-					connect_status = True
-					break
-			except Exception as e:
-				logging.info(e)
-				connect_status = False
+                                pytest.dut.checkoutput(cmd)
+                                time.sleep(5)
 
-	logging.info(f'dut_ip:{pytest.dut.dut_ip}')
-	connect_status = True
+                                if pytest.dut.wait_for_wifi_address(target=re.findall(r'(\d+\.\d+\.\d+\.)', dut_ip)[0]):
+                                        connect_status = True
+                                        break
+                        except Exception as e:
+                                logging.info(e)
+                                connect_status = False
 
-	logging.info(f'pc_ip:{pytest.dut.pc_ip}')
-	logging.info('dut connected')
+        logging.info(f'dut_ip:{pytest.dut.dut_ip}')
+        connect_status = True
 
-	if rvr_tool == 'ixchariot':
-		if '5' in router_info.band:
-			pytest.dut.ix.modify_tcl_script("set script ",
-			                                'set script "$ixchariot_installation_dir/Scripts/High_Performance_Throughput.scr"\n')
-		else:
-			pytest.dut.ix.modify_tcl_script("set script ",
-			                                'set script "$ixchariot_installation_dir/Scripts/Throughput.scr"\n')
-		pytest.dut.checkoutput(pytest.dut.IX_ENDPOINT_COMMAND)
-		time.sleep(3)
+        logging.info(f'pc_ip:{pytest.dut.pc_ip}')
+        logging.info('dut connected')
 
-	yield connect_status, router_info
-	# 后置动作
-	pytest.dut.kill_iperf()
+        if rvr_tool == 'ixchariot':
+                if '5' in router_info.band:
+                        pytest.dut.ix.modify_tcl_script("set script ",
+                                                        'set script "$ixchariot_installation_dir/Scripts/High_Performance_Throughput.scr"\n')
+                else:
+                        pytest.dut.ix.modify_tcl_script("set script ",
+                                                        'set script "$ixchariot_installation_dir/Scripts/Throughput.scr"\n')
+                pytest.dut.checkoutput(pytest.dut.IX_ENDPOINT_COMMAND)
+                time.sleep(3)
+
+        yield connect_status, router_info, corner_step_list
+        pytest.dut.kill_iperf()
 
 
 # 生成 pdf
@@ -151,54 +143,41 @@ def setup(request):
 
 
 # 测试 iperf
-@pytest.mark.parametrize("rf_value", step_list)
-def test_rvr(setup, rf_value):
-	global rx_result, tx_result
-	# 判断板子是否存在  ip
-	if not setup[0]:
-		logging.info("Can't connect wifi ,input 0")
-		# rx_result_list.append('0')
-		# tx_result_list.append('0')
-		with open(pytest.testResult.detail_file, 'a') as f:
-			f.write("\n Can't connect wifi , skip this loop\n\n")
-		return
-	router_info = setup[1]
+def test_rvr(setup):
+        global rx_result, tx_result
+        connect_status, router_info, corner_step_list = setup
+        if not connect_status:
+                logging.info("Can't connect wifi ,input 0")
+                with open(pytest.testResult.detail_file, 'a') as f:
+                        f.write("\n Can't connect wifi , skip this loop\n\n")
+                return
 
-	logging.info(f'rf_value {rf_value}')
-	# 执行 修改 步长
+        for corner_value in corner_step_list:
+                logging.info(f'corner_value {corner_value}')
+                logging.info('set corner value')
+                value = corner_value[0] if isinstance(corner_value, tuple) else corner_value
+                corner_tool.execute_turntable_cmd('rt', angle=value)
+                logging.info(corner_tool.get_turntanle_current_angle())
 
-	logging.info('set corner value')
-	value = rf_value[0] if type(rf_value) == tuple else rf_value
-	corner_tool.execute_turntable_cmd('rt', angle=value)
-	# 获取转台角度
-	logging.info(corner_tool.get_turntanle_current_angle())
+                with open(pytest.testResult.detail_file, 'a') as f:
+                        f.write('-' * 40 + '\n')
+                        info, corner_set = '', ''
+                        db_set = 0
+                        info += 'db_set :  \n'
+                        corner_set = corner_value[0] if isinstance(corner_value, tuple) else corner_value
+                        info += 'corner_set : ' + str(corner_set) + '\n'
+                        f.write(info)
 
-	with open(pytest.testResult.detail_file, 'a') as f:
-		f.write('-' * 40 + '\n')
-		info, corner_set = '', ''
-		db_set = 0
-
-		info += 'db_set :  \n'
-		corner_set = rf_value[0] if type(rf_value) == tuple else rf_value
-		info += 'corner_set : ' + str(corner_set) + '\n'
-
-		f.write(info)
-	# time.sleep(1)
-
-	# 获取rssi
-	rssi_num = pytest.dut.get_rssi()
-
-	# handle iperf pair count
-	logging.info('start test tx/rx')
-	logging.info(f'router_info: {router_info}')
-	# iperf  打流
-	if 'tx' in router_info.test_type:
-		logging.info(f'rssi : {rssi_num} ')
-		pytest.dut.get_tx_rate(router_info, rssi_num,  'TCP',
-		                       corner_tool=corner_tool,
-		                       db_set=db_set)
-	if 'rx' in router_info.test_type:
-		logging.info(f'rssi : {rssi_num}')
-		pytest.dut.get_rx_rate(router_info, rssi_num,  'TCP',
-		                       corner_tool=corner_tool,
-		                       db_set=db_set)
+                rssi_num = pytest.dut.get_rssi()
+                logging.info('start test tx/rx')
+                logging.info(f'router_info: {router_info}')
+                if 'tx' in router_info.test_type:
+                        logging.info(f'rssi : {rssi_num} ')
+                        pytest.dut.get_tx_rate(router_info, rssi_num, 'TCP',
+                                               corner_tool=corner_tool,
+                                               db_set=db_set)
+                if 'rx' in router_info.test_type:
+                        logging.info(f'rssi : {rssi_num}')
+                        pytest.dut.get_rx_rate(router_info, rssi_num, 'TCP',
+                                               corner_tool=corner_tool,
+                                               db_set=db_set)
