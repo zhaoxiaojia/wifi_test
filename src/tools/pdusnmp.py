@@ -110,7 +110,7 @@ class power_ctrl:
     SET_CMD = 'snmpset -v1 -c private {} 1.3.6.1.4.1.23273.4.4{}.0 i 255'
 
     def __init__(self):
-        self.config = load_config()
+        self.config = load_config(refresh=True)
         self.power_ctrl = self.config.get('power_relay')
         self.ip_list = list(self.power_ctrl.keys())
         self.ctrl = self._handle_env_data()
