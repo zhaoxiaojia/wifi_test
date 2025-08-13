@@ -198,7 +198,7 @@ class RvrWifiConfigPage(CardWidget):
 
         try:
             load_config.cache_clear()
-            cfg = load_config() or {}
+            cfg = load_config(refresh=True) or {}
             router_name = name or cfg.get("router", {}).get("name", "asusax86u")
             router = get_router(router_name)
         except Exception as e:

@@ -95,8 +95,14 @@ class CaseRunner(QThread):
                 self.case_path,
             ]
             import sys
-            sys.modules.pop("src.conftest", None)  # 移除已加载的旧模块
-
+            from src.tools.config_loader import load_config
+            # 确保每次运行前都读取最新的配置并清理相关模块缓存
+            load_config(refresh=True)
+            for m in list(sys.modules):
+                if m.startswith("src.test"):
+                    sys.modules.pop(m, None)
+            sys.modules.pop("src.tools.config_loader", None)
+            sys.modules.pop("src.conftest", None)
             # 实时日志到窗口
             def emit_log(line):
                 self.log_signal.emit(line)

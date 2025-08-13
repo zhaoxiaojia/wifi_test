@@ -213,7 +213,7 @@ class CaseConfigPage(CardWidget):
             return {}
         try:
             load_config.cache_clear()
-            config = load_config() or {}
+            config = load_config(refresh=True) or {}
 
             app_base = self._get_application_base()
             changed = False

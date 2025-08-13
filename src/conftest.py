@@ -52,7 +52,7 @@ def pytest_sessionstart(session):
     else:
         pytest.win_flag = False
     # The configuration information of  DUT
-    pytest.config = load_config()
+    pytest.config = load_config(refresh=True)
     # The connection method to the product to DUT
     pytest.chip_info = pytest.config.get('fpga')
     pytest.connect_type = pytest.config.get('connect_type')['type']
