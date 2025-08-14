@@ -20,6 +20,7 @@ import pytest
 import telnetlib
 from src.tools.ixchariot import ix
 from threading import Thread
+from src.tools.config_loader import load_config
 
 lock = threading.Lock()
 
@@ -116,6 +117,10 @@ class dut():
         self._dut_ip = ''
         self._pc_ip = ''
         self.rvr_result = None
+        cfg = load_config(refresh=True)
+        self.throughput_threshold = float(cfg['rvr'].get('throughput_threshold', 0))
+        self.skip_tx = False
+        self.skip_rx = False
         if self.rvr_tool == 'iperf':
             self.test_tool = pytest.config.get('rvr')[self.rvr_tool]['version']
             self.tool_path = pytest.config.get('rvr')[self.rvr_tool]['path'] or ''
@@ -345,16 +350,24 @@ class dut():
 
     @step
     def get_rx_rate(self, router_info, type='TCP', corner_tool=None, db_set=''):
+        if self.skip_rx:
+            corner = corner_tool.get_turntanle_current_angle() if corner_tool else ''
+            rx_result_info = (
+                f'{self.serialnumber} Throughput Standalone NULL Null {router_info.wireless_mode.split()[0]} '
+                f'{router_info.band.split()[0]} {router_info.bandwidth.split()[0]} Rate_Adaptation '
+                f'{router_info.channel} {type} DL NULL NULL {db_set} {self.rssi_num} {corner} NULL "NULL" 0')
+            pytest.testResult.save_result(rx_result_info.replace(' ', ','))
+            with open(pytest.testResult.detail_file, 'a', encoding='utf-8') as f:
+                f.write(f'Rx {type} result : 0\n')
+                f.write('-' * 40 + '\n\n')
+            return 'N/A'
+
         rx_result_list = []
         self.rvr_result = None
         for c in range(self.repest_times + 1):
             logging.info(f'run rx {c} loop')
             rx_result = 0
             mcs_rx = 0
-            # clear mcs data
-            # pytest.dut.checkoutput(pytest.dut.CLEAR_DMESG_COMMAND)
-            # pytest.dut.checkoutput(pytest.dut.MCS_RX_CLEAR_COMMAND)
-            # kill iperf
             if self.test_tool == 'iperf':
                 pytest.dut.kill_iperf()
                 terminal = pytest.dut.run_iperf(self.tool_path + pytest.dut.IPERF_SERVER[type], self.serialnumber)
@@ -392,15 +405,21 @@ class dut():
 
             time.sleep(3)
             logging.info(f'rx result {rx_result}')
-            # get mcs data
             mcs_rx = pytest.dut.get_mcs_rx()
-            # logging.info(f'expected rate {router_info.expected_rate.split()[1]}')
             logging.info(f'{rx_result}, {mcs_rx}')
             rx_result_list.append(rx_result)
             if len(rx_result_list) > self.repest_times:
                 break
-        corner = corner_tool.get_turntanle_current_angle() if corner_tool else ''
 
+        if rx_result_list:
+            try:
+                rx_val = float(rx_result_list[0])
+            except Exception:
+                rx_val = 0
+            if rx_val < self.throughput_threshold:
+                self.skip_rx = True
+
+        corner = corner_tool.get_turntanle_current_angle() if corner_tool else ''
         rx_result_info = (
             f'{self.serialnumber} Throughput Standalone NULL Null {router_info.wireless_mode.split()[0]} '
             f'{router_info.band.split()[0]} {router_info.bandwidth.split()[0]} Rate_Adaptation '
@@ -415,6 +434,19 @@ class dut():
 
     @step
     def get_tx_rate(self, router_info, type='TCP', corner_tool=None, db_set=''):
+        if self.skip_tx:
+            corner = corner_tool.get_turntanle_current_angle() if corner_tool else ''
+            tx_result_info = (
+                f'{self.serialnumber} Throughput Standalone NULL Null {router_info.wireless_mode.split()[0]} '
+                f'{router_info.band.split()[0]} {router_info.bandwidth.split()[0]} Rate_Adaptation '
+                f'{router_info.channel} {type} UL NULL NULL {db_set} {self.rssi_num} {corner} NULL "NULL" 0')
+            logging.info(tx_result_info)
+            pytest.testResult.save_result(tx_result_info.replace(' ', ','))
+            with open(pytest.testResult.detail_file, 'a') as f:
+                f.write(f'Tx {type} result : 0\n')
+                f.write('-' * 40 + '\n\n')
+            return 'N/A'
+
         tx_result_list = []
         self.rvr_result = None
 
@@ -422,9 +454,6 @@ class dut():
             logging.info(f'run tx:  {c} loop ')
             tx_result = 0
             mcs_tx = 0
-            # pytest.dut.checkoutput(pytest.dut.CLEAR_DMESG_COMMAND)
-            # pytest.dut.checkoutput(pytest.dut.MCS_TX_KEEP_GET_COMMAND)
-            # kill iperf
             if self.test_tool == 'iperf':
                 pytest.dut.kill_iperf()
                 time.sleep(1)
@@ -464,11 +493,19 @@ class dut():
                 continue
 
             mcs_tx = pytest.dut.get_mcs_tx()
-            # logging.info(f'expected rate {router_info.expected_rate.split()[0]}')
             logging.info(f'{tx_result}, {mcs_tx}')
             tx_result_list.append(tx_result)
             if len(tx_result_list) > self.repest_times:
                 break
+
+        if tx_result_list:
+            try:
+                tx_val = float(tx_result_list[0])
+            except Exception:
+                tx_val = 0
+            if tx_val < self.throughput_threshold:
+                self.skip_tx = True
+
         corner = corner_tool.get_turntanle_current_angle() if corner_tool else ''
 
         tx_result_info = (
