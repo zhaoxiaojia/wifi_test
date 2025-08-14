@@ -21,6 +21,7 @@ import telnetlib
 from src.tools.ixchariot import ix
 from threading import Thread
 from src.tools.config_loader import load_config
+from src.tools.router_tool.router_performance import handle_expectdata
 
 lock = threading.Lock()
 
@@ -350,12 +351,20 @@ class dut():
 
     @step
     def get_rx_rate(self, router_info, type='TCP', corner_tool=None, db_set=''):
+        router_cfg = {
+            router_info.band: {
+                'mode': router_info.wireless_mode,
+                'authentication': router_info.authentication,
+                'bandwidth': router_info.bandwidth,
+            }
+        }
+        expect_rate = handle_expectdata(router_cfg, router_info.band, 'DL', pytest.chip_info)
         if self.skip_rx:
             corner = corner_tool.get_turntanle_current_angle() if corner_tool else ''
             rx_result_info = (
                 f'{self.serialnumber} Throughput Standalone NULL Null {router_info.wireless_mode.split()[0]} '
                 f'{router_info.band.split()[0]} {router_info.bandwidth.split()[0]} Rate_Adaptation '
-                f'{router_info.channel} {type} DL NULL NULL {db_set} {self.rssi_num} {corner} NULL "NULL" 0')
+                f'{router_info.channel} {type} DL NULL NULL {db_set} {self.rssi_num} {corner} NULL "NULL" 0 {expect_rate}')
             pytest.testResult.save_result(rx_result_info.replace(' ', ','))
             with open(pytest.testResult.detail_file, 'a', encoding='utf-8') as f:
                 f.write(f'Rx {type} result : 0\n')
@@ -424,7 +433,7 @@ class dut():
             f'{self.serialnumber} Throughput Standalone NULL Null {router_info.wireless_mode.split()[0]} '
             f'{router_info.band.split()[0]} {router_info.bandwidth.split()[0]} Rate_Adaptation '
             f'{router_info.channel} {type} DL NULL NULL {db_set} {self.rssi_num} {corner} NULL '
-            f'{mcs_rx if mcs_rx else "NULL"} {",".join(map(str, rx_result_list))}')
+            f'{mcs_rx if mcs_rx else "NULL"} {",".join(map(str, rx_result_list))} {expect_rate}')
         pytest.testResult.save_result(rx_result_info.replace(' ', ','))
         with open(pytest.testResult.detail_file, 'a', encoding='utf-8') as f:
             logging.info('writing')
@@ -434,12 +443,20 @@ class dut():
 
     @step
     def get_tx_rate(self, router_info, type='TCP', corner_tool=None, db_set=''):
+        router_cfg = {
+            router_info.band: {
+                'mode': router_info.wireless_mode,
+                'authentication': router_info.authentication,
+                'bandwidth': router_info.bandwidth,
+            }
+        }
+        expect_rate = handle_expectdata(router_cfg, router_info.band, 'UL', pytest.chip_info)
         if self.skip_tx:
             corner = corner_tool.get_turntanle_current_angle() if corner_tool else ''
             tx_result_info = (
                 f'{self.serialnumber} Throughput Standalone NULL Null {router_info.wireless_mode.split()[0]} '
                 f'{router_info.band.split()[0]} {router_info.bandwidth.split()[0]} Rate_Adaptation '
-                f'{router_info.channel} {type} UL NULL NULL {db_set} {self.rssi_num} {corner} NULL "NULL" 0')
+                f'{router_info.channel} {type} UL NULL NULL {db_set} {self.rssi_num} {corner} NULL "NULL" 0 {expect_rate}')
             logging.info(tx_result_info)
             pytest.testResult.save_result(tx_result_info.replace(' ', ','))
             with open(pytest.testResult.detail_file, 'a') as f:
@@ -512,7 +529,7 @@ class dut():
             f'{self.serialnumber} Throughput Standalone NULL Null {router_info.wireless_mode.split()[0]} '
             f'{router_info.band.split()[0]} {router_info.bandwidth.split()[0]} Rate_Adaptation '
             f'{router_info.channel} {type} UL NULL NULL {db_set} {self.rssi_num} {corner} NULL '
-            f'{mcs_tx if mcs_tx else "NULL"} {",".join(map(str, tx_result_list))}')
+            f'{mcs_tx if mcs_tx else "NULL"} {",".join(map(str, tx_result_list))} {expect_rate}')
         logging.info(tx_result_info)
         pytest.testResult.save_result(tx_result_info.replace(' ', ','))
         with open(pytest.testResult.detail_file, 'a') as f:
