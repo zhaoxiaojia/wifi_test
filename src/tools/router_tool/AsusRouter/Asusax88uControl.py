@@ -125,8 +125,7 @@ class Asusax88uControl(RouterTools):
 
     def telnet_write(self, cmd, max_retries=3):
         """使用已建立的Telnet连接执行命令（修复：复用连接）"""
-        logging.info(f"Executing command: {cmd}")
-        print(f"Executing command: {cmd}")
+        logging.info("Executing command: %s", cmd)
         retries = 0
         while retries < max_retries:
             try:
@@ -150,15 +149,15 @@ class Asusax88uControl(RouterTools):
         try:
             # 终止所有Telnet服务进程（包括残留连接）
             output = self.telnet_write("killall telnetd\n")
-            logging.info(f"终止Telnet进程输出: {output}")
-            time.sleep(2)  # 等待进程终止
+            logging.info("Terminate telnetd output: %s", output)
+            time.sleep(2)  # wait for process to end
 
-            # 重新启动Telnet服务
+            # restart telnet service
             output = self.telnet_write("telnetd\n")
-            logging.info(f"重启Telnet服务输出: {output}")
-            print("Telnet连接已释放，端口23可用")
+            logging.info("Restart telnetd output: %s", output)
+            logging.info("Telnet connection released, port 23 available")
         except Exception as e:
-            print(f"执行命令失败（可能已无法建立连接）: {e}")
+            logging.error("Failed to execute command, connection may be closed: %s", e)
 
     def quit(self):
         try:
