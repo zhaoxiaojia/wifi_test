@@ -47,7 +47,7 @@ def setup(request):
     router = get_router(router_name)
     logging.info(f'router {router}')
     rf_solution = cfg['rf_solution']
-    # print(f"rf_solution['step']: {rf_solution['step']}")
+    print(f"rf_solution['step']: {rf_solution['step']}")
     model = rf_solution['model']
     if model not in ['RADIORACK-4-220', 'RC4DAT-8G-95', 'XIN-YI']:
         raise EnvironmentError("Doesn't support this model")
@@ -59,7 +59,7 @@ def setup(request):
         logging.info(f'rf_ip {rf_ip}')
     rf_step_list = rf_solution['step']
     rf_step_list = [i for i in range(*rf_step_list)][::3]
-    # print(f'rf_step_list {rf_step_list}')
+    print(f'rf_step_list {rf_step_list}')
     rvr_tool = cfg['rvr']['tool']
     # 重置衰减&转台
     # 衰减器置0
