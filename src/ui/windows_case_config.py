@@ -16,7 +16,7 @@ import yaml
 import logging
 from dataclasses import dataclass, field
 from src.tools.router_tool.router_factory import router_list
-from src.util.constants import Paths
+from src.util.constants import Paths, RouterConst
 from src.util.constants import get_config_base, get_src_base
 from src.tools.config_loader import load_config
 from PyQt5.QtCore import (
@@ -451,6 +451,27 @@ class CaseConfigPage(CardWidget):
                 self.field_widgets["connect_type.type"] = self.connect_type_combo
                 self.field_widgets["connect_type.adb.device"] = self.adb_device_edit
                 self.field_widgets["connect_type.telnet.ip"] = self.telnet_ip_edit
+                continue
+            if key == "fpga":
+                group = QGroupBox("FPGA")
+                vbox = QVBoxLayout(group)
+                self.fpga_chip_combo = ComboBox(self)
+                self.fpga_chip_combo.addItems(RouterConst.FPGA_CONFIG.keys())
+                self.fpga_if_combo = ComboBox(self)
+                self.fpga_if_combo.addItems(RouterConst.INTERFACE_CONFIG)
+                chip_default, if_default = "W2", "SDIO"
+                if isinstance(value, str) and "_" in value:
+                    chip_default, if_default = value.split("_", 1)
+                    chip_default = chip_default.upper()
+                    if_default = if_default.upper()
+                self.fpga_chip_combo.setCurrentText(chip_default)
+                self.fpga_if_combo.setCurrentText(if_default)
+                vbox.addWidget(QLabel("Chip:"))
+                vbox.addWidget(self.fpga_chip_combo)
+                vbox.addWidget(QLabel("Interface:"))
+                vbox.addWidget(self.fpga_if_combo)
+                self._add_group(group)
+                self.field_widgets["fpga"] = group
                 continue
             if key == "rf_solution":
                 group = QGroupBox("RF Solution")
@@ -990,6 +1011,9 @@ class CaseConfigPage(CardWidget):
                 ref[leaf] = True if text == 'True' else False if text == 'False' else text
             elif isinstance(widget, QCheckBox):
                 ref[leaf] = widget.isChecked()
+        chip = self.fpga_chip_combo.currentText()
+        interface = self.fpga_if_combo.currentText()
+        self.config["fpga"] = f"{chip.lower()}_{interface.lower()}"
         base = Path(self._get_application_base())
         case_path = self.field_widgets["text_case"].text().strip()
         # 默认将现有路径解析成 POSIX 字符串
