@@ -14,7 +14,8 @@ class host_os:
         return host_os._instance
 
     def __init__(self):
-        self.config = load_config()
+        # 每次实例化都刷新配置缓存，确保读取最新的配置内容
+        self.config = load_config(refresh=True)
         self.host = self.config.get('host_os')
         self.user = self.host['user']
         self.passwd = self.host['password']
