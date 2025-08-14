@@ -64,7 +64,7 @@ def playback_youtube():
 
 
 def run_iperf():
-    # print('run iperf')
+    print('run iperf')
     iperf.run_iperf(type='tx')
     iperf.run_iperf(type='rx')
 
