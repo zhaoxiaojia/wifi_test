@@ -24,6 +24,11 @@ from src.util.constants import Paths, cleanup_temp_dir
 os.chdir(Paths.BASE_DIR)
 
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+)
+
 def log_exception(exc_type, exc_value, exc_tb):
     logging.error("".join(traceback.format_exception(exc_type, exc_value, exc_tb)))
 
@@ -107,7 +112,7 @@ class MainWindow(FluentWindow):
             self._remove_interface(self.run_page)
             self.run_page = None
             self._run_nav_button = None
-            print("RunPage cleared!")
+            logging.info("RunPage cleared")
 
     def _set_nav_buttons_enabled(self, enabled: bool):
         """启用或禁用除 RunPage 外的导航按钮"""
@@ -140,9 +145,9 @@ class MainWindow(FluentWindow):
                 if hasattr(self.rvr_wifi_config_page, "set_router_credentials"):
                     self.rvr_wifi_config_page.set_router_credentials(ssid or "", passwd or "")
             self.stackedWidget.setCurrentWidget(page_widget)
-            print(f"FluentWindow.setCurrentWidget({page_widget}) success")
+            logging.debug("Switched widget to %s", page_widget)
         except Exception as e:
-            print(f"FluentWindow.setCurrentWidget error: {e}")
+            logging.error("Failed to set current widget: %s", e)
 
     def on_run(self, case_path, display_case_path, config):
         self.clear_run_page()
@@ -176,17 +181,17 @@ class MainWindow(FluentWindow):
         runner = getattr(self.run_page, "runner", None)
         if runner:
             runner.finished.connect(lambda: self._set_nav_buttons_enabled(True))
-        print("Switched to RunPage:", self.run_page)
+        logging.info("Switched to RunPage: %s", self.run_page)
 
     def show_case_config(self):
         self.setCurrentIndex(self.case_config_page)
-        print("Switched to CaseConfigPage")
+        logging.info("Switched to CaseConfigPage")
 
     def stop_run_and_show_case_config(self):
         self.setCurrentIndex(self.case_config_page)
         QCoreApplication.processEvents()  # 强制事件刷新
         self._set_nav_buttons_enabled(True)
-        print("Switched to CaseConfigPage")
+        logging.info("Switched to CaseConfigPage")
 
 
 sys.excepthook = log_exception
