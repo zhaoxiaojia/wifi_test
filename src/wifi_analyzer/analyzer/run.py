@@ -107,6 +107,6 @@ def main():
     }
     tpl = str(Path(__file__).parent.parent / "report" / "templates" / "base.html")
     render_html(tpl, args.out, ctx)
-    # print(f"[report] generated -> {args.out}")
+    print(f"[report] generated -> {args.out}")
 if __name__ == "__main__":
     main()
