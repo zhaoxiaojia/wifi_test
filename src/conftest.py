@@ -148,7 +148,7 @@ def pytest_runtest_makereport(item, call):
         session.pyqt_finished += 1
         total = getattr(session, 'total_test_count', None)
         if total:
-            print(f"[PYQT_PROGRESS] {session.pyqt_finished}/{total}", flush=True)
+            # print(f"[PYQT_PROGRESS] {session.pyqt_finished}/{total}", flush=True)
 
         item._store['test_result'] = "PASS" if report.passed else "FAIL" if report.failed else "SKIPP"
         if not report.failed:

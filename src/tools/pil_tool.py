@@ -30,7 +30,7 @@ class PilTool:
 
             if diff.getbbox() is None:
                 # 图片间没有任何不同则直接退出
-                print("【+】We are the same!")
+                # print("【+】We are the same!")
             else:
                 diff.save(diff_save_location)
         except ValueError as e:
@@ -38,4 +38,4 @@ class PilTool:
                     "The box argument is either a 2-tuple giving the upper left corner, a 4-tuple defining the left, upper, "
                     "right, and lower pixel coordinate, or None (same as (0, 0)). If a 4-tuple is given, the size of the pasted "
                     "image must match the size of the region.使用2纬的box避免上述问题")
-            print("【{0}】{1}".format(e, text))
+            # print("【{0}】{1}".format(e, text))

@@ -27,4 +27,4 @@ def capture(tmp_path):
     subprocess.run(["sudo","./scripts/capture_stop.sh", str(outdir)], check=True)
 
     latest = Path(outdir, ".latest").read_text().strip()
-    print(f"[pytest] pcap: {latest}")
+    # print(f"[pytest] pcap: {latest}")

@@ -270,11 +270,11 @@ class dut():
                     try:
                         # 等待命令完成，设置超时时间（例如 40 秒）
                         stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=35)
-                        print("Command output:", stdout.decode())  # 打印标准输出
+                        # print("Command output:", stdout.decode())  # 打印标准输出
                         if stderr:
-                            print("Command error:", stderr.decode())  # 打印标准错误
+                            # print("Command error:", stderr.decode())  # 打印标准错误
                     except asyncio.TimeoutError:
-                        print("Command timed out")
+                        # print("Command timed out")
                         process.terminate()  # 终止进程
                         await process.wait()  # 等待进程完全终止
 

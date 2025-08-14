@@ -53,9 +53,9 @@ def setup(request):
                 corner_tool = LabDeviceController(corner_ip)
         logging.info(f'corner_ip {corner_ip}')
         corner_step = cfg['corner_angle']['step']
-        print(f"corner_step: {corner_step}")
+        # print(f"corner_step: {corner_step}")
         corner_step_list = [i for i in range(*corner_step)][::45]
-        print(f'corner_step_list {corner_step_list}')
+        # print(f'corner_step_list {corner_step_list}')
 
         logging.info('Reset corner')
         corner_tool.set_turntable_zero()

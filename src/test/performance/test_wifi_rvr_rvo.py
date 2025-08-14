@@ -52,7 +52,7 @@ def setup(request):
     rvr_tool = cfg['rvr']['tool']
 
     rf_solution = cfg['rf_solution']
-    print(f"rf_solution['step']: {rf_solution['step']}")
+    # print(f"rf_solution['step']: {rf_solution['step']}")
     model = rf_solution['model']
     if model not in ['RADIORACK-4-220', 'RC4DAT-8G-95', 'XIN-YI']:
         raise EnvironmentError("Doesn't support this model")
@@ -64,7 +64,7 @@ def setup(request):
         logging.info(f'rf_ip {rf_ip}')
     rf_step_list = rf_solution['step']
     rf_step_list = [i for i in range(*rf_step_list)][::3]
-    print(f'rf_step_list {rf_step_list}')
+    # print(f'rf_step_list {rf_step_list}')
 
     corner_ip = cfg['corner_angle']['ip_address']
     if corner_ip == '192.168.5.11':
@@ -73,12 +73,12 @@ def setup(request):
         corner_tool = LabDeviceController(corner_ip)
     logging.info(f'corner_ip {corner_ip}')
     corner_step = cfg['corner_angle']['step']
-    print(f"corner_step: {corner_step}")
+    # print(f"corner_step: {corner_step}")
     corner_step_list = [i for i in range(*corner_step)][::45]
-    print(f'corner_step_list {corner_step_list}')
+    # print(f'corner_step_list {corner_step_list}')
 
     step_list = list(itertools.product(corner_step_list, rf_step_list))
-    print(f'step_list {step_list}')
+    # print(f'step_list {step_list}')
 
     logging.info('Reset rf value')
     rf_tool.execute_rf_cmd(0)
