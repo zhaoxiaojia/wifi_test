@@ -22,7 +22,7 @@ rf_solution:
   model: RC4DAT-8G-95
   step:
   - 65
-  - 70
+  - 66
 router:
   name: asusax88u
   ssid_2g: asusax88u_2g
