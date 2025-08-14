@@ -36,12 +36,13 @@ corner_tool = None
 
 # 配置 测试报告
 # pytest.testResult.x_path = [] if (rf_needed and corner_needed) == 'both' else step_list
-rx_result, tx_result = '', ''
 
 
 @pytest.fixture(scope='session', params=test_data, ids=[str(i) for i in test_data])
 def setup(request):
-        global rx_result, tx_result, pc_ip, dut_ip, corner_tool
+        global pc_ip, dut_ip, corner_tool
+        pytest.dut.skip_tx = False
+        pytest.dut.skip_rx = False
         cfg = load_config(refresh=True)
         rvr_tool = cfg['rvr']['tool']
         logging.info('router setup start')
@@ -144,7 +145,6 @@ def setup(request):
 
 # 测试 iperf
 def test_rvr(setup):
-        global rx_result, tx_result
         connect_status, router_info, corner_step_list = setup
         if not connect_status:
                 logging.info("Can't connect wifi ,input 0")
@@ -173,11 +173,11 @@ def test_rvr(setup):
                 logging.info(f'router_info: {router_info}')
                 if 'tx' in router_info.test_type:
                         logging.info(f'rssi : {rssi_num} ')
-                        pytest.dut.get_tx_rate(router_info, rssi_num, 'TCP',
+                        pytest.dut.get_tx_rate(router_info, 'TCP',
                                                corner_tool=corner_tool,
                                                db_set=db_set)
                 if 'rx' in router_info.test_type:
                         logging.info(f'rssi : {rssi_num}')
-                        pytest.dut.get_rx_rate(router_info, rssi_num, 'TCP',
+                        pytest.dut.get_rx_rate(router_info, 'TCP',
                                                corner_tool=corner_tool,
                                                db_set=db_set)

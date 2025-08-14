@@ -34,12 +34,13 @@ logging.info(f'finally step_list {step_list}')
 
 # 配置 测试报告
 # pytest.testResult.x_path = [] if (rf_needed and corner_needed) == 'both' else step_list
-rx_result, tx_result = '', ''
 
 
 @pytest.fixture(scope='session', params=test_data, ids=[str(i) for i in test_data])
 def setup(request):
-    global rx_result, tx_result, pc_ip, dut_ip
+    global pc_ip, dut_ip
+    pytest.dut.skip_tx = False
+    pytest.dut.skip_rx = False
     logging.info('router setup start')
     cfg = load_config(refresh=True)
     rvr_tool = cfg['rvr']['tool']
@@ -110,7 +111,6 @@ def setup(request):
 # 测试 iperf
 @pytest.mark.parametrize("rf_value", step_list)
 def test_rvr(setup, rf_value):
-    global rx_result, tx_result
     # 判断板子是否存在  ip
     if not setup[0]:
         logging.info("Can't connect wifi ,input 0")
