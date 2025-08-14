@@ -10,6 +10,7 @@ from contextlib import suppress
 
 sys.path.insert(0, str(Path(__file__).parent))
 from PyQt5.QtWidgets import QApplication, QAbstractButton
+import sip
 from qfluentwidgets import FluentIcon, FluentWindow, NavigationItemPosition
 from src.ui.windows_case_config import CaseConfigPage
 from src.ui.rvr_wifi_config import RvrWifiConfigPage
@@ -64,6 +65,9 @@ class MainWindow(FluentWindow):
 
     def show_rvr_wifi_config(self):
         """在导航栏中显示 RVR Wi-Fi 配置页"""
+        # 页面可能已被删除，需重新实例化
+        if self.rvr_wifi_config_page is None or sip.isdeleted(self.rvr_wifi_config_page):
+            self.rvr_wifi_config_page = RvrWifiConfigPage(self.case_config_page)
         if hasattr(self.rvr_wifi_config_page, "reload_csv"):
             self.rvr_wifi_config_page.reload_csv()
         if self.stackedWidget.indexOf(self.rvr_wifi_config_page) == -1:
@@ -76,7 +80,9 @@ class MainWindow(FluentWindow):
 
     def hide_rvr_wifi_config(self):
         """从导航栏移除 RVR Wi-Fi 配置页"""
-        self._remove_interface(self.rvr_wifi_config_page)
+        if self.rvr_wifi_config_page and not sip.isdeleted(self.rvr_wifi_config_page):
+            self._remove_interface(self.rvr_wifi_config_page)
+        self.rvr_wifi_config_page = None
 
     def removeSubInterface(self, page):
         """Remove the given page from the navigation if possible."""
