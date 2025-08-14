@@ -364,43 +364,47 @@ with open(f"{os.getcwd()}/config/compatibility_dut.json", 'w', encoding='utf-8')
     json.dump(dut.to_dict(), f, indent=4, ensure_ascii=False)
 
 
-def handle_expectdata(ip, port, band, direction):
+def handle_expectdata(router_info, band, direction, chip_info=None):
     """
+    根据路由器信息和芯片方案获取预期吞吐率
+
     Args:
-        ip: PDU ip
-        port: router port in PDU
+        router_info: 路由器信息字典，至少包含 band 对应的 mode、authentication、bandwidth
         band: '2.4G' or '5G'
         direction: 'UL' or 'DL'
+        chip_info: 如 'w2_sdio'
     Returns:
         float expected throughput
     """
-    with open(f"{os.getcwd()}/config/compatibility_router.json", 'r', encoding='utf-8') as f:
-        router_datas = json.load(f)
+    if chip_info is None:
+        chip_info = RouterConst.dut_wifichip
 
-    for data in router_datas:
-        if data.get('ip') == ip and data.get('port') == port:
-            mode = str(data[band]['mode']).upper()
-            bandwidth = str(data[band]['bandwidth']).upper()
-            authentication = str(data[band]['authentication']).upper()
+    mode = str(router_info[band]['mode']).upper()
+    bandwidth = str(router_info[band]['bandwidth']).upper()
+    authentication = 'WPA2'
 
-            with open(f"{os.getcwd()}/config/compatibility_dut.json", 'r', encoding='utf-8') as f2:
-                dut_data = json.load(f2)
+    chip, interface = chip_info.split('_')
+    chip_key = chip.upper()
+    if chip_key in ('W1', 'W1U'):
+        chip_key = 'W1'
+    elif chip_key in ('W2', 'W2U'):
+        chip_key = 'W2'
+    elif chip_key == 'W2L':
+        chip_key = 'W2L'
+    interface_key = interface.upper()
+    mimo_key = RouterConst.FPGA_CONFIG[chip_key]['mimo'].upper()
 
-            chip_key, interface_key = RouterConst.dut_wifichip.split('_')
-            chip_key = chip_key.upper()
-            interface_key = interface_key.upper()
-            mimo_key = RouterConst.FPGA_CONFIG[chip_key]['mimo'].upper()
+    with open(f"{os.getcwd()}/config/compatibility_dut.json", 'r', encoding='utf-8') as f2:
+        dut_data = json.load(f2)
 
-            for ck in (chip_key, 'COMMON'):
-                try:
-                    return dut_data[ck][band.upper()][interface_key][mode][authentication][bandwidth][mimo_key][
-                        direction.upper()]
-                except KeyError:
-                    continue
+    for ck in (chip_key, 'COMMON'):
+        try:
+            return dut_data[ck][band.upper()][interface_key][mode][authentication][bandwidth][mimo_key][
+                direction.upper()]
+        except KeyError:
+            continue
 
-            raise KeyError(
-                f"Missing expected data: chip={chip_key} or COMMON, band={band}, interface={interface_key}, "
-                f"mode={mode}, auth={authentication}, bw={bandwidth}, mimo={mimo_key}, dir={direction.upper()}"
-            )
-
-    raise KeyError(f"No router entry found for ip={ip}, port={port}")
+    raise KeyError(
+        f"Missing expected data: chip={chip_key} or COMMON, band={band}, interface={interface_key}, "
+        f"mode={mode}, auth={authentication}, bw={bandwidth}, mimo={mimo_key}, dir={direction.upper()}"
+    )
