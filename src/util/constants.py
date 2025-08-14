@@ -87,7 +87,7 @@ class RouterConst:
         'W2U': {'mimo': '2X2', '2.4G': '11AX', '5G': '11AX'},
         'W2L': {'mimo': '2X2', '2.4G': '11AX', '5G': '11AX'}
     }
-    SW_INTERFACE = ['SDIO','PCIE','USB']
+    INTERFACE_CONFIG = ['SDIO','PCIE','USB']
     dut_wifichip: Final[str] = 'w2_sdio'
 
 
