@@ -222,19 +222,19 @@ class RvrWifiConfigPage(CardWidget):
         ]
         headers = default_headers
         rows: list[dict[str, str]] = []
-        print(f"_load_csv path={self.csv_path}")
+        # print(f"_load_csv path={self.csv_path}")
         if self.csv_path.exists():
             with open(self.csv_path, newline="", encoding="utf-8") as f:
                 reader = csv.DictReader(f)
                 headers = reader.fieldnames or default_headers
                 for row in reader:
                     rows.append({h: row.get(h, "") for h in headers})
-        print(f"_load_csv headers={headers} rows={len(rows)}")
+        # print(f"_load_csv headers={headers} rows={len(rows)}")
         return headers, rows
 
     def reload_csv(self):
         """重新读取当前 CSV 并刷新表格"""
-        print(f"reload_csv using {self.csv_path}")
+        # print(f"reload_csv using {self.csv_path}")
         self.headers, self.rows = self._load_csv()
         self.refresh_table()
 
@@ -278,9 +278,9 @@ class RvrWifiConfigPage(CardWidget):
         if not path:
             return
         # 确保使用绝对路径加载 CSV，避免目录切换引起的混淆
-        print(f"on_csv_file_changed path={path}")
+        # print(f"on_csv_file_changed path={path}")
         self.csv_path = Path(path).resolve()
-        print(f"resolved csv_path={self.csv_path}")
+        # print(f"resolved csv_path={self.csv_path}")
 
         self.reload_csv()
         self._loading = True
