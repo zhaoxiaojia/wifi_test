@@ -46,7 +46,7 @@ class TestResult():
             self.log_file = os.path.join(self.logdir,
                                          'Rvr' + time.asctime().replace(' ', '_').replace(':', '_') + '.csv')
             with open(self.log_file, 'a', encoding='utf-8') as f:
-                title = 'SerianNumber Test_Category	Sub_Category	Coex_Method	BT_WF_Isolation	Standard	Freq_Band	BW	Data_Rate	CH_Freq_MHz	Protocol	Direction	Total_Path_Loss	RxP DB	RSSI Angel	Data_RSSI MCS_Rate Throughput	'
+                title = 'SerianNumber Test_Category	Sub_Category	Coex_Method	BT_WF_Isolation	Standard	Freq_Band	BW	Data_Rate	CH_Freq_MHz	Protocol	Direction	Total_Path_Loss	RxP DB	RSSI Angel	Data_RSSI MCS_Rate Throughput Expect_Rate '
                 f.write(','.join(title.split()))
                 f.write('\n')
         if not hasattr(self, 'detail_file'):
