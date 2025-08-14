@@ -100,7 +100,7 @@ class serial_tool:
     def is_keyword_detected(self, keyword):
         '''检查关键字是否被检测到'''
         with self.keyword_flags_lock:
-            print(f'get {keyword} : {self.keyword_flags.get(keyword)} ')
+            # print(f'get {keyword} : {self.keyword_flags.get(keyword)} ')
             return self.keyword_flags.get(keyword, False)
 
     def clear_keyword(self, keyword):
@@ -224,7 +224,7 @@ class serial_tool:
         '''
         self.ser.write(bytes(command + '\r', encoding='utf-8'))
         logging.info(f'=> {command}')
-        print(f'=> {command}')
+        # print(f'=> {command}')
         sleep(0.1)
 
     def recv(self, timeout=5, until_newline=False):
@@ -279,11 +279,11 @@ class serial_tool:
                         break
                     # 将数据写入输出文件
                     file.write(data)
-            print("文件传输完成")
+            # print("文件传输完成")
         except serial.SerialException as e:
-            print("串口连接错误:", str(e))
+            # print("串口连接错误:", str(e))
         except Exception as e:
-            print("发生错误:", str(e))
+            # print("发生错误:", str(e))
 
     def start_saving_kernel_log(self):
         try:
@@ -294,9 +294,9 @@ class serial_tool:
                         file.write(data)
                         file.flush()  # 强制刷新缓冲区
         except serial.SerialException as e:
-            print("串口连接错误:", str(e))
+            # print("串口连接错误:", str(e))
         except Exception as e:
-            print("发生错误:", str(e))
+            # print("发生错误:", str(e))
 
     def search_keyword_in_log(self, keyword):
         try:
@@ -308,7 +308,7 @@ class serial_tool:
                 self.log_file_position = file.tell()  # 更新读取位置
             return False
         except Exception as e:
-            print("发生错误:", str(e))
+            # print("发生错误:", str(e))
             return False
 
     def close(self):

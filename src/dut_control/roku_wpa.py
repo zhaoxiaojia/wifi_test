@@ -52,10 +52,10 @@ class roku_wpa:
             if proc["type"] == proc_type:
                 self.executor.write(f"kill {proc['pid']}")
                 killed.append(proc)
-                print(f"[KILL] {proc_type}: PID={proc['pid']} CMD={proc['cmdline']}")
+                # print(f"[KILL] {proc_type}: PID={proc['pid']} CMD={proc['cmdline']}")
                 time.sleep(0.5)
         if not killed:
-            print(f"[INFO] 没有需要kill的 {proc_type} wpa_supplicant")
+            # print(f"[INFO] 没有需要kill的 {proc_type} wpa_supplicant")
 
     def restart_ui_wpa(self, proc_type):
         """重启指定类型的wpa_supplicant（只启动之前查到的命令）"""
@@ -66,7 +66,7 @@ class roku_wpa:
             if proc["type"] == proc_type:
                 cmd = proc["cmdline"]
                 self.executor.write(cmd + " &")
-                print(f"[RESTART] {proc_type}: {cmd}")
+                # print(f"[RESTART] {proc_type}: {cmd}")
                 time.sleep(1)
 
     def restart_interface(self, iface='wlan0'):
@@ -222,14 +222,14 @@ update_config=1
             if m:
                 curr = m.group(1)
                 if curr == target_state:
-                    print(f"[INFO] 连接状态已到达 {target_state}")
+                    # print(f"[INFO] 连接状态已到达 {target_state}")
                     return True
                 else:
-                    print(f"[INFO] 当前状态：{curr}，等待中...")
+                    # print(f"[INFO] 当前状态：{curr}，等待中...")
             else:
-                print("[WARN] 未检测到状态字段，等待中...")
+                # print("[WARN] 未检测到状态字段，等待中...")
             time.sleep(interval)
-        print(f"[ERROR] 等待 {target_state} 超时！")
+        # print(f"[ERROR] 等待 {target_state} 超时！")
         return False
 
     def is_ip_in_use(self, ip, iface='wlan0'):
@@ -248,11 +248,11 @@ update_config=1
             if not self.is_ip_in_use(ip, iface=iface):
                 self.set_static_ip(iface, ip, mask)
                 self.set_default_route(gw=gw, iface=iface)
-                print(f"[INFO] 设置静态IP成功: {ip}")
+                # print(f"[INFO] 设置静态IP成功: {ip}")
                 return ip
             else:
-                print(f"[WARN] IP {ip} 已被占用，尝试下一个...")
-        print("[ERROR] 没有可用的静态IP，请检查路由器分配策略。")
+                # print(f"[WARN] IP {ip} 已被占用，尝试下一个...")
+        # print("[ERROR] 没有可用的静态IP，请检查路由器分配策略。")
         return None
 
     def connect(self, ssid, auth_type="WPA2-PSK", psk=None, eap=None, identity=None, password=None,
@@ -267,7 +267,7 @@ update_config=1
         - retry_interval: 每次重试之间等待时间（秒）
         """
         for attempt in range(1, max_retry + 1):
-            print(f"\n[INFO] 第 {attempt} 次尝试连接 {ssid} ...")
+            # print(f"\n[INFO] 第 {attempt} 次尝试连接 {ssid} ...")
             self.kill_by_type("ui")
             self.make_ctrl_dir()
             self.create_conf(ssid, auth_type, psk, eap, identity, password,
@@ -281,15 +281,15 @@ update_config=1
                 else:
                     self.set_available_static_ip()
                     self.set_default_route(gw=gw)
-                print(f"[SUCCESS] 第 {attempt} 次连接成功！")
+                # print(f"[SUCCESS] 第 {attempt} 次连接成功！")
                 time.sleep(3)
                 self.restart_ui_wpa('ui')
                 return self.status_check(iface=iface)
             else:
-                print(f"[WARN] 第 {attempt} 次连接失败，{retry_interval} 秒后重试...")
+                # print(f"[WARN] 第 {attempt} 次连接失败，{retry_interval} 秒后重试...")
                 time.sleep(retry_interval)
                 self.kill_by_type("script")
-        print(f"[ERROR] 多次尝试后，连接 {ssid} 仍失败。")
+        # print(f"[ERROR] 多次尝试后，连接 {ssid} 仍失败。")
         time.sleep(3)
         self.restart_ui_wpa('ui')
         return None
