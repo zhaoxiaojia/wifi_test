@@ -12,13 +12,11 @@
 import logging
 import time
 import os
-import json
 import pytest
 
 from src.tools.pdusnmp import power_ctrl
 from src.tools.router_tool.Router import Router
-from src.tools.router_tool.router_performance import compatibility_router
-from src.util.constants import RouterConst
+from src.tools.router_tool.router_performance import compatibility_router, handle_expectdata
 
 power_delay = power_ctrl()
 power_ctrl = power_delay.ctrl
@@ -30,51 +28,8 @@ ssid = {
 ssid_6g = 'Aml_AP_Comp_6G'
 passwd = '@Aml#*st271'
 
-wifichip, interface = pytest.chip_info.split('_')
 power_delay.shutdown()
 time.sleep(2)
-
-
-def handle_expectdata(ip, port, band, direction):
-    """
-    Args:
-        ip: PDU ip
-        port: router port in PDU
-        band: '2.4G' or '5G'
-        direction: 'UL' or 'DL'
-    Returns:
-        float expected throughput
-    """
-    with open(f"{os.getcwd()}/config/compatibility_router.json", 'r', encoding='utf-8') as f:
-        router_datas = json.load(f)
-
-    for data in router_datas:
-        if data.get('ip') == ip and data.get('port') == port:
-            mode = str(data[band]['mode']).upper()
-            bandwidth = str(data[band]['bandwidth']).upper()
-            authentication = str(data[band]['authentication']).upper()
-
-            with open(f"{os.getcwd()}/config/compatibility_dut.json", 'r', encoding='utf-8') as f2:
-                dut_data = json.load(f2)
-
-            wifichip, interface = pytest.chip_info.split('_')
-            chip_key = str(wifichip).upper()
-            interface_key = str(interface).upper()
-            mimo_key = RouterConst.FPGA_CONFIG[chip_key]['mimo'].upper()
-
-            for ck in (chip_key, 'COMMON'):
-                try:
-                    return dut_data[ck][band.upper()][interface_key][mode][authentication][bandwidth][mimo_key][
-                        direction.upper()]
-                except KeyError:
-                    continue
-
-            raise KeyError(
-                f"Missing expected data: chip={chip_key} or COMMON, band={band}, interface={interface_key}, "
-                f"mode={mode}, auth={authentication}, bw={bandwidth}, mimo={mimo_key}, dir={direction.upper()}"
-            )
-
-    raise KeyError(f"No router entry found for ip={ip}, port={port}")
 
 
 @pytest.fixture(scope='module', autouse=True, params=power_ctrl, ids=[str(i) for i in power_ctrl])
@@ -100,8 +55,8 @@ def router_setting(power_setting, request):
     logging.info(f'pc_ip {pytest.dut.pc_ip}')
     router_set = power_setting
     band = request.param
-    expect_tx = handle_expectdata(router_set['ip'], router_set['port'], band, 'UL')
-    expect_rx = handle_expectdata(router_set['ip'], router_set['port'], band, 'DL')
+    expect_tx = handle_expectdata(router_set, band, 'UL', pytest.chip_info)
+    expect_rx = handle_expectdata(router_set, band, 'DL', pytest.chip_info)
     router = Router(ap=router_set['mode'], band=band, wireless_mode=router_set[band]['mode'],
                     channel='default', authentication=router_set[band]['authentication'],
                     bandwidth=router_set[band]['bandwidth'], ssid=ssid[band], wpa_passwd=passwd,
