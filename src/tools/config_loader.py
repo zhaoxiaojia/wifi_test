@@ -1,6 +1,7 @@
 from functools import lru_cache
 from src.util.constants import get_config_base
 import yaml
+import logging
 
 
 @lru_cache()
@@ -19,23 +20,23 @@ def load_config(refresh: bool = False):
     config_path = get_config_base() / "config.yaml"
     if refresh:
         load_config.cache_clear()
-        print(f"配置缓存已清理，重新加载: {config_path}")
+        logging.info("Cache cleared, reloading %s", config_path)
     else:
-        print(f"加载配置文件（缓存未清理）: {config_path}")
+        logging.debug("Loading config file without clearing cache: %s", config_path)
 
     config = _cached_load_config()
 
     if refresh:
         try:
-            print(f"config_path: {config_path}")
-            print(f"rf_solution['step']: {config['rf_solution']['step']}")
+            logging.debug("config_path: %s", config_path)
+            logging.debug("rf_solution['step']: %s", config['rf_solution']['step'])
         except Exception as e:
-            print(f"无法获取 rf_solution['step']: {e}")
+            logging.warning("Failed to get rf_solution['step']: %s", e)
         try:
             with open(config_path, encoding="utf-8") as f:
-                print(f"配置文件内容:\n{f.read()}")
+                logging.debug("Config file content:\n%s", f.read())
         except Exception as e:
-            print(f"无法读取配置文件内容: {e}")
+            logging.warning("Failed to read config file content: %s", e)
 
     return config
 
