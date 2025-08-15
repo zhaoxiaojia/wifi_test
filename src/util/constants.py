@@ -12,17 +12,13 @@ from contextlib import suppress
 def get_config_base() -> Path:
     """获取配置目录路径。
 
-    优先使用当前工作目录下的 ``config`` 目录；若不存在，再尝试
-    可执行文件同级目录；都不存在时回退到源码目录。
+    优先返回可执行文件同目录下的 ``config`` 目录；若不存在，
+        则回退到源码目录 ``Path(__file__).resolve().parents[2] / 'config'``。
     """
-    cwd_candidate = Path.cwd() / "config"
-    if cwd_candidate.exists():
-        return cwd_candidate
-
-    exe_candidate = Path(sys.argv[0]).resolve().parent / "config"
-    if exe_candidate.exists():
-        return exe_candidate
-
+    exe_dir = Path(sys.argv[0]).resolve().parent
+    candidate = exe_dir / "config"
+    if candidate.exists():
+        return candidate
     return Path(__file__).resolve().parents[2] / "config"
 
 
@@ -66,8 +62,8 @@ def cleanup_temp_dir() -> None:
 class Paths:
     """项目路径常量"""
     if getattr(sys, "frozen", False):
-        # 运行在打包环境，使用当前工作目录作为项目根路径
-        BASE_DIR: Final[str] = os.getcwd()
+        # sys.executable 指向临时 _MEI 目录，改用 sys.argv[0] 获取真实 exe 路径
+        BASE_DIR: Final[str] = os.path.dirname(os.path.abspath(sys.argv[0]))
     else:
         BASE_DIR: Final[str] = str(Path(__file__).resolve().parents[2])
     CONFIG_DIR: Final[str] = os.path.join(BASE_DIR, "config")
