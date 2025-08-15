@@ -168,9 +168,6 @@ class CaseRunner(QThread):
         # NOTE: pytest没有优雅的“中止”API，通常不能强停，最优雅还是用子进程方案
         self._should_stop = True
         logging.info("stop called: isRunning=%s", self.isRunning())
-        if self.isRunning():
-            self.terminate()
-            logging.info("terminate issued")
 
 
 class RunPage(CardWidget):
@@ -310,16 +307,24 @@ class RunPage(CardWidget):
             logging.info("cleanup end wait=%s", None)
             return None
         runner.stop()
-        runner.terminate()
-        logging.info("runner isRunning before wait: %s", runner.isRunning())
+        logging.info("runner isRunning before first wait: %s", runner.isRunning())
         finished = runner.wait(3000)
         logging.info(
-            "runner.wait(3000) returned %s; isRunning after wait: %s",
+            "runner.wait(3000) after stop returned %s; isRunning=%s",
             finished,
             runner.isRunning(),
         )
         if not finished:
-            logging.warning("runner thread did not finish within 3000 ms")
+            logging.warning("runner thread did not stop gracefully within 3000 ms, terminating")
+            runner.terminate()
+            finished = runner.wait(3000)
+            logging.info(
+                "runner.wait(3000) after terminate returned %s; isRunning=%s",
+                finished,
+                runner.isRunning(),
+            )
+            if not finished:
+                logging.error("runner thread did not terminate within 3000 ms")
         for signal, slot in (
                 (runner.log_signal, self._append_log),
                 (runner.progress_signal, self.update_progress),
