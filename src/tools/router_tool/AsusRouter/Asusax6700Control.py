@@ -49,12 +49,12 @@ class Asusax6700Control:
             if (router.band):
                 if router.band not in self.BAND_LIST: raise ConfigError('band element error')
                 element = '//*[@id="wl_unit_field"]/td/select/option[{}]'
-                index = '1' if router.band == '2.4 GHz' else '2'
+                index = '1' if router.band == '2.4G' else '2'
                 self.router_control.driver.find_element(By.XPATH, element.format(index)).click()
 
             # 修改 wireless_mode
             if router.wireless_mode:
-                target_list = self.WIRELESS_2 if router.band == '2.4 GHz' else self.WIRELESS_5
+                target_list = self.WIRELESS_2 if router.band == '2.4G' else self.WIRELESS_5
                 if router.wireless_mode not in target_list:
                     raise ConfigError('channel element error')
                 index = target_list.index(router.wireless_mode) + 1
@@ -87,7 +87,7 @@ class Asusax6700Control:
                 channel = str(router.channel)
                 # try:
                 #     channel_index = (
-                #         self.CHANNEL_2_DICT[channel] if router.band == '2.4 GHz' else
+                #         self.CHANNEL_2_DICT[channel] if router.band == '2.4G' else
                 #         self.CHANNEL_5_DICT[channel])
                 # except ConfigError:
                 #     raise ConfigError('channel element error')
@@ -97,7 +97,7 @@ class Asusax6700Control:
             # 修改 bandwidth
             if (router.bandwidth):
                 if router.bandwidth not in \
-                        {'2.4 GHz': self.BANDWIDTH_2, '5 GHz': self.BANDWIDTH_5}[
+                        {'2.4G': self.BANDWIDTH_2, '5G': self.BANDWIDTH_5}[
                             router.band]: raise ConfigError('bandwidth element error')
                 self.router_control.change_bandwidth(router.bandwidth)
 
@@ -170,7 +170,7 @@ class Asusax6700Control:
 # fields = ['serial', 'band', 'ssid', 'wireless_mode', 'channel', 'bandwidth', 'authentication', 'wep_encrypt',
 #           'passwd_index', 'wep_passwd', 'wpa_passwd', 'protect_frame', 'wpa_encrypt', 'hide_ssid', 'hide_type']
 # Router = namedtuple('Router', fields, defaults=[None, ] * len(fields))
-# router = Router(serial='1', band='5 GHz', ssid='ASUSAX6700_5G', wireless_mode='Legacy',
+# router = Router(serial='1', band='5G', ssid='ASUSAX6700_5G', wireless_mode='Legacy',
 #                 channel='40', bandwidth='20 MHz', authentication='Shared Key',hide_ssid='否',
 #                 wep_passwd='12345678',wep_encrypt='WEP-128bits',passwd_index='2')
 # control = Asusea6700Control()

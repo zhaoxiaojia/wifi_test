@@ -19,8 +19,8 @@ from src.tools.router_tool.Tplink.TplinkConfig import TplinkAx6000Config
 
 class TplinkAx6000Control:
 
-    BAND_2 = '2.4 GHz'
-    BAND_5 = '5 GHz'
+    BAND_2 = '2.4G'
+    BAND_5 = '5G'
 
     def __init__(self):
         self.router_control = RouterTools('tplink_ax6000', display=True)
@@ -261,7 +261,7 @@ class TplinkAx6000Control:
 #           'wpa_passwd', 'test_type', 'wep_encrypt', 'passwd_index', 'wep_passwd', 'protect_frame',
 #           'wpa_encrypt', 'hide_ssid']
 # Router = namedtuple('Router', fields, defaults=[None, ] * len(fields))
-# router = Router(band='5 GHz', ssid='Tplinkax6000_5G_123', wireless_mode='11a/n mixed', channel='52',
+# router = Router(band='5G', ssid='Tplinkax6000_5G_123', wireless_mode='11a/n mixed', channel='52',
 #                 bandwidth='20MHz', authentication='WPA2-PSK/WPA3-SAE', wpa_passwd='amlogic_wifi123@')
 # control = TplinkAx6000Control()
 # control.change_setting(router)

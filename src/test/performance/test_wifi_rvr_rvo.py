@@ -92,7 +92,7 @@ def setup(request):
     # 修改路由器配置
     assert router.change_setting(router_info), "Can't set ap , pls check first"
     if pytest.connect_type == 'telnet':
-        band = '5 GHz' if '2' in router_info.band else '2.4 GHz'
+        band = '5G' if '2' in router_info.band else '2.4G'
         ssid = router_info.ssid + "_bat";
         router.change_setting(Router(band=band, ssid=ssid))
     time.sleep(3)

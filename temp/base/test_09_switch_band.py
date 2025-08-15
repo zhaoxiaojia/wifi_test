@@ -23,9 +23,9 @@ from src.tools.router_tool.Router import Router
 ssid_2g = 'ATC_ASUS_AX88U_2G'
 ssid_5g = 'ATC_ASUS_AX88U_5G'
 passwd = '12345678'
-router_2g = Router(band='2.4 GHz', ssid=ssid_2g, wireless_mode='N only', channel='1', bandwidth='40 MHz',
+router_2g = Router(band='2.4G', ssid=ssid_2g, wireless_mode='N only', channel='1', bandwidth='40 MHz',
                    authentication='WPA2-Personal', wpa_passwd=passwd)
-router_5g = Router(band='5 GHz', ssid=ssid_5g, wireless_mode='N/AC/AX mixed', channel='36', bandwidth='40 MHz',
+router_5g = Router(band='5G', ssid=ssid_5g, wireless_mode='N/AC/AX mixed', channel='36', bandwidth='40 MHz',
                    authentication='WPA2-Personal', wpa_passwd=passwd)
 
 

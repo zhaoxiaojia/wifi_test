@@ -36,8 +36,8 @@ def test_hotspot_2g():
     ssid = pytest.dut.u().d2(resourceId="android:id/summary").get_text()
     logging.info(ssid)
     pytest.dut.wait_and_tap('AP Band', 'text')
-    pytest.dut.wait_element('2.4 GHz Band', 'text')
-    pytest.dut.wait_and_tap('2.4 GHz Band', 'text')
+    pytest.dut.wait_element('2.4G Band', 'text')
+    pytest.dut.wait_and_tap('2.4G Band', 'text')
     pytest.dut.wait_element('AP Band', 'text')
     pytest.dut.uiautomator_dump()
     if 'WPA2 PSK' in pytest.dut.get_dump_info():

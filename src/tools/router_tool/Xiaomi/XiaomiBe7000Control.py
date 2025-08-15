@@ -20,8 +20,8 @@ from src.tools.router_tool.RouterControl import ConfigError, RouterTools
 
 
 class XiaomiBe7000Control(RouterTools):
-    BAND_2 = '2.4 GHz'
-    BAND_5 = '5 GHz'
+    BAND_2 = '2.4G'
+    BAND_5 = '5G'
     CHANNEL_2 = {
         '自动': '1',
         '1': '2',
@@ -180,7 +180,7 @@ class XiaomiBe7000Control(RouterTools):
         if router.channel:
             channel = str(router.channel)
             try:
-                if router.band == '2.4 GHz':
+                if router.band == '2.4G':
                     index = self.CHANNEL_2[channel]
                     target = 'channel_2g'
                 else:

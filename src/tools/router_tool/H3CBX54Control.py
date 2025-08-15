@@ -83,7 +83,7 @@ class H3CBX54Control():
             if (router.channel):
                 channel = str(router.channel)
                 # try:
-                #     if router.band == '2.4 GHz':
+                #     if router.band == '2.4G':
                 #         channel_index = H3CRouterConfig.CHANNEL_2_DICT[channel]
                 #     else:
                 #         channel_index = H3CRouterConfig.CHANNEL_5_DICT[channel]
@@ -108,7 +108,7 @@ class H3CBX54Control():
             try:
                 if (router.bandwidth):
                     if router.bandwidth not in \
-                            {'2.4 GHz': H3CRouterConfig.BANDWIDTH_2_LIST, '5 GHz': H3CRouterConfig.BANDWIDTH_5_LIST}[
+                            {'2.4G': H3CRouterConfig.BANDWIDTH_2_LIST, '5G': H3CRouterConfig.BANDWIDTH_5_LIST}[
                                 router.band]: raise ConfigError('bandwidth element error')
                     self.router_control.change_bandwidth(router.bandwidth)
             except NotImplementedError:
@@ -197,7 +197,7 @@ class H3CBX54Control():
 #           'authentication', 'wpa_passwd', 'test_type', 'wep_encrypt',
 #           'passwd_index', 'wep_passwd', 'protect_frame', 'wpa_encrypt', 'hide_ssid']
 # Router = namedtuple('Router', fields, defaults=[None, ] * len(fields))
-# router = Router(serial='1', band='2.4 GHz', ssid='H3CBX54_2.4G', wireless_mode='b+g+n', channel='8', bandwidth='20M',
+# router = Router(serial='1', band='2.4G', ssid='H3CBX54_2.4G', wireless_mode='b+g+n', channel='8', bandwidth='20M',
 #                 authentication='不加密', hide_ssid="否")
 # control = H3CBX54Control()
 # control.change_setting(router)

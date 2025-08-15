@@ -20,7 +20,7 @@ from src.tools.router_tool.Router import Router
 3.从设备 shell里面 ping 路由器网关地址：ping 192.168.50.1
 '''
 ssid = 'ATC_ASUS_AX88U_2G'
-router_2g = Router(band='2.4 GHz', ssid=ssid, wireless_mode='AX only', channel='自动', bandwidth='20/40 MHz',
+router_2g = Router(band='2.4G', ssid=ssid, wireless_mode='AX only', channel='自动', bandwidth='20/40 MHz',
                    authentication='Open System')
 
 

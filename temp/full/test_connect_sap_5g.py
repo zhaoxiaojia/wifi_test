@@ -27,7 +27,7 @@ from src.tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
 
 能连接正常，播放视频正常
 '''
-router_5g = Router(band='5 GHz', ssid='ATC_ASUS_AX88U_5G', wireless_mode='自动', channel='自动', bandwidth='20 MHz',
+router_5g = Router(band='5G', ssid='ATC_ASUS_AX88U_5G', wireless_mode='自动', channel='自动', bandwidth='20 MHz',
                    authentication='WPA2-Personal', wpa_passwd='12345678')
 
 @pytest.fixture(autouse=True)

@@ -23,11 +23,11 @@ from src.tools.router_tool.Router import Router
 
 ssid = 'ATC_ASUS_AX88U_2G'
 passwd = '12345678'
-router_bd20 = Router(band='2.4 GHz', ssid=ssid, wireless_mode='自动', channel='1', bandwidth='20 MHz',
+router_bd20 = Router(band='2.4G', ssid=ssid, wireless_mode='自动', channel='1', bandwidth='20 MHz',
                     authentication='WPA2-Personal', wpa_passwd=passwd)
-router_bd40 = Router(band='2.4 GHz', ssid=ssid, wireless_mode='自动', channel='1', bandwidth='40 MHz',
+router_bd40 = Router(band='2.4G', ssid=ssid, wireless_mode='自动', channel='1', bandwidth='40 MHz',
                     authentication='WPA2-Personal', wpa_passwd=passwd)
-router_bdmix = Router(band='2.4 GHz', ssid=ssid, wireless_mode='自动', channel='1', bandwidth='20/40 MHz',
+router_bdmix = Router(band='2.4G', ssid=ssid, wireless_mode='自动', channel='1', bandwidth='20/40 MHz',
                      authentication='WPA2-Personal', wpa_passwd=passwd)
 
 ax88uControl = Asusax88uControl()

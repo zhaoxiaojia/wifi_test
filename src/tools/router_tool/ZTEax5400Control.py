@@ -122,7 +122,7 @@ class ZTEax5400Control():
         if (router.channel):
             channel = str(router.channel)
             try:
-                if router.band == '2.4 GHz':
+                if router.band == '2.4G':
                     channel_index = ZTEax5400Config.CHANNEL_2_DICT[channel]
                     self.router_control.driver.find_element(
                         By.XPATH,
@@ -194,7 +194,7 @@ class ZTEax5400Control():
 #           'wpa_passwd', 'test_type', 'wep_encrypt', 'passwd_index', 'wep_passwd',
 #           'protect_frame', 'wpa_encrypt', 'hide_ssid']
 # Router = namedtuple('Router', fields, defaults=[None, ] * len(fields))
-# router_zte = Router(band='5 GHz', ssid='ZTEax5400_5G', wireless_mode='802.11 a/n/ac', channel='161', bandwidth='20MHz/40MHz/80MHz',
+# router_zte = Router(band='5G', ssid='ZTEax5400_5G', wireless_mode='802.11 a/n/ac', channel='161', bandwidth='20MHz/40MHz/80MHz',
 #                    authentication='WPA-PSK/WPA2-PSK', wpa_passwd='12345678')
 # control = ZTEax5400Control()
 # control.change_setting(router_zte)

@@ -31,7 +31,7 @@ TPS正常，无掉零
 ssid = 'ATC_ASUS_AX88U_5G'
 passwd = 'Abc@123456'
 
-router_ch6 = Router(band='5 GHz', ssid=ssid, wireless_mode='自动', channel='36', bandwidth='40 MHz',
+router_ch6 = Router(band='5G', ssid=ssid, wireless_mode='自动', channel='36', bandwidth='40 MHz',
                     authentication='WPA2-Personal', wpa_passwd=passwd)
 
 ax88uControl = Asusax88uControl()
@@ -56,8 +56,8 @@ def test_hotspot_2g_iperf_tx():
     ssid = pytest.dut.u().d2(resourceId="android:id/summary").get_text()
     logging.info(ssid)
     pytest.dut.wait_and_tap('AP Band', 'text')
-    pytest.dut.wait_element('2.4 GHz Band', 'text')
-    pytest.dut.wait_and_tap('2.4 GHz Band', 'text')
+    pytest.dut.wait_element('2.4G Band', 'text')
+    pytest.dut.wait_and_tap('2.4G Band', 'text')
     pytest.dut.wait_element('AP Band', 'text')
     iperf.run_iperf(type='rx')
     kill_setting()

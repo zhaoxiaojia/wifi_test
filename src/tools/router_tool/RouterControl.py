@@ -80,7 +80,7 @@ class RouterTools(RouterControl):
     SCROL_JS = 'arguments[0].scrollIntoView();'
 
     # asus router setup value
-    BAND_LIST = ['2.4 GHz', '5 GHz']
+    BAND_LIST = ['2.4G', '5G']
     BANDWIDTH_2 = ['20/40 MHz', '20 MHz', '40 MHz']
     BANDWIDTH_5 = ['20/40/80 MHz', '20 MHz', '40 MHz', '80 MHz']
     WIRELESS_2 = ['自动', '11b', '11g', '11n', '11ax', 'Legacy', 'N only']

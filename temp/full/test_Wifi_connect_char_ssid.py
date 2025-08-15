@@ -22,7 +22,7 @@ Platform connect the AP successful
 
 ssid_name = '1'
 passwd = 'test1234'
-router_2g = Router(band='2.4 GHz', ssid=ssid_name, wireless_mode='自动', channel='自动', bandwidth='20 MHz',
+router_2g = Router(band='2.4G', ssid=ssid_name, wireless_mode='自动', channel='自动', bandwidth='20 MHz',
                    authentication='WPA2-Personal', wpa_passwd=passwd)
 
 

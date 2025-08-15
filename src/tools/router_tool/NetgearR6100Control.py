@@ -66,7 +66,7 @@ class NetgearR6100Control():
             # change ssid
             if (router.ssid):
                 try:
-                    if router.band == '2.4 GHz':
+                    if router.band == '2.4G':
                         ssid_text_element = self.router_control.xpath['ssid_text_element_2g']
                         ssid_text = self.router_control.driver.find_element(By.XPATH, ssid_text_element)
                         ssid_text.clear()
@@ -82,7 +82,7 @@ class NetgearR6100Control():
             if (router.channel):
                 channel = str(router.channel)
                 try:
-                    if router.band == '2.4 GHz':
+                    if router.band == '2.4G':
                         channel_value = NetgearR6100Config.CHANNEL_2_DICT[channel]
                         channel_element = self.router_control.xpath['channel_select_element']['channel_for_2g']
                     else:
@@ -95,7 +95,7 @@ class NetgearR6100Control():
             # change wireless mode
             if (router.wireless_mode):
                 try:
-                    if router.band == '2.4 GHz':
+                    if router.band == '2.4G':
                         # 如果wireless mode非54Mbps，需先选择非wep安全选项才能修改wireless mode
                         if router.wireless_mode != '54Mbps':
                             authentication_element = self.router_control.xpath['authentication_for_2G_element']
@@ -113,7 +113,7 @@ class NetgearR6100Control():
             # # change authentication
             if (router.authentication):
                 try:
-                    if router.band == '2.4 GHz':
+                    if router.band == '2.4G':
                         authentication_element = self.router_control.xpath['authentication_for_2G_element']
                     else:
                         authentication_element = self.router_control.xpath['authentication_for_5G_element']
@@ -128,7 +128,7 @@ class NetgearR6100Control():
             # set authentication_password
             if (router.wpa_passwd):
                 try:
-                    if router.band == '2.4 GHz':
+                    if router.band == '2.4G':
                         element_for_2g = self.router_control.xpath['passwd_input_element']['passwd_for_2g']
                         password_2g_text = self.router_control.driver.find_element(By.XPATH, element_for_2g)
                         password_2g_text.clear()
@@ -180,19 +180,19 @@ class NetgearR6100Control():
 #           'authentication', 'wpa_passwd', 'test_type', 'wep_encrypt',
 #           'passwd_index', 'wep_passwd', 'protect_frame', 'wpa_encrypt', 'hide_ssid']
 # Router = namedtuple('Router', fields, defaults=[None, ] * len(fields))
-# router = Router(serial='1', band='2.4 GHz', ssid='NETGEAR_2G', wireless_mode='54Mbps', channel='AUTO',
+# router = Router(serial='1', band='2.4G', ssid='NETGEAR_2G', wireless_mode='54Mbps', channel='AUTO',
 #                 bandwidth='', wpa_passwd='', wep_encrypt='', wep_passwd='',
 #                 authentication='None', hide_ssid="否")
-# router = Router(serial='2', band='2.4 GHz', ssid='NETGEAR_2G', wireless_mode='54Mbps', channel='1',
+# router = Router(serial='2', band='2.4G', ssid='NETGEAR_2G', wireless_mode='54Mbps', channel='1',
 #                 bandwidth='', wpa_passwd='', wep_encrypt='wep-64', wep_passwd='12345',
 #                 authentication='WEP', hide_ssid="否")
-# router = Router(serial='3', band='2.4 GHz', ssid='NETGEAR_2G', wireless_mode='54Mbps', channel='2',
+# router = Router(serial='3', band='2.4G', ssid='NETGEAR_2G', wireless_mode='54Mbps', channel='2',
 #                 bandwidth='', wpa_passwd='', wep_encrypt='wep-128', wep_passwd='12345678901234567890123456',
 #                 authentication='WEP', hide_ssid="否")
-# router = Router(serial='4', band='2.4 GHz', ssid='NETGEAR_2G', wireless_mode='300Mbps', channel='5',
+# router = Router(serial='4', band='2.4G', ssid='NETGEAR_2G', wireless_mode='300Mbps', channel='5',
 #                 bandwidth='', wpa_passwd='abc12345', wep_encrypt='', wep_passwd='',
 #                 authentication='WPA/WPA2', hide_ssid="否")
-# router = Router(serial='5', band='5 GHz', ssid='NETGEAR_5G+', wireless_mode='192Mbps', channel='40',
+# router = Router(serial='5', band='5G', ssid='NETGEAR_5G+', wireless_mode='192Mbps', channel='40',
 #                 bandwidth='', wpa_passwd='12345678', wep_encrypt='', wep_passwd='',
 #                 authentication='WPA2', hide_ssid="否")
 # control = NetgearR6100Control()

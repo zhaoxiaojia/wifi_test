@@ -21,7 +21,7 @@ from src.tools.router_tool.Router import Router
 '''
 
 ssid = 'Abc123!@#2G测试'
-router_2g = Router(band='2.4 GHz', ssid=ssid, wireless_mode='N only', channel='自动', bandwidth='20/40 MHz',
+router_2g = Router(band='2.4G', ssid=ssid, wireless_mode='N only', channel='自动', bandwidth='20/40 MHz',
                    authentication='Open System')
 
 @pytest.fixture(scope='function', autouse=True)

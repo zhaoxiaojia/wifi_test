@@ -24,7 +24,7 @@ from src.tools.router_tool.Router import Router
 3.DUT播放在线视频
 4.手机通过softap连接DUT上网后播放在线视频。
 '''
-router_2g = Router(band='2.4 GHz', ssid='ATC_ASUS_AX88U_2G', wireless_mode='N only', channel='1', bandwidth='40 MHz',
+router_2g = Router(band='2.4G', ssid='ATC_ASUS_AX88U_2G', wireless_mode='N only', channel='1', bandwidth='40 MHz',
                    authentication='WPA2-Personal', wpa_passwd='12345678')
 
 

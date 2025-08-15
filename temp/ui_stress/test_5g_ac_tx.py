@@ -32,7 +32,7 @@ TPS正常，无掉零
 ssid = 'ATC_ASUS_AX88U_5G'
 passwd = 'Abc@123456'
 
-router = Router(band='5 GHz', ssid=ssid, wireless_mode='N/AC/AX mixed', channel='36', bandwidth='40 MHz',
+router = Router(band='5G', ssid=ssid, wireless_mode='N/AC/AX mixed', channel='36', bandwidth='40 MHz',
                 authentication='WPA2-Personal', wpa_passwd=passwd)
 
 ax88uControl = Asusax88uControl()

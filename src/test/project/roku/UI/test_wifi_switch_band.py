@@ -26,10 +26,10 @@ Expected Result
 
 ssid = 'ATC_ASUS_AX88U'
 ssid_bat = 'ATC_ASUS_AX88U_bat'
-router_2g = Router(band='2.4 GHz', ssid=ssid, wireless_mode='11n', channel='1', bandwidth='20 MHz',
+router_2g = Router(band='2.4G', ssid=ssid, wireless_mode='11n', channel='1', bandwidth='20 MHz',
                    authentication='Open System')
 
-router_5g = Router(band='5 GHz', ssid=ssid_bat, wireless_mode='11ac', channel='36', bandwidth='80 MHz',
+router_5g = Router(band='5G', ssid=ssid_bat, wireless_mode='11ac', channel='36', bandwidth='80 MHz',
                    authentication='Open System')
 
 ax88uControl = Asusax88uControl()

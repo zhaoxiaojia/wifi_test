@@ -26,7 +26,7 @@ SSID输入
 '''
 
 ssid = 'ATC_ASUS_AX88U_5G'
-router_2g = Router(band='5 GHz', ssid=ssid, wireless_mode='自动', channel='157', bandwidth='80 MHz',
+router_2g = Router(band='5G', ssid=ssid, wireless_mode='自动', channel='157', bandwidth='80 MHz',
                    authentication='Open System')
 
 

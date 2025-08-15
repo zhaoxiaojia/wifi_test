@@ -32,9 +32,9 @@ from src.tools.router_tool.ZTEax5400Control import ZTEax5400Control
 asus_ssid_name = 'ATC_ASUS_AX88U'
 zte_ssid_name = 'ZTEax5400_5G'
 passwd = 'test1234'
-router_ausu = Router(band='2.4 GHz', ssid=asus_ssid_name, wireless_mode='自动', channel='自动', bandwidth='20 MHz',
+router_ausu = Router(band='2.4G', ssid=asus_ssid_name, wireless_mode='自动', channel='自动', bandwidth='20 MHz',
                      authentication='WPA2-Personal', wpa_passwd=passwd)
-router_zte = Router(band='5 GHz', ssid=zte_ssid_name, wireless_mode='802.11 a/n/ac', channel='161',
+router_zte = Router(band='5G', ssid=zte_ssid_name, wireless_mode='802.11 a/n/ac', channel='161',
                     bandwidth='20MHz/40MHz/80MHz',
                     authentication='WPA-PSK/WPA2-PSK', wpa_passwd=passwd)
 
