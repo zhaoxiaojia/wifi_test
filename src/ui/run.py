@@ -295,9 +295,16 @@ class RunPage(CardWidget):
         if not runner:
             return
         runner.stop()
-        if not runner.wait(3000):
-            runner.terminate()
-            runner.wait()
+        runner.terminate()
+        logging.info("runner isRunning before wait: %s", runner.isRunning())
+        finished = runner.wait(3000)
+        logging.info(
+            "runner.wait(3000) returned %s; isRunning after wait: %s",
+            finished,
+            runner.isRunning(),
+        )
+        if not finished:
+            logging.warning("runner thread did not finish within 3000 ms")
         for signal, slot in (
                 (runner.log_signal, self._append_log),
                 (runner.progress_signal, self.update_progress),
@@ -318,6 +325,7 @@ class RunPage(CardWidget):
         with suppress(TypeError):
             self.action_btn.clicked.disconnect()
         self.action_btn.clicked.connect(self.run_case)
+        self.action_btn.setEnabled(True)
 
     def on_stop(self):
         self.cleanup()
@@ -326,6 +334,7 @@ class RunPage(CardWidget):
         with suppress(TypeError):
             self.action_btn.clicked.disconnect()
         self.action_btn.clicked.connect(self.run_case)
+        self.action_btn.setEnabled(True)
 
     def _get_application_base(self) -> Path:
         """获取应用根路径"""
