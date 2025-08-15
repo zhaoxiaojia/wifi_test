@@ -360,9 +360,9 @@ def handle_expectdata(router_info, band, direction, chip_info=None):
     if chip_info is None:
         chip_info = RouterConst.dut_wifichip
 
-    mode = str(router_info[band]['mode']).upper()
-    bandwidth = str(router_info[band]['bandwidth']).upper()
-    authentication = 'WPA2'
+    mode = str(router_info.get(band, {}).get('mode', '11AX')).upper()
+    bandwidth = str(router_info.get(band, {}).get('bandwidth', '80MHz')).upper()
+    authentication = str(router_info.get(band, {}).get('authentication', 'WPA2')).upper()
 
     chip_key, interface = chip_info.split('_')
     if chip_key in ('W1', 'W1U'):
@@ -376,14 +376,26 @@ def handle_expectdata(router_info, band, direction, chip_info=None):
         dut_data = json.load(f2)
 
 
+    bw_candidates = [bandwidth]
+    if '80MHZ' not in bw_candidates:
+        bw_candidates.append('80MHZ')
+    mode_candidates = [mode]
+    if '11AX' not in mode_candidates:
+        mode_candidates.append('11AX')
+    auth_candidates = [authentication]
+    if 'WPA2' not in auth_candidates:
+        auth_candidates.append('WPA2')
+
     for ck in (chip_key, 'COMMON'):
-        try:
-            return dut_data[ck][band.upper()][interface][mode][authentication][bandwidth][mimo_key][
-                direction.upper()]
-        except KeyError as e:
-            logging.warning(str(e))
-            logging.warning(sys.exc_info())
-            continue
+        for m in mode_candidates:
+            for a in auth_candidates:
+                for b in bw_candidates:
+                    try:
+                        return dut_data[ck][band.upper()][interface][m][a][b][mimo_key][direction.upper()]
+                    except KeyError as e:
+                        logging.warning(str(e))
+                        logging.warning(sys.exc_info())
+                        continue
 
     raise KeyError(
         f"Missing expected data: chip={chip_key} or COMMON, band={band}, interface={interface}, "
