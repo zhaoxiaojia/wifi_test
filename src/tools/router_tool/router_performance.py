@@ -360,9 +360,38 @@ def handle_expectdata(router_info, band, direction, chip_info=None):
     if chip_info is None:
         chip_info = RouterConst.dut_wifichip
 
-    mode = str(router_info[band]['mode']).upper()
-    bandwidth = str(router_info[band]['bandwidth']).upper()
-    authentication = 'WPA2'
+    def _normalize_mode(m: str) -> str:
+        if not m:
+            return "11AX"
+        return str(m).upper().replace("802.11", "")
+
+    def _normalize_bandwidth(bw: str) -> str:
+        if not bw:
+            return "80MHZ"
+        bw = str(bw).upper().replace(" ", "")
+        if "160" in bw:
+            return "160MHZ"
+        if "80" in bw:
+            return "80MHZ"
+        if "40" in bw:
+            return "40MHZ"
+        if "20" in bw:
+            return "20MHZ"
+        return bw
+
+    def _normalize_auth(auth: str) -> str:
+        if not auth:
+            return "WPA2"
+        auth = str(auth).upper().replace("_", "-")
+        if "WPA3" in auth:
+            return "WPA3"
+        if "WPA2" in auth:
+            return "WPA2"
+        return auth
+
+    mode = _normalize_mode(router_info.get(band, {}).get('mode', '11AX'))
+    bandwidth = _normalize_bandwidth(router_info.get(band, {}).get('bandwidth', '80MHz'))
+    authentication = _normalize_auth(router_info.get(band, {}).get('authentication', 'WPA2'))
 
     chip_key, interface = chip_info.split('_')
     if chip_key in ('W1', 'W1U'):
@@ -371,21 +400,23 @@ def handle_expectdata(router_info, band, direction, chip_info=None):
         chip_key = 'W2'
     elif chip_key == 'W2L':
         chip_key = 'W2L'
+    interface = interface.upper()
     mimo_key = RouterConst.FPGA_CONFIG[chip_key]['mimo']
+
     with open(f"{os.getcwd()}/config/compatibility_dut.json", 'r', encoding='utf-8') as f2:
         dut_data = json.load(f2)
 
-
-    for ck in (chip_key, 'COMMON'):
+    def _get_default(data, key):
         try:
-            return dut_data[ck][band.upper()][interface][mode][authentication][bandwidth][mimo_key][
-                direction.upper()]
-        except KeyError as e:
-            logging.warning(str(e))
-            logging.warning(sys.exc_info())
-            continue
+            return data[key]
+        except KeyError:
+            return data[next(reversed(data))]
 
-    raise KeyError(
-        f"Missing expected data: chip={chip_key} or COMMON, band={band}, interface={interface}, "
-        f"mode={mode}, auth={authentication}, bw={bandwidth}, mimo={mimo_key}, dir={direction.upper()}"
-    )
+    data = _get_default(dut_data, chip_key)
+    data = _get_default(data, band.upper())
+    data = _get_default(data, interface)
+    data = _get_default(data, mode)
+    data = _get_default(data, authentication)
+    data = _get_default(data, bandwidth)
+    data = _get_default(data, mimo_key)
+    return _get_default(data, direction.upper())
