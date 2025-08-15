@@ -10,11 +10,11 @@ def get_requirements():
         return [line.strip().split('==')[0] for line in f if line.strip() and not line.startswith('#')]
 
 requirements = get_requirements()
-pythonw_path = str(Path(sys.executable).with_name('pythonw.exe'))
+pythonw_path = Path(sys.executable).with_name('pythonw.exe')
 a = Analysis(
     ['main.py'],  # 入口文件
     pathex=['.'],
-    binaries=[],
+    binaries=[(str(pythonw_path), '.')],
     datas=[
         ('src/pytest.ini', 'src'),
         ('src/test', 'src/test'),
