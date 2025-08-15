@@ -16,6 +16,7 @@ import time
 
 import pytest
 import asyncio
+import telnetlib
 import telnetlib3
 
 from src.tools.connect_tool.dut import dut
@@ -37,6 +38,19 @@ class telnet_tool(dut):
         logging.info('*' * 80)
         logging.info(f'* Telnet {self.dut_ip}')
         logging.info('*' * 80)
+        try:
+            self.tn = telnetlib.Telnet(self.dut_ip, self.port, timeout=5)
+        except Exception as e:
+            logging.error(f'Create telnet connection failed: {e}')
+            self.tn = None
+
+    def close(self):
+        if getattr(self, 'tn', None):
+            self.tn.close()
+            self.tn = None
+
+    def __del__(self):
+        self.close()
 
     def reboot(self):
         self.checkoutput('reboot')
@@ -49,8 +63,16 @@ class telnet_tool(dut):
             raise Exception('Dut lost connect')
 
     def execute_cmd(self, cmd):
-        self.tn.write(cmd.encode('ascii') + b'\n')
-        time.sleep(1)
+        if self.tn:
+            self.tn.write(cmd.encode('ascii') + b'\n')
+            time.sleep(1)
+        else:
+            try:
+                with telnetlib.Telnet(self.dut_ip, self.port, timeout=5) as tn:
+                    tn.write(cmd.encode('ascii') + b'\n')
+                    time.sleep(1)
+            except Exception as e:
+                logging.error(f'Telnet execute cmd error: {e}')
 
     def checkoutput(self, cmd, wildcard=''):
         return asyncio.run(self.telnet_client(cmd))
@@ -87,6 +109,12 @@ class telnet_tool(dut):
         finally:
             if writer:
                 writer.close()
+                protocol = getattr(writer, "protocol", None)
+                if protocol:
+                    try:
+                        await protocol.wait_closed
+                    except asyncio.CancelledError:
+                        logging.info("Telnet task cancelled")
 
     def popen_term(self, command):
         return subprocess.Popen(command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
