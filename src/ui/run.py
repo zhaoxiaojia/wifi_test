@@ -61,16 +61,8 @@ class CaseRunner(QThread):
 
             load_config(refresh=True)
 
-            if getattr(sys, "frozen", False):  # 打包环境
-                base_dir = Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
-                python_path = base_dir / "pythonw.exe"
-                if not python_path.exists():
-                    python_path = sys.executable
-            else:
-                python_path = sys.executable
-
             cmd = [
-                str(python_path),
+                sys.executable,
                 "-m",
                 "pytest",
                 "-v",
@@ -133,6 +125,7 @@ class CaseRunner(QThread):
         if self._proc and self._proc.poll() is None:
             with suppress(Exception):
                 self._proc.terminate()
+
 
 class RunPage(CardWidget):
     """运行页"""
