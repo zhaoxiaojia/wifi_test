@@ -420,3 +420,4 @@ def handle_expectdata(router_info, band, direction, chip_info=None):
     data = _get_default(data, bandwidth)
     data = _get_default(data, mimo_key)
     return _get_default(data, direction.upper())
+
