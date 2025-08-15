@@ -177,8 +177,15 @@ class CaseRunner(QThread):
             except queue.Empty:
                 pass
             if not self._proc.is_alive() and self._queue.empty():
-                break
-            self._queue.close()
+                self.log_signal.emit(
+                    f"<b style='color:gray;'>队列将关闭，进程存活：{self._proc.is_alive()}</b>"
+                )
+                logging.info("closing queue; proc alive=%s", self._proc.is_alive())
+        self._queue.close()
+        self._queue.join_thread()
+        self.log_signal.emit(
+            f"<b style='color:gray;'>队列已关闭，进程存活：{self._proc.is_alive()}</b>"
+        )
 
     def stop(self):
         # 设置标志位，run() 会检查该标志并自行退出
