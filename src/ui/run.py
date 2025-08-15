@@ -78,6 +78,7 @@ class CaseRunner(QThread):
         self._should_stop = False
 
     def run(self):
+        logging.info("CaseRunner start tid=%s", int(QThread.currentThreadId()))
         # 日志、进度写到窗口
         try:
             timestamp = datetime.datetime.now().strftime("%Y.%m.%d_%H.%M.%S")
@@ -134,6 +135,7 @@ class CaseRunner(QThread):
             root_logger.setLevel(logging.INFO)
 
             # 主线程里定期检查_should_stop可实现停止功能
+            code = None
             try:
                 self.log_signal.emit(f"<b style='color:blue;'>开始执行pytest</b>")
                 code = pytest.main(pytest_args, plugins=[plugin])
@@ -151,6 +153,11 @@ class CaseRunner(QThread):
 
                 sys.stdout = old_stdout
                 sys.stderr = old_stderr
+                logging.info(
+                    "CaseRunner end tid=%s code=%s",
+                    int(QThread.currentThreadId()),
+                    code,
+                )
 
         except Exception as e:
             tb = traceback.format_exc()
@@ -160,8 +167,10 @@ class CaseRunner(QThread):
     def stop(self):
         # NOTE: pytest没有优雅的“中止”API，通常不能强停，最优雅还是用子进程方案
         self._should_stop = True
+        logging.info("stop called: isRunning=%s", self.isRunning())
         if self.isRunning():
             self.terminate()
+            logging.info("terminate issued")
 
 
 class RunPage(CardWidget):
@@ -292,8 +301,14 @@ class RunPage(CardWidget):
 
     def cleanup(self, disconnect_page: bool = True):
         runner = getattr(self, "runner", None)
+        logging.info(
+            "cleanup start tid=%s runner=%s",
+            int(QThread.currentThreadId()),
+            runner,
+        )
         if not runner:
-            return
+            logging.info("cleanup end wait=%s", None)
+            return None
         runner.stop()
         runner.terminate()
         logging.info("runner isRunning before wait: %s", runner.isRunning())
@@ -317,8 +332,11 @@ class RunPage(CardWidget):
         if disconnect_page:
             with suppress(TypeError):
                 self.disconnect()
+        logging.info("cleanup end wait=%s", finished)
+        return finished
 
     def on_runner_finished(self):
+        logging.info("runner finished signal received")
         self.cleanup()
         self.action_btn.setText("Test")
         self.action_btn.setIcon(FluentIcon.PLAY)
@@ -328,7 +346,14 @@ class RunPage(CardWidget):
         self.action_btn.setEnabled(True)
 
     def on_stop(self):
-        self.cleanup()
+        runner = getattr(self, "runner", None)
+        logging.info(
+            "cleanup start tid=%s runner=%s",
+            int(QThread.currentThreadId()),
+            runner,
+        )
+        finished = self.cleanup()
+        logging.info("cleanup finished wait=%s", finished)
         self.action_btn.setText("Test")
         self.action_btn.setIcon(FluentIcon.PLAY)
         with suppress(TypeError):
