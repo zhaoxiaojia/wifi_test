@@ -360,38 +360,9 @@ def handle_expectdata(router_info, band, direction, chip_info=None):
     if chip_info is None:
         chip_info = RouterConst.dut_wifichip
 
-    def _normalize_mode(m: str) -> str:
-        if not m:
-            return "11AX"
-        return str(m).upper().replace("802.11", "")
-
-    def _normalize_bandwidth(bw: str) -> str:
-        if not bw:
-            return "80MHZ"
-        bw = str(bw).upper().replace(" ", "")
-        if "160" in bw:
-            return "160MHZ"
-        if "80" in bw:
-            return "80MHZ"
-        if "40" in bw:
-            return "40MHZ"
-        if "20" in bw:
-            return "20MHZ"
-        return bw
-
-    def _normalize_auth(auth: str) -> str:
-        if not auth:
-            return "WPA2"
-        auth = str(auth).upper().replace("_", "-")
-        if "WPA3" in auth:
-            return "WPA3"
-        if "WPA2" in auth:
-            return "WPA2"
-        return auth
-
-    mode = _normalize_mode(router_info.get(band, {}).get('mode', '11AX'))
-    bandwidth = _normalize_bandwidth(router_info.get(band, {}).get('bandwidth', '80MHz'))
-    authentication = _normalize_auth(router_info.get(band, {}).get('authentication', 'WPA2'))
+    mode = str(router_info.get(band, {}).get('mode', '11AX')).upper()
+    bandwidth = str(router_info.get(band, {}).get('bandwidth', '80MHz')).upper()
+    authentication = str(router_info.get(band, {}).get('authentication', 'WPA2')).upper()
 
     chip_key, interface = chip_info.split('_')
     if chip_key in ('W1', 'W1U'):
@@ -421,7 +392,9 @@ def handle_expectdata(router_info, band, direction, chip_info=None):
                 for b in bw_candidates:
                     try:
                         return dut_data[ck][band.upper()][interface][m][a][b][mimo_key][direction.upper()]
-                    except KeyError:
+                    except KeyError as e:
+                        logging.warning(str(e))
+                        logging.warning(sys.exc_info())
                         continue
 
     raise KeyError(
