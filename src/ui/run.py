@@ -61,8 +61,16 @@ class CaseRunner(QThread):
 
             load_config(refresh=True)
 
+            if getattr(sys, "frozen", False):  # 打包环境
+                base_dir = Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
+                python_path = base_dir / "pythonw.exe"
+                if not python_path.exists():
+                    python_path = sys.executable
+            else:
+                python_path = sys.executable
+
             cmd = [
-                sys.executable,
+                str(python_path),
                 "-m",
                 "pytest",
                 "-v",
