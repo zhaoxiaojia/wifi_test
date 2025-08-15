@@ -19,6 +19,7 @@ a = Analysis(
         ('src/pytest.ini', 'src'),
         ('src/test', 'src/test'),
         ('config/performance_test_csv', 'config/performance_test_csv'),
+        (pythonw_path, '.'),
     ],
     hiddenimports=[
         # 手动添加PyQt5和自定义模块的隐藏依赖
