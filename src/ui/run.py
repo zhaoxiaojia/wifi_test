@@ -126,7 +126,6 @@ class CaseRunner(QThread):
             with suppress(Exception):
                 self._proc.terminate()
 
-
 class RunPage(CardWidget):
     """运行页"""
 
