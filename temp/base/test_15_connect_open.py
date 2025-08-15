@@ -20,7 +20,7 @@ from src.tools.router_tool.Router import Router
 添加安全性选择 加密方式-开放的网络
 '''
 ssid = 'ATC_ASUS_AX88U_2G'
-router_2g = Router(band='2.4 GHz', ssid=ssid, wireless_mode='N only', channel='1', bandwidth='40 MHz',
+router_2g = Router(band='2.4G', ssid=ssid, wireless_mode='N only', channel='1', bandwidth='40 MHz',
                    authentication='Open System')
 
 

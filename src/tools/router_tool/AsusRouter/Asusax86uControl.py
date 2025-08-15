@@ -96,7 +96,7 @@ class Asusax86uControl(RouterTools):
             # 修改 bandwidth
             if (router.bandwidth):
                 if router.bandwidth not in \
-                        {'2.4 GHz': self.BANDWIDTH_2, '5 GHz': self.BANDWIDTH_5}[
+                        {'2.4G': self.BANDWIDTH_2, '5G': self.BANDWIDTH_5}[
                             router.band]: raise ConfigError('bandwidth element error')
                 self.change_bandwidth(router.bandwidth)
 
@@ -109,7 +109,7 @@ class Asusax86uControl(RouterTools):
                 channel = str(router.channel)
                 # try:
                 #     channel_index = (
-                #         Asus86uConfig.CHANNEL_2_DICT[channel] if router.band == '2.4 GHz' else
+                #         Asus86uConfig.CHANNEL_2_DICT[channel] if router.band == '2.4G' else
                 #         Asus86uConfig.CHANNEL_5_DICT[
                 #             channel])
                 # except ConfigError:
@@ -172,7 +172,7 @@ class Asusax86uControl(RouterTools):
 # fields = ['band', 'ssid', 'wireless_mode', 'channel', 'bandwidth', 'authentication', 'password', 'test_type',
 #           'wep_encrypt', 'passwd_index', 'wep_passwd', 'protect_frame', 'wpa_encrypt', 'hide_ssid', 'wifi6']
 # Router = namedtuple('Router', fields, defaults=[None, ] * len(fields))
-# router = Router(band='5 GHz', ssid='ATC_ASUS_AX88U_5G', wireless_mode='AX only', channel='100', bandwidth='20 MHz',
+# router = Router(band='5G', ssid='ATC_ASUS_AX88U_5G', wireless_mode='AX only', channel='100', bandwidth='20 MHz',
 #                 authentication='Open System', wifi6='on')
 # control = Asusax86uControl()
 # control.change_setting(router)

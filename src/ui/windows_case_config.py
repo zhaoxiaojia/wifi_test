@@ -1013,7 +1013,7 @@ class CaseConfigPage(CardWidget):
                 ref[leaf] = widget.isChecked()
         chip = self.fpga_chip_combo.currentText()
         interface = self.fpga_if_combo.currentText()
-        self.config["fpga"] = f"{chip.lower()}_{interface.lower()}"
+        self.config["fpga"] = f"{chip}_{interface}"
         base = Path(self._get_application_base())
         case_path = self.field_widgets["text_case"].text().strip()
         # 默认将现有路径解析成 POSIX 字符串

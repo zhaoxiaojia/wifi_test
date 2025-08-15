@@ -28,9 +28,9 @@ from src.tools.router_tool.Xiaomi.Xiaomiax3600Control import Xiaomiax3600Control
 '''
 
 passwd = '12345678'
-router_5g = Router(band='5 GHz', ssid='ATC_ASUS_AX88U_5G', wireless_mode='自动', channel='自动', bandwidth='20 MHz',
+router_5g = Router(band='5G', ssid='ATC_ASUS_AX88U_5G', wireless_mode='自动', channel='自动', bandwidth='20 MHz',
                    authentication='WPA2-Personal', wpa_passwd=passwd)
-router_2g = Router(serial='1', band='2.4 GHz', ssid='XiaomiAX3000_2G', channel='自动',
+router_2g = Router(serial='1', band='2.4G', ssid='XiaomiAX3000_2G', channel='自动',
                 bandwidth='40MHz', authentication='超强加密(WPA3个人版)', wpa_passwd=passwd)
 
 

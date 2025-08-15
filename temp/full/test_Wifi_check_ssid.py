@@ -24,7 +24,7 @@ from src.tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
 '''
 
 ssid = 'ATC_ASUS_AX88U_2G'
-router_2g = Router(band='2.4 GHz', ssid=ssid, wireless_mode='N only', channel='自动', bandwidth='20/40 MHz',
+router_2g = Router(band='2.4G', ssid=ssid, wireless_mode='N only', channel='自动', bandwidth='20/40 MHz',
                    authentication='Open System')
 
 

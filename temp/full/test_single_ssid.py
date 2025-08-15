@@ -26,7 +26,7 @@ SSID 为单个字符
 ssid = "a"
 
 
-router_2g = Router(band='2.4 GHz', ssid=ssid, wireless_mode='N only', channel='自动', bandwidth='20 MHz',
+router_2g = Router(band='2.4G', ssid=ssid, wireless_mode='N only', channel='自动', bandwidth='20 MHz',
                    authentication='Open System')
 
 

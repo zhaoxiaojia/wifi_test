@@ -14,10 +14,10 @@ from src.tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
 from src.tools.router_tool.Router import Router
 
 ssid_2g = 'ATC_ASUS_AX88U_2G'
-router_2g = Router(band='2.4 GHz', ssid=ssid_2g, wireless_mode='N only', channel='1', bandwidth='40 MHz',
+router_2g = Router(band='2.4G', ssid=ssid_2g, wireless_mode='N only', channel='1', bandwidth='40 MHz',
                    authentication='Open System')
 ssid_5g = 'ATC_ASUS_AX88U_5G'
-router_5g = Router(band='5 GHz', ssid=ssid_5g, wireless_mode='自动', channel='149', bandwidth='20/40/80 MHz',
+router_5g = Router(band='5G', ssid=ssid_5g, wireless_mode='自动', channel='149', bandwidth='20/40/80 MHz',
                    authentication='Open System')
 '''
 Test step

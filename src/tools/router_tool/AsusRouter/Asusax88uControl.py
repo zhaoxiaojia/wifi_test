@@ -28,12 +28,12 @@ class Asusax88uControl(RouterTools):
     Attributes:
 
     rvr
-    0,2.4 GHz, AX86U-2G,11ax ,6,40 MHz ,  Open System , ,rx,TCP,13 ,10 10
+    0,2.4G, AX86U-2G,11ax ,6,40 MHz ,  Open System , ,rx,TCP,13 ,10 10
     '''
     SCROL_JS = 'arguments[0].scrollIntoView();'
 
     # asus router setup value
-    BAND_LIST = ['2.4 GHz', '5 GHz']
+    BAND_LIST = ['2.4G', '5G']
     BANDWIDTH_2 = ['20/40 MHz', '20 MHz', '40 MHz']
     BANDWIDTH_5 = ['20/40/80 MHz', '20 MHz', '40 MHz', '80 MHz']
     WIRELESS_2 = ['自动', '11b', '11g', '11n', '11ax', 'Legacy', 'N only']
@@ -379,7 +379,7 @@ class Asusax88uControl(RouterTools):
 # ssid = 'coco'
 # passwd = '12345678'
 # Router = namedtuple('Router', fields, defaults=[None, ] * len(fields))
-# router = Router(band='5 GHz', ssid=ssid, wireless_mode='11ax', channel='36', bandwidth='80 MHz',
+# router = Router(band='5G', ssid=ssid, wireless_mode='11ax', channel='36', bandwidth='80 MHz',
 #                 authentication='WPA2-Personal', password='12345678')
 # control = Asusax88uControl()
 # control.change_setting(router)

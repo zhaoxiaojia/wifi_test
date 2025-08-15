@@ -69,7 +69,7 @@ class Linksys1200acControl():
             if (router.channel):
                 channel = str(router.channel)
                 try:
-                    if router.band == '2.4 GHz':
+                    if router.band == '2.4G':
                         channel_index = Linksys1200acConfig.CHANNEL_2_DICT[channel]
                         self.router_control.driver.find_element(
                             By.XPATH,
@@ -248,7 +248,7 @@ class Linksys1200acControl():
 #           'wpa_passwd', 'test_type', 'wep_encrypt', 'passwd_index', 'wep_passwd',
 #           'protect_frame', 'wpa_encrypt', 'hide_ssid']
 # Router = namedtuple('Router', fields, defaults=[None, ] * len(fields))
-# router = Router(serial='1', band='2.4 GHz', ssid='Linksys1200ac_2.4G', wireless_mode='混合模式',
+# router = Router(serial='1', band='2.4G', ssid='Linksys1200ac_2.4G', wireless_mode='混合模式',
 #                 channel='1', bandwidth='仅使用20 MHz', authentication='无',)
 #                 # wep_encrypt='104/128位（26个十六进制数字）',
 #                 # wep_passwd='01234567890123456789012345')

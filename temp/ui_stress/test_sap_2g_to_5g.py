@@ -23,7 +23,7 @@ def setup():
 
 def test_sta_sap():
     pytest.dut.open_hotspot()
-    pytest.dut.set_hotspot(ssid=hotspot_ssid,passwd=hotspot_passwd,encrypt="WPA2 PSK",type="2.4 GHz Band")
+    pytest.dut.set_hotspot(ssid=hotspot_ssid,passwd=hotspot_passwd,encrypt="WPA2 PSK",type="2.4G Band")
     concomitant_dut.checkoutput(pytest.dut.CMD_WIFI_CONNECT.format(hotspot_ssid, 'wpa2', hotspot_passwd))
     concomitant_dut.wait_for_wifi_address(target="192.168")
     assert 'freq: 2' in concomitant_dut.checkoutput(pytest.dut.IW_LINNK_COMMAND), "Doesn't conect 2g "

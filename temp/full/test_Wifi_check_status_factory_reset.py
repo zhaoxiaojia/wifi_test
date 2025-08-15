@@ -28,7 +28,7 @@ from src.tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
 3.Mac地址不会变化。
 '''
 
-router = Router(band='5 GHz', ssid='ATC_ASUS_AX88U_5G', wireless_mode='N/AC/AX mixed', channel='36', bandwidth='40 MHz',
+router = Router(band='5G', ssid='ATC_ASUS_AX88U_5G', wireless_mode='N/AC/AX mixed', channel='36', bandwidth='40 MHz',
                 authentication='WPA2-Personal', wpa_passwd='12345678')
 
 TARGET_IP = "192.168.50.1"

@@ -22,7 +22,7 @@ from src.tools.router_tool.Router import Router
 
 ssid = 'ATC_ASUS_AX88U_5G'
 passwd = 'Abc1234567'
-router_5g = Router(band='5 GHz', ssid=ssid, wireless_mode='Legacy', channel='149', bandwidth='20 MHz',
+router_5g = Router(band='5G', ssid=ssid, wireless_mode='Legacy', channel='149', bandwidth='20 MHz',
                    authentication='Shared Key', wep_passwd=passwd, wep_encrypt='WEP-64bits', passwd_index='1')
 
 

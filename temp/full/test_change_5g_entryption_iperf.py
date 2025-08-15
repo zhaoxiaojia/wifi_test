@@ -30,11 +30,11 @@ TPS正常，无掉零，无断流
 
 ssid = 'ATC_ASUS_AX88U_5G'
 passwd = 'Abc@123456'
-router_wpa1 = Router(band='5 GHz', ssid=ssid, wireless_mode='自动', channel='36', bandwidth='40 MHz',
+router_wpa1 = Router(band='5G', ssid=ssid, wireless_mode='自动', channel='36', bandwidth='40 MHz',
                      authentication='WPA2-Personal', wpa_passwd=passwd)
-router_wpa2 = Router(band='5 GHz', ssid=ssid, wireless_mode='自动', channel='36', bandwidth='40 MHz',
+router_wpa2 = Router(band='5G', ssid=ssid, wireless_mode='自动', channel='36', bandwidth='40 MHz',
                      authentication='WPA3-Personal', wpa_passwd=passwd)
-router_open = Router(band='5 GHz', ssid=ssid, wireless_mode='自动', channel='36', bandwidth='40 MHz',
+router_open = Router(band='5G', ssid=ssid, wireless_mode='自动', channel='36', bandwidth='40 MHz',
                      authentication='Open System', wpa_passwd=passwd)
 
 ax88uControl = Asusax88uControl()

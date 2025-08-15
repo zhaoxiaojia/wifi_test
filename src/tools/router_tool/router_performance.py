@@ -8,7 +8,8 @@
 @time: 2025/2/14 10:42 
 @desc: 
 '''
-
+import logging
+import sys
 from dataclasses import dataclass
 import re
 import os
@@ -363,28 +364,28 @@ def handle_expectdata(router_info, band, direction, chip_info=None):
     bandwidth = str(router_info[band]['bandwidth']).upper()
     authentication = 'WPA2'
 
-    chip, interface = chip_info.split('_')
-    chip_key = chip.upper()
+    chip_key, interface = chip_info.split('_')
     if chip_key in ('W1', 'W1U'):
         chip_key = 'W1'
     elif chip_key in ('W2', 'W2U'):
         chip_key = 'W2'
     elif chip_key == 'W2L':
         chip_key = 'W2L'
-    interface_key = interface.upper()
-    mimo_key = RouterConst.FPGA_CONFIG[chip_key]['mimo'].upper()
-
+    mimo_key = RouterConst.FPGA_CONFIG[chip_key]['mimo']
     with open(f"{os.getcwd()}/config/compatibility_dut.json", 'r', encoding='utf-8') as f2:
         dut_data = json.load(f2)
 
+
     for ck in (chip_key, 'COMMON'):
         try:
-            return dut_data[ck][band.upper()][interface_key][mode][authentication][bandwidth][mimo_key][
+            return dut_data[ck][band.upper()][interface][mode][authentication][bandwidth][mimo_key][
                 direction.upper()]
-        except KeyError:
+        except KeyError as e:
+            logging.warning(str(e))
+            logging.warning(sys.exc_info())
             continue
 
     raise KeyError(
-        f"Missing expected data: chip={chip_key} or COMMON, band={band}, interface={interface_key}, "
+        f"Missing expected data: chip={chip_key} or COMMON, band={band}, interface={interface}, "
         f"mode={mode}, auth={authentication}, bw={bandwidth}, mimo={mimo_key}, dir={direction.upper()}"
     )

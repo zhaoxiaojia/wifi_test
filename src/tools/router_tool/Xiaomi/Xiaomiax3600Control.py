@@ -21,10 +21,10 @@ class Xiaomiax3600Control(RouterTools):
     '''
 
     rvr
-    1,2.4 GHz, XiaomiAX3000_2.4G,11ac ,6,40MHz ,超强加密(WPA3个人版) , 12345678,rx,TCP,5 ,10 10
+    1,2.4G, XiaomiAX3000_2.4G,11ac ,6,40MHz ,超强加密(WPA3个人版) , 12345678,rx,TCP,5 ,10 10
     '''
-    BAND_2 = '2.4 GHz'
-    BAND_5 = '5 GHz'
+    BAND_2 = '2.4G'
+    BAND_5 = '5G'
     CHANNEL_2 = {
         '自动': '1',
         '1': '2',
@@ -186,7 +186,7 @@ class Xiaomiax3600Control(RouterTools):
         if router.channel:
             channel = str(router.channel)
             try:
-                if router.band == '2.4 GHz':
+                if router.band == '2.4G':
                     index = self.CHANNEL_2[channel]
                     target = 'channel_2g'
                 else:
@@ -265,10 +265,10 @@ class Xiaomiax3600Control(RouterTools):
 #           'test_type',
 #           'wep_encrypt', 'passwd_index', 'wep_passwd', 'protect_frame', 'wpa_encrypt', 'hide_ssid']
 # Router = namedtuple('Router', fields, defaults=[None, ] * len(fields))
-# router5 = Router(serial='1', band='5 GHz', ssid='XiaomiAX3000_2.4G', channel='36', wireless_mode='11ax',
+# router5 = Router(serial='1', band='5G', ssid='XiaomiAX3000_2.4G', channel='36', wireless_mode='11ax',
 #                  bandwidth='80MHz', authentication='超强加密(WPA3个人版)', password='12345678',
 #                  hide_ssid='否')
-# router2 = Router(serial='1', band='2.4 GHz', ssid='XiaomiAX3000_2.4G', channel='1', wireless_mode='11ac',
+# router2 = Router(serial='1', band='2.4G', ssid='XiaomiAX3000_2.4G', channel='1', wireless_mode='11ac',
 #                  bandwidth='40MHz', authentication='超强加密(WPA3个人版)', password='12345678',
 #                  hide_ssid='否')
 # control = Xiaomiax3000Control()

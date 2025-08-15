@@ -33,7 +33,7 @@ def setup_teardown():
 def test_hotspot_2g():
     ssid = pytest.dut.u().d2(resourceId="android:id/summary").get_text()
     logging.info(ssid)
-    pytest.dut.set_hotspot(type='2.4 GHz Band')
+    pytest.dut.set_hotspot(type='2.4G Band')
     pytest.dut.uiautomator_dump()
     if 'WPA2 PSK' in pytest.dut.get_dump_info():
         # wpa2 need passwd

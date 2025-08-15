@@ -28,7 +28,7 @@ from src.tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
 能连接正常，播放视频正常
 '''
 
-router_2g = Router(band='2.4 GHz', ssid='ATC_ASUS_AX88U_2G', wireless_mode='N only', channel='1', bandwidth='40 MHz',
+router_2g = Router(band='2.4G', ssid='ATC_ASUS_AX88U_2G', wireless_mode='N only', channel='1', bandwidth='40 MHz',
                    authentication='WPA/WPA2-Personal', wpa_passwd='12345678')
 
 
@@ -60,8 +60,8 @@ def test_hotspot_scc():
     ssid = pytest.dut.u().d2(resourceId="android:id/summary").get_text()
     logging.info(ssid)
     pytest.dut.wait_and_tap('AP Band', 'text')
-    pytest.dut.wait_element('2.4 GHz Band', 'text')
-    pytest.dut.wait_and_tap('2.4 GHz Band', 'text')
+    pytest.dut.wait_element('2.4G Band', 'text')
+    pytest.dut.wait_and_tap('2.4G Band', 'text')
     pytest.dut.wait_element('AP Band', 'text')
     pytest.dut.uiautomator_dump()
     if 'WPA2 PSK' in pytest.dut.get_dump_info():

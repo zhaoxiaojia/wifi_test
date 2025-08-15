@@ -1,2 +1,2 @@
 band,ssid,wireless_mode,channel,bandwidth,authentication,password,tx,rx,data_row
-5 GHz,asus88u_2g,11ac,自动,20/40/80 MHz,WPA2-Personal, 12345678,1,1,
+5G,asus88u_2g,11ac,自动,20/40/80 MHz,WPA2-Personal, 12345678,1,1,

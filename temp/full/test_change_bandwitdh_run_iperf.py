@@ -29,9 +29,9 @@ TPS正常，无掉零，无断流
 
 ssid = 'ATC_ASUS_AX88U_2G'
 passwd = 'Abc@123456'
-router_band20 = Router(band='2.4 GHz', ssid=ssid, wireless_mode='自动', channel='6', bandwidth='20 MHz',
+router_band20 = Router(band='2.4G', ssid=ssid, wireless_mode='自动', channel='6', bandwidth='20 MHz',
                     authentication='WPA2-Personal', wpa_passwd=passwd)
-router_band40 = Router(band='2.4 GHz', ssid=ssid, wireless_mode='自动', channel='6', bandwidth='40 MHz',
+router_band40 = Router(band='2.4G', ssid=ssid, wireless_mode='自动', channel='6', bandwidth='40 MHz',
                     authentication='WPA2-Personal', wpa_passwd=passwd)
 
 ax88uControl = Asusax88uControl()

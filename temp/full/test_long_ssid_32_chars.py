@@ -26,7 +26,7 @@ SSID 为32个字符
 ssid = "12345678901234567890123456789012"
 
 
-router_2g = Router(band='2.4 GHz', ssid=ssid, wireless_mode='N only', channel='自动', bandwidth='20 MHz',
+router_2g = Router(band='2.4G', ssid=ssid, wireless_mode='N only', channel='自动', bandwidth='20 MHz',
                    authentication='Open System')
 
 

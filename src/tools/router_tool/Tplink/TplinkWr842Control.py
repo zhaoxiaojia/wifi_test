@@ -19,8 +19,8 @@ from src.tools.router_tool.Tplink.TplinkConfig import TplinkWr842Config
 
 
 class TplinkWr842Control:
-    BAND_2 = '2.4 GHz'
-    BAND_5 = '5 GHz'
+    BAND_2 = '2.4G'
+    BAND_5 = '5G'
 
     def __init__(self):
         self.router_control = RouterTools('tplink_wr842', display=True)
@@ -267,7 +267,7 @@ class TplinkWr842Control:
 #           'wpa_passwd', 'test_type', 'wep_encrypt', 'passwd_index', 'wep_passwd', 'protect_frame',
 #           'wpa_encrypt', 'hide_ssid']
 # Router = namedtuple('Router', fields, defaults=[None, ] * len(fields))
-# router = Router(band='2.4 GHz', ssid='Tplinkwr842_2.4G#$', wireless_mode='11bgn mixed', channel='12',
+# router = Router(band='2.4G', ssid='Tplinkwr842_2.4G#$', wireless_mode='11bgn mixed', channel='12',
 #                 bandwidth='40MHz', authentication='共享秘钥', wep_encrypt='ASCII码', wep_passwd='1234567890123')
 # control = TplinkWr842Control()
 # control.change_setting(router)

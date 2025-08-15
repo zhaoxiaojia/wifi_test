@@ -26,7 +26,7 @@ from src.tools.router_tool.Router import Router
 3.DUT播放在线视频
 4.手机通过softap连接DUT上网后播放在线视频。
 '''
-router_5g = Router(band='5 GHz', ssid='ATC_ASUS_AX88U_5G', wireless_mode='自动', channel='自动', bandwidth='20 MHz',
+router_5g = Router(band='5G', ssid='ATC_ASUS_AX88U_5G', wireless_mode='自动', channel='自动', bandwidth='20 MHz',
                    authentication='WPA2-Personal', wpa_passwd='12345678')
 
 
@@ -54,7 +54,7 @@ def test_hotspot_scc():
     pytest.dut.open_hotspot()
     ssid = pytest.dut.u().d2(resourceId="android:id/summary").get_text()
     logging.info(ssid)
-    pytest.dut.set_hotspot(type='2.4 GHz Band')
+    pytest.dut.set_hotspot(type='2.4G Band')
     pytest.dut.uiautomator_dump()
     if 'WPA2 PSK' in pytest.dut.get_dump_info():
         # wpa2 need passwd

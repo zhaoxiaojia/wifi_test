@@ -28,7 +28,7 @@ Try again
 
 ssid = 'ATC_ASUS_AX88U_2G'
 passwd = 'Abc@123456'
-router_2g = Router(band='2.4 GHz', ssid=ssid, wireless_mode='自动', channel='1', bandwidth='20/40 MHz',
+router_2g = Router(band='2.4G', ssid=ssid, wireless_mode='自动', channel='1', bandwidth='20/40 MHz',
                    authentication='WPA2-Personal', wpa_passwd=passwd)
 
 

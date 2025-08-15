@@ -85,7 +85,7 @@ class RvrWifiConfigPage(CardWidget):
         form_box = QGroupBox(self)
         form_layout = QFormLayout(form_box)
         self.band_combo = ComboBox(form_box)
-        band_list = getattr(self.router, "BAND_LIST", ["2.4 GHz", "5 GHz"])
+        band_list = getattr(self.router, "BAND_LIST", ["2.4G", "5G"])
         self.band_combo.addItems(band_list)
         form_layout.addRow("band", self.band_combo)
 
@@ -249,7 +249,7 @@ class RvrWifiConfigPage(CardWidget):
         except Exception as e:
             logging.error("reload router error: %s", e)
             return
-        band_list = getattr(self.router, "BAND_LIST", ["2.4 GHz", "5 GHz"])
+        band_list = getattr(self.router, "BAND_LIST", ["2.4G", "5G"])
         self.band_combo.blockSignals(True)
         self.band_combo.clear()
         self.band_combo.addItems(band_list)
@@ -291,16 +291,16 @@ class RvrWifiConfigPage(CardWidget):
 
     def _update_band_options(self, band: str):
         wireless = {
-            "2.4 GHz": getattr(self.router, "WIRELESS_2", []),
-            "5 GHz": getattr(self.router, "WIRELESS_5", []),
+            "2.4G": getattr(self.router, "WIRELESS_2", []),
+            "5G": getattr(self.router, "WIRELESS_5", []),
         }[band]
         channel = {
-            "2.4 GHz": getattr(self.router, "CHANNEL_2", []),
-            "5 GHz": getattr(self.router, "CHANNEL_5", []),
+            "2.4G": getattr(self.router, "CHANNEL_2", []),
+            "5G": getattr(self.router, "CHANNEL_5", []),
         }[band]
         bandwidth = {
-            "2.4 GHz": getattr(self.router, "BANDWIDTH_2", []),
-            "5 GHz": getattr(self.router, "BANDWIDTH_5", []),
+            "2.4G": getattr(self.router, "BANDWIDTH_2", []),
+            "5G": getattr(self.router, "BANDWIDTH_5", []),
         }[band]
         with QSignalBlocker(self.wireless_combo), QSignalBlocker(self.channel_combo), QSignalBlocker(
             self.bandwidth_combo
@@ -454,7 +454,7 @@ class RvrWifiConfigPage(CardWidget):
         if not (0 <= row < len(self.rows)):
             return
         band = self.band_combo.currentText()
-        # if band == "2.4 GHz":
+        # if band == "2.4G":
         #     ssid = self.case_config_page.ssid_2g_edit.text()
         # else:
         #     ssid = self.case_config_page.ssid_5g_edit.text()
@@ -488,7 +488,7 @@ class RvrWifiConfigPage(CardWidget):
         if auth not in ("Open System", "无加密（允许所有人连接）") and not self.passwd_edit.text():
             InfoBar.error(title="Error", content="Pls input password", parent=self, position=InfoBarPosition.TOP)
             return
-        if band == "2.4 GHz":
+        if band == "2.4G":
             ssid = self.case_config_page.ssid_2g_edit.text()
         else:
             ssid = self.case_config_page.ssid_5g_edit.text()

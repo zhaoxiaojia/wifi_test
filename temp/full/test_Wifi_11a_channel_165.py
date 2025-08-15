@@ -23,7 +23,7 @@ Connect an AP which channel is 5G A-165
 
 ssid = 'ATC_ASUS_AX88U_5G'
 passwd = 'Abc@123456'
-router_5g = Router(band='5 GHz', ssid=ssid, wireless_mode='N/AC/AX mixed', channel='165', bandwidth='40 MHz',
+router_5g = Router(band='5G', ssid=ssid, wireless_mode='N/AC/AX mixed', channel='165', bandwidth='40 MHz',
                    authentication='WPA2-Personal', wpa_passwd=passwd)
 
 

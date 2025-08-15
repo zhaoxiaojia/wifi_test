@@ -52,7 +52,7 @@ class Asusax5400Control:
 
             # 修改 wireless_mode
             if router.wireless_mode:
-                target_list = self.WIRELESS_2 if router.band == '2.4 GHz' else self.WIRELESS_5
+                target_list = self.WIRELESS_2 if router.band == '2.4G' else self.WIRELESS_5
                 if router.wireless_mode not in target_list:
                     raise ConfigError('channel element error')
                 self.router_control.change_wireless_mode(router.wireless_mode)
@@ -82,8 +82,8 @@ class Asusax5400Control:
             # 修改 bandwidth
             if router.bandwidth:
                 if router.bandwidth not in {
-                    '2.4 GHz': self.BANDWIDTH_2,
-                    '5 GHz': self.BANDWIDTH_5,
+                    '2.4G': self.BANDWIDTH_2,
+                    '5G': self.BANDWIDTH_5,
                 }[router.band]:
                     raise ConfigError('bandwidth element error')
                 self.router_control.change_bandwidth(router.bandwidth)
@@ -158,7 +158,7 @@ class Asusax5400Control:
 # fields = ['serial', 'band', 'ssid', 'wireless_mode', 'channel', 'bandwidth', 'authentication', 'wep_encrypt',
 #           'passwd_index', 'wep_passwd', 'wpa_passwd', 'protect_frame', 'wpa_encrypt', 'hide_ssid', 'hide_type']
 # Router = namedtuple('Router', fields, defaults=[None, ] * len(fields))
-# router = Router(serial='1', band='5 GHz', ssid='ASUSAX5400_5G', wireless_mode='N/AC mixed',
+# router = Router(serial='1', band='5G', ssid='ASUSAX5400_5G', wireless_mode='N/AC mixed',
 #                 channel='40', bandwidth='20 MHz', authentication='Open System',hide_ssid='是')
 # control = Asusax5400Control()
 # control.change_setting(router)

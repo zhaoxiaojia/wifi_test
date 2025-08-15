@@ -21,7 +21,7 @@ from src.tools.router_tool.Router import Router
 2.选择任一AP，输入密码界面，勾选"Hide password"，输入正确密码，连接AP
 '''
 
-router = Router(band='5 GHz', ssid='ATC_ASUS_AX88U_5G', wireless_mode='N/AC/AX mixed', channel='36', bandwidth='40 MHz',
+router = Router(band='5G', ssid='ATC_ASUS_AX88U_5G', wireless_mode='N/AC/AX mixed', channel='36', bandwidth='40 MHz',
                 authentication='WPA2-Personal', wpa_passwd='12345678')
 
 TARGET_IP = "192.168.50.1"
