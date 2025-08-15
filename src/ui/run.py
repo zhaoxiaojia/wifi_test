@@ -9,7 +9,8 @@
 @desc: 
 '''
 import logging
-
+import multiprocessing
+import queue
 # ui/run.py
 
 from PyQt5.QtWidgets import QVBoxLayout, QTextEdit, QLabel, QFrame
@@ -68,6 +69,77 @@ class LiveLogWriter:
         raise io.UnsupportedOperation("Not a real file")
 
 
+def _pytest_worker(case_path: str, q: multiprocessing.Queue):
+    """子进程执行pytest，将日志和进度写入队列"""
+    try:
+        timestamp = datetime.datetime.now().strftime("%Y.%m.%d_%H.%M.%S")
+        timestamp = f"{timestamp}_{random.randint(1000, 9999)}"
+        report_dir = (Path.cwd() / "report" / timestamp).resolve()
+        report_dir.mkdir(parents=True, exist_ok=True)
+        plugin = install_redactor_for_current_process()
+        pytest_args = [
+            "-v",
+            "-s",
+            "--full-trace",
+            "--rootdir=.",
+            "--import-mode=importlib",
+            f"--resultpath={report_dir}",
+            case_path,
+        ]
+        from src.tools.config_loader import load_config
+
+        load_config(refresh=True)
+        for m in list(sys.modules):
+            if m.startswith("src.test"):
+                sys.modules.pop(m, None)
+        sys.modules.pop("src.tools.config_loader", None)
+        sys.modules.pop("src.conftest", None)
+
+        def emit_log(line: str):
+            q.put(("log", line))
+            match = re.search(r"\[PYQT_PROGRESS\]\s+(\d+)/(\d+)", line)
+            if match:
+                finished = int(match.group(1))
+                total = int(match.group(2))
+                percent = int(finished / total * 100)
+                q.put(("progress", percent))
+
+        writer = LiveLogWriter(emit_log)
+        old_stdout, old_stderr = sys.stdout, sys.stderr
+        sys.stdout = sys.stderr = writer
+
+        root_logger = logging.getLogger()
+        old_handlers = root_logger.handlers[:]
+        old_level = root_logger.level
+        for h in old_handlers:
+            root_logger.removeHandler(h)
+        stream_handler = logging.StreamHandler(writer)
+        formatter = logging.Formatter(
+            "%(asctime)s | %(levelname)s | %(filename)s:%(funcName)s(line:%(lineno)d) |  %(message)s",
+            "%Y-%m-%d %H:%M:%S",
+        )
+        stream_handler.setFormatter(formatter)
+        root_logger.addHandler(stream_handler)
+        root_logger.setLevel(logging.INFO)
+        try:
+            q.put(("log", "<b style='color:blue;'>开始执行pytest</b>"))
+            pytest.main(pytest_args, plugins=[plugin])
+            q.put(("log", "<b style='color:green;'>运行完成！</b>"))
+        finally:
+            for h in root_logger.handlers[:]:
+                root_logger.removeHandler(h)
+            for h in old_handlers:
+                root_logger.addHandler(h)
+            root_logger.setLevel(old_level)
+            sys.stdout = old_stdout
+            sys.stderr = old_stderr
+            writer.flush()
+    except Exception as e:
+        tb = traceback.format_exc()
+        q.put(("log", f"<b style='color:red;'>执行失败：{str(e)}</b>"))
+        q.put(("log", f"<pre>{tb}</pre>"))
+
+
 class CaseRunner(QThread):
     log_signal = pyqtSignal(str)
     progress_signal = pyqtSignal(int)
@@ -76,92 +148,43 @@ class CaseRunner(QThread):
         super().__init__(parent)
         self.case_path = case_path
         self._should_stop = False
+        self.old_handlers = []
+        self.old_level = logging.NOTSET
+        self._ctx = multiprocessing.get_context("spawn")
+        self._queue: multiprocessing.Queue = self._ctx.Queue()
+        self._proc: multiprocessing.Process | None = None
 
     def run(self):
-        # 日志、进度写到窗口
-        try:
-            timestamp = datetime.datetime.now().strftime("%Y.%m.%d_%H.%M.%S")
-            timestamp = f"{timestamp}_{random.randint(1000, 9999)}"
-            report_dir = (Path.cwd() / "report" / timestamp).resolve()
-            report_dir.mkdir(parents=True, exist_ok=True)
-            plugin = install_redactor_for_current_process()
-            pytest_args = [
-                "-v",
-                "-s",
-                "--full-trace",
-                "--rootdir=.",
-                "--import-mode=importlib",
-                f"--resultpath={report_dir}",
-                self.case_path,
-            ]
-            import sys
-            from src.tools.config_loader import load_config
-            # 确保每次运行前都读取最新的配置并清理相关模块缓存
-            load_config(refresh=True)
-            for m in list(sys.modules):
-                if m.startswith("src.test"):
-                    sys.modules.pop(m, None)
-            sys.modules.pop("src.tools.config_loader", None)
-            sys.modules.pop("src.conftest", None)
-            # 实时日志到窗口
-            def emit_log(line):
-                self.log_signal.emit(line)
-                # 解析进度
-                match = re.search(r"\[PYQT_PROGRESS\]\s+(\d+)/(\d+)", line)
-                if match:
-                    finished = int(match.group(1))
-                    total = int(match.group(2))
-                    percent = int(finished / total * 100)
-                    self.progress_signal.emit(percent)
-
-            writer = LiveLogWriter(emit_log)
-            old_stdout, old_stderr = sys.stdout, sys.stderr
-            sys.stdout = sys.stderr = writer
-
-            # 重新配置 logging，将输出重定向到 writer
-            root_logger = logging.getLogger()
-            old_handlers = root_logger.handlers[:]
-            old_level = root_logger.level
-            for h in old_handlers:
-                root_logger.removeHandler(h)
-            stream_handler = logging.StreamHandler(writer)
-            formatter = logging.Formatter(
-                "%(asctime)s | %(levelname)s | %(filename)s:%(funcName)s(line:%(lineno)d) |  %(message)s",
-                "%Y-%m-%d %H:%M:%S",
-            )
-            stream_handler.setFormatter(formatter)
-            root_logger.addHandler(stream_handler)
-            root_logger.setLevel(logging.INFO)
-
+        """启动子进程运行pytest，并监听队列更新GUI"""
+        self._proc = self._ctx.Process(
+            target=_pytest_worker, args=(self.case_path, self._queue)
+        )
+        self._proc.start()
+        while True:
+            if self._should_stop:
+                if self._proc.is_alive():
+                    self._proc.terminate()
+                    self._proc.join()
+                self.log_signal.emit("<b style='color:red;'>运行已终止！</b>")
+                break
             # 主线程里定期检查_should_stop可实现停止功能
             try:
-                self.log_signal.emit(f"<b style='color:blue;'>开始执行pytest</b>")
-                code = pytest.main(pytest_args, plugins=[plugin])
-                if not self._should_stop:
-                    self.log_signal.emit("<b style='color:green;'>运行完成！</b>")
-                else:
-                    self.log_signal.emit("<b style='color:red;'>运行已终止！</b>")
-            finally:
-                logging.info(traceback.format_exc())
-                for h in root_logger.handlers[:]:
-                    root_logger.removeHandler(h)
-                for h in old_handlers:
-                    root_logger.addHandler(h)
-                root_logger.setLevel(old_level)
-
-                sys.stdout = old_stdout
-                sys.stderr = old_stderr
-
-        except Exception as e:
-            tb = traceback.format_exc()
-            self.log_signal.emit(f"<b style='color:red;'>执行失败：{str(e)}</b>")
-            self.log_signal.emit(f"<pre>{tb}</pre>")
+                kind, payload = self._queue.get(timeout=0.1)
+                if kind == "log":
+                    self.log_signal.emit(payload)
+                elif kind == "progress":
+                    self.progress_signal.emit(payload)
+            except queue.Empty:
+                pass
+            if not self._proc.is_alive() and self._queue.empty():
+                break
+            self._queue.close()
 
     def stop(self):
-        # NOTE: pytest没有优雅的“中止”API，通常不能强停，最优雅还是用子进程方案
+        # 设置标志位，run() 会检查该标志并自行退出
         self._should_stop = True
-        if self.isRunning():
-            self.terminate()
+        if self._proc and self._proc.is_alive():
+            self._proc.terminate()
 
 
 class RunPage(CardWidget):
@@ -211,6 +234,9 @@ class RunPage(CardWidget):
         self.progress_chunk.setFixedWidth(0)
         self.action_btn = PushButton("Exit", self)
         self.action_btn.setIcon(FluentIcon.CLOSE)
+        self.action_btn.clicked.connect(
+            lambda: logging.info("action_btn clicked")
+        )
         self.action_btn.clicked.connect(self.on_stop)
         layout.addWidget(self.action_btn)
         self.setLayout(layout)
@@ -256,6 +282,9 @@ class RunPage(CardWidget):
         self.action_btn.setIcon(FluentIcon.CLOSE)
         with suppress(TypeError):
             self.action_btn.clicked.disconnect()
+        self.action_btn.clicked.connect(
+            lambda: logging.info("action_btn clicked")
+        )
         self.action_btn.clicked.connect(self.on_stop)
         self.runner = CaseRunner(self.case_path)
         self.runner.log_signal.connect(self._append_log)
@@ -291,20 +320,39 @@ class RunPage(CardWidget):
         self.on_runner_finished()
 
     def cleanup(self, disconnect_page: bool = True):
+
         runner = getattr(self, "runner", None)
         if not runner:
             return
-        runner.stop()
-        runner.terminate()
         logging.info("runner isRunning before wait: %s", runner.isRunning())
-        finished = runner.wait(3000)
+        runner.stop()
+        logging.getLogger().handlers[:] = runner.old_handlers
+        logging.getLogger().setLevel(runner.old_level)
         logging.info(
-            "runner.wait(3000) returned %s; isRunning after wait: %s",
-            finished,
+            "before terminate: isRunning=%s threadId=%s",
             runner.isRunning(),
+            int(runner.currentThreadId()),
         )
-        if not finished:
-            logging.warning("runner thread did not finish within 3000 ms")
+        elapsed = 0
+        step = 500
+        timeout = 5000
+        while not runner.wait(step):
+            elapsed += step
+            if elapsed >= timeout:
+                logging.warning(
+                    "runner thread did not finish within %s ms", timeout
+                )
+                InfoBar.warning(
+                    title="Warning",
+                    content="线程未能及时结束",
+                    parent=self.main_window,
+                    position=InfoBarPosition.TOP,
+                    duration=3000,
+                )
+                break
+            logging.info(
+                "runner.isRunning after wait: %s", runner.isRunning()
+            )
         for signal, slot in (
                 (runner.log_signal, self._append_log),
                 (runner.progress_signal, self.update_progress),
@@ -328,6 +376,7 @@ class RunPage(CardWidget):
         self.action_btn.setEnabled(True)
 
     def on_stop(self):
+        self._append_log("on_stop entered")
         self.cleanup()
         self.action_btn.setText("Test")
         self.action_btn.setIcon(FluentIcon.PLAY)
