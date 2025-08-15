@@ -1,6 +1,8 @@
 # build.spec
 import os
 import sys
+from pathlib import Path
+
 # 在build.spec顶部添加
 def get_requirements():
     with open('requirements.txt', 'r', encoding='utf-8') as f:
@@ -8,14 +10,16 @@ def get_requirements():
         return [line.strip().split('==')[0] for line in f if line.strip() and not line.startswith('#')]
 
 requirements = get_requirements()
+pythonw_path = Path(sys.executable).with_name('pythonw.exe')
 a = Analysis(
     ['main.py'],  # 入口文件
     pathex=['.'],
-    binaries=[],
+    binaries=[(str(pythonw_path), '.')],
     datas=[
         ('src/pytest.ini', 'src'),
         ('src/test', 'src/test'),
         ('config/performance_test_csv', 'config/performance_test_csv'),
+        (pythonw_path, '.'),
     ],
     hiddenimports=[
         # 手动添加PyQt5和自定义模块的隐藏依赖
