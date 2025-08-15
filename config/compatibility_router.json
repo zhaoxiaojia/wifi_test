@@ -1,5 +1,21 @@
 [
     {
+        "ip": "192.168.200.4",
+        "port": "2",
+        "brand": "ASUS",
+        "model": "RT-AX88U PRO",
+        "2.4G": {
+            "mode": "11AX",
+            "authentication": "wpa2",
+            "bandwidth": "20MHz"
+        },
+        "5G": {
+            "mode": "11AX",
+            "authentication": "wpa2",
+            "bandwidth": "80MHz"
+        }
+    },
+    {
         "ip": "192.168.200.6",
         "port": "7",
         "brand": "XIAOMI",
@@ -129,7 +145,7 @@
     },
     {
         "ip": "192.168.200.3",
-        "port": "4",
+        "port": "1",
         "brand": "ZTE",
         "model": "ZXSLC SR7410",
         "2.4G": {
@@ -491,6 +507,166 @@
         },
         "5G": {
             "mode": "11AX",
+            "authentication": "wpa2",
+            "bandwidth": "80MHz"
+        }
+    },
+    {
+        "ip": "192.168.200.7",
+        "port": "1",
+        "brand": "ARRIS",
+        "model": "TR4400",
+        "2.4G": {
+            "mode": "11N",
+            "authentication": "wpa2",
+            "bandwidth": "20MHz"
+        },
+        "5G": {
+            "mode": "11AC",
+            "authentication": "wpa2",
+            "bandwidth": "80MHz"
+        }
+    },
+    {
+        "ip": "192.168.200.7",
+        "port": "2",
+        "brand": "ARRIS",
+        "model": "SBR-AC1200P",
+        "2.4G": {
+            "mode": "11N",
+            "authentication": "wpa2",
+            "bandwidth": "20MHz"
+        },
+        "5G": {
+            "mode": "11AC",
+            "authentication": "wpa2",
+            "bandwidth": "80MHz"
+        }
+    },
+    {
+        "ip": "192.168.200.7",
+        "port": "3",
+        "brand": "ARRIS",
+        "model": "W21",
+        "2.4G": {
+            "mode": "11N",
+            "authentication": "wpa2",
+            "bandwidth": "20MHz"
+        },
+        "5G": {
+            "mode": "11AX",
+            "authentication": "wpa2",
+            "bandwidth": "80MHz"
+        }
+    },
+    {
+        "ip": "192.168.200.7",
+        "port": "4",
+        "brand": "HUAWEI",
+        "model": "BE7",
+        "2.4G": {
+            "mode": "11N",
+            "authentication": "wpa2",
+            "bandwidth": "20MHz"
+        },
+        "5G": {
+            "mode": "11AX",
+            "authentication": "wpa2",
+            "bandwidth": "80MHz"
+        }
+    },
+    {
+        "ip": "192.168.200.7",
+        "port": "5",
+        "brand": "BAFFALO",
+        "model": "WZR-1750DHP",
+        "2.4G": {
+            "mode": "11N",
+            "authentication": "wpa2",
+            "bandwidth": "20MHz"
+        },
+        "5G": {
+            "mode": "11AC",
+            "authentication": "wpa2",
+            "bandwidth": "80MHz"
+        }
+    },
+    {
+        "ip": "192.168.200.7",
+        "port": "7",
+        "brand": "HUAWEI",
+        "model": "BE3 PRO",
+        "2.4G": {
+            "mode": "11N",
+            "authentication": "wpa2",
+            "bandwidth": "20MHz"
+        },
+        "5G": {
+            "mode": "11AX",
+            "authentication": "wpa2",
+            "bandwidth": "80MHz"
+        }
+    },
+    {
+        "ip": "192.168.200.7",
+        "port": "8",
+        "brand": "ARRIS",
+        "model": "TG3452",
+        "2.4G": {
+            "mode": "11N",
+            "authentication": "wpa2",
+            "bandwidth": "20MHz"
+        },
+        "5G": {
+            "mode": "11N",
+            "authentication": "wpa2",
+            "bandwidth": "20MHz"
+        }
+    },
+    {
+        "ip": "192.168.200.8",
+        "port": "1",
+        "brand": "VANTIVA",
+        "model": "SDX62",
+        "2.4G": {
+            "mode": "11N",
+            "authentication": "wpa2",
+            "bandwidth": "20MHz"
+        },
+        "5G": {
+            "mode": "11AX",
+            "authentication": "wpa2",
+            "bandwidth": "80MHz"
+        }
+    },
+    {
+        "ip": "192.168.200.8",
+        "port": "3",
+        "brand": "PORTAL",
+        "model": "2AFZUSAP102",
+        "2.4G": {
+            "mode": "11N",
+            "authentication": "wpa2",
+            "bandwidth": "20MHz"
+        },
+        "5G": {
+            "mode": "11AC",
+            "authentication": "wpa2",
+            "bandwidth": "80MHz"
+        }
+    },
+    {
+        "ip": "192.168.200.8",
+        "port": "8",
+        "brand": "ARRIS",
+        "model": "SBR-AC1750",
+        "2.4G": {
+            "mode": "11N",
+            "authentication": "wpa2",
+            "bandwidth": "20MHz"
+        },
+        "5G": {
+            "mode": "11AC",
             "authentication": "wpa2",
             "bandwidth": "80MHz"
         }
