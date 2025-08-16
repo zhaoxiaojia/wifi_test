@@ -11,6 +11,7 @@
 import logging
 import multiprocessing
 import queue
+import os
 # ui/run.py
 
 from PyQt5.QtWidgets import QVBoxLayout, QTextEdit, QLabel, QFrame
@@ -71,6 +72,8 @@ class LiveLogWriter:
 
 def _pytest_worker(case_path: str, q: multiprocessing.Queue):
     """子进程执行pytest，将日志和进度写入队列"""
+    pid = os.getpid()
+    start_ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     try:
         timestamp = datetime.datetime.now().strftime("%Y.%m.%d_%H.%M.%S")
         timestamp = f"{timestamp}_{random.randint(1000, 9999)}"
@@ -121,11 +124,24 @@ def _pytest_worker(case_path: str, q: multiprocessing.Queue):
         stream_handler.setFormatter(formatter)
         root_logger.addHandler(stream_handler)
         root_logger.setLevel(logging.INFO)
+        logging.info(
+            "_pytest_worker start pid=%s time=%s case_path=%s",
+            pid,
+            start_ts,
+            case_path,
+        )
         try:
             q.put(("log", "<b style='color:blue;'>开始执行pytest</b>"))
             pytest.main(pytest_args, plugins=[plugin])
             q.put(("log", "<b style='color:green;'>运行完成！</b>"))
         finally:
+            end_ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            logging.info(
+                "_pytest_worker end pid=%s time=%s case_path=%s",
+                pid,
+                end_ts,
+                case_path,
+            )
             for h in root_logger.handlers[:]:
                 root_logger.removeHandler(h)
             for h in old_handlers:
@@ -156,10 +172,16 @@ class CaseRunner(QThread):
 
     def run(self):
         """启动子进程运行pytest，并监听队列更新GUI"""
+        logging.info("CaseRunner: preparing to start process for %s", self.case_path)
         self._proc = self._ctx.Process(
             target=_pytest_worker, args=(self.case_path, self._queue)
         )
         self._proc.start()
+        logging.info(
+            "CaseRunner: process started pid=%s for %s",
+            self._proc.pid,
+            self.case_path,
+        )
         while True:
             if self._should_stop:
                 if self._proc.is_alive():

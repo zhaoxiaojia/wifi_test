@@ -24,11 +24,11 @@ from src.util.constants import Paths, cleanup_temp_dir
 # 确保工作目录为可执行文件所在目录
 os.chdir(Paths.BASE_DIR)
 
-
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
 )
+
 
 def log_exception(exc_type, exc_value, exc_tb):
     logging.error("".join(traceback.format_exception(exc_type, exc_value, exc_tb)))
@@ -201,7 +201,9 @@ class MainWindow(FluentWindow):
 
 
 sys.excepthook = log_exception
+import multiprocessing
 
+multiprocessing.freeze_support()
 if __name__ == "__main__":
     try:
         app = QApplication(sys.argv)
