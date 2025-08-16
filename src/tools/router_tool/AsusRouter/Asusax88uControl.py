@@ -8,16 +8,12 @@
 
 
 import logging
-import os
 import telnetlib
 import time
-
-from urllib.parse import urlparse
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
-from src.tools.yamlTool import yamlTool
 from src.tools.router_tool.RouterControl import ConfigError, RouterTools
 
 
@@ -104,11 +100,9 @@ class Asusax88uControl(RouterTools):
         '161': '13',
     }
 
-    def __init__(self):
-        self.yaml_info = yamlTool(os.getcwd() + f'\\config\\router_xpath\\asus_xpath.yaml')
-        self.xpath = self.yaml_info.get_note('asus')
-        addr = self.xpath['address']['88u']
-        self.host = urlparse(addr).hostname or addr
+    def __init__(self, address: str | None = None):
+        super().__init__('asus_88u', display=True, address=address)
+        self.host = self.address
         self.port = 23
         self.prompt = b'admin@RT-AX88U-D8C0:/tmp/home/root#'  # 命令提示符
         self.tn = None

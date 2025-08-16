@@ -1,10 +1,6 @@
 # This is yaml for xiaomi router xpath info
 
 xiaomi:
-  address:
-    be7000: http://192.168.31.1/cgi-bin/luci/web
-    ax3600: http://192.168.50.1/cgi-bin/luci/web
-    ax3000: http://192.168.1.1/
   passwd: 12345678
   password_element: password
   signin_element: btnRtSubmit

@@ -29,7 +29,7 @@ class TplinkAx6000Control:
 
     def login(self):
         # try:
-        self.router_control.driver.get(self.router_control.address)
+        self.router_control.driver.get(f"http://{self.router_control.address}")
         # input passwd
         self.router_control.driver.find_element(By.ID, self.router_control.xpath['password_element'][self.type]).click()
         self.router_control.driver.find_element(By.ID,

@@ -1,8 +1,6 @@
 # This is yaml for linksys router xpath info
 
 linksys:
-  address:
-    1200ac: http://192.168.3.1/
   passwd: 12345678
   password_element: adminPass
   signin_element: submit-login

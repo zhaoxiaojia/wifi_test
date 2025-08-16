@@ -25,6 +25,7 @@ rf_solution:
   - 70
 router:
   name: asusax88u
+  address: 192.168.50.1
   ssid_2g: asusax88u_2g
   passwd_2g: '12345678'
   ssid_5g: asusax88u_5g

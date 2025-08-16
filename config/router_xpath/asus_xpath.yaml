@@ -1,11 +1,6 @@
 # This is yaml for ASUS router xpath info
 
 asus:
-  address:
-    '5400': http://192.168.1.1/
-    86u: http://192.168.50.1/
-    88u: http://192.168.5.1/
-    '6700': http://192.168.8.1/
   account: admin
   passwd: 12345678
   username_element: login_username
