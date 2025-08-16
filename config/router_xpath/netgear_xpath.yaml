@@ -1,7 +1,5 @@
 # This is yaml for NETGEAR router xpath info
 netgear:
-  address:
-    R6100: http://192.168.9.1
   account: admin
   passwd: '12345678'
 

@@ -74,7 +74,9 @@ class RvrWifiConfigPage(CardWidget):
         combo = getattr(self.case_config_page, "router_name_combo", None)
         router_name = combo.currentText().lower() if combo is not None else ""
         self.csv_path = self._compute_csv_path(router_name)
-        self.router, self.router_name = self._load_router(router_name)
+        addr_edit = getattr(self.case_config_page, "router_addr_edit", None)
+        addr = addr_edit.text() if addr_edit is not None else None
+        self.router, self.router_name = self._load_router(router_name, addr)
         self.headers, self.rows = self._load_csv()
         # 当前页面使用的路由器 SSID
         self.ssid: str = ""
@@ -193,18 +195,20 @@ class RvrWifiConfigPage(CardWidget):
         """返回当前页面的路由器 SSID 和密码"""
         return self.ssid, self.passwd_edit.text()
 
-    def _load_router(self, name: str | None = None):
+    def _load_router(self, name: str | None = None, address: str | None = None):
         from src.tools.config_loader import load_config
 
         try:
             load_config.cache_clear()
             cfg = load_config(refresh=True) or {}
             router_name = name or cfg.get("router", {}).get("name", "asusax86u")
-            router = get_router(router_name)
+            if address is None and cfg.get("router", {}).get("name") == router_name:
+                address = cfg.get("router", {}).get("address")
+            router = get_router(router_name, address)
         except Exception as e:
             logging.error("load router error: %s", e)
             router_name = name or "asusax86u"
-            router = get_router(router_name)
+            router = get_router(router_name, address)
         return router, router_name
 
     def _load_csv(self):
@@ -244,7 +248,9 @@ class RvrWifiConfigPage(CardWidget):
         name = combo.currentText().lower() if combo is not None else self.router_name
         self.csv_path = self._compute_csv_path(name)
         try:
-            self.router = get_router(name)
+            addr_edit = getattr(self.case_config_page, "router_addr_edit", None)
+            addr = addr_edit.text() if addr_edit is not None else None
+            self.router = get_router(name, addr)
             self.router_name = name
         except Exception as e:
             logging.error("reload router error: %s", e)

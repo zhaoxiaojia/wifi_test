@@ -1,9 +1,6 @@
 # This is yaml for h3c router xpath info
 
 tplink:
-  address:
-    ax6000: http://192.168.5.1
-    wr842: http://192.168.7.1
   passwd: 12345678
   password_element:
     ax6000: lgPwd
