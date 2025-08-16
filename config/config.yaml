@@ -29,11 +29,11 @@ router:
   passwd_2g: '12345678'
   ssid_5g: asusax88u_5g
   passwd_5g: '12345678'
-  rvr:
-    iperf:
-      path: ''
-      server_cmd: "iperf -s -w 2m -i 1"
-      client_cmd: "iperf -c {ip} -w 2m -i 1 -t 30 -p 5"
+rvr:
+  iperf:
+    path: ''
+    server_cmd: iperf -s -w 2m -i 1
+    client_cmd: iperf -c {ip} -w 2m -i 1 -t 30 -p 5
   ixchariot:
     path: D:/Program Files (x86)/Ixia/IxChariot
   repeat: '0'
