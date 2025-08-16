@@ -101,6 +101,8 @@ class MainWindow(FluentWindow):
 
     def _remove_interface(self, widget):
         """移除堆叠窗口和导航项中的页面"""
+        if not widget or sip.isdeleted(widget):
+            return
         for i in reversed(range(self.stackedWidget.count())):
             w = self.stackedWidget.widget(i)
             if w is widget or w.__class__ == widget.__class__:
@@ -112,13 +114,29 @@ class MainWindow(FluentWindow):
             self.removeSubInterface(widget)
 
     def clear_run_page(self):
-        if self.run_page:
+        if self.run_page and not sip.isdeleted(self.run_page):
             with suppress(Exception):
                 self.run_page.cleanup()
             self._remove_interface(self.run_page)
-            self.run_page = None
+        self.run_page = None
+        if self._run_nav_button:
+            with suppress(Exception):
+                self._run_nav_button.clicked.disconnect()
+            nav = getattr(self, "navigationInterface", None)
+            if nav:
+                with suppress(Exception):
+                    for name in ("removeWidget", "removeItem", "removeButton"):
+                        func = getattr(nav, name, None)
+                        if callable(func):
+                            try:
+                                func(self._run_nav_button)
+                                break
+                            except Exception:
+                                pass
+            self._run_nav_button.setParent(None)
+            self._run_nav_button.deleteLater()
             self._run_nav_button = None
-            logging.info("RunPage cleared")
+        logging.info("RunPage cleared")
 
     def _set_nav_buttons_enabled(self, enabled: bool):
         """启用或禁用除 RunPage 外的导航按钮"""
@@ -157,7 +175,6 @@ class MainWindow(FluentWindow):
 
     def on_run(self, case_path, display_case_path, config):
         self.clear_run_page()
-        prev_buttons = set(self.navigationInterface.findChildren(QAbstractButton))
         # 传递主窗口自身作为RunPage的父窗口
         self.run_page = RunPage(
             case_path,
@@ -172,9 +189,8 @@ class MainWindow(FluentWindow):
             "Test",
             position=NavigationItemPosition.BOTTOM
         )
-        all_buttons = set(self.navigationInterface.findChildren(QAbstractButton))
-        new_buttons = all_buttons - prev_buttons
-        self._run_nav_button = next(iter(new_buttons), None)
+        buttons = self.navigationInterface.findChildren(QAbstractButton)
+        self._run_nav_button = buttons[-1] if buttons else None
         self._set_nav_buttons_enabled(False)
         # 强制刷新堆叠窗口并切换（移除QTimer，直接同步切换）
         if self.stackedWidget.indexOf(self.run_page) == -1:
