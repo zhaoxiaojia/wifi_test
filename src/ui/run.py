@@ -12,6 +12,7 @@ import logging
 import multiprocessing
 import queue
 import os
+import sip
 # ui/run.py
 
 from PyQt5.QtWidgets import QVBoxLayout, QTextEdit, QLabel, QFrame
@@ -222,6 +223,14 @@ class RunPage(CardWidget):
 
     def __init__(self, case_path, display_case_path=None, config=None, parent=None):
         super().__init__(parent)
+        stack = getattr(parent, "stackedWidget", None)
+        idx = stack.indexOf(self) if stack else None
+        logging.info(
+            "RunPage.__init__ start id=%s isdeleted=%s index=%s",
+            id(self),
+            sip.isdeleted(self),
+            idx,
+        )
         self.setObjectName("runPage")
         self.case_path = case_path
         self.config = config
@@ -267,9 +276,19 @@ class RunPage(CardWidget):
         self.action_btn.clicked.connect(
             lambda: logging.info("action_btn clicked")
         )
+        logging.info("Connected action_btn clicked log for RunPage id=%s", id(self))
         self.action_btn.clicked.connect(self.on_stop)
+        logging.info("Connected action_btn clicked to on_stop for RunPage id=%s", id(self))
         layout.addWidget(self.action_btn)
         self.setLayout(layout)
+        stack = getattr(self.main_window, "stackedWidget", None)
+        idx = stack.indexOf(self) if stack else None
+        logging.info(
+            "RunPage.__init__ end id=%s isdeleted=%s index=%s",
+            id(self),
+            sip.isdeleted(self),
+            idx,
+        )
 
     def _append_log(self, msg: str):
         upper_msg = msg.upper()
@@ -312,10 +331,13 @@ class RunPage(CardWidget):
         self.action_btn.setIcon(FluentIcon.CLOSE)
         with suppress(TypeError):
             self.action_btn.clicked.disconnect()
+            logging.info("Disconnected action_btn clicked in run_case for RunPage id=%s", id(self))
         self.action_btn.clicked.connect(
             lambda: logging.info("action_btn clicked")
         )
+        logging.info("Connected action_btn clicked log in run_case for RunPage id=%s", id(self))
         self.action_btn.clicked.connect(self.on_stop)
+        logging.info("Connected action_btn clicked to on_stop in run_case for RunPage id=%s", id(self))
         self.runner = CaseRunner(self.case_path)
         self.runner.log_signal.connect(self._append_log)
         self.runner.progress_signal.connect(self.update_progress)
@@ -350,7 +372,14 @@ class RunPage(CardWidget):
         self.on_runner_finished()
 
     def cleanup(self, disconnect_page: bool = True):
-
+        stack = getattr(self.main_window, "stackedWidget", None)
+        idx = stack.indexOf(self) if stack else None
+        logging.info(
+            "RunPage.cleanup start id=%s isdeleted=%s index=%s",
+            id(self),
+            sip.isdeleted(self),
+            idx,
+        )
         runner = getattr(self, "runner", None)
         if not runner:
             return
@@ -394,7 +423,17 @@ class RunPage(CardWidget):
         self.runner = None
         if disconnect_page:
             with suppress(TypeError):
+                logging.info("Disconnecting signals for RunPage id=%s", id(self))
                 self.disconnect()
+                logging.info("Signals disconnected for RunPage id=%s", id(self))
+        stack = getattr(self.main_window, "stackedWidget", None)
+        idx = stack.indexOf(self) if stack else None
+        logging.info(
+            "RunPage.cleanup end id=%s isdeleted=%s index=%s",
+            id(self),
+            sip.isdeleted(self),
+            idx,
+        )
 
     def on_runner_finished(self):
         self.cleanup()
@@ -402,7 +441,9 @@ class RunPage(CardWidget):
         self.action_btn.setIcon(FluentIcon.PLAY)
         with suppress(TypeError):
             self.action_btn.clicked.disconnect()
+            logging.info("Disconnected action_btn clicked in on_runner_finished for RunPage id=%s", id(self))
         self.action_btn.clicked.connect(self.run_case)
+        logging.info("Connected action_btn clicked to run_case in on_runner_finished for RunPage id=%s", id(self))
         self.action_btn.setEnabled(True)
 
     def on_stop(self):
@@ -412,7 +453,9 @@ class RunPage(CardWidget):
         self.action_btn.setIcon(FluentIcon.PLAY)
         with suppress(TypeError):
             self.action_btn.clicked.disconnect()
+            logging.info("Disconnected action_btn clicked in on_stop for RunPage id=%s", id(self))
         self.action_btn.clicked.connect(self.run_case)
+        logging.info("Connected action_btn clicked to run_case in on_stop for RunPage id=%s", id(self))
         self.action_btn.setEnabled(True)
 
     def _get_application_base(self) -> Path:

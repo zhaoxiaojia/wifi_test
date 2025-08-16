@@ -51,6 +51,7 @@ class MainWindow(FluentWindow):
         self.rvr_wifi_config_page = RvrWifiConfigPage(self.case_config_page)
         self.run_page = None  # 运行窗口动态加载
         self._run_nav_button = None  # 记录 RunPage 的导航按钮
+        self._nav_button_clicked_log_slot = None
 
         # 添加侧边导航（页面，图标，标题，描述）
         self.addSubInterface(
@@ -103,6 +104,7 @@ class MainWindow(FluentWindow):
         """移除堆叠窗口和导航项中的页面"""
         if not widget or sip.isdeleted(widget):
             return
+
         for i in reversed(range(self.stackedWidget.count())):
             w = self.stackedWidget.widget(i)
             if w is widget or w.__class__ == widget.__class__:
@@ -111,12 +113,29 @@ class MainWindow(FluentWindow):
                 w.deleteLater()
         QCoreApplication.processEvents()
         with suppress(Exception):
+            logging.info("Removing from navigationInterface id=%s", id(widget) if widget else None)
             self.removeSubInterface(widget)
+            logging.info("Removed from navigationInterface id=%s", id(widget) if widget else None)
+        idx = self.stackedWidget.indexOf(widget) if widget else None
+        logging.info(
+            "_remove_interface end id=%s isdeleted=%s index=%s",
+            id(widget) if widget else None,
+            sip.isdeleted(widget) if widget else None,
+            idx,
+        )
 
     def clear_run_page(self):
         if self.run_page and not sip.isdeleted(self.run_page):
+
             with suppress(Exception):
                 self.run_page.cleanup()
+            if self._run_nav_button and self._nav_button_clicked_log_slot:
+                with suppress(Exception):
+                    self._run_nav_button.clicked.disconnect(self._nav_button_clicked_log_slot)
+                    logging.info(
+                        "Disconnected nav button clicked for RunPage id=%s",
+                        id(self.run_page),
+                    )
             self._remove_interface(self.run_page)
         self.run_page = None
         if self._run_nav_button:
@@ -137,6 +156,7 @@ class MainWindow(FluentWindow):
             self._run_nav_button.deleteLater()
             self._run_nav_button = None
         logging.info("RunPage cleared")
+
 
     def _set_nav_buttons_enabled(self, enabled: bool):
         """启用或禁用除 RunPage 外的导航按钮"""
@@ -174,6 +194,13 @@ class MainWindow(FluentWindow):
             logging.error("Failed to set current widget: %s", e)
 
     def on_run(self, case_path, display_case_path, config):
+        stack_idx = self.stackedWidget.indexOf(self.run_page) if self.run_page else None
+        logging.info(
+            "on_run start id=%s isdeleted=%s index=%s",
+            id(self.run_page) if self.run_page else None,
+            sip.isdeleted(self.run_page) if self.run_page else None,
+            stack_idx,
+        )
         self.clear_run_page()
         # 传递主窗口自身作为RunPage的父窗口
         self.run_page = RunPage(
@@ -183,6 +210,7 @@ class MainWindow(FluentWindow):
             parent=self,
         )
         # 确保添加到导航栏和堆叠窗口
+        logging.info("Adding RunPage to navigationInterface id=%s", id(self.run_page))
         self.addSubInterface(
             self.run_page,
             FluentIcon.PLAY,
@@ -191,6 +219,7 @@ class MainWindow(FluentWindow):
         )
         buttons = self.navigationInterface.findChildren(QAbstractButton)
         self._run_nav_button = buttons[-1] if buttons else None
+
         self._set_nav_buttons_enabled(False)
         # 强制刷新堆叠窗口并切换（移除QTimer，直接同步切换）
         if self.stackedWidget.indexOf(self.run_page) == -1:
@@ -204,6 +233,13 @@ class MainWindow(FluentWindow):
         if runner:
             runner.finished.connect(lambda: self._set_nav_buttons_enabled(True))
         logging.info("Switched to RunPage: %s", self.run_page)
+        stack_idx = self.stackedWidget.indexOf(self.run_page) if self.run_page else None
+        logging.info(
+            "on_run end id=%s isdeleted=%s index=%s",
+            id(self.run_page) if self.run_page else None,
+            sip.isdeleted(self.run_page) if self.run_page else None,
+            stack_idx,
+        )
 
     def show_case_config(self):
         self.setCurrentIndex(self.case_config_page)
