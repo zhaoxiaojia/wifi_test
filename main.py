@@ -102,13 +102,9 @@ class MainWindow(FluentWindow):
 
     def _remove_interface(self, widget):
         """移除堆叠窗口和导航项中的页面"""
-        idx = self.stackedWidget.indexOf(widget) if widget else None
-        logging.info(
-            "_remove_interface start id=%s isdeleted=%s index=%s",
-            id(widget) if widget else None,
-            sip.isdeleted(widget) if widget else None,
-            idx,
-        )
+        if not widget or sip.isdeleted(widget):
+            return
+
         for i in reversed(range(self.stackedWidget.count())):
             w = self.stackedWidget.widget(i)
             if w is widget or w.__class__ == widget.__class__:
@@ -129,14 +125,8 @@ class MainWindow(FluentWindow):
         )
 
     def clear_run_page(self):
-        stack_idx = self.stackedWidget.indexOf(self.run_page) if self.run_page else None
-        logging.info(
-            "clear_run_page start id=%s isdeleted=%s index=%s",
-            id(self.run_page) if self.run_page else None,
-            sip.isdeleted(self.run_page) if self.run_page else None,
-            stack_idx,
-        )
-        if self.run_page:
+        if self.run_page and not sip.isdeleted(self.run_page):
+
             with suppress(Exception):
                 self.run_page.cleanup()
             if self._run_nav_button and self._nav_button_clicked_log_slot:
@@ -147,17 +137,26 @@ class MainWindow(FluentWindow):
                         id(self.run_page),
                     )
             self._remove_interface(self.run_page)
-            self.run_page = None
+        self.run_page = None
+        if self._run_nav_button:
+            with suppress(Exception):
+                self._run_nav_button.clicked.disconnect()
+            nav = getattr(self, "navigationInterface", None)
+            if nav:
+                with suppress(Exception):
+                    for name in ("removeWidget", "removeItem", "removeButton"):
+                        func = getattr(nav, name, None)
+                        if callable(func):
+                            try:
+                                func(self._run_nav_button)
+                                break
+                            except Exception:
+                                pass
+            self._run_nav_button.setParent(None)
+            self._run_nav_button.deleteLater()
             self._run_nav_button = None
-            self._nav_button_clicked_log_slot = None
-            logging.info("RunPage cleared")
-        stack_idx = self.stackedWidget.indexOf(self.run_page) if self.run_page else None
-        logging.info(
-            "clear_run_page end id=%s isdeleted=%s index=%s",
-            id(self.run_page) if self.run_page else None,
-            sip.isdeleted(self.run_page) if self.run_page else None,
-            stack_idx,
-        )
+        logging.info("RunPage cleared")
+
 
     def _set_nav_buttons_enabled(self, enabled: bool):
         """启用或禁用除 RunPage 外的导航按钮"""
@@ -203,7 +202,6 @@ class MainWindow(FluentWindow):
             stack_idx,
         )
         self.clear_run_page()
-        prev_buttons = set(self.navigationInterface.findChildren(QAbstractButton))
         # 传递主窗口自身作为RunPage的父窗口
         self.run_page = RunPage(
             case_path,
@@ -219,22 +217,9 @@ class MainWindow(FluentWindow):
             "Test",
             position=NavigationItemPosition.BOTTOM
         )
-        logging.info("Added RunPage to navigationInterface id=%s", id(self.run_page))
-        all_buttons = set(self.navigationInterface.findChildren(QAbstractButton))
-        new_buttons = all_buttons - prev_buttons
-        self._run_nav_button = next(iter(new_buttons), None)
-        if self._run_nav_button:
-            self._nav_button_clicked_log_slot = lambda: logging.info(
-                "Run nav button clicked id=%s isdeleted=%s index=%s",
-                id(self.run_page),
-                sip.isdeleted(self.run_page),
-                self.stackedWidget.indexOf(self.run_page),
-            )
-            self._run_nav_button.clicked.connect(self._nav_button_clicked_log_slot)
-            logging.info(
-                "Connected nav button clicked for RunPage id=%s",
-                id(self.run_page),
-            )
+        buttons = self.navigationInterface.findChildren(QAbstractButton)
+        self._run_nav_button = buttons[-1] if buttons else None
+
         self._set_nav_buttons_enabled(False)
         # 强制刷新堆叠窗口并切换（移除QTimer，直接同步切换）
         if self.stackedWidget.indexOf(self.run_page) == -1:
