@@ -269,11 +269,11 @@ class dut():
                     try:
                         # 等待命令完成，设置超时时间（例如 40 秒）
                         stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=35)
-                        print("Command output:", stdout.decode())  # 打印标准输出
+                        # print("Command output:", stdout.decode())  # 打印标准输出
                         if stderr:
-                            print("Command error:", stderr.decode())  # 打印标准错误
+                            logging.warning("Command error:", stderr.decode())  # 打印标准错误
                     except asyncio.TimeoutError:
-                        print("Command timed out")
+                        logging.warning("Command timed out")
                         process.terminate()  # 终止进程
                         await process.wait()  # 等待进程完全终止
 
@@ -296,14 +296,14 @@ class dut():
             if '[SUM]' not in line:
                 continue
             if self.rssi_num > -60:
-                data = re.findall('\s0\.0-\s*3\d+\.\d*.*?(\d+\.*\d*)\s+Mbits/sec.*?', line.strip(), re.S)
+                if line.strip(): logging.info(f'line : {line.strip()}')
+                data = re.findall('\s0\.0+-\s*3\d+\.\d*.*?(\d+\.*\d*)\s+Mbits/sec.*?', line.strip(), re.S)
                 if data:
-                    if line.strip(): logging.info(f'line : {line.strip()}')
                     result_list.append(float(data[0]))
             else:
+                if line.strip(): logging.info(f'line : {line.strip()}')
                 data = re.findall(r'.*?\d+\.\d*-\s*\d+\.\d*.*?(\d+\.*\d*)\s+Mbits/sec.*?', line.strip(), re.S)
                 if data:
-                    if line.strip(): logging.info(f'line : {line.strip()}')
                     result_list.append(float(data[0]))
         if result_list:
             logging.info(f'{sum(result_list) / len(result_list)}')
