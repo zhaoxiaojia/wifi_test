@@ -15,7 +15,7 @@ from pathlib import Path
 import yaml
 import logging
 from dataclasses import dataclass, field
-from src.tools.router_tool.router_factory import router_list
+from src.tools.router_tool.router_factory import router_list, get_router
 from src.util.constants import Paths, RouterConst
 from src.util.constants import get_config_base, get_src_base
 from src.tools.config_loader import load_config
@@ -109,6 +109,7 @@ class CaseConfigPage(CardWidget):
         self.field_widgets: dict[str, QWidget] = {}
         self.router_ssid_2g = ""
         self.router_ssid_5g = ""
+        self.router_obj = None
         self.selected_csv_path: str | None = None
         # -------------------- layout --------------------
         main_layout = QHBoxLayout(self)
@@ -352,6 +353,15 @@ class CaseConfigPage(CardWidget):
         self._load_router_wifi_info(name)
         self.ssid_2g_edit.setText(self.router_ssid_2g)
         self.ssid_5g_edit.setText(self.router_ssid_5g)
+        cfg = self.config.get("router", {})
+        addr = cfg.get("address") if cfg.get("name") == name else None
+        self.router_obj = get_router(name, addr)
+        self.router_addr_edit.setText(self.router_obj.address)
+        self.routerInfoChanged.emit()
+
+    def on_router_address_changed(self, text: str) -> None:
+        if self.router_obj is not None:
+            self.router_obj.address = text
         self.routerInfoChanged.emit()
 
     def _update_csv_options(self):
@@ -655,6 +665,12 @@ class CaseConfigPage(CardWidget):
                 self.router_name_combo = ComboBox(self)
                 self.router_name_combo.addItems(router_list.keys())
                 self.router_name_combo.setCurrentText(value.get("name", "xiaomiax3000"))
+                addr = value.get("address")
+                self.router_obj = get_router(self.router_name_combo.currentText(), addr)
+                self.router_addr_edit = LineEdit(self)
+                self.router_addr_edit.setPlaceholderText("Gateway")
+                self.router_addr_edit.setText(self.router_obj.address)
+                self.router_addr_edit.textChanged.connect(self.on_router_address_changed)
                 self.ssid_2g_edit = LineEdit(self)
                 self.ssid_2g_edit.setPlaceholderText("2.4G SSID")
                 self.ssid_2g_edit.setText(value.get("ssid_2g", ""))
@@ -664,6 +680,8 @@ class CaseConfigPage(CardWidget):
 
                 vbox.addWidget(QLabel("Name:"))
                 vbox.addWidget(self.router_name_combo)
+                vbox.addWidget(QLabel("Gateway:"))
+                vbox.addWidget(self.router_addr_edit)
                 vbox.addWidget(QLabel("SSID 2G:"))
                 vbox.addWidget(self.ssid_2g_edit)
                 vbox.addWidget(QLabel("SSID 5G:"))
@@ -671,6 +689,7 @@ class CaseConfigPage(CardWidget):
                 self._add_group(group)
                 # 注册控件
                 self.field_widgets["router.name"] = self.router_name_combo
+                self.field_widgets["router.address"] = self.router_addr_edit
                 self.field_widgets["router.ssid_2g"] = self.ssid_2g_edit
                 self.field_widgets["router.ssid_5g"] = self.ssid_5g_edit
                 self.router_name_combo.currentTextChanged.connect(self.on_router_changed)
@@ -833,6 +852,7 @@ class CaseConfigPage(CardWidget):
             "connect_type.telnet.ip",
             "connect_type.telnet.wildcard",
             "router.name",
+            "router.address",
             "router.ssid_2g",
             "router.ssid_5g",
             "serial_port.status",

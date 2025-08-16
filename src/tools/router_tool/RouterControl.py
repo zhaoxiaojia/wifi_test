@@ -8,7 +8,6 @@
 
 import logging
 import os
-import re
 import time
 from abc import ABCMeta, abstractmethod
 
@@ -126,7 +125,19 @@ class RouterTools(RouterControl):
         '澳大利亚': '8'
     }
 
-    def __init__(self, router_info, display=True):
+    def __init__(self, router_info, display=True, address: str | None = None):
+        """初始化路由器控制对象
+
+        Parameters
+        ----------
+        router_info: str
+            路由器信息，格式为 ``品牌_型号``
+        display: bool
+            是否显示浏览器界面
+        address: str | None
+            路由器网关地址，如果为空则使用默认值
+        """
+
         # 路由器品牌
         self.router_type = router_info.split("_")[0]
         # 路由器完整信息
@@ -135,15 +146,21 @@ class RouterTools(RouterControl):
         self.yaml_info = yamlTool(os.getcwd() + f'\\config\\router_xpath\\{self.router_type.split("_")[0]}_xpath.yaml')
         # self.yaml_info = yamlTool(fr'D:\PycharmProjects\wifi_test\config\router_xpath\{self.router_type}_xpath.yaml')
         # 元素配置文件 根节点
-
         self.xpath = self.yaml_info.get_note(self.router_type)
-        # print(self.xpath['address'])
-        # print(router_info.split("_")[1])
 
-        # 路由器登录 地址
-        self.address = self.xpath['address'][router_info.split("_")[1]]
+        # 路由器登录地址，优先使用传入参数，其次使用预设默认值
+        default_address = {
+            'xiaomi': '192.168.31.1',
+            'asus': '192.168.50.1',
+            'h3c': '192.168.4.1',
+            'linksys': '192.168.3.1',
+            'netgear': '192.168.9.1',
+            'tplink': '192.168.5.1',
+            'zte': '192.168.2.1'
+        }.get(self.router_type, '192.168.1.1')
+        self.address = address or default_address
         logging.info(self.address)
-        self.ping_address = re.findall(r"\d+\.\d+\.\d+\.\d+", self.address)[0]
+        self.ping_address = self.address
 
         # 全局等待3秒 （当driver 去查询 控件时生效）
 

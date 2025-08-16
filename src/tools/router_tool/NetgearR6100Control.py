@@ -26,7 +26,7 @@ class NetgearR6100Control():
 
     def login(self):
         try:
-            self.router_control.driver.get(self.router_control.address)
+            self.router_control.driver.get(f"http://{self.router_control.address}")
             self.keyboard.type_string(self.router_control.xpath["account"])  # 输入账号
             # self.keyboard.tap_key(self.keyboard.enter_key)  # 按enter，如果默认输入法是英文，请注销此行
             sleep(1)

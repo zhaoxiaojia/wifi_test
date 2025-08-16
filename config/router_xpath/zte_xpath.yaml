@@ -1,8 +1,6 @@
 # This is yaml for zte router xpath info
 
 zte:
-  address:
-    ax5400: http://192.168.2.1
   passwd: 12345678
   password_element: txtPwd
   signin_element: btnLogin

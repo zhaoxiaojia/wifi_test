@@ -1,8 +1,6 @@
 # This is yaml for h3c router xpath info
 
 h3c:
-  address:
-    bx54: http://192.168.4.1/router_password_mobile.asp
   passwd: 12345678
   password_element: psd
   signin_element: login

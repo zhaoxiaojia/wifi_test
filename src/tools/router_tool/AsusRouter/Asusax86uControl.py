@@ -41,8 +41,8 @@ class Asusax86uControl(RouterTools):
         '13': '14',
     }
 
-    def __init__(self):
-        super().__init__('asus_86u', display=True)
+    def __init__(self, address: str | None = None):
+        super().__init__('asus_86u', display=True, address=address)
 
     def change_setting(self, router):
         '''
