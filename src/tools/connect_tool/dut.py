@@ -36,32 +36,17 @@ class dut():
 
     SKIP_OOBE = "pm disable com.google.android.tungsten.setupwraith;settings put secure user_setup_complete 1;settings put global device_provisioned 1;settings put secure tv_user_setup_complete 1"
     # iperf 相关命令
-    IPERF_TEST_TIME = 30
-    IPERF_WAIT_TIME = IPERF_TEST_TIME + 5
-
-    def iperf(args, command='iperf'):
-        return f'{command} {args}'
-
-    IPERF_SERVER = {'TCP': iperf(' -s -w 2m -i 1'),
-                    'UDP': iperf(' -s -u -i 1 ')}
-
-    IPERF_CLIENT_REGU = {'TCP': {'tx': iperf(' -c {} -w 2m -i 1 -t {} -P{}'),
-                                 'rx': iperf(' -c {} -w 2m -i 1 -t {} -P{}')},
-                         'UDP': {'tx': iperf(' -c {} -u -i1 -b 800M -t {} -P{}'),
-                                 'rx': iperf(' -c {} -u -i1 -b 300M -t {} -P{}')}}
-
-    # IPERF_MULTI_SERVER = 'iperf -s -w 4m -i 1 {}&'
-    # IPERF_MULTI_CLIENT_REGU = '.iperf -c {} -w 4m -i 1 -t 60 -p {}'
-
-    # 新增 iperf3
-    IPERF3_SERVER = {'TCP': 'iperf3 -s -i 1', 'UDP': 'iperf3 -s -i 1'}
-    IPERF3_CLIENT_REGU = {
-        'TCP': {'tx': 'iperf3 -c {} -i 1 -t {} -P {} -R', 'rx': 'iperf3 -c {} -i 1 -t {} -P {}'},
-        'UDP': {'tx': 'iperf3 -c {} -i 1 -t {} -P {} -u', 'rx': 'iperf3 -c {} -i 1 -t {} -P {} -u'}
-    }
-
     IPERF_KILL = 'killall -9 {}'
     IPERF_WIN_KILL = 'taskkill /im {}.exe -f'
+
+    @staticmethod
+    def _parse_iperf_params(cmd: str) -> tuple[int, int]:
+        t_match = re.search(r'-t\s+(\d+)', cmd)
+        p_match = re.search(r'-p\s+(\d+)', cmd)
+        test_time = int(t_match.group(1)) if t_match else 30
+        pair = int(p_match.group(1)) if p_match else 5
+        return test_time, pair
+
     IW_LINNK_COMMAND = 'iw dev wlan0 link'
     IX_ENDPOINT_COMMAND = "monkey -p com.ixia.ixchariot 1"
     STOP_IX_ENDPOINT_COMMAND = "am force-stop com.ixia.ixchariot"
@@ -112,25 +97,33 @@ class dut():
 
     def __init__(self):
         self.serialnumber = 'executer'
-        self.rvr_tool = pytest.config.get('rvr')['tool']
+        cfg = load_config(refresh=True)
+        rvr_cfg = cfg.get('rvr', {})
+        self.rvr_tool = rvr_cfg.get('tool', 'iperf')
         self.pair = 5
-        self.repest_times = int(pytest.config.get('rvr')['repeat'])
+        iperf_cfg = rvr_cfg.get('iperf', {})
+        self.iperf_server_cmd = iperf_cfg.get('server_cmd', 'iperf -s -w 2m -i 1')
+        self.iperf_client_cmd = iperf_cfg.get('client_cmd', 'iperf -c {ip} -w 2m -i 1 -t 30 -p 5')
+        self.iperf_test_time, self.pair = self._parse_iperf_params(self.iperf_client_cmd)
+        self.iperf_wait_time = self.iperf_test_time + 5
+        self.repest_times = int(rvr_cfg.get('repeat', 0))
         self._dut_ip = ''
         self._pc_ip = ''
         self.rvr_result = None
-        cfg = load_config(refresh=True)
-        self.throughput_threshold = float(cfg['rvr'].get('throughput_threshold', 0))
+        self.throughput_threshold = float(rvr_cfg.get('throughput_threshold', 0))
         self.skip_tx = False
         self.skip_rx = False
         if self.rvr_tool == 'iperf':
-            self.test_tool = pytest.config.get('rvr')[self.rvr_tool]['version']
-            self.tool_path = pytest.config.get('rvr')[self.rvr_tool]['path'] or ''
+            cmds = f"{self.iperf_server_cmd} {self.iperf_client_cmd}"
+            self.test_tool = 'iperf3' if 'iperf3' in cmds else 'iperf'
+            self.tool_path = iperf_cfg.get('path', '')
             logging.info(f'test_tool {self.test_tool}')
 
         if self.rvr_tool == 'ixchariot':
             self.ix = ix()
-            self.test_tool = pytest.config.get('rvr')[self.rvr_tool]
-            self.script_path = self.test_tool['path']
+            ix_cfg = rvr_cfg.get('ixchariot', {})
+            self.test_tool = ix_cfg
+            self.script_path = ix_cfg.get('path', '')
             logging.info(f'path {self.script_path}')
             logging.info(f'test_tool {self.test_tool}')
             self.ix.modify_tcl_script("set ixchariot_installation_dir ",
@@ -377,27 +370,19 @@ class dut():
             logging.info(f'run rx {c} loop')
             rx_result = 0
             mcs_rx = 0
-            if self.test_tool == 'iperf':
+            if self.rvr_tool == 'iperf':
                 pytest.dut.kill_iperf()
-                terminal = pytest.dut.run_iperf(self.tool_path + pytest.dut.IPERF_SERVER[type], self.serialnumber)
+                terminal = pytest.dut.run_iperf(self.tool_path + pytest.dut.iperf_server_cmd, self.serialnumber)
                 time.sleep(1)
-                pytest.dut.run_iperf(
-                    pytest.dut.IPERF_CLIENT_REGU[type]['rx'].format(
-                        self.dut_ip, pytest.dut.IPERF_TEST_TIME, self.pair), '', direction='rx')
-            elif self.test_tool == 'iperf3':
-                pytest.dut.kill_iperf()
-                time.sleep(1)
-                terminal = pytest.dut.run_iperf(pytest.dut.IPERF3_SERVER[type], self.serialnumber)
-                time.sleep(1)
-                pytest.dut.run_iperf(pytest.dut.IPERF3_CLIENT_REGU[type]['rx'].format(
-                    self.dut_ip, pytest.dut.IPERF_TEST_TIME, self.pair), '')
-            time.sleep(pytest.dut.IPERF_WAIT_TIME)
-            if pytest.connect_type == 'telnet':
-                time.sleep(15)
-            rx_result = self.get_logcat()
-            if isinstance(terminal, subprocess.Popen):
-                terminal.terminate()
-            if self.rvr_tool == 'ixchariot':
+                client_cmd = pytest.dut.iperf_client_cmd.replace('{ip}', self.dut_ip)
+                pytest.dut.run_iperf(client_cmd, '', direction='rx')
+                time.sleep(pytest.dut.iperf_wait_time)
+                if pytest.connect_type == 'telnet':
+                    time.sleep(15)
+                rx_result = self.get_logcat()
+                if isinstance(terminal, subprocess.Popen):
+                    terminal.terminate()
+            elif self.rvr_tool == 'ixchariot':
                 ix.ep1 = self.pc_ip
                 ix.ep2 = self.dut_ip
                 ix.pair = self.pair
@@ -471,30 +456,21 @@ class dut():
             logging.info(f'run tx:  {c} loop ')
             tx_result = 0
             mcs_tx = 0
-            if self.test_tool == 'iperf':
+            if self.rvr_tool == 'iperf':
                 pytest.dut.kill_iperf()
                 time.sleep(1)
-                terminal = pytest.dut.run_iperf(pytest.dut.IPERF_SERVER[type], '')
+                terminal = pytest.dut.run_iperf(pytest.dut.iperf_server_cmd, '')
                 time.sleep(1)
-                pytest.dut.run_iperf(self.tool_path + pytest.dut.IPERF_CLIENT_REGU[type]['tx'].format(
-                    self.pc_ip,
-                    pytest.dut.IPERF_TEST_TIME,
-                    self.pair), self.serialnumber)
-            elif self.test_tool == 'iperf3':
-                pytest.dut.kill_iperf()
-                time.sleep(1)
-                terminal = pytest.dut.run_iperf(pytest.dut.IPERF3_SERVER[type], self.serialnumber)
-                time.sleep(1)
-                pytest.dut.run_iperf(pytest.dut.IPERF3_CLIENT_REGU[type]['tx'].format(
-                    self.dut_ip, pytest.dut.IPERF_TEST_TIME, self.pair), '')
-            time.sleep(pytest.dut.IPERF_WAIT_TIME)
-            if pytest.connect_type == 'telnet':
-                time.sleep(15)
-            time.sleep(3)
-            tx_result = self.get_logcat()
-            if isinstance(terminal, subprocess.Popen):
-                terminal.terminate()
-            if self.rvr_tool == 'ixchariot':
+                client_cmd = pytest.dut.iperf_client_cmd.replace('{ip}', self.pc_ip)
+                pytest.dut.run_iperf(self.tool_path + client_cmd, self.serialnumber)
+                time.sleep(pytest.dut.iperf_wait_time)
+                if pytest.connect_type == 'telnet':
+                    time.sleep(15)
+                time.sleep(3)
+                tx_result = self.get_logcat()
+                if isinstance(terminal, subprocess.Popen):
+                    terminal.terminate()
+            elif self.rvr_tool == 'ixchariot':
                 ix.ep1 = self.dut_ip
                 ix.ep2 = self.pc_ip
                 ix.pair = self.pair
