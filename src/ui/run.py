@@ -203,6 +203,7 @@ class CaseRunner(QThread):
                     f"<b style='color:gray;'>队列将关闭，进程存活：{self._proc.is_alive()}</b>"
                 )
                 logging.info("closing queue; proc alive=%s", self._proc.is_alive())
+                break
         self._queue.close()
         self._queue.join_thread()
         self.log_signal.emit(
