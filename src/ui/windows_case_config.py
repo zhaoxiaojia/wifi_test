@@ -419,7 +419,7 @@ class CaseConfigPage(CardWidget):
                 self.field_widgets["text_case"] = self.test_case_edit
                 continue
             if key == "connect_type":
-                group = QGroupBox("Connect Type")
+                group = QGroupBox("Control Type")
                 vbox = QVBoxLayout(group)
                 self.connect_type_combo = ComboBox(self)
                 self.connect_type_combo.addItems(["adb", "telnet"])
@@ -474,7 +474,7 @@ class CaseConfigPage(CardWidget):
                 self.field_widgets["fpga"] = group
                 continue
             if key == "rf_solution":
-                group = QGroupBox("RF Solution")
+                group = QGroupBox("Attenuator")
                 vbox = QVBoxLayout(group)
                 # -------- 下拉：选择型号 --------
                 self.rf_model_combo = ComboBox(self)
