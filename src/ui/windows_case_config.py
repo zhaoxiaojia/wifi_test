@@ -813,7 +813,7 @@ class CaseConfigPage(CardWidget):
         basename = os.path.basename(case_path)
         logging.debug("testcase name %s", basename)
         logging.debug("_compute_editable_info case_path=%s basename=%s", case_path, basename)
-        rvr_keys = {
+        peak_keys = {
             "rvr",
             "rvr.tool",
             "rvr.iperf.path",
@@ -821,6 +821,8 @@ class CaseConfigPage(CardWidget):
             "rvr.iperf.client_cmd",
             "rvr.ixchariot.path",
             "rvr.repeat",
+        }
+        rvr_keys = peak_keys + {
             "rvr.throughput_threshold",
         }
         info = EditableInfo()
@@ -841,15 +843,7 @@ class CaseConfigPage(CardWidget):
         if basename == "test_compatibility.py":
             info.fields |= {"Power relay"}
         if basename == "test_wifi_peak_throughput.py":
-            info.fields |= {
-                "rvr",
-                "rvr.tool",
-                "rvr.iperf.path",
-                "rvr.iperf.server_cmd",
-                "rvr.iperf.client_cmd",
-                "rvr.ixchariot.path",
-                "rvr.repeat",
-            }
+            info.fields |= peak_keys
         if self._is_performance_case(case_path):
             info.fields |= rvr_keys
             info.enable_csv = True
