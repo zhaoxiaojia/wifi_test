@@ -32,7 +32,7 @@ class H3CBX54Control():
     def login(self):
         # click login
         try:
-            self.router_control.driver.get(self.router_control.address)
+            self.router_control.driver.get(f"http://{self.router_control.address}")
             self.router_control.driver.find_element(By.ID, self.router_control.xpath['signin_element']).click()
             # input passwd
             self.router_control.driver.find_element(By.ID, self.router_control.xpath['password_element']).click()

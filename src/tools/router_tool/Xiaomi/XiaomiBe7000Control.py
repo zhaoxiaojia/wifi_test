@@ -80,13 +80,13 @@ class XiaomiBe7000Control(RouterTools):
     WIRELESS_2 = ['11n', '11ax']
     WIRELESS_5 = ['11ac', '11ax']
 
-    def __init__(self):
-        super().__init__('xiaomi_be7000', display=True)
+    def __init__(self, address: str | None = None):
+        super().__init__('xiaomi_be7000', display=True, address=address)
 
     def login(self):
         super().login()
         # try:
-        self.driver.get(self.address)
+        self.driver.get(f"http://{self.address}")
         # input passwd
         self.driver.find_element(By.ID, self.xpath['password_element']).click()
         self.driver.find_element(By.ID, self.xpath['password_element']).clear()
