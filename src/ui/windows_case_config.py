@@ -822,7 +822,7 @@ class CaseConfigPage(CardWidget):
             "rvr.ixchariot.path",
             "rvr.repeat",
         }
-        rvr_keys = peak_keys + {
+        rvr_keys = peak_keys | {
             "rvr.throughput_threshold",
         }
         info = EditableInfo()
