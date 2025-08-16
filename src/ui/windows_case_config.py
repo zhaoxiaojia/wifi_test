@@ -556,18 +556,23 @@ class CaseConfigPage(CardWidget):
                 self.rvr_iperf_group = QWidget()
                 iperf_box = QVBoxLayout(self.rvr_iperf_group)
 
-                self.iperf_version_combo = ComboBox(self)
-                self.iperf_version_combo.addItems(["iperf", "iperf3"])
-                self.iperf_version_combo.setCurrentText(
-                    value.get("iperf", {}).get("version", "iperf"))
                 self.iperf_path_edit = LineEdit(self)
                 self.iperf_path_edit.setPlaceholderText("iperf path (DUT)")
                 self.iperf_path_edit.setText(value.get("iperf", {}).get("path", ""))
-
-                iperf_box.addWidget(QLabel("Version:"))
-                iperf_box.addWidget(self.iperf_version_combo)
                 iperf_box.addWidget(QLabel("Path:"))
                 iperf_box.addWidget(self.iperf_path_edit)
+
+                self.iperf_server_edit = LineEdit(self)
+                self.iperf_server_edit.setPlaceholderText("iperf -s command")
+                self.iperf_server_edit.setText(value.get("iperf", {}).get("server_cmd", ""))
+                iperf_box.addWidget(QLabel("Server cmd:"))
+                iperf_box.addWidget(self.iperf_server_edit)
+
+                self.iperf_client_edit = LineEdit(self)
+                self.iperf_client_edit.setPlaceholderText("iperf -c command")
+                self.iperf_client_edit.setText(value.get("iperf", {}).get("client_cmd", ""))
+                iperf_box.addWidget(QLabel("Client cmd:"))
+                iperf_box.addWidget(self.iperf_client_edit)
                 vbox.addWidget(self.rvr_iperf_group)
 
                 # ----- ixchariot 子组 -----
@@ -606,8 +611,9 @@ class CaseConfigPage(CardWidget):
 
                 # 字段注册（供启用/禁用和收集参数用）
                 self.field_widgets["rvr.tool"] = self.rvr_tool_combo
-                self.field_widgets["rvr.iperf.version"] = self.iperf_version_combo
                 self.field_widgets["rvr.iperf.path"] = self.iperf_path_edit
+                self.field_widgets["rvr.iperf.server_cmd"] = self.iperf_server_edit
+                self.field_widgets["rvr.iperf.client_cmd"] = self.iperf_client_edit
                 self.field_widgets["rvr.ixchariot.path"] = self.ix_path_edit
                 self.field_widgets["rvr.repeat"] = self.repeat_combo
                 self.field_widgets["rvr.throughput_threshold"] = self.rvr_threshold_edit
@@ -807,13 +813,16 @@ class CaseConfigPage(CardWidget):
         basename = os.path.basename(case_path)
         logging.debug("testcase name %s", basename)
         logging.debug("_compute_editable_info case_path=%s basename=%s", case_path, basename)
-        rvr_keys = {
+        peak_keys = {
             "rvr",
             "rvr.tool",
-            "rvr.iperf.version",
             "rvr.iperf.path",
+            "rvr.iperf.server_cmd",
+            "rvr.iperf.client_cmd",
             "rvr.ixchariot.path",
             "rvr.repeat",
+        }
+        rvr_keys = peak_keys + {
             "rvr.throughput_threshold",
         }
         info = EditableInfo()
@@ -834,14 +843,7 @@ class CaseConfigPage(CardWidget):
         if basename == "test_compatibility.py":
             info.fields |= {"Power relay"}
         if basename == "test_wifi_peak_throughput.py":
-            info.fields |= {
-                "rvr",
-                "rvr.tool",
-                "rvr.iperf.version",
-                "rvr.iperf.path",
-                "rvr.ixchariot.path",
-                "rvr.repeat",
-            }
+            info.fields |= peak_keys
         if self._is_performance_case(case_path):
             info.fields |= rvr_keys
             info.enable_csv = True
