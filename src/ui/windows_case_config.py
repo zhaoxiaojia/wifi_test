@@ -54,7 +54,7 @@ from qfluentwidgets import (
     InfoBarPosition,
     ScrollArea
 )
-from .theme import apply_theme, FONT_FAMILY, TEXT_COLOR,apply_tree_font
+from .theme import apply_theme, FONT_FAMILY, TEXT_COLOR,apply_tree_font_and_selection
 
 
 @dataclass
@@ -119,7 +119,7 @@ class CaseConfigPage(CardWidget):
         # ----- left: case tree -----
         self.case_tree = TreeView(self)
         apply_theme(self.case_tree)
-        apply_tree_font(self.case_tree)
+        apply_tree_font_and_selection(self.case_tree)
         print("TreeView font:", self.case_tree.font().family())
         print("TreeView stylesheet:", self.case_tree.styleSheet())
         self._init_case_tree(Path(self._get_application_base()) / "test")

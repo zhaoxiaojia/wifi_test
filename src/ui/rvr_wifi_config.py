@@ -34,6 +34,7 @@ from qfluentwidgets import (
 
 from src.tools.router_tool.router_factory import get_router
 from typing import TYPE_CHECKING
+from .theme import apply_theme
 
 if TYPE_CHECKING:
     from .windows_case_config import CaseConfigPage
@@ -153,7 +154,8 @@ class RvrWifiConfigPage(CardWidget):
         header.setStretchLastSection(True)
         self.table.itemSelectionChanged.connect(self._load_row_to_form)
         main_layout.addWidget(self.table, 2)
-
+        apply_theme(form_box, recursive=True)
+        apply_theme(self.table, recursive=True)
         self.band_combo.currentTextChanged.connect(self._on_band_changed)
         self.wireless_combo.currentTextChanged.connect(self._update_auth_options)
         self.wireless_combo.currentTextChanged.connect(self._update_current_row)
