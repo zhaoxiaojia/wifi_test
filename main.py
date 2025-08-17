@@ -115,8 +115,8 @@ class MainWindow(FluentWindow):
         self.rvr_wifi_config_page = None
         print("hide_rvr_wifi_config end: page=", self.rvr_wifi_config_page)
 
-    def removeSubInterface(self, page):
-        """Remove the given page from the navigation if possible."""
+    def _detach_sub_interface(self, page):
+        """Detach the given page from the navigation if possible."""
         if hasattr(self, "navigationInterface"):
             for name in ("removeSubInterface", "removeInterface", "removeItem"):
                 func = getattr(self.navigationInterface, name, None)
@@ -155,13 +155,6 @@ class MainWindow(FluentWindow):
         )
         nav = getattr(self, "navigationInterface", None)
 
-        if widget is self.rvr_wifi_config_page and self._rvr_nav_button:
-            if nav:
-                with suppress(Exception):
-                    nav.removeWidget(self._rvr_nav_button)
-            self._rvr_nav_button.deleteLater()
-            self._rvr_nav_button = None
-
         buttons = []
         if nav:
             buttons = [
@@ -185,10 +178,14 @@ class MainWindow(FluentWindow):
             logging.info(
                 "Removing from navigationInterface id=%s", id(widget) if widget else None
             )
-            self.removeSubInterface(widget)
+            FluentWindow.removeSubInterface(self, widget)
             logging.info(
                 "Removed from navigationInterface id=%s", id(widget) if widget else None
             )
+
+        if widget is self.rvr_wifi_config_page and self._rvr_nav_button:
+            self._rvr_nav_button.deleteLater()
+            self._rvr_nav_button = None
 
         if nav:
             leftover = [
