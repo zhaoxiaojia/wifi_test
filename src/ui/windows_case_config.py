@@ -19,6 +19,7 @@ from src.tools.router_tool.router_factory import router_list, get_router
 from src.util.constants import Paths, RouterConst
 from src.util.constants import get_config_base, get_src_base
 from src.tools.config_loader import load_config
+from src.util.decorators import lazy_proerty
 from PyQt5.QtCore import (
     Qt,
     QSignalBlocker,
@@ -240,23 +241,26 @@ class CaseConfigPage(CardWidget):
         for col in range(1, self.fs_model.columnCount()):
             self.case_tree.hideColumn(col)
 
+    def _show_bar(self, bar, title: str, content: str) -> None:
+        QTimer.singleShot(
+            0,
+            lambda: bar(
+                title=title,
+                content=content,
+                parent=self,
+                position=InfoBarPosition.TOP,
+            ),
+        )
+
     def _load_config(self) -> dict:
         if not self.config_path.exists():
-            QTimer.singleShot(
-                0,
-                lambda: InfoBar.warning(
-                    title="Error",
-                    content="Failed to find config",
-                    parent=self,
-                    position=InfoBarPosition.TOP,
-                ),
-            )
+            self._show_bar(InfoBar.warning, "Error", "Failed to find config")
             return {}
         try:
             load_config.cache_clear()
             config = load_config(refresh=True) or {}
 
-            app_base = self._get_application_base()
+            app_base = self.app_base
             changed = False
             path = config.get("text_case", "")
             if path:
@@ -286,26 +290,10 @@ class CaseConfigPage(CardWidget):
                     with self.config_path.open("w", encoding="utf-8") as wf:
                         yaml.safe_dump(config, wf, allow_unicode=True, sort_keys=False, width=4096)
                 except Exception as exc:
-                    QTimer.singleShot(
-                        0,
-                        lambda exc=exc: InfoBar.error(
-                            title="Error",
-                            content=f"Failed to write config: {exc}",
-                            parent=self,
-                            position=InfoBarPosition.TOP,
-                        ),
-                    )
+                    self._show_bar(InfoBar.error, "Error", f"Failed to write config: {exc}")
             return config
         except Exception as exc:
-            QTimer.singleShot(
-                0,
-                lambda exc=exc: InfoBar.error(
-                    title="Error",
-                    content=f"Failed to load config : {exc}",
-                    parent=self,
-                    position=InfoBarPosition.TOP,
-                ),
-            )
+            self._show_bar(InfoBar.error, "Error", f"Failed to load config : {exc}")
             return {}
 
     def _save_config(self):
@@ -315,38 +303,15 @@ class CaseConfigPage(CardWidget):
                 yaml.safe_dump(self.config, f, allow_unicode=True, sort_keys=False, width=4096)
                 logging.info("Configuration saved")
             self.config = self._load_config()
-            QTimer.singleShot(
-                0,
-                lambda: InfoBar.success(
-                    title="Hint",
-                    content="Configuration has been saved",
-                    parent=self,
-                    position=InfoBarPosition.TOP,
-                ),
-            )
+            self._show_bar(InfoBar.success, "Hint", "Configuration has been saved")
         except Exception as exc:
             logging.error("[save] failed: %s", exc)
-            QTimer.singleShot(
-                0,
-                lambda exc=exc: InfoBar.error(
-                    title="Error",
-                    content=f"Failed to save config : {exc}",
-                    parent=self,
-                    position=InfoBarPosition.TOP,
-                ),
-            )
+            self._show_bar(InfoBar.error, "Error", f"Failed to save config : {exc}")
 
-    def _get_application_base(self) -> Path:
-        """获取应用根路径"""
+    @lazy_proerty
+    def app_base(self) -> Path:
+        """应用根路径（懒加载）"""
         return Path(get_src_base()).resolve()
-
-    def _resolve_case_path(self, path: str | Path) -> Path:
-        """将相对用例路径转换为绝对路径"""
-        if not path:
-            return Path()
-        p = Path(path)
-        base = Path(self._get_application_base())
-        return str(p) if p.is_absolute() else str((base / p).resolve())
 
     def on_connect_type_changed(self, type_str):
         """

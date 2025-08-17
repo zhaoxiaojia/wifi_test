@@ -43,8 +43,9 @@ import threading
 import pytest
 import io
 from contextlib import suppress
-from src.util.constants import Paths, get_src_base
+from src.util.constants import get_src_base
 from src.util.pytest_redact import install_redactor_for_current_process
+from src.util.decorators import lazy_proerty
 
 
 class LiveLogWriter:
@@ -229,8 +230,8 @@ class RunPage(CardWidget):
 
     def __init__(self, case_path, display_case_path=None, config=None, parent=None):
         super().__init__(parent)
-        stack = getattr(parent, "stackedWidget", None)
-        idx = stack.indexOf(self) if stack else None
+        self.stack = getattr(parent, "stackedWidget", None)
+        idx = self.stack.indexOf(self) if self.stack else None
         logging.info(
             "RunPage.__init__ start id=%s isdeleted=%s index=%s",
             id(self),
@@ -290,21 +291,32 @@ class RunPage(CardWidget):
             self.action_btn.setUseRippleEffect(True)
         if hasattr(self.action_btn, "setUseStateEffect"):
             self.action_btn.setUseStateEffect(True)
-        self.action_btn.clicked.connect(
-            lambda: logging.info("action_btn clicked")
-        )
-        logging.info("Connected action_btn clicked log for RunPage id=%s", id(self))
-        self.action_btn.clicked.connect(self.on_stop)
-        logging.info("Connected action_btn clicked to on_stop for RunPage id=%s", id(self))
+        self._setup_action_btn("Exit", FluentIcon.CLOSE, self.on_stop)
         layout.addWidget(self.action_btn)
         self.setLayout(layout)
-        stack = getattr(self.main_window, "stackedWidget", None)
-        idx = stack.indexOf(self) if stack else None
+        idx = self.stack.indexOf(self) if self.stack else None
         logging.info(
             "RunPage.__init__ end id=%s isdeleted=%s index=%s",
             id(self),
             sip.isdeleted(self),
             idx,
+        )
+
+    def _log_action(self):
+        logging.info("action_btn clicked")
+
+    def _setup_action_btn(self, text: str, icon: FluentIcon, handler):
+        """统一配置 action_btn，减少重复代码"""
+        self.action_btn.setText(text)
+        self.action_btn.setIcon(icon)
+        with suppress(TypeError):
+            self.action_btn.clicked.disconnect()
+        self.action_btn.clicked.connect(self._log_action)
+        self.action_btn.clicked.connect(handler)
+        logging.info(
+            "action_btn configured to %s for RunPage id=%s",
+            getattr(handler, "__name__", str(handler)),
+            id(self),
         )
 
     def _append_log(self, msg: str):
@@ -353,53 +365,16 @@ class RunPage(CardWidget):
         self.progress.setValue(0)
         self.update_progress(0)
 
-        self.action_btn.setText("Exit")
-        self.action_btn.setIcon(FluentIcon.CLOSE)
-        with suppress(TypeError):
-            self.action_btn.clicked.disconnect()
-            logging.info("Disconnected action_btn clicked in run_case for RunPage id=%s", id(self))
-        self.action_btn.clicked.connect(
-            lambda: logging.info("action_btn clicked")
-        )
-        logging.info("Connected action_btn clicked log in run_case for RunPage id=%s", id(self))
-        self.action_btn.clicked.connect(self.on_stop)
-        logging.info("Connected action_btn clicked to on_stop in run_case for RunPage id=%s", id(self))
+        self._setup_action_btn("Exit", FluentIcon.CLOSE, self.on_stop)
         self.runner = CaseRunner(self.case_path)
         self.runner.log_signal.connect(self._append_log)
         self.runner.progress_signal.connect(self.update_progress)
-        # 关键修改：InfoBar的父窗口改为主窗口（而非RunPage自身）
-        # self.runner.finished.connect(
-        #     lambda: InfoBar.success(
-        #         title="Done",
-        #         content="Test Done",
-        #         parent=self.main_window,  # 这里改为主窗口
-        #         position=InfoBarPosition.TOP,
-        #         duration=1800,
-        #     )
-        # )
-        self.runner.finished.connect(self._finalize_runner)
+        self.runner.finished.connect(self.on_runner_finished)
         self.runner.start()
 
-    def _finalize_runner(self):
-        runner = getattr(self, "runner", None)
-        if not runner:
-            self.on_runner_finished()
-            return
-        for signal, slot in (
-                (runner.log_signal, self._append_log),
-                (runner.progress_signal, self.update_progress),
-        ):
-            with suppress((TypeError, RuntimeError)):
-                signal.disconnect(slot)
-        with suppress((TypeError, RuntimeError)):
-            runner.finished.disconnect(self._finalize_runner)
-        runner.deleteLater()
-        self.runner = None
-        self.on_runner_finished()
 
     def cleanup(self, disconnect_page: bool = True):
-        stack = getattr(self.main_window, "stackedWidget", None)
-        idx = stack.indexOf(self) if stack else None
+        idx = self.stack.indexOf(self) if self.stack else None
         logging.info(
             "RunPage.cleanup start id=%s isdeleted=%s index=%s",
             id(self),
@@ -439,8 +414,8 @@ class RunPage(CardWidget):
                 "runner.isRunning after wait: %s", runner.isRunning()
             )
         for signal, slot in (
-                (runner.log_signal, self._append_log),
-                (runner.progress_signal, self.update_progress),
+            (runner.log_signal, self._append_log),
+            (runner.progress_signal, self.update_progress),
         ):
             with suppress((TypeError, RuntimeError)):
                 signal.disconnect(slot)
@@ -452,8 +427,7 @@ class RunPage(CardWidget):
                 logging.info("Disconnecting signals for RunPage id=%s", id(self))
                 self.disconnect()
                 logging.info("Signals disconnected for RunPage id=%s", id(self))
-        stack = getattr(self.main_window, "stackedWidget", None)
-        idx = stack.indexOf(self) if stack else None
+        idx = self.stack.indexOf(self) if self.stack else None
         logging.info(
             "RunPage.cleanup end id=%s isdeleted=%s index=%s",
             id(self),
@@ -462,30 +436,30 @@ class RunPage(CardWidget):
         )
 
     def on_runner_finished(self):
-        self.cleanup()
-        self.action_btn.setText("Test")
-        self.action_btn.setIcon(FluentIcon.PLAY)
-        with suppress(TypeError):
-            self.action_btn.clicked.disconnect()
-            logging.info("Disconnected action_btn clicked in on_runner_finished for RunPage id=%s", id(self))
-        self.action_btn.clicked.connect(self.run_case)
-        logging.info("Connected action_btn clicked to run_case in on_runner_finished for RunPage id=%s", id(self))
+        runner = getattr(self, "runner", None)
+        if runner:
+            for signal, slot in (
+                (runner.log_signal, self._append_log),
+                (runner.progress_signal, self.update_progress),
+            ):
+                with suppress((TypeError, RuntimeError)):
+                    signal.disconnect(slot)
+            with suppress((TypeError, RuntimeError)):
+                runner.finished.disconnect(self.on_runner_finished)
+            runner.deleteLater()
+            self.runner = None
+        self._setup_action_btn("Test", FluentIcon.PLAY, self.run_case)
         self.action_btn.setEnabled(True)
 
     def on_stop(self):
         self._append_log("on_stop entered")
         self.cleanup()
-        self.action_btn.setText("Test")
-        self.action_btn.setIcon(FluentIcon.PLAY)
-        with suppress(TypeError):
-            self.action_btn.clicked.disconnect()
-            logging.info("Disconnected action_btn clicked in on_stop for RunPage id=%s", id(self))
-        self.action_btn.clicked.connect(self.run_case)
-        logging.info("Connected action_btn clicked to run_case in on_stop for RunPage id=%s", id(self))
+        self._setup_action_btn("Test", FluentIcon.PLAY, self.run_case)
         self.action_btn.setEnabled(True)
 
-    def _get_application_base(self) -> Path:
-        """获取应用根路径"""
+    @lazy_proerty
+    def app_base(self) -> Path:
+        """应用根路径（懒加载）"""
         return Path(get_src_base()).resolve()
 
     def _calc_display_path(self, case_path: str, display_case_path: str | None) -> str:
@@ -494,8 +468,7 @@ class RunPage(CardWidget):
             p = Path(display_case_path)
             if ".." not in p.parts and not p.drive and not p.is_absolute():
                 return display_case_path.replace("\\", "/")
-        app_base = self._get_application_base()
         display_case_path = Path(case_path).resolve()
         with suppress(ValueError):
-            display_case_path = display_case_path.relative_to(app_base)
+            display_case_path = display_case_path.relative_to(self.app_base)
         return display_case_path.as_posix()
