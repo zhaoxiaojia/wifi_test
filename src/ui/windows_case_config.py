@@ -34,7 +34,6 @@ from PyQt5.QtWidgets import (
     QWidget,
     QHBoxLayout,
     QVBoxLayout,
-    QGridLayout,
     QGroupBox,
     QLabel,
     QFileSystemModel,
@@ -139,12 +138,18 @@ class CaseConfigPage(CardWidget):
         right.setContentsMargins(0, 0, 0, 0)
         right.setSpacing(5)
         self._columns_widget = QWidget()
-        self._columns_layout = QGridLayout(self._columns_widget)
+        self._columns_layout = QHBoxLayout(self._columns_widget)
         self._columns_layout.setSpacing(8)
         self._columns_layout.setContentsMargins(0, 0, 0, 0)
-        for i in range(self._col_count):
-            self._columns_layout.setColumnStretch(i, 1)
-        self._group_index = 0
+        self._column_layouts: list[QVBoxLayout] = []
+        for _ in range(self._col_count):
+            col_widget = QWidget()
+            vbox = QVBoxLayout(col_widget)
+            vbox.setSpacing(8)
+            vbox.setContentsMargins(0, 0, 0, 0)
+            self._columns_layout.addWidget(col_widget)
+            self._column_layouts.append(vbox)
+        self._col_heights = [0] * self._col_count
         right.addWidget(self._columns_widget)
         self.run_btn = PushButton("Test", self)
         self.run_btn.setIcon(FluentIcon.PLAY)
@@ -155,6 +160,7 @@ class CaseConfigPage(CardWidget):
         self.run_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.run_btn.clicked.connect(self.on_run)
         right.addWidget(self.run_btn)
+        self._apply_dynamic_heights(self.run_btn)
         scroll_area.setWidget(container)
         splitter.addWidget(scroll_area)
         splitter.setSizes([200, 600])
@@ -182,7 +188,6 @@ class CaseConfigPage(CardWidget):
             }
             """
         )
-        self._col_weight = [0, 0]
         # render form fields from yaml
         self.render_all_fields()
         self.routerInfoChanged.connect(self._update_csv_options)
@@ -348,6 +353,7 @@ class CaseConfigPage(CardWidget):
         """
         self.adb_group.setVisible(type_str == "adb")
         self.telnet_group.setVisible(type_str == "telnet")
+        self._apply_dynamic_heights(self.connect_group)
 
     def on_rf_model_changed(self, model_str):
         """
@@ -358,15 +364,18 @@ class CaseConfigPage(CardWidget):
         self.xin_group.setVisible(model_str == "XIN-YI")
         self.rc4_group.setVisible(model_str == "RC4DAT-8G-95")
         self.rack_group.setVisible(model_str == "RADIORACK-4-220")
+        self._apply_dynamic_heights(self.rf_group)
 
     # 添加到类里：响应 Tool 下拉，切换子参数可见性
     def on_rvr_tool_changed(self, tool: str):
         """选择 iperf / ixchariot 时，动态显示对应子参数"""
         self.rvr_iperf_group.setVisible(tool == "iperf")
         self.rvr_ix_group.setVisible(tool == "ixchariot")
+        self._apply_dynamic_heights(self.rvr_group)
 
     def on_serial_enabled_changed(self, text: str):
         self.serial_cfg_group.setVisible(text == "True")
+        self._apply_dynamic_heights(self.serial_group)
 
     def _load_router_wifi_info(self, name: str):
         cfg = self.config.get("router", {})
@@ -429,11 +438,22 @@ class CaseConfigPage(CardWidget):
 
 
     def _add_group(self, group: QWidget, weight: int | None = None):
-        """将 group 按列数依次放入网格布局"""
-        row = self._group_index // self._col_count
-        col = self._group_index % self._col_count
-        self._columns_layout.addWidget(group, row, col)
-        self._group_index += 1
+        """瀑布流布局：将 group 放入当前高度最小的列"""
+        h = self._apply_dynamic_heights(group)
+        idx = self._col_heights.index(min(self._col_heights))
+        self._column_layouts[idx].addWidget(group)
+        self._col_heights[idx] += weight if weight is not None else h
+
+    def _apply_dynamic_heights(self, widget: QWidget) -> int:
+        """递归设置控件高度等于其内容高度，避免裁剪和留白"""
+        fm = widget.fontMetrics()
+        hint = widget.sizeHint().height()
+        min_h = fm.height() + 6
+        h = max(hint, min_h)
+        widget.setFixedHeight(h)
+        for child in widget.findChildren(QWidget, options=Qt.FindDirectChildrenOnly):
+            self._apply_dynamic_heights(child)
+        return h
 
     def render_all_fields(self):
         """
@@ -459,6 +479,7 @@ class CaseConfigPage(CardWidget):
                 continue
             if key == "connect_type":
                 group = QGroupBox("Control Type")
+                self.connect_group = group
                 vbox = QVBoxLayout(group)
                 self.connect_type_combo = ComboBox(self)
                 self.connect_type_combo.addItems(["adb", "telnet"])
@@ -514,6 +535,7 @@ class CaseConfigPage(CardWidget):
                 continue
             if key == "rf_solution":
                 group = QGroupBox("Attenuator")
+                self.rf_group = group
                 vbox = QVBoxLayout(group)
                 # -------- 下拉：选择型号 --------
                 self.rf_model_combo = ComboBox(self)
@@ -582,6 +604,7 @@ class CaseConfigPage(CardWidget):
                 continue  # 跳过后面的通用字段处理
             if key == "rvr":
                 group = QGroupBox("RVR Config")  # 外层分组
+                self.rvr_group = group
                 vbox = QVBoxLayout(group)
                 # Tool 下拉
                 self.rvr_tool_combo = ComboBox(self)
@@ -726,6 +749,7 @@ class CaseConfigPage(CardWidget):
                 continue  # ← 继续下一顶层 key
             if key == "serial_port":
                 group = QGroupBox("Serial Port")
+                self.serial_group = group
                 vbox = QVBoxLayout(group)
 
                 # 开关（True/False 下拉，同一套保存逻辑即可）
