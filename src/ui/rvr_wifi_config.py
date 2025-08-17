@@ -144,7 +144,7 @@ class RvrWifiConfigPage(CardWidget):
         self.table.setAlternatingRowColors(False)
         self.table.setStyleSheet(
             self.table.styleSheet()
-            + "QTableView {alternate-background-color: transparent;}"
+            + "QTableView {alternate-background-color: transparent;font-family: Verdana;}"
         )
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)

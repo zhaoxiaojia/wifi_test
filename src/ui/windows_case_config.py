@@ -38,7 +38,8 @@ from PyQt5.QtWidgets import (
     QGroupBox,
     QLabel,
     QFileSystemModel,
-    QCheckBox
+    QCheckBox,
+    QSplitter
 )
 
 from qfluentwidgets import (
@@ -112,21 +113,22 @@ class CaseConfigPage(CardWidget):
         self.router_obj = None
         self.selected_csv_path: str | None = None
         # -------------------- layout --------------------
-        main_layout = QHBoxLayout(self)
-        main_layout.setSpacing(10)
-        main_layout.setContentsMargins(5, 5, 5, 5)
+        splitter = QSplitter(Qt.Horizontal, self)
+        splitter.setChildrenCollapsible(False)
         # ----- left: case tree -----
         self.case_tree = TreeView(self)
-        self.case_tree.setFixedWidth(300)
+        self.case_tree.setMinimumWidth(200)
         self._init_case_tree(Path(self._get_application_base()) / "test")
-        main_layout.addWidget(self.case_tree, 3)
+        splitter.addWidget(self.case_tree)
 
         # ----- right: parameters & run button -----
         scroll_area = ScrollArea(self)
         scroll_area.setWidgetResizable(True)
+        scroll_area.setContentsMargins(0, 0, 0, 0)
         container = QWidget()
+        container.setMaximumWidth(600)
         right = QVBoxLayout(container)
-        right.setContentsMargins(5, 5, 5, 5)
+        right.setContentsMargins(0, 0, 0, 0)
         right.setSpacing(5)
         self._columns_widget = QWidget()
         cols = QHBoxLayout(self._columns_widget)
@@ -143,11 +145,21 @@ class CaseConfigPage(CardWidget):
         right.addWidget(self._columns_widget)
         self.run_btn = PushButton("Test", self)
         self.run_btn.setIcon(FluentIcon.PLAY)
+        if hasattr(self.run_btn, "setUseRippleEffect"):
+            self.run_btn.setUseRippleEffect(True)
+        if hasattr(self.run_btn, "setUseStateEffect"):
+            self.run_btn.setUseStateEffect(True)
         self.run_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.run_btn.clicked.connect(self.on_run)
         right.addWidget(self.run_btn)
         scroll_area.setWidget(container)
-        main_layout.addWidget(scroll_area, 4)
+        splitter.addWidget(scroll_area)
+        splitter.setSizes([300, 1])
+
+        main_layout = QHBoxLayout(self)
+        main_layout.setSpacing(10)
+        main_layout.setContentsMargins(5, 5, 5, 5)
+        main_layout.addWidget(splitter)
         self._col_weight = [0, 0]
         # render form fields from yaml
         self.render_all_fields()
@@ -418,8 +430,10 @@ class CaseConfigPage(CardWidget):
             if key == "text_case":
                 group = QGroupBox("Test Case")
                 group.setStyleSheet(
-                    "QGroupBox{border:1px solid #d0d0d0;border-radius:4px;margin-top:6px;}"
-                    "QGroupBox::title{left:8px;padding:0 3px;}")
+                    "QGroupBox{border:1px solid #444444;font-family: Verdana;"
+                    "border-radius:4px;margin-top:6px;color:#fafafa;}"
+                    "QGroupBox::title{left:8px;padding:0 3px;font-family: Verdana;}"
+                )
                 vbox = QVBoxLayout(group)
                 self.test_case_edit = LineEdit(self)
                 self.test_case_edit.setText(value or "")  # 默认值

@@ -1607,12 +1607,3 @@ class adb(dut):
         logging.info(f'conn wifi cmd :{cmd}')
         return cmd
 
-
-
-# concomitant_dut_config = load_config().get('concomitant_dut')
-# if concomitant_dut_config['status']:
-#     accompanying_dut = adb(concomitant_dut_config['device_number'])
-#     accompanying_dut.root()
-#     accompanying_dut.remount()
-# else:
-#     accompanying_dut = ''
