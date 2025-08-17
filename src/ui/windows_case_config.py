@@ -113,20 +113,18 @@ class CaseConfigPage(CardWidget):
         self.router_obj = None
         self.selected_csv_path: str | None = None
         # -------------------- layout --------------------
-        splitter = QSplitter(Qt.Horizontal, self)
-        splitter.setChildrenCollapsible(False)
+        self.splitter = QSplitter(Qt.Horizontal, self)
+        self.splitter.setChildrenCollapsible(False)
         # ----- left: case tree -----
         self.case_tree = TreeView(self)
-        self.case_tree.setMinimumWidth(200)
         self._init_case_tree(Path(self._get_application_base()) / "test")
-        splitter.addWidget(self.case_tree)
+        self.splitter.addWidget(self.case_tree)
 
         # ----- right: parameters & run button -----
         scroll_area = ScrollArea(self)
         scroll_area.setWidgetResizable(True)
         scroll_area.setContentsMargins(0, 0, 0, 0)
         container = QWidget()
-        container.setMaximumWidth(600)
         right = QVBoxLayout(container)
         right.setContentsMargins(0, 0, 0, 0)
         right.setSpacing(5)
@@ -153,13 +151,14 @@ class CaseConfigPage(CardWidget):
         self.run_btn.clicked.connect(self.on_run)
         right.addWidget(self.run_btn)
         scroll_area.setWidget(container)
-        splitter.addWidget(scroll_area)
-        splitter.setSizes([300, 1])
+        self.splitter.addWidget(scroll_area)
+        self.splitter.setStretchFactor(0, 2)
+        self.splitter.setStretchFactor(1, 3)
 
         main_layout = QHBoxLayout(self)
         main_layout.setSpacing(10)
         main_layout.setContentsMargins(5, 5, 5, 5)
-        main_layout.addWidget(splitter)
+        main_layout.addWidget(self.splitter)
         self._col_weight = [0, 0]
         # render form fields from yaml
         self.render_all_fields()
@@ -169,6 +168,19 @@ class CaseConfigPage(CardWidget):
         self.case_tree.clicked.connect(self.on_case_tree_clicked)
         self.case_tree.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         QTimer.singleShot(0, lambda: self.get_editable_fields(""))
+        # 全局暗色风格
+        self.setStyleSheet(
+            "background-color: #2b2b2b; color: #ffffff;"
+            "QPushButton{background-color:#3c3f41;color:#ffffff;border:1px solid #5c5c5c;"
+            "padding:4px;border-radius:3px;}"
+            "QPushButton:hover{background-color:#484a4c;}"
+            "QPushButton:pressed{background-color:#3c3f41;}"
+            "QLineEdit, QComboBox, QTreeView, QTextEdit{background-color:#3c3f41;"
+            "color:#ffffff;border:1px solid #5c5c5c;}"
+        )
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.splitter.setSizes([int(self.width() * 0.3), int(self.width() * 0.7)])
 
     def _is_performance_case(self, abs_case_path) -> bool:
         """
@@ -433,6 +445,7 @@ class CaseConfigPage(CardWidget):
                     "QGroupBox{border:1px solid #444444;font-family: Verdana;"
                     "border-radius:4px;margin-top:6px;color:#fafafa;}"
                     "QGroupBox::title{left:8px;padding:0 3px;font-family: Verdana;}"
+                    "QLineEdit{background-color:#3c3f41;color:#ffffff;border:1px solid #5c5c5c;}"
                 )
                 vbox = QVBoxLayout(group)
                 self.test_case_edit = LineEdit(self)
@@ -906,10 +919,10 @@ class CaseConfigPage(CardWidget):
                 info.enable_csv = True
             info.enable_rvr_wifi = True
             logging.debug(
-            "_compute_editable_info enable_csv=%s enable_rvr_wifi=%s",
-            info.enable_csv,
-            info.enable_rvr_wifi,
-        )
+                "_compute_editable_info enable_csv=%s enable_rvr_wifi=%s",
+                info.enable_csv,
+                info.enable_rvr_wifi,
+            )
         # 如果你需要所有字段都可编辑，直接 return EditableInfo(set(self.field_widgets.keys()), True, True)
         return info
 
