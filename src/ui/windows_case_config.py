@@ -442,6 +442,7 @@ class CaseConfigPage(CardWidget):
         """根据标题计算最小宽度，避免文本被截断"""
         fm = group.fontMetrics()
         width = fm.boundingRect(group.title()).width() + 32
+
         if group.minimumWidth() < width:
             group.setMinimumWidth(width)
 
