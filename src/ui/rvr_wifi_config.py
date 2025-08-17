@@ -34,6 +34,7 @@ from qfluentwidgets import (
 
 from src.tools.router_tool.router_factory import get_router
 from typing import TYPE_CHECKING
+from src.util.decorators import lazy_proerty
 
 if TYPE_CHECKING:
     from .windows_case_config import CaseConfigPage
@@ -87,8 +88,8 @@ class RvrWifiConfigPage(CardWidget):
         form_box = QGroupBox(self)
         form_layout = QFormLayout(form_box)
         self.band_combo = ComboBox(form_box)
-        band_list = getattr(self.router, "BAND_LIST", ["2.4G", "5G"])
-        self.band_combo.addItems(band_list)
+        self.band_list = getattr(self.router, "BAND_LIST", ["2.4G", "5G"])
+        self.band_combo.addItems(self.band_list)
         form_layout.addRow("band", self.band_combo)
 
         self.wireless_combo = ComboBox(form_box)
@@ -172,19 +173,20 @@ class RvrWifiConfigPage(CardWidget):
         self.case_config_page.routerInfoChanged.connect(self.reload_router)
         self.case_config_page.csvFileChanged.connect(self.on_csv_file_changed)
 
-    def _get_base_dir(self) -> Path:
-        return Path(Paths.BASE_DIR)
+    @lazy_proerty
+    def csv_base(self) -> Path:
+        return (Path(Paths.CONFIG_DIR) / "performance_test_csv").resolve()
 
     def _compute_csv_path(self, router_name: str) -> Path:
-        csv_base = Path(Paths.CONFIG_DIR) / "performance_test_csv"
+        base = self.csv_base
         name = router_name.lower()
         if "asus" in name:
-            csv_base /= "asus"
+            base /= "asus"
         elif "xiaomi" in name:
-            csv_base /= "xiaomi"
+            base /= "xiaomi"
         else:
-            csv_base = Path(Paths.CONFIG_DIR)
-        return (csv_base / "rvr_wifi_setup.csv").resolve()
+            base = Path(Paths.CONFIG_DIR)
+        return (base / "rvr_wifi_setup.csv").resolve()
 
     def set_router_credentials(self, ssid: str, passwd: str) -> None:
         """设置路由器凭据并自动填充密码输入框"""
@@ -255,12 +257,12 @@ class RvrWifiConfigPage(CardWidget):
         except Exception as e:
             logging.error("reload router error: %s", e)
             return
-        band_list = getattr(self.router, "BAND_LIST", ["2.4G", "5G"])
+        self.band_list = getattr(self.router, "BAND_LIST", ["2.4G", "5G"])
         self.band_combo.blockSignals(True)
         self.band_combo.clear()
-        self.band_combo.addItems(band_list)
-        if band_list:
-            self.band_combo.setCurrentText(band_list[0])
+        self.band_combo.addItems(self.band_list)
+        if self.band_list:
+            self.band_combo.setCurrentText(self.band_list[0])
         self.band_combo.blockSignals(False)
         self.reload_csv()
         self._loading = True
@@ -296,18 +298,14 @@ class RvrWifiConfigPage(CardWidget):
             self._loading = False
 
     def _update_band_options(self, band: str):
-        wireless = {
-            "2.4G": getattr(self.router, "WIRELESS_2", []),
-            "5G": getattr(self.router, "WIRELESS_5", []),
-        }[band]
-        channel = {
-            "2.4G": getattr(self.router, "CHANNEL_2", []),
-            "5G": getattr(self.router, "CHANNEL_5", []),
-        }[band]
-        bandwidth = {
-            "2.4G": getattr(self.router, "BANDWIDTH_2", []),
-            "5G": getattr(self.router, "BANDWIDTH_5", []),
-        }[band]
+        if band == "2.4G":
+            wireless = getattr(self.router, "WIRELESS_2", [])
+            channel = getattr(self.router, "CHANNEL_2", [])
+            bandwidth = getattr(self.router, "BANDWIDTH_2", [])
+        else:
+            wireless = getattr(self.router, "WIRELESS_5", [])
+            channel = getattr(self.router, "CHANNEL_5", [])
+            bandwidth = getattr(self.router, "BANDWIDTH_5", [])
         with QSignalBlocker(self.wireless_combo), QSignalBlocker(self.channel_combo), QSignalBlocker(
             self.bandwidth_combo
         ):
@@ -488,12 +486,24 @@ class RvrWifiConfigPage(CardWidget):
             else:
                 item.setText(value)
 
+    def _need_password(self) -> bool:
+        return self.auth_combo.currentText() not in ("Open System", "无加密（允许所有人连接）")
+
+    def _ensure_password(self) -> bool:
+        if self._need_password() and not self.passwd_edit.text():
+            InfoBar.error(
+                title="Error",
+                content="Pls input password",
+                parent=self,
+                position=InfoBarPosition.TOP,
+            )
+            return False
+        return True
+
     def add_row(self):
-        band = self.band_combo.currentText()
-        auth = self.auth_combo.currentText()
-        if auth not in ("Open System", "无加密（允许所有人连接）") and not self.passwd_edit.text():
-            InfoBar.error(title="Error", content="Pls input password", parent=self, position=InfoBarPosition.TOP)
+        if not self._ensure_password():
             return
+        band = self.band_combo.currentText()
         if band == "2.4G":
             ssid = self.case_config_page.ssid_2g_edit.text()
         else:
@@ -523,10 +533,7 @@ class RvrWifiConfigPage(CardWidget):
             self.refresh_table()
 
     def save_csv(self):
-        band = self.band_combo.currentText()
-        auth = self.auth_combo.currentText()
-        if auth not in ("Open System", "无加密（允许所有人连接）") and not self.passwd_edit.text():
-            InfoBar.error(title="Error", content="Pls input password", parent=self, position=InfoBarPosition.TOP)
+        if not self._ensure_password():
             return
         self._collect_table_data()
         try:
