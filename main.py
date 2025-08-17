@@ -55,6 +55,7 @@ class MainWindow(FluentWindow):
         self.rvr_wifi_config_page = RvrWifiConfigPage(self.case_config_page)
         self.run_page = None  # 运行窗口动态加载
         self._run_nav_button = None  # 记录 RunPage 的导航按钮
+        self._rvr_nav_button = None  # 记录 RVR Wi-Fi 配置页的导航按钮
         self._nav_button_clicked_log_slot = None
 
         # 添加侧边导航（页面，图标，标题，描述）
@@ -80,8 +81,8 @@ class MainWindow(FluentWindow):
             self.rvr_wifi_config_page = RvrWifiConfigPage(self.case_config_page)
         if hasattr(self.rvr_wifi_config_page, "reload_csv"):
             self.rvr_wifi_config_page.reload_csv()
-        if self.stackedWidget.indexOf(self.rvr_wifi_config_page) == -1:
-            self._add_interface(
+        if not self._rvr_nav_button or sip.isdeleted(self._rvr_nav_button):
+            self._rvr_nav_button = self._add_interface(
                 self.rvr_wifi_config_page,
                 FluentIcon.WIFI,
                 "RVR Scenario Config",
@@ -101,6 +102,13 @@ class MainWindow(FluentWindow):
             self.setCurrentIndex(self.case_config_page)
             QCoreApplication.processEvents()
             self._remove_interface(self.rvr_wifi_config_page)
+        elif self._rvr_nav_button and not sip.isdeleted(self._rvr_nav_button):
+            nav = getattr(self, "navigationInterface", None)
+            if nav:
+                with suppress(Exception):
+                    nav.removeWidget(self._rvr_nav_button)
+            self._rvr_nav_button.deleteLater()
+            self._rvr_nav_button = None
         nav = getattr(self, "navigationInterface", None)
         nav_count = len(nav.findChildren(QAbstractButton)) if nav else 0
         print("hide_rvr_wifi_config after remove: nav count=", nav_count)
@@ -125,13 +133,14 @@ class MainWindow(FluentWindow):
     def _add_interface(self, *args, **kwargs):
         widget = args[0] if args else kwargs.get("widget")
         print("_add_interface: adding", widget)
-        self.addSubInterface(*args, **kwargs)
+        btn = self.addSubInterface(*args, **kwargs)
         nav = getattr(self, "navigationInterface", None)
         nav_count = len(nav.findChildren(QAbstractButton)) if nav else 0
         stack_count = self.stackedWidget.count()
         print(
             "_add_interface: nav count=", nav_count, "stack count=", stack_count
         )
+        return btn
 
     def _remove_interface(self, widget):
         """移除堆叠窗口和导航项中的页面"""
@@ -145,6 +154,13 @@ class MainWindow(FluentWindow):
             self.stackedWidget.currentWidget(),
         )
         nav = getattr(self, "navigationInterface", None)
+
+        if widget is self.rvr_wifi_config_page and self._rvr_nav_button:
+            if nav:
+                with suppress(Exception):
+                    nav.removeWidget(self._rvr_nav_button)
+            self._rvr_nav_button.deleteLater()
+            self._rvr_nav_button = None
 
         buttons = []
         if nav:
