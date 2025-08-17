@@ -190,6 +190,7 @@ class CaseConfigPage(CardWidget):
         )
         # render form fields from yaml
         self.render_all_fields()
+        self._ensure_font_heights()
         self.routerInfoChanged.connect(self._update_csv_options)
         self._update_csv_options()
         # connect signals AFTER UI ready
