@@ -441,7 +441,8 @@ class CaseConfigPage(CardWidget):
     def _ensure_groupbox_title_visible(self, group: QGroupBox) -> None:
         """根据标题计算最小宽度，避免文本被截断"""
         fm = group.fontMetrics()
-        width = fm.horizontalAdvance(group.title()) + 16
+        width = fm.boundingRect(group.title()).width() + 32
+
         if group.minimumWidth() < width:
             group.setMinimumWidth(width)
 
@@ -457,13 +458,19 @@ class CaseConfigPage(CardWidget):
 
     def _apply_dynamic_heights(self, widget: QWidget) -> int:
         """递归设置控件高度等于其内容高度，避免裁剪和留白"""
-        fm = widget.fontMetrics()
-        hint = widget.sizeHint().height()
-        min_h = fm.height() + 6
-        h = max(hint, min_h)
-        widget.setFixedHeight(h)
         for child in widget.findChildren(QWidget, options=Qt.FindDirectChildrenOnly):
             self._apply_dynamic_heights(child)
+
+        fm = widget.fontMetrics()
+        if isinstance(widget, QGroupBox) and widget.layout() is not None:
+            content_h = widget.layout().sizeHint().height()
+            title_h = fm.height() + 12
+            h = max(content_h + title_h, fm.height() + 6)
+        else:
+            hint = widget.sizeHint().height()
+            min_h = fm.height() + 6
+            h = max(hint, min_h)
+        widget.setFixedHeight(h)
         return h
 
     def render_all_fields(self):
