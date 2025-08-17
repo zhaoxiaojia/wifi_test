@@ -72,6 +72,7 @@ class RvrWifiConfigPage(CardWidget):
         main_layout = QHBoxLayout(self)
 
         form_box = QGroupBox(self)
+        apply_theme(form_box, recursive=True)
         form_layout = QFormLayout(form_box)
         self.band_combo = ComboBox(form_box)
         band_list = getattr(self.router, "BAND_LIST", ["2.4G", "5G"])
@@ -127,16 +128,7 @@ class RvrWifiConfigPage(CardWidget):
         main_layout.addWidget(form_box, 1)
 
         self.table = WifiTableWidget(self)
-        apply_theme(self.table, recursive=True)
-        apply_font_and_selection(
-            self.table,
-            family="Verdana", size_px=16,
-            sel_text="#A6E3FF",  # 选中文字
-            sel_bg="#2B2B2B",  # 选中背景
-            header_bg="#202225",  # 表头/首行首列背景
-            header_fg="#C9D1D9",  # 表头文字
-            grid="#2E2E2E"  # 网格线/分隔线
-        )
+
 
         # 禁用交替行颜色并避免样式表重新启用
         self.table.setAlternatingRowColors(False)
@@ -147,8 +139,18 @@ class RvrWifiConfigPage(CardWidget):
         header.setStretchLastSection(True)
         self.table.itemSelectionChanged.connect(self._load_row_to_form)
         main_layout.addWidget(self.table, 2)
-        apply_theme(form_box, recursive=True)
-        apply_theme(self.table, recursive=True)
+
+        apply_theme(header)
+        apply_font_and_selection(
+            self.table,
+            family="Verdana", size_px=16,
+            sel_text="#A6E3FF",  # 选中文字
+            sel_bg="#2B2B2B",  # 选中背景
+            header_bg="#202225",  # 表头/首行首列背景
+            header_fg="#C9D1D9",  # 表头文字
+            grid="#2E2E2E"  # 网格线/分隔线
+        )
+
         self.band_combo.currentTextChanged.connect(self._on_band_changed)
         self.wireless_combo.currentTextChanged.connect(self._update_auth_options)
         self.wireless_combo.currentTextChanged.connect(self._update_current_row)
