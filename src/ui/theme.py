@@ -11,7 +11,7 @@
 
 from PyQt5.QtGui import QFont
 
-FONT_SIZE = 16
+FONT_SIZE = 18
 FONT_FAMILY = "Verdana"
 TEXT_COLOR = "#fafafa"
 BACKGROUND_COLOR = "#2b2b2b"
@@ -108,6 +108,7 @@ def apply_font_and_selection(view: QAbstractItemView,
     if hasattr(view, "setUniformRowHeights"):
         view.setUniformRowHeights(False)
     view.viewport().update()
+
 def apply_theme(widget, recursive: bool = False):
     widget.setStyleSheet(
         f"""
