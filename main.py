@@ -174,7 +174,7 @@ class MainWindow(FluentWindow):
                     id(widget),
                 )
 
-        with suppress(Exception):
+        try:
             logging.info(
                 "Removing from navigationInterface id=%s", id(widget) if widget else None
             )
@@ -182,10 +182,18 @@ class MainWindow(FluentWindow):
             logging.info(
                 "Removed from navigationInterface id=%s", id(widget) if widget else None
             )
-
-        if widget is self.rvr_wifi_config_page and self._rvr_nav_button:
-            self._rvr_nav_button.deleteLater()
-            self._rvr_nav_button = None
+        except Exception as e:
+            print("removeSubInterface failed:", e)
+            traceback.print_exc()
+            self._detach_sub_interface(widget)
+        finally:
+            if widget is self.rvr_wifi_config_page and self._rvr_nav_button:
+                with suppress(Exception):
+                    self._rvr_nav_button.clicked.disconnect()
+                if nav:
+                    with suppress(Exception):
+                        nav.removeWidget(self._rvr_nav_button)
+                self._rvr_nav_button.deleteLater()
 
         if nav:
             leftover = [
@@ -204,9 +212,11 @@ class MainWindow(FluentWindow):
                 self.stackedWidget.removeWidget(w)
                 w.setParent(None)
                 w.deleteLater()
+        widget.deleteLater()
         QCoreApplication.processEvents()
         idx = self.stackedWidget.indexOf(widget)
         assert idx == -1, "Widget still exists in stackedWidget"
+        self._rvr_nav_button = None
         nav_after = len(nav.findChildren(QAbstractButton)) if nav else 0
         print(
             "_remove_interface end: nav count=",
