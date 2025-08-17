@@ -56,6 +56,7 @@ class MainWindow(FluentWindow):
         self.run_page = None  # 运行窗口动态加载
         self._run_nav_button = None  # 记录 RunPage 的导航按钮
         self._rvr_nav_button = None  # 记录 RVR Wi-Fi 配置页的导航按钮
+        self._rvr_route_key = None  # 记录 RVR 页面对应的 routeKey
         self._nav_button_clicked_log_slot = None
         self._rvr_visible = False
 
@@ -102,6 +103,12 @@ class MainWindow(FluentWindow):
                 "RVR Scenario Config",
                 "RVR Wi-Fi Config",
             )
+            if self._rvr_nav_button:
+                self._rvr_route_key = self._rvr_nav_button.property("routeKey") or self.rvr_wifi_config_page.objectName()
+                print(
+                    "show_rvr_wifi_config: routeKey=",
+                    self._rvr_route_key,
+                )
         self._rvr_visible = True
 
     def hide_rvr_wifi_config(self):
@@ -118,15 +125,7 @@ class MainWindow(FluentWindow):
             # 切换到 CaseConfigPage，避免删除正在显示的页面
             self.setCurrentIndex(self.case_config_page)
             QCoreApplication.processEvents()
-            self._remove_interface(self.rvr_wifi_config_page)
-        elif self._rvr_nav_button and not sip.isdeleted(self._rvr_nav_button):
-            nav = getattr(self, "navigationInterface", None)
-            if nav:
-                with suppress(Exception):
-                    nav.removeWidget(self._rvr_nav_button)
-            self._rvr_nav_button.deleteLater()
-        self._rvr_nav_button = None
-        self.rvr_wifi_config_page = None
+        self._remove_interface(self.rvr_wifi_config_page, self._rvr_route_key)
         QCoreApplication.processEvents()
         nav = getattr(self, "navigationInterface", None)
         nav_count = len(nav.findChildren(QAbstractButton)) if nav else 0
@@ -161,60 +160,53 @@ class MainWindow(FluentWindow):
         )
         return btn
 
-    def _remove_interface(self, widget):
-        """移除堆叠窗口和导航项中的页面"""
-        if not widget or sip.isdeleted(widget):
-            return
-
-        print(
-            "_remove_interface start: widget=",
-            widget,
-            "current=",
-            self.stackedWidget.currentWidget(),
-        )
+    def _remove_interface(self, widget, route_key=None):
+        """移除堆叠窗口和导航项中的页面，并清理路由栈"""
         nav = getattr(self, "navigationInterface", None)
-        nav_count_before = len(nav.findChildren(QAbstractButton)) if nav else 0
+        router = getattr(nav, "router", None) if nav else None
+        nav_before = len(nav.findChildren(QAbstractButton)) if nav else 0
+        stack_before = list(getattr(router, "stackHistories", []))
+        print(
+            "_remove_interface start: nav count=",
+            nav_before,
+            "stackHistories=",
+            stack_before,
+            "widget=",
+            widget,
+        )
 
-        try:
-            if nav:
-                buttons = [
-                    btn
-                    for btn in nav.findChildren(QAbstractButton)
-                    if any(
-                        getattr(btn, attr, None) is widget
-                        for attr in (
-                            "widget",
-                            "page",
-                            "targetWidget",
-                            "contentWidget",
-                        )
-                    )
-                ]
-                for btn in buttons:
-                    with suppress(Exception):
-                        btn.clicked.disconnect()
-                    nav.removeWidget(btn)
-                    btn.deleteLater()
+        if nav and route_key:
+            with suppress(Exception):
+                if hasattr(nav, "removeItem"):
+                    nav.removeItem(route_key)
+                elif hasattr(nav, "removeSubInterface"):
+                    nav.removeSubInterface(route_key)
+        if router and route_key:
+            with suppress(Exception):
+                router.remove(route_key)
 
-            self.stackedWidget.removeWidget(widget)
-            widget.deleteLater()
-        except Exception:
-            traceback.print_exc()
+        if widget and not sip.isdeleted(widget):
+            with suppress(Exception):
+                self.stackedWidget.removeWidget(widget)
+                widget.deleteLater()
 
         QCoreApplication.processEvents()
-        idx = self.stackedWidget.indexOf(widget)
-        assert idx == -1, "Widget still exists in stackedWidget"
         nav_after = len(nav.findChildren(QAbstractButton)) if nav else 0
+        stack_after = list(getattr(router, "stackHistories", []))
         print(
             "_remove_interface end: nav count=",
             nav_after,
+            "stackHistories=",
+            stack_after,
             "stack count=",
             self.stackedWidget.count(),
-            "rvr_wifi_config_page=",
-            self.rvr_wifi_config_page,
         )
-        logging.info("Nav buttons: %s -> %s", nav_count_before, nav_after)
-        logging.info("_remove_interface end id=%s index=%s", id(widget), idx)
+
+        if widget is self.rvr_wifi_config_page:
+            self._rvr_nav_button = None
+            self.rvr_wifi_config_page = None
+            self._rvr_route_key = None
+        logging.info("Nav buttons: %s -> %s", nav_before, nav_after)
 
     def clear_run_page(self):
         if self.run_page and not sip.isdeleted(self.run_page):
