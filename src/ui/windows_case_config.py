@@ -34,7 +34,6 @@ from PyQt5.QtWidgets import (
     QWidget,
     QHBoxLayout,
     QVBoxLayout,
-    QGridLayout,
     QGroupBox,
     QLabel,
     QFileSystemModel,
@@ -139,12 +138,18 @@ class CaseConfigPage(CardWidget):
         right.setContentsMargins(0, 0, 0, 0)
         right.setSpacing(5)
         self._columns_widget = QWidget()
-        self._columns_layout = QGridLayout(self._columns_widget)
+        self._columns_layout = QHBoxLayout(self._columns_widget)
         self._columns_layout.setSpacing(8)
         self._columns_layout.setContentsMargins(0, 0, 0, 0)
-        for i in range(self._col_count):
-            self._columns_layout.setColumnStretch(i, 1)
-        self._group_index = 0
+        self._column_layouts: list[QVBoxLayout] = []
+        for _ in range(self._col_count):
+            col_widget = QWidget()
+            vbox = QVBoxLayout(col_widget)
+            vbox.setSpacing(8)
+            vbox.setContentsMargins(0, 0, 0, 0)
+            self._columns_layout.addWidget(col_widget)
+            self._column_layouts.append(vbox)
+        self._col_heights = [0] * self._col_count
         right.addWidget(self._columns_widget)
         self.run_btn = PushButton("Test", self)
         self.run_btn.setIcon(FluentIcon.PLAY)
@@ -182,9 +187,9 @@ class CaseConfigPage(CardWidget):
             }
             """
         )
-        self._col_weight = [0, 0]
         # render form fields from yaml
         self.render_all_fields()
+        self._ensure_font_heights()
         self.routerInfoChanged.connect(self._update_csv_options)
         self._update_csv_options()
         # connect signals AFTER UI ready
@@ -429,11 +434,19 @@ class CaseConfigPage(CardWidget):
 
 
     def _add_group(self, group: QWidget, weight: int | None = None):
-        """将 group 按列数依次放入网格布局"""
-        row = self._group_index // self._col_count
-        col = self._group_index % self._col_count
-        self._columns_layout.addWidget(group, row, col)
-        self._group_index += 1
+        """瀑布流布局：将 group 放入当前高度最小的列"""
+        idx = self._col_heights.index(min(self._col_heights))
+        self._column_layouts[idx].addWidget(group)
+        h = weight if weight is not None else group.sizeHint().height()
+        self._col_heights[idx] += h
+
+    def _ensure_font_heights(self):
+        """确保所有控件的高度至少能容纳其字体"""
+        for w in self.findChildren(QWidget):
+            fm = w.fontMetrics()
+            min_h = fm.height() + 6
+            if w.minimumHeight() < min_h:
+                w.setMinimumHeight(min_h)
 
     def render_all_fields(self):
         """
