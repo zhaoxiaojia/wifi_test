@@ -86,7 +86,14 @@ class MainWindow(FluentWindow):
     def hide_rvr_wifi_config(self):
         """从导航栏移除 RVR Wi-Fi 配置页"""
         if self.rvr_wifi_config_page and not sip.isdeleted(self.rvr_wifi_config_page):
+            # 切换到 CaseConfigPage，避免删除正在显示的页面
+            self.setCurrentIndex(self.case_config_page)
+            QCoreApplication.processEvents()
             self._remove_interface(self.rvr_wifi_config_page)
+            logging.debug(
+                "RVR Wi-Fi config page removed id=%s",
+                id(self.rvr_wifi_config_page),
+            )
         self.rvr_wifi_config_page = None
 
     def removeSubInterface(self, page):
@@ -109,6 +116,46 @@ class MainWindow(FluentWindow):
         if not widget or sip.isdeleted(widget):
             return
 
+        nav = getattr(self, "navigationInterface", None)
+        buttons = []
+        if nav:
+            buttons = [
+                btn
+                for btn in nav.findChildren(QAbstractButton)
+                if any(
+                    getattr(btn, attr, None) is widget
+                    for attr in ("widget", "page", "targetWidget", "contentWidget")
+                )
+            ]
+        for btn in buttons:
+            with suppress(Exception):
+                btn.clicked.disconnect()
+                logging.debug(
+                    "Disconnected nav button clicked id=%s for widget id=%s",
+                    id(btn),
+                    id(widget),
+                )
+
+        with suppress(Exception):
+            logging.info(
+                "Removing from navigationInterface id=%s", id(widget) if widget else None
+            )
+            self.removeSubInterface(widget)
+            logging.info(
+                "Removed from navigationInterface id=%s", id(widget) if widget else None
+            )
+
+        if nav:
+            leftover = [
+                btn
+                for btn in nav.findChildren(QAbstractButton)
+                if any(
+                    getattr(btn, attr, None) is widget
+                    for attr in ("widget", "page", "targetWidget", "contentWidget")
+                )
+            ]
+            assert not leftover, "Navigation button not fully removed"
+
         for i in reversed(range(self.stackedWidget.count())):
             w = self.stackedWidget.widget(i)
             if w is widget or w.__class__ == widget.__class__:
@@ -116,17 +163,9 @@ class MainWindow(FluentWindow):
                 w.setParent(None)
                 w.deleteLater()
         QCoreApplication.processEvents()
-        with suppress(Exception):
-            logging.info("Removing from navigationInterface id=%s", id(widget) if widget else None)
-            self.removeSubInterface(widget)
-            logging.info("Removed from navigationInterface id=%s", id(widget) if widget else None)
-        idx = self.stackedWidget.indexOf(widget) if widget else None
-        logging.info(
-            "_remove_interface end id=%s isdeleted=%s index=%s",
-            id(widget) if widget else None,
-            sip.isdeleted(widget) if widget else None,
-            idx,
-        )
+        idx = self.stackedWidget.indexOf(widget)
+        assert idx == -1, "Widget still exists in stackedWidget"
+        logging.info("_remove_interface end id=%s index=%s", id(widget), idx)
 
     def clear_run_page(self):
         if self.run_page and not sip.isdeleted(self.run_page):
