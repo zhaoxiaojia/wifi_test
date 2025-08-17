@@ -113,11 +113,12 @@ class MainWindow(FluentWindow):
                 with suppress(Exception):
                     nav.removeWidget(self._rvr_nav_button)
             self._rvr_nav_button.deleteLater()
-            self._rvr_nav_button = None
+        self._rvr_nav_button = None
+        self.rvr_wifi_config_page = None
+        QCoreApplication.processEvents()
         nav = getattr(self, "navigationInterface", None)
         nav_count = len(nav.findChildren(QAbstractButton)) if nav else 0
         print("hide_rvr_wifi_config after remove: nav count=", nav_count)
-        self.rvr_wifi_config_page = None
         self._rvr_visible = False
         print("hide_rvr_wifi_config end: page=", self.rvr_wifi_config_page)
 
@@ -162,71 +163,35 @@ class MainWindow(FluentWindow):
         nav = getattr(self, "navigationInterface", None)
         nav_count_before = len(nav.findChildren(QAbstractButton)) if nav else 0
 
-        buttons = []
-        if nav:
-            buttons = [
-                btn
-                for btn in nav.findChildren(QAbstractButton)
-                if any(
-                    getattr(btn, attr, None) is widget
-                    for attr in ("widget", "page", "targetWidget", "contentWidget")
-                )
-            ]
-        for btn in buttons:
-            with suppress(Exception):
-                btn.clicked.disconnect()
-                logging.debug(
-                    "Disconnected nav button clicked id=%s for widget id=%s",
-                    id(btn),
-                    id(widget),
-                )
-
         try:
-            logging.info(
-                "Removing from navigationInterface id=%s", id(widget) if widget else None
-            )
-            if nav and hasattr(nav, "removeItem"):
-                nav.removeItem(widget.objectName())
-            else:
-                self.removeInterface(widget)
-            logging.info(
-                "Removed from navigationInterface id=%s", id(widget) if widget else None
-            )
-        except Exception as e:
-            print("removeSubInterface failed:", e)
-            traceback.print_exc()
-            self._detach_sub_interface(widget)
-        finally:
-            if widget is self.rvr_wifi_config_page and self._rvr_nav_button:
-                with suppress(Exception):
-                    self._rvr_nav_button.clicked.disconnect()
-                if nav:
+            if nav:
+                buttons = [
+                    btn
+                    for btn in nav.findChildren(QAbstractButton)
+                    if any(
+                        getattr(btn, attr, None) is widget
+                        for attr in (
+                            "widget",
+                            "page",
+                            "targetWidget",
+                            "contentWidget",
+                        )
+                    )
+                ]
+                for btn in buttons:
                     with suppress(Exception):
-                        nav.removeWidget(self._rvr_nav_button)
-                self._rvr_nav_button.deleteLater()
+                        btn.clicked.disconnect()
+                    nav.removeWidget(btn)
+                    btn.deleteLater()
 
-        if nav:
-            leftover = [
-                btn
-                for btn in nav.findChildren(QAbstractButton)
-                if any(
-                    getattr(btn, attr, None) is widget
-                    for attr in ("widget", "page", "targetWidget", "contentWidget")
-                )
-            ]
-            assert not leftover, "Navigation button not fully removed"
+            self.stackedWidget.removeWidget(widget)
+            widget.deleteLater()
+        except Exception:
+            traceback.print_exc()
 
-        for i in reversed(range(self.stackedWidget.count())):
-            w = self.stackedWidget.widget(i)
-            if w is widget or w.__class__ == widget.__class__:
-                self.stackedWidget.removeWidget(w)
-                w.setParent(None)
-                w.deleteLater()
-        widget.deleteLater()
         QCoreApplication.processEvents()
         idx = self.stackedWidget.indexOf(widget)
         assert idx == -1, "Widget still exists in stackedWidget"
-        self._rvr_nav_button = None
         nav_after = len(nav.findChildren(QAbstractButton)) if nav else 0
         print(
             "_remove_interface end: nav count=",
@@ -236,9 +201,7 @@ class MainWindow(FluentWindow):
             "rvr_wifi_config_page=",
             self.rvr_wifi_config_page,
         )
-        logging.info(
-            "Nav buttons: %s -> %s", nav_count_before, nav_after
-        )
+        logging.info("Nav buttons: %s -> %s", nav_count_before, nav_after)
         logging.info("_remove_interface end id=%s index=%s", id(widget), idx)
 
     def clear_run_page(self):
