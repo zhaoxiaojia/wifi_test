@@ -125,23 +125,26 @@ class CaseConfigPage(CardWidget):
         scroll_area = ScrollArea(self)
         scroll_area.setWidgetResizable(True)
         scroll_area.setContentsMargins(0, 0, 0, 0)
+        # 根据配置项数量动态决定列数
+        total_fields = len(self.config)
+        if total_fields > 12:
+            self._col_count = 4
+        elif total_fields > 8:
+            self._col_count = 3
+        else:
+            self._col_count = 2
         container = QWidget()
-        container.setMaximumWidth(600)
+        container.setMinimumWidth(220 * self._col_count)
         right = QVBoxLayout(container)
         right.setContentsMargins(0, 0, 0, 0)
         right.setSpacing(5)
         self._columns_widget = QWidget()
-        cols = QHBoxLayout(self._columns_widget)
-        cols.setSpacing(8)
-        cols.setContentsMargins(0, 0, 0, 0)
-        self._left_col = QVBoxLayout()
-        self._left_col.setSpacing(8)
-        self._left_col.setAlignment(Qt.AlignTop)
-        self._right_col = QVBoxLayout()
-        self._right_col.setSpacing(8)
-        self._right_col.setAlignment(Qt.AlignTop)
-        cols.addLayout(self._left_col, 1)
-        cols.addLayout(self._right_col, 1)
+        self._columns_layout = QGridLayout(self._columns_widget)
+        self._columns_layout.setSpacing(8)
+        self._columns_layout.setContentsMargins(0, 0, 0, 0)
+        for i in range(self._col_count):
+            self._columns_layout.setColumnStretch(i, 1)
+        self._group_index = 0
         right.addWidget(self._columns_widget)
         self.run_btn = PushButton("Test", self)
         self.run_btn.setIcon(FluentIcon.PLAY)
@@ -154,12 +157,31 @@ class CaseConfigPage(CardWidget):
         right.addWidget(self.run_btn)
         scroll_area.setWidget(container)
         splitter.addWidget(scroll_area)
-        splitter.setSizes([300, 1])
-
+        splitter.setSizes([200, 600])
+        splitter.setStretchFactor(0, 1)
+        splitter.setStretchFactor(1, 3)
         main_layout = QHBoxLayout(self)
         main_layout.setSpacing(10)
         main_layout.setContentsMargins(5, 5, 5, 5)
         main_layout.addWidget(splitter)
+        self.setStyleSheet(
+            """
+            QWidget {
+                color: #f0f0f0;
+                background-color: #2b2b2b;
+            }
+            QGroupBox {
+                border: 1px solid #444444;
+            }
+            QGroupBox::title {
+                left: 8px;
+                padding: 0 3px;
+            }
+            QComboBox, QLineEdit, TextEdit, TreeView, QAbstractItemView {
+                background-color: #333333;
+            }
+            """
+        )
         self._col_weight = [0, 0]
         # render form fields from yaml
         self.render_all_fields()
@@ -405,20 +427,13 @@ class CaseConfigPage(CardWidget):
                 self.csv_combo.setCurrentIndex(-1)
         self.selected_csv_path = None
 
-    def _estimate_group_weight(self, group: QWidget) -> int:
-        """粗略估算分组高度：以输入型子控件数量为权重"""
-        from PyQt5.QtWidgets import (
-            QLineEdit, QComboBox, QTextEdit, QSpinBox, QDoubleSpinBox, QCheckBox
-        )
-        inputs = group.findChildren((QLineEdit, QComboBox, QTextEdit, QSpinBox, QDoubleSpinBox, QCheckBox))
-        return max(1, len(inputs))
 
     def _add_group(self, group: QWidget, weight: int | None = None):
-        """把 group 放到当前更“轻”的一列"""
-        w = self._estimate_group_weight(group) if weight is None else weight
-        ci = 0 if self._col_weight[0] <= self._col_weight[1] else 1
-        (self._left_col if ci == 0 else self._right_col).addWidget(group)
-        self._col_weight[ci] += w
+        """将 group 按列数依次放入网格布局"""
+        row = self._group_index // self._col_count
+        col = self._group_index % self._col_count
+        self._columns_layout.addWidget(group, row, col)
+        self._group_index += 1
 
     def render_all_fields(self):
         """
