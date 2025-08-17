@@ -160,6 +160,7 @@ class MainWindow(FluentWindow):
             self.stackedWidget.currentWidget(),
         )
         nav = getattr(self, "navigationInterface", None)
+        nav_count_before = len(nav.findChildren(QAbstractButton)) if nav else 0
 
         buttons = []
         if nav:
@@ -184,7 +185,10 @@ class MainWindow(FluentWindow):
             logging.info(
                 "Removing from navigationInterface id=%s", id(widget) if widget else None
             )
-            FluentWindow.removeSubInterface(self, widget)
+            if nav and hasattr(nav, "removeItem"):
+                nav.removeItem(widget.objectName())
+            else:
+                self.removeInterface(widget)
             logging.info(
                 "Removed from navigationInterface id=%s", id(widget) if widget else None
             )
@@ -231,6 +235,9 @@ class MainWindow(FluentWindow):
             self.stackedWidget.count(),
             "rvr_wifi_config_page=",
             self.rvr_wifi_config_page,
+        )
+        logging.info(
+            "Nav buttons: %s -> %s", nav_count_before, nav_after
         )
         logging.info("_remove_interface end id=%s index=%s", id(widget), idx)
 
