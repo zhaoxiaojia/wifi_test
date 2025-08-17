@@ -34,7 +34,6 @@ from qfluentwidgets import (
 
 from src.tools.router_tool.router_factory import get_router
 from typing import TYPE_CHECKING
-from .theme import apply_theme, FONT_FAMILY
 
 if TYPE_CHECKING:
     from .windows_case_config import CaseConfigPage
@@ -71,7 +70,6 @@ class RvrWifiConfigPage(CardWidget):
     def __init__(self, case_config_page: "CaseConfigPage"):
         super().__init__()
         self.setObjectName("rvrWifiConfigPage")
-        apply_theme(self)
         self.case_config_page = case_config_page
         combo = getattr(self.case_config_page, "router_name_combo", None)
         router_name = combo.currentText().lower() if combo is not None else ""
@@ -142,12 +140,11 @@ class RvrWifiConfigPage(CardWidget):
         main_layout.addWidget(form_box, 1)
 
         self.table = WifiTableWidget(self)
-        apply_theme(self.table)
         # 禁用交替行颜色并避免样式表重新启用
         self.table.setAlternatingRowColors(False)
         self.table.setStyleSheet(
             self.table.styleSheet()
-            + f"QTableView {{alternate-background-color: transparent;font-family: {FONT_FAMILY};}}"
+            + "QTableView {alternate-background-color: transparent;font-family: Verdana;}"
         )
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
@@ -312,7 +309,7 @@ class RvrWifiConfigPage(CardWidget):
             "5G": getattr(self.router, "BANDWIDTH_5", []),
         }[band]
         with QSignalBlocker(self.wireless_combo), QSignalBlocker(self.channel_combo), QSignalBlocker(
-                self.bandwidth_combo
+            self.bandwidth_combo
         ):
             self.wireless_combo.clear()
             self.wireless_combo.addItems(wireless)
