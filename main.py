@@ -72,36 +72,48 @@ class MainWindow(FluentWindow):
 
     def show_rvr_wifi_config(self):
         """在导航栏中显示 RVR Wi-Fi 配置页"""
+        if self._rvr_visible:
+            return
+
         nav = getattr(self, "navigationInterface", None)
         nav_items = []
         if nav:
             nav_items = [getattr(btn, "text", lambda: "")() for btn in nav.findChildren(QAbstractButton)]
-        print("show_rvr_wifi_config start: page id=", id(self.rvr_wifi_config_page), "nav items=", nav_items)
+        print(
+            "show_rvr_wifi_config start: page id=",
+            id(self.rvr_wifi_config_page),
+            "nav items=",
+            nav_items,
+        )
         # 页面可能已被删除，需重新实例化
         if self.rvr_wifi_config_page is None or sip.isdeleted(self.rvr_wifi_config_page):
             self.rvr_wifi_config_page = RvrWifiConfigPage(self.case_config_page)
-        if hasattr(self.rvr_wifi_config_page, "reload_csv"):
+        if (
+            self.rvr_wifi_config_page
+            and not sip.isdeleted(self.rvr_wifi_config_page)
+            and hasattr(self.rvr_wifi_config_page, "reload_csv")
+        ):
             self.rvr_wifi_config_page.reload_csv()
-        if not self._rvr_visible:
-            if not self._rvr_nav_button or sip.isdeleted(self._rvr_nav_button):
-                self._rvr_nav_button = self._add_interface(
-                    self.rvr_wifi_config_page,
-                    FluentIcon.WIFI,
-                    "RVR Scenario Config",
-                    "RVR Wi-Fi Config",
-                )
-            self._rvr_visible = True
+
+        if not self._rvr_nav_button or sip.isdeleted(self._rvr_nav_button):
+            self._rvr_nav_button = self._add_interface(
+                self.rvr_wifi_config_page,
+                FluentIcon.WIFI,
+                "RVR Scenario Config",
+                "RVR Wi-Fi Config",
+            )
+        self._rvr_visible = True
 
     def hide_rvr_wifi_config(self):
         """从导航栏移除 RVR Wi-Fi 配置页"""
+        if not self._rvr_visible:
+            return
         print(
             "hide_rvr_wifi_config start: page=",
             self.rvr_wifi_config_page,
             "current=",
             self.stackedWidget.currentWidget(),
         )
-        if not self._rvr_visible:
-            return
         if self.rvr_wifi_config_page and not sip.isdeleted(self.rvr_wifi_config_page):
             # 切换到 CaseConfigPage，避免删除正在显示的页面
             self.setCurrentIndex(self.case_config_page)

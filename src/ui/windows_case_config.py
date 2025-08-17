@@ -965,16 +965,14 @@ class CaseConfigPage(CardWidget):
             if isinstance(passwd_widget, LineEdit):
                 passwd = passwd_widget.text()
             if hasattr(main_window, "show_rvr_wifi_config"):
-                if not getattr(main_window, "_rvr_visible", False):
-                    print("get_editable_fields: before show_rvr_wifi_config")
-                    main_window.show_rvr_wifi_config()
-                    print("get_editable_fields: after show_rvr_wifi_config")
+                print("get_editable_fields: before show_rvr_wifi_config")
+                main_window.show_rvr_wifi_config()
+                print("get_editable_fields: after show_rvr_wifi_config")
         else:
             if hasattr(main_window, "hide_rvr_wifi_config"):
-                if getattr(main_window, "_rvr_visible", False):
-                    print("get_editable_fields: before hide_rvr_wifi_config")
-                    main_window.hide_rvr_wifi_config()
-                    print("get_editable_fields: after hide_rvr_wifi_config")
+                print("get_editable_fields: before hide_rvr_wifi_config")
+                main_window.hide_rvr_wifi_config()
+                print("get_editable_fields: after hide_rvr_wifi_config")
         if hasattr(self, "csv_combo"):
             if info.enable_csv:
                 self.csv_combo.setEnabled(True)
