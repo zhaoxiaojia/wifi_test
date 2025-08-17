@@ -354,7 +354,7 @@ class CaseConfigPage(CardWidget):
         """
         self.adb_group.setVisible(type_str == "adb")
         self.telnet_group.setVisible(type_str == "telnet")
-        self._apply_dynamic_heights(self.connect_group)
+        self.connect_group.setFixedHeight(getattr(self.connect_group, "_max_height", self.connect_group.height()))
 
     def on_rf_model_changed(self, model_str):
         """
@@ -365,18 +365,18 @@ class CaseConfigPage(CardWidget):
         self.xin_group.setVisible(model_str == "XIN-YI")
         self.rc4_group.setVisible(model_str == "RC4DAT-8G-95")
         self.rack_group.setVisible(model_str == "RADIORACK-4-220")
-        self._apply_dynamic_heights(self.rf_group)
+        self.rf_group.setFixedHeight(getattr(self.rf_group, "_max_height", self.rf_group.height()))
 
     # 添加到类里：响应 Tool 下拉，切换子参数可见性
     def on_rvr_tool_changed(self, tool: str):
         """选择 iperf / ixchariot 时，动态显示对应子参数"""
         self.rvr_iperf_group.setVisible(tool == "iperf")
         self.rvr_ix_group.setVisible(tool == "ixchariot")
-        self._apply_dynamic_heights(self.rvr_group)
+        self.rvr_group.setFixedHeight(getattr(self.rvr_group, "_max_height", self.rvr_group.height()))
 
     def on_serial_enabled_changed(self, text: str):
         self.serial_cfg_group.setVisible(text == "True")
-        self._apply_dynamic_heights(self.serial_group)
+        self.serial_group.setFixedHeight(getattr(self.serial_group, "_max_height", self.serial_group.height()))
 
     def _load_router_wifi_info(self, name: str):
         cfg = self.config.get("router", {})
@@ -438,22 +438,38 @@ class CaseConfigPage(CardWidget):
         self.selected_csv_path = None
 
 
+    def _ensure_groupbox_title_visible(self, group: QGroupBox) -> None:
+        """根据标题计算最小宽度，避免文本被截断"""
+        fm = group.fontMetrics()
+        width = fm.boundingRect(group.title()).width() + 32
+        if group.minimumWidth() < width:
+            group.setMinimumWidth(width)
+
     def _add_group(self, group: QWidget, weight: int | None = None):
         """瀑布流布局：将 group 放入当前高度最小的列"""
         h = self._apply_dynamic_heights(group)
+        if isinstance(group, QGroupBox):
+            self._ensure_groupbox_title_visible(group)
+        group._max_height = h  # 记录最大高度，后续保持布局稳定
         idx = self._col_heights.index(min(self._col_heights))
         self._column_layouts[idx].addWidget(group)
         self._col_heights[idx] += weight if weight is not None else h
 
     def _apply_dynamic_heights(self, widget: QWidget) -> int:
         """递归设置控件高度等于其内容高度，避免裁剪和留白"""
-        fm = widget.fontMetrics()
-        hint = widget.sizeHint().height()
-        min_h = fm.height() + 6
-        h = max(hint, min_h)
-        widget.setFixedHeight(h)
         for child in widget.findChildren(QWidget, options=Qt.FindDirectChildrenOnly):
             self._apply_dynamic_heights(child)
+
+        fm = widget.fontMetrics()
+        if isinstance(widget, QGroupBox) and widget.layout() is not None:
+            content_h = widget.layout().sizeHint().height()
+            title_h = fm.height() + 12
+            h = max(content_h + title_h, fm.height() + 6)
+        else:
+            hint = widget.sizeHint().height()
+            min_h = fm.height() + 6
+            h = max(hint, min_h)
+        widget.setFixedHeight(h)
         return h
 
     def render_all_fields(self):
