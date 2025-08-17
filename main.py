@@ -9,15 +9,19 @@ import os
 from contextlib import suppress
 
 sys.path.insert(0, str(Path(__file__).parent))
-from PyQt5.QtWidgets import QApplication, QAbstractButton
+from PyQt5.QtWidgets import (
+    QApplication,
+    QAbstractButton,
+    QGraphicsOpacityEffect,
+)
 import sip
 from qfluentwidgets import FluentIcon, FluentWindow, NavigationItemPosition
 from src.ui.windows_case_config import CaseConfigPage
 from src.ui.rvr_wifi_config import RvrWifiConfigPage
 from src.ui.run import RunPage
 from qfluentwidgets import setTheme, Theme
-from PyQt5.QtGui import QGuiApplication
-from PyQt5.QtCore import QCoreApplication
+from PyQt5.QtGui import QGuiApplication,QFont
+from PyQt5.QtCore import QCoreApplication, QPropertyAnimation, QEasingCurve
 from src.util.constants import Paths
 from src.util.constants import Paths, cleanup_temp_dir
 
@@ -61,7 +65,7 @@ class MainWindow(FluentWindow):
         # 可加更多页面，比如“历史记录”“关于”等
 
         # FluentWindow自带自定义颜色与主题
-        setTheme(Theme.LIGHT)  # 或 Theme.LIGHT
+        setTheme(Theme.DARK)  #
         # self.setMicaEffectEnabled(True)  # Win11下生效毛玻璃
 
     def show_rvr_wifi_config(self):
@@ -168,7 +172,9 @@ class MainWindow(FluentWindow):
             if btn is self._run_nav_button:
                 continue
             btn.setEnabled(enabled)
-            btn.setStyleSheet("color: gray;" if not enabled else "")
+            btn.setStyleSheet(
+                "color: gray; font-family: Verdana;" if not enabled else "font-family: Verdana;"
+            )
 
     def center_window(self):
         # 获取屏幕的几何信息
@@ -188,8 +194,32 @@ class MainWindow(FluentWindow):
             if page_widget is self.rvr_wifi_config_page and (ssid or passwd):
                 if hasattr(self.rvr_wifi_config_page, "set_router_credentials"):
                     self.rvr_wifi_config_page.set_router_credentials(ssid or "", passwd or "")
-            self.stackedWidget.setCurrentWidget(page_widget)
-            logging.debug("Switched widget to %s", page_widget)
+            current = self.stackedWidget.currentWidget()
+            if current is not page_widget:
+                if current:
+                    effect = QGraphicsOpacityEffect(current)
+                    current.setGraphicsEffect(effect)
+                    fade_out = QPropertyAnimation(effect, b"opacity", current)
+                    fade_out.setDuration(200)
+                    fade_out.setStartValue(1.0)
+                    fade_out.setEndValue(0.0)
+                    fade_out.setEasingCurve(QEasingCurve.OutCubic)
+                    fade_out.start()
+                    self._fade_out = fade_out
+                    fade_out.finished.connect(lambda: current.setGraphicsEffect(None))
+                self.stackedWidget.setCurrentWidget(page_widget)
+                if page_widget:
+                    effect_in = QGraphicsOpacityEffect(page_widget)
+                    page_widget.setGraphicsEffect(effect_in)
+                    fade_in = QPropertyAnimation(effect_in, b"opacity", page_widget)
+                    fade_in.setDuration(200)
+                    fade_in.setStartValue(0.0)
+                    fade_in.setEndValue(1.0)
+                    fade_in.setEasingCurve(QEasingCurve.OutCubic)
+                    fade_in.start()
+                    self._fade_in = fade_in
+                    fade_in.finished.connect(lambda: page_widget.setGraphicsEffect(None))
+                logging.debug("Switched widget to %s", page_widget)
         except Exception as e:
             logging.error("Failed to set current widget: %s", e)
 
@@ -259,6 +289,7 @@ multiprocessing.freeze_support()
 if __name__ == "__main__":
     try:
         app = QApplication(sys.argv)
+        QGuiApplication.setFont(QFont("Verdana"))
         window = MainWindow()
         window.show()
         sys.exit(app.exec())

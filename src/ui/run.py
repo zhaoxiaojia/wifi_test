@@ -25,7 +25,13 @@ from qfluentwidgets import (
     InfoBarPosition,
     FluentIcon,
 )
-from PyQt5.QtCore import QThread, pyqtSignal
+from PyQt5.QtCore import (
+    QThread,
+    pyqtSignal,
+    QPropertyAnimation,
+    QEasingCurve,
+    QRect,
+)
 from PyQt5.QtGui import QTextCursor
 import datetime
 import re
@@ -249,30 +255,41 @@ class RunPage(CardWidget):
         self.log_area = QTextEdit(self)
         self.log_area.setReadOnly(True)
         self.log_area.setMinimumHeight(400)
-        self.log_area.setStyleSheet("font-size:16px; color:#2b2b2b; background:#fafaff;")
+        self.log_area.setStyleSheet(
+            "font-size:16px; background:#2b2b2b; color:#fafafa;font-family: Verdana;"
+        )
         self.log_area.document().setMaximumBlockCount(2000)
         layout.addWidget(self.log_area, stretch=5)
 
         # 文本进度标签
-        self.progress_text = QLabel("当前进度 0%", self)
-        self.progress_text.setStyleSheet("font-size: 14px;")
+        self.progress_text = QLabel("Process 0%", self)
+        self.progress_text.setStyleSheet(
+            "font-size: 14px; background:#2b2b2b; color:#fafafa;font-family: Verdana;"
+        )
         layout.addWidget(self.progress_text)
         # 外部容器（透明）
         self.progress_container = QFrame(self)
         self.progress_container.setFixedHeight(10)
-        self.progress_container.setStyleSheet("background: transparent;")
+        self.progress_container.setStyleSheet("background: transparent;font-family: Verdana;")
         layout.addWidget(self.progress_container)
 
         # 内部进度块
         self.progress_chunk = QFrame(self.progress_container)
         self.progress_chunk.setFixedHeight(10)
-        self.progress_chunk.setStyleSheet("""
-            background-color: #A2D2FF;
+        self.progress_chunk.setStyleSheet(
+            """
+            background-color: #4a90e2;
             border-radius: 4px;
-        """)
+            font-family: Verdana;
+            """
+        )
         self.progress_chunk.setFixedWidth(0)
         self.action_btn = PushButton("Exit", self)
         self.action_btn.setIcon(FluentIcon.CLOSE)
+        if hasattr(self.action_btn, "setUseRippleEffect"):
+            self.action_btn.setUseRippleEffect(True)
+        if hasattr(self.action_btn, "setUseStateEffect"):
+            self.action_btn.setUseStateEffect(True)
         self.action_btn.clicked.connect(
             lambda: logging.info("action_btn clicked")
         )
@@ -319,7 +336,16 @@ class RunPage(CardWidget):
         total_width = self.progress_container.width() or 300  # 默认宽度
         progress_width = int(total_width * percent / 100)
         # 更新进度块宽度
-        self.progress_chunk.setFixedWidth(progress_width)
+        start_rect = self.progress_chunk.geometry()
+        end_rect = QRect(start_rect)
+        end_rect.setWidth(progress_width)
+        animation = QPropertyAnimation(self.progress_chunk, b"geometry")
+        animation.setDuration(300)
+        animation.setStartValue(start_rect)
+        animation.setEndValue(end_rect)
+        animation.setEasingCurve(QEasingCurve.OutCubic)
+        animation.start()
+        self._progress_animation = animation
 
     def run_case(self):
         self.cleanup()
