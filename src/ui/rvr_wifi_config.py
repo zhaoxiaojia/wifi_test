@@ -34,7 +34,7 @@ from qfluentwidgets import (
 
 from src.tools.router_tool.router_factory import get_router
 from typing import TYPE_CHECKING
-from .theme import apply_theme
+from .theme import apply_theme,apply_font_and_selection
 
 if TYPE_CHECKING:
     from .windows_case_config import CaseConfigPage
@@ -49,20 +49,6 @@ class WifiTableWidget(TableWidget):
         # 仅允许单行选择并整行高亮
         self.setSelectionMode(QAbstractItemView.SingleSelection)
         self.setSelectionBehavior(QAbstractItemView.SelectRows)
-        # 垂直表头允许拖动以调整行顺序
-        vh = self.verticalHeader()
-        vh.setVisible(True)
-        vh.setSectionsMovable(True)
-        vh.sectionMoved.connect(lambda *_: self.page._sync_rows())
-        # 启用内部拖拽排序
-        self.setDragDropMode(QAbstractItemView.InternalMove)
-        self.setDragEnabled(True)
-        self.setAcceptDrops(True)
-
-    # 仍保留 dropEvent 以兼容内部拖拽
-    def dropEvent(self, event):  # type: ignore[override]
-        super().dropEvent(event)
-        self.page._sync_rows()
 
 
 class RvrWifiConfigPage(CardWidget):
@@ -141,12 +127,19 @@ class RvrWifiConfigPage(CardWidget):
         main_layout.addWidget(form_box, 1)
 
         self.table = WifiTableWidget(self)
+        apply_theme(self.table, recursive=True)
+        apply_font_and_selection(
+            self.table,
+            family="Verdana", size_px=16,
+            sel_text="#A6E3FF",  # 选中文字
+            sel_bg="#2B2B2B",  # 选中背景
+            header_bg="#202225",  # 表头/首行首列背景
+            header_fg="#C9D1D9",  # 表头文字
+            grid="#2E2E2E"  # 网格线/分隔线
+        )
+
         # 禁用交替行颜色并避免样式表重新启用
         self.table.setAlternatingRowColors(False)
-        self.table.setStyleSheet(
-            self.table.styleSheet()
-            + "QTableView {alternate-background-color: transparent;font-family: Verdana;}"
-        )
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         header = self.table.horizontalHeader()
