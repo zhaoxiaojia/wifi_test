@@ -118,6 +118,7 @@ class CaseConfigPage(CardWidget):
         self.splitter.setChildrenCollapsible(False)
         # ----- left: case tree -----
         self.case_tree = TreeView(self)
+        apply_theme(self.case_tree)
         self._init_case_tree(Path(self._get_application_base()) / "test")
         self.splitter.addWidget(self.case_tree)
 

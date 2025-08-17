@@ -20,7 +20,13 @@ HTML_STYLE = f"{STYLE_BASE} color:{TEXT_COLOR};"
 def apply_theme(widget):
     """Apply the global theme to a widget."""
     widget.setStyleSheet(
-        f"{STYLE_BASE} color:{TEXT_COLOR}; background:{BACKGROUND_COLOR};"
+        f"""
+        {STYLE_BASE} color:{TEXT_COLOR}; background:{BACKGROUND_COLOR};
+        QTreeView, QTreeView::item {{
+            {STYLE_BASE} color:{TEXT_COLOR};
+            background:{BACKGROUND_COLOR};
+        }}
+        """
     )
 
 
