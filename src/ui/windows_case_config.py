@@ -54,6 +54,7 @@ from qfluentwidgets import (
     InfoBarPosition,
     ScrollArea
 )
+from .theme import apply_theme, FONT_FAMILY, TEXT_COLOR
 
 
 @dataclass
@@ -100,7 +101,7 @@ class CaseConfigPage(CardWidget):
         super().__init__()
         self.setObjectName("caseConfigPage")
         self.on_run_callback = on_run_callback
-
+        apply_theme(self)
         # -------------------- load yaml --------------------
         self.config_path = (Path(Paths.CONFIG_DIR) / "config.yaml").resolve()
         self.config: dict = self._load_config()
@@ -168,16 +169,7 @@ class CaseConfigPage(CardWidget):
         self.case_tree.clicked.connect(self.on_case_tree_clicked)
         self.case_tree.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         QTimer.singleShot(0, lambda: self.get_editable_fields(""))
-        # 全局暗色风格
-        self.setStyleSheet(
-            "background-color: #2b2b2b; color: #ffffff;"
-            "QPushButton{background-color:#3c3f41;color:#ffffff;border:1px solid #5c5c5c;"
-            "padding:4px;border-radius:3px;}"
-            "QPushButton:hover{background-color:#484a4c;}"
-            "QPushButton:pressed{background-color:#3c3f41;}"
-            "QLineEdit, QComboBox, QTreeView, QTextEdit{background-color:#3c3f41;"
-            "color:#ffffff;border:1px solid #5c5c5c;}"
-        )
+
     def resizeEvent(self, event):
         super().resizeEvent(event)
         self.splitter.setSizes([int(self.width() * 0.3), int(self.width() * 0.7)])
@@ -427,6 +419,7 @@ class CaseConfigPage(CardWidget):
 
     def _add_group(self, group: QWidget, weight: int | None = None):
         """把 group 放到当前更“轻”的一列"""
+        apply_theme(group)
         w = self._estimate_group_weight(group) if weight is None else weight
         ci = 0 if self._col_weight[0] <= self._col_weight[1] else 1
         (self._left_col if ci == 0 else self._right_col).addWidget(group)
@@ -442,13 +435,13 @@ class CaseConfigPage(CardWidget):
             if key == "text_case":
                 group = QGroupBox("Test Case")
                 group.setStyleSheet(
-                    "QGroupBox{border:1px solid #444444;font-family: Verdana;"
-                    "border-radius:4px;margin-top:6px;color:#fafafa;}"
-                    "QGroupBox::title{left:8px;padding:0 3px;font-family: Verdana;}"
-                    "QLineEdit{background-color:#3c3f41;color:#ffffff;border:1px solid #5c5c5c;}"
+                    group.styleSheet()
+                    + f"QGroupBox{{border:1px solid #444444;border-radius:4px;margin-top:6px;color:{TEXT_COLOR};font-family:{FONT_FAMILY};}}"
+                    + f"QGroupBox::title{{left:8px;padding:0 3px;font-family:{FONT_FAMILY};}}"
                 )
                 vbox = QVBoxLayout(group)
                 self.test_case_edit = LineEdit(self)
+                apply_theme(self.test_case_edit)
                 self.test_case_edit.setText(value or "")  # 默认值
                 self.test_case_edit.setReadOnly(True)  # 只读，由左侧树刷新
                 vbox.addWidget(self.test_case_edit)
