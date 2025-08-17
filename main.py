@@ -57,6 +57,7 @@ class MainWindow(FluentWindow):
         self._run_nav_button = None  # 记录 RunPage 的导航按钮
         self._rvr_nav_button = None  # 记录 RVR Wi-Fi 配置页的导航按钮
         self._nav_button_clicked_log_slot = None
+        self._rvr_visible = False
 
         # 添加侧边导航（页面，图标，标题，描述）
         self.addSubInterface(
@@ -81,13 +82,15 @@ class MainWindow(FluentWindow):
             self.rvr_wifi_config_page = RvrWifiConfigPage(self.case_config_page)
         if hasattr(self.rvr_wifi_config_page, "reload_csv"):
             self.rvr_wifi_config_page.reload_csv()
-        if not self._rvr_nav_button or sip.isdeleted(self._rvr_nav_button):
-            self._rvr_nav_button = self._add_interface(
-                self.rvr_wifi_config_page,
-                FluentIcon.WIFI,
-                "RVR Scenario Config",
-                "RVR Wi-Fi Config",
-            )
+        if not self._rvr_visible:
+            if not self._rvr_nav_button or sip.isdeleted(self._rvr_nav_button):
+                self._rvr_nav_button = self._add_interface(
+                    self.rvr_wifi_config_page,
+                    FluentIcon.WIFI,
+                    "RVR Scenario Config",
+                    "RVR Wi-Fi Config",
+                )
+            self._rvr_visible = True
 
     def hide_rvr_wifi_config(self):
         """从导航栏移除 RVR Wi-Fi 配置页"""
@@ -97,6 +100,8 @@ class MainWindow(FluentWindow):
             "current=",
             self.stackedWidget.currentWidget(),
         )
+        if not self._rvr_visible:
+            return
         if self.rvr_wifi_config_page and not sip.isdeleted(self.rvr_wifi_config_page):
             # 切换到 CaseConfigPage，避免删除正在显示的页面
             self.setCurrentIndex(self.case_config_page)
@@ -113,6 +118,7 @@ class MainWindow(FluentWindow):
         nav_count = len(nav.findChildren(QAbstractButton)) if nav else 0
         print("hide_rvr_wifi_config after remove: nav count=", nav_count)
         self.rvr_wifi_config_page = None
+        self._rvr_visible = False
         print("hide_rvr_wifi_config end: page=", self.rvr_wifi_config_page)
 
     def _detach_sub_interface(self, page):
