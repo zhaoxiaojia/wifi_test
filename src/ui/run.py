@@ -45,7 +45,8 @@ import io
 from contextlib import suppress
 from src.util.constants import Paths, get_src_base
 from src.util.pytest_redact import install_redactor_for_current_process
-
+from .theme import apply_theme, STYLE_BASE, TEXT_COLOR, FONT_FAMILY
+from .theme import format_log_html
 
 class LiveLogWriter:
     """自定义stdout/err实时回调到信号"""
@@ -138,9 +139,13 @@ def _pytest_worker(case_path: str, q: multiprocessing.Queue):
             case_path,
         )
         try:
-            q.put(("log", "<b style='color:blue;'>开始执行pytest</b>"))
+            q.put(
+                ("log", f"<b style='{STYLE_BASE} color:green;'>Run pytest</b>")
+            )
             pytest.main(pytest_args, plugins=[plugin])
-            q.put(("log", "<b style='color:green;'>运行完成！</b>"))
+            q.put(
+                ("log", f"<b style='{STYLE_BASE} color:green;'>Test completed ！</b>")
+            )
         finally:
             end_ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             logging.info(
@@ -159,8 +164,8 @@ def _pytest_worker(case_path: str, q: multiprocessing.Queue):
             writer.flush()
     except Exception as e:
         tb = traceback.format_exc()
-        q.put(("log", f"<b style='color:red;'>执行失败：{str(e)}</b>"))
-        q.put(("log", f"<pre>{tb}</pre>"))
+        q.put(("log", f"<b style='{STYLE_BASE} color:red;'>Execution failed：{str(e)}</b>"))
+        q.put(("log", f"<pre style='{STYLE_BASE} color:{TEXT_COLOR};'>{tb}</pre>"))
 
 
 class CaseRunner(QThread):
@@ -238,6 +243,7 @@ class RunPage(CardWidget):
             idx,
         )
         self.setObjectName("runPage")
+        apply_theme(self)
         self.case_path = case_path
         self.config = config
         self.main_window = parent  # 保存主窗口引用（用于InfoBar父窗口）
@@ -255,47 +261,39 @@ class RunPage(CardWidget):
         self.log_area = QTextEdit(self)
         self.log_area.setReadOnly(True)
         self.log_area.setMinimumHeight(400)
-        self.log_area.setStyleSheet(
-            "font-size:16px; background:#2b2b2b; color:#fafafa;font-family: Verdana;"
-        )
+        apply_theme(self.log_area)
         self.log_area.document().setMaximumBlockCount(2000)
         layout.addWidget(self.log_area, stretch=5)
 
         # 文本进度标签
         self.progress_text = QLabel("Process 0%", self)
-        self.progress_text.setStyleSheet(
-            "font-size: 14px; background:#2b2b2b; color:#fafafa;font-family: Verdana;"
-        )
+        apply_theme(self.progress_text)
         layout.addWidget(self.progress_text)
         # 外部容器（透明）
         self.progress_container = QFrame(self)
         self.progress_container.setFixedHeight(10)
-        self.progress_container.setStyleSheet("background: transparent;font-family: Verdana;")
+        self.progress_container.setStyleSheet(
+            f"background: transparent;font-family: {FONT_FAMILY}; color:{TEXT_COLOR};"
+        )
         layout.addWidget(self.progress_container)
 
         # 内部进度块
         self.progress_chunk = QFrame(self.progress_container)
         self.progress_chunk.setFixedHeight(10)
         self.progress_chunk.setStyleSheet(
-            """
+            f"""
             background-color: #4a90e2;
             border-radius: 4px;
-            font-family: Verdana;
+            font-family: {FONT_FAMILY};
             """
         )
         self.progress_chunk.setFixedWidth(0)
-        self.action_btn = PushButton("Exit", self)
-        self.action_btn.setIcon(FluentIcon.CLOSE)
+        self.action_btn = PushButton(self)
         if hasattr(self.action_btn, "setUseRippleEffect"):
             self.action_btn.setUseRippleEffect(True)
         if hasattr(self.action_btn, "setUseStateEffect"):
             self.action_btn.setUseStateEffect(True)
-        self.action_btn.clicked.connect(
-            lambda: logging.info("action_btn clicked")
-        )
-        logging.info("Connected action_btn clicked log for RunPage id=%s", id(self))
-        self.action_btn.clicked.connect(self.on_stop)
-        logging.info("Connected action_btn clicked to on_stop for RunPage id=%s", id(self))
+        self._set_action_button("stop")
         layout.addWidget(self.action_btn)
         self.setLayout(layout)
         stack = getattr(self.main_window, "stackedWidget", None)
@@ -308,10 +306,7 @@ class RunPage(CardWidget):
         )
 
     def _append_log(self, msg: str):
-        upper_msg = msg.upper()
-        colors = {"ERROR": "red", "WARNING": "orange", "INFO": "blue"}
-        color = next((c for k, c in colors.items() if k in upper_msg), None)
-        html = f"<span style='color:{color};'>{msg}</span>" if color else msg
+        html = format_log_html(msg)
         self.log_area.append(html)
 
         doc = self.log_area.document()
@@ -347,23 +342,28 @@ class RunPage(CardWidget):
         animation.start()
         self._progress_animation = animation
 
+    def _set_action_button(self, mode: str):
+        """根据模式设置操作按钮"""
+        with suppress(TypeError):
+            self.action_btn.clicked.disconnect()
+        if mode == "run":
+            text, icon, slot = "Test", FluentIcon.PLAY, self.run_case
+        elif mode == "stop":
+            text, icon, slot = "Exit", FluentIcon.CLOSE, self.on_stop
+        else:
+            raise ValueError(f"Unknown mode: {mode}")
+        self.action_btn.setText(text)
+        self.action_btn.setIcon(icon)
+        self.action_btn.clicked.connect(lambda: logging.info("action_btn clicked"))
+        self.action_btn.clicked.connect(slot)
+        logging.info("Action button set to %s mode for RunPage id=%s", mode, id(self))
+
     def run_case(self):
         self.cleanup()
         self.log_area.clear()
         self.progress.setValue(0)
         self.update_progress(0)
-
-        self.action_btn.setText("Exit")
-        self.action_btn.setIcon(FluentIcon.CLOSE)
-        with suppress(TypeError):
-            self.action_btn.clicked.disconnect()
-            logging.info("Disconnected action_btn clicked in run_case for RunPage id=%s", id(self))
-        self.action_btn.clicked.connect(
-            lambda: logging.info("action_btn clicked")
-        )
-        logging.info("Connected action_btn clicked log in run_case for RunPage id=%s", id(self))
-        self.action_btn.clicked.connect(self.on_stop)
-        logging.info("Connected action_btn clicked to on_stop in run_case for RunPage id=%s", id(self))
+        self._set_action_button("stop")
         self.runner = CaseRunner(self.case_path)
         self.runner.log_signal.connect(self._append_log)
         self.runner.progress_signal.connect(self.update_progress)
@@ -463,25 +463,13 @@ class RunPage(CardWidget):
 
     def on_runner_finished(self):
         self.cleanup()
-        self.action_btn.setText("Test")
-        self.action_btn.setIcon(FluentIcon.PLAY)
-        with suppress(TypeError):
-            self.action_btn.clicked.disconnect()
-            logging.info("Disconnected action_btn clicked in on_runner_finished for RunPage id=%s", id(self))
-        self.action_btn.clicked.connect(self.run_case)
-        logging.info("Connected action_btn clicked to run_case in on_runner_finished for RunPage id=%s", id(self))
+        self._set_action_button("run")
         self.action_btn.setEnabled(True)
 
     def on_stop(self):
         self._append_log("on_stop entered")
         self.cleanup()
-        self.action_btn.setText("Test")
-        self.action_btn.setIcon(FluentIcon.PLAY)
-        with suppress(TypeError):
-            self.action_btn.clicked.disconnect()
-            logging.info("Disconnected action_btn clicked in on_stop for RunPage id=%s", id(self))
-        self.action_btn.clicked.connect(self.run_case)
-        logging.info("Connected action_btn clicked to run_case in on_stop for RunPage id=%s", id(self))
+        self._set_action_button("run")
         self.action_btn.setEnabled(True)
 
     def _get_application_base(self) -> Path:
