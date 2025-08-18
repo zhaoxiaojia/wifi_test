@@ -120,8 +120,8 @@ class CaseConfigPage(CardWidget):
         self.case_tree = TreeView(self)
         apply_theme(self.case_tree)
         apply_font_and_selection(self.case_tree)
-        print("TreeView font:", self.case_tree.font().family())
-        print("TreeView stylesheet:", self.case_tree.styleSheet())
+        logging.debug("TreeView font: %s", self.case_tree.font().family())
+        logging.debug("TreeView stylesheet: %s", self.case_tree.styleSheet())
         self._init_case_tree(Path(self._get_application_base()) / "test")
         self.splitter.addWidget(self.case_tree)
 
@@ -951,9 +951,9 @@ class CaseConfigPage(CardWidget):
 
         main_window = self.window()
         if hasattr(main_window, "setCurrentIndex"):
-            print("get_editable_fields: before switch to case_config_page")
+            logging.debug("get_editable_fields: before switch to case_config_page")
             main_window.setCurrentIndex(main_window.case_config_page)
-            print("get_editable_fields: after switch to case_config_page")
+            logging.debug("get_editable_fields: after switch to case_config_page")
 
         if info.enable_rvr_wifi:
             ssid = ""
@@ -965,14 +965,14 @@ class CaseConfigPage(CardWidget):
             if isinstance(passwd_widget, LineEdit):
                 passwd = passwd_widget.text()
             if hasattr(main_window, "show_rvr_wifi_config"):
-                print("get_editable_fields: before show_rvr_wifi_config")
+                logging.debug("get_editable_fields: before show_rvr_wifi_config")
                 main_window.show_rvr_wifi_config()
-                print("get_editable_fields: after show_rvr_wifi_config")
+                logging.debug("get_editable_fields: after show_rvr_wifi_config")
         else:
             if hasattr(main_window, "hide_rvr_wifi_config"):
-                print("get_editable_fields: before hide_rvr_wifi_config")
+                logging.debug("get_editable_fields: before hide_rvr_wifi_config")
                 main_window.hide_rvr_wifi_config()
-                print("get_editable_fields: after hide_rvr_wifi_config")
+                logging.debug("get_editable_fields: after hide_rvr_wifi_config")
         if hasattr(self, "csv_combo"):
             if info.enable_csv:
                 self.csv_combo.setEnabled(True)

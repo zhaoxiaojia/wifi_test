@@ -45,7 +45,7 @@ class LabDeviceController:
         logging.info(f'Set rf value to {value}')
         if self.model == 'RC4DAT-8G-95':
             cmd = f":CHAN:1:2:3:4:SETATT:{value};"
-            print(cmd)
+            logging.debug(cmd)
             self.tn.checkoutput(cmd)
         else:
             cmd = f"ATT 1 {value};2 {value};3 {value};4 {value};"
@@ -55,7 +55,7 @@ class LabDeviceController:
     def get_rf_current_value(self):
         if self.model == 'RC4DAT-8G-95':
             res = self.tn.checkoutput("ATT?;")
-            print(res)
+            logging.debug(res)
             return res.split()[0]
         else:
             res = self.tn.checkoutput("ATT")

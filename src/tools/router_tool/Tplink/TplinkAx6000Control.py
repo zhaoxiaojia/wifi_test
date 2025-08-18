@@ -214,8 +214,8 @@ class TplinkAx6000Control:
                     if select_list.text:
                         lis = select_list.find_elements(By.TAG_NAME, 'li')
                         index = [i.get_attribute('title') for i in lis].index(router.bandwidth) + 1
-                        print(router.bandwidth)
-                        print(index)
+                        logging.debug("%s", router.bandwidth)
+                        logging.debug("%s", index)
                         wair_for = self.router_control.driver.find_element(
                             By.XPATH, select_xpath.format(index))
                         self.router_control.scroll_to(wait_for)

@@ -145,13 +145,13 @@ class TestResult():
                     # print(j)
                     if 'UL' in j[-8]:
                         if j[-2] == 'False':
-                            print('date wrong')
+                            logging.warning('date wrong')
                             tx_results.append(0)
                         else:
                             tx_results.append(int(j[-2]))
                     else:
                         if j[-2] == 'False':
-                            print('data wrong')
+                            logging.warning('data wrong')
                             rx_results.append(0)
                         else:
                             rx_results.append(int(j[-2]))
@@ -204,13 +204,13 @@ class TestResult():
                 for j in i:
                     if 'UL' in j[-8]:
                         if j[-2] == 'False':
-                            print('data wrong')
+                            logging.warning('data wrong')
                             tx_results.append(0)
                         else:
                             tx_results.append(int(j[-2]))
                     else:
                         if j[-2] == 'False':
-                            print('data wrong')
+                            logging.warning('data wrong')
                             rx_results.append(0)
                         else:
                             rx_results.append(int(j[-2]))
