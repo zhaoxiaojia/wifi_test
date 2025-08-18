@@ -18,6 +18,7 @@ import pytest
 
 from src.tools.router_tool.router_factory import get_router
 from src.tools.config_loader import load_config
+from src.tools.router_tool.Router import Router
 
 router_name = load_config(refresh=True)['router']['name']
 # 实例路由器对象
@@ -36,7 +37,6 @@ step_list = [0]
 
 @pytest.fixture(scope='session', params=test_data, ids=[str(i) for i in test_data])
 def setup(request):
-    global pc_ip, dut_ip
     pytest.dut.skip_tx = False
     pytest.dut.skip_rx = False
     logging.info('router setup start')
@@ -131,17 +131,14 @@ def test_rvr(setup, rf_value):
     # time.sleep(1)
 
     pytest.dut.get_rssi()
-
     # handle iperf pair count
     logging.info('start test tx/rx')
-    logging.info(f'router_info: {router_info}')
-
     # iperf  打流
-    if router_info.tx:
+    if int(router_info.tx):
         logging.info(f'rssi : {pytest.dut.rssi_num}')
         pytest.dut.get_tx_rate(router_info , 'TCP',
                                db_set=db_set)
-    if router_info.rx:
+    if int(router_info.rx):
         logging.info(f'rssi : {pytest.dut.rssi_num}')
         pytest.dut.get_rx_rate(router_info, 'TCP',
                                db_set=db_set)
