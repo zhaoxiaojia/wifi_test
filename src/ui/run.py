@@ -132,12 +132,6 @@ def _pytest_worker(case_path: str, q: multiprocessing.Queue):
         stream_handler.setFormatter(formatter)
         root_logger.addHandler(stream_handler)
         root_logger.setLevel(logging.INFO)
-        logging.info(
-            "_pytest_worker start pid=%s time=%s case_path=%s",
-            pid,
-            start_ts,
-            case_path,
-        )
         try:
             q.put(
                 ("log", f"<b style='{STYLE_BASE} color:green;'>Run pytest</b>")

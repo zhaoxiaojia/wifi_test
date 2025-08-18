@@ -306,8 +306,8 @@ class dut():
                 if data:
                     result_list.append(float(data[0]))
         if result_list:
-            logging.info(f'{sum(result_list) / len(result_list)}')
-            logging.info(f'{result_list}')
+            logging.info(f'throughput result : {sum(result_list) / len(result_list)}')
+            # logging.info(f'{result_list}')
             result = sum(result_list) / len(result_list)
         else:
             result = 0

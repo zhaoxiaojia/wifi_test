@@ -27,7 +27,7 @@ def get_testdata(router):
         else:
             csv_path = config_base / "rvr_wifi_setup.csv"
 
-    print(f"router_name: {router_name}, csv_path: {csv_path}")
+    # print(f"router_name: {router_name}, csv_path: {csv_path}")
     pc_ip, dut_ip = "", ""
     # 读取 测试配置
     test_data = []
@@ -49,7 +49,7 @@ def get_testdata(router):
     # 校验 csv 数据是否异常
     for i in test_data:
         logging.info(i)
-        print(f'get_testdata {i}')
+        # print(f'get_testdata {i}')
         if pytest.connect_type != "adb":
             break
         if "2" in i.band:

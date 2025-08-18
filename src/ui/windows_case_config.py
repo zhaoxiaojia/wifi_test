@@ -1029,6 +1029,7 @@ class CaseConfigPage(CardWidget):
         self.csvFileChanged.emit(self.selected_csv_path or "")
 
     def on_run(self):
+        self.config = self._load_config()
         logging.info(
             "[on_run] start case=%s csv=%s config=%s",
             self.field_widgets['text_case'].text().strip(),

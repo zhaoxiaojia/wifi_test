@@ -20,7 +20,7 @@ def load_config(refresh: bool = False):
     config_path = get_config_base() / "config.yaml"
     if refresh:
         load_config.cache_clear()
-        logging.info("Cache cleared, reloading %s", config_path)
+        logging.debug("Cache cleared, reloading %s", config_path)
     else:
         logging.debug("Loading config file without clearing cache: %s", config_path)
 
