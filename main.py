@@ -28,11 +28,6 @@ from src.util.constants import Paths, cleanup_temp_dir
 # 确保工作目录为可执行文件所在目录
 os.chdir(Paths.BASE_DIR)
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-)
-
 
 def log_exception(exc_type, exc_value, exc_tb):
     logging.error("".join(traceback.format_exception(exc_type, exc_value, exc_tb)))
@@ -82,7 +77,7 @@ class MainWindow(FluentWindow):
                 self.stackedWidget.addWidget(self.rvr_wifi_config_page)
             self._rvr_nav_button.setVisible(True)
             self._rvr_visible = True
-            print("show_rvr_wifi_config: reuse nav item; setVisible(True)")
+            logging.debug("show_rvr_wifi_config: reuse nav item; setVisible(True)")
             return
 
         # 走首次添加（保持你原有逻辑）
@@ -90,7 +85,11 @@ class MainWindow(FluentWindow):
         nav_items = []
         if nav:
             nav_items = [getattr(btn, "text", lambda: "")() for btn in nav.findChildren(QAbstractButton)]
-        print("show_rvr_wifi_config start: page id=", id(self.rvr_wifi_config_page), "nav items=", nav_items)
+        logging.debug(
+            "show_rvr_wifi_config start: page id=%s nav items=%s",
+            id(self.rvr_wifi_config_page),
+            nav_items,
+        )
 
         if self.rvr_wifi_config_page is None or sip.isdeleted(self.rvr_wifi_config_page):
             self.rvr_wifi_config_page = RvrWifiConfigPage(self.case_config_page)
@@ -106,22 +105,27 @@ class MainWindow(FluentWindow):
         )
         if self._rvr_nav_button:
             self._rvr_route_key = self._rvr_nav_button.property("routeKey") or self.rvr_wifi_config_page.objectName()
-            print("show_rvr_wifi_config: routeKey=", self._rvr_route_key)
+            logging.debug("show_rvr_wifi_config: routeKey=%s", self._rvr_route_key)
             # 首次添加后，显式可见（保险）
             self._rvr_nav_button.setVisible(True)
             # 确保页在堆叠
             if self.stackedWidget.indexOf(self.rvr_wifi_config_page) == -1:
                 self.stackedWidget.addWidget(self.rvr_wifi_config_page)
         else:
-            print("WARNING: addSubInterface returned None (duplicate routeKey or internal reject).")
+            logging.warning(
+                "addSubInterface returned None (duplicate routeKey or internal reject)"
+            )
         self._rvr_visible = True
 
     def hide_rvr_wifi_config(self):
         """从导航栏隐藏 RVR Wi-Fi 配置页（不删除，避免 routeKey 残留）"""
         if not self._rvr_visible:
             return
-        print("hide_rvr_wifi_config start: page=", self.rvr_wifi_config_page, "current=",
-              self.stackedWidget.currentWidget())
+        logging.debug(
+            "hide_rvr_wifi_config start: page=%s current=%s",
+            self.rvr_wifi_config_page,
+            self.stackedWidget.currentWidget(),
+        )
 
         # 切回安全页，避免正在显示被隐藏的页
         self.setCurrentIndex(self.case_config_page)
@@ -130,11 +134,11 @@ class MainWindow(FluentWindow):
         # 关键：只隐藏，不删除
         if self._rvr_nav_button and not sip.isdeleted(self._rvr_nav_button):
             self._rvr_nav_button.setVisible(False)
-            print("hide_rvr_wifi_config: setVisible(False) for nav item")
+            logging.debug("hide_rvr_wifi_config: setVisible(False) for nav item")
 
         # 页面对象保留在内存/stack（不删），下次可直接复用
         self._rvr_visible = False
-        print("hide_rvr_wifi_config end: page=", self.rvr_wifi_config_page)
+        logging.debug("hide_rvr_wifi_config end: page=%s", self.rvr_wifi_config_page)
 
     def _detach_sub_interface(self, page):
         """Detach the given page from navigation, best-effort for different QFluent versions."""
@@ -178,14 +182,18 @@ class MainWindow(FluentWindow):
         widget = args[0] if args else kwargs.get("interface") or kwargs.get("widget")
         if widget is None or sip.isdeleted(widget):
             raise RuntimeError("_add_interface called with a None/invalid widget")
-        print("_add_interface: adding", widget)
+        logging.debug("_add_interface: adding %s", widget)
         btn = self.addSubInterface(*args, **kwargs)
         nav = getattr(self, "navigationInterface", None)
         nav_count = len(nav.findChildren(QAbstractButton)) if nav else 0
         stack_count = self.stackedWidget.count()
-        print("_add_interface: nav count=", nav_count, "stack count=", stack_count)
+        logging.debug(
+            "_add_interface: nav count=%s stack count=%s", nav_count, stack_count
+        )
         if btn is None:
-            print("WARNING: addSubInterface returned None (maybe duplicate routeKey or rejected by framework).")
+            logging.warning(
+                "addSubInterface returned None (maybe duplicate routeKey or rejected by framework)"
+            )
         return btn
 
     def _remove_interface(self, page, route_key=None, nav_button=None):
@@ -232,19 +240,23 @@ class MainWindow(FluentWindow):
             rk = route_key or getattr(page, "objectName", lambda: None)()
             if rk and hasattr(self, "_interfaces"):
                 self._interfaces.pop(rk, None)
-                print(f">>> _remove_interface: removed {rk} from self._interfaces")
+                logging.debug(
+                    ">>> _remove_interface: removed %s from self._interfaces", rk
+                )
             if rk and hasattr(self, "_routes"):
                 self._routes.pop(rk, None)
-                print(f">>> _remove_interface: removed {rk} from self._routes")
+                logging.debug(
+                    ">>> _remove_interface: removed %s from self._routes", rk
+                )
         except Exception as e:
-            print(">>> _remove_interface: failed to clean routeKey mapping:", e)
+            logging.warning(">>> _remove_interface: failed to clean routeKey mapping: %s", e)
 
     # ==== DEBUG: deep nav/router/stack introspection ====
     def _debug_nav_state(self, tag: str):
-        print(f"\n===== DEBUG NAV STATE [{tag}] =====")
+        logging.debug("\n===== DEBUG NAV STATE [%s] =====", tag)
         nav = getattr(self, "navigationInterface", None)
         if not nav:
-            print("navigationInterface = None")
+            logging.debug("navigationInterface = None")
             return
 
         # 1) 可用方法探测（我们关心 removeX 接口到底叫什么）
@@ -254,20 +266,29 @@ class MainWindow(FluentWindow):
             except Exception:
                 return False
 
-        nav_methods = [n for n in ("removeItem", "removeWidget", "removeButton",
-                                   "removeSubInterface", "removeInterface", "addItem", "addWidget")
-                       if _has(nav, n)]
-        fw_methods = [n for n in ("removeSubInterface", "addSubInterface")
-                      if _has(self, n)]
-        print("nav methods:", nav_methods)
-        print("FluentWindow methods:", fw_methods)
+        nav_methods = [
+            n
+            for n in (
+                "removeItem",
+                "removeWidget",
+                "removeButton",
+                "removeSubInterface",
+                "removeInterface",
+                "addItem",
+                "addWidget",
+            )
+            if _has(nav, n)
+        ]
+        fw_methods = [n for n in ("removeSubInterface", "addSubInterface") if _has(self, n)]
+        logging.debug("nav methods: %s", nav_methods)
+        logging.debug("FluentWindow methods: %s", fw_methods)
 
         # 2) 列出“看得到的可能是导航按钮的孩子”
         try:
             btns = nav.findChildren(QAbstractButton)
         except Exception:
             btns = []
-        print("QAbstractButton count:", len(btns))
+        logging.debug("QAbstractButton count: %s", len(btns))
         for i, b in enumerate(btns):
             try:
                 cls = b.metaObject().className()
@@ -283,7 +304,7 @@ class MainWindow(FluentWindow):
                 except Exception:
                     v = None
                 props[k] = v
-            print(f"  [BTN#{i}] id={id(b)} class={cls} props={props}")
+            logging.debug("  [BTN#%s] id=%s class=%s props=%s", i, id(b), cls, props)
 
         # 3) 再撒一网：找所有 QWidget 子代里“带 routeKey 属性的家伙”（有的不是 QAbstractButton）
         try:
@@ -299,25 +320,32 @@ class MainWindow(FluentWindow):
                 rk = None
             if rk:
                 rk_widgets.append(w)
-        print("widgets-with-routeKey count:", len(rk_widgets))
+        logging.debug("widgets-with-routeKey count: %s", len(rk_widgets))
         for i, w in enumerate(rk_widgets):
             try:
                 cls = w.metaObject().className()
             except Exception:
                 cls = type(w).__name__
-            print(f"  [RK#{i}] id={id(w)} class={cls} routeKey={w.property('routeKey')} objName={w.objectName()}")
+            logging.debug(
+                "  [RK#%s] id=%s class=%s routeKey=%s objName=%s",
+                i,
+                id(w),
+                cls,
+                w.property("routeKey"),
+                w.objectName(),
+            )
 
         # 4) Router 栈/路由表（不同版本字段名不同，做 best-effort 打印）
         router = getattr(nav, "router", None)
         if router:
-            print("router exists:", type(router).__name__)
+            logging.debug("router exists: %s", type(router).__name__)
             # 尝试打印常见成员
             for key in ("stackHistories", "currentKey", "history", "routeView"):
                 try:
                     val = getattr(router, key, None)
                     if callable(val):
                         val = val()
-                    print(f"  router.{key} =", val)
+                    logging.debug("  router.%s = %s", key, val)
                 except Exception:
                     pass
             # 尝试打印 routes（map）
@@ -329,18 +357,18 @@ class MainWindow(FluentWindow):
                             keys = list(routes.keys()) if hasattr(routes, "keys") else routes
                         except Exception:
                             keys = routes
-                        print(f"  router.{key} keys =", keys)
+                        logging.debug("  router.%s keys = %s", key, keys)
                 except Exception:
                     pass
         else:
-            print("router = None")
+            logging.debug("router = None")
 
         # 5) StackedWidget 里到底有谁
         try:
             count = self.stackedWidget.count()
         except Exception:
             count = -1
-        print("stackedWidget count:", count)
+        logging.debug("stackedWidget count: %s", count)
         try:
             for i in range(count):
                 w = self.stackedWidget.widget(i)
@@ -348,16 +376,24 @@ class MainWindow(FluentWindow):
                     cls = w.metaObject().className()
                 except Exception:
                     cls = type(w).__name__
-                print(f"  [STACK#{i}] id={id(w)} class={cls} objName={w.objectName()}")
+                logging.debug(
+                    "  [STACK#%s] id=%s class=%s objName=%s",
+                    i,
+                    id(w),
+                    cls,
+                    w.objectName(),
+                )
         except Exception:
             pass
 
         # 6) 我们自己的指针状态
-        print("self._rvr_visible =", getattr(self, "_rvr_visible", None))
-        print("self._rvr_nav_button =", getattr(self, "_rvr_nav_button", None))
-        print("self._rvr_route_key =", getattr(self, "_rvr_route_key", None))
-        print("self.rvr_wifi_config_page =", getattr(self, "rvr_wifi_config_page", None))
-        print("===== END DEBUG NAV STATE =====\n")
+        logging.debug("self._rvr_visible = %s", getattr(self, "_rvr_visible", None))
+        logging.debug("self._rvr_nav_button = %s", getattr(self, "_rvr_nav_button", None))
+        logging.debug("self._rvr_route_key = %s", getattr(self, "_rvr_route_key", None))
+        logging.debug(
+            "self.rvr_wifi_config_page = %s", getattr(self, "rvr_wifi_config_page", None)
+        )
+        logging.debug("===== END DEBUG NAV STATE =====\n")
 
     # ==== DEBUG END ====
 
@@ -519,6 +555,10 @@ import multiprocessing
 
 multiprocessing.freeze_support()
 if __name__ == "__main__":
+    logging.basicConfig(
+        level=logging.WARNING,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+    )
     try:
         app = QApplication(sys.argv)
         QGuiApplication.setFont(QFont("Verdana"))

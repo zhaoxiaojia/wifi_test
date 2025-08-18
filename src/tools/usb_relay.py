@@ -26,8 +26,7 @@ class UsbRelay:
             self.ser = serial.Serial(com, 9600)
             self.alive = True
         except Exception as e:
-            print(f"Can't open {com} Pls check")
-            logging.info(f"Can't open {com} Pls check")
+            logging.error("Can't open %s Pls check", com)
         else:
             self.alive = False
 
