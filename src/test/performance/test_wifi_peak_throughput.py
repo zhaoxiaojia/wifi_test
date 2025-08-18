@@ -26,11 +26,9 @@ logging.info(f'router {router}')
 test_data = get_testdata(router)
 
 sum_list_lock = threading.Lock()
-
-
 step_list = [0]
 
-logging.info(f'finally step_list {step_list}')
+
 
 # 配置 测试报告
 # pytest.testResult.x_path = [] if (rf_needed and corner_needed) == 'both' else step_list
@@ -47,12 +45,12 @@ def setup(request):
     # push_iperf()
     router_info = request.param
     # 修改路由器配置
-    # assert router.change_setting(router_info), "Can't set ap , pls check first"
-    # if pytest.connect_type == 'telnet':
-    #     band = '5G' if '2' in router_info.band else '2.4G'
-    #     ssid = router_info.ssid + "_bat";
-    #     router.change_setting(Router(band=band, ssid=ssid))
-    # time.sleep(3)
+    assert router.change_setting(router_info), "Can't set ap , pls check first"
+    if pytest.connect_type == 'telnet':
+        band = '5G' if '2' in router_info.band else '2.4G'
+        ssid = router_info.ssid + "_bat";
+        router.change_setting(Router(band=band, ssid=ssid))
+    time.sleep(3)
 
     logging.info('router set done')
     with open(pytest.testResult.detail_file, 'a', encoding='utf-8') as f:
@@ -61,7 +59,7 @@ def setup(request):
     logging.info(f'dut try to connect {router_info.ssid}')
     if pytest.connect_type == 'telnet':
         connect_status = True
-        # time.sleep(90)
+        time.sleep(90)
     else:
         # 连接 网络 最多三次重试
         for _ in range(3):

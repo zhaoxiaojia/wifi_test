@@ -43,7 +43,7 @@ def get_router(router_name: str, address: str | None = None):
 
     if address is None:
         try:
-            cfg = load_config()
+            cfg = load_config(refresh=True)
             cfg_router = cfg.get('router', {})
             if cfg_router.get('name') == router_name:
                 address = cfg_router.get('address')

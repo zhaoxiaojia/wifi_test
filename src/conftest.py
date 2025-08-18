@@ -84,7 +84,7 @@ def pytest_addoption(parser):
 def pytest_collection_finish(session):
     # 收集完毕，记录总用例数
     session.total_test_count = len(session.items)
-    logging.info(f"[PYQT_TOTAL]{session.total_test_count}")
+    # logging.info(f"[PYQT_TOTAL]{session.total_test_count}")
 
 
 def pytest_runtest_logreport(report):
