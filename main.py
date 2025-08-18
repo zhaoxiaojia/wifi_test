@@ -20,7 +20,7 @@ from src.ui.windows_case_config import CaseConfigPage
 from src.ui.rvr_wifi_config import RvrWifiConfigPage
 from src.ui.run import RunPage
 from qfluentwidgets import setTheme, Theme
-from PyQt5.QtGui import QGuiApplication,QFont
+from PyQt5.QtGui import QGuiApplication, QFont
 from PyQt5.QtCore import QCoreApplication, QPropertyAnimation, QEasingCurve
 from src.util.constants import Paths
 from src.util.constants import Paths, cleanup_temp_dir
@@ -72,139 +72,294 @@ class MainWindow(FluentWindow):
         # self.setMicaEffectEnabled(True)  # Win11下生效毛玻璃
 
     def show_rvr_wifi_config(self):
-        """在导航栏中显示 RVR Wi-Fi 配置页"""
-        if self._rvr_visible:
+        """在导航栏中显示 RVR Wi-Fi 配置页（幂等：已存在则只显示）"""
+        # 已存在的场景：不再二次 add，只改可见性
+        if self._rvr_nav_button and not sip.isdeleted(self._rvr_nav_button):
+            if self.rvr_wifi_config_page is None or sip.isdeleted(self.rvr_wifi_config_page):
+                self.rvr_wifi_config_page = RvrWifiConfigPage(self.case_config_page)
+            # 确保页在堆叠里
+            if self.stackedWidget.indexOf(self.rvr_wifi_config_page) == -1:
+                self.stackedWidget.addWidget(self.rvr_wifi_config_page)
+            self._rvr_nav_button.setVisible(True)
+            self._rvr_visible = True
+            print("show_rvr_wifi_config: reuse nav item; setVisible(True)")
             return
 
+        # 走首次添加（保持你原有逻辑）
         nav = getattr(self, "navigationInterface", None)
         nav_items = []
         if nav:
             nav_items = [getattr(btn, "text", lambda: "")() for btn in nav.findChildren(QAbstractButton)]
-        print(
-            "show_rvr_wifi_config start: page id=",
-            id(self.rvr_wifi_config_page),
-            "nav items=",
-            nav_items,
-        )
-        # 页面可能已被删除，需重新实例化
+        print("show_rvr_wifi_config start: page id=", id(self.rvr_wifi_config_page), "nav items=", nav_items)
+
         if self.rvr_wifi_config_page is None or sip.isdeleted(self.rvr_wifi_config_page):
             self.rvr_wifi_config_page = RvrWifiConfigPage(self.case_config_page)
-        if (
-            self.rvr_wifi_config_page
-            and not sip.isdeleted(self.rvr_wifi_config_page)
-            and hasattr(self.rvr_wifi_config_page, "reload_csv")
-        ):
+        if self.rvr_wifi_config_page and not sip.isdeleted(self.rvr_wifi_config_page) and hasattr(
+                self.rvr_wifi_config_page, "reload_csv"):
             self.rvr_wifi_config_page.reload_csv()
 
-        if not self._rvr_nav_button or sip.isdeleted(self._rvr_nav_button):
-            self._rvr_nav_button = self._add_interface(
-                self.rvr_wifi_config_page,
-                FluentIcon.WIFI,
-                "RVR Scenario Config",
-                "RVR Wi-Fi Config",
-            )
-            if self._rvr_nav_button:
-                self._rvr_route_key = self._rvr_nav_button.property("routeKey") or self.rvr_wifi_config_page.objectName()
-                print(
-                    "show_rvr_wifi_config: routeKey=",
-                    self._rvr_route_key,
-                )
+        self._rvr_nav_button = self._add_interface(
+            self.rvr_wifi_config_page,
+            FluentIcon.WIFI,
+            "RVR Scenario Config",
+            "RVR Wi-Fi Config",
+        )
+        if self._rvr_nav_button:
+            self._rvr_route_key = self._rvr_nav_button.property("routeKey") or self.rvr_wifi_config_page.objectName()
+            print("show_rvr_wifi_config: routeKey=", self._rvr_route_key)
+            # 首次添加后，显式可见（保险）
+            self._rvr_nav_button.setVisible(True)
+            # 确保页在堆叠
+            if self.stackedWidget.indexOf(self.rvr_wifi_config_page) == -1:
+                self.stackedWidget.addWidget(self.rvr_wifi_config_page)
+        else:
+            print("WARNING: addSubInterface returned None (duplicate routeKey or internal reject).")
         self._rvr_visible = True
 
     def hide_rvr_wifi_config(self):
-        """从导航栏移除 RVR Wi-Fi 配置页"""
+        """从导航栏隐藏 RVR Wi-Fi 配置页（不删除，避免 routeKey 残留）"""
         if not self._rvr_visible:
             return
-        print(
-            "hide_rvr_wifi_config start: page=",
-            self.rvr_wifi_config_page,
-            "current=",
-            self.stackedWidget.currentWidget(),
-        )
-        if self.rvr_wifi_config_page and not sip.isdeleted(self.rvr_wifi_config_page):
-            # 切换到 CaseConfigPage，避免删除正在显示的页面
-            self.setCurrentIndex(self.case_config_page)
-            QCoreApplication.processEvents()
-        self._remove_interface(
-            self.rvr_wifi_config_page, self._rvr_route_key, self._rvr_nav_button
-        )
-        nav = getattr(self, "navigationInterface", None)
-        nav_count = len(nav.findChildren(QAbstractButton)) if nav else 0
-        print("hide_rvr_wifi_config after remove: nav count=", nav_count)
+        print("hide_rvr_wifi_config start: page=", self.rvr_wifi_config_page, "current=",
+              self.stackedWidget.currentWidget())
+
+        # 切回安全页，避免正在显示被隐藏的页
+        self.setCurrentIndex(self.case_config_page)
+        QCoreApplication.processEvents()
+
+        # 关键：只隐藏，不删除
+        if self._rvr_nav_button and not sip.isdeleted(self._rvr_nav_button):
+            self._rvr_nav_button.setVisible(False)
+            print("hide_rvr_wifi_config: setVisible(False) for nav item")
+
+        # 页面对象保留在内存/stack（不删），下次可直接复用
         self._rvr_visible = False
         print("hide_rvr_wifi_config end: page=", self.rvr_wifi_config_page)
 
     def _detach_sub_interface(self, page):
-        """Detach the given page from the navigation if possible."""
-        if hasattr(self, "navigationInterface"):
-            for name in ("removeSubInterface", "removeInterface", "removeItem"):
-                func = getattr(self.navigationInterface, name, None)
-                if callable(func):
-                    try:
-                        func(page)
-                        return
-                    except Exception:
-                        pass
-        # Fallback: detach widget
-        if hasattr(page, "setParent"):
-            page.setParent(None)
+        """Detach the given page from navigation, best-effort for different QFluent versions."""
+        nav = getattr(self, "navigationInterface", None)
+        if not nav or not page or sip.isdeleted(page):
+            return False
+
+        # 优先尝试各种官方接口（注意顺序，最后补上 removeWidget(page)）
+        for name in ("removeSubInterface", "removeInterface", "removeItem", "removeWidget"):
+            func = getattr(nav, name, None)
+            if callable(func):
+                try:
+                    func(page)  # ← 关键：按 page 移除
+                    return True
+                except Exception:
+                    pass
+
+        # 兜底：暴力把同 routeKey 的部件从树上摘掉（不同版本可能不是 QAbstractButton）
+        try:
+            from PyQt5.QtWidgets import QWidget
+            rk = getattr(page, "objectName", lambda: None)() or "rvrWifiConfigPage"
+            for w in nav.findChildren(QWidget):
+                try:
+                    if w.property("routeKey") == rk:
+                        try:
+                            w.setParent(None)
+                        except Exception:
+                            pass
+                        try:
+                            w.deleteLater()
+                        except Exception:
+                            pass
+                        return True
+                except Exception:
+                    continue
+        except Exception:
+            pass
+        return False
 
     def _add_interface(self, *args, **kwargs):
-        widget = args[0] if args else kwargs.get("widget")
+        widget = args[0] if args else kwargs.get("interface") or kwargs.get("widget")
+        if widget is None or sip.isdeleted(widget):
+            raise RuntimeError("_add_interface called with a None/invalid widget")
         print("_add_interface: adding", widget)
         btn = self.addSubInterface(*args, **kwargs)
         nav = getattr(self, "navigationInterface", None)
         nav_count = len(nav.findChildren(QAbstractButton)) if nav else 0
         stack_count = self.stackedWidget.count()
-        print(
-            "_add_interface: nav count=", nav_count, "stack count=", stack_count
-        )
+        print("_add_interface: nav count=", nav_count, "stack count=", stack_count)
+        if btn is None:
+            print("WARNING: addSubInterface returned None (maybe duplicate routeKey or rejected by framework).")
         return btn
 
     def _remove_interface(self, page, route_key=None, nav_button=None):
-        """移除堆叠窗口和导航项中的页面，并清理路由栈"""
         nav = getattr(self, "navigationInterface", None)
-        router = getattr(nav, "router", None) if nav else None
-        nav_before = len(nav.findChildren(QAbstractButton)) if nav else 0
-        stack_before = list(getattr(router, "stackHistories", []))
-        print(
-            "_remove_interface start: nav count=",
-            nav_before,
-            "stackHistories=",
-            stack_before,
-            "page=",
-            page,
-        )
 
+        # ① 优先：按 page 从导航移除（这是关键修正）
+        removed = False
+        if nav and page and not sip.isdeleted(page):
+            func = getattr(nav, "removeWidget", None)
+            if callable(func):
+                try:
+                    func(page)  # ← 传 page
+                except Exception:
+                    pass
+        if not removed:
+            # 二次尝试：走通用 Detach（内含 removeWidget + 兜底）
+            self._detach_sub_interface(page)
+
+        # ② 清理 nav_button（只是 UI 残留的可视对象，非必须，但做干净更保险）
         if nav_button and not sip.isdeleted(nav_button):
             with suppress(Exception):
                 nav_button.clicked.disconnect()
             with suppress(Exception):
-                self.navigationInterface.removeWidget(nav_button)
-            nav_button.deleteLater()
-
-        if router and route_key:
+                nav_button.setParent(None)
             with suppress(Exception):
-                router.remove(route_key)
+                nav_button.deleteLater()
 
+        # ③ 从堆栈里移走页面（你原来就有）
         if page and not sip.isdeleted(page):
             with suppress(Exception):
                 self.stackedWidget.removeWidget(page)
+            with suppress(Exception):
                 page.deleteLater()
 
         QCoreApplication.processEvents()
-        self._rvr_nav_button = self.rvr_wifi_config_page = self._rvr_route_key = None
-        nav_after = len(nav.findChildren(QAbstractButton)) if nav else 0
-        stack_after = list(getattr(router, "stackHistories", []))
-        print(
-            "_remove_interface end: nav count=",
-            nav_before,
-            "->",
-            nav_after,
-            "stackHistories=",
-            stack_after,
-        )
-        logging.info("Nav buttons: %s -> %s", nav_before, nav_after)
+
+        # ④ 统一清空指针
+        self._rvr_nav_button = None
+        self._rvr_route_key = None
+        self.rvr_wifi_config_page = None
+
+        # ⑤ 清除 FluentWindow 内部的 routeKey 映射（必须）
+        try:
+            rk = route_key or getattr(page, "objectName", lambda: None)()
+            if rk and hasattr(self, "_interfaces"):
+                self._interfaces.pop(rk, None)
+                print(f">>> _remove_interface: removed {rk} from self._interfaces")
+            if rk and hasattr(self, "_routes"):
+                self._routes.pop(rk, None)
+                print(f">>> _remove_interface: removed {rk} from self._routes")
+        except Exception as e:
+            print(">>> _remove_interface: failed to clean routeKey mapping:", e)
+
+    # ==== DEBUG: deep nav/router/stack introspection ====
+    def _debug_nav_state(self, tag: str):
+        print(f"\n===== DEBUG NAV STATE [{tag}] =====")
+        nav = getattr(self, "navigationInterface", None)
+        if not nav:
+            print("navigationInterface = None")
+            return
+
+        # 1) 可用方法探测（我们关心 removeX 接口到底叫什么）
+        def _has(obj, name):
+            try:
+                return callable(getattr(obj, name, None))
+            except Exception:
+                return False
+
+        nav_methods = [n for n in ("removeItem", "removeWidget", "removeButton",
+                                   "removeSubInterface", "removeInterface", "addItem", "addWidget")
+                       if _has(nav, n)]
+        fw_methods = [n for n in ("removeSubInterface", "addSubInterface")
+                      if _has(self, n)]
+        print("nav methods:", nav_methods)
+        print("FluentWindow methods:", fw_methods)
+
+        # 2) 列出“看得到的可能是导航按钮的孩子”
+        try:
+            btns = nav.findChildren(QAbstractButton)
+        except Exception:
+            btns = []
+        print("QAbstractButton count:", len(btns))
+        for i, b in enumerate(btns):
+            try:
+                cls = b.metaObject().className()
+            except Exception:
+                cls = type(b).__name__
+            props = {}
+            for k in ("routeKey", "text", "objectName"):
+                try:
+                    if k == "text":
+                        v = b.text()
+                    else:
+                        v = b.property(k)
+                except Exception:
+                    v = None
+                props[k] = v
+            print(f"  [BTN#{i}] id={id(b)} class={cls} props={props}")
+
+        # 3) 再撒一网：找所有 QWidget 子代里“带 routeKey 属性的家伙”（有的不是 QAbstractButton）
+        try:
+            from PyQt5.QtWidgets import QWidget
+            widgets = nav.findChildren(QWidget)
+        except Exception:
+            widgets = []
+        rk_widgets = []
+        for w in widgets:
+            try:
+                rk = w.property("routeKey")
+            except Exception:
+                rk = None
+            if rk:
+                rk_widgets.append(w)
+        print("widgets-with-routeKey count:", len(rk_widgets))
+        for i, w in enumerate(rk_widgets):
+            try:
+                cls = w.metaObject().className()
+            except Exception:
+                cls = type(w).__name__
+            print(f"  [RK#{i}] id={id(w)} class={cls} routeKey={w.property('routeKey')} objName={w.objectName()}")
+
+        # 4) Router 栈/路由表（不同版本字段名不同，做 best-effort 打印）
+        router = getattr(nav, "router", None)
+        if router:
+            print("router exists:", type(router).__name__)
+            # 尝试打印常见成员
+            for key in ("stackHistories", "currentKey", "history", "routeView"):
+                try:
+                    val = getattr(router, key, None)
+                    if callable(val):
+                        val = val()
+                    print(f"  router.{key} =", val)
+                except Exception:
+                    pass
+            # 尝试打印 routes（map）
+            for key in ("routes", "_routes", "routeTable", "routeMap"):
+                try:
+                    routes = getattr(router, key, None)
+                    if routes:
+                        try:
+                            keys = list(routes.keys()) if hasattr(routes, "keys") else routes
+                        except Exception:
+                            keys = routes
+                        print(f"  router.{key} keys =", keys)
+                except Exception:
+                    pass
+        else:
+            print("router = None")
+
+        # 5) StackedWidget 里到底有谁
+        try:
+            count = self.stackedWidget.count()
+        except Exception:
+            count = -1
+        print("stackedWidget count:", count)
+        try:
+            for i in range(count):
+                w = self.stackedWidget.widget(i)
+                try:
+                    cls = w.metaObject().className()
+                except Exception:
+                    cls = type(w).__name__
+                print(f"  [STACK#{i}] id={id(w)} class={cls} objName={w.objectName()}")
+        except Exception:
+            pass
+
+        # 6) 我们自己的指针状态
+        print("self._rvr_visible =", getattr(self, "_rvr_visible", None))
+        print("self._rvr_nav_button =", getattr(self, "_rvr_nav_button", None))
+        print("self._rvr_route_key =", getattr(self, "_rvr_route_key", None))
+        print("self.rvr_wifi_config_page =", getattr(self, "rvr_wifi_config_page", None))
+        print("===== END DEBUG NAV STATE =====\n")
+
+    # ==== DEBUG END ====
 
     def clear_run_page(self):
         if self.run_page and not sip.isdeleted(self.run_page):
@@ -238,7 +393,6 @@ class MainWindow(FluentWindow):
             self._run_nav_button.deleteLater()
             self._run_nav_button = None
         logging.info("RunPage cleared")
-
 
     def _set_nav_buttons_enabled(self, enabled: bool):
         """启用或禁用除 RunPage 外的导航按钮"""
