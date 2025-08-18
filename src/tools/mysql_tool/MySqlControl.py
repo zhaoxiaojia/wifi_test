@@ -69,7 +69,7 @@ class MySql:
     @operate_tablename.setter
     def operate_tablename(self, operate_tablename):
         assert operate_tablename != "", "请输入要操作的表名！"
-        print(f"{self._operate_tablename} 表已被更换！")
+        logging.info("%s 表已被更换！", self._operate_tablename)
         self._operate_tablename = operate_tablename
         self._get_field()
 
@@ -78,7 +78,7 @@ class MySql:
         self._cursor.execute(f"select * from {self._operate_tablename}")
         self._desc = self._cursor.description
         self._field_ = []
-        print('_desc',self._desc)
+        logging.debug('_desc %s', self._desc)
         for field in self._desc:
             self._field_.append(field[0])
 
@@ -87,10 +87,12 @@ class MySql:
         try:
             self._cursor.execute(sql)  # 执行sql语句
             self._conn.commit()  # 执行sql语句后，进行提交
-            if msg: print(f"数据{msg}成功！")
+            if msg:
+                logging.info("数据%s成功！", msg)
             return True
         except Exception as e:
-            if msg: print(f"\033[31m数据{msg}失败！！！\n{e} \033[0m")
+            if msg:
+                logging.warning("数据%s失败！！！\n%s", msg, e)
             self._conn.rollback()  # 执行sql语句失败，进行回滚
             return False
     # 建表
@@ -99,7 +101,7 @@ class MySql:
     # 插入数据
     def insert(self, *value):
         if not hasattr(self,'_filed_'):
-            print('aaaaaaaaaaaaaaaa')
+            logging.debug('aaaaaaaaaaaaaaaa')
             self._get_field()
         if not isinstance(value[0], tuple): raise Exception("要求传入的参数类型为tuple元组！！！")
         if len(value) == 1:
@@ -107,9 +109,9 @@ class MySql:
         else:
             value = str(value)[1:-1]
         sql = f"insert into {self._operate_tablename} ({','.join(self._field_[1:])}) values {value}"
-        print(f'->{sql}<-')
+        logging.debug('->%s<-', sql)
         if not self._sql(sql, f"{value}插入"):
-            print("\n\033[31m：请检查每一条记录字段是否正确！！！\033[0m\n")
+            logging.warning("请检查每一条记录字段是否正确！")
 
     # 插入：自定义sql语句插入数据
     def insert_by_sql(self, sql):
@@ -119,9 +121,9 @@ class MySql:
     def delete_by_id(self, id_: int):
         sql = f"delete from {self._operate_tablename} where id = {id_}"
         if self._sql(sql):
-            print(f"id={id_}记录，删除成功！")
+            logging.info("id=%s记录，删除成功！", id_)
         else:
-            print(f"\n\033[31m：id = {id_}记录，删除失败！！！\033[0m\n")
+            logging.warning("id = %s记录，删除失败！", id_)
 
     # 删除：自定义sql语句删除数据
     def delete_by_sql(self, sql):
@@ -136,9 +138,9 @@ class MySql:
         set_field = ",".join(tempset_field)
         sql = f"update {self._operate_tablename} set {set_field} where id = {id_}"
         if self._sql(sql):
-            print(f"id={id_}记录，{set_field}修改成功！")
+            logging.info("id=%s记录，%s修改成功！", id_, set_field)
         else:
-            print(f"\n\033[31m：id = {id_}记录，{set_field}修改失败！！！\033[0m\n")
+            logging.warning("id = %s记录，%s修改失败！", id_, set_field)
 
     # 修改：自定义sql语句修改数据
     def update_by_sql(self, sql):
@@ -177,7 +179,7 @@ class MySql:
             self._cursor.execute(sql)
             return self._cursor.fetchall()
         except Exception as e:
-            print(f"\033[31m：数据查询失败！！！\n{e} \033[0m")
+            logging.error("数据查询失败！！！\n%s", e)
 
     # 当对象被销毁时，游标先关闭,连接后关闭
     def __del__(self):
@@ -186,6 +188,7 @@ class MySql:
 
 
 if __name__ == '__main__':
+    logging.basicConfig(level=logging.INFO)
     my_sqldb_config_param = {
         "host": "192.168.50.169",  # 连接主机的ip
         "port": 3306,  # 连接主机的端口
@@ -196,7 +199,7 @@ if __name__ == '__main__':
     }
 
     operate_tablename = "py_demo"  # 设置该数据库准备操作的表名
-    print("-------------my_mysql_test：注意下面传入数据的格式---------------")
+    logging.info("-------------my_mysql_test：注意下面传入数据的格式---------------")
     create_commane = '''
     CREATE TABLE py_demo(
                                    id  int  primary key AUTO_INCREMENT,
@@ -208,35 +211,35 @@ if __name__ == '__main__':
     mysql = MySql(operate_tablename=operate_tablename, my_sqldb_config_param=my_sqldb_config_param)
     mysql.create(create_commane)
 
-    print(mysql.operate_tablename)
+    logging.info(mysql.operate_tablename)
 
     # 自定义sql语句，插入多条数据，这里我们在创建表时，设置了id自动增加，所以这里不需要设置id字段
     mysql.insert_by_sql(
         'insert into py_demo(name,age,gender) values ("111", 12, "男"), ("222", 22, "女"),("333", 32, "女")')
     mysql.insert(("444", 42, "男"))  # 插入一条数据
     mysql.insert(("555",52,"男"),("666",62,"女"))  # 插入多条数据
-    print("----------------select-----------------")
+    logging.info("----------------select-----------------")
     result = mysql.select_by_sql("select * from py_demo where gender='男'")  # 自定义sql语句查询数据
-    print("查询：自定义sql查询数据：\n", result)
+    logging.info("查询：自定义sql查询数据：\n%s", result)
     result = mysql.select_all()  # 查询表中所有数据，返回表中所有数据
-    print("查询：表中所有数据：\n", result)
+    logging.info("查询：表中所有数据：\n%s", result)
     result = mysql.select_by_id(1)  # 通过id查询，返回一条数据
-    print("\n查询：通过id：", result)
+    logging.info("\n查询：通过id：%s", result)
     result = mysql.select_many(1, {"gender": "女"})  # 指定查询返回多少条数数据,可根据简单条件查询（where 字段=”“）
-    print('查询：指定查询多少条数数据,可根据简单条件查询（where 字段=”“）：', result)
+    logging.info('查询：指定查询多少条数数据,可根据简单条件查询（where 字段=”“）：%s', result)
 
-    print("----------------delete-----------------")
+    logging.info("----------------delete-----------------")
     mysql.delete_by_sql('delete from py_demo where gender="男"')  # 自定义sql语句删除数据
     mysql.delete_by_id(4)  # 通过id删除数据
     result = mysql.select_all()
-    print("删除数据后查询表中所有数据：\n", result)
+    logging.info("删除数据后查询表中所有数据：\n%s", result)
 
-    print("----------------update-----------------")
+    logging.info("----------------update-----------------")
     mysql.update_by_sql("update py_demo set name='update_name',gender='男' where id = 6")  # 自定义sql语句更新数据
     mysql.update_by_id(3, {"age": "180"})  # 通过id更新数据
     mysql.update_by_id(2, {"name": "update_name", "age": "999"})
     mysql.update_by_id(6, {"xxx": "updateName", "yyy": "18"})  # 异常
     mysql.update_by_id(1, ("age","180"))  # 异常
     result = mysql.select_all()
-    print("更新数据后查询表中所有数据：\n", result)
+    logging.info("更新数据后查询表中所有数据：\n%s", result)
 
