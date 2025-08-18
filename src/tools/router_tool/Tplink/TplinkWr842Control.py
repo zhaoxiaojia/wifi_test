@@ -115,8 +115,8 @@ class TplinkWr842Control:
                     if select_list.text:
                         lis = select_list.find_elements(By.TAG_NAME, 'option')
                         index = [i.text for i in lis].index(router.bandwidth) + 1
-                        print(router.bandwidth)
-                        print(index)
+                        logging.debug("%s", router.bandwidth)
+                        logging.debug("%s", index)
                         self.router_control.driver.find_element(
                             By.XPATH, select_xpath.format(index)).click()
             except NotImplementedError:
@@ -198,12 +198,17 @@ class TplinkWr842Control:
             # 修改wpa加密方式
             if router.wpa_encrypt:
                 index = TplinkWr842Config.WPA_ENCRYPT[router.wpa_encrypt]
-                print(self.router_control.xpath['wr842_authentication_encrypt_element'][target_element].format(
-                    index))
+                logging.debug(
+                    self.router_control.xpath['wr842_authentication_encrypt_element'][target_element].format(
+                        index
+                    )
+                )
                 self.router_control.driver.find_element(
                     By.XPATH,
                     self.router_control.xpath['wr842_authentication_encrypt_element'][target_element].format(
-                        index)).click()
+                        index
+                    )
+                ).click()
 
             # 修改wpa密码
             if (router.wpa_passwd):
