@@ -123,26 +123,6 @@ def setup(request):
         yield connect_status, router_info, corner_step_list
         pytest.dut.kill_iperf()
 
-
-# 生成 pdf
-# if step_list != [0]:
-#     pytest.testResult.write_to_excel()
-#     if test_type == 'rf':
-#         # 重置衰减
-#         if not rf_debug:
-#             rf_tool.execute_rf_cmd(0)
-#         # 生成折线图
-#         pytest.testResult.write_attenuation_data_to_pdf()
-#     elif test_type == 'corner':
-#         # 转台重置
-#         if not rf_debug:
-#             corner_tool.set_turntable_zero()
-#         # 生成雷达图
-#         pytest.testResult.write_corner_data_to_pdf()
-#     else:
-#         ...
-
-
 # 测试 iperf
 def test_rvr(setup):
         connect_status, router_info, corner_step_list = setup
@@ -171,12 +151,12 @@ def test_rvr(setup):
                 rssi_num = pytest.dut.get_rssi()
                 logging.info('start test tx/rx')
                 logging.info(f'router_info: {router_info}')
-                if 'tx' in router_info.test_type:
+                if int(router_info.test_type):
                         logging.info(f'rssi : {rssi_num} ')
                         pytest.dut.get_tx_rate(router_info, 'TCP',
                                                corner_tool=corner_tool,
                                                db_set=db_set)
-                if 'rx' in router_info.test_type:
+                if int(router_info.test_type):
                         logging.info(f'rssi : {rssi_num}')
                         pytest.dut.get_rx_rate(router_info, 'TCP',
                                                corner_tool=corner_tool,

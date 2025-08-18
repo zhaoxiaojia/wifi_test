@@ -149,10 +149,9 @@ def test_rvr(setup):
 
         pytest.dut.get_rssi()
         logging.info('start test iperf')
-        logging.info(f'router_info: {router_info}')
-        if router_info.rx:
+        if int(router_info.rx):
             logging.info(f'rssi : {pytest.dut.rssi_num}')
             pytest.dut.get_tx_rate(router_info, 'TCP', db_set=db_set)
-        if router_info.tx:
+        if int(router_info.tx):
             logging.info(f'rssi : {pytest.dut.rssi_num}')
             pytest.dut.get_rx_rate(router_info, 'TCP', db_set=db_set)

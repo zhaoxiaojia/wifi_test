@@ -218,13 +218,36 @@ class dut():
             self.checkoutput('chmod a+x /system/bin/iperf')
 
     def run_iperf(self, command, adb, direction='tx', iperf3=False):
+
         def telnet_iperf():
             tn = telnetlib.Telnet(pytest.dut.dut_ip)
+            logging.info(f'run thread: {command}')
             tn.write(command.encode('ascii') + b'\n')
             while True:
-                res = tn.read_until(b'Mbits/sec').decode('gbk')
-                with lock:
-                    return self._get_logcat([res, ])
+                line = tn.read_until(b'Mbits/sec').decode('gbk').strip()
+                logging.info(f'res {line}')
+                if '[SUM]' not in line:
+                    continue
+                if self.rssi_num > -60:
+                    if line.strip(): logging.info(f'line : {line.strip()}')
+                    data = re.findall('\s0\.0+-\s*3\d+\.\d*.*?(\d+\.*\d*)\s+Mbits/sec.*?', line.strip(), re.S)
+                    if data:
+                        result_list.append(float(data[0]))
+                        break
+                else:
+                    if line.strip(): logging.info(f'line : {line.strip()}')
+                    data = re.findall(r'.*?\d+\.\d*-\s*\d+\.\d*.*?(\d+\.*\d*)\s+Mbits/sec.*?', line.strip(), re.S)
+                    if data:
+                        result_list.append(float(data[0]))
+                    if len(result_list) > 30:
+                        break
+            if result_list:
+                logging.info(f'throughput result : {sum(result_list) / len(result_list)}')
+                # logging.info(f'{result_list}')
+                result = sum(result_list) / len(result_list)
+            else:
+                result = 0
+            return round(result, 1)
             logging.info('run thread done')
 
         result_list = []
@@ -235,7 +258,6 @@ class dut():
         if '-s' in command:
             if adb:
                 if pytest.connect_type == 'telnet':
-                    logging.info(f'run thread: {command}')
                     t = Thread(target=telnet_iperf)
                     t.daemon = True
                     t.start()
