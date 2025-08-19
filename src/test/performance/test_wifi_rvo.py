@@ -125,7 +125,11 @@ def setup(request):
                 time.sleep(3)
 
         yield connect_status, router_info, corner_step_list
+        if pytest.connect_type == 'telnet':
+                router.change_country("欧洲")
+                router.driver.quit()
         pytest.dut.kill_iperf()
+        corner_tool.set_turntable_zero()
 
 # 测试 iperf
 def test_rvr(setup):
