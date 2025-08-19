@@ -10,7 +10,6 @@ corner_angle:
   - 0
   - 320
 fpga: W2_SDIO
-power_relay: '{''192.168.200.6'': ''7''}'
 rf_solution:
   RADIORACK-4-220:
     ip_address: 192.168.50.19

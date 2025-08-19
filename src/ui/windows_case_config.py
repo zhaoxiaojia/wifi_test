@@ -576,7 +576,7 @@ class CaseConfigPage(CardWidget):
                 self.field_widgets["rf_solution.step"] = self.rf_step_edit
                 continue  # 跳过后面的通用字段处理
             if key == "rvr":
-                group = QGroupBox("Rvr config")  # 外层分组
+                group = QGroupBox("RvR config")  # 外层分组
                 vbox = QVBoxLayout(group)
                 # Tool 下拉
                 self.rvr_tool_combo = ComboBox(self)
@@ -706,7 +706,7 @@ class CaseConfigPage(CardWidget):
                 vbox.addWidget(self.router_name_combo)
                 vbox.addWidget(QLabel("Gateway:"))
                 vbox.addWidget(self.router_addr_edit)
-                vbox.addWidget(QLabel("SSID 2G:"))
+                vbox.addWidget(QLabel("SSID 2.4G:"))
                 vbox.addWidget(self.ssid_2g_edit)
                 vbox.addWidget(QLabel("SSID 5G:"))
                 vbox.addWidget(self.ssid_5g_edit)
@@ -762,6 +762,8 @@ class CaseConfigPage(CardWidget):
                 self.field_widgets["serial_port.status"] = self.serial_enable_combo
                 self.field_widgets["serial_port.port"] = self.serial_port_edit
                 self.field_widgets["serial_port.baud"] = self.serial_baud_edit
+                continue
+            if key == "csv_path":
                 continue
             # ------- 默认处理：创建 LineEdit 保存未覆盖字段 -------
             group = QGroupBox(key)
@@ -884,8 +886,6 @@ class CaseConfigPage(CardWidget):
             "serial_port.baud",
             "fpga",
         }
-        if basename == "test_compatibility.py":
-            info.fields |= {"Power relay"}
         if basename == "test_wifi_peak_throughput.py":
             info.fields |= peak_keys
         if self._is_performance_case(case_path):
@@ -965,14 +965,10 @@ class CaseConfigPage(CardWidget):
             if isinstance(passwd_widget, LineEdit):
                 passwd = passwd_widget.text()
             if hasattr(main_window, "show_rvr_wifi_config"):
-                logging.debug("get_editable_fields: before show_rvr_wifi_config")
                 main_window.show_rvr_wifi_config()
-                logging.debug("get_editable_fields: after show_rvr_wifi_config")
         else:
             if hasattr(main_window, "hide_rvr_wifi_config"):
-                logging.debug("get_editable_fields: before hide_rvr_wifi_config")
                 main_window.hide_rvr_wifi_config()
-                logging.debug("get_editable_fields: after hide_rvr_wifi_config")
         if hasattr(self, "csv_combo"):
             if info.enable_csv:
                 self.csv_combo.setEnabled(True)
