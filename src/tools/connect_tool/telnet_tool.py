@@ -62,7 +62,7 @@ class telnet_tool(dut):
                     logging.warning(f'Error closing telnet connection: {e}')
             self.writer = None
         self.reader = None
-        if not self.loop.is_closed():
+        if hasattr(self,'loop') and not self.loop.is_closed():
             self.loop.close()
 
     def __del__(self):

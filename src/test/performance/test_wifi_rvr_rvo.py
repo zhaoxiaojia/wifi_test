@@ -96,6 +96,7 @@ def setup(request):
             router.change_country("欧洲")
         else:
             router.change_country("美国")
+        router.driver.quit()
         band = '5G' if '2' in router_info.band else '2.4G'
         ssid = router_info.ssid + "_bat";
         router.change_setting(Router(band=band, ssid=ssid))
