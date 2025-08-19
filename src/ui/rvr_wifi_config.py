@@ -106,7 +106,7 @@ class RvrWifiConfigPage(CardWidget):
         test_layout.addWidget(self.rx_check)
         self.tx_check.stateChanged.connect(self._update_tx_rx)
         self.rx_check.stateChanged.connect(self._update_tx_rx)
-        form_layout.addRow("test_type", test_widget)
+        form_layout.addRow("direction", test_widget)
 
         self.data_row_edit = LineEdit(form_box)
         form_layout.addRow("data_row", self.data_row_edit)
