@@ -75,7 +75,7 @@ class RouterConst:
     """路由器相关常量"""
     RUN_SETTING_ACTIVITY: Final[str] = 'am start -n com.android.tv.settings/.MainSettings'
     fields: Final[list[str]] = [
-        'band', 'ssid', 'wireless_mode', 'channel', 'bandwidth', 'authentication',
+        'band', 'ssid', 'wireless_mode', 'channel', 'bandwidth', 'security_protocol',
         'password', 'tx', 'rx', 'data_row', 'expected_rate', 'wifi6', 'wep_encrypt',
         'hide_ssid', 'hide_type', 'wpa_encrypt', 'passwd_index', 'protect_frame',
         'smart_connect', 'country_code'

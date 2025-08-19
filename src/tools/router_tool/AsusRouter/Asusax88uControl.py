@@ -207,7 +207,7 @@ class Asusax88uControl(RouterTools):
         mode_list = self.AUTHENTICATION_METHOD if method != 'Legacy' \
             else self.AUTHENTICATION_METHOD_LEGCY
         if method not in mode_list:
-            raise ConfigError('authentication method element error')
+            raise ConfigError('security protocol method element error')
         self.telnet_write(cmd.format(self.MODE_PARAM[method]))
         if method == 'Open System':
             self.set_2g_wep_encrypt('None')
@@ -217,7 +217,7 @@ class Asusax88uControl(RouterTools):
         mode_list = self.AUTHENTICATION_METHOD if method != 'Legacy' \
             else self.AUTHENTICATION_METHOD_LEGCY
         if method not in mode_list:
-            raise ConfigError('authentication method element error')
+            raise ConfigError('security protocol method element error')
         self.telnet_write(cmd.format(self.MODE_PARAM[method]))
         if method == 'Open System':
             self.set_5g_wep_encrypt('None')
@@ -301,11 +301,11 @@ class Asusax88uControl(RouterTools):
             self.set_2g_password(router.password) if '2' in router.band else self.set_5g_password(
                 router.password)
 
-        # 修改 authentication
-        if router.authentication:
+        # 修改 security_protocol
+        if router.security_protocol:
             self.set_2g_authentication(
-                router.authentication) if '2' in router.band else self.set_5g_authentication(
-                router.authentication)
+                router.security_protocol) if '2' in router.band else self.set_5g_authentication(
+                router.security_protocol)
 
         # 修改channel
         if router.channel:
@@ -336,7 +336,7 @@ class Asusax88uControl(RouterTools):
 
 # ['Open System', 'WPA2-Personal', 'WPA3-Personal', 'WPA/WPA2-Personal', 'WPA2/WPA3-Personal',
 #                              'WPA2-Enterprise', 'WPA/WPA2-Enterprise']
-# fields = ['serial', 'band', 'ssid', 'wireless_mode', 'channel', 'bandwidth', 'authentication',
+# fields = ['serial', 'band', 'ssid', 'wireless_mode', 'channel', 'bandwidth', 'security_protocol',
 #           'password', 'test_type', 'protocol_type', 'wep_encrypt', 'wep_passwd',
 #           'hide_ssid', 'hide_type', 'wpa_encrypt', 'passwd_index', 'protect_frame',
 #           'smart_connect', 'country_code']

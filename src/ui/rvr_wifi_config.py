@@ -91,7 +91,7 @@ class RvrWifiConfigPage(CardWidget):
         self.auth_combo = ComboBox(form_box)
         self.auth_combo.addItems(getattr(self.router, "AUTHENTICATION_METHOD", []))
         self.auth_combo.setMinimumWidth(150)
-        form_layout.addRow("authentication", self.auth_combo)
+        form_layout.addRow("security_protocol", self.auth_combo)
         # 密码输入框，用于自动填充和测试流程引用
         self.passwd_edit = LineEdit(form_box)
         form_layout.addRow("password", self.passwd_edit)
@@ -214,7 +214,7 @@ class RvrWifiConfigPage(CardWidget):
             "wireless_mode",
             "channel",
             "bandwidth",
-            "authentication",
+            "security_protocol",
             "ssid",
             "password",
             "tx",
@@ -349,7 +349,7 @@ class RvrWifiConfigPage(CardWidget):
         self.table.setColumnCount(len(self.headers))
         self.table.setHorizontalHeaderLabels(self.headers)
         header = self.table.horizontalHeader()
-        idx = self.headers.index("authentication")
+        idx = self.headers.index("security_protocol")
         ssid = self.headers.index("ssid")
         header.setSectionResizeMode(idx, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(ssid, QHeaderView.ResizeToContents)
@@ -414,7 +414,7 @@ class RvrWifiConfigPage(CardWidget):
             with QSignalBlocker(self.bandwidth_combo):
                 self.bandwidth_combo.setCurrentText(data.get("bandwidth", ""))
             with QSignalBlocker(self.auth_combo):
-                self.auth_combo.setCurrentText(data.get("authentication", ""))
+                self.auth_combo.setCurrentText(data.get("security_protocol", ""))
             with QSignalBlocker(self.passwd_edit):
                 self._on_auth_changed(self.auth_combo.currentText())
             with QSignalBlocker(self.passwd_edit):
@@ -466,7 +466,7 @@ class RvrWifiConfigPage(CardWidget):
             "wireless_mode": self.wireless_combo.currentText(),
             "channel": self.channel_combo.currentText(),
             "bandwidth": self.bandwidth_combo.currentText(),
-            "authentication": self.auth_combo.currentText(),
+            "security_protocol": self.auth_combo.currentText(),
             # "ssid": ssid,
             "password": self.passwd_edit.text(),
             "data_row": self.data_row_edit.text(),
@@ -500,7 +500,7 @@ class RvrWifiConfigPage(CardWidget):
             "wireless_mode": self.wireless_combo.currentText(),
             "channel": self.channel_combo.currentText(),
             "bandwidth": self.bandwidth_combo.currentText(),
-            "authentication": self.auth_combo.currentText(),
+            "security_protocol": self.auth_combo.currentText(),
             "ssid": ssid,
             "password": self.passwd_edit.text(),
             "tx": "1" if self.tx_check.isChecked() else "0",

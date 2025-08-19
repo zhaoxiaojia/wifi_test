@@ -128,11 +128,11 @@ class Linksys1200acControl():
                         By.XPATH, self.router_control.xpath['ssid_element_5g']).send_keys(router.ssid)
 
             #
-            if (router.authentication):
+            if (router.security_protocol):
                 try:
-                    index = Linksys1200acConfig.AUTHENTICATION_METHOD_DICT[router.authentication]
+                    index = Linksys1200acConfig.AUTHENTICATION_METHOD_DICT[router.security_protocol]
                 except ConfigError:
-                    raise ConfigError('authentication method element error')
+                    raise ConfigError('security protocol method element error')
                 # //*[@id="ssid_enc"]/option[1]
                 if '2' in router.band:
                     target_element = 'authtication_2g'
@@ -244,7 +244,7 @@ class Linksys1200acControl():
         finally:
             self.router_control.driver.quit()
 
-# fields = ['serial', 'band', 'ssid', 'wireless_mode', 'channel', 'bandwidth', 'authentication',
+# fields = ['serial', 'band', 'ssid', 'wireless_mode', 'channel', 'bandwidth', 'security_protocol',
 #           'wpa_passwd', 'test_type', 'wep_encrypt', 'passwd_index', 'wep_passwd',
 #           'protect_frame', 'wpa_encrypt', 'hide_ssid']
 # Router = namedtuple('Router', fields, defaults=[None, ] * len(fields))
