@@ -14,9 +14,7 @@ import logging
 import subprocess
 import time
 
-import pytest
 import asyncio
-import telnetlib
 import telnetlib3
 
 from src.tools.connect_tool.dut import dut
@@ -38,16 +36,27 @@ class telnet_tool(dut):
         logging.info('*' * 80)
         logging.info(f'* Telnet {self.dut_ip}')
         logging.info('*' * 80)
+        self.loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self.loop)
+        self.reader = None
+        self.writer = None
         try:
-            self.tn = telnetlib.Telnet(self.dut_ip, self.port, timeout=5)
+            self.reader, self.writer = self.loop.run_until_complete(
+                telnetlib3.open_connection(self.dut_ip, self.port)
+            )
         except Exception as e:
             logging.error(f'Create telnet connection failed: {e}')
-            self.tn = None
 
     def close(self):
-        if getattr(self, 'tn', None):
-            self.tn.close()
-            self.tn = None
+        if self.writer:
+            self.writer.close()
+            try:
+                self.loop.run_until_complete(self.writer.wait_closed())
+            except Exception as e:
+                logging.warning(f'Error closing telnet connection: {e}')
+            self.writer = None
+        if not self.loop.is_closed():
+            self.loop.close()
 
     def __del__(self):
         self.close()
@@ -62,57 +71,47 @@ class telnet_tool(dut):
         else:
             raise Exception('Dut lost connect')
 
+    def login(self, username, password, prompt):
+        async def _login():
+            await self.reader.readuntil("login:")
+            self.writer.write(username + "\n")
+            await self.writer.drain()
+            await self.reader.readuntil("Password:")
+            self.writer.write(password + "\n")
+            await self.writer.drain()
+            await self.reader.readuntil(prompt)
+        if self.reader and self.writer:
+            try:
+                self.loop.run_until_complete(_login())
+            except Exception as e:
+                logging.error(f'Telnet login failed: {e}')
+
+    async def _read_all(self, timeout=2):
+        output = []
+        while True:
+            try:
+                data = await asyncio.wait_for(self.reader.read(1024), timeout)
+                if not data:
+                    break
+                output.append(data)
+            except asyncio.TimeoutError:
+                break
+        return "".join(output)
+
     def execute_cmd(self, cmd):
-        if self.tn:
-            self.tn.write(cmd.encode('ascii') + b'\n')
+        if self.writer:
+            self.writer.write(cmd + "\n")
+            self.loop.run_until_complete(self.writer.drain())
             time.sleep(1)
         else:
-            try:
-                with telnetlib.Telnet(self.dut_ip, self.port, timeout=5) as tn:
-                    tn.write(cmd.encode('ascii') + b'\n')
-                    time.sleep(1)
-            except Exception as e:
-                logging.error(f'Telnet execute cmd error: {e}')
+            logging.error('Telnet execute cmd error: no connection')
 
     def checkoutput(self, cmd, wildcard=''):
-        return asyncio.run(self.telnet_client(cmd))
-
-    @pytest.mark.asyncio
-    async def telnet_client(self, command):
-        async def read_all(reader, timeout=2):
-            """循环读取数据，若超时无数据，则退出"""
-            output = []
-            while True:
-                try:
-                    data = await asyncio.wait_for(reader.read(1024), timeout)
-                    if not data:
-                        break
-                    output.append(data)
-                except asyncio.TimeoutError:
-                    break
-            return "".join(output)
-
-        reader, writer = '', ''
-        try:
-            reader, writer = await telnetlib3.open_connection(self.dut_ip, self.port)
-            # 发送命令
-            writer.write(command + "\n")
-            await writer.drain()
-            # 读取命令执行结果
-            result = await read_all(reader)
-            return result
-        except Exception as e:
-            logging.error(f"Telnet error: {e}")
+        if not (self.reader and self.writer):
             return None
-        finally:
-            if writer:
-                writer.close()
-                protocol = getattr(writer, "protocol", None)
-                if protocol:
-                    try:
-                        await protocol.wait_closed
-                    except asyncio.CancelledError:
-                        logging.info("Telnet task cancelled")
+        self.writer.write(cmd + "\n")
+        self.loop.run_until_complete(self.writer.drain())
+        return self.loop.run_until_complete(self._read_all())
 
     def popen_term(self, command):
         return subprocess.Popen(command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -135,8 +134,8 @@ class telnet_tool(dut):
     def get_mcs_rx(self):
         return 'mcs_rx'
 
-# tl = telnet_tool('192.168.50.207','bayside')
-# tl.tn.close()
+# tl = telnet_tool('192.168.50.207')
+# tl.close()
 # print(tl.checkoutput('iw dev wlan0 link'))
 # print(tl.checkoutput('iw dev wlan0 link'))
 # print('aaa')
