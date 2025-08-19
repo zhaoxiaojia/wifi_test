@@ -43,30 +43,36 @@ def setup_router(request):
         time.sleep(10)
 
 
-def test_rvr(setup):
-    connect_status, router_info, rf_step_list, rf_tool = setup
-    if not connect_status:
-        logging.info("Can't connect wifi ,input 0")
-        with open(pytest.testResult.detail_file, 'a') as f:
-            f.write("\n Can't connect wifi , skip this loop\n\n")
-        return
+@pytest.fixture(scope='function')
+def setup_rf(setup_router):
+    connect_status, router_info, rf_step_list, rf_tool = setup_router
     for rf_value in rf_step_list:
         logging.info(f'set rf value {rf_value}')
         db_set = rf_value[1] if isinstance(rf_value, tuple) else rf_value
         rf_tool.execute_rf_cmd(db_set)
         logging.info(rf_tool.get_rf_current_value())
-        with open(pytest.testResult.detail_file, 'a') as f:
-            f.write('-' * 40 + '\n')
-            info = ''
-            info += 'db_set : ' + str(db_set) + '\n'
-            info += 'corner_set : \n'
-            f.write(info)
+        yield connect_status, router_info, db_set, rf_tool
 
-        pytest.dut.get_rssi()
-        logging.info('start test iperf')
-        if int(router_info.rx):
-            logging.info(f'rssi : {pytest.dut.rssi_num}')
-            pytest.dut.get_tx_rate(router_info, 'TCP', db_set=db_set)
-        if int(router_info.tx):
-            logging.info(f'rssi : {pytest.dut.rssi_num}')
-            pytest.dut.get_rx_rate(router_info, 'TCP', db_set=db_set)
+
+def test_rvr(setup_rf):
+    connect_status, router_info, db_set, rf_tool = setup_rf
+    if not connect_status:
+        logging.info("Can't connect wifi ,input 0")
+        with open(pytest.testResult.detail_file, 'a') as f:
+            f.write("\n Can't connect wifi , skip this loop\n\n")
+        return
+    with open(pytest.testResult.detail_file, 'a') as f:
+        f.write('-' * 40 + '\n')
+        info = ''
+        info += 'db_set : ' + str(db_set) + '\n'
+        info += 'corner_set : \n'
+        f.write(info)
+
+    pytest.dut.get_rssi()
+    logging.info('start test iperf')
+    if int(router_info.rx):
+        logging.info(f'rssi : {pytest.dut.rssi_num}')
+        pytest.dut.get_tx_rate(router_info, 'TCP', db_set=db_set)
+    if int(router_info.tx):
+        logging.info(f'rssi : {pytest.dut.rssi_num}')
+        pytest.dut.get_rx_rate(router_info, 'TCP', db_set=db_set)
