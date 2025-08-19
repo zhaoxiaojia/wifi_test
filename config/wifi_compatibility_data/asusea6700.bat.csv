@@ -1,4 +1,4 @@
-serial,band,ssid,wireless_mode,channel,bandwidth,authentication,wpa_passwd,test_type,protocol_type,wep_encrypt,wep_passwd,hide_ssid,hide_type,wpa_encrypt,passwd_index,protect_frame
+serial,band,ssid,wireless_mode,channel,bandwidth,security_protocol,wpa_passwd,test_type,protocol_type,wep_encrypt,wep_passwd,hide_ssid,hide_type,wpa_encrypt,passwd_index,protect_frame
 1,2.4G,Asusea6700_2.4G,自动,自动,20/40 MHz,Open System,,tx rx,TCP,,,是,NONE,,,
 2,2.4G,Asusea6700_2.4G,自动,1,20/40 MHz,WPA2-Personal,12345678,tx rx,TCP,,,否,,,,
 3,2.4G,Asusea6700_2.4G,自动,2,20/40 MHz,WPA-Auto-Personal,12345678,tx rx,TCP,,,否,,,,

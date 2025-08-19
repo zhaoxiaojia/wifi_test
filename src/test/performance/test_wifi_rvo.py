@@ -83,8 +83,8 @@ def setup(request):
         else:
                 for _ in range(3):
                         try:
-                                type = 'wpa3' if 'WPA3' in router_info.authentication else 'wpa2'
-                                if router_info.authentication.lower() in \
+                                type = 'wpa3' if 'WPA3' in router_info.security_protocol else 'wpa2'
+                                if router_info.security_protocol.lower() in \
                                                 ['open', '不加密', '无', 'open system', '无加密(允许所有人连接)', 'none']:
                                         logging.info('no passwd')
                                         cmd = pytest.dut.CMD_WIFI_CONNECT.format(router_info.ssid, "open", "")

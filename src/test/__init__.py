@@ -68,10 +68,10 @@ def get_testdata(router):
         ], "Pls check bandwidth info"
         if "Legacy" in i.wireless_mode:
             assert (
-                    i.authentication in router.AUTHENTICATION_METHOD_LEGCY
-            ), "Pls check authentication info"
+                    i.security_protocol in router.AUTHENTICATION_METHOD_LEGCY
+            ), "Pls check security protocol info"
         else:
             assert (
-                    i.authentication in router.AUTHENTICATION_METHOD
-            ), "Pls check authentication info"
+                    i.security_protocol in router.AUTHENTICATION_METHOD
+            ), "Pls check security protocol info"
     return test_data
