@@ -95,6 +95,8 @@ class RvrWifiConfigPage(CardWidget):
         # 密码输入框，用于自动填充和测试流程引用
         self.passwd_edit = LineEdit(form_box)
         form_layout.addRow("password", self.passwd_edit)
+        self.ssid_edit = LineEdit(form_box)
+        form_layout.addRow("ssid", self.ssid_edit)
         self.auth_combo.currentTextChanged.connect(self._on_auth_changed)
 
         test_widget = QWidget(form_box)
@@ -159,6 +161,7 @@ class RvrWifiConfigPage(CardWidget):
         self.auth_combo.currentTextChanged.connect(self._on_auth_changed)
         self.auth_combo.currentTextChanged.connect(self._update_current_row)
         self.passwd_edit.textChanged.connect(self._update_current_row)
+        self.ssid_edit.textChanged.connect(self._update_current_row)
         self.data_row_edit.textChanged.connect(self._update_current_row)
         self._update_band_options(self.band_combo.currentText())
         self._update_auth_options(self.wireless_combo.currentText())
@@ -387,6 +390,7 @@ class RvrWifiConfigPage(CardWidget):
                     self.bandwidth_combo,
                     self.auth_combo,
                     self.passwd_edit,
+                    self.ssid_edit,
                     self.tx_check,
                     self.rx_check,
                     self.data_row_edit,
@@ -411,6 +415,7 @@ class RvrWifiConfigPage(CardWidget):
                 self._on_auth_changed(self.auth_combo.currentText())
 
                 self.passwd_edit.clear()
+                self.ssid_edit.clear()
                 self.tx_check.setChecked(False)
                 self.rx_check.setChecked(False)
                 self.data_row_edit.clear()
@@ -436,6 +441,7 @@ class RvrWifiConfigPage(CardWidget):
                         self.bandwidth_combo,
                         self.auth_combo,
                         self.passwd_edit,
+                        self.ssid_edit,
                 ):
                     stack.enter_context(QSignalBlocker(w))
                 self._update_band_options(band)
@@ -457,6 +463,8 @@ class RvrWifiConfigPage(CardWidget):
                 self._on_auth_changed(self.auth_combo.currentText())
             with QSignalBlocker(self.passwd_edit):
                 self.passwd_edit.setText(data.get("password", ""))
+            with QSignalBlocker(self.ssid_edit):
+                self.ssid_edit.setText(data.get("ssid", ""))
             with QSignalBlocker(self.tx_check):
                 self.tx_check.setChecked(data.get("tx", "0") == "1")
             with QSignalBlocker(self.rx_check):
@@ -495,17 +503,13 @@ class RvrWifiConfigPage(CardWidget):
         if not (0 <= row < len(self.rows)):
             return
         band = self.band_combo.currentText()
-        # if band == "2.4G":
-        #     ssid = self.case_config_page.ssid_2g_edit.text()
-        # else:
-        #     ssid = self.case_config_page.ssid_5g_edit.text()
         data = {
             "band": band,
             "wireless_mode": self.wireless_combo.currentText(),
             "channel": self.channel_combo.currentText(),
             "bandwidth": self.bandwidth_combo.currentText(),
             "security_protocol": self.auth_combo.currentText(),
-            # "ssid": ssid,
+            "ssid": self.ssid_edit.text(),
             "password": self.passwd_edit.text(),
             "data_row": self.data_row_edit.text(),
         }
@@ -529,10 +533,7 @@ class RvrWifiConfigPage(CardWidget):
         if auth not in ("Open System", "无加密（允许所有人连接）") and not self.passwd_edit.text():
             InfoBar.error(title="Error", content="Pls input password", parent=self, position=InfoBarPosition.TOP)
             return
-        if band == "2.4G":
-            ssid = self.case_config_page.ssid_2g_edit.text()
-        else:
-            ssid = self.case_config_page.ssid_5g_edit.text()
+        ssid = self.ssid_edit.text()
         row = {
             "band": band,
             "wireless_mode": self.wireless_combo.currentText(),
