@@ -25,7 +25,7 @@ test_data = get_testdata(router)
 
 
 @pytest.fixture(scope='session', params=test_data, ids=[str(i) for i in test_data])
-def setup(request):
+def setup_router(request):
     corner_step_list = []
     corner_tool = None
 
