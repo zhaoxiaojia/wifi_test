@@ -88,9 +88,9 @@ class Asusax5400Control:
                     raise ConfigError('bandwidth element error')
                 self.router_control.change_bandwidth(router.bandwidth)
 
-            # 修改 authentication
-            if router.authentication:
-                self.router_control.change_authentication(router.authentication)
+            # 修改 security_protocol
+            if router.security_protocol:
+                self.router_control.change_authentication(router.security_protocol)
 
             # 修改 wep_encrypt
             if router.wep_encrypt:
@@ -155,7 +155,7 @@ class Asusax5400Control:
         finally:
             self.router_control.driver.quit()
 
-# fields = ['serial', 'band', 'ssid', 'wireless_mode', 'channel', 'bandwidth', 'authentication', 'wep_encrypt',
+# fields = ['serial', 'band', 'ssid', 'wireless_mode', 'channel', 'bandwidth', 'security_protocol', 'wep_encrypt',
 #           'passwd_index', 'wep_passwd', 'wpa_passwd', 'protect_frame', 'wpa_encrypt', 'hide_ssid', 'hide_type']
 # Router = namedtuple('Router', fields, defaults=[None, ] * len(fields))
 # router = Router(serial='1', band='5G', ssid='ASUSAX5400_5G', wireless_mode='N/AC mixed',

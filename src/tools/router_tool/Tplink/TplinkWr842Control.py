@@ -159,15 +159,15 @@ class TplinkWr842Control:
             time.sleep(1)
             wait_for = self.router_control.driver.find_element(By.ID, "help")
             target_element = ''
-            if (router.authentication):
-                if router.authentication not in TplinkWr842Config.AUTHENTICATION_METHOD_LIST:
-                    raise ConfigError('authentication method key error')
+            if (router.security_protocol):
+                if router.security_protocol not in TplinkWr842Config.AUTHENTICATION_METHOD_LIST:
+                    raise ConfigError('security protocol method key error')
 
-                if router.authentication in 'WPA/WPA2':
+                if router.security_protocol in 'WPA/WPA2':
                     target_element = 'WPA/WPA2'
-                elif router.authentication in 'WPA-PSK/WPA2-PSK':
+                elif router.security_protocol in 'WPA-PSK/WPA2-PSK':
                     target_element = 'WPA-PSK/WPA2-PSK'
-                elif router.authentication == 'OPEN':
+                elif router.security_protocol == 'OPEN':
                     target_element = 'NONE'
                 else:
                     target_element = 'WEP'
@@ -176,16 +176,16 @@ class TplinkWr842Control:
                 self.router_control.driver.find_element(
                     By.XPATH, self.router_control.xpath['wr842_authentication_element'][target_element]).click()
                 if target_element != 'NONE':
-                    if router.authentication == 'WPA/WPA2' or router.authentication == 'WPA-PSK/WPA2-PSK':
-                        authentication = '自动'
+                    if router.security_protocol == 'WPA/WPA2' or router.security_protocol == 'WPA-PSK/WPA2-PSK':
+                        security_protocol = '自动'
                     else:
-                        authentication = router.authentication
+                        security_protocol = router.security_protocol
                     target_dict = {
                         'WPA/WPA2': TplinkWr842Config.WPA_DICT,
                         'WPA-PSK/WPA2-PSK': TplinkWr842Config.PSK_DICT,
                         'WEP': TplinkWr842Config.WEP_DICT
                     }
-                    index = target_dict[target_element][authentication]
+                    index = target_dict[target_element][security_protocol]
                     # /html/body/center/form/table/tbody/tr[2]/td/table/tbody/tr[1]/td[2]/table[8]/tbody/tr[2]/td[2]/select/option[1]
                     self.router_control.driver.find_element(
                         By.XPATH,
@@ -268,7 +268,7 @@ class TplinkWr842Control:
             self.router_control.driver.quit()
 
 
-# fields = ['band', 'ssid', 'wireless_mode', 'channel', 'bandwidth', 'authentication',
+# fields = ['band', 'ssid', 'wireless_mode', 'channel', 'bandwidth', 'security_protocol',
 #           'wpa_passwd', 'test_type', 'wep_encrypt', 'passwd_index', 'wep_passwd', 'protect_frame',
 #           'wpa_encrypt', 'hide_ssid']
 # Router = namedtuple('Router', fields, defaults=[None, ] * len(fields))
