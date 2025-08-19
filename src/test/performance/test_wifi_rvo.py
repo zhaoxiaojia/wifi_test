@@ -129,7 +129,7 @@ def setup(request):
                 router.change_country("欧洲")
                 router.driver.quit()
         pytest.dut.kill_iperf()
-        corner_tool.set_turntable_zero()
+
 
 # 测试 iperf
 def test_rvr(setup):
