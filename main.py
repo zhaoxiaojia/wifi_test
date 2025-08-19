@@ -61,10 +61,7 @@ class MainWindow(FluentWindow):
         )
         # 初始不展示 RVR Wi-Fi 配置页
         # 可加更多页面，比如“历史记录”“关于”等
-
-        # FluentWindow自带自定义颜色与主题
-        setTheme(Theme.DARK)  #
-        # self.setMicaEffectEnabled(True)  # Win11下生效毛玻璃
+        self.setMicaEffectEnabled(True)  # Win11下生效毛玻璃
 
     def show_rvr_wifi_config(self):
         """在导航栏中显示 RVR Wi-Fi 配置页（幂等：已存在则只显示）"""
@@ -561,7 +558,9 @@ if __name__ == "__main__":
     )
     try:
         app = QApplication(sys.argv)
-        QGuiApplication.setFont(QFont("Verdana"))
+        setTheme(Theme.DARK)
+        # font = QFont("Verdana", 22)
+        # QGuiApplication.setFont(font)
         window = MainWindow()
         window.show()
         sys.exit(app.exec())

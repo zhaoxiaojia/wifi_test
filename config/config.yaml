@@ -9,7 +9,7 @@ corner_angle:
   step:
   - 0
   - 320
-fpga: W2_SDIO
+fpga: W2U_USB
 rf_solution:
   RADIORACK-4-220:
     ip_address: 192.168.50.19

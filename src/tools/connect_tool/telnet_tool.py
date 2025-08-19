@@ -95,11 +95,9 @@ class telnet_tool(dut):
         reader, writer = '', ''
         try:
             reader, writer = await telnetlib3.open_connection(self.dut_ip, self.port)
-
             # 发送命令
             writer.write(command + "\n")
             await writer.drain()
-
             # 读取命令执行结果
             result = await read_all(reader)
             return result

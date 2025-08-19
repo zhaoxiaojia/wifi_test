@@ -20,8 +20,8 @@ from src.tools.config_loader import load_config
 router_list = {
     'asusax86u': Asusax86uControl,
     'asusax88u': Asusax88uControl,
-    'asusax5400': Asusax5400Control,
-    'asusax6700': Asusax6700Control,
+    # 'asusax5400': Asusax5400Control,
+    # 'asusax6700': Asusax6700Control,
     'xiaomibe7000': XiaomiBe7000Control,
     'xiaomiax3600': Xiaomiax3600Control,
 }

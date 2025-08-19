@@ -11,7 +11,7 @@
 
 from PyQt5.QtGui import QFont
 
-FONT_SIZE = 18
+FONT_SIZE = 14
 FONT_FAMILY = "Verdana"
 TEXT_COLOR = "#fafafa"
 BACKGROUND_COLOR = "#2b2b2b"
@@ -21,18 +21,19 @@ HTML_STYLE = f"{STYLE_BASE} color:{TEXT_COLOR};"
 
 from PyQt5.QtWidgets import (
     QStyledItemDelegate, QStyleOptionViewItem, QAbstractItemView,
-    QTreeView, QTableView, QTableWidget, QWidget
+    QTreeView, QTableView, QTableWidget, QWidget, QGroupBox
 )
 from PyQt5.QtGui import QFont, QFontMetrics, QColor, QPalette
 from PyQt5.QtCore import QSize, Qt
 from PyQt5.QtWidgets import QStyle
 
+
 def apply_font_and_selection(view: QAbstractItemView,
-                                      family="Verdana", size_px=18,
-                                      sel_text="#A6E3FF", sel_bg="#2B2B2B",
-                                      header_bg="#202225", header_fg="#C9D1D9",
-                                      grid="#2E2E2E",
-                                      adjust_row_height=True, header_affects=True):
+                             family="Verdana", size_px=16,
+                             sel_text="#A6E3FF", sel_bg="#2B2B2B",
+                             header_bg="#202225", header_fg="#C9D1D9",
+                             grid="#2E2E2E",
+                             adjust_row_height=True, header_affects=True):
     """统一字体 & 选中配色，并把横/纵表头和 corner 也调成暗色。兼容 QFluentWidgets。"""
 
     # 1) 继承当前 delegate 类，保留其私有 API（如 setSelectedRows）
@@ -42,8 +43,10 @@ def apply_font_and_selection(view: QAbstractItemView,
     class _PatchedFontDelegate(BaseCls):
         def __init__(self, parent=None):
             super().__init__(parent)
-            self._font = QFont(family); self._font.setPixelSize(size_px)
-            self._sel_text = QColor(sel_text); self._sel_bg = QColor(sel_bg)
+            self._font = QFont(family);
+            self._font.setPixelSize(size_px)
+            self._sel_text = QColor(sel_text);
+            self._sel_bg = QColor(sel_bg)
 
         def initStyleOption(self, option: QStyleOptionViewItem, index):
             super().initStyleOption(option, index)
@@ -66,7 +69,8 @@ def apply_font_and_selection(view: QAbstractItemView,
     if adjust_row_height and isinstance(view, (QTableView, QTableWidget)):
         view.resizeRowsToContents()
     if header_affects and isinstance(view, (QTableView, QTableWidget)):
-        hf = QFont(family); hf.setPixelSize(max(12, size_px - 1))
+        hf = QFont(family);
+        hf.setPixelSize(max(12, size_px - 1))
         if view.horizontalHeader(): view.horizontalHeader().setFont(hf)
         if view.verticalHeader():   view.verticalHeader().setFont(hf)
 
@@ -108,6 +112,20 @@ def apply_font_and_selection(view: QAbstractItemView,
     if hasattr(view, "setUniformRowHeights"):
         view.setUniformRowHeights(False)
     view.viewport().update()
+
+
+def apply_groupbox_style(
+        group: QGroupBox,
+        family: str = FONT_FAMILY,
+        size_px: int = FONT_SIZE +3,
+        title_px: int = FONT_SIZE,
+) -> None:
+    """统一 QGroupBox 内容及标题的字体样式"""
+    group.setStyleSheet(
+        f"QGroupBox{{font-size:{size_px}px;font-family:{family};}}"
+        f"QGroupBox::title{{font-size:{title_px}px;font-family:{family};}}"
+    )
+
 
 def apply_theme(widget, recursive: bool = False):
     widget.setStyleSheet(
