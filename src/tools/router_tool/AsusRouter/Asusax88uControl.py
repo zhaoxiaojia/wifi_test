@@ -8,8 +8,8 @@
 
 
 import logging
-import telnetlib
 import time
+from src.tools.connect_tool.telnet_tool import telnet_tool
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
@@ -105,17 +105,12 @@ class Asusax88uControl(RouterTools):
         self.host = self.address
         self.port = 23
         self.prompt = b'admin@RT-AX88U-D8C0:/tmp/home/root#'  # 命令提示符
-        self.tn = None
+        self.telnet = telnet_tool(self.host)
+        self._init_telnet()
 
     def _init_telnet(self):
         """初始化Telnet连接并登录"""
-        tn = telnetlib.Telnet(self.host, self.port, timeout=10)
-        tn.read_until(b'login:')
-        tn.write("admin".encode('ascii') + b'\n')
-        tn.read_until(b'Password:')
-        tn.write(str(self.xpath['passwd']).encode("ascii") + b'\n')
-        tn.read_until(self.prompt)  # 等待登录成功
-        return tn
+        self.telnet.login("admin", str(self.xpath['passwd']), self.prompt.decode())
 
     def telnet_write(self, cmd, max_retries=3):
         """使用已建立的Telnet连接执行命令（修复：复用连接）"""
@@ -123,43 +118,31 @@ class Asusax88uControl(RouterTools):
         retries = 0
         while retries < max_retries:
             try:
-                if self.tn is None:
-                    self.tn = self._init_telnet()
-                self.tn.write(cmd.encode('ascii') + b'\n')  # 发送命令
-                output = self.tn.read_until(self.prompt, timeout=10).decode('ascii', errors='ignore')
-                if "error" in output.lower():
+                output = self.telnet.checkoutput(cmd)
+                if output and "error" in output.lower():
                     logging.warning(f"Command error: {output}")
                 return output
             except Exception as e:
                 logging.warning(f"Connection error, retrying ({retries + 1}/{max_retries}): {e}")
                 retries += 1
-                if self.tn is not None:
-                    self.tn.close()
-                    self.tn = None
         return None
 
     def kill_telnet_connections(self):
         """强制终止路由器上的Telnet相关进程，释放端口"""
-        try:
-            # 终止所有Telnet服务进程（包括残留连接）
-            output = self.telnet_write("killall telnetd\n")
-            logging.info("Terminate telnetd output: %s", output)
-            time.sleep(2)  # wait for process to end
-
-            # restart telnet service
-            output = self.telnet_write("telnetd\n")
-            logging.info("Restart telnetd output: %s", output)
-            logging.info("Telnet connection released, port 23 available")
-        except Exception as e:
-            logging.error("Failed to execute command, connection may be closed: %s", e)
+        # 终止所有Telnet服务进程（包括残留连接）
+        output = self.telnet.checkoutput("killall telnetd")
+        logging.info("Terminate telnetd output: %s", output)
+        time.sleep(2)
+        # restart telnet service
+        output = self.telnet.checkoutput("telnetd")
+        logging.info("Restart telnetd output: %s", output)
+        logging.info("Telnet connection released, port 23 available")
 
     def quit(self):
         try:
-            if self.tn:
-                self.tn.write(b"exit\n")
-                logging.info(self.tn.read_all().decode('ascii'))
-        except Exception as e:
-            logging.info("Error: %s", str(e))
+            self.telnet.execute_cmd("exit")
+        finally:
+            self.telnet.close()
 
     def set_2g_ssid(self, ssid):
         cmd = 'nvram set wl0_ssid={};'
