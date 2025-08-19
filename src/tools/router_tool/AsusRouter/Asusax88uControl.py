@@ -110,7 +110,7 @@ class Asusax88uControl(RouterTools):
 
     def _init_telnet(self):
         """初始化Telnet连接并登录"""
-        self.telnet.login("admin", str(self.xpath['passwd']), self.prompt.decode())
+        self.telnet.login("admin", str(self.xpath['passwd']), self.prompt)
 
     def telnet_write(self, cmd, max_retries=3):
         """使用已建立的Telnet连接执行命令（修复：复用连接）"""

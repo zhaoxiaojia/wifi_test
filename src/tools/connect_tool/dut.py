@@ -246,8 +246,8 @@ class dut():
                 with lock:
                     self.rvr_result = sum(result_list) / len(result_list)
             else:
-                result = 0
-            return round(result, 1)
+                with lock:
+                    self.rvr_result = None
             logging.info('run thread done')
 
         result_list = []

@@ -153,11 +153,15 @@ def setup(request):
 
     yield connect_status, router_info, step_list
     # 后置动作
+    if pytest.connect_type == 'telnet':
+        router.change_country("欧洲")
+        router.driver.quit()
     pytest.dut.kill_iperf()
 
     logging.info('Reset rf value')
     rf_tool.execute_rf_cmd(0)
     logging.info(rf_tool.get_rf_current_value())
+    corner_tool.set_turntable_zero()
     time.sleep(10)
 
 

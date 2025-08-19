@@ -36,10 +36,15 @@ class telnet_tool(dut):
         logging.info('*' * 80)
         logging.info(f'* Telnet {self.dut_ip}')
         logging.info('*' * 80)
-        self.loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(self.loop)
         self.reader = None
         self.writer = None
+
+    def connect(self):
+        if not hasattr(self, "loop"):
+            self.loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(self.loop)
+        if self.reader and self.writer:
+            return
         try:
             self.reader, self.writer = self.loop.run_until_complete(
                 telnetlib3.open_connection(self.dut_ip, self.port)
@@ -50,11 +55,13 @@ class telnet_tool(dut):
     def close(self):
         if self.writer:
             self.writer.close()
-            try:
-                self.loop.run_until_complete(self.writer.wait_closed())
-            except Exception as e:
-                logging.warning(f'Error closing telnet connection: {e}')
+            if hasattr(self.writer, "wait_closed"):
+                try:
+                    self.loop.run_until_complete(self.writer.wait_closed())
+                except Exception as e:
+                    logging.warning(f'Error closing telnet connection: {e}')
             self.writer = None
+        self.reader = None
         if not self.loop.is_closed():
             self.loop.close()
 
@@ -72,19 +79,36 @@ class telnet_tool(dut):
             raise Exception('Dut lost connect')
 
     def login(self, username, password, prompt):
+        """Login to the telnet session.
+
+        The prompt argument is normalised to ``bytes`` to avoid ``TypeError``
+        when awaiting ``readuntil``. In addition, known login strings are also
+        passed as byte separators.
+        """
+
+        # Ensure prompt is bytes to match ``reader.readuntil`` expectations
+        prompt = prompt.encode() if isinstance(prompt, str) else prompt
+        if not (self.reader and self.writer):
+            self.connect()
+        if not (self.reader and self.writer):
+            logging.error('Telnet login error: no connection')
+            return
+
         async def _login():
-            await self.reader.readuntil("login:")
+            await self.reader.readuntil(b"login:")
             self.writer.write(username + "\n")
             await self.writer.drain()
-            await self.reader.readuntil("Password:")
+            await self.reader.readuntil(b"Password:")
             self.writer.write(password + "\n")
             await self.writer.drain()
             await self.reader.readuntil(prompt)
-        if self.reader and self.writer:
-            try:
-                self.loop.run_until_complete(_login())
-            except Exception as e:
-                logging.error(f'Telnet login failed: {e}')
+
+        try:
+            self.loop.run_until_complete(_login())
+        except TypeError as e:
+            logging.error(f'Telnet login failed (TypeError): {e}')
+        except Exception as e:
+            logging.error(f'Telnet login failed: {e}')
 
     async def _read_all(self, timeout=2):
         output = []
@@ -99,6 +123,8 @@ class telnet_tool(dut):
         return "".join(output)
 
     def execute_cmd(self, cmd):
+        if not (self.reader and self.writer):
+            self.connect()
         if self.writer:
             self.writer.write(cmd + "\n")
             self.loop.run_until_complete(self.writer.drain())
@@ -107,6 +133,8 @@ class telnet_tool(dut):
             logging.error('Telnet execute cmd error: no connection')
 
     def checkoutput(self, cmd, wildcard=''):
+        if not (self.reader and self.writer):
+            self.connect()
         if not (self.reader and self.writer):
             return None
         self.writer.write(cmd + "\n")

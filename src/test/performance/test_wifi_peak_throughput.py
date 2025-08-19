@@ -106,7 +106,9 @@ def setup(request):
 
     yield connect_status, router_info
     # 后置动作
-    router.change_country("欧洲")
+    if pytest.connect_type == 'telnet':
+        router.change_country("欧洲")
+        router.driver.quit()
     pytest.dut.kill_iperf()
 
 
