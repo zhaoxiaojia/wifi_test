@@ -93,10 +93,10 @@ class RvrWifiConfigPage(CardWidget):
         self.auth_combo.setMinimumWidth(150)
         form_layout.addRow("security_protocol", self.auth_combo)
         # 密码输入框，用于自动填充和测试流程引用
-        self.passwd_edit = LineEdit(form_box)
-        form_layout.addRow("password", self.passwd_edit)
         self.ssid_edit = LineEdit(form_box)
         form_layout.addRow("ssid", self.ssid_edit)
+        self.passwd_edit = LineEdit(form_box)
+        form_layout.addRow("password", self.passwd_edit)
         self.auth_combo.currentTextChanged.connect(self._on_auth_changed)
 
         test_widget = QWidget(form_box)
