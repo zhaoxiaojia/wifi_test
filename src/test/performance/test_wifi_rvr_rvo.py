@@ -50,7 +50,6 @@ def setup(request):
     rvr_tool = cfg['rvr']['tool']
 
     rf_solution = cfg['rf_solution']
-    print(f"rf_solution['step']: {rf_solution['step']}")
     model = rf_solution['model']
     if model not in ['RADIORACK-4-220', 'RC4DAT-8G-95', 'XIN-YI']:
         raise EnvironmentError("Doesn't support this model")
@@ -161,7 +160,6 @@ def setup(request):
     logging.info('Reset rf value')
     rf_tool.execute_rf_cmd(0)
     logging.info(rf_tool.get_rf_current_value())
-    corner_tool.set_turntable_zero()
     time.sleep(10)
 
 
