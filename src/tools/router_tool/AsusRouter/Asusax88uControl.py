@@ -106,11 +106,20 @@ class Asusax88uControl(RouterTools):
         self.port = 23
         self.prompt = b'admin@RT-AX88U-D8C0:/tmp/home/root#'  # 命令提示符
         self.telnet = telnet_tool(self.host)
-        self._init_telnet()
 
     def _init_telnet(self):
         """初始化Telnet连接并登录"""
         self.telnet.login("admin", str(self.xpath['passwd']), self.prompt)
+
+    def _ensure_telnet(self):
+        """确保Telnet连接可用，必要时尝试重新登录"""
+        if not (self.telnet.reader and self.telnet.writer):
+            try:
+                self.telnet.login("admin", str(self.xpath['passwd']), self.prompt)
+            except Exception as e:
+                logging.error(f"Telnet login exception: {e}")
+        if not (self.telnet.reader and self.telnet.writer):
+            raise ConnectionError("Telnet连接不可用")
 
     def telnet_write(self, cmd, max_retries=3):
         """使用已建立的Telnet连接执行命令（修复：复用连接）"""
@@ -118,29 +127,40 @@ class Asusax88uControl(RouterTools):
         retries = 0
         while retries < max_retries:
             try:
+                self._ensure_telnet()
                 output = self.telnet.checkoutput(cmd)
                 if output and "error" in output.lower():
                     logging.warning(f"Command error: {output}")
                 return output
             except Exception as e:
                 logging.warning(f"Connection error, retrying ({retries + 1}/{max_retries}): {e}")
+                self.telnet.close()
                 retries += 1
+        logging.error(f"Failed to execute command after {max_retries} retries")
         return None
 
     def kill_telnet_connections(self):
         """强制终止路由器上的Telnet相关进程，释放端口"""
-        # 终止所有Telnet服务进程（包括残留连接）
-        output = self.telnet.checkoutput("killall telnetd")
-        logging.info("Terminate telnetd output: %s", output)
-        time.sleep(2)
-        # restart telnet service
-        output = self.telnet.checkoutput("telnetd")
-        logging.info("Restart telnetd output: %s", output)
-        logging.info("Telnet connection released, port 23 available")
+        try:
+            self._ensure_telnet()
+            # 终止所有Telnet服务进程（包括残留连接）
+            output = self.telnet.checkoutput("killall telnetd")
+            logging.info("Terminate telnetd output: %s", output)
+            time.sleep(2)
+            # restart telnet service
+            output = self.telnet.checkoutput("telnetd")
+            logging.info("Restart telnetd output: %s", output)
+            logging.info("Telnet connection released, port 23 available")
+        except Exception as e:
+            logging.error(f"Kill telnet connections failed: {e}")
+            self.telnet.close()
 
     def quit(self):
         try:
+            self._ensure_telnet()
             self.telnet.execute_cmd("exit")
+        except Exception as e:
+            logging.error(f"Telnet quit failed: {e}")
         finally:
             self.telnet.close()
 
