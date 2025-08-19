@@ -2,142 +2,49 @@
 # -*-coding:utf-8 -*-
 
 """
-# File       : test_wifi_rvr_rvo.py
-# Time       ：2023/9/15 14:03
-# Author     ：chao.li
-# version    ：python 3.9
-# Description：
+File       : test_wifi_rvr.py
+Time       ：2023/9/15 14:03
+Author     ：chao.li
+version    ：python 3.9
+Description：
 """
 
 import logging
-import re
-import threading
 import time
 from src.test import get_testdata
-from src.tools.rs_test import rs
 import pytest
 
-from src.tools.connect_tool.lab_device_controller import LabDeviceController
-from src.tools.router_tool.Router import Router
 from src.tools.router_tool.router_factory import get_router
 from src.tools.config_loader import load_config
 
+from src.test.performance import common_setup, init_rf
+
 test_data = get_testdata(get_router(load_config(refresh=True)['router']['name']))
-
-sum_list_lock = threading.Lock()
-
-# 初始化 衰减 & 转台 对象
-rf_tool = None
-
-# 配置 测试报告
-# pytest.testResult.x_path = [] if (rf_needed and corner_needed) == 'both' else step_list
 
 
 @pytest.fixture(scope='session', params=test_data, ids=[str(i) for i in test_data])
 def setup(request):
-    global rf_tool
-    pytest.dut.skip_tx = False
-    pytest.dut.skip_rx = False
-    logging.info('router setup start')
-    cfg = load_config(refresh=True)
-    router_name = cfg['router']['name']
-    router = get_router(router_name)
-    logging.info(f'router {router}')
-    rf_solution = cfg['rf_solution']
-    print(f"rf_solution['step']: {rf_solution['step']}")
-    model = rf_solution['model']
-    if model not in ['RADIORACK-4-220', 'RC4DAT-8G-95', 'XIN-YI']:
-        raise EnvironmentError("Doesn't support this model")
-    if model == 'XIN-YI':
-        rf_tool = rs()
-    else:
-        rf_ip = rf_solution[model]['ip_address']
-        rf_tool = LabDeviceController(rf_ip)
-        logging.info(f'rf_ip {rf_ip}')
-    rf_step_list = rf_solution['step']
-    rf_step_list = [i for i in range(*rf_step_list)][::3]
-    print(f'rf_step_list {rf_step_list}')
-    rvr_tool = cfg['rvr']['tool']
-    # 重置衰减&转台
-    # 衰减器置0
+    rf_step_list = []
+    rf_tool = None
 
-    logging.info('Reset rf value')
-    rf_tool.execute_rf_cmd(0)
-    logging.info(rf_tool.get_rf_current_value())
-    time.sleep(30)
-    router_info = request.param
+    def pre(cfg, _router):
+        nonlocal rf_tool, rf_step_list
+        rf_tool, rf_step_list = init_rf(cfg)
 
-    # 修改路由器配置
-    router.change_setting(router_info), "Can't set ap , pls check first"
-    if pytest.connect_type == 'telnet':
-        if router_info.band == "2.4G":
-            router.change_country("欧洲")
-        else:
-            router.change_country("美国")
-        router.driver.quit()
-        band = '5G' if '2' in router_info.band else '2.4G'
-        ssid = router_info.ssid + "_bat";
-        router.change_setting(Router(band=band, ssid=ssid))
-    time.sleep(3)
-
-    logging.info('router set done')
-    with open(pytest.testResult.detail_file, 'a', encoding='utf-8') as f:
-        f.write(f'Testing {router_info} \n')
-
-    logging.info(f'pc_ip:{pytest.dut.pc_ip}')
-    logging.info(f'dut try to connect {router_info.ssid}')
-    if pytest.connect_type == 'telnet':
-        connect_status = True
-        time.sleep(90)
-    else:
-        # 连接 网络 最多三次重试
-        for _ in range(3):
-            type = 'wpa3' if 'WPA3' in router_info.security_protocol else 'wpa2'
-            if router_info.security_protocol.lower() in \
-                    ['open', '不加密', '无', 'open system', '无加密(允许所有人连接)', 'none']:
-                logging.info('no passwd')
-                cmd = pytest.dut.CMD_WIFI_CONNECT.format(router_info.ssid, "open", "")
-            else:
-                cmd = pytest.dut.CMD_WIFI_CONNECT.format(router_info.ssid, type,
-                                                         router_info.password)
-            if router_info.hide_ssid == '是':
-                cmd += pytest.dut.CMD_WIFI_HIDE
-            logging.info(f"Try to connect {cmd}")
-            pytest.dut.checkoutput(cmd)
-            time.sleep(5)
-            if pytest.dut.wait_for_wifi_address(target=re.findall(r'(\d+\.\d+\.\d+\.)', pytest.dut.pc_ip)[0]):
-                connect_status = True
-                break
-
-    logging.info(f'dut_ip:{pytest.dut.dut_ip}')
-    logging.info('dut connected')
-
-    if rvr_tool == 'ixchariot':
-        if '5' in router_info.band:
-            pytest.dut.ix.modify_tcl_script("set script ",
-                                            'set script "$ixchariot_installation_dir/Scripts/High_Performance_Throughput.scr"\n')
-        else:
-            pytest.dut.ix.modify_tcl_script("set script ",
-                                            'set script "$ixchariot_installation_dir/Scripts/Throughput.scr"\n')
-        pytest.dut.checkoutput(pytest.dut.IX_ENDPOINT_COMMAND)
-        time.sleep(3)
-
-    yield connect_status, router_info, rf_step_list
-    # 后置动作
-    if pytest.connect_type == 'telnet':
-        router.change_country("欧洲")
-        router.driver.quit()
-    pytest.dut.kill_iperf()
-
-    logging.info('Reset rf value')
-    rf_tool.execute_rf_cmd(0)
-    logging.info(rf_tool.get_rf_current_value())
-    time.sleep(10)
+    common = common_setup(request, pre_setup=pre)
+    connect_status, router_info, _, _ = next(common)
+    try:
+        yield connect_status, router_info, rf_step_list, rf_tool
+    finally:
+        next(common, None)
+        logging.info('Reset rf value')
+        rf_tool.execute_rf_cmd(0)
+        logging.info(rf_tool.get_rf_current_value())
+        time.sleep(10)
 
 
-# 测试 iperf
 def test_rvr(setup):
-    connect_status, router_info, rf_step_list = setup
+    connect_status, router_info, rf_step_list, rf_tool = setup
     if not connect_status:
         logging.info("Can't connect wifi ,input 0")
         with open(pytest.testResult.detail_file, 'a') as f:
@@ -145,7 +52,7 @@ def test_rvr(setup):
         return
     for rf_value in rf_step_list:
         logging.info(f'set rf value {rf_value}')
-        db_set = rf_value[1] if type(rf_value) == tuple else rf_value
+        db_set = rf_value[1] if isinstance(rf_value, tuple) else rf_value
         rf_tool.execute_rf_cmd(db_set)
         logging.info(rf_tool.get_rf_current_value())
         with open(pytest.testResult.detail_file, 'a') as f:
