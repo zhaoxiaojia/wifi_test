@@ -225,7 +225,6 @@ class dut():
             tn.write(command.encode('ascii') + b'\n')
             while True:
                 line = tn.read_until(b'Mbits/sec').decode('gbk').strip()
-                logging.info(f'res {line}')
                 if '[SUM]' not in line:
                     continue
                 if self.rssi_num > -60:
@@ -244,7 +243,8 @@ class dut():
             if result_list:
                 logging.info(f'throughput result : {sum(result_list) / len(result_list)}')
                 # logging.info(f'{result_list}')
-                result = sum(result_list) / len(result_list)
+                with lock:
+                    self.rvr_result = sum(result_list) / len(result_list)
             else:
                 result = 0
             return round(result, 1)
@@ -402,6 +402,7 @@ class dut():
                 if pytest.connect_type == 'telnet':
                     time.sleep(15)
                 rx_result = self.get_logcat()
+                self.rvr_result = None
                 if isinstance(terminal, subprocess.Popen):
                     terminal.terminate()
             elif self.rvr_tool == 'ixchariot':
@@ -490,6 +491,7 @@ class dut():
                     time.sleep(15)
                 time.sleep(3)
                 tx_result = self.get_logcat()
+                self.rvr_result = None
                 if isinstance(terminal, subprocess.Popen):
                     terminal.terminate()
             elif self.rvr_tool == 'ixchariot':

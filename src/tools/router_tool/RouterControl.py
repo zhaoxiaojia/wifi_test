@@ -401,37 +401,53 @@ class RouterTools(RouterControl):
         else:
             return False
 
-    def change_country(self, router):
-        super().login()
+    def change_country(self, router_or_code):
+        self.login()
         self.driver.find_element(By.ID, 'Advanced_Wireless_Content_menu').click()
         # Wireless - General
         WebDriverWait(driver=self.driver, timeout=5, poll_frequency=0.5).until(
-            EC.presence_of_element_located((By.ID, 'FormTitle')))
+            EC.presence_of_element_located((By.ID, 'FormTitle'))
+        )
+
+        # 判断参数类型，提取 country_code
+        if isinstance(router_or_code, str):
+            country_code = router_or_code
+        else:
+            country_code = getattr(router_or_code, "country_code", None)
+
         # 修改 国家码
-        if router.country_code:
-            if router.country_code not in self.COUNTRY_CODE: raise ConfigError('country code error')
+        if country_code:
+            if country_code not in self.COUNTRY_CODE:
+                raise ConfigError('country code error')
+
             self.driver.find_element(
-                By.XPATH, '//*[@id="Advanced_WAdvanced_Content_tab"]/div').click()
+                By.XPATH, '//*[@id="Advanced_WAdvanced_Content_tab"]/div'
+            ).click()
+
             WebDriverWait(driver=self.driver, timeout=5, poll_frequency=0.5).until(
-                EC.presence_of_element_located((By.ID, 'titl_desc')))
-            index = self.COUNTRY_CODE[router.country_code]
-            # logging.info(self.xpath['country_code_element'][self.router_info].format(index))
+                EC.presence_of_element_located((By.ID, 'titl_desc'))
+            )
+
+            index = self.COUNTRY_CODE[country_code]
             self.driver.find_element(
                 By.XPATH,
-                self.xpath['country_code_element'][self.router_info].format(
-                    index)).click()
+                self.xpath['country_code_element'][self.router_info].format(index)
+            ).click()
+
             self.driver.find_element(
-                By.XPATH,
-                '//*[@id="apply_btn"]/input').click()
-            try:
-                self.driver.switch_to.alert.accept()
-            except Exception:
-                ...
-            try:
-                self.driver.switch_to.alert.accept()
-            except Exception:
-                ...
+                By.XPATH, '//*[@id="apply_btn"]/input'
+            ).click()
+
+            # 处理弹窗
+            for _ in range(2):
+                try:
+                    self.driver.switch_to.alert.accept()
+                except Exception:
+                    ...
+
             WebDriverWait(driver=self.driver, timeout=120, poll_frequency=0.5).until_not(
-                EC.visibility_of_element_located((By.XPATH, '//*[@id="loadingBlock"]/tbody')))
+                EC.visibility_of_element_located((By.XPATH, '//*[@id="loadingBlock"]/tbody'))
+            )
+
     # def __del__(self):
     #     self.driver.quit()

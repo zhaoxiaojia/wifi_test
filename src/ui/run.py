@@ -48,6 +48,7 @@ from src.util.pytest_redact import install_redactor_for_current_process
 from .theme import apply_theme, STYLE_BASE, TEXT_COLOR, FONT_FAMILY
 from .theme import format_log_html
 
+
 class LiveLogWriter:
     """自定义stdout/err实时回调到信号"""
 
@@ -142,12 +143,6 @@ def _pytest_worker(case_path: str, q: multiprocessing.Queue):
             )
         finally:
             end_ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            logging.info(
-                "_pytest_worker end pid=%s time=%s case_path=%s",
-                pid,
-                end_ts,
-                case_path,
-            )
             for h in root_logger.handlers[:]:
                 root_logger.removeHandler(h)
             for h in old_handlers:
@@ -341,9 +336,9 @@ class RunPage(CardWidget):
         with suppress(TypeError):
             self.action_btn.clicked.disconnect()
         if mode == "run":
-            text, icon, slot = "Test", FluentIcon.PLAY, self.run_case
+            text, icon, slot = "Run", FluentIcon.PLAY, self.run_case
         elif mode == "stop":
-            text, icon, slot = "Exit", FluentIcon.CLOSE, self.on_stop
+            text, icon, slot = "Stop", FluentIcon.CLOSE, self.on_stop
         else:
             raise ValueError(f"Unknown mode: {mode}")
         self.action_btn.setText(text)

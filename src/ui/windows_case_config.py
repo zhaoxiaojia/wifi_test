@@ -54,7 +54,7 @@ from qfluentwidgets import (
     InfoBarPosition,
     ScrollArea
 )
-from .theme import apply_theme, FONT_FAMILY, TEXT_COLOR,apply_font_and_selection
+from .theme import apply_theme, FONT_FAMILY, TEXT_COLOR,apply_font_and_selection,apply_groupbox_style
 
 
 @dataclass
@@ -146,7 +146,7 @@ class CaseConfigPage(CardWidget):
         cols.addLayout(self._left_col, 1)
         cols.addLayout(self._right_col, 1)
         right.addWidget(self._columns_widget)
-        self.run_btn = PushButton("Test", self)
+        self.run_btn = PushButton("Run", self)
         self.run_btn.setIcon(FluentIcon.PLAY)
         if hasattr(self.run_btn, "setUseRippleEffect"):
             self.run_btn.setUseRippleEffect(True)
@@ -424,6 +424,7 @@ class CaseConfigPage(CardWidget):
     def _add_group(self, group: QWidget, weight: int | None = None):
         """把 group 放到当前更“轻”的一列"""
         apply_theme(group)
+        apply_groupbox_style(group)
         w = self._estimate_group_weight(group) if weight is None else weight
         ci = 0 if self._col_weight[0] <= self._col_weight[1] else 1
         (self._left_col if ci == 0 else self._right_col).addWidget(group)
@@ -437,7 +438,7 @@ class CaseConfigPage(CardWidget):
         """
         for i, (key, value) in enumerate(self.config.items()):
             if key == "text_case":
-                group = QGroupBox("Test case")
+                group = QGroupBox("Test Case")
                 group.setStyleSheet(
                     group.styleSheet()
                     + f"QGroupBox{{border:1px solid #444444;border-radius:4px;margin-top:6px;color:{TEXT_COLOR};font-family:{FONT_FAMILY};}}"
@@ -487,7 +488,7 @@ class CaseConfigPage(CardWidget):
                 self.field_widgets["connect_type.telnet.ip"] = self.telnet_ip_edit
                 continue
             if key == "fpga":
-                group = QGroupBox("Chip")
+                group = QGroupBox("Wi-Fi Chipset")
                 vbox = QVBoxLayout(group)
                 self.fpga_chip_combo = ComboBox(self)
                 self.fpga_chip_combo.addItems(RouterConst.FPGA_CONFIG.keys())
@@ -500,7 +501,7 @@ class CaseConfigPage(CardWidget):
                     if_default = if_default.upper()
                 self.fpga_chip_combo.setCurrentText(chip_default)
                 self.fpga_if_combo.setCurrentText(if_default)
-                vbox.addWidget(QLabel("Type:"))
+                vbox.addWidget(QLabel("Series:"))
                 vbox.addWidget(self.fpga_chip_combo)
                 vbox.addWidget(QLabel("Interface:"))
                 vbox.addWidget(self.fpga_if_combo)
@@ -541,7 +542,7 @@ class CaseConfigPage(CardWidget):
                 rc4_box.addWidget(self.rc4_vendor_edit)
                 rc4_box.addWidget(QLabel("idProduct:"))
                 rc4_box.addWidget(self.rc4_product_edit)
-                rc4_box.addWidget(QLabel("Ip address :"))
+                rc4_box.addWidget(QLabel("IP address :"))
                 rc4_box.addWidget(self.rc4_ip_edit)
                 vbox.addWidget(self.rc4_group)
 
@@ -576,14 +577,14 @@ class CaseConfigPage(CardWidget):
                 self.field_widgets["rf_solution.step"] = self.rf_step_edit
                 continue  # 跳过后面的通用字段处理
             if key == "rvr":
-                group = QGroupBox("RvR config")  # 外层分组
+                group = QGroupBox("RvR Config")  # 外层分组
                 vbox = QVBoxLayout(group)
                 # Tool 下拉
                 self.rvr_tool_combo = ComboBox(self)
                 self.rvr_tool_combo.addItems(["iperf", "ixchariot"])
                 self.rvr_tool_combo.setCurrentText(value.get("tool", "iperf"))
                 self.rvr_tool_combo.currentTextChanged.connect(self.on_rvr_tool_changed)
-                vbox.addWidget(QLabel("Tool:"))
+                vbox.addWidget(QLabel("Data Generator:"))
                 vbox.addWidget(self.rvr_tool_combo)
 
                 # ----- iperf 子组 -----
@@ -638,7 +639,7 @@ class CaseConfigPage(CardWidget):
                 self.rvr_threshold_edit.setPlaceholderText("throughput threshold")
                 self.rvr_threshold_edit.setText(str(value.get("throughput_threshold", 0)))
 
-                vbox.addWidget(QLabel("Throughput threshold:"))
+                vbox.addWidget(QLabel("Zero Point Threshold:"))
                 vbox.addWidget(self.rvr_threshold_edit)
                 # 加入表单
                 self._add_group(group)
@@ -657,7 +658,7 @@ class CaseConfigPage(CardWidget):
 
                 # ---------- 其余简单字段 ----------
             if key == "corner_angle":
-                group = QGroupBox("Rotary table instrument")
+                group = QGroupBox("Turntable")
                 vbox = QVBoxLayout(group)
 
                 # —— IP 地址 ——
@@ -702,13 +703,13 @@ class CaseConfigPage(CardWidget):
                 self.ssid_5g_edit.setPlaceholderText("5G SSID")
                 self.ssid_5g_edit.setText(value.get("ssid_5g", ""))
 
-                vbox.addWidget(QLabel("Type:"))
+                vbox.addWidget(QLabel("Model:"))
                 vbox.addWidget(self.router_name_combo)
                 vbox.addWidget(QLabel("Gateway:"))
                 vbox.addWidget(self.router_addr_edit)
-                vbox.addWidget(QLabel("SSID 2.4G:"))
+                vbox.addWidget(QLabel("2.4G SSID:"))
                 vbox.addWidget(self.ssid_2g_edit)
-                vbox.addWidget(QLabel("SSID 5G:"))
+                vbox.addWidget(QLabel("5G SSID:"))
                 vbox.addWidget(self.ssid_5g_edit)
                 self._add_group(group)
                 # 注册控件
@@ -720,7 +721,7 @@ class CaseConfigPage(CardWidget):
                 self.on_router_changed(self.router_name_combo.currentText())
                 continue  # ← 继续下一顶层 key
             if key == "serial_port":
-                group = QGroupBox("Serial port")
+                group = QGroupBox("Serial Port")
                 vbox = QVBoxLayout(group)
 
                 # 开关（True/False 下拉，同一套保存逻辑即可）
