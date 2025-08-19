@@ -34,7 +34,7 @@ from qfluentwidgets import (
 
 from src.tools.router_tool.router_factory import get_router
 from typing import TYPE_CHECKING
-from .theme import apply_theme,apply_font_and_selection
+from .theme import apply_theme, apply_font_and_selection
 
 if TYPE_CHECKING:
     from .windows_case_config import CaseConfigPage
@@ -49,6 +49,13 @@ class WifiTableWidget(TableWidget):
         # 仅允许单行选择并整行高亮
         self.setSelectionMode(QAbstractItemView.SingleSelection)
         self.setSelectionBehavior(QAbstractItemView.SelectRows)
+
+    def mousePressEvent(self, event):
+        """点击空白区域时清除选择并重置表单"""
+        super().mousePressEvent(event)
+        if self.itemAt(event.pos()) is None:
+            self.clearSelection()
+            self.page.reset_form()
 
 
 class RvrWifiConfigPage(CardWidget):
@@ -130,7 +137,6 @@ class RvrWifiConfigPage(CardWidget):
         main_layout.addWidget(form_box, 1)
 
         self.table = WifiTableWidget(self)
-
 
         # 禁用交替行颜色并避免样式表重新启用
         self.table.setAlternatingRowColors(False)
@@ -309,7 +315,7 @@ class RvrWifiConfigPage(CardWidget):
             "5G": getattr(self.router, "BANDWIDTH_5", []),
         }[band]
         with QSignalBlocker(self.wireless_combo), QSignalBlocker(self.channel_combo), QSignalBlocker(
-            self.bandwidth_combo
+                self.bandwidth_combo
         ):
             self.wireless_combo.clear()
             self.wireless_combo.addItems(wireless)
