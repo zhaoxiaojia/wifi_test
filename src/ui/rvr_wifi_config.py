@@ -343,7 +343,6 @@ class RvrWifiConfigPage(CardWidget):
             self.passwd_edit.clear()
 
     def refresh_table(self):
-        current = self.table.currentRow()
         self.table.clear()
         self.table.setRowCount(len(self.rows))
         self.table.setColumnCount(len(self.headers))
@@ -360,12 +359,8 @@ class RvrWifiConfigPage(CardWidget):
                 item = QTableWidgetItem(str(row.get(h, "")))
                 item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
                 self.table.setItem(r, c, item)
-        if 0 <= current < self.table.rowCount():
-            self.table.selectRow(current)
-        elif self.table.rowCount():
-            self.table.selectRow(0)
-        else:
-            self._load_row_to_form()
+        self.table.clearSelection()
+        self._load_row_to_form()
 
     def _sync_rows(self):
         self._collect_table_data()
@@ -380,11 +375,54 @@ class RvrWifiConfigPage(CardWidget):
             data.append(row)
         self.rows = data
 
+    def reset_form(self) -> None:
+        """重置表单控件到默认状态"""
+        self._loading = True
+        try:
+            with ExitStack() as stack:
+                widgets = (
+                    self.band_combo,
+                    self.wireless_combo,
+                    self.channel_combo,
+                    self.bandwidth_combo,
+                    self.auth_combo,
+                    self.passwd_edit,
+                    self.tx_check,
+                    self.rx_check,
+                    self.data_row_edit,
+                )
+                for w in widgets:
+                    stack.enter_context(QSignalBlocker(w))
+
+                if self.band_combo.count():
+                    self.band_combo.setCurrentIndex(0)
+                self._update_band_options(self.band_combo.currentText())
+
+                if self.wireless_combo.count():
+                    self.wireless_combo.setCurrentIndex(0)
+                if self.channel_combo.count():
+                    self.channel_combo.setCurrentIndex(0)
+                if self.bandwidth_combo.count():
+                    self.bandwidth_combo.setCurrentIndex(0)
+                self._update_auth_options(self.wireless_combo.currentText())
+
+                if self.auth_combo.count():
+                    self.auth_combo.setCurrentIndex(0)
+                self._on_auth_changed(self.auth_combo.currentText())
+
+                self.passwd_edit.clear()
+                self.tx_check.setChecked(False)
+                self.rx_check.setChecked(False)
+                self.data_row_edit.clear()
+        finally:
+            self._loading = False
+
     def _load_row_to_form(self):
         self._loading = True
         try:
             row_index = self.table.currentRow()
             if not (0 <= row_index < len(self.rows)):
+                self.reset_form()
                 return
             data = self.rows[row_index]
 
