@@ -27,7 +27,7 @@ step_list = [0]
 
 
 @pytest.fixture(scope='session', params=test_data, ids=[str(i) for i in test_data])
-def setup(request):
+def setup_router(request):
     common = common_setup(request)
     connect_status, router_info, _, _ = next(common)
     try:
