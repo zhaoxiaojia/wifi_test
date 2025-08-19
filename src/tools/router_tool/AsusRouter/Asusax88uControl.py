@@ -330,38 +330,8 @@ class Asusax88uControl(RouterTools):
         logging.info('Router setting done')
         return True
 
-    def change_country(self, router):
-        try:
-            self.router_control.login()
-            self.router_control.driver.find_element(By.ID, 'Advanced_Wireless_Content_menu').click()
-            # Wireless - General
-            WebDriverWait(driver=self.router_control.driver, timeout=5, poll_frequency=0.5).until(
-                EC.presence_of_element_located((By.ID, 'FormTitle')))
-            # 修改 国家码
-            if router.country_code:
-                if router.country_code not in self.COUNTRY_CODE: raise ConfigError('country code error')
-                self.router_control.driver.find_element(
-                    By.XPATH, '//*[@id="Advanced_WAdvanced_Content_tab"]/span').click()
-                WebDriverWait(driver=self.router_control.driver, timeout=5, poll_frequency=0.5).until(
-                    EC.presence_of_element_located((By.ID, 'titl_desc')))
-                index = self.COUNTRY_CODE[router.country_code]
-                # logging.info(self.router_control.xpath['country_code_element'][self.router_control.router_info].format(index))
-                self.router_control.driver.find_element(
-                    By.XPATH,
-                    self.router_control.xpath['country_code_element'][self.router_control.router_info].format(
-                        index)).click()
-                self.router_control.driver.find_element(
-                    By.XPATH,
-                    '/html/body/form/table/tbody/tr/td[3]/div/table/tbody/tr/td/table/tbody/tr/td/div[9]/input').click()
-                try:
-                    self.router_control.driver.switch_to.alert.accept()
-                    self.router_control.driver.switch_to.alert.accept()
-                except Exception as e:
-                    ...
-                WebDriverWait(driver=self.router_control.driver, timeout=60, poll_frequency=0.5).until(
-                    EC.presence_of_element_located((By.XPATH, '/html/body/form/div/div/div[1]/div[2]')))
-        except Exception as e:
-            logging.info('country code set with error')
+
+
 
 
 # ['Open System', 'WPA2-Personal', 'WPA3-Personal', 'WPA/WPA2-Personal', 'WPA2/WPA3-Personal',
@@ -370,12 +340,16 @@ class Asusax88uControl(RouterTools):
 #           'password', 'test_type', 'protocol_type', 'wep_encrypt', 'wep_passwd',
 #           'hide_ssid', 'hide_type', 'wpa_encrypt', 'passwd_index', 'protect_frame',
 #           'smart_connect', 'country_code']
+# from collections import namedtuple
+#
 # ssid = 'coco'
 # passwd = '12345678'
 # Router = namedtuple('Router', fields, defaults=[None, ] * len(fields))
 # router = Router(band='5G', ssid=ssid, wireless_mode='11ax', channel='36', bandwidth='80 MHz',
-#                 authentication='WPA2-Personal', password='12345678')
-# control = Asusax88uControl()
+#                 authentication='WPA2-Personal', password='12345678', country_code="欧洲")
+# control = Asusax88uControl("192.168.5.1")
+# control.change_country(router)
+# control.quit()
 # control.change_setting(router)
 # control.quit()
 # # control.change_country(router)

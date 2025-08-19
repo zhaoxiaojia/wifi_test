@@ -144,10 +144,11 @@ class RouterTools(RouterControl):
         self.router_info = router_info
         # 路由器 各控件 元素 配置文件
         self.yaml_info = yamlTool(os.getcwd() + f'\\config\\router_xpath\\{self.router_type.split("_")[0]}_xpath.yaml')
-        # self.yaml_info = yamlTool(fr'D:\PycharmProjects\wifi_test\config\router_xpath\{self.router_type}_xpath.yaml')
+        # self.yaml_info = yamlTool(
+        #     fr'C:\Users\SH171300-1522\PycharmProjects\wifi_test\config\router_xpath\{self.router_type.split("_")[0]}_xpath.yaml')
         # 元素配置文件 根节点
         self.xpath = self.yaml_info.get_note(self.router_type)
-
+        # print(self.xpath)
         # 路由器登录地址，优先使用传入参数，其次使用预设默认值
         default_address = {
             'xiaomi': '192.168.31.1',
@@ -181,13 +182,26 @@ class RouterTools(RouterControl):
         # if display == True:
         self.option.add_argument("--start-maximized")  # 窗口最大化
         self.option.add_experimental_option("detach", True)  # 不自动关闭浏览器
-        # self.service = Service(executable_path=r"C:\Users\yu.zeng\ChromeWebDriver\chromedriver.exe")
         self.driver = webdriver.Chrome(options=self.option)
         # else:
         # self.option.add_argument(argument='headless')
         # self.driver = webdriver.Chrome(options=self.option)
         self.driver.implicitly_wait(3)
-
+        self.driver.get(f"http://{self.address}")
+        time.sleep(1)
+        WebDriverWait(driver=self.driver, timeout=10, poll_frequency=0.5).until(
+            EC.presence_of_element_located((By.ID, self.xpath['username_element'])))
+        self.driver.find_element(By.ID, self.xpath['username_element']).click()
+        self.driver.find_element(By.ID, self.xpath['username_element']).send_keys(self.xpath['account'])
+        # input passwd
+        self.driver.find_element(By.NAME, self.xpath['password_element']).click()
+        self.driver.find_element(By.NAME, self.xpath['password_element']).send_keys(self.xpath['passwd'])
+        # click login
+        self.driver.find_element(By.XPATH, self.xpath['signin_element'][self.router_info]).click()
+        # wait for login in done
+        WebDriverWait(driver=self.driver, timeout=10, poll_frequency=0.5).until(
+            EC.presence_of_element_located((By.ID, self.xpath['signin_done_element'])))
+        time.sleep(1)
 
     def change_setting(self, router):
         ...
@@ -387,5 +401,37 @@ class RouterTools(RouterControl):
         else:
             return False
 
+    def change_country(self, router):
+        super().login()
+        self.driver.find_element(By.ID, 'Advanced_Wireless_Content_menu').click()
+        # Wireless - General
+        WebDriverWait(driver=self.driver, timeout=5, poll_frequency=0.5).until(
+            EC.presence_of_element_located((By.ID, 'FormTitle')))
+        # 修改 国家码
+        if router.country_code:
+            if router.country_code not in self.COUNTRY_CODE: raise ConfigError('country code error')
+            self.driver.find_element(
+                By.XPATH, '//*[@id="Advanced_WAdvanced_Content_tab"]/div').click()
+            WebDriverWait(driver=self.driver, timeout=5, poll_frequency=0.5).until(
+                EC.presence_of_element_located((By.ID, 'titl_desc')))
+            index = self.COUNTRY_CODE[router.country_code]
+            # logging.info(self.xpath['country_code_element'][self.router_info].format(index))
+            self.driver.find_element(
+                By.XPATH,
+                self.xpath['country_code_element'][self.router_info].format(
+                    index)).click()
+            self.driver.find_element(
+                By.XPATH,
+                '//*[@id="apply_btn"]/input').click()
+            try:
+                self.driver.switch_to.alert.accept()
+            except Exception:
+                ...
+            try:
+                self.driver.switch_to.alert.accept()
+            except Exception:
+                ...
+            WebDriverWait(driver=self.driver, timeout=120, poll_frequency=0.5).until_not(
+                EC.visibility_of_element_located((By.XPATH, '//*[@id="loadingBlock"]/tbody')))
     # def __del__(self):
     #     self.driver.quit()
