@@ -1,4 +1,4 @@
-serial    ,band   ,ssid        ,wireless_mode,channel,bandwidth,authentication,wpa_passwd,test_type,protocol_type,wep_encrypt,wep_passwd,hide_ssid,hide_type
+serial    ,band   ,ssid        ,wireless_mode,channel,bandwidth,security_protocol,wpa_passwd,test_type,protocol_type,wep_encrypt,wep_passwd,hide_ssid,hide_type
 1,2.4G,H3CBX54_2.4G,b-only       ,AUTO   ,20M      ,WPA-PSK/WPA2-PSK混合  ,12345678,tx rx    ,TCP          ,           ,          ,否        ,
 2,2.4G,H3CBX54_2.4G,b-only       ,1,20M      ,不加密                ,          ,tx rx    ,TCP           ,           ,          ,否        ,
 3,2.4G,H3CBX54_2.4G,b-only       ,2,20M      ,WPA2-PSK             ,12345678,tx rx    ,TCP           ,           ,          ,是        ,PSK

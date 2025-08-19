@@ -37,6 +37,6 @@ class yamlTool:
 # print(coco.get_note('router')['name'])
 # # asusac68u
 # print(coco.get_note('wifi'))
-# # [{'band': 'autotest2g', 'ssid': 12345678, 'wireless_mode': 'N only', 'channel': 1, 'bandwidth': '40 MHz', 'authentication': 'WPA2-Personal'}, {'band': 'autotest2g', 'ssid': 12345678, 'wireless_mode': 'N only', 'channel': 6, 'bandwidth': '40 MHz', 'authentication': 'WPA2-Personal'}]
+# # [{'band': 'autotest2g', 'ssid': 12345678, 'wireless_mode': 'N only', 'channel': 1, 'bandwidth': '40 MHz', 'security_protocol': 'WPA2-Personal'}, {'band': 'autotest2g', 'ssid': 12345678, 'wireless_mode': 'N only', 'channel': 6, 'bandwidth': '40 MHz', 'security_protocol': 'WPA2-Personal'}]
 # print(coco.get_note('wifi')[0]['band'])
 # # autotest2g

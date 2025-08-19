@@ -100,7 +100,7 @@ class NetgearR6100Control():
                         if router.wireless_mode != '54Mbps':
                             authentication_element = self.router_control.xpath['authentication_for_2G_element']
                             self.router_control.driver.find_element(By.XPATH, authentication_element[
-                                router.authentication]).click()
+                                router.security_protocol]).click()
                         mode_value = NetgearR6100Config.WIRELESS_MODE_2_DICT[router.wireless_mode]
                         mode_element = self.router_control.xpath['mode_select_element']['mode_for_2g']
                     else:
@@ -111,20 +111,20 @@ class NetgearR6100Control():
                 mode_select = Select(self.router_control.driver.find_element(By.XPATH, mode_element))
                 mode_select.select_by_value(mode_value)
             # # change authentication
-            if (router.authentication):
+            if (router.security_protocol):
                 try:
                     if router.band == '2.4G':
                         authentication_element = self.router_control.xpath['authentication_for_2G_element']
                     else:
                         authentication_element = self.router_control.xpath['authentication_for_5G_element']
                 except KeyError:
-                    raise ConfigError('authentication element error')
+                    raise ConfigError('security protocol element error')
                 if self.router_control.element_is_selected(authentication_element[
-                                                               router.authentication]):
+                                                               router.security_protocol]):
                     pass
                 else:
                     self.router_control.driver.find_element(By.XPATH, authentication_element[
-                        router.authentication]).click()
+                        router.security_protocol]).click()
             # set authentication_password
             if (router.wpa_passwd):
                 try:
@@ -177,7 +177,7 @@ class NetgearR6100Control():
 
 
 # fields = ['serial', 'band', 'ssid', 'wireless_mode', 'channel', 'bandwidth',
-#           'authentication', 'wpa_passwd', 'test_type', 'wep_encrypt',
+#           'security_protocol', 'wpa_passwd', 'test_type', 'wep_encrypt',
 #           'passwd_index', 'wep_passwd', 'protect_frame', 'wpa_encrypt', 'hide_ssid']
 # Router = namedtuple('Router', fields, defaults=[None, ] * len(fields))
 # router = Router(serial='1', band='2.4G', ssid='NETGEAR_2G', wireless_mode='54Mbps', channel='AUTO',

@@ -82,12 +82,12 @@ class ZTEax5400Control():
             if not select.get_attribute('checked'):
                 element.click()
 
-        # 修改 authentication
-        if (router.authentication):
+        # 修改 security_protocol
+        if (router.security_protocol):
             try:
-                index = ZTEax5400Config.AUTHENTICATION_METHOD[router.authentication]
+                index = ZTEax5400Config.AUTHENTICATION_METHOD[router.security_protocol]
             except ConfigError:
-                raise ConfigError('authentication method element error')
+                raise ConfigError('security protocol method element error')
             # //*[@id="ssid_enc"]/option[1]
             if '2' in router.band:
                 target_element = 'authtication_2g'
@@ -190,7 +190,7 @@ class ZTEax5400Control():
         # finally:
         #     self.router_control.driver.quit()
 
-# fields = ['band', 'ssid', 'wireless_mode', 'channel', 'bandwidth', 'authentication',
+# fields = ['band', 'ssid', 'wireless_mode', 'channel', 'bandwidth', 'security_protocol',
 #           'wpa_passwd', 'test_type', 'wep_encrypt', 'passwd_index', 'wep_passwd',
 #           'protect_frame', 'wpa_encrypt', 'hide_ssid']
 # Router = namedtuple('Router', fields, defaults=[None, ] * len(fields))

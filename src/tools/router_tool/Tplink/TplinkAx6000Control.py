@@ -129,11 +129,11 @@ class TplinkAx6000Control:
                     By.ID, self.router_control.xpath['wpa_passwd'][target_element]).send_keys(router.wpa_passwd)
 
             time.sleep(2)
-            if (router.authentication):
+            if (router.security_protocol):
                 try:
-                    index = TplinkAx6000Config.AUTHENTICATION_METHOD_DICT[router.authentication]
+                    index = TplinkAx6000Config.AUTHENTICATION_METHOD_DICT[router.security_protocol]
                 except ConfigError:
-                    raise ConfigError('authentication method key error')
+                    raise ConfigError('security protocol method key error')
 
                 if '2' in router.band:
                     target_element = 'authtication_2g'
@@ -257,7 +257,7 @@ class TplinkAx6000Control:
             self.router_control.driver.quit()
 
 
-# fields = ['band', 'ssid', 'wireless_mode', 'channel', 'bandwidth', 'authentication',
+# fields = ['band', 'ssid', 'wireless_mode', 'channel', 'bandwidth', 'security_protocol',
 #           'wpa_passwd', 'test_type', 'wep_encrypt', 'passwd_index', 'wep_passwd', 'protect_frame',
 #           'wpa_encrypt', 'hide_ssid']
 # Router = namedtuple('Router', fields, defaults=[None, ] * len(fields))
