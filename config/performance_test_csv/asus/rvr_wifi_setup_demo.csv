@@ -1,2 +1,4 @@
 band,ssid,wireless_mode,channel,bandwidth,security_protocol,password,tx,rx,data_row
-5G,asus88u_2g,自动,自动,20/40/80 MHz,Open System,,1,1,
+5G,asusax88u_2g,自动,36,20/40/80 MHz,Open System,,1,1,
+5G,asusax88u_2g,自动,40,20/40/80 MHz,Open System,,1,1,
+5G,asusax88u_2g,自动,44,20/40/80 MHz,Open System,,1,1,
