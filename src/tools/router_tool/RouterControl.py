@@ -172,12 +172,7 @@ class RouterTools(RouterControl):
     def scroll_to(self, target):
         self.driver.execute_script(self.SCROL_JS, target)
 
-    def login(self):
-        '''
-        login in router
-        @return:
-        '''
-        # 实例 driver 用于对浏览器进行操作
+    def _init(self):
         self.option = webdriver.ChromeOptions()
         # if display == True:
         self.option.add_argument("--start-maximized")  # 窗口最大化
@@ -187,6 +182,14 @@ class RouterTools(RouterControl):
         # self.option.add_argument(argument='headless')
         # self.driver = webdriver.Chrome(options=self.option)
         self.driver.implicitly_wait(3)
+
+    def login(self):
+        '''
+        login in router
+        @return:
+        '''
+        # 实例 driver 用于对浏览器进行操作
+        self._init()
         self.driver.get(f"http://{self.address}")
         time.sleep(1)
         WebDriverWait(driver=self.driver, timeout=10, poll_frequency=0.5).until(

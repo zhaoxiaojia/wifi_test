@@ -9,6 +9,7 @@
 """
 
 import os, sys
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import re
 import shutil
@@ -141,20 +142,30 @@ def pytest_runtest_makereport(item, call):
     outcome = yield
     report = outcome.get_result()
 
-    if report.when == 'call':
-        session = item.session
-        if not hasattr(session, 'pyqt_finished'):
-            session.pyqt_finished = 0
-        session.pyqt_finished += 1
-        total = getattr(session, 'total_test_count', None)
-        if total:
-            print(f"[PYQT_PROGRESS] {session.pyqt_finished}/{total}", flush=True)
-
+    if report.when == 'setup':
+        if report.failed:
+            item._store['test_result'] = "FAIL"
+    elif report.when == 'call':
         item._store['test_result'] = "PASS" if report.passed else "FAIL" if report.failed else "SKIPP"
         if not report.failed:
             return_value = getattr(call, "result", None) or item._store.get("return_value", None)
             logging.info(f'record return value: {call.result}')
             item._store["return_value"] = return_value
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_teardown(item, nextitem):
+    yield
+    session = item.session
+    if not hasattr(session, 'pyqt_finished'):
+        session.pyqt_finished = 0
+    if getattr(item, '_pyqt_progress_recorded', False):
+        return
+    session.pyqt_finished += 1
+    total = getattr(session, 'total_test_count', None)
+    if total:
+        print(f"[PYQT_PROGRESS] {session.pyqt_finished}/{total}", flush=True)
+    item._pyqt_progress_recorded = True
 
 
 def pytest_sessionfinish(session, exitstatus):

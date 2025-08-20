@@ -84,7 +84,7 @@ class XiaomiBe7000Control(RouterTools):
         super().__init__('xiaomi_be7000', display=True, address=address)
 
     def login(self):
-        super().login()
+        super()._init()
         # try:
         self.driver.get(f"http://{self.address}")
         # input passwd
