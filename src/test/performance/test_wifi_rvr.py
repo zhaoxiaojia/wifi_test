@@ -14,13 +14,12 @@ import time
 from src.test import get_testdata
 import pytest
 
-from src.tools.router_tool.router_factory import get_router
 from src.tools.config_loader import load_config
 
-from src.test.performance import common_setup, init_rf
+from src.test.performance import common_setup, init_rf, init_router
 
 cfg = load_config(refresh=True)
-test_data = get_testdata(get_router(cfg['router']['name']))
+test_data = get_testdata(init_router(cfg))
 rf_step_list = [i for i in range(*cfg['rf_solution']['step'])][::3]
 
 
@@ -33,7 +32,7 @@ def pre_setup(cfg, _router):
 def setup_router(request):
     router_info = request.param
     cfg = load_config(refresh=True)
-    router = get_router(cfg['router']['name'])
+    router = init_router(cfg)
     pre = getattr(request.module, 'pre_setup', None)
     extra = pre(cfg, router) if callable(pre) else None
     connect_status = common_setup(cfg, router, router_info)

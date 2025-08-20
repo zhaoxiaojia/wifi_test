@@ -51,6 +51,13 @@ def init_corner(cfg: dict):
     return corner_tool, corner_step_list
 
 
+def init_router(cfg: dict) -> Router:
+    """根据配置返回路由实例"""
+    router = get_router(cfg['router']['name'])
+    logging.info(f'router {router}')
+    return router
+
+
 def pre_setup(cfg: dict, router: Router) -> Any:
     """默认的前置设置示例，测试文件可覆盖"""
     return None
