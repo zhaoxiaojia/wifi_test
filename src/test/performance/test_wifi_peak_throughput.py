@@ -24,7 +24,7 @@ logging.info(f'router {router}')
 test_data = get_testdata(router)
 
 
-@pytest.fixture(scope='session', params=test_data, ids=[str(i) for i in test_data])
+@pytest.fixture(scope='session', params=test_data, ids=[str(i) for i in test_data],autouse=True)
 def setup_router(request):
     common = common_setup(request)
     connect_status, router_info, _, _ = next(common)
@@ -33,7 +33,7 @@ def setup_router(request):
     finally:
         next(common, None)
 
-def test_rvr(setup_router):
+def test_rvr():
     connect_status, router_info = setup_router
     if not connect_status:
         logging.info("Can't connect wifi ,input 0")
