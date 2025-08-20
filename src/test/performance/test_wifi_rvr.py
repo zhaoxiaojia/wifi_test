@@ -19,17 +19,18 @@ from src.tools.config_loader import load_config
 
 from src.test.performance import common_setup, init_rf
 
-test_data = get_testdata(get_router(load_config(refresh=True)['router']['name']))
+cfg = load_config(refresh=True)
+test_data = get_testdata(get_router(cfg['router']['name']))
+rf_step_list = [i for i in range(*cfg['rf_solution']['step'])][::3]
 
 
 @pytest.fixture(scope='session', params=test_data, ids=[str(i) for i in test_data])
 def setup_router(request):
-    rf_step_list = []
     rf_tool = None
 
     def pre(cfg, _router):
-        nonlocal rf_tool, rf_step_list
-        rf_tool, rf_step_list = init_rf(cfg)
+        nonlocal rf_tool
+        rf_tool, _ = init_rf(cfg)
 
     common = common_setup(request, pre_setup=pre)
     connect_status, router_info, _, _ = next(common)
@@ -43,15 +44,12 @@ def setup_router(request):
         time.sleep(10)
 
 
-@pytest.fixture(scope='function')
-def setup_rf(setup_router):
-    connect_status, router_info, rf_step_list, rf_tool = setup_router
-    for rf_value in rf_step_list:
-        logging.info(f'set rf value {rf_value}')
-        db_set = rf_value[1] if isinstance(rf_value, tuple) else rf_value
-        rf_tool.execute_rf_cmd(db_set)
-        logging.info(rf_tool.get_rf_current_value())
-        yield connect_status, router_info, db_set, rf_tool
+@pytest.fixture(scope='function', params=rf_step_list)
+def setup_rf(request, setup_router):
+    db_set = request.param[1] if isinstance(request.param, tuple) else request.param
+    rf_tool = setup_router[3]
+    rf_tool.execute_rf_cmd(db_set)
+    yield setup_router[0], setup_router[1], db_set, rf_tool
 
 
 def test_rvr(setup_rf):
