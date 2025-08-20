@@ -25,19 +25,24 @@ rf_step_list = [i for i in range(*cfg['rf_solution']['step'])][::3]
 
 
 @pytest.fixture(scope='session', params=test_data, ids=[str(i) for i in test_data])
-def setup_router(request):
-    rf_tool = None
+def router_info(request):
+    return request.param
 
-    def pre(cfg, _router):
-        nonlocal rf_tool
+
+@pytest.fixture
+def pre_setup():
+    def _pre(cfg, _router):
         rf_tool, _ = init_rf(cfg)
+        return rf_tool
+    return _pre
 
-    common = common_setup(request, pre_setup=pre)
-    connect_status, router_info, _, _ = next(common)
+
+@pytest.fixture(scope='session')
+def setup_router(common_setup):
+    connect_status, router_info, _, _, rf_tool = common_setup
     try:
         yield connect_status, router_info, rf_step_list, rf_tool
     finally:
-        next(common, None)
         logging.info('Reset rf value')
         rf_tool.execute_rf_cmd(0)
         logging.info(rf_tool.get_rf_current_value())
