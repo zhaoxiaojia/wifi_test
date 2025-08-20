@@ -26,23 +26,24 @@ test_data = get_testdata(router)
 corner_step_list = [i for i in range(*cfg['corner_angle']['step'])][::45]
 
 
+def pre_setup(cfg, _router):
+    corner_tool, _ = init_corner(cfg)
+    return corner_tool
+
+
 @pytest.fixture(scope='session', params=test_data, ids=[str(i) for i in test_data])
-def router_info(request):
-    return request.param
-
-
-@pytest.fixture
-def pre_setup():
-    def _pre(cfg, _router):
-        corner_tool, _ = init_corner(cfg)
-        return corner_tool
-    return _pre
-
-
-@pytest.fixture(scope='session')
-def setup_router(common_setup):
-    connect_status, router_info, _, _, corner_tool = common_setup
-    yield connect_status, router_info, corner_step_list, corner_tool
+def setup_router(request):
+    router_info = request.param
+    cfg = load_config(refresh=True)
+    router = get_router(cfg['router']['name'])
+    pre = getattr(request.module, 'pre_setup', None)
+    extra = pre(cfg, router) if callable(pre) else None
+    connect_status = common_setup(cfg, router, router_info)
+    step_list = corner_step_list
+    try:
+        yield connect_status, router_info, step_list, extra
+    finally:
+        pytest.dut.kill_iperf()
 
 
 @pytest.fixture(scope="function", params=corner_step_list)
