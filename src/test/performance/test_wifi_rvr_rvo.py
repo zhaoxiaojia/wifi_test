@@ -28,37 +28,38 @@ rf_step_list = [i for i in range(*cfg['rf_solution']['step'])][::3]
 corner_step_list = [i for i in range(*cfg['corner_angle']['step'])][::45]
 
 
+def pre_setup(cfg, _router):
+    rf_tool, _ = init_rf(cfg)
+    corner_tool, _ = init_corner(cfg)
+    return rf_tool, corner_tool
+
+
 @pytest.fixture(scope='session', params=test_data, ids=[str(i) for i in test_data])
-def router_info(request):
-    return request.param
-
-
-@pytest.fixture
-def pre_setup():
-    def _pre(cfg, _router):
-        rf_tool, _ = init_rf(cfg)
-        corner_tool, _ = init_corner(cfg)
-        return rf_tool, corner_tool
-    return _pre
-
-
-@pytest.fixture(scope='session')
-def setup_router(common_setup):
-    connect_status, router_info, _, _, tools = common_setup
-    rf_tool, corner_tool = tools
+def setup_router(request):
+    router_info = request.param
+    cfg = load_config(refresh=True)
+    router = get_router(cfg['router']['name'])
+    pre = getattr(request.module, 'pre_setup', None)
+    extra = pre(cfg, router) if callable(pre) else None
+    connect_status = common_setup(cfg, router, router_info)
+    step_list = (corner_step_list, rf_step_list)
     try:
-        yield connect_status, router_info, corner_step_list, corner_tool, rf_step_list, rf_tool
+        yield connect_status, router_info, step_list, extra
     finally:
-        logging.info('Reset rf value')
-        rf_tool.execute_rf_cmd(0)
-        logging.info(rf_tool.get_rf_current_value())
-        time.sleep(10)
+        pytest.dut.kill_iperf()
+        if extra:
+            rf_tool, _ = extra
+            logging.info('Reset rf value')
+            rf_tool.execute_rf_cmd(0)
+            logging.info(rf_tool.get_rf_current_value())
+            time.sleep(10)
 
 
 @pytest.fixture(scope="function", params=corner_step_list)
 def setup_corner(request, setup_router):
     corner_set = request.param[0] if isinstance(request.param, tuple) else request.param
-    corner_tool, rf_step_list, rf_tool = setup_router[3], setup_router[4], setup_router[5]
+    rf_step_list = setup_router[2][1]
+    rf_tool, corner_tool = setup_router[3]
     corner_tool.execute_turntable_cmd("rt", angle=corner_set)
     yield (
         setup_router[0],
