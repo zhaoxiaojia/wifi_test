@@ -52,18 +52,25 @@ def setup_router(request):
 
 @pytest.fixture(scope="function", params=corner_step_list)
 def setup_corner(request, setup_router):
-    value = request.param[0] if isinstance(request.param, tuple) else request.param
-    corner_tool = setup_router[3]
-    corner_tool.execute_turntable_cmd("rt", angle=value)
-    yield setup_router[0], setup_router[1], value, corner_tool, setup_router[5]
+    corner_set = request.param[0] if isinstance(request.param, tuple) else request.param
+    corner_tool, rf_step_list, rf_tool = setup_router[3], setup_router[4], setup_router[5]
+    corner_tool.execute_turntable_cmd("rt", angle=corner_set)
+    yield (
+        setup_router[0],
+        setup_router[1],
+        corner_set,
+        corner_tool,
+        rf_step_list,
+        rf_tool,
+    )
 
 
 @pytest.fixture(scope="function", params=rf_step_list)
 def setup_rf(request, setup_corner):
     db_set = request.param[1] if isinstance(request.param, tuple) else request.param
-    rf_tool = setup_corner[4]
+    connect_status, router_info, corner_set, corner_tool, _, rf_tool = setup_corner
     rf_tool.execute_rf_cmd(db_set)
-    yield setup_corner[0], setup_corner[1], setup_corner[2], db_set, rf_tool, setup_corner[3]
+    yield connect_status, router_info, corner_set, db_set, rf_tool, corner_tool
 
 
 def test_rvr_rvo(setup_rf):
