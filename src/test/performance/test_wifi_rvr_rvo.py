@@ -19,22 +19,23 @@ from src.tools.config_loader import load_config
 
 from src.test.performance import common_setup, init_rf, init_corner
 
-router_name = load_config(refresh=True)['router']['name']
+cfg = load_config(refresh=True)
+router_name = cfg['router']['name']
 router = get_router(router_name)
 logging.info(f'router {router}')
 test_data = get_testdata(router)
+rf_step_list = [i for i in range(*cfg['rf_solution']['step'])][::3]
 
 
 @pytest.fixture(scope='session', params=test_data, ids=[str(i) for i in test_data])
 def setup_router(request):
-    rf_step_list = []
     corner_step_list = []
     rf_tool = None
     corner_tool = None
 
     def pre(cfg, _router):
-        nonlocal rf_tool, rf_step_list, corner_tool, corner_step_list
-        rf_tool, rf_step_list = init_rf(cfg)
+        nonlocal rf_tool, corner_tool, corner_step_list
+        rf_tool, _ = init_rf(cfg)
         corner_tool, corner_step_list = init_corner(cfg)
 
     common = common_setup(request, pre_setup=pre)
@@ -61,15 +62,12 @@ def setup_corner(setup_router):
         yield connect_status, router_info, corner_set, corner_tool, rf_step_list, rf_tool
 
 
-@pytest.fixture(scope='function')
-def setup_rf(setup_corner):
-    connect_status, router_info, corner_set, corner_tool, rf_step_list, rf_tool = setup_corner
-    for rf_value in rf_step_list:
-        logging.info(f'set rf value {rf_value}')
-        db_set = rf_value[1] if isinstance(rf_value, tuple) else rf_value
-        rf_tool.execute_rf_cmd(db_set)
-        logging.info(rf_tool.get_rf_current_value())
-        yield connect_status, router_info, corner_set, db_set, rf_tool, corner_tool
+@pytest.fixture(scope='function', params=rf_step_list)
+def setup_rf(request, setup_corner):
+    db_set = request.param[1] if isinstance(request.param, tuple) else request.param
+    rf_tool = setup_corner[5]
+    rf_tool.execute_rf_cmd(db_set)
+    yield setup_corner[0], setup_corner[1], setup_corner[2], db_set, rf_tool, setup_corner[3]
 
 
 def test_rvr_rvo(setup_rf):
