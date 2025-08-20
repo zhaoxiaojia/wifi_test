@@ -6,7 +6,7 @@
 import logging
 import re
 import time
-from typing import Callable, Generator, Tuple, Any
+from typing import Any
 
 import pytest
 
@@ -51,47 +51,17 @@ def init_corner(cfg: dict):
     return corner_tool, corner_step_list
 
 
-@pytest.fixture
-def pre_setup() -> Callable | None:
-    """默认的前置设置，测试文件可覆盖"""
+def pre_setup(cfg: dict, router: Router) -> Any:
+    """默认的前置设置示例，测试文件可覆盖"""
     return None
 
 
-@pytest.fixture(scope="session")
-def common_setup(request, router_info) -> Generator[
-    Tuple[bool, Router, Router, dict, Any], None, None
-]:
-    """通用的性能测试前置步骤
-
-    Parameters
-    ----------
-    request: pytest.FixtureRequest
-        pytest 传入的 request 对象
-    router_info: Router
-        当前测试参数中的路由器信息
-    Yields
-    ------
-    Tuple[bool, Router, Router, dict, Any]
-        (connect_status, router_info, router, cfg, extra)
-    Notes
-    -----
-    如需在路由器配置和连接之前执行额外初始化步骤，可在测试文件中定义同名
-    ``pre_setup`` fixture 覆盖。
-    """
+def common_setup(cfg: dict, router: Router, router_info: Router) -> bool:
+    """通用的性能测试前置步骤"""
     logging.info("router setup start")
-    cfg = load_config(refresh=True)
-    router_name = cfg['router']['name']
-    router = get_router(router_name)
 
     pytest.dut.skip_tx = False
     pytest.dut.skip_rx = False
-    try:
-        pre_setup = request.getfixturevalue("pre_setup")
-    except pytest.FixtureLookupError:
-        pre_setup = None
-    extra: Any = None
-    if pre_setup:
-        extra = pre_setup(cfg, router)
 
     router.change_setting(router_info), "Can't set ap , pls check first"
     # if pytest.connect_type == 'telnet':
@@ -131,8 +101,10 @@ def common_setup(request, router_info) -> Generator[
                     cmd += pytest.dut.CMD_WIFI_HIDE
                 pytest.dut.checkoutput(cmd)
                 time.sleep(5)
-                if pytest.dut.wait_for_wifi_address(cmd=cmd,
-                                                    target=re.findall(r'(\d+\.\d+\.\d+\.)', pytest.dut.pc_ip)[0]):
+                if pytest.dut.wait_for_wifi_address(
+                    cmd=cmd,
+                    target=re.findall(r'(\d+\.\d+\.\d+\.)', pytest.dut.pc_ip)[0],
+                ):
                     connect_status = True
                     break
             except Exception as e:
@@ -154,9 +126,4 @@ def common_setup(request, router_info) -> Generator[
         pytest.dut.checkoutput(pytest.dut.IX_ENDPOINT_COMMAND)
         time.sleep(3)
 
-    yield connect_status, router_info, router, cfg, extra
-
-    # if pytest.connect_type == 'telnet':
-    #     router.change_country("欧洲")
-    #     router.driver.quit()
-    pytest.dut.kill_iperf()
+    return connect_status
