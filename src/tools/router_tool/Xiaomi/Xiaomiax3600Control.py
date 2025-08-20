@@ -93,7 +93,7 @@ class Xiaomiax3600Control(RouterTools):
 
         '''
         # try:
-        super().login()
+        super()._init()
         self.driver.get(f"http://{self.address}")
         # input passwd
         self.driver.find_element(By.ID, self.xpath['password_element']).click()
