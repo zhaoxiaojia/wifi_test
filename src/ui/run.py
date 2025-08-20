@@ -15,7 +15,7 @@ import os
 import sip
 # ui/run.py
 
-from PyQt5.QtWidgets import QVBoxLayout, QTextEdit, QLabel, QFrame
+from PyQt5.QtWidgets import QVBoxLayout, QTextEdit, QLabel, QFrame, QHBoxLayout
 from qfluentwidgets import (
     CardWidget,
     StrongBodyLabel,
@@ -37,6 +37,7 @@ import datetime
 import re
 import random
 import sys
+import time
 from pathlib import Path
 import traceback
 import threading
@@ -171,6 +172,7 @@ class CaseRunner(QThread):
         self._ctx = multiprocessing.get_context("spawn")
         self._queue: multiprocessing.Queue = self._ctx.Queue()
         self._proc: multiprocessing.Process | None = None
+        self._case_start_time: float | None = None
 
     def run(self):
         """启动子进程运行pytest，并监听队列更新GUI"""
@@ -195,6 +197,12 @@ class CaseRunner(QThread):
             try:
                 kind, payload = self._queue.get(timeout=0.1)
                 if kind == "log":
+                    if payload.startswith("[PYQT_CASE]"):
+                        self._case_start_time = time.time()
+                    elif payload.startswith("[PYQT_PROGRESS]") and self._case_start_time is not None:
+                        duration_ms = int((time.time() - self._case_start_time) * 1000)
+                        self.log_signal.emit(f"[PYQT_CASETIME]{duration_ms}")
+                        self._case_start_time = None
                     self.log_signal.emit(payload)
                 elif kind == "progress":
                     self.progress_signal.emit(payload)
@@ -249,7 +257,13 @@ class RunPage(CardWidget):
 
         self.progress = ProgressBar(self)
         self.progress.setValue(0)
-        layout.addWidget(self.progress)
+        progress_layout = QHBoxLayout()
+        progress_layout.addWidget(self.progress, stretch=1)
+        self.remaining_time_label = QLabel("", self)
+        apply_theme(self.remaining_time_label)
+        self.remaining_time_label.hide()
+        progress_layout.addWidget(self.remaining_time_label)
+        layout.addLayout(progress_layout)
         # 当前用例信息展示
         self.case_info_label = QLabel("", self)
         apply_theme(self.case_info_label)
@@ -293,6 +307,11 @@ class RunPage(CardWidget):
         self._set_action_button("stop")
         layout.addWidget(self.action_btn)
         self.setLayout(layout)
+        self.finished_count = 0
+        self.total_count = 0
+        self.avg_case_duration = 0
+        self._duration_sum = 0
+        self._current_has_fixture = False
         stack = getattr(self.main_window, "stackedWidget", None)
         idx = stack.indexOf(self) if stack else None
         logging.info(
@@ -320,6 +339,30 @@ class RunPage(CardWidget):
             fn = msg[len("[PYQT_CASE]"):].strip()
             self.case_info_label.setText(fn)
             return
+        if msg.startswith("[PYQT_CASEINFO]"):
+            info = json.loads(msg[len("[PYQT_CASEINFO]"):])
+            fixtures = info.get("fixtures") or []
+            self._current_has_fixture = bool(fixtures)
+            self._update_remaining_time_label()
+            return
+        if msg.startswith("[PYQT_CASETIME]"):
+            try:
+                duration_ms = int(msg[len("[PYQT_CASETIME]"):])
+            except ValueError:
+                return
+            self.finished_count += 1
+            self._duration_sum += duration_ms
+            self.avg_case_duration = self._duration_sum / self.finished_count
+            self._update_remaining_time_label()
+            return
+        if msg.startswith("[PYQT_PROGRESS]"):
+            parts = msg[len("[PYQT_PROGRESS]"):].strip().split("/")
+            if len(parts) == 2:
+                with suppress(ValueError):
+                    self.finished_count = int(parts[0])
+                    self.total_count = int(parts[1])
+            self._update_remaining_time_label()
+            return
         html = format_log_html(msg)
         self.log_area.append(html)
 
@@ -329,6 +372,19 @@ class RunPage(CardWidget):
             cursor.select(QTextCursor.BlockUnderCursor)
             cursor.removeSelectedText()
             cursor.deleteChar()
+
+    def _update_remaining_time_label(self):
+        remaining_cases = max(self.total_count - self.finished_count, 0)
+        remaining_ms = self.avg_case_duration * remaining_cases
+        if not self._current_has_fixture or remaining_ms <= 0:
+            self.remaining_time_label.hide()
+            return
+        remaining_sec = int(remaining_ms / 1000)
+        h = remaining_sec // 3600
+        m = (remaining_sec % 3600) // 60
+        s = remaining_sec % 60
+        self.remaining_time_label.setText(f"{h:02d}:{m:02d}:{s:02d}")
+        self.remaining_time_label.show()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
