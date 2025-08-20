@@ -28,7 +28,7 @@ from src.tools.router_tool.Router import Router
 
 # pytest_plugins = "util.report_plugin"
 test_results = []
-
+fixture_param_cache = {}
 import logging
 
 logging.basicConfig(
@@ -95,8 +95,8 @@ def pytest_runtest_setup(item):
 
 @pytest.hookimpl(hookwrapper=True)
 def pytest_fixture_setup(fixturedef, request):
-    logging.info('coco' * 40)
-    logging.info(fixturedef.func.__name__)
+    logging.info(f"setup {fixturedef.func.__name__} from {fixturedef.func.__module__}, scope={fixturedef.scope}")
+    params = getattr(request, 'param', None)
     params = getattr(request, "param", None)
     data = {"fixture": fixturedef.func.__name__, "params": repr(params)}
     print(f"[PYQT_FIX]{json.dumps(data)}", flush=True)
@@ -177,9 +177,13 @@ def record_test_data(request):
             fixture_values[fixture_name] = expand(
                 request.node.funcargs[fixture_name], fixture_name
             )
+    for _name in request.node.fixturenames:
+        _data = fixture_param_cache.get(_name)
+        if _data:
+            print(f"[PYQT_FIX]{json.dumps(_data)}", flush=True)
 
     print(
-        f"[PYQT_CASEINFO]{json.dumps({'test': test_name, 'params': fixture_values}, default=str)}",
+        f"[PYQT_FIX]{json.dumps({'test': test_name, 'params': fixture_values}, default=str)}",
         flush=True,
     )
     # 确保 request.node._store 存在
