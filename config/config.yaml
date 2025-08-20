@@ -3,7 +3,7 @@ connect_type:
     device: coco5c6788c23f1804
   telnet:
     ip: 192.168.5.12
-  type: adb
+  type: telnet
 corner_angle:
   ip_address: 192.168.5.11
   step:
@@ -42,5 +42,5 @@ serial_port:
   baud: '961200'
   port: COM5
   status: false
-text_case: test/performance/test_wifi_rvr.py
+text_case: test/performance/test_wifi_peak_throughput.py
 csv_path: performance_test_csv/asus/rvr_wifi_setup_demo.csv

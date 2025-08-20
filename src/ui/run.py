@@ -42,6 +42,7 @@ import traceback
 import threading
 import pytest
 import io
+import json
 from contextlib import suppress
 from src.util.constants import Paths, get_src_base
 from src.util.pytest_redact import install_redactor_for_current_process
@@ -241,11 +242,18 @@ class RunPage(CardWidget):
 
         layout = QVBoxLayout(self)
         layout.setSpacing(16)
-        layout.addWidget(StrongBodyLabel(self.display_case_path))
+        self.case_info_label = StrongBodyLabel(self.display_case_path)
+        apply_theme(self.case_info_label)
+        self.case_info_label.setVisible(True)
+        layout.addWidget(self.case_info_label)
 
         self.progress = ProgressBar(self)
         self.progress.setValue(0)
         layout.addWidget(self.progress)
+        # 当前用例信息展示
+        self.case_info_label = QLabel("", self)
+        apply_theme(self.case_info_label)
+        layout.addWidget(self.case_info_label)
 
         self.log_area = QTextEdit(self)
         self.log_area.setReadOnly(True)
@@ -295,6 +303,23 @@ class RunPage(CardWidget):
         )
 
     def _append_log(self, msg: str):
+        if msg.startswith("[PYQT_FIX]"):
+            info = json.loads(msg[len("[PYQT_FIX]"):])
+            base = self.case_info_label.text().split(" (", 1)[0]
+            cur = self.case_info_label.text()
+            params = info.get("params")
+            if params:
+                cur = (
+                    f"{cur}, {info['fixture']}={params}"
+                    if "(" in cur
+                    else f"{base} ({info['fixture']}={params})"
+                )
+            self.case_info_label.setText(cur)
+            return
+        if msg.startswith("[PYQT_CASE]"):
+            fn = msg[len("[PYQT_CASE]"):].strip()
+            self.case_info_label.setText(fn)
+            return
         html = format_log_html(msg)
         self.log_area.append(html)
 

@@ -14,6 +14,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 import re
 import shutil
 import subprocess
+import json
 
 import pytest
 import csv
@@ -86,6 +87,22 @@ def pytest_collection_finish(session):
     # 收集完毕，记录总用例数
     session.total_test_count = len(session.items)
     # logging.info(f"[PYQT_TOTAL]{session.total_test_count}")
+
+
+def pytest_runtest_setup(item):
+    print(f"[PYQT_CASE]{item.originalname}", flush=True)
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_fixture_setup(fixturedef, request):
+    logging.info('coco' * 40)
+    logging.info(fixturedef.func.__name__)
+    if fixturedef.func.__name__.startswith("setup_"):
+        params = getattr(request, "param", None)
+        data = {"fixture": fixturedef.func.__name__, "params": repr(params)}
+        print(f"[PYQT_FIX]{json.dumps(data)}", flush=True)
+    outcome = yield
+    return outcome.get_result()
 
 
 def pytest_runtest_logreport(report):

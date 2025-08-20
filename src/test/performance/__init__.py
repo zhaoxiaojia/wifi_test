@@ -82,16 +82,16 @@ def common_setup(request, pre_setup: Callable | None = None) -> Generator[
 
     router_info = request.param
     router.change_setting(router_info), "Can't set ap , pls check first"
-    if pytest.connect_type == 'telnet':
-        if router_info.band == "2.4G":
-            router.change_country("欧洲")
-        else:
-            router.change_country("美国")
-        router.driver.quit()
-        band = '5G' if '2' in router_info.band else '2.4G'
-        ssid = router_info.ssid + "_bat"
-        router.change_setting(Router(band=band, ssid=ssid))
-    time.sleep(3)
+    # if pytest.connect_type == 'telnet':
+    #     if router_info.band == "2.4G":
+    #         router.change_country("欧洲")
+    #     else:
+    #         router.change_country("美国")
+    #     router.driver.quit()
+    #     band = '5G' if '2' in router_info.band else '2.4G'
+    #     ssid = router_info.ssid + "_bat"
+    #     router.change_setting(Router(band=band, ssid=ssid))
+    # time.sleep(3)
 
     logging.info('router set done')
     with open(pytest.testResult.detail_file, 'a', encoding='utf-8') as f:
@@ -100,7 +100,7 @@ def common_setup(request, pre_setup: Callable | None = None) -> Generator[
     logging.info(f'dut try to connect {router_info.ssid}')
     if pytest.connect_type == 'telnet':
         connect_status = True
-        time.sleep(90)
+        # time.sleep(90)
     else:
         connect_status = False
         for _ in range(3):
@@ -144,7 +144,7 @@ def common_setup(request, pre_setup: Callable | None = None) -> Generator[
 
     yield connect_status, router_info, router, cfg
 
-    if pytest.connect_type == 'telnet':
-        router.change_country("欧洲")
-        router.driver.quit()
+    # if pytest.connect_type == 'telnet':
+    #     router.change_country("欧洲")
+    #     router.driver.quit()
     pytest.dut.kill_iperf()
