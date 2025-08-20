@@ -18,20 +18,21 @@ from src.tools.config_loader import load_config
 
 from src.test.performance import common_setup, init_corner
 
-router_name = load_config(refresh=True)['router']['name']
+cfg = load_config(refresh=True)
+router_name = cfg['router']['name']
 router = get_router(router_name)
 logging.info(f'router {router}')
 test_data = get_testdata(router)
+corner_step_list = [i for i in range(*cfg['corner_angle']['step'])][::45]
 
 
 @pytest.fixture(scope='session', params=test_data, ids=[str(i) for i in test_data])
 def setup_router(request):
-    corner_step_list = []
     corner_tool = None
 
     def pre(cfg, _router):
-        nonlocal corner_tool, corner_step_list
-        corner_tool, corner_step_list = init_corner(cfg)
+        nonlocal corner_tool
+        corner_tool, _ = init_corner(cfg)
 
     common = common_setup(request, pre_setup=pre)
     connect_status, router_info, _, _ = next(common)
@@ -41,16 +42,12 @@ def setup_router(request):
         next(common, None)
 
 
-@pytest.fixture(scope='function')
-def setup_corner(setup_router):
-    connect_status, router_info, corner_step_list, corner_tool = setup_router
-    for corner_value in corner_step_list:
-        logging.info(f'corner_value {corner_value}')
-        logging.info('set corner value')
-        value = corner_value[0] if isinstance(corner_value, tuple) else corner_value
-        corner_tool.execute_turntable_cmd('rt', angle=value)
-        logging.info(corner_tool.get_turntanle_current_angle())
-        yield connect_status, router_info, value, corner_tool
+@pytest.fixture(scope="function", params=corner_step_list)
+def setup_corner(request, setup_router):
+    value = request.param[0] if isinstance(request.param, tuple) else request.param
+    corner_tool = setup_router[3]
+    corner_tool.execute_turntable_cmd("rt", angle=value)
+    yield setup_router[0], setup_router[1], value, corner_tool
 
 
 def test_rvo(setup_corner):

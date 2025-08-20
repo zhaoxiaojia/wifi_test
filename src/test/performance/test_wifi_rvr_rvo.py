@@ -25,18 +25,18 @@ router = get_router(router_name)
 logging.info(f'router {router}')
 test_data = get_testdata(router)
 rf_step_list = [i for i in range(*cfg['rf_solution']['step'])][::3]
+corner_step_list = [i for i in range(*cfg['corner_angle']['step'])][::45]
 
 
 @pytest.fixture(scope='session', params=test_data, ids=[str(i) for i in test_data])
 def setup_router(request):
-    corner_step_list = []
     rf_tool = None
     corner_tool = None
 
     def pre(cfg, _router):
-        nonlocal rf_tool, corner_tool, corner_step_list
+        nonlocal rf_tool, corner_tool
         rf_tool, _ = init_rf(cfg)
-        corner_tool, corner_step_list = init_corner(cfg)
+        corner_tool, _ = init_corner(cfg)
 
     common = common_setup(request, pre_setup=pre)
     connect_status, router_info, _, _ = next(common)
@@ -50,22 +50,18 @@ def setup_router(request):
         time.sleep(10)
 
 
-@pytest.fixture(scope='function')
-def setup_corner(setup_router):
-    connect_status, router_info, corner_step_list, corner_tool, rf_step_list, rf_tool = setup_router
-    for corner_value in corner_step_list:
-        logging.info(f'corner_value {corner_value}')
-        logging.info('set corner value')
-        corner_set = corner_value[0] if isinstance(corner_value, tuple) else corner_value
-        corner_tool.execute_turntable_cmd('rt', angle=corner_set)
-        logging.info(corner_tool.get_turntanle_current_angle())
-        yield connect_status, router_info, corner_set, corner_tool, rf_step_list, rf_tool
+@pytest.fixture(scope="function", params=corner_step_list)
+def setup_corner(request, setup_router):
+    value = request.param[0] if isinstance(request.param, tuple) else request.param
+    corner_tool = setup_router[3]
+    corner_tool.execute_turntable_cmd("rt", angle=value)
+    yield setup_router[0], setup_router[1], value, corner_tool, setup_router[5]
 
 
-@pytest.fixture(scope='function', params=rf_step_list)
+@pytest.fixture(scope="function", params=rf_step_list)
 def setup_rf(request, setup_corner):
     db_set = request.param[1] if isinstance(request.param, tuple) else request.param
-    rf_tool = setup_corner[5]
+    rf_tool = setup_corner[4]
     rf_tool.execute_rf_cmd(db_set)
     yield setup_corner[0], setup_corner[1], setup_corner[2], db_set, rf_tool, setup_corner[3]
 
