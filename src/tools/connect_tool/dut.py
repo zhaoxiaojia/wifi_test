@@ -317,16 +317,14 @@ class dut():
         for line in lines:
             if '[SUM]' not in line:
                 continue
-            if self.rssi_num > -60:
-                if line.strip(): logging.info(f'line : {line.strip()}')
-                data = re.findall('\s0\.0+-\s*3\d+\.\d*.*?(\d+\.*\d*)\s+Mbits/sec.*?', line.strip(), re.S)
-                if data:
-                    result_list.append(float(data[0]))
-            else:
-                if line.strip(): logging.info(f'line : {line.strip()}')
-                data = re.findall(r'.*?\d+\.\d*-\s*\d+\.\d*.*?(\d+\.*\d*)\s+Mbits/sec.*?', line.strip(), re.S)
-                if data:
-                    result_list.append(float(data[0]))
+            if line.strip(): logging.info(f'line : {line.strip()}')
+            data = re.findall(r'.*?\d+\.\d*-\s*\d+\.\d*.*?(\d+\.*\d*)\s+Mbits/sec.*?', line.strip(), re.S)
+            if data:
+                result_list.append(float(data[0]))
+            if line.strip(): logging.info(f'line : {line.strip()}')
+            data = re.findall('\s0\.0+-\s*3\d+\.\d*.*?(\d+\.*\d*)\s+Mbits/sec.*?', line.strip(), re.S)
+            if data:
+                return round(float(data[0]), 1)
         if result_list:
             logging.info(f'throughput result : {sum(result_list) / len(result_list)}')
             # logging.info(f'{result_list}')
@@ -552,7 +550,7 @@ class dut():
                 time.sleep(5)
                 step += 1
                 info = self.checkoutput('ifconfig wlan0')
-                logging.info(f'info {info}')
+                # logging.info(f'info {info}')
                 ip_address = re.findall(r'inet addr:(\d+\.\d+\.\d+\.\d+)', info, re.S)
                 if ip_address:
                     ip_address = ip_address[0]
@@ -560,10 +558,10 @@ class dut():
                 if target in ip_address:
                     self.dut_ip = ip_address
                     break
-                if step == 2:
+                if step % 3 == 0:
                     logging.info('repeat command')
                     if cmd:
-                        info = self.checkoutput('ifconfig wlan0')
+                        info = self.checkoutput(cmd)
                 if step > 10:
                     assert False, f"Can't catch the address:{target} "
             logging.info(f'ip address {ip_address}')
