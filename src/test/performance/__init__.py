@@ -6,7 +6,7 @@
 import logging
 import re
 import time
-from typing import Callable, Generator, Tuple
+from typing import Callable, Generator, Tuple, Any
 
 import pytest
 
@@ -51,8 +51,15 @@ def init_corner(cfg: dict):
     return corner_tool, corner_step_list
 
 
-def common_setup(request, pre_setup: Callable | None = None) -> Generator[
-    Tuple[bool, Router, Router, dict], None, None
+@pytest.fixture
+def pre_setup() -> Callable | None:
+    """默认的前置设置，测试文件可覆盖"""
+    return None
+
+
+@pytest.fixture(scope="session")
+def common_setup(request, router_info, pre_setup: Callable | None) -> Generator[
+    Tuple[bool, Router, Router, dict, Any], None, None
 ]:
     """通用的性能测试前置步骤
 
@@ -60,14 +67,16 @@ def common_setup(request, pre_setup: Callable | None = None) -> Generator[
     ----------
     request: pytest.FixtureRequest
         pytest 传入的 request 对象
+    router_info: Router
+        当前测试参数中的路由器信息
     pre_setup: Callable | None
         在路由器配置和连接之前执行的额外初始化函数，
-        接收 (cfg, router) 两个参数。
+        接收 (cfg, router) 两个参数，返回额外数据。
 
     Yields
     ------
-    Tuple[bool, Router, Router, dict]
-        (connect_status, router_info, router, cfg)
+    Tuple[bool, Router, Router, dict, Any]
+        (connect_status, router_info, router, cfg, extra)
     """
     logging.info("router setup start")
     cfg = load_config(refresh=True)
@@ -77,10 +86,10 @@ def common_setup(request, pre_setup: Callable | None = None) -> Generator[
     pytest.dut.skip_tx = False
     pytest.dut.skip_rx = False
 
+    extra: Any = None
     if pre_setup:
-        pre_setup(cfg, router)
+        extra = pre_setup(cfg, router)
 
-    router_info = request.param
     router.change_setting(router_info), "Can't set ap , pls check first"
     # if pytest.connect_type == 'telnet':
     #     if router_info.band == "2.4G":
@@ -142,7 +151,7 @@ def common_setup(request, pre_setup: Callable | None = None) -> Generator[
         pytest.dut.checkoutput(pytest.dut.IX_ENDPOINT_COMMAND)
         time.sleep(3)
 
-    yield connect_status, router_info, router, cfg
+    yield connect_status, router_info, router, cfg, extra
 
     # if pytest.connect_type == 'telnet':
     #     router.change_country("欧洲")

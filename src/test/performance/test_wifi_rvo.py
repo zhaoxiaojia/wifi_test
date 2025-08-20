@@ -27,19 +27,22 @@ corner_step_list = [i for i in range(*cfg['corner_angle']['step'])][::45]
 
 
 @pytest.fixture(scope='session', params=test_data, ids=[str(i) for i in test_data])
-def setup_router(request):
-    corner_tool = None
+def router_info(request):
+    return request.param
 
-    def pre(cfg, _router):
-        nonlocal corner_tool
+
+@pytest.fixture
+def pre_setup():
+    def _pre(cfg, _router):
         corner_tool, _ = init_corner(cfg)
+        return corner_tool
+    return _pre
 
-    common = common_setup(request, pre_setup=pre)
-    connect_status, router_info, _, _ = next(common)
-    try:
-        yield connect_status, router_info, corner_step_list, corner_tool
-    finally:
-        next(common, None)
+
+@pytest.fixture(scope='session')
+def setup_router(common_setup):
+    connect_status, router_info, _, _, corner_tool = common_setup
+    yield connect_status, router_info, corner_step_list, corner_tool
 
 
 @pytest.fixture(scope="function", params=corner_step_list)
