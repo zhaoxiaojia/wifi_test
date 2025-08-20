@@ -58,7 +58,7 @@ def pre_setup() -> Callable | None:
 
 
 @pytest.fixture(scope="session")
-def common_setup(request, router_info, pre_setup: Callable | None) -> Generator[
+def common_setup(request, router_info) -> Generator[
     Tuple[bool, Router, Router, dict, Any], None, None
 ]:
     """通用的性能测试前置步骤
@@ -69,14 +69,14 @@ def common_setup(request, router_info, pre_setup: Callable | None) -> Generator[
         pytest 传入的 request 对象
     router_info: Router
         当前测试参数中的路由器信息
-    pre_setup: Callable | None
-        在路由器配置和连接之前执行的额外初始化函数，
-        接收 (cfg, router) 两个参数，返回额外数据。
-
     Yields
     ------
     Tuple[bool, Router, Router, dict, Any]
         (connect_status, router_info, router, cfg, extra)
+    Notes
+    -----
+    如需在路由器配置和连接之前执行额外初始化步骤，可在测试文件中定义同名
+    ``pre_setup`` fixture 覆盖。
     """
     logging.info("router setup start")
     cfg = load_config(refresh=True)
@@ -85,7 +85,10 @@ def common_setup(request, router_info, pre_setup: Callable | None) -> Generator[
 
     pytest.dut.skip_tx = False
     pytest.dut.skip_rx = False
-
+    try:
+        pre_setup = request.getfixturevalue("pre_setup")
+    except pytest.FixtureLookupError:
+        pre_setup = None
     extra: Any = None
     if pre_setup:
         extra = pre_setup(cfg, router)
