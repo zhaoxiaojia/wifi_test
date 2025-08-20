@@ -14,8 +14,6 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 import re
 import shutil
 import subprocess
-import json
-
 import pytest
 import csv
 from src.tools.connect_tool.adb import adb
@@ -28,7 +26,6 @@ from src.tools.router_tool.Router import Router
 
 # pytest_plugins = "util.report_plugin"
 test_results = []
-fixture_param_cache = {}
 import logging
 
 logging.basicConfig(
@@ -95,12 +92,11 @@ def pytest_runtest_setup(item):
 
 @pytest.hookimpl(hookwrapper=True)
 def pytest_fixture_setup(fixturedef, request):
-    logging.info(f"setup {fixturedef.func.__name__} from {fixturedef.func.__module__}, scope={fixturedef.scope}")
-    params = getattr(request, 'param', None)
+    logging.info(
+        f"setup {fixturedef.func.__name__} from {fixturedef.func.__module__}, scope={fixturedef.scope}"
+    )
     params = getattr(request, "param", None)
-    data = {"fixture": fixturedef.func.__name__, "params": repr(params)}
-    print(f"[PYQT_FIX]{json.dumps(data)}", flush=True)
-    fixture_param_cache[fixturedef.func.__name__] = data
+    logging.info(f"fixture params: {repr(params)}")
     outcome = yield
     return outcome.get_result()
 
@@ -122,71 +118,12 @@ def record_test_data(request):
     """
     test_name = request.node.originalname  # 获取测试名称
     logging.info(f'test_name {test_name}')
-    fixture_values = {}  # 存储 fixture 返回值
-
-    tuple_keys_map = {
-        "setup_rf": {
-            4: ["connect_status", "router_info", "rf_step", "rf_tool"],
-            6: [
-                "connect_status",
-                "router_info",
-                "corner_step",
-                "rf_step",
-                "rf_tool",
-                "corner_tool",
-            ],
-        },
-        "setup_corner": {
-            6: [
-                "connect_status",
-                "router_info",
-                "corner_step",
-                "corner_tool",
-                "rf_step_list",
-                "rf_tool",
-            ]
-        },
-        "setup_router": {
-            2: ["connect_status", "router_info"],
-            4: ["connect_status", "router_info", "rf_step_list", "rf_tool"],
-            6: [
-                "connect_status",
-                "router_info",
-                "corner_step_list",
-                "corner_tool",
-                "rf_step_list",
-                "rf_tool",
-            ],
-        },
-    }
-
-    def expand(value, name=None):
-        if isinstance(value, dict):
-            return {k: expand(v, k) for k, v in value.items()}
-        if isinstance(value, tuple):
-            if name in tuple_keys_map and len(value) in tuple_keys_map[name]:
-                keys = tuple_keys_map[name][len(value)]
-                return {k: expand(v, k) for k, v in zip(keys, value)}
-            return [expand(v) for v in value]
-        if isinstance(value, list):
-            return [expand(v) for v in value]
-        return value
-
+    fixture_values = {}
     # 遍历所有 fixture 并存储返回值
     for fixture_name in request.node.fixturenames:
         if fixture_name in request.node.funcargs:
-            fixture_values[fixture_name] = expand(
-                request.node.funcargs[fixture_name], fixture_name
-            )
-    for _name in request.node.fixturenames:
-        _data = fixture_param_cache.pop(_name, None)
-        if _data:
-            print(f"[PYQT_FIX]{json.dumps(_data)}", flush=True)
+            fixture_values[fixture_name] = request.node.funcargs[fixture_name]
 
-    print(
-        f"[PYQT_FIX]{json.dumps({'test': test_name, 'params': fixture_values}, default=str)}",
-        flush=True,
-    )
     # 确保 request.node._store 存在
     request.node._store = getattr(request.node, "_store", {})
     request.node._store["return_value"] = None  # 初始化返回值
