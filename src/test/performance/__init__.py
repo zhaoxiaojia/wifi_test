@@ -119,9 +119,8 @@ def common_setup(request, pre_setup: Callable | None = None) -> Generator[
                     cmd += pytest.dut.CMD_WIFI_HIDE
                 pytest.dut.checkoutput(cmd)
                 time.sleep(5)
-                if pytest.dut.wait_for_wifi_address(
-                    target=re.findall(r'(\d+\.\d+\.\d+\.)', pytest.dut.pc_ip)[0]
-                ):
+                if pytest.dut.wait_for_wifi_address(cmd=cmd,
+                                                    target=re.findall(r'(\d+\.\d+\.\d+\.)', pytest.dut.pc_ip)[0]):
                     connect_status = True
                     break
             except Exception as e:

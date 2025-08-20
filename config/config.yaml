@@ -3,7 +3,7 @@ connect_type:
     device: coco5c6788c23f1804
   telnet:
     ip: 192.168.5.12
-  type: telnet
+  type: adb
 corner_angle:
   ip_address: 192.168.5.11
   step:
@@ -20,7 +20,7 @@ rf_solution:
   model: RC4DAT-8G-95
   step:
   - 65
-  - 66
+  - 70
 router:
   name: asusax88u
   address: 192.168.5.1
@@ -42,5 +42,5 @@ serial_port:
   baud: '961200'
   port: COM5
   status: false
-text_case: test/performance/test_wifi_peak_throughput.py
-csv_path: performance_test_csv/asus/rvr_wifi_setup.csv
+text_case: test/performance/test_wifi_rvr.py
+csv_path: performance_test_csv/asus/rvr_wifi_setup_demo.csv
