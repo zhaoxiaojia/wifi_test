@@ -305,20 +305,21 @@ class RunPage(CardWidget):
     def _append_log(self, msg: str):
         if msg.startswith("[PYQT_FIX]"):
             info = json.loads(msg[len("[PYQT_FIX]"):])
-            base = self.case_info_label.text().split(" (", 1)[0]
-            cur = self.case_info_label.text()
+            base = getattr(self, "_case_name", self.case_info_label.text().split(" (", 1)[0])
             params = info.get("params")
             if params:
+                cur = self.case_info_label.text()
                 cur = (
                     f"{cur}, {info['fixture']}={params}"
                     if "(" in cur
                     else f"{base} ({info['fixture']}={params})"
                 )
-            self.case_info_label.setText(cur)
+                self.case_info_label.setText(cur)
             return
         if msg.startswith("[PYQT_CASE]"):
             fn = msg[len("[PYQT_CASE]"):].strip()
-            self.case_info_label.setText(fn)
+            self.case_info_label.setText(msg[len("[PYQT_CASE]"):])
+            self._case_name = fn
             return
         html = format_log_html(msg)
         self.log_area.append(html)

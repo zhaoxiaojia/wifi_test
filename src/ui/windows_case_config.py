@@ -176,7 +176,7 @@ class CaseConfigPage(CardWidget):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        self.splitter.setSizes([int(self.width() * 0.3), int(self.width() * 0.7)])
+        self.splitter.setSizes([int(self.width() * 0.2), int(self.width() * 0.8)])
 
     def _is_performance_case(self, abs_case_path) -> bool:
         """
