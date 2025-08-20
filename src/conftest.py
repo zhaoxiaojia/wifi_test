@@ -100,6 +100,7 @@ def pytest_fixture_setup(fixturedef, request):
     params = getattr(request, "param", None)
     data = {"fixture": fixturedef.func.__name__, "params": repr(params)}
     print(f"[PYQT_FIX]{json.dumps(data)}", flush=True)
+    fixture_param_cache[fixturedef.func.__name__] = data
     outcome = yield
     return outcome.get_result()
 
@@ -120,7 +121,7 @@ def record_test_data(request):
     自动收集测试用例的 fixture 参数 ids，并存储返回值
     """
     test_name = request.node.originalname  # 获取测试名称
-    logging.info(test_name)
+    logging.info(f'test_name {test_name}')
     fixture_values = {}  # 存储 fixture 返回值
 
     tuple_keys_map = {
@@ -178,7 +179,7 @@ def record_test_data(request):
                 request.node.funcargs[fixture_name], fixture_name
             )
     for _name in request.node.fixturenames:
-        _data = fixture_param_cache.get(_name)
+        _data = fixture_param_cache.pop(_name, None)
         if _data:
             print(f"[PYQT_FIX]{json.dumps(_data)}", flush=True)
 
