@@ -264,10 +264,6 @@ class RunPage(CardWidget):
         self.remaining_time_label.hide()
         progress_layout.addWidget(self.remaining_time_label)
         layout.addLayout(progress_layout)
-        # 当前用例信息展示
-        self.case_info_label = QLabel("", self)
-        apply_theme(self.case_info_label)
-        layout.addWidget(self.case_info_label)
 
         self.log_area = QTextEdit(self)
         self.log_area.setReadOnly(True)
@@ -275,7 +271,10 @@ class RunPage(CardWidget):
         apply_theme(self.log_area)
         self.log_area.document().setMaximumBlockCount(2000)
         layout.addWidget(self.log_area, stretch=5)
-
+        # 当前用例信息展示
+        self.case_info_label = QLabel("", self)
+        apply_theme(self.case_info_label)
+        layout.addWidget(self.case_info_label)
         # 文本进度标签
         self.progress_text = QLabel("Process 0%", self)
         apply_theme(self.progress_text)
@@ -331,7 +330,7 @@ class RunPage(CardWidget):
                 cur = (
                     f"{cur}, {info['fixture']}={params}"
                     if "(" in cur
-                    else f"{base} ({info['fixture']}={params})"
+                    else f"{base} {info['fixture']} : {params}"
                 )
                 self.case_info_label.setText(cur)
             return

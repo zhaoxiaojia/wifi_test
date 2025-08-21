@@ -100,35 +100,35 @@ def pytest_runtest_logreport(report):
             logging.info('*' * 80)
 
 
-@pytest.fixture(autouse=True)
-def record_test_data(request):
-    """
-    自动收集测试用例的 fixture 参数 ids，并存储返回值
-    """
-    test_name = request.node.originalname  # 获取测试名称
-    logging.info(f'test_name {test_name}')
-    fixture_values = {}
-    # 遍历所有 fixture 并存储返回值
-    for fixture_name in request.node.fixturenames:
-        if fixture_name in request.node.funcargs:
-            fixture_values[fixture_name] = request.node.funcargs[fixture_name]
-
-    # 确保 request.node._store 存在
-    request.node._store = getattr(request.node, "_store", {})
-    request.node._store["return_value"] = None  # 初始化返回值
-    request.node._store["fixture_values"] = fixture_values  # 记录 fixture 返回值
-
-    yield  # 让测试执行
-    # 获取测试结果
-    test_result = request.node._store.get("test_result", "UNKNOWN")  # 这里改为从 _store 获取
-    # 获取测试方法的返回值
-    test_return_value = request.node._store.get("return_value", "None")
-    # 存储到全局字典
-    test_results.append({test_name: {
-        "result": test_result,
-        "return_value": test_return_value,
-        "fixtures": fixture_values
-    }})
+# @pytest.fixture(autouse=True)
+# def record_test_data(request):
+#     """
+#     自动收集测试用例的 fixture 参数 ids，并存储返回值
+#     """
+#     test_name = request.node.originalname  # 获取测试名称
+#     logging.info(f'test_name {test_name}')
+#     fixture_values = {}
+#     # 遍历所有 fixture 并存储返回值
+#     for fixture_name in request.node.fixturenames:
+#         if fixture_name in request.node.funcargs:
+#             fixture_values[fixture_name] = request.node.funcargs[fixture_name]
+#
+#     # 确保 request.node._store 存在
+#     request.node._store = getattr(request.node, "_store", {})
+#     request.node._store["return_value"] = None  # 初始化返回值
+#     request.node._store["fixture_values"] = fixture_values  # 记录 fixture 返回值
+#
+#     yield  # 让测试执行
+#     # 获取测试结果
+#     test_result = request.node._store.get("test_result", "UNKNOWN")  # 这里改为从 _store 获取
+#     # 获取测试方法的返回值
+#     test_return_value = request.node._store.get("return_value", "None")
+#     # 存储到全局字典
+#     test_results.append({test_name: {
+#         "result": test_result,
+#         "return_value": test_return_value,
+#         "fixtures": fixture_values
+#     }})
 
 
 def pytest_collection_modifyitems(config, items):
@@ -173,82 +173,82 @@ def pytest_runtest_teardown(item, nextitem):
 
 def pytest_sessionfinish(session, exitstatus):
     csv_file = "../test_results.csv"
-    global test_results  # 确保test_results在函数中可用
-
-    # 定义表头
-    title_data = ['PDU IP', 'PDU Port', 'AP Brand', 'Band', 'Ssid', 'WiFi Mode', 'Bandwidth', 'Security',
-                  'Scan', 'Connect', 'TX Result', 'Channel', 'RSSI', 'TX Criteria', 'TX  Throughtput(Mbps)',
-                  'RX  Result', 'Channel', 'RSSI',
-                  'RX Criteria', 'RX Throughtput(Mbps)']
-
-    # 写入表头
-    with open(csv_file, mode="w", newline="", encoding="utf-8") as file:
-        writer = csv.writer(file, quotechar=' ')
-        writer.writerow(title_data)
-
-    logging.info(test_results)
-
-    row_data = []
-    temp_data = []
-
-    # 处理每个测试结果
-    for test_result in test_results:
-        try:
-            # 获取测试名称
-            test_name = sorted(test_result.keys())[0]
-
-            # 检查是否需要写入前一行数据
-            if test_name in temp_data:
-                if row_data:  # 确保有数据可写
-                    with open(csv_file, mode="a", newline="", encoding="utf-8") as file:
-                        writer = csv.writer(file, quotechar=' ')
-                        writer.writerow(row_data)
-                row_data.clear()
-                temp_data.clear()
-
-            # 获取测试数据
-            data = test_result[test_name]
-
-            # 处理fixtures数据
-            if 'fixtures' in data and data['fixtures']:
-                keys = sorted(data['fixtures'].keys())
-                if data['fixtures'][keys[0]][0] not in row_data:
-                    for j in keys:
-                        try:
-                            logging.info(f"fixture {type(data['fixtures'][j])}")
-                            if isinstance(data['fixtures'][j], dict):
-                                if data['fixtures'][j].get('ip') and data['fixtures'][j]['ip'] not in row_data:
-                                    row_data.append(data['fixtures'][j]['ip'])
-                                if data['fixtures'][j].get('port') and data['fixtures'][j]['port'] not in row_data:
-                                    row_data.append(data['fixtures'][j]['port'])
-                                if data['fixtures'][j].get('brand') and \
-                                        f"{data['fixtures'][j]['brand']} {data['fixtures'][j]['model']}" not in row_data:
-                                    row_data.append(f"{data['fixtures'][j]['brand']} {data['fixtures'][j]['model']}")
-                            elif isinstance(data['fixtures'][j], Router):
-                                router_str = str(data['fixtures'][j]).replace('default,', '')
-                                if router_str not in row_data:
-                                    row_data.append(router_str)
-                        except KeyError as e:
-                            logging.warning(f"KeyError in fixture processing: {e}")
-                            continue  # 继续处理下一个fixture
-
-            temp_data.append(test_name)
-
-            # 添加测试结果和返回值
-            if 'result' in data and data['result']:
-                row_data.append(data['result'])
-            if 'return_value' in data and data['return_value']:
-                row_data.extend([*data['return_value']])
-
-        except (KeyError, IndexError) as e:
-            logging.error(f"Error processing test result: {e}")
-            continue  # 继续处理下一个测试结果
-
-    # 写入最后一行数据
-    if row_data:
-        with open(csv_file, mode="a", newline="", encoding="utf-8") as file:
-            writer = csv.writer(file, quotechar=' ')
-            writer.writerow(row_data)
+    # global test_results  # 确保test_results在函数中可用
+    #
+    # # 定义表头
+    # title_data = ['PDU IP', 'PDU Port', 'AP Brand', 'Band', 'Ssid', 'WiFi Mode', 'Bandwidth', 'Security',
+    #               'Scan', 'Connect', 'TX Result', 'Channel', 'RSSI', 'TX Criteria', 'TX  Throughtput(Mbps)',
+    #               'RX  Result', 'Channel', 'RSSI',
+    #               'RX Criteria', 'RX Throughtput(Mbps)']
+    #
+    # # 写入表头
+    # with open(csv_file, mode="w", newline="", encoding="utf-8") as file:
+    #     writer = csv.writer(file, quotechar=' ')
+    #     writer.writerow(title_data)
+    #
+    # logging.info(test_results)
+    #
+    # row_data = []
+    # temp_data = []
+    #
+    # # 处理每个测试结果
+    # for test_result in test_results:
+    #     try:
+    #         # 获取测试名称
+    #         test_name = sorted(test_result.keys())[0]
+    #
+    #         # 检查是否需要写入前一行数据
+    #         if test_name in temp_data:
+    #             if row_data:  # 确保有数据可写
+    #                 with open(csv_file, mode="a", newline="", encoding="utf-8") as file:
+    #                     writer = csv.writer(file, quotechar=' ')
+    #                     writer.writerow(row_data)
+    #             row_data.clear()
+    #             temp_data.clear()
+    #
+    #         # 获取测试数据
+    #         data = test_result[test_name]
+    #
+    #         # 处理fixtures数据
+    #         if 'fixtures' in data and data['fixtures']:
+    #             keys = sorted(data['fixtures'].keys())
+    #             if data['fixtures'][keys[0]][0] not in row_data:
+    #                 for j in keys:
+    #                     try:
+    #                         logging.info(f"fixture {type(data['fixtures'][j])}")
+    #                         if isinstance(data['fixtures'][j], dict):
+    #                             if data['fixtures'][j].get('ip') and data['fixtures'][j]['ip'] not in row_data:
+    #                                 row_data.append(data['fixtures'][j]['ip'])
+    #                             if data['fixtures'][j].get('port') and data['fixtures'][j]['port'] not in row_data:
+    #                                 row_data.append(data['fixtures'][j]['port'])
+    #                             if data['fixtures'][j].get('brand') and \
+    #                                     f"{data['fixtures'][j]['brand']} {data['fixtures'][j]['model']}" not in row_data:
+    #                                 row_data.append(f"{data['fixtures'][j]['brand']} {data['fixtures'][j]['model']}")
+    #                         elif isinstance(data['fixtures'][j], Router):
+    #                             router_str = str(data['fixtures'][j]).replace('default,', '')
+    #                             if router_str not in row_data:
+    #                                 row_data.append(router_str)
+    #                     except KeyError as e:
+    #                         logging.warning(f"KeyError in fixture processing: {e}")
+    #                         continue  # 继续处理下一个fixture
+    #
+    #         temp_data.append(test_name)
+    #
+    #         # 添加测试结果和返回值
+    #         if 'result' in data and data['result']:
+    #             row_data.append(data['result'])
+    #         if 'return_value' in data and data['return_value']:
+    #             row_data.extend([*data['return_value']])
+    #
+    #     except (KeyError, IndexError) as e:
+    #         logging.error(f"Error processing test result: {e}")
+    #         continue  # 继续处理下一个测试结果
+    #
+    # # 写入最后一行数据
+    # if row_data:
+    #     with open(csv_file, mode="a", newline="", encoding="utf-8") as file:
+    #         writer = csv.writer(file, quotechar=' ')
+    #         writer.writerow(row_data)
 
     shutil.copy("pytest.log", "debug.log")
     shutil.move("debug.log", pytest.testResult.logdir)
