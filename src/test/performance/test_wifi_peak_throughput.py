@@ -13,30 +13,24 @@ import logging
 from src.test import get_testdata
 import pytest
 
-from src.tools.config_loader import load_config
-
 from src.test.performance import common_setup, init_router
 
-cfg = load_config(refresh=True)
-test_data = get_testdata(init_router(cfg))
+test_data = get_testdata(init_router())
 
 
 @pytest.fixture(scope='session', params=test_data, ids=[str(i) for i in test_data])
 def setup_router(request):
     router_info = request.param
-    cfg = load_config(refresh=True)
-    router = init_router(cfg)
-    pre = getattr(request.module, 'pre_setup', None)
-    extra = pre(cfg, router) if callable(pre) else None
-    connect_status = common_setup(cfg, router, router_info)
+    router = init_router()
+    connect_status = common_setup(router, router_info)
     try:
-        yield connect_status, router_info, None, extra
+        yield connect_status, router_info
     finally:
         pytest.dut.kill_iperf()
 
 
 def test_rvr(setup_router):
-    connect_status, router_info, _, _ = setup_router
+    connect_status, router_info = setup_router
     if not connect_status:
         logging.info("Can't connect wifi ,input 0")
         with open(pytest.testResult.detail_file, 'a') as f:
