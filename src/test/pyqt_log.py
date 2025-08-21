@@ -18,7 +18,7 @@ def log_fixture_params(tag="FIX", name=None):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             request = kwargs.get("request") or args[0]
-            pyqt_log(tag, name or func.__name__, request.param)
+            pyqt_log(tag, name or func.__name__, str(request.param))
             return func(*args, **kwargs)
 
         return wrapper
