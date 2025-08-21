@@ -25,8 +25,9 @@ test_data = get_testdata(init_router())
 corner_step_list = get_corner_step_list()
 
 
-@log_fixture_params()
+
 @pytest.fixture(scope='session', params=test_data, ids=[str(i) for i in test_data])
+@log_fixture_params()
 def setup_router(request):
     router_info = request.param
     router = init_router()
@@ -38,8 +39,9 @@ def setup_router(request):
         pytest.dut.kill_iperf()
 
 
-@log_fixture_params()
+
 @pytest.fixture(scope="function", params=corner_step_list)
+@log_fixture_params()
 def setup_corner(request, setup_router):
     value = request.param[0] if isinstance(request.param, tuple) else request.param
     corner_tool = setup_router[3]

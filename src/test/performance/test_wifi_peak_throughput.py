@@ -19,8 +19,9 @@ from src.test.performance import common_setup, init_router
 test_data = get_testdata(init_router())
 
 
-@log_fixture_params()
+
 @pytest.fixture(scope='session', params=test_data, ids=[str(i) for i in test_data])
+@log_fixture_params()
 def setup_router(request):
     router_info = request.param
     router = init_router()
