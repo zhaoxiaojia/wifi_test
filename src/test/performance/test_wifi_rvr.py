@@ -26,8 +26,9 @@ test_data = get_testdata(init_router())
 rf_step_list = get_rf_step_list()
 
 
-@log_fixture_params()
+
 @pytest.fixture(scope='session', params=test_data, ids=[str(i) for i in test_data])
+@log_fixture_params()
 def setup_router(request):
     router_info = request.param
     router = init_router()
@@ -43,8 +44,9 @@ def setup_router(request):
         time.sleep(10)
 
 
-@log_fixture_params()
+
 @pytest.fixture(scope='function', params=rf_step_list)
+@log_fixture_params()
 def setup_rf(request, setup_router):
     db_set = request.param[1] if isinstance(request.param, tuple) else request.param
     rf_tool = setup_router[3]

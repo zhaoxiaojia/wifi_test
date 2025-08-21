@@ -90,17 +90,6 @@ def pytest_runtest_setup(item):
     print(f"[PYQT_CASE]{item.originalname}", flush=True)
 
 
-@pytest.hookimpl(hookwrapper=True)
-def pytest_fixture_setup(fixturedef, request):
-    logging.info(
-        f"setup {fixturedef.func.__name__} from {fixturedef.func.__module__}, scope={fixturedef.scope}"
-    )
-    params = getattr(request, "param", None)
-    logging.info(f"fixture params: {repr(params)}")
-    outcome = yield
-    return outcome.get_result()
-
-
 def pytest_runtest_logreport(report):
     if report.when == "setup" and hasattr(report, "nodeid"):
         test_nodeid = report.nodeid
