@@ -16,20 +16,17 @@ import pytest
 
 from src.test.performance import common_setup, init_router
 
-test_data = get_testdata(init_router())
+_test_data = get_testdata(init_router())
 
 
-
-@pytest.fixture(scope='session', params=test_data, ids=[str(i) for i in test_data])
+@pytest.fixture(scope='session', params=_test_data, ids=[str(i) for i in _test_data])
 @log_fixture_params()
 def setup_router(request):
     router_info = request.param
     router = init_router()
     connect_status = common_setup(router, router_info)
-    try:
-        yield connect_status, router_info
-    finally:
-        pytest.dut.kill_iperf()
+    yield connect_status, router_info
+    pytest.dut.kill_iperf()
 
 
 def test_rvr(setup_router):

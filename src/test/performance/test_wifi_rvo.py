@@ -21,33 +21,27 @@ from src.test.performance import (
     init_router,
 )
 
-test_data = get_testdata(init_router())
-corner_step_list = get_corner_step_list()
+_test_data = get_testdata(init_router())
 
 
-
-@pytest.fixture(scope='session', params=test_data, ids=[str(i) for i in test_data])
+@pytest.fixture(scope='session', params=_test_data, ids=[str(i) for i in _test_data])
 @log_fixture_params()
 def setup_router(request):
     router_info = request.param
     router = init_router()
-    corner_tool, step_list = init_corner()
     connect_status = common_setup(router, router_info)
-    try:
-        yield connect_status, router_info, step_list, corner_tool
-    finally:
-        pytest.dut.kill_iperf()
+    yield (connect_status, router_info)
+    pytest.dut.kill_iperf()
 
 
-
-@pytest.fixture(scope="function", params=corner_step_list)
+@pytest.fixture(scope="function", params=get_corner_step_list())
 @log_fixture_params()
 def setup_corner(request, setup_router):
     value = request.param[0] if isinstance(request.param, tuple) else request.param
-    corner_tool = setup_router[3]
+    corner_tool, step_list = init_corner()
     corner_tool.execute_turntable_cmd("rt", angle=value)
     yield setup_router[0], setup_router[1], value, corner_tool
-
+    pytest.dut.kill_iperf()
 
 def test_rvo(setup_corner):
     connect_status, router_info, corner_set, corner_tool = setup_corner
