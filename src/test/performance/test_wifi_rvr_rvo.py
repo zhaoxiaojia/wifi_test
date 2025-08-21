@@ -12,7 +12,7 @@ Description：
 import logging
 import time
 from src.test import get_testdata
-from src.test.pyqt_log import pyqt_log
+from src.test.pyqt_log import log_fixture_params
 import pytest
 
 from src.test.performance import (
@@ -29,9 +29,9 @@ rf_step_list = get_rf_step_list()
 corner_step_list = get_corner_step_list()
 
 
+@log_fixture_params()
 @pytest.fixture(scope='session', params=test_data, ids=[str(i) for i in test_data])
 def setup_router(request):
-    pyqt_log('FIX', 'setup_router', request.param)
     router_info = request.param
     router = init_router()
     rf_tool, rf_list = init_rf()
@@ -49,9 +49,9 @@ def setup_router(request):
         time.sleep(10)
 
 
+@log_fixture_params()
 @pytest.fixture(scope="function", params=corner_step_list)
 def setup_corner(request, setup_router):
-    pyqt_log('FIX', 'setup_corner', request.param)
     corner_set = request.param[0] if isinstance(request.param, tuple) else request.param
     rf_step_list = setup_router[2][1]
     rf_tool, corner_tool = setup_router[3]
@@ -66,9 +66,9 @@ def setup_corner(request, setup_router):
     )
 
 
+@log_fixture_params()
 @pytest.fixture(scope="function", params=rf_step_list)
 def setup_rf(request, setup_corner):
-    pyqt_log('FIX', 'setup_rf', request.param)
     db_set = request.param[1] if isinstance(request.param, tuple) else request.param
     connect_status, router_info, corner_set, corner_tool, _, rf_tool = setup_corner
     rf_tool.execute_rf_cmd(db_set)

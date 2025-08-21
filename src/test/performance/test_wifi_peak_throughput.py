@@ -11,7 +11,7 @@ Description：
 
 import logging
 from src.test import get_testdata
-from src.test.pyqt_log import pyqt_log
+from src.test.pyqt_log import log_fixture_params
 import pytest
 
 from src.test.performance import common_setup, init_router
@@ -19,9 +19,9 @@ from src.test.performance import common_setup, init_router
 test_data = get_testdata(init_router())
 
 
+@log_fixture_params()
 @pytest.fixture(scope='session', params=test_data, ids=[str(i) for i in test_data])
 def setup_router(request):
-    pyqt_log('FIX', 'setup_router', request.param)
     router_info = request.param
     router = init_router()
     connect_status = common_setup(router, router_info)
