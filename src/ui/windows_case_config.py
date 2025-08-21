@@ -338,10 +338,10 @@ class CaseConfigPage(CardWidget):
     def on_rf_model_changed(self, model_str):
         """
         切换rf_solution.model时，仅展示当前选项参数
-        现在只有XIN-YI，如果有别的model，添加隐藏/显示逻辑
+        现在只有RS232Board5，如果有别的model，添加隐藏/显示逻辑
         """
-        # 当前只有XIN-YI，后续有其它model可以加if-else
-        self.xin_group.setVisible(model_str == "XIN-YI")
+        # 当前只有RS232Board5，后续有其它model可以加if-else
+        self.xin_group.setVisible(model_str == "RS232Board5")
         self.rc4_group.setVisible(model_str == "RC4DAT-8G-95")
         self.rack_group.setVisible(model_str == "RADIORACK-4-220")
 
@@ -513,13 +513,13 @@ class CaseConfigPage(CardWidget):
                 vbox = QVBoxLayout(group)
                 # -------- 下拉：选择型号 --------
                 self.rf_model_combo = ComboBox(self)
-                self.rf_model_combo.addItems(["XIN-YI", "RC4DAT-8G-95", "RADIORACK-4-220"])
-                self.rf_model_combo.setCurrentText(value.get("model", "XIN-YI"))
+                self.rf_model_combo.addItems(["RS232Board5", "RC4DAT-8G-95", "RADIORACK-4-220"])
+                self.rf_model_combo.setCurrentText(value.get("model", "RS232Board5"))
                 self.rf_model_combo.currentTextChanged.connect(self.on_rf_model_changed)
                 vbox.addWidget(QLabel("Model:"))
                 vbox.addWidget(self.rf_model_combo)
 
-                # ========== ① XIN-YI 参数区（目前无额外字段，可放提醒文字） ==========
+                # ========== ① RS232Board5 参数区（目前无额外字段，可放提醒文字） ==========
                 self.xin_group = QWidget()
                 xin_box = QVBoxLayout(self.xin_group)
                 xin_box.addWidget(QLabel("SH - New Wi-Fi full-wave anechoic chamber "))

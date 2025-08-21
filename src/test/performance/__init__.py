@@ -22,9 +22,9 @@ def init_rf():
     cfg = load_config(refresh=True)
     rf_solution = cfg['rf_solution']
     model = rf_solution['model']
-    if model not in ['RADIORACK-4-220', 'RC4DAT-8G-95', 'XIN-YI']:
+    if model not in ['RADIORACK-4-220', 'RC4DAT-8G-95', 'RS232Board5']:
         raise EnvironmentError("Doesn't support this model")
-    if model == 'XIN-YI':
+    if model == 'RS232Board5':
         rf_tool = rs()
     else:
         rf_ip = rf_solution[model]['ip_address']
