@@ -10,8 +10,8 @@ Description：
 """
 
 import logging
-import json
 from src.test import get_testdata
+from src.test.pyqt_log import pyqt_log
 import pytest
 
 from src.test.performance import common_setup, init_router
@@ -21,7 +21,7 @@ test_data = get_testdata(init_router())
 
 @pytest.fixture(scope='session', params=test_data, ids=[str(i) for i in test_data])
 def setup_router(request):
-    print(f"[PYQT_FIX]{json.dumps({'fixture': 'setup_router', 'params': request.param})}", flush=True)
+    pyqt_log('FIX', 'setup_router', request.param)
     router_info = request.param
     router = init_router()
     connect_status = common_setup(router, router_info)
