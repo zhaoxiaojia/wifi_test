@@ -250,10 +250,10 @@ class RunPage(CardWidget):
 
         layout = QVBoxLayout(self)
         layout.setSpacing(16)
-        self.case_info_label = StrongBodyLabel(self.display_case_path)
-        apply_theme(self.case_info_label)
-        self.case_info_label.setVisible(True)
-        layout.addWidget(self.case_info_label)
+        self.case_path_label = StrongBodyLabel(self.display_case_path)
+        apply_theme(self.case_path_label)
+        self.case_path_label.setVisible(True)
+        layout.addWidget(self.case_path_label)
 
         self.progress = ProgressBar(self)
         self.progress.setValue(0)
@@ -272,7 +272,7 @@ class RunPage(CardWidget):
         self.log_area.document().setMaximumBlockCount(2000)
         layout.addWidget(self.log_area, stretch=5)
         # 当前用例信息展示
-        self.case_info_label = QLabel("", self)
+        self.case_info_label = QLabel("Current execute : ", self)
         apply_theme(self.case_info_label)
         layout.addWidget(self.case_info_label)
         # 文本进度标签
@@ -323,7 +323,7 @@ class RunPage(CardWidget):
     def _append_log(self, msg: str):
         if msg.startswith("[PYQT_FIX]"):
             info = json.loads(msg[len("[PYQT_FIX]"):])
-            base = getattr(self, "_case_name", self.case_info_label.text().split(" (", 1)[0])
+            base = self.case_info_label.text().split(" (", 1)[0]
             params = info.get("params")
             if params:
                 cur = self.case_info_label.text()
@@ -336,8 +336,9 @@ class RunPage(CardWidget):
             return
         if msg.startswith("[PYQT_CASE]"):
             fn = msg[len("[PYQT_CASE]"):].strip()
-            self.case_info_label.setText(msg[len("[PYQT_CASE]"):])
-            self._case_name = fn
+            base = f"Current execute : {fn}"
+            self.case_info_label.setText(base)
+            self._case_name = base
             return
         if msg.startswith("[PYQT_CASEINFO]"):
             info = json.loads(msg[len("[PYQT_CASEINFO]"):])

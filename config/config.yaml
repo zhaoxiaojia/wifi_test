@@ -42,5 +42,5 @@ serial_port:
   baud: '961200'
   port: COM5
   status: false
-text_case: test/performance/test_wifi_peak_throughput.py
+text_case: test/performance/test_wifi_rvr.py
 csv_path: performance_test_csv/asus/rvr_wifi_setup_demo.csv
