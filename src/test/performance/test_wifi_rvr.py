@@ -32,9 +32,6 @@ def setup_router(request):
     router_info = request.param
     router = init_router()
     connect_status = common_setup(router, router_info)
-    logging.info('coco' * 40)
-    logging.info(connect_status)
-    logging.info(router_info)
     yield connect_status, router_info
     pytest.dut.kill_iperf()
     logging.info('Reset rf value')
