@@ -17,8 +17,9 @@ from src.tools.connect_tool.lab_device_controller import LabDeviceController
 from src.tools.rs_test import rs
 
 
-def init_rf(cfg: dict):
+def init_rf():
     """根据配置初始化射频衰减器"""
+    cfg = load_config(refresh=True)
     rf_solution = cfg['rf_solution']
     model = rf_solution['model']
     if model not in ['RADIORACK-4-220', 'RC4DAT-8G-95', 'XIN-YI']:
@@ -37,8 +38,9 @@ def init_rf(cfg: dict):
     return rf_tool, rf_step_list
 
 
-def init_corner(cfg: dict):
+def init_corner():
     """根据配置初始化转台"""
+    cfg = load_config(refresh=True)
     corner_ip = cfg['corner_angle']['ip_address']
     corner_tool = rs() if corner_ip == '192.168.5.11' else LabDeviceController(corner_ip)
     logging.info(f'corner_ip {corner_ip}')
@@ -51,19 +53,15 @@ def init_corner(cfg: dict):
     return corner_tool, corner_step_list
 
 
-def init_router(cfg: dict) -> Router:
+def init_router() -> Router:
     """根据配置返回路由实例"""
+    cfg = load_config(refresh=True)
     router = get_router(cfg['router']['name'])
     logging.info(f'router {router}')
     return router
 
 
-def pre_setup(cfg: dict, router: Router) -> Any:
-    """默认的前置设置示例，测试文件可覆盖"""
-    return None
-
-
-def common_setup(cfg: dict, router: Router, router_info: Router) -> bool:
+def common_setup(router: Router, router_info: Router) -> bool:
     """通用的性能测试前置步骤"""
     logging.info("router setup start")
 
@@ -122,6 +120,7 @@ def common_setup(cfg: dict, router: Router, router_info: Router) -> bool:
     logging.info(f'pc_ip:{pytest.dut.pc_ip}')
     logging.info('dut connected')
 
+    cfg = load_config(refresh=True)
     rvr_tool = cfg['rvr']['tool']
     if rvr_tool == 'ixchariot':
         script = (
@@ -134,3 +133,15 @@ def common_setup(cfg: dict, router: Router, router_info: Router) -> bool:
         time.sleep(3)
 
     return connect_status
+
+
+def get_rf_step_list():
+    cfg = load_config(refresh=True)
+    rf_solution = cfg['rf_solution']
+    return [i for i in range(*rf_solution['step'])][::3]
+
+
+def get_corner_step_list():
+    cfg = load_config(refresh=True)
+    corner_step = cfg['corner_angle']['step']
+    return [i for i in range(*corner_step)][::45]
