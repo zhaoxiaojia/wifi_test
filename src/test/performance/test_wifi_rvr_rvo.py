@@ -24,62 +24,47 @@ from src.test.performance import (
     init_router,
 )
 
-test_data = get_testdata(init_router())
-rf_step_list = get_rf_step_list()
-corner_step_list = get_corner_step_list()
+_test_data = get_testdata(init_router())
+router = init_router()
+rf_tool = init_rf()
+corner_tool = init_corner()
 
-
-
-@pytest.fixture(scope='session', params=test_data, ids=[str(i) for i in test_data])
+@pytest.fixture(scope='session', params=_test_data, ids=[str(i) for i in _test_data])
 @log_fixture_params()
 def setup_router(request):
     router_info = request.param
-    router = init_router()
-    rf_tool, rf_list = init_rf()
-    corner_tool, corner_list = init_corner()
     connect_status = common_setup(router, router_info)
-    step_list = (corner_list, rf_list)
-    tools = (rf_tool, corner_tool)
-    try:
-        yield connect_status, router_info, step_list, tools
-    finally:
-        pytest.dut.kill_iperf()
-        logging.info('Reset rf value')
-        rf_tool.execute_rf_cmd(0)
-        logging.info(rf_tool.get_rf_current_value())
-        time.sleep(10)
+    yield connect_status, router_info
+    pytest.dut.kill_iperf()
+    logging.info('Reset rf value')
+    rf_tool.execute_rf_cmd(0)
+    logging.info(rf_tool.get_rf_current_value())
+    time.sleep(10)
 
 
-
-@pytest.fixture(scope="function", params=corner_step_list)
+@pytest.fixture(scope="function", params=get_corner_step_list())
 @log_fixture_params()
 def setup_corner(request, setup_router):
-    corner_set = request.param[0] if isinstance(request.param, tuple) else request.param
-    rf_step_list = setup_router[2][1]
-    rf_tool, corner_tool = setup_router[3]
+    corner_set = request.param
     corner_tool.execute_turntable_cmd("rt", angle=corner_set)
     yield (
         setup_router[0],
         setup_router[1],
-        corner_set,
-        corner_tool,
-        rf_step_list,
-        rf_tool,
+        corner_set
     )
 
 
-
-@pytest.fixture(scope="function", params=rf_step_list)
+@pytest.fixture(scope="function", params=get_rf_step_list())
 @log_fixture_params()
-def setup_rf(request, setup_corner):
-    db_set = request.param[1] if isinstance(request.param, tuple) else request.param
-    connect_status, router_info, corner_set, corner_tool, _, rf_tool = setup_corner
+def setup_attenuation(request, setup_corner):
+    db_set = request.param
+    connect_status, router_info, corner_set = setup_corner
     rf_tool.execute_rf_cmd(db_set)
-    yield connect_status, router_info, corner_set, db_set, rf_tool, corner_tool
-
+    yield (connect_status, router_info, corner_set, db_set)
+    pytest.dut.kill_iperf()
 
 def test_rvr_rvo(setup_rf):
-    connect_status, router_info, corner_set, db_set, rf_tool, corner_tool = setup_rf
+    connect_status, router_info, corner_set, db_set = setup_rf
     if not connect_status:
         logging.info("Can't connect wifi ,input 0")
         with open(pytest.testResult.detail_file, 'a') as f:

@@ -22,40 +22,39 @@ from src.test.performance import (
     init_router,
 )
 
-test_data = get_testdata(init_router())
-rf_step_list = get_rf_step_list()
+_test_data = get_testdata(init_router())
+rf_tool = init_rf()
 
 
-
-@pytest.fixture(scope='session', params=test_data, ids=[str(i) for i in test_data])
+@pytest.fixture(scope='session', params=_test_data, ids=[str(i) for i in _test_data])
 @log_fixture_params()
 def setup_router(request):
     router_info = request.param
     router = init_router()
-    rf_tool, step_list = init_rf()
     connect_status = common_setup(router, router_info)
-    try:
-        yield connect_status, router_info, step_list, rf_tool
-    finally:
-        pytest.dut.kill_iperf()
-        logging.info('Reset rf value')
-        rf_tool.execute_rf_cmd(0)
-        logging.info(rf_tool.get_rf_current_value())
-        time.sleep(10)
+    logging.info('coco' * 40)
+    logging.info(connect_status)
+    logging.info(router_info)
+    yield connect_status, router_info
+    pytest.dut.kill_iperf()
+    logging.info('Reset rf value')
+    rf_tool.execute_rf_cmd(0)
+    logging.info(rf_tool.get_rf_current_value())
+    time.sleep(30)
 
 
-
-@pytest.fixture(scope='function', params=rf_step_list)
+@pytest.fixture(scope='function', params=get_rf_step_list())
 @log_fixture_params()
-def setup_rf(request, setup_router):
-    db_set = request.param[1] if isinstance(request.param, tuple) else request.param
-    rf_tool = setup_router[3]
+def setup_attenuation(request, setup_router):
+    db_set = request.param
+    connect_status, router_info = setup_router
     rf_tool.execute_rf_cmd(db_set)
-    yield setup_router[0], setup_router[1], db_set, rf_tool
+    yield (connect_status, router_info, db_set)
+    pytest.dut.kill_iperf()
 
 
-def test_rvr(setup_rf):
-    connect_status, router_info, db_set, rf_tool = setup_rf
+def test_rvr(setup_attenuation):
+    connect_status, router_info, db_set = setup_attenuation
     if not connect_status:
         logging.info("Can't connect wifi ,input 0")
         with open(pytest.testResult.detail_file, 'a') as f:

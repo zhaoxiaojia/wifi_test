@@ -272,7 +272,7 @@ class RunPage(CardWidget):
         self.log_area.document().setMaximumBlockCount(2000)
         layout.addWidget(self.log_area, stretch=5)
         # 当前用例信息展示
-        self.case_info_label = QLabel("Current execute : ", self)
+        self.case_info_label = QLabel("Current case : ", self)
         apply_theme(self.case_info_label)
         layout.addWidget(self.case_info_label)
         # 文本进度标签
@@ -336,7 +336,7 @@ class RunPage(CardWidget):
             return
         if msg.startswith("[PYQT_CASE]"):
             fn = msg[len("[PYQT_CASE]"):].strip()
-            base = f"Current execute : {fn}"
+            base = f"Current case : {fn}"
             self.case_info_label.setText(base)
             self._case_name = base
             return

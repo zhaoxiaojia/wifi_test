@@ -35,12 +35,11 @@ def init_rf():
         rf_ip = rf_solution[model]['ip_address']
         rf_tool = LabDeviceController(rf_ip)
         logging.info(f'rf_ip {rf_ip}')
-    rf_step_list = get_rf_step_list()
     logging.info('Reset rf value')
     rf_tool.execute_rf_cmd(0)
     logging.info(rf_tool.get_rf_current_value())
-    time.sleep(30)
-    return rf_tool, rf_step_list
+    time.sleep(3)
+    return rf_tool
 
 
 def init_corner():
@@ -49,12 +48,11 @@ def init_corner():
     corner_ip = cfg['corner_angle']['ip_address']
     corner_tool = rs() if corner_ip == '192.168.5.11' else LabDeviceController(corner_ip)
     logging.info(f'corner_ip {corner_ip}')
-    corner_step_list = get_corner_step_list()
     logging.info('Reset corner')
     corner_tool.set_turntable_zero()
     logging.info(corner_tool.get_turntanle_current_angle())
     time.sleep(3)
-    return corner_tool, corner_step_list
+    return corner_tool
 
 
 def init_router() -> Router:
