@@ -7,6 +7,7 @@ import logging
 import re
 import time
 from typing import Any
+from functools import lru_cache
 
 import pytest
 
@@ -15,11 +16,15 @@ from src.tools.router_tool.Router import Router
 from src.tools.router_tool.router_factory import get_router
 from src.tools.connect_tool.lab_device_controller import LabDeviceController
 from src.tools.rs_test import rs
+@lru_cache(maxsize=1)
+def get_cfg() -> Any:
+    """返回最新的配置"""
+    return load_config(refresh=True)
 
 
 def init_rf():
     """根据配置初始化射频衰减器"""
-    cfg = load_config(refresh=True)
+    cfg = get_cfg()
     rf_solution = cfg['rf_solution']
     model = rf_solution['model']
     if model not in ['RADIORACK-4-220', 'RC4DAT-8G-95', 'RS232Board5']:
@@ -30,7 +35,7 @@ def init_rf():
         rf_ip = rf_solution[model]['ip_address']
         rf_tool = LabDeviceController(rf_ip)
         logging.info(f'rf_ip {rf_ip}')
-    rf_step_list = [i for i in range(*rf_solution['step'])][::3]
+    rf_step_list = get_rf_step_list()
     logging.info('Reset rf value')
     rf_tool.execute_rf_cmd(0)
     logging.info(rf_tool.get_rf_current_value())
@@ -40,12 +45,11 @@ def init_rf():
 
 def init_corner():
     """根据配置初始化转台"""
-    cfg = load_config(refresh=True)
+    cfg = get_cfg()
     corner_ip = cfg['corner_angle']['ip_address']
     corner_tool = rs() if corner_ip == '192.168.5.11' else LabDeviceController(corner_ip)
     logging.info(f'corner_ip {corner_ip}')
-    corner_step = cfg['corner_angle']['step']
-    corner_step_list = [i for i in range(*corner_step)][::45]
+    corner_step_list = get_corner_step_list()
     logging.info('Reset corner')
     corner_tool.set_turntable_zero()
     logging.info(corner_tool.get_turntanle_current_angle())
@@ -55,7 +59,7 @@ def init_corner():
 
 def init_router() -> Router:
     """根据配置返回路由实例"""
-    cfg = load_config(refresh=True)
+    cfg = get_cfg()
     router = get_router(cfg['router']['name'])
     logging.info(f'router {router}')
     return router
@@ -135,13 +139,15 @@ def common_setup(router: Router, router_info: Router) -> bool:
     return connect_status
 
 
+@lru_cache(maxsize=1)
 def get_rf_step_list():
-    cfg = load_config(refresh=True)
+    cfg = get_cfg()
     rf_solution = cfg['rf_solution']
     return [i for i in range(*rf_solution['step'])][::3]
 
 
+@lru_cache(maxsize=1)
 def get_corner_step_list():
-    cfg = load_config(refresh=True)
+    cfg = get_cfg()
     corner_step = cfg['corner_angle']['step']
     return [i for i in range(*corner_step)][::45]
