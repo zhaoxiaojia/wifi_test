@@ -14,38 +14,31 @@ import time
 from src.test import get_testdata
 import pytest
 
-from src.tools.config_loader import load_config
+from src.test.performance import (
+    common_setup,
+    get_rf_step_list,
+    init_rf,
+    init_router,
+)
 
-from src.test.performance import common_setup, init_rf, init_router
-
-cfg = load_config(refresh=True)
-test_data = get_testdata(init_router(cfg))
-rf_step_list = [i for i in range(*cfg['rf_solution']['step'])][::3]
-
-
-def pre_setup(cfg, _router):
-    rf_tool, _ = init_rf(cfg)
-    return rf_tool
+test_data = get_testdata(init_router())
+rf_step_list = get_rf_step_list()
 
 
 @pytest.fixture(scope='session', params=test_data, ids=[str(i) for i in test_data])
 def setup_router(request):
     router_info = request.param
-    cfg = load_config(refresh=True)
-    router = init_router(cfg)
-    pre = getattr(request.module, 'pre_setup', None)
-    extra = pre(cfg, router) if callable(pre) else None
-    connect_status = common_setup(cfg, router, router_info)
-    step_list = rf_step_list
+    router = init_router()
+    rf_tool, step_list = init_rf()
+    connect_status = common_setup(router, router_info)
     try:
-        yield connect_status, router_info, step_list, extra
+        yield connect_status, router_info, step_list, rf_tool
     finally:
         pytest.dut.kill_iperf()
-        if extra:
-            logging.info('Reset rf value')
-            extra.execute_rf_cmd(0)
-            logging.info(extra.get_rf_current_value())
-            time.sleep(10)
+        logging.info('Reset rf value')
+        rf_tool.execute_rf_cmd(0)
+        logging.info(rf_tool.get_rf_current_value())
+        time.sleep(10)
 
 
 @pytest.fixture(scope='function', params=rf_step_list)
