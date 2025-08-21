@@ -11,6 +11,7 @@ Description：
 
 import logging
 import time
+import json
 from src.test import get_testdata
 import pytest
 
@@ -27,6 +28,7 @@ rf_step_list = get_rf_step_list()
 
 @pytest.fixture(scope='session', params=test_data, ids=[str(i) for i in test_data])
 def setup_router(request):
+    print(f"[PYQT_FIX]{json.dumps({'fixture': 'setup_router', 'params': request.param})}", flush=True)
     router_info = request.param
     router = init_router()
     rf_tool, step_list = init_rf()
@@ -43,6 +45,7 @@ def setup_router(request):
 
 @pytest.fixture(scope='function', params=rf_step_list)
 def setup_rf(request, setup_router):
+    print(f"[PYQT_FIX]{json.dumps({'fixture': 'setup_rf', 'params': request.param})}", flush=True)
     db_set = request.param[1] if isinstance(request.param, tuple) else request.param
     rf_tool = setup_router[3]
     rf_tool.execute_rf_cmd(db_set)
