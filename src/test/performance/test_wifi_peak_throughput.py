@@ -10,6 +10,7 @@ Description：
 """
 
 import logging
+import json
 from src.test import get_testdata
 import pytest
 
@@ -20,6 +21,7 @@ test_data = get_testdata(init_router())
 
 @pytest.fixture(scope='session', params=test_data, ids=[str(i) for i in test_data])
 def setup_router(request):
+    print(f"[PYQT_FIX]{json.dumps({'fixture': 'setup_router', 'params': request.param})}", flush=True)
     router_info = request.param
     router = init_router()
     connect_status = common_setup(router, router_info)
