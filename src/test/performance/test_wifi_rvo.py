@@ -10,8 +10,8 @@ Description：
 """
 
 import logging
-import json
 from src.test import get_testdata
+from src.test.pyqt_log import pyqt_log
 import pytest
 
 from src.test.performance import (
@@ -27,7 +27,7 @@ corner_step_list = get_corner_step_list()
 
 @pytest.fixture(scope='session', params=test_data, ids=[str(i) for i in test_data])
 def setup_router(request):
-    print(f"[PYQT_FIX]{json.dumps({'fixture': 'setup_router', 'params': request.param})}", flush=True)
+    pyqt_log('FIX', 'setup_router', request.param)
     router_info = request.param
     router = init_router()
     corner_tool, step_list = init_corner()
@@ -40,7 +40,7 @@ def setup_router(request):
 
 @pytest.fixture(scope="function", params=corner_step_list)
 def setup_corner(request, setup_router):
-    print(f"[PYQT_FIX]{json.dumps({'fixture': 'setup_corner', 'params': request.param})}", flush=True)
+    pyqt_log('FIX', 'setup_corner', request.param)
     value = request.param[0] if isinstance(request.param, tuple) else request.param
     corner_tool = setup_router[3]
     corner_tool.execute_turntable_cmd("rt", angle=value)
