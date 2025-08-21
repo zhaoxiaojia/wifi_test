@@ -11,7 +11,7 @@ Description：
 
 import logging
 from src.test import get_testdata
-from src.test.pyqt_log import pyqt_log
+from src.test.pyqt_log import log_fixture_params
 import pytest
 
 from src.test.performance import (
@@ -25,9 +25,9 @@ test_data = get_testdata(init_router())
 corner_step_list = get_corner_step_list()
 
 
+@log_fixture_params()
 @pytest.fixture(scope='session', params=test_data, ids=[str(i) for i in test_data])
 def setup_router(request):
-    pyqt_log('FIX', 'setup_router', request.param)
     router_info = request.param
     router = init_router()
     corner_tool, step_list = init_corner()
@@ -38,9 +38,9 @@ def setup_router(request):
         pytest.dut.kill_iperf()
 
 
+@log_fixture_params()
 @pytest.fixture(scope="function", params=corner_step_list)
 def setup_corner(request, setup_router):
-    pyqt_log('FIX', 'setup_corner', request.param)
     value = request.param[0] if isinstance(request.param, tuple) else request.param
     corner_tool = setup_router[3]
     corner_tool.execute_turntable_cmd("rt", angle=value)
