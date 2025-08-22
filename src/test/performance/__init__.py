@@ -70,7 +70,7 @@ def common_setup(router: Router, router_info: Router) -> bool:
     pytest.dut.skip_tx = False
     pytest.dut.skip_rx = False
 
-    router.change_setting(router_info), "Can't set ap , pls check first"
+    # router.change_setting(router_info), "Can't set ap , pls check first"
     # if pytest.connect_type == 'telnet':
     #     if router_info.band == "2.4G":
     #         router.change_country("欧洲")

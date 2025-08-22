@@ -2,7 +2,7 @@ connect_type:
   adb:
     device: coco5c6788c23f1804
   telnet:
-    ip: 192.168.5.209
+    ip: 192.168.5.12
   type: telnet
 corner_angle:
   ip_address: 192.168.5.11
