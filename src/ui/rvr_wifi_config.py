@@ -72,8 +72,6 @@ class RvrWifiConfigPage(CardWidget):
         addr = addr_edit.text() if addr_edit is not None else None
         self.router, self.router_name = self._load_router(router_name, addr)
         self.headers, self.rows = self._load_csv()
-        # 当前页面使用的路由器 SSID
-        self.ssid: str = ""
         # 标记是否处于数据加载阶段，用于屏蔽信号回调
         self._loading = False
         main_layout = QHBoxLayout(self)
@@ -194,12 +192,12 @@ class RvrWifiConfigPage(CardWidget):
 
     def set_router_credentials(self, ssid: str, passwd: str) -> None:
         """设置路由器凭据并自动填充密码输入框"""
-        self.ssid = ssid
+        self.ssid_edit.setText(ssid)
         self.passwd_edit.setText(passwd)
 
     def get_router_credentials(self) -> tuple[str, str]:
         """返回当前页面的路由器 SSID 和密码"""
-        return self.ssid, self.passwd_edit.text()
+        return self.ssid_edit.text(), self.passwd_edit.text()
 
     def _load_router(self, name: str | None = None, address: str | None = None):
         from src.tools.config_loader import load_config
