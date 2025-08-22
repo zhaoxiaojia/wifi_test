@@ -437,6 +437,7 @@ class RunPage(CardWidget):
         h = self._remaining_seconds // 3600
         m = (self._remaining_seconds % 3600) // 60
         s = self._remaining_seconds % 60
+
         self.remaining_time_label.setText(
             f"Remaining : {h:02d}:{m:02d}:{s:02d}"
         )
@@ -556,6 +557,7 @@ class RunPage(CardWidget):
         self._remaining_time_timer.stop()
         self.remaining_time_label.hide()
         self._remaining_seconds = 0
+
         runner = getattr(self, "runner", None)
         if not runner:
             return
