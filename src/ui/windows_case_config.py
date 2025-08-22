@@ -109,8 +109,6 @@ class CaseConfigPage(CardWidget):
         self._refreshing = False
         self._pending_path: str | None = None
         self.field_widgets: dict[str, QWidget] = {}
-        self.router_ssid_2g = ""
-        self.router_ssid_5g = ""
         self.router_obj = None
         self.selected_csv_path: str | None = None
         # -------------------- layout --------------------
@@ -354,25 +352,7 @@ class CaseConfigPage(CardWidget):
     def on_serial_enabled_changed(self, text: str):
         self.serial_cfg_group.setVisible(text == "True")
 
-    def _load_router_wifi_info(self, name: str):
-        cfg = self.config.get("router", {})
-        if cfg.get("name") == name:
-            self.router_ssid_2g = cfg.get("ssid_2g", f"{name}_2g")
-            self.router_ssid_5g = cfg.get("ssid_5g", f"{name}_5g")
-        else:
-            self.router_ssid_2g = f"{name}_2g"
-            self.router_ssid_5g = f"{name}_5g"
-
-    def get_router_wifi_info(self):
-        return (
-            self.router_ssid_2g,
-            self.router_ssid_5g,
-        )
-
     def on_router_changed(self, name: str):
-        self._load_router_wifi_info(name)
-        self.ssid_2g_edit.setText(self.router_ssid_2g)
-        self.ssid_5g_edit.setText(self.router_ssid_5g)
         cfg = self.config.get("router", {})
         addr = cfg.get("address") if cfg.get("name") == name else None
         self.router_obj = get_router(name, addr)
@@ -696,27 +676,15 @@ class CaseConfigPage(CardWidget):
                 self.router_addr_edit.setPlaceholderText("Gateway")
                 self.router_addr_edit.setText(self.router_obj.address)
                 self.router_addr_edit.textChanged.connect(self.on_router_address_changed)
-                self.ssid_2g_edit = LineEdit(self)
-                self.ssid_2g_edit.setPlaceholderText("2.4G SSID")
-                self.ssid_2g_edit.setText(value.get("ssid_2g", ""))
-                self.ssid_5g_edit = LineEdit(self)
-                self.ssid_5g_edit.setPlaceholderText("5G SSID")
-                self.ssid_5g_edit.setText(value.get("ssid_5g", ""))
 
                 vbox.addWidget(QLabel("Model:"))
                 vbox.addWidget(self.router_name_combo)
                 vbox.addWidget(QLabel("Gateway:"))
                 vbox.addWidget(self.router_addr_edit)
-                vbox.addWidget(QLabel("2.4G SSID:"))
-                vbox.addWidget(self.ssid_2g_edit)
-                vbox.addWidget(QLabel("5G SSID:"))
-                vbox.addWidget(self.ssid_5g_edit)
                 self._add_group(group)
                 # 注册控件
                 self.field_widgets["router.name"] = self.router_name_combo
                 self.field_widgets["router.address"] = self.router_addr_edit
-                self.field_widgets["router.ssid_2g"] = self.ssid_2g_edit
-                self.field_widgets["router.ssid_5g"] = self.ssid_5g_edit
                 self.router_name_combo.currentTextChanged.connect(self.on_router_changed)
                 self.on_router_changed(self.router_name_combo.currentText())
                 continue  # ← 继续下一顶层 key
@@ -880,8 +848,6 @@ class CaseConfigPage(CardWidget):
             "connect_type.telnet.wildcard",
             "router.name",
             "router.address",
-            "router.ssid_2g",
-            "router.ssid_5g",
             "serial_port.status",
             "serial_port.port",
             "serial_port.baud",
