@@ -31,6 +31,8 @@ from PyQt5.QtCore import (
     QPropertyAnimation,
     QEasingCurve,
     QRect,
+    QEvent,
+    Qt
 )
 from PyQt5.QtGui import QTextCursor
 import datetime
@@ -137,11 +139,11 @@ def _pytest_worker(case_path: str, q: multiprocessing.Queue):
         root_logger.setLevel(logging.INFO)
         try:
             q.put(
-                ("log", f"<b style='{STYLE_BASE} color:green;'>Run pytest</b>")
+                ("log", f"<b style='{STYLE_BASE} color:#a6e3ff;'>Run pytest</b>")
             )
             pytest.main(pytest_args, plugins=[plugin])
             q.put(
-                ("log", f"<b style='{STYLE_BASE} color:green;'>Test completed ！</b>")
+                ("log", f"<b style='{STYLE_BASE} color:#a6e3ff;'>Test completed ！</b>")
             )
         finally:
             end_ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -255,16 +257,6 @@ class RunPage(CardWidget):
         self.case_path_label.setVisible(True)
         layout.addWidget(self.case_path_label)
 
-        self.progress = ProgressBar(self)
-        self.progress.setValue(0)
-        progress_layout = QHBoxLayout()
-        progress_layout.addWidget(self.progress, stretch=1)
-        self.remaining_time_label = QLabel("", self)
-        apply_theme(self.remaining_time_label)
-        self.remaining_time_label.hide()
-        progress_layout.addWidget(self.remaining_time_label)
-        layout.addLayout(progress_layout)
-
         self.log_area = QTextEdit(self)
         self.log_area.setReadOnly(True)
         self.log_area.setMinimumHeight(400)
@@ -275,29 +267,44 @@ class RunPage(CardWidget):
         self.case_info_label = QLabel("Current case : ", self)
         apply_theme(self.case_info_label)
         layout.addWidget(self.case_info_label)
-        # 文本进度标签
-        self.progress_text = QLabel("Process 0%", self)
-        apply_theme(self.progress_text)
-        layout.addWidget(self.progress_text)
-        # 外部容器（透明）
-        self.progress_container = QFrame(self)
-        self.progress_container.setFixedHeight(10)
-        self.progress_container.setStyleSheet(
-            f"background: transparent;font-family: {FONT_FAMILY}; color:{TEXT_COLOR};"
-        )
-        layout.addWidget(self.progress_container)
-
-        # 内部进度块
-        self.progress_chunk = QFrame(self.progress_container)
-        self.progress_chunk.setFixedHeight(10)
-        self.progress_chunk.setStyleSheet(
+        self.process = QFrame(self)
+        self.process.setFixedHeight(28)
+        self.process.setStyleSheet(
             f"""
-            background-color: #4a90e2;
-            border-radius: 4px;
-            font-family: {FONT_FAMILY};
+                    QFrame {{
+                        background-color: rgba(255,255,255,0.06);
+                        border: 1px solid rgba(255,255,255,0.12);
+                        border-radius: 4px;
+                        font-family: {FONT_FAMILY};
+                    }}
+                    """
+        )
+        layout.addWidget(self.process)
+        # 填充条（作为背景动画层）
+        self.process_fill = QFrame(self.process)
+        self.process_fill.setGeometry(0, 0, 0, self.process.height())
+        self.process_fill.setStyleSheet(
+            """
+            QFrame {
+                background-color:  #001a4d;
+                border-radius: 8px;
+            }
             """
         )
-        self.progress_chunk.setFixedWidth(0)
+        # 百分比文字（居中覆盖）
+        self.process_label = QLabel("Process: 0%", self.process)
+        self.process_label.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        self.process_label.setAlignment(Qt.AlignLeft)
+        self.process_label.setAlignment(Qt.AlignVCenter)
+
+        apply_theme(self.process_label)
+        self.process_label.setStyleSheet(
+            f"font-family: {FONT_FAMILY};"
+        )
+        self.process_label.resize(self.process.size())
+        self.process.installEventFilter(self)  # 让容器尺寸变化时同步 label/fill
+        self._progress_animation = None
+        self._current_percent = 0
         self.action_btn = PushButton(self)
         if hasattr(self.action_btn, "setUseRippleEffect"):
             self.action_btn.setUseRippleEffect(True)
@@ -309,6 +316,9 @@ class RunPage(CardWidget):
         self.finished_count = 0
         self.total_count = 0
         self.avg_case_duration = 0
+        self._case_name_base = "Current case : "  # 基线文本，不含 fixture
+        self._fixture_chain = []  # [(fixture_name, params), ...] 保序累积
+        self._case_fn = ""  # 当前用例名（用于是否重置链）
         self._duration_sum = 0
         self._current_has_fixture = False
         stack = getattr(self.main_window, "stackedWidget", None)
@@ -320,25 +330,51 @@ class RunPage(CardWidget):
             idx,
         )
 
+    def eventFilter(self, obj, event):
+        # 用 getattr 防止属性未创建时报 AttributeError；用 QEvent.Resize 做比较
+        if obj is getattr(self, "process", None) and event.type() == QEvent.Resize:
+            self.process_label.resize(self.process.size())
+            total_w = max(self.process.width(), 1)
+            w = int(total_w * self._current_percent / 100)
+            r = self.process.geometry()
+            self.process_fill.setGeometry(0, 0, w, r.height())
+        return super().eventFilter(obj, event)
+
+    def _fixture_upsert(self, name: str, params: str):
+        """按顺序 upsert：存在则更新参数，不存在则追加到末尾"""
+        for i, (n, _) in enumerate(self._fixture_chain):
+            if n == name:
+                self._fixture_chain[i] = (name, params)
+                break
+        else:
+            self._fixture_chain.append((name, params))
+        self._rebuild_case_info_label()
+
+    def _rebuild_case_info_label(self):
+        """用基线 + 链式 fixture 重建 Current case 文本"""
+        parts = [self._case_name_base.strip()]
+        for n, p in self._fixture_chain:
+            parts.append(f"{n}={p}")
+        # 用竖线分隔，直观显示执行先后顺序
+        self.case_info_label.setText(" | ".join(parts))
+
     def _append_log(self, msg: str):
         if msg.startswith("[PYQT_FIX]"):
             info = json.loads(msg[len("[PYQT_FIX]"):])
-            base = self.case_info_label.text().split(" (", 1)[0]
-            params = info.get("params")
-            if params:
-                cur = self.case_info_label.text()
-                cur = (
-                    f"{cur}, {info['fixture']}={params}"
-                    if "(" in cur
-                    else f"{base} {info['fixture']} : {params}"
-                )
-                self.case_info_label.setText(cur)
+            name = str(info.get("fixture", "")).strip()
+            params = str(info.get("params", "")).strip()
+            if name and params:
+                self._fixture_upsert(name, params)  # 累计或原位更新，不覆盖其它 fixture
             return
         if msg.startswith("[PYQT_CASE]"):
             fn = msg[len("[PYQT_CASE]"):].strip()
-            base = f"Current case : {fn}"
-            self.case_info_label.setText(base)
-            self._case_name = base
+            if fn != self._case_fn:
+                # 只有用例真的变化时才清空链
+                self._case_fn = fn
+                self._fixture_chain = []
+            # 无论是否变化，都更新基线文本
+            self._case_name_base = f"Current case : {fn}"
+            self._rebuild_case_info_label()
             return
         if msg.startswith("[PYQT_CASEINFO]"):
             info = json.loads(msg[len("[PYQT_CASEINFO]"):])
@@ -375,6 +411,8 @@ class RunPage(CardWidget):
             cursor.deleteChar()
 
     def _update_remaining_time_label(self):
+        if not hasattr(self, "remaining_time_label"):
+            return
         remaining_cases = max(self.total_count - self.finished_count, 0)
         remaining_ms = self.avg_case_duration * remaining_cases
         if not self._current_has_fixture or remaining_ms <= 0:
@@ -387,31 +425,30 @@ class RunPage(CardWidget):
         self.remaining_time_label.setText(f"{h:02d}:{m:02d}:{s:02d}")
         self.remaining_time_label.show()
 
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        try:
-            # 从标签中提取当前百分比
-            text = self.progress_text.text()
-            percent = int(text.split()[-1].rstrip('%'))
-            self.update_progress(percent)
-        except Exception:
-            pass
+    def update_progress(self, percent: int):
+        # 归一化
+        percent = max(0, min(100, int(percent)))
+        self._current_percent = percent
+        # 文本
+        self.process_label.setText(f"Process: {percent}%")
+        self.process_fill.setStyleSheet(
+            '''QFrame { 
+            background-color:  #001a4d; border-radius: 4px; 
+            }'''
+        )
+        # 宽度动画
+        total_w = self.process.width() or 300
+        target_w = int(total_w * percent / 100)
+        start_rect = self.process_fill.geometry()
+        end_rect = QRect(0, 0, target_w, self.process.height())
 
-    def update_progress(self, percent):
-        self.progress_text.setText(f"Process :  {percent}%")
-        total_width = self.progress_container.width() or 300  # 默认宽度
-        progress_width = int(total_width * percent / 100)
-        # 更新进度块宽度
-        start_rect = self.progress_chunk.geometry()
-        end_rect = QRect(start_rect)
-        end_rect.setWidth(progress_width)
-        animation = QPropertyAnimation(self.progress_chunk, b"geometry")
-        animation.setDuration(300)
-        animation.setStartValue(start_rect)
-        animation.setEndValue(end_rect)
-        animation.setEasingCurve(QEasingCurve.OutCubic)
-        animation.start()
-        self._progress_animation = animation
+        anim = QPropertyAnimation(self.process_fill, b"geometry")
+        anim.setDuration(300)
+        anim.setStartValue(start_rect)
+        anim.setEndValue(end_rect)
+        anim.setEasingCurve(QEasingCurve.OutCubic)
+        anim.start()
+        self._progress_animation = anim
 
     def _set_action_button(self, mode: str):
         """根据模式设置操作按钮"""
@@ -432,8 +469,12 @@ class RunPage(CardWidget):
     def run_case(self):
         self.cleanup()
         self.log_area.clear()
-        self.progress.setValue(0)
         self.update_progress(0)
+        # —— 新一轮运行：重置 Current case 基线与链 ——
+        self._case_fn = ""
+        self._case_name_base = "Current case : "
+        self._fixture_chain = []
+        self.case_info_label.setText(self._case_name_base)
         self._set_action_button("stop")
         self.runner = CaseRunner(self.case_path)
         self.runner.log_signal.connect(self._append_log)
@@ -536,7 +577,10 @@ class RunPage(CardWidget):
         self.cleanup()
         self._set_action_button("run")
         self.action_btn.setEnabled(True)
-
+        self._case_fn = ""
+        self._case_name_base = "Current case : "
+        self._fixture_chain = []
+        self.case_info_label.setText(self._case_name_base)
     def on_stop(self):
         self._append_log("on_stop entered")
         self.cleanup()
