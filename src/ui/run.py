@@ -15,7 +15,7 @@ import os
 import sip
 # ui/run.py
 
-from PyQt5.QtWidgets import QVBoxLayout, QTextEdit, QLabel, QFrame, QHBoxLayout
+from PyQt5.QtWidgets import QVBoxLayout, QTextEdit, QLabel, QFrame, QHBoxLayout, QApplication
 from qfluentwidgets import (
     CardWidget,
     StrongBodyLabel,
@@ -24,6 +24,7 @@ from qfluentwidgets import (
     InfoBar,
     InfoBarPosition,
     FluentIcon,
+
 )
 from PyQt5.QtCore import (
     QThread,
@@ -284,6 +285,19 @@ class RunPage(CardWidget):
         layout.addWidget(self.case_path_label)
 
         self.log_area = QTextEdit(self)
+        self.log_area.setStyleSheet(
+            f"""
+            QTextEdit {{
+                background: rgba(255,255,255,0.04);
+                border: 1px solid rgba(0,103,192,0.35);
+                border-radius: 6px;
+                padding: 6px;
+                selection-background-color: {ACCENT_COLOR};
+                selection-color: white;
+                font-family: {FONT_FAMILY};
+            }}
+            """
+        )
         self.log_area.setReadOnly(True)
         self.log_area.setMinimumHeight(400)
         apply_theme(self.log_area)
@@ -409,7 +423,7 @@ class RunPage(CardWidget):
             self.process_label.setGeometry(rect)
             self.remaining_time_label.setGeometry(rect)
             total_w = max(rect.width(), 1)
-            w = int(total_w * self._current_percent / 100)
+            w = total_w if self._current_percent >= 99 else int(total_w * self._current_percent / 100)
             self.process_fill.setGeometry(0, 0, w, rect.height())
         return super().eventFilter(obj, event)
 
@@ -432,6 +446,10 @@ class RunPage(CardWidget):
         self.case_info_label.setText(" | ".join(parts))
 
     def _append_log(self, msg: str):
+        if "libpng warning: iCCP: known incorrect sRGB profile" in msg:
+            return
+        if msg.strip() == "KeyboardInterrupt":
+            return
         if msg.startswith("[PYQT_FIX]"):
             info = json.loads(msg[len("[PYQT_FIX]"):])
             name = str(info.get("fixture", "")).strip()
@@ -475,19 +493,6 @@ class RunPage(CardWidget):
             return
         html = format_log_html(msg)
         self.log_area.append(html)
-        self.log_area.setStyleSheet(
-            f"""
-            QTextEdit {{
-                background: rgba(255,255,255,0.04);
-                border: 1px solid rgba(0,103,192,0.35);
-                border-radius: 6px;
-                padding: 6px;
-                selection-background-color: {ACCENT_COLOR};
-                selection-color: white;
-                font-family: {FONT_FAMILY};
-            }}
-            """
-        )
         doc = self.log_area.document()
         if doc.blockCount() > 5000:
             cursor = QTextCursor(doc.firstBlock())
@@ -584,28 +589,43 @@ class RunPage(CardWidget):
             pass
 
     def update_progress(self, percent: int):
-        # 归一化
+        # 1) 归一化 & 记录
         percent = max(0, min(100, int(percent)))
         self._current_percent = percent
-        # 文本
-        self.process_label.setText(f"Process: {percent}%")
-        self.process_fill.setStyleSheet(
-            f"QFrame {{ background-color: {ACCENT_COLOR}; border-radius: 4px; }}"
-        )
-        # 宽度动画
-        total_w = self.process.width() or 300
-        target_w = int(total_w * percent / 100)
-        start_rect = self.process_fill.geometry()
-        end_rect = QRect(0, 0, target_w, self.process.height())
 
+        # 2) 文本
+        self.process_label.setText(f"Process: {percent}%")
+
+        # 3) 颜色（使用你的主题蓝）
+        try:
+            color = ACCENT_COLOR  # 若未定义 ACCENT_COLOR，则改成 "#0067c0"
+        except NameError:
+            color = "#0067c0"
+        self.process_fill.setStyleSheet(
+            f"QFrame {{ background-color: {color}; border-radius: 4px; }}"
+        )
+
+        # 4) 目标宽度（100% 直接吃满，避免取整误差）
+        rect = self.process.rect()
+        total_w = rect.width() or 300
+        target_w = total_w if percent >= 99 else int(total_w * percent / 100)
+
+        # 5) 小于 2 像素的变化直接定位，避免末段频繁动画卡顿
+        current_geo = self.process_fill.geometry()
+        current_w = current_geo.width()
+
+        if abs(target_w - current_w) < 2:
+            self.process_fill.setGeometry(0, 0, target_w, rect.height())
+            return
+
+        # 6) 正常做平滑动画
         anim = QPropertyAnimation(self.process_fill, b"geometry")
         anim.setDuration(300)
-        anim.setStartValue(start_rect)
-        anim.setEndValue(end_rect)
+        anim.setStartValue(current_geo)
+        anim.setEndValue(QRect(0, 0, target_w, rect.height()))
         anim.setEasingCurve(QEasingCurve.OutCubic)
         anim.start()
         self._progress_animation = anim
-        self._update_remaining_time_label()
 
     def _set_action_button(self, mode: str):
         """根据模式设置操作按钮"""
@@ -693,18 +713,19 @@ class RunPage(CardWidget):
         step = 500
         timeout = 5000
         while not runner.wait(step):
+            QApplication.processEvents()
             elapsed += step
             if elapsed >= timeout:
                 logging.warning(
                     "runner thread did not finish within %s ms", timeout
                 )
-                InfoBar.warning(
-                    title="Warning",
-                    content="线程未能及时结束",
-                    parent=self.main_window,
-                    position=InfoBarPosition.TOP,
-                    duration=3000,
-                )
+                # InfoBar.warning(
+                #     title="Warning",
+                #     content="线程未能及时结束",
+                #     parent=self.main_window,
+                #     position=InfoBarPosition.TOP,
+                #     duration=3000,
+                # )
                 break
             logging.info(
                 "runner.isRunning after wait: %s", runner.isRunning()

@@ -293,26 +293,9 @@ class CaseConfigPage(CardWidget):
                 yaml.safe_dump(self.config, f, allow_unicode=True, sort_keys=False, width=4096)
                 logging.info("Configuration saved")
             self.config = self._load_config()
-            QTimer.singleShot(
-                0,
-                lambda: InfoBar.success(
-                    title="Hint",
-                    content="Configuration has been saved",
-                    parent=self,
-                    position=InfoBarPosition.TOP,
-                ),
-            )
+            logging.info("Configuration saved")
         except Exception as exc:
             logging.error("[save] failed: %s", exc)
-            QTimer.singleShot(
-                0,
-                lambda exc=exc: InfoBar.error(
-                    title="Error",
-                    content=f"Failed to save config : {exc}",
-                    parent=self,
-                    position=InfoBarPosition.TOP,
-                ),
-            )
 
     def _get_application_base(self) -> Path:
         """获取应用根路径"""

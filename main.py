@@ -549,7 +549,43 @@ class MainWindow(FluentWindow):
 
 sys.excepthook = log_exception
 import multiprocessing
+import sys, os, logging, subprocess as _sp
 
+# 仅在 Windows 生效；加环境开关，必要时可关闭（WIFI_TEST_HIDE_MP_CONSOLE=0）
+if sys.platform.startswith("win") and os.environ.get("WIFI_TEST_HIDE_MP_CONSOLE", "1") == "1":
+    _orig_Popen = _sp.Popen
+
+    def _is_mp_spawn_cmd(cmd):
+        """粗判是否是 multiprocessing.spawn 的子进程启动命令"""
+        try:
+            if isinstance(cmd, (list, tuple)):
+                s = " ".join(str(x) for x in cmd)
+            else:
+                s = str(cmd)
+            # Windows 下 spawn 的命令行里通常包含 spawn_main
+            return "multiprocessing.spawn" in s or "spawn_main" in s
+        except Exception:
+            return False
+
+    def _patched_Popen(*args, **kwargs):
+        try:
+            cmd = kwargs.get("args", args[0] if args else None)
+            if _is_mp_spawn_cmd(cmd):
+                # 叠加 CREATE_NO_WINDOW，并隐藏窗口
+                flags = kwargs.get("creationflags", 0) | 0x08000000  # CREATE_NO_WINDOW
+                kwargs["creationflags"] = flags
+                if kwargs.get("startupinfo") is None:
+                    from subprocess import STARTUPINFO, STARTF_USESHOWWINDOW, SW_HIDE
+                    si = STARTUPINFO()
+                    si.dwFlags |= STARTF_USESHOWWINDOW
+                    si.wShowWindow = SW_HIDE
+                    kwargs["startupinfo"] = si
+        except Exception as e:
+            logging.debug("mp-console patch noop: %s", e)
+        return _orig_Popen(*args, **kwargs)
+
+    _sp.Popen = _patched_Popen
+    logging.debug("Installed mp-console hide patch for Windows")
 multiprocessing.freeze_support()
 if __name__ == "__main__":
     logging.basicConfig(
