@@ -922,15 +922,8 @@ class CaseConfigPage(CardWidget):
             main_window.setCurrentIndex(main_window.case_config_page)
             logging.debug("get_editable_fields: after switch to case_config_page")
 
+        # RVR 页面展示与否仅取决于 enable_rvr_wifi
         if info.enable_rvr_wifi:
-            ssid = ""
-            passwd = ""
-            ssid_widget = self.field_widgets.get("router.ssid")
-            if isinstance(ssid_widget, LineEdit):
-                ssid = ssid_widget.text()
-            passwd_widget = self.field_widgets.get("router.wpa_passwd")
-            if isinstance(passwd_widget, LineEdit):
-                passwd = passwd_widget.text()
             if hasattr(main_window, "show_rvr_wifi_config"):
                 main_window.show_rvr_wifi_config()
         else:
