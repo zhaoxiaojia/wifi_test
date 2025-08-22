@@ -33,7 +33,8 @@ from PyQt5.QtCore import (
     QRect,
     QEvent,
     Qt,
-    QTimer
+    QTimer,
+    QSize
 )
 from PyQt5.QtGui import QTextCursor
 import datetime
@@ -54,6 +55,10 @@ from .theme import apply_theme, STYLE_BASE, TEXT_COLOR, FONT_FAMILY
 from .theme import format_log_html
 
 CONTROL_HEIGHT = 32
+ACCENT_COLOR = "#0067c0"
+ICON_SIZE = 18
+ICON_TEXT_SPACING = 8
+LEFT_PAD = ICON_SIZE + ICON_TEXT_SPACING  # 给文本预留的左侧内边距
 
 
 class LiveLogWriter:
@@ -270,6 +275,9 @@ class RunPage(CardWidget):
         layout.setSpacing(16)
         self.case_path_label = StrongBodyLabel(self.display_case_path)
         apply_theme(self.case_path_label)
+        self.case_path_label.setStyleSheet(
+            f"border-left: 4px solid {ACCENT_COLOR}; padding-left: 8px; font-family:{FONT_FAMILY};"
+        )
         self.case_path_label.setFixedHeight(CONTROL_HEIGHT)
         self.case_path_label.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
         self.case_path_label.setVisible(True)
@@ -284,34 +292,36 @@ class RunPage(CardWidget):
         # 当前用例信息展示
         self.case_info_label = QLabel("Current case : ", self)
         apply_theme(self.case_info_label)
+        self.case_info_label.setStyleSheet(
+            f"border-left: 4px solid {ACCENT_COLOR}; padding-left: 8px; font-family:{FONT_FAMILY};"
+        )
         # ← 新增：统一高度 & 垂直居中，避免看起来更“瘦”
         self.case_info_label.setFixedHeight(CONTROL_HEIGHT)
         self.case_info_label.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
-        self.case_info_label.setStyleSheet(f"padding-top:0px; padding-bottom:0px; font-family:{FONT_FAMILY};")
+        self.case_info_label.setStyleSheet(
+            f"border-left: 4px solid {ACCENT_COLOR}; "
+            f"padding-left: 8px; padding-top:0px; padding-bottom:0px; "
+            f"font-family:{FONT_FAMILY};"
+        )
         layout.addWidget(self.case_info_label)
         self.process = QFrame(self)
         self.process.setFixedHeight(CONTROL_HEIGHT)
         self.process.setStyleSheet(
             f"""
-                    QFrame {{
-                        background-color: rgba(255,255,255,0.06);
-                        border: 1px solid rgba(255,255,255,0.12);
-                        border-radius: 4px;
-                        font-family: {FONT_FAMILY};
-                    }}
-                    """
+            QFrame {{
+                background-color: rgba(255,255,255,0.06);
+                border: 1px solid rgba(0,103,192,0.35);  /* ← 淡蓝描边 */
+                border-radius: 4px;
+                font-family: {FONT_FAMILY};
+            }}
+            """
         )
         layout.addWidget(self.process)
         # 填充条（作为背景动画层）
         self.process_fill = QFrame(self.process)
         self.process_fill.setGeometry(0, 0, 0, CONTROL_HEIGHT)
         self.process_fill.setStyleSheet(
-            """
-            QFrame {
-                background-color:  #0067c0;
-                border-radius: 8px;
-            }
-            """
+            f"QFrame {{ background-color: {ACCENT_COLOR}; border-radius: 4px; }}"
         )
         # 百分比文字（居中覆盖）
         self.process_label = QLabel("Process: 0%", self.process)
@@ -343,6 +353,30 @@ class RunPage(CardWidget):
         self._progress_animation = None
         self._current_percent = 0
         self.action_btn = PushButton(self)
+        self.action_btn.setObjectName("actionBtn")
+        self.action_btn.setStyleSheet(
+            f"""
+            #actionBtn {{
+                background-color: {ACCENT_COLOR};
+                color: white;
+                border: none;
+                border-radius: 4px;
+                height: {CONTROL_HEIGHT}px;
+                font-family: {FONT_FAMILY};
+                padding: 0 20px;
+            }}
+            #actionBtn:hover {{
+                background-color: #0b5ea8;  /* 深一点 */
+            }}
+            #actionBtn:pressed {{
+                background-color: #084a85;  /* 更深 */
+            }}
+            #actionBtn:disabled {{
+                background-color: rgba(0,103,192,0.35);
+                color: rgba(255,255,255,0.6);
+            }}
+            """
+        )
         if hasattr(self.action_btn, "setUseRippleEffect"):
             self.action_btn.setUseRippleEffect(True)
         if hasattr(self.action_btn, "setUseStateEffect"):
@@ -441,7 +475,19 @@ class RunPage(CardWidget):
             return
         html = format_log_html(msg)
         self.log_area.append(html)
-
+        self.log_area.setStyleSheet(
+            f"""
+            QTextEdit {{
+                background: rgba(255,255,255,0.04);
+                border: 1px solid rgba(0,103,192,0.35);
+                border-radius: 6px;
+                padding: 6px;
+                selection-background-color: {ACCENT_COLOR};
+                selection-color: white;
+                font-family: {FONT_FAMILY};
+            }}
+            """
+        )
         doc = self.log_area.document()
         if doc.blockCount() > 5000:
             cursor = QTextCursor(doc.firstBlock())
@@ -544,9 +590,7 @@ class RunPage(CardWidget):
         # 文本
         self.process_label.setText(f"Process: {percent}%")
         self.process_fill.setStyleSheet(
-            '''QFrame { 
-            background-color:  #0067c0; border-radius: 4px; 
-            }'''
+            f"QFrame {{ background-color: {ACCENT_COLOR}; border-radius: 4px; }}"
         )
         # 宽度动画
         total_w = self.process.width() or 300
@@ -568,13 +612,12 @@ class RunPage(CardWidget):
         with suppress(TypeError):
             self.action_btn.clicked.disconnect()
         if mode == "run":
-            text, icon, slot = "Run", FluentIcon.PLAY, self.run_case
+            text, slot = "Run", self.run_case
         elif mode == "stop":
-            text, icon, slot = "Stop", FluentIcon.CLOSE, self.on_stop
+            text, slot = "Stop", self.on_stop
         else:
             raise ValueError(f"Unknown mode: {mode}")
         self.action_btn.setText(text)
-        self.action_btn.setIcon(icon)
         self.action_btn.clicked.connect(lambda: logging.info("action_btn clicked"))
         self.action_btn.clicked.connect(slot)
         logging.info("Action button set to %s mode for RunPage id=%s", mode, id(self))
