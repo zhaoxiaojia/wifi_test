@@ -53,6 +53,8 @@ from src.util.pytest_redact import install_redactor_for_current_process
 from .theme import apply_theme, STYLE_BASE, TEXT_COLOR, FONT_FAMILY
 from .theme import format_log_html
 
+CONTROL_HEIGHT = 32
+
 
 class LiveLogWriter:
     """自定义stdout/err实时回调到信号"""
@@ -268,6 +270,8 @@ class RunPage(CardWidget):
         layout.setSpacing(16)
         self.case_path_label = StrongBodyLabel(self.display_case_path)
         apply_theme(self.case_path_label)
+        self.case_path_label.setFixedHeight(CONTROL_HEIGHT)
+        self.case_path_label.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
         self.case_path_label.setVisible(True)
         layout.addWidget(self.case_path_label)
 
@@ -280,9 +284,13 @@ class RunPage(CardWidget):
         # 当前用例信息展示
         self.case_info_label = QLabel("Current case : ", self)
         apply_theme(self.case_info_label)
+        # ← 新增：统一高度 & 垂直居中，避免看起来更“瘦”
+        self.case_info_label.setFixedHeight(CONTROL_HEIGHT)
+        self.case_info_label.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
+        self.case_info_label.setStyleSheet(f"padding-top:0px; padding-bottom:0px; font-family:{FONT_FAMILY};")
         layout.addWidget(self.case_info_label)
         self.process = QFrame(self)
-        self.process.setFixedHeight(28)
+        self.process.setFixedHeight(CONTROL_HEIGHT)
         self.process.setStyleSheet(
             f"""
                     QFrame {{
@@ -296,7 +304,7 @@ class RunPage(CardWidget):
         layout.addWidget(self.process)
         # 填充条（作为背景动画层）
         self.process_fill = QFrame(self.process)
-        self.process_fill.setGeometry(0, 0, 0, self.process.height())
+        self.process_fill.setGeometry(0, 0, 0, CONTROL_HEIGHT)
         self.process_fill.setStyleSheet(
             """
             QFrame {
@@ -315,19 +323,22 @@ class RunPage(CardWidget):
         self.process_label.setStyleSheet(
             f"font-family: {FONT_FAMILY};"
         )
-        self.process_label.resize(self.process.size())
+        self.process_label.setGeometry(self.process.rect())
         self.remaining_time_label = QLabel("Remaining : 00:00:00", self.process)
         self.remaining_time_label.setAttribute(Qt.WA_TransparentForMouseEvents, True)
         self.remaining_time_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         apply_theme(self.remaining_time_label)
         self.remaining_time_label.setStyleSheet(f"font-family: {FONT_FAMILY};")
-        self.remaining_time_label.resize(self.process.size())
+        self.remaining_time_label.setGeometry(self.process.rect())
         self.remaining_time_label.hide()
         # —— Remaining 倒计时：每秒刷新 ——
         self._remaining_time_timer = QTimer(self)
         self._remaining_time_timer.setInterval(1000)  # 1s
         self._remaining_time_timer.timeout.connect(self._on_remaining_tick)
         self._remaining_seconds = 0
+        # —— Overtime（倒计时到 0 后继续计时）——
+        self._remaining_overtime = False
+        self._overtime_seconds = 0
         self.process.installEventFilter(self)  # 让容器尺寸变化时同步 label/fill
         self._progress_animation = None
         self._current_percent = 0
@@ -337,6 +348,7 @@ class RunPage(CardWidget):
         if hasattr(self.action_btn, "setUseStateEffect"):
             self.action_btn.setUseStateEffect(True)
         self._set_action_button("stop")
+        self.action_btn.setFixedHeight(CONTROL_HEIGHT)
         layout.addWidget(self.action_btn)
         self.setLayout(layout)
         self.finished_count = 0
@@ -359,12 +371,12 @@ class RunPage(CardWidget):
     def eventFilter(self, obj, event):
         # 用 getattr 防止属性未创建时报 AttributeError；用 QEvent.Resize 做比较
         if obj is getattr(self, "process", None) and event.type() == QEvent.Resize:
-            self.process_label.resize(self.process.size())
-            self.remaining_time_label.resize(self.process.size())
-            total_w = max(self.process.width(), 1)
+            rect = self.process.rect()
+            self.process_label.setGeometry(rect)
+            self.remaining_time_label.setGeometry(rect)
+            total_w = max(rect.width(), 1)
             w = int(total_w * self._current_percent / 100)
-            r = self.process.geometry()
-            self.process_fill.setGeometry(0, 0, w, r.height())
+            self.process_fill.setGeometry(0, 0, w, rect.height())
         return super().eventFilter(obj, event)
 
     def _fixture_upsert(self, name: str, params: str):
@@ -447,13 +459,16 @@ class RunPage(CardWidget):
     def _start_remaining_timer(self, seconds: int):
         seconds = max(0, int(seconds))
         if seconds <= 0:
-            self._stop_remaining_timer()
+            # 不在这里停表；由 _on_remaining_tick() 或 _update_remaining_time_label() 决定
             return
-        # 只在差异较大时重置，避免 UI 跳来跳去
-        if self._remaining_time_timer.isActive():
+
+        # 收到新的有效 ETA ⇒ 回到倒计时模式
+        self._remaining_overtime = False
+        # 只在差异较大时重置，避免 UI 跳动；若当前是 Overtime，则无条件重置
+        if self._remaining_time_timer.isActive() and not self._remaining_overtime:
             if abs(seconds - self._remaining_seconds) < 3:
-                # 小于阈值，直接返回，不重置
                 return
+
         self._remaining_seconds = seconds
         self.remaining_time_label.setText(self._format_hms(self._remaining_seconds))
         self.remaining_time_label.show()
@@ -461,48 +476,66 @@ class RunPage(CardWidget):
             self._remaining_time_timer.start()
 
     def _stop_remaining_timer(self):
-        # 统一入口：停止并隐藏
         if hasattr(self, "_remaining_time_timer"):
             self._remaining_time_timer.stop()
+        self._remaining_overtime = False
+        self._overtime_seconds = 0
         if hasattr(self, "remaining_time_label"):
             self.remaining_time_label.hide()
 
     def _on_remaining_tick(self):
+        if self._remaining_overtime:
+            # Overtime：每秒 +1
+            self._overtime_seconds += 1
+            self.remaining_time_label.setText(f"Overtime : {self._format_hms(self._overtime_seconds)[12:]}")
+            return
+
+        # 倒计时模式：每秒 -1
         self._remaining_seconds -= 1
         if self._remaining_seconds <= 0:
-            self._stop_remaining_timer()
-            return
+            # 还有任务？→ 切 Overtime；没有任务 → 停表隐藏
+            remaining_cases = max(self.total_count - self.finished_count, 0)
+            runner_running = bool(getattr(self, "runner", None) and self.runner.isRunning())
+            if remaining_cases > 0 or runner_running:
+                self._remaining_overtime = True
+                self._overtime_seconds = 0
+                self.remaining_time_label.setText("Overtime : 00:00:00")
+                self.remaining_time_label.show()
+                # 计时器继续跑，由本函数负责递增
+                return
+            else:
+                self._stop_remaining_timer()
+                return
+
+        # 正常倒计时刷新
         self.remaining_time_label.setText(self._format_hms(self._remaining_seconds))
 
     def _update_remaining_time_label(self):
         if not hasattr(self, "remaining_time_label"):
             return
 
-        # 还有多少 case
         remaining_cases = max(self.total_count - self.finished_count, 0)
 
-        # 情况 A：确实没有剩余用例 -> 停表并隐藏
+        # 全部完成：停表隐藏
         if remaining_cases <= 0:
             self._stop_remaining_timer()
             return
 
-        # 情况 B：有剩余用例，但本轮算不出新的有效 ETA（均值为 0 或数据不足）
-        # -> 如果计时器已经在跑，就保持现状，不要隐藏（避免“忽隐忽现”）
+        # 有新 ETA ⇒ 重置倒计时（会自动退出 Overtime）
         remaining_ms = self.avg_case_duration * remaining_cases
         seconds = int(remaining_ms // 1000) if remaining_ms > 0 else -1
-
         if seconds > 0:
-            # 情况 C：有新的有效估算 -> 重置为新 ETA，并每秒递减
             self._start_remaining_timer(seconds)
-        else:
-            # 没有新估算：
-            # 1) 如果已经有计时器在跑，什么都不做（保持之前的倒计时继续跑）
-            # 2) 如果还没开始过，就静默等待下一次有数据时再开表（不闪烁）
-            if not self._remaining_time_timer.isActive():
-                # 可选：如果你想让用户知道正在估算，可在这里显示 "Remaining : estimating..."
-                # self.remaining_time_label.setText("Remaining : estimating...")
-                # self.remaining_time_label.show()
-                pass
+            return
+
+        # 无新 ETA：
+        # 1) 若已在 Overtime，保持不动（继续每秒递增）；
+        # 2) 若不在 Overtime 且计时器未启动，保持静默（避免闪烁）。
+        if not self._remaining_time_timer.isActive() and not self._remaining_overtime:
+            # 你也可在此显示“Estimating...”占位
+            # self.remaining_time_label.setText("Remaining : estimating...")
+            # self.remaining_time_label.show()
+            pass
 
     def update_progress(self, percent: int):
         # 归一化
