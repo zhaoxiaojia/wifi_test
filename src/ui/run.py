@@ -302,6 +302,13 @@ class RunPage(CardWidget):
             f"font-family: {FONT_FAMILY};"
         )
         self.process_label.resize(self.process.size())
+        self.remaining_time_label = QLabel("Remaining : 00:00:00", self.process)
+        self.remaining_time_label.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        self.remaining_time_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        apply_theme(self.remaining_time_label)
+        self.remaining_time_label.setStyleSheet(f"font-family: {FONT_FAMILY};")
+        self.remaining_time_label.resize(self.process.size())
+        self.remaining_time_label.hide()
         self.process.installEventFilter(self)  # 让容器尺寸变化时同步 label/fill
         self._progress_animation = None
         self._current_percent = 0
@@ -334,6 +341,7 @@ class RunPage(CardWidget):
         # 用 getattr 防止属性未创建时报 AttributeError；用 QEvent.Resize 做比较
         if obj is getattr(self, "process", None) and event.type() == QEvent.Resize:
             self.process_label.resize(self.process.size())
+            self.remaining_time_label.resize(self.process.size())
             total_w = max(self.process.width(), 1)
             w = int(total_w * self._current_percent / 100)
             r = self.process.geometry()
@@ -415,14 +423,16 @@ class RunPage(CardWidget):
             return
         remaining_cases = max(self.total_count - self.finished_count, 0)
         remaining_ms = self.avg_case_duration * remaining_cases
-        if not self._current_has_fixture or remaining_ms <= 0:
+        if remaining_cases <= 0 or remaining_ms <= 0:
             self.remaining_time_label.hide()
             return
         remaining_sec = int(remaining_ms / 1000)
         h = remaining_sec // 3600
         m = (remaining_sec % 3600) // 60
         s = remaining_sec % 60
-        self.remaining_time_label.setText(f"{h:02d}:{m:02d}:{s:02d}")
+        self.remaining_time_label.setText(
+            f"Remaining : {h:02d}:{m:02d}:{s:02d}"
+        )
         self.remaining_time_label.show()
 
     def update_progress(self, percent: int):
@@ -470,6 +480,7 @@ class RunPage(CardWidget):
         self.cleanup()
         self.log_area.clear()
         self.update_progress(0)
+        self.remaining_time_label.hide()
         # —— 新一轮运行：重置 Current case 基线与链 ——
         self._case_fn = ""
         self._case_name_base = "Current case : "
@@ -518,6 +529,7 @@ class RunPage(CardWidget):
             sip.isdeleted(self),
             idx,
         )
+        self.remaining_time_label.hide()
         runner = getattr(self, "runner", None)
         if not runner:
             return
