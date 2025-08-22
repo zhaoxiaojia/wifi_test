@@ -32,7 +32,8 @@ from PyQt5.QtCore import (
     QEasingCurve,
     QRect,
     QEvent,
-    Qt
+    Qt,
+    QTimer
 )
 from PyQt5.QtGui import QTextCursor
 import datetime
@@ -302,6 +303,17 @@ class RunPage(CardWidget):
             f"font-family: {FONT_FAMILY};"
         )
         self.process_label.resize(self.process.size())
+        self.remaining_time_label = QLabel("Remaining : 00:00:00", self.process)
+        self.remaining_time_label.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        self.remaining_time_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        apply_theme(self.remaining_time_label)
+        self.remaining_time_label.setStyleSheet(f"font-family: {FONT_FAMILY};")
+        self.remaining_time_label.resize(self.process.size())
+        self.remaining_time_label.hide()
+        self._remaining_seconds = 0
+        self._remaining_time_timer = QTimer(self)
+        self._remaining_time_timer.setInterval(1000)
+        self._remaining_time_timer.timeout.connect(self._on_remaining_time_tick)
         self.process.installEventFilter(self)  # 让容器尺寸变化时同步 label/fill
         self._progress_animation = None
         self._current_percent = 0
@@ -334,6 +346,7 @@ class RunPage(CardWidget):
         # 用 getattr 防止属性未创建时报 AttributeError；用 QEvent.Resize 做比较
         if obj is getattr(self, "process", None) and event.type() == QEvent.Resize:
             self.process_label.resize(self.process.size())
+            self.remaining_time_label.resize(self.process.size())
             total_w = max(self.process.width(), 1)
             w = int(total_w * self._current_percent / 100)
             r = self.process.geometry()
@@ -415,15 +428,34 @@ class RunPage(CardWidget):
             return
         remaining_cases = max(self.total_count - self.finished_count, 0)
         remaining_ms = self.avg_case_duration * remaining_cases
-        if not self._current_has_fixture or remaining_ms <= 0:
+        if remaining_cases <= 0 or remaining_ms <= 0:
+            self._remaining_time_timer.stop()
+            self.remaining_time_label.hide()
+            self._remaining_seconds = 0
+            return
+        self._remaining_seconds = int(remaining_ms / 1000)
+        h = self._remaining_seconds // 3600
+        m = (self._remaining_seconds % 3600) // 60
+        s = self._remaining_seconds % 60
+        self.remaining_time_label.setText(
+            f"Remaining : {h:02d}:{m:02d}:{s:02d}"
+        )
+        self.remaining_time_label.show()
+        if not self._remaining_time_timer.isActive():
+            self._remaining_time_timer.start()
+
+    def _on_remaining_time_tick(self):
+        if self._remaining_seconds <= 0:
+            self._remaining_time_timer.stop()
             self.remaining_time_label.hide()
             return
-        remaining_sec = int(remaining_ms / 1000)
-        h = remaining_sec // 3600
-        m = (remaining_sec % 3600) // 60
-        s = remaining_sec % 60
-        self.remaining_time_label.setText(f"{h:02d}:{m:02d}:{s:02d}")
-        self.remaining_time_label.show()
+        self._remaining_seconds -= 1
+        h = self._remaining_seconds // 3600
+        m = (self._remaining_seconds % 3600) // 60
+        s = self._remaining_seconds % 60
+        self.remaining_time_label.setText(
+            f"Remaining : {h:02d}:{m:02d}:{s:02d}"
+        )
 
     def update_progress(self, percent: int):
         # 归一化
@@ -470,6 +502,9 @@ class RunPage(CardWidget):
         self.cleanup()
         self.log_area.clear()
         self.update_progress(0)
+        self._remaining_time_timer.stop()
+        self.remaining_time_label.hide()
+        self._remaining_seconds = 0
         # —— 新一轮运行：重置 Current case 基线与链 ——
         self._case_fn = ""
         self._case_name_base = "Current case : "
@@ -518,6 +553,9 @@ class RunPage(CardWidget):
             sip.isdeleted(self),
             idx,
         )
+        self._remaining_time_timer.stop()
+        self.remaining_time_label.hide()
+        self._remaining_seconds = 0
         runner = getattr(self, "runner", None)
         if not runner:
             return
