@@ -113,6 +113,7 @@ class dut():
         self.throughput_threshold = float(rvr_cfg.get('throughput_threshold', 0))
         self.skip_tx = False
         self.skip_rx = False
+        self.iperf_log_list: list[str] = []
         if self.rvr_tool == 'iperf':
             cmds = f"{self.iperf_server_cmd} {self.iperf_client_cmd}"
             self.test_tool = 'iperf3' if 'iperf3' in cmds else 'iperf'
@@ -225,6 +226,7 @@ class dut():
             tn.write(command.encode('ascii') + b'\n')
             while True:
                 line = tn.read_until(b'Mbits/sec').decode('gbk').strip()
+                self.iperf_log_list.append(line)
                 if '[SUM]' not in line:
                     continue
                 if self.rssi_num > -60:
@@ -251,10 +253,8 @@ class dut():
             logging.info('run thread done')
 
         result_list = []
-        if os.path.exists(f'rvr_log_{pytest.dut.serialnumber}.txt') and '-s' in command:
-            os.remove(f'rvr_log_{pytest.dut.serialnumber}.txt')
-            time.sleep(1)
-
+        if '-s' in command:
+            self.iperf_log_list = []
         if '-s' in command:
             if adb:
                 if pytest.connect_type == 'telnet':
@@ -265,13 +265,33 @@ class dut():
                 else:
                     command = f'adb -s {pytest.dut.serialnumber} shell {command} '
                     logging.info(f'server adb command: {command}')
-                    with open(f'rvr_log_{pytest.dut.serialnumber}.txt', 'w') as f:
-                        process = subprocess.Popen(command.split(), stdout=f, stderr=f, stdin=f, encoding='utf-8', )
+                    process = subprocess.Popen(
+                        command.split(),
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
+                        encoding='utf-8',
+                    )
+
+                    def _read_output(proc):
+                        for line in proc.stdout:
+                            self.iperf_log_list.append(line)
+
+                    Thread(target=_read_output, args=(process,), daemon=True).start()
                     return process
             else:
                 logging.info(f'server pc command: {command}')
-                with open(f'rvr_log_{pytest.dut.serialnumber}.txt', 'w') as f:
-                    process = subprocess.Popen(command.split(), stdout=f, encoding='utf-8')
+                process = subprocess.Popen(
+                    command.split(),
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    encoding='utf-8',
+                )
+
+                def _read_output(proc):
+                    for line in proc.stdout:
+                        self.iperf_log_list.append(line)
+
+                Thread(target=_read_output, args=(process,), daemon=True).start()
                 return process
         else:
             if adb:
@@ -339,9 +359,7 @@ class dut():
         # 分析 iperf 测试结果
         if self.rvr_result is not None:
             return round(self.rvr_result, 1)
-        if os.path.exists(f'rvr_log_{pytest.dut.serialnumber}.txt'):
-            with open(f'rvr_log_{pytest.dut.serialnumber}.txt', 'r') as f:
-                return self._get_logcat(f.readlines())
+        return self._get_logcat(self.iperf_log_list)
 
     def get_pc_ip(self):
         if pytest.win_flag:
