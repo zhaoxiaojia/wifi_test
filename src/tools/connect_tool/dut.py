@@ -293,7 +293,7 @@ class dut():
                         stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=35)
                         # print("Command output:", stdout.decode())  # 打印标准输出
                         if stderr:
-                            logging.warning("Command error:", stderr.decode())  # 打印标准错误
+                            logging.warning(f"Command error: {stderr.decode()}")  # 打印标准错误
                     except asyncio.TimeoutError:
                         logging.warning("Command timed out")
                         process.terminate()  # 终止进程
@@ -304,6 +304,7 @@ class dut():
                     pytest.dut.checkoutput(command)
                 else:
                     command = f'adb -s {pytest.dut.serialnumber} shell timeout 35 {command} '
+                    # command = f'adb -s {pytest.dut.serialnumber} shell {command} '
                     logging.info(f'run over async {command}')
                     # 运行异步函数
                     asyncio.run(run_adb_iperf())
@@ -401,8 +402,10 @@ class dut():
                     time.sleep(15)
                 rx_result = self.get_logcat()
                 self.rvr_result = None
-                if isinstance(terminal, subprocess.Popen):
+                try:
                     terminal.terminate()
+                except Exception as e:
+                    logging.warning(f'Fail to kill run_iperf terminal \n {e}')
             elif self.rvr_tool == 'ixchariot':
                 ix.ep1 = self.pc_ip
                 ix.ep2 = self.dut_ip
@@ -490,8 +493,10 @@ class dut():
                 time.sleep(3)
                 tx_result = self.get_logcat()
                 self.rvr_result = None
-                if isinstance(terminal, subprocess.Popen):
+                try:
                     terminal.terminate()
+                except Exception as e:
+                    logging.warning(f'Fail to kill run_iperf terminal \n {e}')
             elif self.rvr_tool == 'ixchariot':
                 ix.ep1 = self.dut_ip
                 ix.ep2 = self.pc_ip

@@ -53,6 +53,7 @@ class MainWindow(FluentWindow):
         self._rvr_nav_button = None  # 记录 RVR Wi-Fi 配置页的导航按钮
         self._rvr_route_key = None  # 记录 RVR 页面对应的 routeKey
         self._nav_button_clicked_log_slot = None
+        self._runner_finished_slot = None
         self._rvr_visible = False
 
         # 添加侧边导航（页面，图标，标题，描述）
@@ -396,9 +397,11 @@ class MainWindow(FluentWindow):
 
     def clear_run_page(self):
         if self.run_page and not sip.isdeleted(self.run_page):
-
-            with suppress(Exception):
-                self.run_page.cleanup()
+            runner = getattr(self.run_page, "runner", None)
+            if runner and self._runner_finished_slot:
+                with suppress(Exception):
+                    runner.finished.disconnect(self._runner_finished_slot)
+            self._runner_finished_slot = None
             if self._run_nav_button and self._nav_button_clicked_log_slot:
                 with suppress(Exception):
                     self._run_nav_button.clicked.disconnect(self._nav_button_clicked_log_slot)
@@ -406,25 +409,12 @@ class MainWindow(FluentWindow):
                         "Disconnected nav button clicked for RunPage id=%s",
                         id(self.run_page),
                     )
-            self._remove_interface(self.run_page)
-        self.run_page = None
-        if self._run_nav_button:
             with suppress(Exception):
-                self._run_nav_button.clicked.disconnect()
-            nav = getattr(self, "navigationInterface", None)
-            if nav:
-                with suppress(Exception):
-                    for name in ("removeWidget", "removeItem", "removeButton"):
-                        func = getattr(nav, name, None)
-                        if callable(func):
-                            try:
-                                func(self._run_nav_button)
-                                break
-                            except Exception:
-                                pass
-            self._run_nav_button.setParent(None)
-            self._run_nav_button.deleteLater()
+                self.run_page.cleanup()
+            self._remove_interface(self.run_page, nav_button=self._run_nav_button)
             self._run_nav_button = None
+            self.run_page = None
+        QCoreApplication.processEvents()
         logging.info("RunPage cleared")
 
     def _set_nav_buttons_enabled(self, enabled: bool):
@@ -506,14 +496,12 @@ class MainWindow(FluentWindow):
         )
         # 确保添加到导航栏和堆叠窗口
         logging.info("Adding RunPage to navigationInterface id=%s", id(self.run_page))
-        self.addSubInterface(
+        self._run_nav_button = self.addSubInterface(
             self.run_page,
             FluentIcon.PLAY,
             "Test",
-            position=NavigationItemPosition.BOTTOM
+            position=NavigationItemPosition.BOTTOM,
         )
-        buttons = self.navigationInterface.findChildren(QAbstractButton)
-        self._run_nav_button = buttons[-1] if buttons else None
 
         self._set_nav_buttons_enabled(False)
         # 强制刷新堆叠窗口并切换（移除QTimer，直接同步切换）
@@ -526,7 +514,8 @@ class MainWindow(FluentWindow):
         self.run_page.run_case()
         runner = getattr(self.run_page, "runner", None)
         if runner:
-            runner.finished.connect(lambda: self._set_nav_buttons_enabled(True))
+            self._runner_finished_slot = lambda: self._set_nav_buttons_enabled(True)
+            runner.finished.connect(self._runner_finished_slot)
         logging.info("Switched to RunPage: %s", self.run_page)
         stack_idx = self.stackedWidget.indexOf(self.run_page) if self.run_page else None
         logging.info(
