@@ -425,10 +425,13 @@ class MainWindow(FluentWindow):
         buttons = nav.findChildren(QAbstractButton)
         for btn in buttons:
             if btn is self._run_nav_button:
+                # 运行页按钮始终保持可见、可点击
+                btn.setVisible(True)
+                btn.setEnabled(True)
                 continue
             btn.setEnabled(enabled)
             btn.setStyleSheet(
-                "color: gray; font-family: Verdana;" if not enabled else "font-family: Verdana;"
+                "color: gray; font-family: Verdana;" if not enabled else "font-family: Verdana;",
             )
 
     def center_window(self):
@@ -503,7 +506,8 @@ class MainWindow(FluentWindow):
             position=NavigationItemPosition.BOTTOM,
         )
 
-        self._set_nav_buttons_enabled(False)
+        if hasattr(self.case_config_page, 'run_btn'):
+            self.case_config_page.run_btn.setEnabled(False)
         # 强制刷新堆叠窗口并切换（移除QTimer，直接同步切换）
         if self.stackedWidget.indexOf(self.run_page) == -1:
             self.stackedWidget.addWidget(self.run_page)
@@ -514,7 +518,12 @@ class MainWindow(FluentWindow):
         self.run_page.run_case()
         runner = getattr(self.run_page, "runner", None)
         if runner:
-            self._runner_finished_slot = lambda: self._set_nav_buttons_enabled(True)
+            def _on_runner_finished():
+                self._set_nav_buttons_enabled(True)
+                if hasattr(self.case_config_page, 'run_btn'):
+                    self.case_config_page.run_btn.setEnabled(True)
+
+            self._runner_finished_slot = _on_runner_finished
             runner.finished.connect(self._runner_finished_slot)
         logging.info("Switched to RunPage: %s", self.run_page)
         stack_idx = self.stackedWidget.indexOf(self.run_page) if self.run_page else None

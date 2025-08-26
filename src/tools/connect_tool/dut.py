@@ -342,7 +342,6 @@ class dut():
             data = re.findall(r'.*?\d+\.\d*-\s*\d+\.\d*.*?(\d+\.*\d*)\s+Mbits/sec.*?', line.strip(), re.S)
             if data:
                 result_list.append(float(data[0]))
-            if line.strip(): logging.info(f'line : {line.strip()}')
             data = re.findall('\s0\.0+-\s*3\d+\.\d*.*?(\d+\.*\d*)\s+Mbits/sec.*?', line.strip(), re.S)
             if data:
                 return round(float(data[0]), 1)
