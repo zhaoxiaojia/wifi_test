@@ -70,17 +70,17 @@ def common_setup(router: Router, router_info: Router) -> bool:
     pytest.dut.skip_tx = False
     pytest.dut.skip_rx = False
 
-    # router.change_setting(router_info), "Can't set ap , pls check first"
-    # if pytest.connect_type == 'telnet':
-    #     if router_info.band == "2.4G":
-    #         router.change_country("欧洲")
-    #     else:
-    #         router.change_country("美国")
-    #     router.driver.quit()
-    #     band = '5G' if '2' in router_info.band else '2.4G'
-    #     ssid = router_info.ssid + "_bat"
-    #     router.change_setting(Router(band=band, ssid=ssid))
-    # time.sleep(3)
+    router.change_setting(router_info), "Can't set ap , pls check first"
+    if pytest.connect_type == 'telnet':
+        if router_info.band == "2.4G":
+            router.change_country("欧洲")
+        else:
+            router.change_country("美国")
+        router.driver.quit()
+        band = '5G' if '2' in router_info.band else '2.4G'
+        ssid = router_info.ssid + "_bat"
+        router.change_setting(Router(band=band, ssid=ssid))
+    time.sleep(3)
 
     logging.info('router set done')
     with open(pytest.testResult.detail_file, 'a', encoding='utf-8') as f:
@@ -89,7 +89,7 @@ def common_setup(router: Router, router_info: Router) -> bool:
     logging.info(f'dut try to connect {router_info.ssid}')
     if pytest.connect_type == 'telnet':
         connect_status = True
-        # time.sleep(90)
+        time.sleep(90)
     else:
         connect_status = False
         for _ in range(3):
