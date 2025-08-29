@@ -13,6 +13,7 @@ from PyQt5.QtWidgets import (
     QApplication,
     QAbstractButton,
     QGraphicsOpacityEffect,
+    QMessageBox,
 )
 import sip
 from qfluentwidgets import FluentIcon, FluentWindow, NavigationItemPosition
@@ -429,6 +430,8 @@ class MainWindow(FluentWindow):
             self.run_page = None
         QCoreApplication.processEvents()
         logging.info("RunPage cleared")
+        if hasattr(self.case_config_page, "run_btn"):
+            self.case_config_page.run_btn.setEnabled(True)
 
     def _set_nav_buttons_enabled(self, enabled: bool):
         """启用或禁用除 RunPage 外的导航按钮"""
@@ -495,57 +498,63 @@ class MainWindow(FluentWindow):
             logging.error("Failed to set current widget: %s", e)
 
     def on_run(self, case_path, display_case_path, config):
-        stack_idx = self.stackedWidget.indexOf(self.run_page) if self.run_page else None
-        logging.info(
-            "on_run start id=%s isdeleted=%s index=%s",
-            id(self.run_page) if self.run_page else None,
-            sip.isdeleted(self.run_page) if self.run_page else None,
-            stack_idx,
-        )
-        self.clear_run_page()
-        # 传递主窗口自身作为RunPage的父窗口
-        self.run_page = RunPage(
-            case_path,
-            display_case_path,
-            config,
-            parent=self,
-        )
-        # 确保添加到导航栏和堆叠窗口
-        logging.info("Adding RunPage to navigationInterface id=%s", id(self.run_page))
-        self._run_nav_button = self.addSubInterface(
-            self.run_page,
-            FluentIcon.PLAY,
-            "Test",
-            position=NavigationItemPosition.BOTTOM,
-        )
-
-        if hasattr(self.case_config_page, 'run_btn'):
+        if hasattr(self.case_config_page, "run_btn"):
             self.case_config_page.run_btn.setEnabled(False)
-        # 强制刷新堆叠窗口并切换（移除QTimer，直接同步切换）
-        if self.stackedWidget.indexOf(self.run_page) == -1:
-            self.stackedWidget.addWidget(self.run_page)
-        # 直接切换，不使用延迟
-        if self.run_page:  # 额外检查对象是否有效
-            self.switchTo(self.run_page)
-        # 统一通过 run_case 启动测试
-        self.run_page.run_case()
-        runner = getattr(self.run_page, "runner", None)
-        if runner:
-            def _on_runner_finished():
-                self._set_nav_buttons_enabled(True)
-                if hasattr(self.case_config_page, 'run_btn'):
-                    self.case_config_page.run_btn.setEnabled(True)
+        try:
+            stack_idx = self.stackedWidget.indexOf(self.run_page) if self.run_page else None
+            logging.info(
+                "on_run start id=%s isdeleted=%s index=%s",
+                id(self.run_page) if self.run_page else None,
+                sip.isdeleted(self.run_page) if self.run_page else None,
+                stack_idx,
+            )
+            self.clear_run_page()
+            # 传递主窗口自身作为RunPage的父窗口
+            self.run_page = RunPage(
+                case_path,
+                display_case_path,
+                config,
+                parent=self,
+            )
+            # 确保添加到导航栏和堆叠窗口
+            logging.info("Adding RunPage to navigationInterface id=%s", id(self.run_page))
+            self._run_nav_button = self.addSubInterface(
+                self.run_page,
+                FluentIcon.PLAY,
+                "Test",
+                position=NavigationItemPosition.BOTTOM,
+            )
 
-            self._runner_finished_slot = _on_runner_finished
-            runner.finished.connect(self._runner_finished_slot)
-        logging.info("Switched to RunPage: %s", self.run_page)
-        stack_idx = self.stackedWidget.indexOf(self.run_page) if self.run_page else None
-        logging.info(
-            "on_run end id=%s isdeleted=%s index=%s",
-            id(self.run_page) if self.run_page else None,
-            sip.isdeleted(self.run_page) if self.run_page else None,
-            stack_idx,
-        )
+            # 强制刷新堆叠窗口并切换（移除QTimer，直接同步切换）
+            if self.stackedWidget.indexOf(self.run_page) == -1:
+                self.stackedWidget.addWidget(self.run_page)
+            # 直接切换，不使用延迟
+            if self.run_page:  # 额外检查对象是否有效
+                self.switchTo(self.run_page)
+            # 统一通过 run_case 启动测试
+            self.run_page.run_case()
+            runner = getattr(self.run_page, "runner", None)
+            if runner:
+                def _on_runner_finished():
+                    self._set_nav_buttons_enabled(True)
+                    if hasattr(self.case_config_page, 'run_btn'):
+                        self.case_config_page.run_btn.setEnabled(True)
+
+                self._runner_finished_slot = _on_runner_finished
+                runner.finished.connect(self._runner_finished_slot)
+            logging.info("Switched to RunPage: %s", self.run_page)
+            stack_idx = self.stackedWidget.indexOf(self.run_page) if self.run_page else None
+            logging.info(
+                "on_run end id=%s isdeleted=%s index=%s",
+                id(self.run_page) if self.run_page else None,
+                sip.isdeleted(self.run_page) if self.run_page else None,
+                stack_idx,
+            )
+        except Exception as e:
+            logging.error("on_run failed: %s", e, exc_info=True)
+            QMessageBox.critical(self, "错误", f"运行失败：{e}")
+            if hasattr(self.case_config_page, "run_btn"):
+                self.case_config_page.run_btn.setEnabled(True)
 
     def show_case_config(self):
         self.setCurrentIndex(self.case_config_page)
