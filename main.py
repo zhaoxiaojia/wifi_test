@@ -96,24 +96,49 @@ class MainWindow(FluentWindow):
                 self.rvr_wifi_config_page, "reload_csv"):
             self.rvr_wifi_config_page.reload_csv()
 
+        # 可能存在上次未清理干净的 routeKey，需要在重新添加前先移除
+        rk = (
+            self._rvr_route_key
+            or getattr(self.rvr_wifi_config_page, "objectName", lambda: None)()
+        )
+        for attr in ("_interfaces", "_routes"):
+            mapping = getattr(self, attr, None)
+            if mapping and rk in mapping:
+                try:
+                    mapping.pop(rk, None)
+                    logging.debug(
+                        "show_rvr_wifi_config: removed stale %s[%s] before re-add", attr, rk
+                    )
+                except Exception as e:
+                    logging.warning(
+                        "show_rvr_wifi_config: failed to remove %s[%s]: %s", attr, rk, e
+                    )
+
         self._rvr_nav_button = self._add_interface(
             self.rvr_wifi_config_page,
             FluentIcon.WIFI,
             "RVR Scenario Config",
             "RVR Wi-Fi Config",
         )
-        if self._rvr_nav_button:
-            self._rvr_route_key = self._rvr_nav_button.property("routeKey") or self.rvr_wifi_config_page.objectName()
-            logging.debug("show_rvr_wifi_config: routeKey=%s", self._rvr_route_key)
-            # 首次添加后，显式可见（保险）
-            self._rvr_nav_button.setVisible(True)
-            # 确保页在堆叠
-            if self.stackedWidget.indexOf(self.rvr_wifi_config_page) == -1:
-                self.stackedWidget.addWidget(self.rvr_wifi_config_page)
-        else:
+        if not self._rvr_nav_button:
             logging.warning(
-                "addSubInterface returned None (duplicate routeKey or internal reject)"
+                "addSubInterface returned None (duplicate routeKey or internal reject)",
             )
+            QMessageBox.critical(
+                self,
+                "Error",
+                "Failed to add RVR Wi-Fi Config page. Please check logs.",
+            )
+            self._rvr_visible = False
+            return
+
+        self._rvr_route_key = self._rvr_nav_button.property("routeKey") or self.rvr_wifi_config_page.objectName()
+        logging.debug("show_rvr_wifi_config: routeKey=%s", self._rvr_route_key)
+        # 首次添加后，显式可见（保险）
+        self._rvr_nav_button.setVisible(True)
+        # 确保页在堆叠
+        if self.stackedWidget.indexOf(self.rvr_wifi_config_page) == -1:
+            self.stackedWidget.addWidget(self.rvr_wifi_config_page)
         self._rvr_visible = True
 
     def hide_rvr_wifi_config(self):
@@ -246,7 +271,7 @@ class MainWindow(FluentWindow):
         self.rvr_wifi_config_page = None
 
         # ⑤ 清除 FluentWindow 内部的 routeKey 映射（必须）
-        if removed and rk:
+        if rk:
             try:
                 if hasattr(self, "_interfaces"):
                     self._interfaces.pop(rk, None)
