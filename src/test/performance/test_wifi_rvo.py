@@ -61,12 +61,12 @@ def test_rvo(setup_corner):
     rssi_num = pytest.dut.get_rssi()
     logging.info('start test tx/rx')
     logging.info(f'router_info: {router_info}')
-    if int(router_info.test_type):
+    if int(router_info.tx):
         logging.info(f'rssi : {rssi_num} ')
         pytest.dut.get_tx_rate(router_info, 'TCP',
                                corner_tool=corner_tool,
                                db_set=db_set)
-    if int(router_info.test_type):
+    if int(router_info.rx):
         logging.info(f'rssi : {rssi_num}')
         pytest.dut.get_rx_rate(router_info, 'TCP',
                                corner_tool=corner_tool,

@@ -39,6 +39,9 @@ from .theme import apply_theme, apply_font_and_selection
 if TYPE_CHECKING:
     from .windows_case_config import CaseConfigPage
 
+# 无需密码的认证方式集合
+OPEN_AUTH = {"Open System", "无加密(允许所有人连接)"}
+
 
 class WifiTableWidget(TableWidget):
     """支持拖拽排序并通知父页面同步行顺序的表格"""
@@ -343,10 +346,10 @@ class RvrWifiConfigPage(CardWidget):
             self._on_auth_changed(self.auth_combo.currentText())
 
     def _on_auth_changed(self, auth: str):
-        # 调整密码框逻辑
-        need_password = auth not in ("Open System", "无加密(允许所有人连接)")
-        self.passwd_edit.setEnabled(need_password)
-        if not need_password:
+        # 根据认证方式启用或禁用密码框
+        no_password = auth in OPEN_AUTH
+        self.passwd_edit.setEnabled(not no_password)
+        if no_password:
             self.passwd_edit.clear()
 
     def refresh_table(self):
@@ -533,8 +536,10 @@ class RvrWifiConfigPage(CardWidget):
 
     def add_row(self):
         band = self.band_combo.currentText()
-        auth = self.auth_combo.currentText()
-        if auth not in ("Open System", "无加密（允许所有人连接）") and not self.passwd_edit.text():
+        if not self.ssid_edit.text():
+            InfoBar.error(title="Error", content="Pls input ssid", parent=self, position=InfoBarPosition.TOP)
+            return
+        if self.passwd_edit.isEnabled() and not self.passwd_edit.text():
             InfoBar.error(title="Error", content="Pls input password", parent=self, position=InfoBarPosition.TOP)
             return
         ssid = self.ssid_edit.text()
@@ -563,12 +568,13 @@ class RvrWifiConfigPage(CardWidget):
             self.refresh_table()
 
     def save_csv(self):
-        band = self.band_combo.currentText()
-        auth = self.auth_combo.currentText()
-        if auth not in ("Open System", "无加密（允许所有人连接）") and not self.passwd_edit.text():
+        if self.passwd_edit.isEnabled() and not self.passwd_edit.text():
             InfoBar.error(title="Error", content="Pls input password", parent=self, position=InfoBarPosition.TOP)
             return
         self._collect_table_data()
+        if any(not row.get("ssid") for row in self.rows):
+            InfoBar.error(title="Error", content="Pls input ssid", parent=self, position=InfoBarPosition.TOP)
+            return
         try:
             with open(self.csv_path, "w", newline="", encoding="utf-8") as f:
                 writer = csv.DictWriter(f, fieldnames=self.headers)
