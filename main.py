@@ -197,18 +197,29 @@ class MainWindow(FluentWindow):
     def _remove_interface(self, page, route_key=None, nav_button=None):
         nav = getattr(self, "navigationInterface", None)
 
-        # ① 优先：按 page 从导航移除（这是关键修正）
+        rk = (
+            route_key
+            or (nav_button.property("routeKey") if nav_button else None)
+            or getattr(page, "objectName", lambda: None)()
+        )
         removed = False
-        if nav and page and not sip.isdeleted(page):
-            func = getattr(nav, "removeWidget", None)
-            if callable(func):
-                try:
-                    func(page)  # ← 传 page
-                except Exception:
-                    pass
-        if not removed:
-            # 二次尝试：走通用 Detach（内含 removeWidget + 兜底）
-            self._detach_sub_interface(page)
+        if nav:
+            if nav_button and not sip.isdeleted(nav_button):
+                func = getattr(nav, "removeWidget", None)
+                if callable(func):
+                    try:
+                        func(nav_button)
+                        removed = True
+                    except Exception:
+                        pass
+            if not removed and rk:
+                func = getattr(nav, "removeItem", None)
+                if callable(func):
+                    try:
+                        func(rk)
+                        removed = True
+                    except Exception:
+                        pass
 
         # ② 清理 nav_button（只是 UI 残留的可视对象，非必须，但做干净更保险）
         if nav_button and not sip.isdeleted(nav_button):
@@ -234,20 +245,22 @@ class MainWindow(FluentWindow):
         self.rvr_wifi_config_page = None
 
         # ⑤ 清除 FluentWindow 内部的 routeKey 映射（必须）
-        try:
-            rk = route_key or getattr(page, "objectName", lambda: None)()
-            if rk and hasattr(self, "_interfaces"):
-                self._interfaces.pop(rk, None)
-                logging.debug(
-                    ">>> _remove_interface: removed %s from self._interfaces", rk
+        if removed and rk:
+            try:
+                if hasattr(self, "_interfaces"):
+                    self._interfaces.pop(rk, None)
+                    logging.debug(
+                        ">>> _remove_interface: removed %s from self._interfaces", rk
+                    )
+                if hasattr(self, "_routes"):
+                    self._routes.pop(rk, None)
+                    logging.debug(
+                        ">>> _remove_interface: removed %s from self._routes", rk
+                    )
+            except Exception as e:
+                logging.warning(
+                    ">>> _remove_interface: failed to clean routeKey mapping: %s", e
                 )
-            if rk and hasattr(self, "_routes"):
-                self._routes.pop(rk, None)
-                logging.debug(
-                    ">>> _remove_interface: removed %s from self._routes", rk
-                )
-        except Exception as e:
-            logging.warning(">>> _remove_interface: failed to clean routeKey mapping: %s", e)
 
     # ==== DEBUG: deep nav/router/stack introspection ====
     def _debug_nav_state(self, tag: str):
