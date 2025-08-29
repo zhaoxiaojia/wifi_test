@@ -104,7 +104,7 @@ class Asusax88uControl(RouterTools):
         super().__init__('asus_88u', display=True, address=address)
         self.host = self.address
         self.port = 23
-        self.prompt = b'admin@RT-AX88U-D8C0:/tmp/home/root#'  # 命令提示符
+        self.prompt = b':/tmp/home/root#'  # 命令提示符
         self.telnet = telnet_tool(self.host)
 
     def _init_telnet(self):
