@@ -226,33 +226,12 @@ class dut():
             while True:
                 line = tn.read_until(b'Mbits/sec').decode('gbk').strip()
                 self.iperf_log_list.append(line)
-                if '[SUM]' not in line and self.pair != 1:
-                    logging.info('?????')
-                    continue
-                if self.rssi_num > -60:
-                    if line.strip(): logging.info(f'line : {line.strip()}')
-                    data = re.findall('\s0\.0+-\s*3\d+\.\d*.*?(\d+\.*\d*)\s+Mbits/sec.*?', line.strip(), re.S)
-                    if data:
-                        result_list.append(float(data[0]))
-                        break
-                else:
-                    if line.strip(): logging.info(f'line : {line.strip()}')
-                    data = re.findall(r'.*?\d+\.\d*-\s*\d+\.\d*.*?(\d+\.*\d*)\s+Mbits/sec.*?', line.strip(), re.S)
-                    if data:
-                        result_list.append(float(data[0]))
-                    if len(result_list) > 30:
-                        break
-            if result_list:
-                logging.info(f'throughput result : {sum(result_list) / len(result_list)}')
-                # logging.info(f'{result_list}')
-                with lock:
-                    self.rvr_result = sum(result_list) / len(result_list)
-            else:
-                with lock:
-                    self.rvr_result = None
+                result = self._parse_iperf_log(self.iperf_log_list)
+                if result is not None:
+                    with lock:
+                        self.rvr_result = result if result else None
+                    break
             logging.info('run thread done')
-
-        result_list = []
         if '-s' in command:
             self.iperf_log_list = []
         if '-s' in command:
@@ -333,32 +312,34 @@ class dut():
                 logging.info(f'client pc command: {command}')
                 subprocess.Popen(command.split())
 
-    def _get_logcat(self, lines):
+    def _parse_iperf_log(self, lines):
+        """解析 iperf 日志并计算吞吐量."""
         result_list = []
         for line in lines:
             if '[SUM]' not in line and self.pair != 1:
                 continue
-            if line.strip(): logging.info(f'line : {line.strip()}')
+            if line.strip():
+                logging.info(f'line : {line.strip()}')
             data = re.findall(r'.*?\d+\.\d*-\s*\d+\.\d*.*?(\d+\.*\d*)\s+Mbits/sec.*?', line.strip(), re.S)
             if data:
                 result_list.append(float(data[0]))
             data = re.findall('\s0\.0+-\s*3\d+\.\d*.*?(\d+\.*\d*)\s+Mbits/sec.*?', line.strip(), re.S)
             if data:
-                return round(float(data[0]), 1)
-        if result_list:
-            logging.info(f'throughput result : {sum(result_list) / len(result_list)}')
-            # logging.info(f'{result_list}')
-            result = sum(result_list) / len(result_list)
-        else:
-            result = 0
-        return round(result, 1)
+                return float(data[0])
+        throughput = sum(result_list) / len(result_list) if result_list else 0.0
+        if self.rssi_num > -60:
+            return throughput if throughput else None
+        if len(lines) > 30:
+            return throughput
+        return None
 
     def get_logcat(self):
         # pytest.dut.kill_iperf()
         # 分析 iperf 测试结果
         if self.rvr_result is not None:
             return round(self.rvr_result, 1)
-        return self._get_logcat(self.iperf_log_list)
+        result = self._parse_iperf_log(self.iperf_log_list)
+        return round(result, 1) if result is not None else None
 
     def get_pc_ip(self):
         if pytest.win_flag:
