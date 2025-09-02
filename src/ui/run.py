@@ -642,17 +642,23 @@ class RunPage(CardWidget):
         self.action_btn.clicked.connect(slot)
         logging.info("Action button set to %s mode for RunPage id=%s", mode, id(self))
 
-    def run_case(self):
-        self.cleanup()
+    def reset(self):
+        """重置页面状态"""
+        with suppress(Exception):
+            self.cleanup()
         self.log_area.clear()
         self.update_progress(0)
         self.remaining_time_label.hide()
         self._stop_remaining_timer()
-        # —— 新一轮运行：重置 Current case 基线与链 ——
         self._case_fn = ""
         self._case_name_base = "Current case : "
         self._fixture_chain = []
         self.case_info_label.setText(self._case_name_base)
+        self._set_action_button("run")
+        self.action_btn.setEnabled(True)
+
+    def run_case(self):
+        self.reset()
         self._set_action_button("stop")
         self.runner = CaseRunner(self.case_path)
         self.runner.log_signal.connect(self._append_log)
