@@ -69,6 +69,7 @@ class MainWindow(FluentWindow):
             position=NavigationItemPosition.BOTTOM,
         )
         self.run_nav_button.setVisible(False)
+        self.run_nav_button.setEnabled(False)
 
         # 兼容旧属性
         self._run_nav_button = self.run_nav_button
@@ -269,15 +270,11 @@ class MainWindow(FluentWindow):
                 nav_button.clicked.disconnect()
             with suppress(Exception):
                 nav_button.setParent(None)
-            with suppress(Exception):
-                nav_button.deleteLater()
 
         # ④ 从堆栈里移走页面（你原来就有）
         if page and not sip.isdeleted(page):
             with suppress(Exception):
                 self.stackedWidget.removeWidget(page)
-            with suppress(Exception):
-                page.deleteLater()
 
         QCoreApplication.processEvents()
 
@@ -465,10 +462,10 @@ class MainWindow(FluentWindow):
                         id(self.run_page),
                     )
             with suppress(Exception):
-                self.run_page.cleanup()
-            self._remove_interface(self.run_page, nav_button=self._run_nav_button)
-            self._run_nav_button = None
-            self.run_page = None
+                self.run_page.reset()
+            if self._run_nav_button and not sip.isdeleted(self._run_nav_button):
+                self._run_nav_button.setEnabled(False)
+                self._run_nav_button.setVisible(False)
         QCoreApplication.processEvents()
         logging.info("RunPage cleared")
         if hasattr(self.case_config_page, "run_btn"):
@@ -482,9 +479,10 @@ class MainWindow(FluentWindow):
         buttons = nav.findChildren(QAbstractButton)
         for btn in buttons:
             if btn is self._run_nav_button:
-                # 运行页按钮始终保持可见、可点击
+                # 运行页按钮始终保持可见，在禁用其他按钮时保持可点击
                 btn.setVisible(True)
-                btn.setEnabled(True)
+                if not enabled:
+                    btn.setEnabled(True)
                 continue
             btn.setEnabled(enabled)
             btn.setStyleSheet(
@@ -544,7 +542,7 @@ class MainWindow(FluentWindow):
         try:
             if self.run_page:
                 with suppress(Exception):
-                    self.run_page.cleanup()
+                    self.run_page.reset()
 
             # 更新 RunPage 信息
             self.run_page.case_path = case_path
@@ -557,6 +555,7 @@ class MainWindow(FluentWindow):
 
             # 显示运行页
             self.run_nav_button.setVisible(True)
+            self.run_nav_button.setEnabled(True)
             if self.stackedWidget.indexOf(self.run_page) == -1:
                 self.stackedWidget.addWidget(self.run_page)
             self.switchTo(self.run_page)
@@ -567,6 +566,8 @@ class MainWindow(FluentWindow):
             if runner:
                 def _on_runner_finished():
                     self._set_nav_buttons_enabled(True)
+                    if self._run_nav_button and not sip.isdeleted(self._run_nav_button):
+                        self._run_nav_button.setEnabled(False)
                     if hasattr(self.case_config_page, "run_btn"):
                         self.case_config_page.run_btn.setEnabled(True)
 
@@ -580,6 +581,9 @@ class MainWindow(FluentWindow):
             QMessageBox.critical(self, "错误", f"运行失败：{e}")
             if hasattr(self.case_config_page, "run_btn"):
                 self.case_config_page.run_btn.setEnabled(True)
+            if self._run_nav_button and not sip.isdeleted(self._run_nav_button):
+                self._run_nav_button.setEnabled(False)
+                self._run_nav_button.setVisible(False)
 
     def show_case_config(self):
         self.setCurrentIndex(self.case_config_page)
