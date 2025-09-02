@@ -227,16 +227,10 @@ class dut():
                 line = tn.read_until(b'Mbits/sec').decode('gbk').strip()
                 self.iperf_log_list.append(line)
                 result = self._parse_iperf_log(self.iperf_log_list)
-                if self.rssi_num > -60:
-                    if result:
-                        with lock:
-                            self.rvr_result = result
-                        break
-                else:
-                    if len(self.iperf_log_list) > 30:
-                        with lock:
-                            self.rvr_result = result if result else None
-                        break
+                if result is not None:
+                    with lock:
+                        self.rvr_result = result if result else None
+                    break
             logging.info('run thread done')
         if '-s' in command:
             self.iperf_log_list = []
@@ -332,20 +326,21 @@ class dut():
             data = re.findall('\s0\.0+-\s*3\d+\.\d*.*?(\d+\.*\d*)\s+Mbits/sec.*?', line.strip(), re.S)
             if data:
                 return float(data[0])
-        if result_list:
-            logging.info(f'throughput result : {sum(result_list) / len(result_list)}')
-            return sum(result_list) / len(result_list)
-        return 0.0
+        throughput = sum(result_list) / len(result_list) if result_list else 0.0
+        if self.rssi_num > -60:
+            return throughput if throughput else None
+        if len(lines) > 30:
+            return throughput
+        return None
 
-    def _get_logcat(self, lines):
-        return round(self._parse_iperf_log(lines), 1)
 
     def get_logcat(self):
         # pytest.dut.kill_iperf()
         # 分析 iperf 测试结果
         if self.rvr_result is not None:
             return round(self.rvr_result, 1)
-        return self._get_logcat(self.iperf_log_list)
+        result = self._parse_iperf_log(self.iperf_log_list)
+        return round(result, 1) if result is not None else None
 
     def get_pc_ip(self):
         if pytest.win_flag:
