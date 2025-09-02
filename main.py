@@ -55,20 +55,23 @@ class MainWindow(FluentWindow):
         self.case_nav_button = self.addSubInterface(
             self.case_config_page, FluentIcon.SETTING, "Config Setup", "Case Config"
         )
+        self.case_nav_button.setVisible(True)
+        self.case_nav_button.setEnabled(True)
         self.rvr_nav_button = self.addSubInterface(
             self.rvr_wifi_config_page,
             FluentIcon.WIFI,
             "RVR Scenario Config",
             "RVR Wi-Fi Config",
         )
-        self.rvr_nav_button.setVisible(False)
+        self.rvr_nav_button.setVisible(True)
+        self.rvr_nav_button.setEnabled(False)
         self.run_nav_button = self.addSubInterface(
             self.run_page,
             FluentIcon.PLAY,
             "Test",
             position=NavigationItemPosition.BOTTOM,
         )
-        self.run_nav_button.setVisible(False)
+        self.run_nav_button.setVisible(True)
         self.run_nav_button.setEnabled(False)
 
         # 兼容旧属性
@@ -115,8 +118,8 @@ class MainWindow(FluentWindow):
 
         # 可能存在上次未清理干净的 routeKey，需要在重新添加前先移除
         rk = (
-            self._rvr_route_key
-            or getattr(self.rvr_wifi_config_page, "objectName", lambda: None)()
+                self._rvr_route_key
+                or getattr(self.rvr_wifi_config_page, "objectName", lambda: None)()
         )
         for attr in ("_interfaces", "_routes"):
             mapping = getattr(self, attr, None)
@@ -241,9 +244,9 @@ class MainWindow(FluentWindow):
         nav = getattr(self, "navigationInterface", None)
 
         rk = (
-            route_key
-            or (nav_button.property("routeKey") if nav_button else None)
-            or getattr(page, "objectName", lambda: None)()
+                route_key
+                or (nav_button.property("routeKey") if nav_button else None)
+                or getattr(page, "objectName", lambda: None)()
         )
         removed = False
         try:
@@ -537,8 +540,9 @@ class MainWindow(FluentWindow):
             logging.error("Failed to set current widget: %s", e)
 
     def on_run(self, case_path, display_case_path, config):
-        if hasattr(self.case_config_page, "run_btn"):
-            self.case_config_page.run_btn.setEnabled(False)
+        self.case_config_page.lock_for_running(True)
+        if getattr(self, "rvr_wifi_config_page", None):
+            self.rvr_wifi_config_page.set_readonly(True)
         try:
             if self.run_page:
                 with suppress(Exception):
@@ -559,17 +563,27 @@ class MainWindow(FluentWindow):
             if self.stackedWidget.indexOf(self.run_page) == -1:
                 self.stackedWidget.addWidget(self.run_page)
             self.switchTo(self.run_page)
-
+            self.case_config_page.lock_for_running(True)
+            if hasattr(self.rvr_wifi_config_page, "set_readonly"):
+                self.rvr_wifi_config_page.set_readonly(True)
             # 启动测试
             self.run_page.run_case()
             runner = getattr(self.run_page, "runner", None)
             if runner:
                 def _on_runner_finished():
-                    self._set_nav_buttons_enabled(True)
+                    self.case_config_page.lock_for_running(False)
+                    if getattr(self, "rvr_wifi_config_page", None):
+                        self.rvr_wifi_config_page.set_readonly(False)
                     if self._run_nav_button and not sip.isdeleted(self._run_nav_button):
                         self._run_nav_button.setEnabled(False)
-                    if hasattr(self.case_config_page, "run_btn"):
-                        self.case_config_page.run_btn.setEnabled(True)
+                    self.case_config_page.lock_for_running(False)
+                    if hasattr(self.rvr_wifi_config_page, "set_readonly"):
+                        self.rvr_wifi_config_page.set_readonly(False)
+                    if self.rvr_nav_button and not sip.isdeleted(self.rvr_nav_button):
+                        is_perf = self.case_config_page._is_performance_case(
+                            getattr(self.run_page, "case_path", "")
+                        )
+                        self.rvr_nav_button.setEnabled(is_perf)
 
                 self._runner_finished_slot = _on_runner_finished
                 runner.finished.connect(self._runner_finished_slot)
@@ -578,9 +592,10 @@ class MainWindow(FluentWindow):
             logging.info("Switched to RunPage: %s", self.run_page)
         except Exception as e:
             logging.error("on_run failed: %s", e, exc_info=True)
-            QMessageBox.critical(self, "错误", f"运行失败：{e}")
-            if hasattr(self.case_config_page, "run_btn"):
-                self.case_config_page.run_btn.setEnabled(True)
+            QMessageBox.critical(self, "Error", f"Unable to run ：{e}")
+            self.case_config_page.lock_for_running(False)
+            if getattr(self, "rvr_wifi_config_page", None):
+                self.rvr_wifi_config_page.set_readonly(False)
             if self._run_nav_button and not sip.isdeleted(self._run_nav_button):
                 self._run_nav_button.setEnabled(False)
                 self._run_nav_button.setVisible(False)
@@ -592,7 +607,19 @@ class MainWindow(FluentWindow):
     def stop_run_and_show_case_config(self):
         self.setCurrentIndex(self.case_config_page)
         QCoreApplication.processEvents()  # 强制事件刷新
-        self._set_nav_buttons_enabled(True)
+        self.case_config_page.lock_for_running(False)
+        if getattr(self, "rvr_wifi_config_page", None):
+            self.rvr_wifi_config_page.set_readonly(False)
+        if self._run_nav_button and not sip.isdeleted(self._run_nav_button):
+            self._run_nav_button.setEnabled(False)
+        self.case_config_page.lock_for_running(False)
+        if hasattr(self.rvr_wifi_config_page, "set_readonly"):
+            self.rvr_wifi_config_page.set_readonly(False)
+        if self.rvr_nav_button and not sip.isdeleted(self.rvr_nav_button):
+            is_perf = self.case_config_page._is_performance_case(
+                getattr(self.run_page, "case_path", "")
+            )
+            self.rvr_nav_button.setEnabled(is_perf)
         logging.info("Switched to CaseConfigPage")
 
 
