@@ -202,6 +202,27 @@ class RvrWifiConfigPage(CardWidget):
         """返回当前页面的路由器 SSID 和密码"""
         return self.ssid_edit.text(), self.passwd_edit.text()
 
+    def set_readonly(self, readonly: bool) -> None:
+        """切换页面只读状态"""
+        widgets = (
+            self.table,
+            self.band_combo,
+            self.wireless_combo,
+            self.channel_combo,
+            self.bandwidth_combo,
+            self.auth_combo,
+            self.ssid_edit,
+            self.passwd_edit,
+            self.tx_check,
+            self.rx_check,
+            self.data_row_edit,
+            self.add_btn,
+            self.del_btn,
+            self.save_btn,
+        )
+        for w in widgets:
+            w.setEnabled(not readonly)
+
     def _load_router(self, name: str | None = None, address: str | None = None):
         from src.tools.config_loader import load_config
 

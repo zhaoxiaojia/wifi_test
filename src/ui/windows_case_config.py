@@ -54,7 +54,7 @@ from qfluentwidgets import (
     InfoBarPosition,
     ScrollArea
 )
-from .theme import apply_theme, FONT_FAMILY, TEXT_COLOR,apply_font_and_selection,apply_groupbox_style
+from .theme import apply_theme, FONT_FAMILY, TEXT_COLOR, apply_font_and_selection, apply_groupbox_style
 
 
 @dataclass
@@ -111,6 +111,7 @@ class CaseConfigPage(CardWidget):
         self.field_widgets: dict[str, QWidget] = {}
         self.router_obj = None
         self.selected_csv_path: str | None = None
+        self._locked_fields: set[str] | None = None
         # -------------------- layout --------------------
         self.splitter = QSplitter(Qt.Horizontal, self)
         self.splitter.setChildrenCollapsible(False)
@@ -905,13 +906,9 @@ class CaseConfigPage(CardWidget):
             main_window.setCurrentIndex(main_window.case_config_page)
             logging.debug("get_editable_fields: after switch to case_config_page")
 
-        # RVR 页面展示与否仅取决于 enable_rvr_wifi
-        if info.enable_rvr_wifi:
-            if hasattr(main_window, "show_rvr_wifi_config"):
-                main_window.show_rvr_wifi_config()
-        else:
-            if hasattr(main_window, "hide_rvr_wifi_config"):
-                main_window.hide_rvr_wifi_config()
+        # RVR 导航按钮可用状态仅取决于 enable_rvr_wifi
+        if hasattr(main_window, "rvr_nav_button"):
+            main_window.rvr_nav_button.setEnabled(info.enable_rvr_wifi)
         if hasattr(self, "csv_combo"):
             if info.enable_csv:
                 self.csv_combo.setEnabled(True)
@@ -946,6 +943,16 @@ class CaseConfigPage(CardWidget):
         finally:
             self.setUpdatesEnabled(True)
             self.update()  # 确保一次性刷新到屏幕
+
+    def lock_for_running(self, locked: bool) -> None:
+        """运行期间锁定页面控件"""
+        self.case_tree.setEnabled(not locked)
+        if hasattr(self, "run_btn"):
+            self.run_btn.setEnabled(not locked)
+        for w in self.field_widgets.values():
+            w.setEnabled(not locked)
+        if hasattr(self, "csv_combo"):
+            self.csv_combo.setEnabled(not locked)
 
     def on_csv_activated(self, index: int) -> None:
         """用户手动点击同一项时也需要重新加载"""
