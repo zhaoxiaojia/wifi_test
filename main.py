@@ -229,25 +229,25 @@ class MainWindow(FluentWindow):
             or getattr(page, "objectName", lambda: None)()
         )
         removed = False
-        if nav:
-            if nav_button and not sip.isdeleted(nav_button):
-                func = getattr(nav, "removeWidget", None)
-                if callable(func):
-                    try:
-                        func(nav_button)
-                        removed = True
-                    except Exception:
-                        pass
-            if not removed and rk:
+        try:
+            # ① 优先使用 FluentWindow.removeSubInterface 删除导航条目
+            func = getattr(self, "removeSubInterface", None)
+            if callable(func):
+                removed = bool(func(page))
+            # ② 退而求其次，调用 navigationInterface.removeItem
+            elif nav and rk:
                 func = getattr(nav, "removeItem", None)
                 if callable(func):
-                    try:
-                        func(rk)
-                        removed = True
-                    except Exception:
-                        pass
+                    removed = bool(func(rk))
+        except Exception as e:
+            logging.error("_remove_interface: failed to remove nav item %s: %s", rk, e)
+            raise
 
-        # ② 清理 nav_button（只是 UI 残留的可视对象，非必须，但做干净更保险）
+        if not removed:
+            logging.error("_remove_interface: removal failed for %s", rk)
+            raise RuntimeError(f"failed to remove navigation item {rk}")
+
+        # ③ 仅在确认导航项已移除后再删除 nav_button
         if nav_button and not sip.isdeleted(nav_button):
             with suppress(Exception):
                 nav_button.clicked.disconnect()
@@ -256,7 +256,7 @@ class MainWindow(FluentWindow):
             with suppress(Exception):
                 nav_button.deleteLater()
 
-        # ③ 从堆栈里移走页面（你原来就有）
+        # ④ 从堆栈里移走页面（你原来就有）
         if page and not sip.isdeleted(page):
             with suppress(Exception):
                 self.stackedWidget.removeWidget(page)
@@ -265,12 +265,12 @@ class MainWindow(FluentWindow):
 
         QCoreApplication.processEvents()
 
-        # ④ 统一清空指针
+        # ⑤ 统一清空指针
         self._rvr_nav_button = None
         self._rvr_route_key = None
         self.rvr_wifi_config_page = None
 
-        # ⑤ 清除 FluentWindow 内部的 routeKey 映射（必须）
+        # ⑥ 清除 FluentWindow 内部的 routeKey 映射（必须）
         if rk:
             try:
                 if hasattr(self, "_interfaces"):
