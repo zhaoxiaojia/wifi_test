@@ -2,7 +2,7 @@ connect_type:
   adb:
     device: coco5c6788c23f1804
   telnet:
-    ip: 192.168.1.9
+    ip: 192.168.1.102
   type: telnet
 corner_angle:
   ip_address: 192.168.5.11
@@ -28,7 +28,7 @@ rvr:
   iperf:
     path: ''
     server_cmd: iperf -s -w 2m -i 1
-    client_cmd: iperf -c {ip} -w 2m -i 1 -t 30 -P 5
+    client_cmd: iperf -c {ip} -w 2m -i 1 -t 30 -P 1
   ixchariot:
     path: D:/Program Files (x86)/Ixia/IxChariot
   repeat: '0'
