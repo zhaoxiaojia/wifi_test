@@ -28,7 +28,7 @@ rvr:
   iperf:
     path: ''
     server_cmd: iperf -s -w 2m -i 1
-    client_cmd: iperf -c {ip} -w 2m -i 1 -t 30 -P 1
+    client_cmd: iperf -c {ip} -w 2m -i 1 -t 30 -P 5
   ixchariot:
     path: D:/Program Files (x86)/Ixia/IxChariot
   repeat: '0'
