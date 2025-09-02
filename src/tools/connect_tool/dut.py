@@ -42,7 +42,7 @@ class dut():
     @staticmethod
     def _parse_iperf_params(cmd: str) -> tuple[int, int]:
         t_match = re.search(r'-t\s+(\d+)', cmd)
-        p_match = re.search(r'-p\s+(\d+)', cmd)
+        p_match = re.search(r'-P\s+(\d+)', cmd)
         test_time = int(t_match.group(1)) if t_match else 30
         pair = int(p_match.group(1)) if p_match else 5
         return test_time, pair
@@ -104,7 +104,6 @@ class dut():
         self.iperf_server_cmd = iperf_cfg.get('server_cmd', 'iperf -s -w 2m -i 1')
         self.iperf_client_cmd = iperf_cfg.get('client_cmd', 'iperf -c {ip} -w 2m -i 1 -t 30 -p 5')
         self.iperf_test_time, self.pair = self._parse_iperf_params(self.iperf_client_cmd)
-        logging.info(f'self.pair {self.pair}')
         self.iperf_wait_time = self.iperf_test_time + 5
         self.repest_times = int(rvr_cfg.get('repeat', 0))
         self._dut_ip = ''
