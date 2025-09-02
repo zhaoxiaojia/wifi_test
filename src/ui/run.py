@@ -395,16 +395,13 @@ class RunPage(CardWidget):
             self.action_btn.setUseRippleEffect(True)
         if hasattr(self.action_btn, "setUseStateEffect"):
             self.action_btn.setUseStateEffect(True)
-        self._set_action_button("stop")
         self.action_btn.setFixedHeight(CONTROL_HEIGHT)
         layout.addWidget(self.action_btn)
         self.setLayout(layout)
+        self.reset()
         self.finished_count = 0
         self.total_count = 0
         self.avg_case_duration = 0
-        self._case_name_base = "Current case : "  # 基线文本，不含 fixture
-        self._fixture_chain = []  # [(fixture_name, params), ...] 保序累积
-        self._case_fn = ""  # 当前用例名（用于是否重置链）
         self._duration_sum = 0
         self._current_has_fixture = False
         stack = getattr(self.main_window, "stackedWidget", None)

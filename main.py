@@ -50,7 +50,8 @@ class MainWindow(FluentWindow):
         self.case_config_page = CaseConfigPage(self.on_run)
         self.rvr_wifi_config_page = RvrWifiConfigPage(self.case_config_page)
         self.run_page = RunPage("", parent=self)
-
+        # 确保初始运行页为空布局
+        self.run_page.reset()
         # 导航按钮引用
         self.case_nav_button = self.addSubInterface(
             self.case_config_page, FluentIcon.SETTING, "Config Setup", "Case Config"
@@ -72,7 +73,8 @@ class MainWindow(FluentWindow):
             position=NavigationItemPosition.BOTTOM,
         )
         self.run_nav_button.setVisible(True)
-        self.run_nav_button.setEnabled(False)
+        # 默认启用运行页按钮，便于直接查看
+        self.run_nav_button.setEnabled(True)
 
         # 兼容旧属性
         self._run_nav_button = self.run_nav_button
@@ -466,32 +468,23 @@ class MainWindow(FluentWindow):
                     )
             with suppress(Exception):
                 self.run_page.reset()
-            if self._run_nav_button and not sip.isdeleted(self._run_nav_button):
-                self._run_nav_button.setEnabled(False)
-                self._run_nav_button.setVisible(False)
         QCoreApplication.processEvents()
         logging.info("RunPage cleared")
         if hasattr(self.case_config_page, "run_btn"):
             self.case_config_page.run_btn.setEnabled(True)
 
     def _set_nav_buttons_enabled(self, enabled: bool):
-        """启用或禁用除 RunPage 外的导航按钮"""
+        """保持导航按钮启用，并根据需要调整样式"""
         nav = getattr(self, "navigationInterface", None)
         if not nav:
             return
         buttons = nav.findChildren(QAbstractButton)
         for btn in buttons:
+            # 运行页按钮始终保持可见
             if btn is self._run_nav_button:
-                # 运行页按钮始终保持可见，在禁用其他按钮时保持可点击
                 btn.setVisible(True)
-                if not enabled:
-                    btn.setEnabled(True)
-                continue
-            btn.setEnabled(enabled)
-            btn.setStyleSheet(
-                "color: gray; font-family: Verdana;" if not enabled else "font-family: Verdana;",
-            )
-
+            btn.setEnabled(True)
+            btn.setStyleSheet("font-family: Verdana;")
     def center_window(self):
         # 获取屏幕的几何信息
         screen_geometry = QGuiApplication.primaryScreen().availableGeometry()
@@ -574,11 +567,7 @@ class MainWindow(FluentWindow):
                     self.case_config_page.lock_for_running(False)
                     if getattr(self, "rvr_wifi_config_page", None):
                         self.rvr_wifi_config_page.set_readonly(False)
-                    if self._run_nav_button and not sip.isdeleted(self._run_nav_button):
-                        self._run_nav_button.setEnabled(False)
-                    self.case_config_page.lock_for_running(False)
-                    if hasattr(self.rvr_wifi_config_page, "set_readonly"):
-                        self.rvr_wifi_config_page.set_readonly(False)
+                    # 保留运行页导航按钮状态，以便随时查看日志
                     if self.rvr_nav_button and not sip.isdeleted(self.rvr_nav_button):
                         is_perf = self.case_config_page._is_performance_case(
                             getattr(self.run_page, "case_path", "")
@@ -588,7 +577,6 @@ class MainWindow(FluentWindow):
                 self._runner_finished_slot = _on_runner_finished
                 runner.finished.connect(self._runner_finished_slot)
 
-            self._set_nav_buttons_enabled(False)
             logging.info("Switched to RunPage: %s", self.run_page)
         except Exception as e:
             logging.error("on_run failed: %s", e, exc_info=True)

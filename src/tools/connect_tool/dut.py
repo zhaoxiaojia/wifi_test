@@ -100,11 +100,11 @@ class dut():
         cfg = load_config(refresh=True)
         rvr_cfg = cfg.get('rvr', {})
         self.rvr_tool = rvr_cfg.get('tool', 'iperf')
-        self.pair = 5
         iperf_cfg = rvr_cfg.get('iperf', {})
         self.iperf_server_cmd = iperf_cfg.get('server_cmd', 'iperf -s -w 2m -i 1')
         self.iperf_client_cmd = iperf_cfg.get('client_cmd', 'iperf -c {ip} -w 2m -i 1 -t 30 -p 5')
         self.iperf_test_time, self.pair = self._parse_iperf_params(self.iperf_client_cmd)
+        logging.info(f'self.pair {self.pair}')
         self.iperf_wait_time = self.iperf_test_time + 5
         self.repest_times = int(rvr_cfg.get('repeat', 0))
         self._dut_ip = ''
@@ -218,8 +218,7 @@ class dut():
             self.push(path, '/system/bin')
             self.checkoutput('chmod a+x /system/bin/iperf')
 
-    def run_iperf(self, command, adb, direction='tx', iperf3=False):
-
+    def run_iperf(self, command, adb):
         def telnet_iperf():
             tn = telnetlib.Telnet(pytest.dut.dut_ip)
             logging.info(f'run thread: {command}')
@@ -227,7 +226,8 @@ class dut():
             while True:
                 line = tn.read_until(b'Mbits/sec').decode('gbk').strip()
                 self.iperf_log_list.append(line)
-                if '[SUM]' not in line:
+                if '[SUM]' not in line and self.pair != 1:
+                    logging.info('?????')
                     continue
                 if self.rssi_num > -60:
                     if line.strip(): logging.info(f'line : {line.strip()}')
@@ -336,7 +336,7 @@ class dut():
     def _get_logcat(self, lines):
         result_list = []
         for line in lines:
-            if '[SUM]' not in line:
+            if '[SUM]' not in line and self.pair != 1:
                 continue
             if line.strip(): logging.info(f'line : {line.strip()}')
             data = re.findall(r'.*?\d+\.\d*-\s*\d+\.\d*.*?(\d+\.*\d*)\s+Mbits/sec.*?', line.strip(), re.S)
@@ -413,7 +413,7 @@ class dut():
                 terminal = pytest.dut.run_iperf(self.tool_path + pytest.dut.iperf_server_cmd, self.serialnumber)
                 time.sleep(1)
                 client_cmd = pytest.dut.iperf_client_cmd.replace('{ip}', self.dut_ip)
-                pytest.dut.run_iperf(client_cmd, '', direction='rx')
+                pytest.dut.run_iperf(client_cmd, '')
                 time.sleep(pytest.dut.iperf_wait_time)
                 if pytest.connect_type == 'telnet':
                     time.sleep(15)
