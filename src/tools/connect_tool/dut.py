@@ -333,6 +333,7 @@ class dut():
             return throughput
         return None
 
+
     def get_logcat(self):
         # pytest.dut.kill_iperf()
         # 分析 iperf 测试结果
