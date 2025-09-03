@@ -15,7 +15,15 @@ import os
 import sip
 # ui/run.py
 
-from PyQt5.QtWidgets import QVBoxLayout, QTextEdit, QLabel, QFrame, QHBoxLayout, QApplication
+from PyQt5.QtWidgets import (
+    QVBoxLayout,
+    QTextEdit,
+    QLabel,
+    QFrame,
+    QHBoxLayout,
+    QApplication,
+    QGraphicsOpacityEffect,
+)
 from qfluentwidgets import (
     CardWidget,
     StrongBodyLabel,
@@ -37,7 +45,7 @@ from PyQt5.QtCore import (
     QTimer,
     QSize
 )
-from PyQt5.QtGui import QTextCursor
+from PyQt5.QtGui import QTextCursor, QColor
 import datetime
 import re
 import random
@@ -60,6 +68,7 @@ ACCENT_COLOR = "#0067c0"
 ICON_SIZE = 18
 ICON_TEXT_SPACING = 8
 LEFT_PAD = ICON_SIZE + ICON_TEXT_SPACING  # 给文本预留的左侧内边距
+ANIMATION_MAX_BLOCKS = 1000  # 超过此行数不再执行渐显动画
 
 
 class LiveLogWriter:
@@ -399,6 +408,7 @@ class RunPage(CardWidget):
         layout.addWidget(self.action_btn)
         self.setLayout(layout)
         self.reset()
+        self._log_animating = False  # 标记当前是否存在日志渐显动画
         self.finished_count = 0
         self.total_count = 0
         self.avg_case_duration = 0
@@ -491,6 +501,50 @@ class RunPage(CardWidget):
         html = format_log_html(msg)
         self.log_area.append(html)
         doc = self.log_area.document()
+        if (
+            doc.blockCount() < ANIMATION_MAX_BLOCKS
+            and not self._log_animating
+        ):
+            self._log_animating = True
+            block = doc.lastBlock()
+            block_number = block.blockNumber()
+            cursor = QTextCursor(block)
+            cursor.select(QTextCursor.BlockUnderCursor)
+            fmt = cursor.charFormat()
+            fmt.setForeground(QColor(0, 0, 0, 0))
+            cursor.setCharFormat(fmt)
+            cursor.clearSelection()
+
+            layout = doc.documentLayout()
+            rect = layout.blockBoundingRect(block).translated(
+                self.log_area.contentOffset()
+            ).toRect()
+            overlay = QLabel(self.log_area.viewport())
+            overlay.setTextFormat(Qt.RichText)
+            overlay.setText(html)
+            overlay.setStyleSheet(
+                f"background: transparent; font-family:{FONT_FAMILY};"
+            )
+            overlay.setAttribute(Qt.WA_TransparentForMouseEvents)
+            overlay.setGeometry(0, rect.top(), self.log_area.viewport().width(), rect.height())
+            effect = QGraphicsOpacityEffect(overlay)
+            overlay.setGraphicsEffect(effect)
+            animation = QPropertyAnimation(effect, b"opacity", overlay)
+            animation.setDuration(200)
+            animation.setStartValue(0.0)
+            animation.setEndValue(1.0)
+
+            def finish_animation():
+                cur = QTextCursor(doc.findBlockByNumber(block_number))
+                cur.select(QTextCursor.BlockUnderCursor)
+                cur.setHtml(html)
+                overlay.deleteLater()
+                self._log_animating = False
+
+            animation.finished.connect(finish_animation)
+            overlay.show()
+            animation.start(QPropertyAnimation.DeleteWhenStopped)
+
         if doc.blockCount() > 5000:
             cursor = QTextCursor(doc.firstBlock())
             cursor.select(QTextCursor.BlockUnderCursor)
