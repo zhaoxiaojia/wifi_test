@@ -44,7 +44,6 @@ from PyQt5.QtWidgets import (
 
 from qfluentwidgets import (
     CardWidget,
-    TreeView,
     LineEdit,
     PushButton,
     ComboBox,
@@ -54,6 +53,7 @@ from qfluentwidgets import (
     InfoBarPosition,
     ScrollArea
 )
+from .animated_tree_view import AnimatedTreeView
 from .theme import apply_theme, FONT_FAMILY, TEXT_COLOR, apply_font_and_selection, apply_groupbox_style
 
 
@@ -116,7 +116,7 @@ class CaseConfigPage(CardWidget):
         self.splitter = QSplitter(Qt.Horizontal, self)
         self.splitter.setChildrenCollapsible(False)
         # ----- left: case tree -----
-        self.case_tree = TreeView(self)
+        self.case_tree = AnimatedTreeView(self)
         apply_theme(self.case_tree)
         apply_font_and_selection(self.case_tree)
         logging.debug("TreeView font: %s", self.case_tree.font().family())
