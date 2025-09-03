@@ -22,7 +22,12 @@ from src.ui.rvr_wifi_config import RvrWifiConfigPage
 from src.ui.run import RunPage
 from qfluentwidgets import setTheme, Theme
 from PyQt5.QtGui import QGuiApplication, QFont
-from PyQt5.QtCore import QCoreApplication, QPropertyAnimation, QEasingCurve
+from PyQt5.QtCore import (
+    QCoreApplication,
+    QPropertyAnimation,
+    QEasingCurve,
+    QParallelAnimationGroup,
+)
 from src.util.constants import Paths
 from src.util.constants import Paths, cleanup_temp_dir
 
@@ -45,6 +50,39 @@ class MainWindow(FluentWindow):
         self.setMinimumSize(width, height)
         self.center_window()
         self.show()
+
+        final_rect = self.geometry()
+        start_rect = final_rect.adjusted(
+            int(final_rect.width() * 0.1),
+            int(final_rect.height() * 0.1),
+            -int(final_rect.width() * 0.1),
+            -int(final_rect.height() * 0.1),
+        )
+        self.setGeometry(start_rect)
+        self.setWindowOpacity(0)
+
+        self._geo_animation = QPropertyAnimation(self, b"geometry")
+        self._geo_animation.setDuration(400)
+        self._geo_animation.setStartValue(start_rect)
+        self._geo_animation.setEndValue(final_rect)
+        self._geo_animation.setEasingCurve(QEasingCurve.OutBack)
+
+        self._opacity_animation = QPropertyAnimation(self, b"windowOpacity")
+        self._opacity_animation.setDuration(400)
+        self._opacity_animation.setStartValue(0)
+        self._opacity_animation.setEndValue(1)
+        self._opacity_animation.setEasingCurve(QEasingCurve.OutBack)
+
+        self._show_group = QParallelAnimationGroup(self)
+        self._show_group.addAnimation(self._geo_animation)
+        self._show_group.addAnimation(self._opacity_animation)
+
+        def _restore():
+            self.setGeometry(final_rect)
+            self.setWindowOpacity(1)
+
+        self._show_group.finished.connect(_restore)
+        self._show_group.start()
 
         # 页面实例化
         self.case_config_page = CaseConfigPage(self.on_run)
