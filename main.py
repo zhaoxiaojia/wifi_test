@@ -27,6 +27,7 @@ from PyQt5.QtCore import (
     QPropertyAnimation,
     QEasingCurve,
     QParallelAnimationGroup,
+    QPoint,
 )
 from src.util.constants import Paths
 from src.util.constants import Paths, cleanup_temp_dir
@@ -201,6 +202,28 @@ class MainWindow(FluentWindow):
             self.stackedWidget.addWidget(self.rvr_wifi_config_page)
         self._rvr_visible = True
 
+        # 启动滑动动画并切换到 RVR 配置页
+        try:
+            width = self.stackedWidget.width()
+            page = self.rvr_wifi_config_page
+            if page:
+                page.move(width, 0)
+                self.setCurrentIndex(page)
+                anim = QPropertyAnimation(page, b"pos", self)
+                anim.setDuration(200)
+                anim.setStartValue(QPoint(width, 0))
+                anim.setEndValue(QPoint(0, 0))
+                anim.setEasingCurve(QEasingCurve.OutCubic)
+
+                def _reset_pos():
+                    page.move(0, 0)
+
+                anim.finished.connect(_reset_pos)
+                anim.start()
+                self._rvr_slide_anim = anim
+        except Exception as e:
+            logging.warning("show_rvr_wifi_config animation failed: %s", e)
+
     def hide_rvr_wifi_config(self):
         """从导航栏隐藏 RVR Wi-Fi 配置页（不删除，避免 routeKey 残留）"""
         if not self._rvr_visible:
@@ -211,18 +234,40 @@ class MainWindow(FluentWindow):
             self.stackedWidget.currentWidget(),
         )
 
-        # 切回安全页，避免正在显示被隐藏的页
+        width = self.stackedWidget.width()
+        page = self.rvr_wifi_config_page
+
+        # 切回安全页，并保持当前页可见以执行滑动动画
         self.setCurrentIndex(self.case_config_page)
         QCoreApplication.processEvents()
 
-        # 关键：只隐藏，不删除
-        if self._rvr_nav_button and not sip.isdeleted(self._rvr_nav_button):
-            self._rvr_nav_button.setVisible(False)
-            logging.debug("hide_rvr_wifi_config: setVisible(False) for nav item")
+        if page:
+            page.show()
+            page.raise_()
+            anim = QPropertyAnimation(page, b"pos", self)
+            anim.setDuration(200)
+            anim.setStartValue(QPoint(0, 0))
+            anim.setEndValue(QPoint(width, 0))
+            anim.setEasingCurve(QEasingCurve.OutCubic)
 
-        # 页面对象保留在内存/stack（不删），下次可直接复用
-        self._rvr_visible = False
-        logging.debug("hide_rvr_wifi_config end: page=%s", self.rvr_wifi_config_page)
+            def _after():
+                page.move(0, 0)
+                page.hide()
+                if self._rvr_nav_button and not sip.isdeleted(self._rvr_nav_button):
+                    self._rvr_nav_button.setVisible(False)
+                    logging.debug("hide_rvr_wifi_config: setVisible(False) for nav item")
+                self._rvr_visible = False
+                logging.debug("hide_rvr_wifi_config end: page=%s", self.rvr_wifi_config_page)
+
+            anim.finished.connect(_after)
+            anim.start()
+            self._rvr_slide_anim = anim
+        else:
+            if self._rvr_nav_button and not sip.isdeleted(self._rvr_nav_button):
+                self._rvr_nav_button.setVisible(False)
+                logging.debug("hide_rvr_wifi_config: setVisible(False) for nav item")
+            self._rvr_visible = False
+            logging.debug("hide_rvr_wifi_config end: page=%s", self.rvr_wifi_config_page)
 
     def _detach_sub_interface(self, page):
         """Detach the given page from navigation, best-effort for different QFluent versions."""
