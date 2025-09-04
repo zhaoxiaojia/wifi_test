@@ -624,12 +624,21 @@ class RunPage(CardWidget):
         anim.start()
         self._progress_animation = anim
 
+    def _trigger_config_run(self):
+        """触发配置页的运行逻辑，确保与配置页按钮一致"""
+        cfg_page = getattr(self.main_window, "case_config_page", None)
+        if cfg_page and not sip.isdeleted(cfg_page):
+            cfg_page.on_run()
+        else:
+            # 回退到直接运行当前 case
+            self.run_case()
+
     def _set_action_button(self, mode: str):
         """根据模式设置操作按钮"""
         with suppress(TypeError):
             self.action_btn.clicked.disconnect()
         if mode == "run":
-            text, slot = "Run", self.run_case
+            text, slot = "Run", self._trigger_config_run
         elif mode == "stop":
             text, slot = "Stop", self.on_stop
         else:
