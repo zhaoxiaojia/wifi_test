@@ -44,7 +44,7 @@ class dut():
         t_match = re.search(r'-t\s+(\d+)', cmd)
         p_match = re.search(r'-P\s+(\d+)', cmd)
         test_time = int(t_match.group(1)) if t_match else 30
-        pair = int(p_match.group(1)) if p_match else 5
+        pair = int(p_match.group(1)) if p_match else 1
         return test_time, pair
 
     IW_LINNK_COMMAND = 'iw dev wlan0 link'
@@ -102,7 +102,7 @@ class dut():
         self.rvr_tool = rvr_cfg.get('tool', 'iperf')
         iperf_cfg = rvr_cfg.get('iperf', {})
         self.iperf_server_cmd = iperf_cfg.get('server_cmd', 'iperf -s -w 2m -i 1')
-        self.iperf_client_cmd = iperf_cfg.get('client_cmd', 'iperf -c {ip} -w 2m -i 1 -t 30 -p 5')
+        self.iperf_client_cmd = iperf_cfg.get('client_cmd', 'iperf -c {ip} -w 2m -i 1 -t 30 -P 5')
         self.iperf_test_time, self.pair = self._parse_iperf_params(self.iperf_client_cmd)
         self.iperf_wait_time = self.iperf_test_time + 5
         self.repest_times = int(rvr_cfg.get('repeat', 0))
@@ -225,11 +225,6 @@ class dut():
             while True:
                 line = tn.read_until(b'Mbits/sec').decode('gbk').strip()
                 self.iperf_log_list.append(line)
-                result = self._parse_iperf_log(self.iperf_log_list)
-                if result is not None:
-                    with lock:
-                        self.rvr_result = result if result else None
-                    break
             logging.info('run thread done')
         if '-s' in command:
             self.iperf_log_list = []
@@ -336,8 +331,6 @@ class dut():
     def get_logcat(self):
         # pytest.dut.kill_iperf()
         # 分析 iperf 测试结果
-        if self.rvr_result is not None:
-            return round(self.rvr_result, 1)
         result = self._parse_iperf_log(self.iperf_log_list)
         return round(result, 1) if result is not None else None
 
@@ -378,9 +371,6 @@ class dut():
                 f'{router_info.band.split()[0]} {router_info.bandwidth.split()[0]} Rate_Adaptation '
                 f'{router_info.channel} {type} DL NULL NULL {db_set} {self.rssi_num} {corner} NULL "NULL" 0 {expect_rate}')
             pytest.testResult.save_result(rx_result_info.replace(' ', ','))
-            with open(pytest.testResult.detail_file, 'a', encoding='utf-8') as f:
-                f.write(f'Rx {type} result : 0\n')
-                f.write('-' * 40 + '\n\n')
             return 'N/A'
 
         rx_result_list = []
@@ -442,10 +432,6 @@ class dut():
             f'{router_info.channel} {type} DL NULL NULL {db_set} {self.rssi_num} {corner} NULL '
             f'{mcs_rx if mcs_rx else "NULL"} {",".join(map(str, rx_result_list))} {expect_rate}')
         pytest.testResult.save_result(rx_result_info.replace(' ', ','))
-        with open(pytest.testResult.detail_file, 'a', encoding='utf-8') as f:
-            logging.info('writing')
-            f.write(f'Rx {type} result : {rx_result}\n')
-            f.write('-' * 40 + '\n\n')
         return ','.join(map(str, rx_result_list)) if rx_result_list else 'N/A'
 
     @step
@@ -466,9 +452,6 @@ class dut():
                 f'{router_info.channel} {type} UL NULL NULL {db_set} {self.rssi_num} {corner} NULL "NULL" 0 {expect_rate}')
             logging.info(tx_result_info)
             pytest.testResult.save_result(tx_result_info.replace(' ', ','))
-            with open(pytest.testResult.detail_file, 'a') as f:
-                f.write(f'Tx {type} result : 0\n')
-                f.write('-' * 40 + '\n\n')
             return 'N/A'
 
         tx_result_list = []
@@ -533,9 +516,6 @@ class dut():
             f'{mcs_tx if mcs_tx else "NULL"} {",".join(map(str, tx_result_list))} {expect_rate}')
         logging.info(tx_result_info)
         pytest.testResult.save_result(tx_result_info.replace(' ', ','))
-        with open(pytest.testResult.detail_file, 'a') as f:
-            f.write(f'Tx {type} result : {tx_result}\n')
-            f.write('-' * 40 + '\n\n')
         return ','.join(map(str, tx_result_list)) if tx_result_list else 'N/A'
 
     def wait_for_wifi_address(self, cmd: str = '', target=''):
@@ -620,15 +600,10 @@ class dut():
             rssi_info = ''
 
         if 'Not connected' in rssi_info:
-            with open(pytest.testResult.detail_file, 'a') as f:
-                f.write('Wifi is not connected \n')
             assert False, "Wifi is not connected"
         try:
             self.rssi_num = int(re.findall(r'signal:\s+(-?\d+)\s+dBm', rssi_info, re.S)[0])
             self.freq_num = int(re.findall(r'freq:\s+(\d+)\s+', rssi_info, re.S)[0])
-            with open(pytest.testResult.detail_file, 'a') as f:
-                f.write(f'Rssi : {self.rssi_num}\n')
-                f.write(f'Freq : {self.freq_num}\n')
         except IndexError as e:
             self.rssi_num = -1
             self.freq_num = -1

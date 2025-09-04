@@ -83,8 +83,6 @@ def common_setup(router: Router, router_info: Router) -> bool:
     # time.sleep(3)
 
     logging.info('router set done')
-    with open(pytest.testResult.detail_file, 'a', encoding='utf-8') as f:
-        f.write(f'Testing {router_info} \n')
 
     logging.info(f'dut try to connect {router_info.ssid}')
     if pytest.connect_type == 'telnet':
