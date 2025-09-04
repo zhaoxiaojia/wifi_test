@@ -47,16 +47,7 @@ def test_rvo(setup_corner):
     connect_status, router_info, corner_set, corner_tool = setup_corner
     if not connect_status:
         logging.info("Can't connect wifi ,input 0")
-        with open(pytest.testResult.detail_file, 'a') as f:
-            f.write("\n Can't connect wifi , skip this loop\n\n")
         return
-
-    with open(pytest.testResult.detail_file, 'a') as f:
-        f.write('-' * 40 + '\n')
-        info, db_set = '', 0
-        info += 'db_set :  \n'
-        info += 'corner_set : ' + str(corner_set) + '\n'
-        f.write(info)
 
     rssi_num = pytest.dut.get_rssi()
     logging.info('start test tx/rx')
