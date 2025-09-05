@@ -49,8 +49,8 @@ class WifiTableWidget(TableWidget):
     def __init__(self, page: "RvrWifiConfigPage"):
         super().__init__(page)
         self.page = page
-        # 仅允许单行选择并整行高亮
-        self.setSelectionMode(QAbstractItemView.SingleSelection)
+        # 取消表格自身的选中状态，避免与勾选框操作冲突
+        self.setSelectionMode(QAbstractItemView.NoSelection)
         self.setSelectionBehavior(QAbstractItemView.SelectRows)
 
     def mousePressEvent(self, event):
@@ -142,11 +142,11 @@ class RvrWifiConfigPage(CardWidget):
         # 禁用交替行颜色并避免样式表重新启用
         self.table.setAlternatingRowColors(False)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.Stretch)
         header.setStretchLastSection(True)
-        self.table.itemSelectionChanged.connect(self._load_row_to_form)
+        # 无选中模式下使用 cellClicked 信号加载数据
+        self.table.cellClicked.connect(lambda r, c: self._load_row_to_form())
         main_layout.addWidget(self.table, 2)
 
         apply_theme(header)
@@ -376,20 +376,26 @@ class RvrWifiConfigPage(CardWidget):
     def refresh_table(self):
         self.table.clear()
         self.table.setRowCount(len(self.rows))
-        self.table.setColumnCount(len(self.headers))
-        self.table.setHorizontalHeaderLabels(self.headers)
+        # 首列为勾选框，需额外预留一列
+        self.table.setColumnCount(len(self.headers) + 1)
+        self.table.setHorizontalHeaderLabels(["选中", *self.headers])
         header = self.table.horizontalHeader()
-        idx = self.headers.index("security_protocol")
-        ssid = self.headers.index("ssid")
+        idx = self.headers.index("security_protocol") + 1
+        ssid = self.headers.index("ssid") + 1
         header.setSectionResizeMode(idx, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(ssid, QHeaderView.ResizeToContents)
         self.table.setColumnWidth(idx, 150)
         self.table.setColumnWidth(ssid, 150)
         for r, row in enumerate(self.rows):
+            # 勾选框列
+            check_item = QTableWidgetItem()
+            check_item.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
+            check_item.setCheckState(Qt.Unchecked)
+            self.table.setItem(r, 0, check_item)
             for c, h in enumerate(self.headers):
                 item = QTableWidgetItem(str(row.get(h, "")))
                 item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
-                self.table.setItem(r, c, item)
+                self.table.setItem(r, c + 1, item)
         self.table.clearSelection()
         self._load_row_to_form()
 
@@ -401,7 +407,7 @@ class RvrWifiConfigPage(CardWidget):
         for r in range(self.table.rowCount()):
             row: dict[str, str] = {}
             for c, h in enumerate(self.headers):
-                item = self.table.item(r, c)
+                item = self.table.item(r, c + 1)
                 row[h] = item.text() if item else ""
             data.append(row)
         self.rows = data
@@ -513,7 +519,7 @@ class RvrWifiConfigPage(CardWidget):
         value = "1" if state == Qt.Checked else "0"
         self.rows[row][col_name] = value
         try:
-            col = self.headers.index(col_name)
+            col = self.headers.index(col_name) + 1
         except ValueError:
             return
         item = self.table.item(row, col)
@@ -544,7 +550,7 @@ class RvrWifiConfigPage(CardWidget):
         self.rows[row].update(data)
         for key, value in data.items():
             try:
-                col = self.headers.index(key)
+                col = self.headers.index(key) + 1
             except ValueError:
                 continue
             item = self.table.item(row, col)
@@ -579,14 +585,22 @@ class RvrWifiConfigPage(CardWidget):
         self.rows.append(row)
         self.refresh_table()
         if self.rows:
-            self.table.selectRow(len(self.rows) - 1)
+            # 选中最后一行的首个数据单元格
+            self.table.setCurrentCell(len(self.rows) - 1, 1)
 
     def delete_row(self):
-        self._collect_table_data()
-        row = self.table.currentRow()
-        if 0 <= row < len(self.rows):
-            self.rows.pop(row)
-            self.refresh_table()
+        new_rows: list[dict[str, str]] = []
+        for r in range(self.table.rowCount()):
+            item = self.table.item(r, 0)
+            if item and item.checkState() == Qt.Checked:
+                continue
+            row_data: dict[str, str] = {}
+            for c, h in enumerate(self.headers):
+                cell = self.table.item(r, c + 1)
+                row_data[h] = cell.text() if cell else ""
+            new_rows.append(row_data)
+        self.rows = new_rows
+        self.refresh_table()
 
     def save_csv(self):
         if self.passwd_edit.isEnabled() and not self.passwd_edit.text():
