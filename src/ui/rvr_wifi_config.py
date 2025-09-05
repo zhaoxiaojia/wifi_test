@@ -58,6 +58,7 @@ class WifiTableWidget(TableWidget):
         super().mousePressEvent(event)
         if self.itemAt(event.pos()) is None:
             self.clearSelection()
+            self.setCurrentItem(None)
             self.page.reset_form()
 
 
@@ -397,6 +398,7 @@ class RvrWifiConfigPage(CardWidget):
                 item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
                 self.table.setItem(r, c + 1, item)
         self.table.clearSelection()
+        self.table.setCurrentItem(None)
         self._load_row_to_form()
 
     def _sync_rows(self):
@@ -431,28 +433,44 @@ class RvrWifiConfigPage(CardWidget):
                 )
                 for w in widgets:
                     stack.enter_context(QSignalBlocker(w))
+                if self.rows:
+                    data = self.rows[-1]
+                    band = data.get("band", "")
+                    self.band_combo.setCurrentText(band)
+                    self._update_band_options(band)
+                    self.wireless_combo.setCurrentText(data.get("wireless_mode", ""))
+                    self.channel_combo.setCurrentText(data.get("channel", ""))
+                    self.bandwidth_combo.setCurrentText(data.get("bandwidth", ""))
+                    self._update_auth_options(self.wireless_combo.currentText())
+                    self.auth_combo.setCurrentText(data.get("security_protocol", ""))
+                    self._on_auth_changed(self.auth_combo.currentText())
+                    self.passwd_edit.setText(data.get("password", ""))
+                    self.ssid_edit.setText(data.get("ssid", ""))
+                    self.tx_check.setChecked(data.get("tx", "0") == "1")
+                    self.rx_check.setChecked(data.get("rx", "0") == "1")
+                    self.data_row_edit.setText(data.get("data_row", ""))
+                else:
+                    if self.band_combo.count():
+                        self.band_combo.setCurrentIndex(0)
+                    self._update_band_options(self.band_combo.currentText())
 
-                if self.band_combo.count():
-                    self.band_combo.setCurrentIndex(0)
-                self._update_band_options(self.band_combo.currentText())
+                    if self.wireless_combo.count():
+                        self.wireless_combo.setCurrentIndex(0)
+                    if self.channel_combo.count():
+                        self.channel_combo.setCurrentIndex(0)
+                    if self.bandwidth_combo.count():
+                        self.bandwidth_combo.setCurrentIndex(0)
+                    self._update_auth_options(self.wireless_combo.currentText())
 
-                if self.wireless_combo.count():
-                    self.wireless_combo.setCurrentIndex(0)
-                if self.channel_combo.count():
-                    self.channel_combo.setCurrentIndex(0)
-                if self.bandwidth_combo.count():
-                    self.bandwidth_combo.setCurrentIndex(0)
-                self._update_auth_options(self.wireless_combo.currentText())
+                    if self.auth_combo.count():
+                        self.auth_combo.setCurrentIndex(0)
+                    self._on_auth_changed(self.auth_combo.currentText())
 
-                if self.auth_combo.count():
-                    self.auth_combo.setCurrentIndex(0)
-                self._on_auth_changed(self.auth_combo.currentText())
-
-                self.passwd_edit.clear()
-                self.ssid_edit.clear()
-                self.tx_check.setChecked(False)
-                self.rx_check.setChecked(False)
-                self.data_row_edit.clear()
+                    self.passwd_edit.clear()
+                    self.ssid_edit.clear()
+                    self.tx_check.setChecked(False)
+                    self.rx_check.setChecked(False)
+                    self.data_row_edit.clear()
         finally:
             self._loading = False
 
