@@ -602,9 +602,6 @@ class RvrWifiConfigPage(CardWidget):
         }
         self.rows.append(row)
         self.refresh_table()
-        if self.rows:
-            # 选中最后一行的首个数据单元格
-            self.table.setCurrentCell(len(self.rows) - 1, 1)
 
     def delete_row(self):
         new_rows: list[dict[str, str]] = []
