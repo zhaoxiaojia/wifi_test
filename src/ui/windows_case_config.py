@@ -858,19 +858,6 @@ class CaseConfigPage(CardWidget):
                 "rf_solution.RC4DAT-8G-95.ip_address",
                 "rf_solution.RADIORACK-4-220.ip_address",
             }
-            # 根据路径判断是否需要启用 CSV 与 RVR WiFi 配置
-            base = Path(self._get_application_base())
-            perf_dir = (base / "test" / "performance").resolve()
-            case_abs = Path(case_path).resolve() if case_path else None
-            logging.debug("_compute_editable_info perf_dir=%s case_abs=%s", perf_dir, case_abs)
-            if case_abs and perf_dir in case_abs.parents:
-                info.enable_csv = True
-            info.enable_rvr_wifi = True
-            logging.debug(
-                "_compute_editable_info enable_csv=%s enable_rvr_wifi=%s",
-                info.enable_csv,
-                info.enable_rvr_wifi,
-            )
         # 如果你需要所有字段都可编辑，直接 return EditableInfo(set(self.field_widgets.keys()), True, True)
         return info
 
