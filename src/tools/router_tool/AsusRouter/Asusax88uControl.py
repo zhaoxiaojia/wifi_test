@@ -174,27 +174,27 @@ class Asusax88uControl(RouterTools):
 
     def set_2g_wireless(self, mode):
         cmd = {
-            '自动': 'nvram set wl0_11ax=0;nvram set wl0_nmode_x=0;',
-            '11n': 'nvram set wl0_11ax=0;nvram set wl0_nmode_x=1;',
-            '11g': 'nvram set wl0_11ax=0;nvram set wl0_nmode_x=5;',
-            '11b': 'nvram set wl0_11ax=0;nvram set wl0_nmode_x=6;',
-            '11ax': 'nvram set wl0_11ax=1;nvram set wl0_nmode_x=9;',
-            'Legacy': 'nvram set wl0_11ax=0;nvram set wl0_nmode_x=2;',
+            '自动': 'nvram set wl0_he_features=0;nvram set wl0_nmode_x=0;',
+            '11n': 'nvram set wl0_he_features=0;nvram set wl0_nmode_x=1;',
+            '11g': 'nvram set wl0_he_features=0;nvram set wl0_nmode_x=5;',
+            '11b': 'nvram set wl0_he_features=0;nvram set wl0_nmode_x=6;',
+            '11ax': 'nvram set wl0_he_features=31;nvram set wl0_nmode_x=9;nvram set wl0_vhtmode=2;',
+            'Legacy': 'nvram set wl0_he_features=0;nvram set wl0_nmode_x=2;',
         }
         if mode not in self.WIRELESS_2:
-            raise ConfigError('wireless elemenr error')
+            raise ConfigError('wireless element error')
         self.telnet_write(cmd[mode])
 
     def set_5g_wireless(self, mode):
         cmd = {
-            '自动': 'nvram set wl1_11ax=0;nvram set wl1_nmode_x=0;',
-            '11a': 'nvram set wl1_11ax=0;nvram set wl1_nmode_x=7;',
-            '11ac': 'nvram set wl1_11ax=0;nvram set wl1_nmode_x=3;',
-            '11ax': 'nvram set wl1_11ax=1;nvram set wl1_nmode_x=9;',
-            'Legacy': 'nvram set wl1_11ax=0;nvram set wl1_nmode_x=2;',
+            '自动': 'nvram set wl1_he_features=0;nvram set wl1_nmode_x=0;',
+            '11a': 'nvram set wl1_he_features=0;nvram set wl1_nmode_x=7;',
+            '11ac': 'nvram set wl1_he_features=0;nvram set wl1_nmode_x=3;',
+            '11ax': 'nvram set wl1_he_features=7;nvram set wl1_nmode_x=9;nvram set wl1_vhtmode=2;',
+            'Legacy': 'nvram set wl1_he_features=0;nvram set wl1_nmode_x=2;',
         }
         if mode not in self.WIRELESS_5:
-            raise ConfigError('wireless elemenr error')
+            raise ConfigError('wireless element error')
         self.telnet_write(cmd[mode])
 
     def set_2g_password(self, passwd):
