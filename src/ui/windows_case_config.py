@@ -111,6 +111,7 @@ class CaseConfigPage(CardWidget):
         self.field_widgets: dict[str, QWidget] = {}
         self.router_obj = None
         self.selected_csv_path: str | None = None
+        self._enable_rvr_wifi: bool = False
         self._locked_fields: set[str] | None = None
         # -------------------- layout --------------------
         self.splitter = QSplitter(Qt.Horizontal, self)
@@ -376,6 +377,13 @@ class CaseConfigPage(CardWidget):
                     self.csv_combo.setItemData(idx, str(csv_file.resolve()))
                 self.csv_combo.setCurrentIndex(-1)
         self.selected_csv_path = None
+
+    def _update_rvr_nav_button(self) -> None:
+        """根据当前状态更新 RVR 导航按钮可用性"""
+        main_window = self.window()
+        if hasattr(main_window, "rvr_nav_button"):
+            enabled = bool(self._enable_rvr_wifi and self.selected_csv_path)
+            main_window.rvr_nav_button.setEnabled(enabled)
 
     def _estimate_group_weight(self, group: QWidget) -> int:
         """粗略估算分组高度：以输入型子控件数量为权重"""
@@ -892,10 +900,7 @@ class CaseConfigPage(CardWidget):
             logging.debug("get_editable_fields: before switch to case_config_page")
             main_window.setCurrentIndex(main_window.case_config_page)
             logging.debug("get_editable_fields: after switch to case_config_page")
-
-        # RVR 导航按钮可用状态仅取决于 enable_rvr_wifi
-        if hasattr(main_window, "rvr_nav_button"):
-            main_window.rvr_nav_button.setEnabled(info.enable_rvr_wifi)
+        self._enable_rvr_wifi = info.enable_rvr_wifi
         if hasattr(self, "csv_combo"):
             if info.enable_csv:
                 self.csv_combo.setEnabled(True)
@@ -907,6 +912,7 @@ class CaseConfigPage(CardWidget):
         else:
             self.selected_csv_path = None
             logging.debug("csv_combo disabled")
+        self._update_rvr_nav_button()
         # 若用户在刷新过程中又点了别的用例，延迟 0 ms 处理它
         if self._pending_path:
             path = self._pending_path
@@ -950,6 +956,7 @@ class CaseConfigPage(CardWidget):
         """记录当前选择的 CSV 文件路径并发出信号"""
         if index < 0:
             self.selected_csv_path = None
+            self._update_rvr_nav_button()
             return
         # 明确使用 UserRole 获取数据，避免在不同 Qt 版本下默认角色不一致
         data = self.csv_combo.itemData(index)
@@ -959,6 +966,7 @@ class CaseConfigPage(CardWidget):
             return
         self.selected_csv_path = new_path
         logging.debug("selected_csv_path=%s", self.selected_csv_path)
+        self._update_rvr_nav_button()
         self.csvFileChanged.emit(self.selected_csv_path or "")
 
     def on_run(self):
