@@ -131,9 +131,6 @@ class RvrWifiConfigPage(CardWidget):
         self.add_btn = PushButton("Add", btn_widget)
         self.add_btn.clicked.connect(self.add_row)
         btn_layout.addWidget(self.add_btn)
-        self.save_btn = PushButton("Save", btn_widget)
-        self.save_btn.clicked.connect(self.save_csv)
-        btn_layout.addWidget(self.save_btn)
         form_layout.addRow(btn_widget)
 
         main_layout.addWidget(form_box, 1)
@@ -219,7 +216,6 @@ class RvrWifiConfigPage(CardWidget):
             self.data_row_edit,
             self.add_btn,
             self.del_btn,
-            self.save_btn,
         )
         for w in widgets:
             w.setEnabled(not readonly)
@@ -547,6 +543,7 @@ class RvrWifiConfigPage(CardWidget):
             self.table.setItem(row, col, item)
         else:
             item.setText(value)
+        self.save_csv()
 
     def _update_current_row(self, *args):
         if self._loading:
@@ -578,6 +575,7 @@ class RvrWifiConfigPage(CardWidget):
                 self.table.setItem(row, col, item)
             else:
                 item.setText(value)
+        self.save_csv()
 
     def add_row(self):
         band = self.band_combo.currentText()
@@ -602,6 +600,7 @@ class RvrWifiConfigPage(CardWidget):
         }
         self.rows.append(row)
         self.refresh_table()
+        self.save_csv()
 
     def delete_row(self):
         new_rows: list[dict[str, str]] = []
@@ -616,6 +615,7 @@ class RvrWifiConfigPage(CardWidget):
             new_rows.append(row_data)
         self.rows = new_rows
         self.refresh_table()
+        self.save_csv()
 
     def save_csv(self):
         if self.passwd_edit.isEnabled() and not self.passwd_edit.text():
@@ -630,6 +630,6 @@ class RvrWifiConfigPage(CardWidget):
                 writer = csv.DictWriter(f, fieldnames=self.headers)
                 writer.writeheader()
                 writer.writerows(self.rows)
-            InfoBar.success(title="Hint", content="Saved", parent=self, position=InfoBarPosition.TOP)
+            logging.info("CSV saved to %s", self.csv_path)
         except Exception as e:
             InfoBar.error(title="Error", content=str(e), parent=self, position=InfoBarPosition.TOP)
