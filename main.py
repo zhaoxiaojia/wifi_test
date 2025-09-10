@@ -31,6 +31,7 @@ from src.ui.windows_case_config import CaseConfigPage
 from src.ui.rvr_wifi_config import RvrWifiConfigPage
 from src.ui.run import RunPage
 from qfluentwidgets import setTheme, Theme
+from src.ui.theme import apply_theme
 from PyQt5.QtGui import QGuiApplication, QFont
 from PyQt5.QtCore import (
     QCoreApplication,
@@ -97,6 +98,8 @@ class LogDock(QDockWidget):
         self.editor.setReadOnly(True)
         self.setWidget(self.editor)
         self._reader: LogReader | None = None
+        apply_theme(self)
+        apply_theme(self.editor, recursive=True)
 
     def start_read(self, log_dir: str):
         if self._reader:
