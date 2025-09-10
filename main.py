@@ -16,9 +16,17 @@ from PyQt5.QtWidgets import (
     QMessageBox,
     QDockWidget,
     QPlainTextEdit,
+    QMainWindow,
+    QStackedWidget,
+    QWidget,
+    QHBoxLayout,
 )
 import sip
-from qfluentwidgets import FluentIcon, FluentWindow, NavigationItemPosition
+from qfluentwidgets import (
+    FluentIcon,
+    NavigationItemPosition,
+    NavigationInterface,
+)
 from src.ui.windows_case_config import CaseConfigPage
 from src.ui.rvr_wifi_config import RvrWifiConfigPage
 from src.ui.run import RunPage
@@ -108,15 +116,32 @@ class LogDock(QDockWidget):
         self.hide()
 
 
-class MainWindow(FluentWindow):
+class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
+        self._interfaces: dict[str, QWidget] = {}
+        self._routes: dict[str, QWidget] = {}
+
         self.setWindowTitle("FAE-QA  Wi-Fi Test Tool")
         screen = QGuiApplication.primaryScreen().availableGeometry()
         width = int(screen.width() * 0.7)
         height = int(screen.height() * 0.7)
         self.resize(width, height)
         self.setMinimumSize(width, height)
+
+        # 中央布局与导航
+        central = QWidget(self)
+        self.setCentralWidget(central)
+        self.hBoxLayout = QHBoxLayout(central)
+        self.hBoxLayout.setSpacing(0)
+        self.hBoxLayout.setContentsMargins(0, 0, 0, 0)
+        self.navigationInterface = NavigationInterface(central, showMenuButton=True)
+        self.stackedWidget = QStackedWidget(central)
+        self.hBoxLayout.addWidget(self.navigationInterface)
+        self.hBoxLayout.addWidget(self.stackedWidget)
+        self.hBoxLayout.setStretchFactor(self.stackedWidget, 1)
+        self.stackedWidget.currentChanged.connect(self.onCurrentInterfaceChanged)
+
         self.center_window()
         self.show()
 
@@ -157,8 +182,8 @@ class MainWindow(FluentWindow):
         self.case_config_page = CaseConfigPage(self.on_run)
         self.rvr_wifi_config_page = RvrWifiConfigPage(self.case_config_page)
         self.run_page = RunPage("", parent=self)
-        # 确保初始运行页为空布局
-        self.run_page.reset()
+        self.run_page.reset()  # 确保初始运行页为空布局
+
         # 导航按钮引用
         self.case_nav_button = self.addSubInterface(
             self.case_config_page, FluentIcon.SETTING, "Config Setup", "Case Config"
@@ -191,13 +216,58 @@ class MainWindow(FluentWindow):
         self._runner_finished_slot = None
         self._rvr_visible = False
 
-        # 可加更多页面，比如“历史记录”“关于”等
-        self.setMicaEffectEnabled(True)  # Win11下生效毛玻璃
-
         # 日志 Dock
         self.log_dock = LogDock(self)
         self.addDockWidget(Qt.BottomDockWidgetArea, self.log_dock)
         self.log_dock.hide()
+
+    # ===== navigation helpers =====
+    def addSubInterface(
+        self,
+        interface: QWidget,
+        icon,
+        text: str,
+        tooltip: str | None = None,
+        position: NavigationItemPosition = NavigationItemPosition.TOP,
+        parent: QWidget | None = None,
+    ):
+        """新增子页面并绑定到导航"""
+        if interface is None:
+            return None
+        self.stackedWidget.addWidget(interface)
+        route_key = interface.objectName()
+        btn = self.navigationInterface.addItem(
+            routeKey=route_key,
+            icon=icon,
+            text=text,
+            onClick=lambda: self.switchTo(interface),
+            position=position,
+            tooltip=tooltip,
+            parentRouteKey=parent.objectName() if parent else None,
+        )
+        self._interfaces[route_key] = interface
+        self._routes[route_key] = interface
+        return btn
+
+    def removeSubInterface(self, interface: QWidget):
+        """从导航和堆栈中移除页面"""
+        if interface is None:
+            return False
+        route_key = interface.objectName()
+        self.navigationInterface.removeWidget(route_key)
+        self.stackedWidget.removeWidget(interface)
+        self._interfaces.pop(route_key, None)
+        self._routes.pop(route_key, None)
+        return True
+
+    def switchTo(self, widget: QWidget, ssid: str | None = None, passwd: str | None = None):
+        """切换到指定页面"""
+        self.setCurrentIndex(widget, ssid, passwd)
+
+    def onCurrentInterfaceChanged(self, index: int):
+        widget = self.stackedWidget.widget(index)
+        if widget:
+            self.navigationInterface.setCurrentItem(widget.objectName())
 
     def show_rvr_wifi_config(self):
         """在导航栏中显示 RVR Wi-Fi 配置页（幂等：已存在则只显示）"""
@@ -408,13 +478,13 @@ class MainWindow(FluentWindow):
         )
         removed = False
         try:
-            # ① 优先使用 FluentWindow.removeSubInterface 删除导航条目
+            # ① 优先使用自定义 removeSubInterface 删除导航条目
             func = getattr(self, "removeSubInterface", None)
             if callable(func):
                 removed = bool(func(page))
-            # ② 退而求其次，调用 navigationInterface.removeItem
+            # ② 退而求其次，调用 navigationInterface.removeWidget
             elif nav and rk:
-                func = getattr(nav, "removeItem", None)
+                func = getattr(nav, "removeWidget", None)
                 if callable(func):
                     removed = bool(func(rk))
         except Exception as e:
