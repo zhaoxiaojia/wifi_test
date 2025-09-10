@@ -15,7 +15,7 @@ import os
 import sip
 # ui/run.py
 
-from PyQt5.QtWidgets import QVBoxLayout, QTextEdit, QLabel, QFrame, QHBoxLayout, QApplication
+from PyQt5.QtWidgets import QVBoxLayout, QTextEdit, QLabel, QFrame, QHBoxLayout, QApplication, QToolButton
 from qfluentwidgets import (
     CardWidget,
     StrongBodyLabel,
@@ -92,14 +92,12 @@ class LiveLogWriter:
         raise io.UnsupportedOperation("Not a real file")
 
 
-def _pytest_worker(case_path: str, q: multiprocessing.Queue):
+def _pytest_worker(case_path: str, q: multiprocessing.Queue, report_dir: str):
     """子进程执行pytest，将日志和进度写入队列"""
     pid = os.getpid()
     start_ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     try:
-        timestamp = datetime.datetime.now().strftime("%Y.%m.%d_%H.%M.%S")
-        timestamp = f"{timestamp}_{random.randint(1000, 9999)}"
-        report_dir = (Path.cwd() / "report" / timestamp).resolve()
+        report_dir = Path(report_dir).resolve()
         report_dir.mkdir(parents=True, exist_ok=True)
         plugin = install_redactor_for_current_process()
         pytest_args = [
@@ -184,12 +182,16 @@ class CaseRunner(QThread):
         self._queue: multiprocessing.Queue = self._ctx.Queue()
         self._proc: multiprocessing.Process | None = None
         self._case_start_time: float | None = None
+        timestamp = datetime.datetime.now().strftime("%Y.%m.%d_%H.%M.%S")
+        timestamp = f"{timestamp}_{random.randint(1000, 9999)}"
+        self.report_dir = (Path.cwd() / "report" / timestamp).resolve()
+        self.report_dir.mkdir(parents=True, exist_ok=True)
 
     def run(self):
         """启动子进程运行pytest，并监听队列更新GUI"""
         logging.info("CaseRunner: preparing to start process for %s", self.case_path)
         self._proc = self._ctx.Process(
-            target=_pytest_worker, args=(self.case_path, self._queue)
+            target=_pytest_worker, args=(self.case_path, self._queue, str(self.report_dir))
         )
         self._proc.start()
         logging.info(
@@ -274,6 +276,7 @@ class RunPage(CardWidget):
 
         layout = QVBoxLayout(self)
         layout.setSpacing(16)
+        header_layout = QHBoxLayout()
         self.case_path_label = StrongBodyLabel(self.display_case_path)
         apply_theme(self.case_path_label)
         self.case_path_label.setStyleSheet(
@@ -282,7 +285,16 @@ class RunPage(CardWidget):
         self.case_path_label.setFixedHeight(CONTROL_HEIGHT)
         self.case_path_label.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
         self.case_path_label.setVisible(True)
-        layout.addWidget(self.case_path_label)
+        header_layout.addWidget(self.case_path_label)
+        self.log_btn = QToolButton(self)
+        self.log_btn.setIcon(FluentIcon.DOCUMENT.icon())
+        self.log_btn.setToolTip("Show Log")
+        self.log_btn.clicked.connect(
+            lambda: (self.main_window.log_dock.show(), self.main_window.log_dock.raise_())
+        )
+        header_layout.addWidget(self.log_btn)
+        header_layout.addStretch()
+        layout.addLayout(header_layout)
 
         self.log_area = QTextEdit(self)
         self.log_area.setStyleSheet(
@@ -681,6 +693,8 @@ class RunPage(CardWidget):
         # )
         self.runner.finished.connect(self._finalize_runner)
         self.runner.start()
+        if hasattr(self.main_window, "log_dock"):
+            self.main_window.log_dock.start_read(self.runner.report_dir)
 
     def _finalize_runner(self):
         runner = getattr(self, "runner", None)
@@ -709,6 +723,9 @@ class RunPage(CardWidget):
             idx,
         )
         self.remaining_time_label.hide()
+        log_dock = getattr(self.main_window, "log_dock", None)
+        if log_dock:
+            log_dock.stop_read()
         runner = getattr(self, "runner", None)
         if not runner:
             return
