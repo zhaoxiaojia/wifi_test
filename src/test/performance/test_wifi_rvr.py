@@ -58,7 +58,7 @@ def test_rvr(setup_attenuation):
 
 
     pytest.dut.get_rssi()
-    logging.info('start test iperf')
+    logging.info(f'start test iperf tx {router_info.tx} rx {router_info.rx}')
 
     if int(router_info.tx):
         logging.info(f'rssi : {pytest.dut.rssi_num}')
