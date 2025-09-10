@@ -15,7 +15,7 @@ import os
 import sip
 # ui/run.py
 
-from PyQt5.QtWidgets import QVBoxLayout, QTextEdit, QLabel, QFrame, QHBoxLayout, QApplication, QToolButton
+from PyQt5.QtWidgets import QVBoxLayout, QTextEdit, QLabel, QFrame, QHBoxLayout, QApplication
 from qfluentwidgets import (
     CardWidget,
     StrongBodyLabel,
@@ -24,7 +24,7 @@ from qfluentwidgets import (
     InfoBar,
     InfoBarPosition,
     FluentIcon,
-
+    TransparentToolButton,
 )
 from PyQt5.QtCore import (
     QThread,
@@ -286,9 +286,11 @@ class RunPage(CardWidget):
         self.case_path_label.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
         self.case_path_label.setVisible(True)
         header_layout.addWidget(self.case_path_label)
-        self.log_btn = QToolButton(self)
+        self.log_btn = TransparentToolButton(self)
+        self.log_btn.setObjectName("logBtn")
         self.log_btn.setIcon(FluentIcon.DOCUMENT.icon())
         self.log_btn.setToolTip("Show Log")
+        self.log_btn.setStyleSheet("#logBtn { background: transparent; }")
         self.log_btn.clicked.connect(
             lambda: (self.main_window.log_dock.show(), self.main_window.log_dock.raise_())
         )
