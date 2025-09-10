@@ -40,25 +40,20 @@ def setup_corner(request, setup_router):
     value = request.param[0] if isinstance(request.param, tuple) else request.param
     corner_tool, step_list = init_corner()
     corner_tool.execute_turntable_cmd("rt", angle=value)
-    yield setup_router[0], setup_router[1], value, corner_tool
+    yield setup_router[0], setup_router[1], value
     pytest.dut.kill_iperf()
 
 def test_rvo(setup_corner):
-    connect_status, router_info, corner_set, corner_tool = setup_corner
+    connect_status, router_info, corner_set = setup_corner
     if not connect_status:
         logging.info("Can't connect wifi ,input 0")
         return
 
     rssi_num = pytest.dut.get_rssi()
-    logging.info('start test tx/rx')
-    logging.info(f'router_info: {router_info}')
+    logging.info(f'start test iperf tx {router_info.tx} rx {router_info.rx}')
     if int(router_info.tx):
         logging.info(f'rssi : {rssi_num} ')
-        pytest.dut.get_tx_rate(router_info, 'TCP',
-                               corner_tool=corner_tool,
-                               db_set=db_set)
+        pytest.dut.get_tx_rate(router_info, 'TCP', db_set=corner_set)
     if int(router_info.rx):
         logging.info(f'rssi : {rssi_num}')
-        pytest.dut.get_rx_rate(router_info, 'TCP',
-                               corner_tool=corner_tool,
-                               db_set=db_set)
+        pytest.dut.get_rx_rate(router_info, 'TCP', db_set=corner_set)

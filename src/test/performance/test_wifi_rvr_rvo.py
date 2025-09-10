@@ -29,6 +29,7 @@ router = init_router()
 rf_tool = init_rf()
 corner_tool = init_corner()
 
+
 @pytest.fixture(scope='session', params=_test_data, ids=[str(i) for i in _test_data])
 @log_fixture_params()
 def setup_router(request):
@@ -63,6 +64,7 @@ def setup_attenuation(request, setup_corner):
     yield (connect_status, router_info, corner_set, db_set)
     pytest.dut.kill_iperf()
 
+
 def test_rvr_rvo(setup_rf):
     connect_status, router_info, corner_set, db_set = setup_rf
     if not connect_status:
@@ -74,7 +76,7 @@ def test_rvr_rvo(setup_rf):
     logging.info(f'router_info: {router_info}')
     if int(router_info.tx):
         logging.info(f'rssi : {pytest.dut.rssi_num}')
-        pytest.dut.get_tx_rate(router_info, 'TCP', corner_tool=corner_tool, db_set=db_set)
+        pytest.dut.get_tx_rate(router_info, 'TCP', db_set=db_set, corner_set=corner_set)
     if int(router_info.rx):
         logging.info(f'rssi : {pytest.dut.rssi_num}')
-        pytest.dut.get_rx_rate(router_info, 'TCP', corner_tool=corner_tool, db_set=db_set)
+        pytest.dut.get_rx_rate(router_info, 'TCP', db_set=db_set, corner_set=corner_set)

@@ -50,7 +50,7 @@ class WifiTableWidget(TableWidget):
         super().__init__(page)
         self.page = page
         # 取消表格自身的选中状态，避免与勾选框操作冲突
-        self.setSelectionMode(QAbstractItemView.NoSelection)
+        self.setSelectionMode(QAbstractItemView.SingleSelection)
         self.setSelectionBehavior(QAbstractItemView.SelectRows)
 
     def mousePressEvent(self, event):
@@ -386,7 +386,9 @@ class RvrWifiConfigPage(CardWidget):
         for r, row in enumerate(self.rows):
             # 勾选框列
             check_item = QTableWidgetItem()
-            check_item.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
+            check_item.setFlags(
+                Qt.ItemIsUserCheckable | Qt.ItemIsEnabled | Qt.ItemIsSelectable
+            )
             check_item.setCheckState(Qt.Unchecked)
             self.table.setItem(r, 0, check_item)
             for c, h in enumerate(self.headers):
