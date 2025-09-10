@@ -14,6 +14,8 @@ from PyQt5.QtWidgets import (
     QAbstractButton,
     QGraphicsOpacityEffect,
     QMessageBox,
+    QDockWidget,
+    QPlainTextEdit,
 )
 import sip
 from qfluentwidgets import FluentIcon, FluentWindow, NavigationItemPosition
@@ -28,8 +30,11 @@ from PyQt5.QtCore import (
     QEasingCurve,
     QParallelAnimationGroup,
     QPoint,
+    Qt,
+    QThread,
+    pyqtSignal,
 )
-from src.util.constants import Paths
+import time
 from src.util.constants import Paths, cleanup_temp_dir
 
 # 确保工作目录为可执行文件所在目录
@@ -38,6 +43,69 @@ os.chdir(Paths.BASE_DIR)
 
 def log_exception(exc_type, exc_value, exc_tb):
     logging.error("".join(traceback.format_exception(exc_type, exc_value, exc_tb)))
+
+
+class LogReader(QThread):
+    """后台线程实时读取 TestResult.log_file"""
+
+    new_line = pyqtSignal(str)
+
+    def __init__(self, log_dir: str, parent=None):
+        super().__init__(parent)
+        self.log_dir = Path(log_dir)
+        self._stop = False
+
+    def run(self):
+        log_file = None
+        while not self._stop:
+            if log_file is None:
+                csvs = sorted(self.log_dir.glob("Rvr*.csv"))
+                if csvs:
+                    log_file = csvs[-1]
+                else:
+                    time.sleep(0.5)
+                    continue
+            with open(log_file, "r", encoding="utf-8", errors="ignore") as f:
+                f.seek(0, os.SEEK_END)
+                while not self._stop:
+                    line = f.readline()
+                    if line:
+                        self.new_line.emit(line.rstrip())
+                    else:
+                        time.sleep(0.5)
+
+    def stop(self):
+        self._stop = True
+
+
+class LogDock(QDockWidget):
+    """显示测试结果日志的 Dock"""
+
+    def __init__(self, parent=None):
+        super().__init__("Log", parent)
+        self.setObjectName("logDock")
+        self.setAllowedAreas(Qt.BottomDockWidgetArea)
+        self.editor = QPlainTextEdit(self)
+        self.editor.setReadOnly(True)
+        self.setWidget(self.editor)
+        self._reader: LogReader | None = None
+
+    def start_read(self, log_dir: str):
+        if self._reader:
+            self.stop_read()
+        self._reader = LogReader(log_dir, self)
+        self._reader.new_line.connect(self.editor.appendPlainText)
+        self._reader.start()
+
+    def stop_read(self):
+        if self._reader:
+            self._reader.stop()
+            self._reader.wait()
+            self._reader = None
+
+    def closeEvent(self, event):
+        event.ignore()
+        self.hide()
 
 
 class MainWindow(FluentWindow):
@@ -125,6 +193,11 @@ class MainWindow(FluentWindow):
 
         # 可加更多页面，比如“历史记录”“关于”等
         self.setMicaEffectEnabled(True)  # Win11下生效毛玻璃
+
+        # 日志 Dock
+        self.log_dock = LogDock(self)
+        self.addDockWidget(Qt.BottomDockWidgetArea, self.log_dock)
+        self.log_dock.hide()
 
     def show_rvr_wifi_config(self):
         """在导航栏中显示 RVR Wi-Fi 配置页（幂等：已存在则只显示）"""
