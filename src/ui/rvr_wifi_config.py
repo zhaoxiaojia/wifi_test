@@ -119,9 +119,6 @@ class RvrWifiConfigPage(CardWidget):
         self.rx_check.stateChanged.connect(self._update_tx_rx)
         form_layout.addRow("direction", test_widget)
 
-        self.data_row_edit = LineEdit(form_box)
-        form_layout.addRow("data_row", self.data_row_edit)
-
         btn_widget = QWidget(form_box)
         btn_layout = QHBoxLayout(btn_widget)
         btn_layout.setContentsMargins(0, 0, 0, 0)
@@ -167,7 +164,6 @@ class RvrWifiConfigPage(CardWidget):
         self.auth_combo.currentTextChanged.connect(self._update_current_row)
         self.passwd_edit.textChanged.connect(self._update_current_row)
         self.ssid_edit.textChanged.connect(self._update_current_row)
-        self.data_row_edit.textChanged.connect(self._update_current_row)
         self._update_band_options(self.band_combo.currentText())
         self._update_auth_options(self.wireless_combo.currentText())
         self._on_auth_changed(self.auth_combo.currentText())
@@ -213,7 +209,6 @@ class RvrWifiConfigPage(CardWidget):
             self.passwd_edit,
             self.tx_check,
             self.rx_check,
-            self.data_row_edit,
             self.add_btn,
             self.del_btn,
         )
@@ -239,15 +234,14 @@ class RvrWifiConfigPage(CardWidget):
     def _load_csv(self):
         default_headers = [
             "band",
+            "ssid",
             "wireless_mode",
             "channel",
             "bandwidth",
             "security_mode",
-            "ssid",
             "password",
             "tx",
             "rx",
-            "data_row",
         ]
         headers = default_headers
         rows: list[dict[str, str]] = []
@@ -427,7 +421,6 @@ class RvrWifiConfigPage(CardWidget):
                     self.ssid_edit,
                     self.tx_check,
                     self.rx_check,
-                    self.data_row_edit,
                 )
                 for w in widgets:
                     stack.enter_context(QSignalBlocker(w))
@@ -446,7 +439,6 @@ class RvrWifiConfigPage(CardWidget):
                     self.ssid_edit.setText(data.get("ssid", ""))
                     self.tx_check.setChecked(data.get("tx", "0") == "1")
                     self.rx_check.setChecked(data.get("rx", "0") == "1")
-                    self.data_row_edit.setText(data.get("data_row", ""))
                 else:
                     if self.band_combo.count():
                         self.band_combo.setCurrentIndex(0)
@@ -468,7 +460,6 @@ class RvrWifiConfigPage(CardWidget):
                     self.ssid_edit.clear()
                     self.tx_check.setChecked(False)
                     self.rx_check.setChecked(False)
-                    self.data_row_edit.clear()
         finally:
             self._loading = False
 
@@ -519,8 +510,6 @@ class RvrWifiConfigPage(CardWidget):
                 self.tx_check.setChecked(data.get("tx", "0") == "1")
             with QSignalBlocker(self.rx_check):
                 self.rx_check.setChecked(data.get("rx", "0") == "1")
-            with QSignalBlocker(self.data_row_edit):
-                self.data_row_edit.setText(data.get("data_row", ""))
         finally:
             self._loading = False
 
@@ -562,7 +551,6 @@ class RvrWifiConfigPage(CardWidget):
             "security_mode": self.auth_combo.currentText(),
             "ssid": self.ssid_edit.text(),
             "password": self.passwd_edit.text(),
-            "data_row": self.data_row_edit.text(),
         }
         self.rows[row].update(data)
         for key, value in data.items():
@@ -598,7 +586,6 @@ class RvrWifiConfigPage(CardWidget):
             "password": self.passwd_edit.text(),
             "tx": "1" if self.tx_check.isChecked() else "0",
             "rx": "1" if self.rx_check.isChecked() else "0",
-            "data_row": self.data_row_edit.text(),
         }
         self.rows.append(row)
         self.refresh_table()
