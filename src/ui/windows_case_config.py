@@ -350,23 +350,17 @@ class CaseConfigPage(CardWidget):
         self.routerInfoChanged.emit()
 
     def _update_csv_options(self):
-        """根据路由器名称刷新 CSV 下拉框"""
+        """刷新 CSV 下拉框"""
         if not hasattr(self, "csv_combo"):
             return
         router_name = ""
         if hasattr(self, "router_name_combo"):
             router_name = self.router_name_combo.currentText().lower()
-        base_dir = get_config_base() / "performance_test_csv"
-        if "asus" in router_name:
-            csv_dir = base_dir / "asus"
-        elif "xiaomi" in router_name:
-            csv_dir = base_dir / "xiaomi"
-        else:
-            csv_dir = None
+        csv_dir = get_config_base() / "performance_test_csv"
         logging.debug("_update_csv_options router=%s dir=%s", router_name, csv_dir)
         with QSignalBlocker(self.csv_combo):
             self.csv_combo.clear()
-            if csv_dir and csv_dir.exists():
+            if csv_dir.exists():
                 for csv_file in sorted(csv_dir.glob("*.csv")):
                     logging.debug("found csv: %s", csv_file)
                     # qfluentwidgets.ComboBox 在 Qt5 和 Qt6 下对 userData 的处理不一致，
