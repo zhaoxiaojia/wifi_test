@@ -371,12 +371,8 @@ class RvrWifiConfigPage(CardWidget):
         self.table.setColumnCount(len(self.headers) + 1)
         self.table.setHorizontalHeaderLabels(["选中", *self.headers])
         header = self.table.horizontalHeader()
-        idx = self.headers.index("security_mode") + 1
-        ssid = self.headers.index("ssid") + 1
-        header.setSectionResizeMode(idx, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(ssid, QHeaderView.ResizeToContents)
-        self.table.setColumnWidth(idx, 150)
-        self.table.setColumnWidth(ssid, 150)
+        header.setSectionResizeMode(QHeaderView.ResizeToContents)
+        header.setStretchLastSection(True)
         for r, row in enumerate(self.rows):
             # 勾选框列
             check_item = QTableWidgetItem()
@@ -389,6 +385,7 @@ class RvrWifiConfigPage(CardWidget):
                 item = QTableWidgetItem(str(row.get(h, "")))
                 item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
                 self.table.setItem(r, c + 1, item)
+        self.table.resizeColumnsToContents()
         self.table.clearSelection()
         self.table.setCurrentItem(None)
         self._load_row_to_form()
