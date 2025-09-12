@@ -19,13 +19,7 @@ def get_testdata(router):
         if not csv_path.is_absolute():
             csv_path = config_base / csv_path
     else:
-        base = config_base / "performance_test_csv"
-        if "asus" in router_name:
-            csv_path = base / "asus" / "rvr_wifi_setup.csv"
-        elif "xiaomi" in router_name:
-            csv_path = base / "xiaomi" / "rvr_wifi_setup.csv"
-        else:
-            csv_path = config_base / "rvr_wifi_setup.csv"
+        csv_path = config_base / "performance_test_csv" / "rvr_wifi_setup.csv"
 
     # print(f"router_name: {router_name}, csv_path: {csv_path}")
     pc_ip, dut_ip = "", ""

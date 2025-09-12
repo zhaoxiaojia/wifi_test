@@ -1,2 +1,0 @@
-band,ssid,wireless_mode,channel,bandwidth,security_mode,password,tx,rx
-2.4G,xiaomibe7000_2g,11n,自动,20MHz,强加密(WPA2个人版),12345678,1,1
