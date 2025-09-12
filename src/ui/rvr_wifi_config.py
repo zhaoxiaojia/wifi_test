@@ -147,7 +147,7 @@ class RvrWifiConfigPage(CardWidget):
         apply_theme(header)
         apply_font_and_selection(
             self.table,
-            family="Verdana", size_px=16,
+            family="Verdana", size_px=12,
             sel_text="#A6E3FF",  # 选中文字
             sel_bg="#2B2B2B",  # 选中背景
             header_bg="#202225",  # 表头/首行首列背景
