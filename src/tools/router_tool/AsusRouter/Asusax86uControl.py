@@ -14,10 +14,11 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
-from src.tools.router_tool.RouterControl import ConfigError, RouterTools
+from src.tools.router_tool.RouterControl import ConfigError
+from src.tools.router_tool.AsusRouter.AsusBaseControl import AsusBaseControl
 
 
-class Asusax86uControl(RouterTools):
+class Asusax86uControl(AsusBaseControl):
     '''
     Asus ax86u router
 
@@ -40,6 +41,7 @@ class Asusax86uControl(RouterTools):
         '12': '13',
         '13': '14',
     }
+
 
     def __init__(self, address: str | None = None):
         super().__init__('asus_86u', display=True, address=address)
@@ -65,8 +67,9 @@ class Asusax86uControl(RouterTools):
                 self.change_band(router.band)
 
             # 修改 wireless_mode
-            if (router.wireless_mode):
-                self.change_wireless_mode(router.wireless_mode)
+            if router.wireless_mode:
+                mode = self.WIRELESS_MODE_MAP.get(router.wireless_mode, router.wireless_mode)
+                self.change_wireless_mode(mode)
 
             if router.wifi6:
                 if router.wifi6 == 'on':
@@ -120,8 +123,9 @@ class Asusax86uControl(RouterTools):
             # 修改 security_mode
             # //*[@id="WLgeneral"]/tbody/tr[13]/td/div[1]/select/option[1]
             # //*[@id="WLgeneral"]/tbody/tr[13]/td/div[1]/select/option[5]
-            if (router.security_mode):
-                self.change_authentication(router.security_mode)
+            if router.security_mode:
+                mode = self.SECURITY_MODE_MAP.get(router.security_mode, router.security_mode)
+                self.change_authentication(mode)
 
             # 修改 wep_encrypt
             if (router.wep_encrypt):

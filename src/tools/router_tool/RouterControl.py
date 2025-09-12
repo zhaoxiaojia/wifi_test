@@ -105,6 +105,7 @@ class RouterTools(RouterControl):
         'TKIP+AES': 2
     }
 
+
     PASSWD_INDEX_DICT = {
         '1': '1',
         '2': '2',
