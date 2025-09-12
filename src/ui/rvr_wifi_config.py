@@ -185,13 +185,6 @@ class RvrWifiConfigPage(CardWidget):
 
     def _compute_csv_path(self, router_name: str) -> Path:
         csv_base = Path(Paths.CONFIG_DIR) / "performance_test_csv"
-        name = router_name.lower()
-        if "asus" in name:
-            csv_base /= "asus"
-        elif "xiaomi" in name:
-            csv_base /= "xiaomi"
-        else:
-            csv_base = Path(Paths.CONFIG_DIR)
         return (csv_base / "rvr_wifi_setup.csv").resolve()
 
     def set_router_credentials(self, ssid: str, passwd: str) -> None:
