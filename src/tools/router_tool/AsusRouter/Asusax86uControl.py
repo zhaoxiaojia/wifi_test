@@ -117,11 +117,11 @@ class Asusax86uControl(RouterTools):
                 # //*[@id="WLgeneral"]/tbody/tr[11]/td/select/option[22]
                 self.change_channel(channel)
 
-            # 修改 security_protocol
+            # 修改 security_mode
             # //*[@id="WLgeneral"]/tbody/tr[13]/td/div[1]/select/option[1]
             # //*[@id="WLgeneral"]/tbody/tr[13]/td/div[1]/select/option[5]
-            if (router.security_protocol):
-                self.change_authentication(router.security_protocol)
+            if (router.security_mode):
+                self.change_authentication(router.security_mode)
 
             # 修改 wep_encrypt
             if (router.wep_encrypt):
@@ -169,7 +169,7 @@ class Asusax86uControl(RouterTools):
         finally:
             self.driver.quit()
 
-# fields = ['band', 'ssid', 'wireless_mode', 'channel', 'bandwidth', 'security_protocol', 'password', 'test_type',
+# fields = ['band', 'ssid', 'wireless_mode', 'channel', 'bandwidth', 'security_mode', 'password', 'test_type',
 #           'wep_encrypt', 'passwd_index', 'wep_passwd', 'protect_frame', 'wpa_encrypt', 'hide_ssid', 'wifi6']
 # Router = namedtuple('Router', fields, defaults=[None, ] * len(fields))
 # router = Router(band='5G', ssid='ATC_ASUS_AX88U_5G', wireless_mode='AX only', channel='100', bandwidth='20 MHz',

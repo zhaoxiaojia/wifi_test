@@ -150,13 +150,13 @@ class H3CBX54Control():
                 self.router_control.driver.find_element(
                     By.XPATH, target_element + '/option[1]').click()
 
-            # 修改 security_protocol
+            # 修改 security_mode
             # //*[@id="WLgeneral"]/tbody/tr[13]/td/div[1]/select/option[1]
             # //*[@id="WLgeneral"]/tbody/tr[13]/td/div[1]/select/option[5]
             #
-            if (router.security_protocol):
+            if (router.security_mode):
                 try:
-                    index = H3CRouterConfig.AUTHENTICATION_METHOD_DICT[router.security_protocol]
+                    index = H3CRouterConfig.AUTHENTICATION_METHOD_DICT[router.security_mode]
                 except ConfigError:
                     raise ConfigError('security protocol method element error')
                 # //*[@id="ssid_enc"]/option[1]
@@ -194,7 +194,7 @@ class H3CBX54Control():
 
 
 # fields = ['serial', 'band', 'ssid', 'wireless_mode', 'channel', 'bandwidth',
-#           'security_protocol', 'wpa_passwd', 'test_type', 'wep_encrypt',
+#           'security_mode', 'wpa_passwd', 'test_type', 'wep_encrypt',
 #           'passwd_index', 'wep_passwd', 'protect_frame', 'wpa_encrypt', 'hide_ssid']
 # Router = namedtuple('Router', fields, defaults=[None, ] * len(fields))
 # router = Router(serial='1', band='2.4G', ssid='H3CBX54_2.4G', wireless_mode='b+g+n', channel='8', bandwidth='20M',

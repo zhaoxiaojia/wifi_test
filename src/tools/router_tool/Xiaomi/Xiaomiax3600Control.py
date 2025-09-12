@@ -159,10 +159,10 @@ class Xiaomiax3600Control(RouterTools):
         else:
             if target.is_selected():
                 target.click()
-        # 修改 security_protocol
-        if router.security_protocol:
+        # 修改 security_mode
+        if router.security_mode:
             try:
-                index = self.AUTHENTICATION_METHOD[router.security_protocol]
+                index = self.AUTHENTICATION_METHOD[router.security_mode]
             except ConfigError:
                 raise ConfigError('security protocol method element error')
             target = 'authentication_2g' if self.BAND_2 == router.band else 'authentication_5g'
@@ -261,7 +261,7 @@ class Xiaomiax3600Control(RouterTools):
         self.driver.quit()
         return True
 
-# fields = ['serial', 'band', 'ssid', 'wireless_mode', 'channel', 'bandwidth', 'security_protocol', 'password',
+# fields = ['serial', 'band', 'ssid', 'wireless_mode', 'channel', 'bandwidth', 'security_mode', 'password',
 #           'test_type',
 #           'wep_encrypt', 'passwd_index', 'wep_passwd', 'protect_frame', 'wpa_encrypt', 'hide_ssid']
 # Router = namedtuple('Router', fields, defaults=[None, ] * len(fields))

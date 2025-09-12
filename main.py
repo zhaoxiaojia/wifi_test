@@ -20,6 +20,7 @@ from qfluentwidgets import FluentIcon, FluentWindow, NavigationItemPosition
 from src.ui.windows_case_config import CaseConfigPage
 from src.ui.rvr_wifi_config import RvrWifiConfigPage
 from src.ui.run import RunPage
+from src.ui.report_page import ReportPage
 from qfluentwidgets import setTheme, Theme
 from PyQt5.QtGui import QGuiApplication, QFont
 from PyQt5.QtCore import (
@@ -91,6 +92,8 @@ class MainWindow(FluentWindow):
         self.run_page = RunPage("", parent=self)
         # 确保初始运行页为空布局
         self.run_page.reset()
+        # 报告页：默认置灰，等待 report_dir 创建后启用
+        self.report_page = ReportPage(self)
         # 导航按钮引用
         self.case_nav_button = self.addSubInterface(
             self.case_config_page, FluentIcon.SETTING, "Config Setup", "Case Config"
@@ -114,6 +117,17 @@ class MainWindow(FluentWindow):
         self.run_nav_button.setVisible(True)
         # 默认启用运行页按钮，便于直接查看
         self.run_nav_button.setEnabled(True)
+
+        # 报告页导航按钮：默认不可用
+        self.report_nav_button = self.addSubInterface(
+            self.report_page,
+            FluentIcon.DOCUMENT,
+            "Reports",
+            position=NavigationItemPosition.BOTTOM,
+        )
+        self.report_nav_button.setVisible(True)
+        self.report_nav_button.setEnabled(False)
+        self.last_report_dir = None
 
         # 兼容旧属性
         self._run_nav_button = self.run_nav_button
@@ -692,6 +706,22 @@ class MainWindow(FluentWindow):
             )
             self.rvr_nav_button.setEnabled(is_perf)
         logging.info("Switched to CaseConfigPage")
+
+    # --- Reports ---
+    def enable_report_page(self, report_dir: str) -> None:
+        """Enable report page and set current report directory.
+
+        Called when runner notifies that report_dir.mkdir(...) succeeded.
+        """
+        try:
+            self.last_report_dir = str(Path(report_dir).resolve())
+            if hasattr(self, "report_page") and self.report_page:
+                self.report_page.set_report_dir(self.last_report_dir)
+            if hasattr(self, "report_nav_button") and self.report_nav_button and not sip.isdeleted(self.report_nav_button):
+                self.report_nav_button.setEnabled(True)
+                self.report_nav_button.setVisible(True)
+        except Exception:
+            pass
 
 
 sys.excepthook = log_exception

@@ -1,4 +1,4 @@
-serial,band,ssid,wireless_mode,channel,bandwidth,security_protocol,wpa_passwd,test_type,protocol_type,wep_encrypt,wep_passwd,hide_ssid,hide_type
+serial,band,ssid,wireless_mode,channel,bandwidth,security_mode,wpa_passwd,test_type,protocol_type,wep_encrypt,wep_passwd,hide_ssid,hide_type
 1,2.4G,Tplinkax6000_2.4G#$,11bgn/ax mixed,自动,40MHz/20MHz自动,WPA-PSK/WPA2-PSK,amlogic_wifi123,,,,,否,
 2,2.4G,Tplinkax6000_2.4G#$,11bgn/ax mixed,自动,40MHz/20MHz自动,WPA2-PSK/WPA3-SAE,12345678,,,,,否,
 3,2.4G,Tplinkax6000_2.4G#$,11bgn/ax mixed,1,40MHz/20MHz自动,WPA-PSK/WPA2-PSK,amlogic_wifi123,,,,,否,

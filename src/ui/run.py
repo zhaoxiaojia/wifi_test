@@ -101,6 +101,9 @@ def _pytest_worker(case_path: str, q: multiprocessing.Queue):
         timestamp = f"{timestamp}_{random.randint(1000, 9999)}"
         report_dir = (Path.cwd() / "report" / timestamp).resolve()
         report_dir.mkdir(parents=True, exist_ok=True)
+        # notify parent process that report dir is ready
+        with suppress(Exception):
+            q.put(("report_dir", str(report_dir)))
         plugin = install_redactor_for_current_process()
         pytest_args = [
             "-v",
@@ -173,6 +176,8 @@ def _pytest_worker(case_path: str, q: multiprocessing.Queue):
 class CaseRunner(QThread):
     log_signal = pyqtSignal(str)
     progress_signal = pyqtSignal(int)
+    # emitted when worker created report directory
+    report_dir_signal = pyqtSignal(str)
 
     def __init__(self, case_path: str, parent=None):
         super().__init__(parent)
@@ -226,6 +231,9 @@ class CaseRunner(QThread):
                     self.log_signal.emit(payload)
                 elif kind == "progress":
                     self.progress_signal.emit(payload)
+                elif kind == "report_dir":
+                    # inform UI that report dir is ready
+                    self.report_dir_signal.emit(str(payload))
             except queue.Empty:
                 pass
             if not self._proc.is_alive() and self._queue.empty():
@@ -669,6 +677,9 @@ class RunPage(CardWidget):
         self.runner = CaseRunner(self.case_path)
         self.runner.log_signal.connect(self._append_log)
         self.runner.progress_signal.connect(self.update_progress)
+        # notify main window when report directory is ready
+        with suppress(Exception):
+            self.runner.report_dir_signal.connect(self._on_report_dir_ready)
         # 关键修改：InfoBar的父窗口改为主窗口（而非RunPage自身）
         # self.runner.finished.connect(
         #     lambda: InfoBar.success(
@@ -694,10 +705,21 @@ class RunPage(CardWidget):
             with suppress((TypeError, RuntimeError)):
                 signal.disconnect(slot)
         with suppress((TypeError, RuntimeError)):
+            runner.report_dir_signal.disconnect(self._on_report_dir_ready)
+        with suppress((TypeError, RuntimeError)):
             runner.finished.disconnect(self._finalize_runner)
         runner.deleteLater()
         self.runner = None
         self.on_runner_finished()
+
+    def _on_report_dir_ready(self, path: str) -> None:
+        """Enable report page when report dir is created."""
+        try:
+            mw = getattr(self, "main_window", None) or self.window()
+            if mw and hasattr(mw, "enable_report_page"):
+                mw.enable_report_page(path)
+        except Exception:
+            pass
 
     def cleanup(self, disconnect_page: bool = True):
         stack = getattr(self.main_window, "stackedWidget", None)

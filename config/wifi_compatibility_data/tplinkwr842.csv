@@ -1,4 +1,4 @@
-serial   ,band   ,ssid           ,wireless_mode,channel,bandwidth   ,security_protocol,wpa_passwd,test_type,protocol_type,wep_encrypt,wep_passwd,hide_ssid,hide_type,wpa_encrypt,passwd_index,protect_frame
+serial   ,band   ,ssid           ,wireless_mode,channel,bandwidth   ,security_mode,wpa_passwd,test_type,protocol_type,wep_encrypt,wep_passwd,hide_ssid,hide_type,wpa_encrypt,passwd_index,protect_frame
 1,2.4G,Tplinkwr842_2.4G#$,11b only,自动,20MHz,OPEN,,tx rx    ,TCP          ,,,否,,,,
 2,2.4G,Tplinkwr842_2.4G#$,11b only,1,20MHz,WPA-PSK,12345678,tx rx    ,TCP          ,,,否,,TKIP,,
 3,2.4G,Tplinkwr842_2.4G#$,11b only,2,20MHz,WPA-PSK,12345678,tx rx    ,TCP          ,,,否,,AES,,

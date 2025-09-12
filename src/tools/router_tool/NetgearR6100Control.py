@@ -100,7 +100,7 @@ class NetgearR6100Control():
                         if router.wireless_mode != '54Mbps':
                             authentication_element = self.router_control.xpath['authentication_for_2G_element']
                             self.router_control.driver.find_element(By.XPATH, authentication_element[
-                                router.security_protocol]).click()
+                                router.security_mode]).click()
                         mode_value = NetgearR6100Config.WIRELESS_MODE_2_DICT[router.wireless_mode]
                         mode_element = self.router_control.xpath['mode_select_element']['mode_for_2g']
                     else:
@@ -111,7 +111,7 @@ class NetgearR6100Control():
                 mode_select = Select(self.router_control.driver.find_element(By.XPATH, mode_element))
                 mode_select.select_by_value(mode_value)
             # # change authentication
-            if (router.security_protocol):
+            if (router.security_mode):
                 try:
                     if router.band == '2.4G':
                         authentication_element = self.router_control.xpath['authentication_for_2G_element']
@@ -120,11 +120,11 @@ class NetgearR6100Control():
                 except KeyError:
                     raise ConfigError('security protocol element error')
                 if self.router_control.element_is_selected(authentication_element[
-                                                               router.security_protocol]):
+                                                               router.security_mode]):
                     pass
                 else:
                     self.router_control.driver.find_element(By.XPATH, authentication_element[
-                        router.security_protocol]).click()
+                        router.security_mode]).click()
             # set authentication_password
             if (router.wpa_passwd):
                 try:
@@ -177,7 +177,7 @@ class NetgearR6100Control():
 
 
 # fields = ['serial', 'band', 'ssid', 'wireless_mode', 'channel', 'bandwidth',
-#           'security_protocol', 'wpa_passwd', 'test_type', 'wep_encrypt',
+#           'security_mode', 'wpa_passwd', 'test_type', 'wep_encrypt',
 #           'passwd_index', 'wep_passwd', 'protect_frame', 'wpa_encrypt', 'hide_ssid']
 # Router = namedtuple('Router', fields, defaults=[None, ] * len(fields))
 # router = Router(serial='1', band='2.4G', ssid='NETGEAR_2G', wireless_mode='54Mbps', channel='AUTO',

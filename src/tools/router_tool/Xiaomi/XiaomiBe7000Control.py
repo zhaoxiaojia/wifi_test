@@ -153,10 +153,10 @@ class XiaomiBe7000Control(RouterTools):
         else:
             if target.is_selected():
                 target.click()
-        # 修改 security_protocol
-        if router.security_protocol:
+        # 修改 security_mode
+        if router.security_mode:
             try:
-                index = self.AUTHENTICATION_METHOD[router.security_protocol]
+                index = self.AUTHENTICATION_METHOD[router.security_mode]
             except ConfigError:
                 raise ConfigError('security protocol method element error')
             target = 'authentication_2g' if self.BAND_2 == router.band else 'authentication_5g'

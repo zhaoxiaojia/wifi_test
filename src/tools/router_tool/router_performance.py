@@ -52,15 +52,15 @@ class dut_standard(json_mixin):
     def set_expect(self, *args):
         """
         Supported signatures:
-        1) set_expect(chip, band, interface, mode, security_protocol, bandwidth, mimo, direction, expect_data)
-        2) set_expect(band, interface, mode, security_protocol, bandwidth, mimo, direction, expect_data)
+        1) set_expect(chip, band, interface, mode, security_mode, bandwidth, mimo, direction, expect_data)
+        2) set_expect(band, interface, mode, security_mode, bandwidth, mimo, direction, expect_data)
            -> falls back to chip='COMMON' for backward compatibility.
         """
         if len(args) == 9:
-            chip, band, interface, mode, security_protocol, bandwidth, mimo, direction, expect_data = args
+            chip, band, interface, mode, security_mode, bandwidth, mimo, direction, expect_data = args
         elif len(args) == 8:
             chip = 'COMMON'
-            band, interface, mode, security_protocol, bandwidth, mimo, direction, expect_data = args
+            band, interface, mode, security_mode, bandwidth, mimo, direction, expect_data = args
         else:
             raise TypeError("set_expect() expects 8 or 9 positional arguments.")
 
@@ -69,7 +69,7 @@ class dut_standard(json_mixin):
         band = str(band).upper()
         interface = str(interface).upper()
         mode = str(mode).upper()
-        security_protocol = str(security_protocol).upper()
+        security_mode = str(security_mode).upper()
         bandwidth_key = str(bandwidth).upper()
         mimo_key = str(mimo).upper()
         direction_key = str(direction).upper()
@@ -92,180 +92,180 @@ class dut_standard(json_mixin):
             raise ValueError(f"mimo must be one of: {valid_mimo}")
         if direction_key not in valid_direction:
             raise ValueError("direction must be UL or DL")
-        if security_protocol not in valid_auth:
-            raise ValueError("security_protocol must be one of: WPA3, WPA2, WEP, OPEN SYSTEM")
+        if security_mode not in valid_auth:
+            raise ValueError("security_mode must be one of: WPA3, WPA2, WEP, OPEN SYSTEM")
 
-        # new structure (chip dimension + security_protocol dimension)
-        self[chip][band][interface][mode][security_protocol][bandwidth_key][mimo_key][direction_key] = expect_data
+        # new structure (chip dimension + security_mode dimension)
+        self[chip][band][interface][mode][security_mode][bandwidth_key][mimo_key][direction_key] = expect_data
 
 
 a = compatibility_router()
 a.set_info("192.168.200.4", '2', 'ASUS', 'RT-AX88U Pro',
-           {'2.4G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '20MHz'},
-            '5G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '80MHz'}})
+           {'2.4G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
 a.set_info("192.168.200.6", '7', 'Xiaomi', 'AX3000 RA80',
-           {'2.4G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '20MHz'},
-            '5G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '80MHz'}})
+           {'2.4G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
 a.set_info("192.168.200.5", '1', 'Netgear', 'AX1800 RAX20',
-           {'2.4G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '20MHz'},
-            '5G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '80MHz'}})
+           {'2.4G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
 a.set_info("192.168.200.5", '2', 'TP-LINK', 'TL-XDR6030yizhanban',
-           {'2.4G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '20MHz'},
-            '5G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '80MHz'}})
+           {'2.4G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
 a.set_info("192.168.200.6", '8', 'ASUS', 'RT-AC1900P',
-           {'2.4G': {'mode': '11N', 'security_protocol': 'wpa2', 'bandwidth': '20MHz'},
-            '5G': {'mode': '11AC', 'security_protocol': 'wpa2', 'bandwidth': '80MHz'}})
+           {'2.4G': {'mode': '11N', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AC', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
 a.set_info("192.168.200.4", '6', 'Tenda', 'JD12LProxinhaozengqiangban',
-           {'2.4G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '20MHz'},
-            '5G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '80MHz'}})
+           {'2.4G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
 a.set_info("192.168.200.4", '5', 'Tenda', 'BE6LPro',
-           {'2.4G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '20MHz'},
-            '5G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '80MHz'}})
+           {'2.4G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
 a.set_info("192.168.200.6", '3', 'COMFAST', 'CF-WR633AX',
-           {'2.4G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '20MHz'},
-            '5G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '80MHz'}})
+           {'2.4G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
 a.set_info("192.168.200.3", '6', 'TP-LINK', 'TL-7DR7230yizhanban',
-           {'2.4G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '20MHz'},
-            '5G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '80MHz'}})
+           {'2.4G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
 a.set_info("192.168.200.3", '1', 'ZTE', 'ZXSLC SR7410',
-           {'2.4G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '20MHz'},
-            '5G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '80MHz'}})
+           {'2.4G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
 a.set_info("192.168.200.6", '6', 'Huawei', 'AX3Pro WS7206',
-           {'2.4G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '20MHz'},
-            '5G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '80MHz'}})
+           {'2.4G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
 a.set_info("192.168.200.6", '2', 'Huawei', 'XIHE-BE70',
-           {'2.4G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '20MHz'},
-            '5G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '80MHz'}})
+           {'2.4G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
 a.set_info("192.168.200.4", '4', 'ZTE', 'ZXSLC SR6110',
-           {'2.4G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '20MHz'},
-            '5G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '80MHz'}})
+           {'2.4G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
 a.set_info("192.168.200.3", '8', 'MERCURY', 'D126',
-           {'2.4G': {'mode': '11N', 'security_protocol': 'wpa2', 'bandwidth': '20MHz'},
-            '5G': {'mode': '11AC', 'security_protocol': 'wpa2', 'bandwidth': '80MHz'}})
+           {'2.4G': {'mode': '11N', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AC', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
 a.set_info("192.168.200.4", '3', 'HONOR', 'X4Pro HLB-600',
-           {'2.4G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '20MHz'},
-            '5G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '80MHz'}})
+           {'2.4G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
 a.set_info("192.168.200.5", '4', 'H3C', 'NX30Pro',
-           {'2.4G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '20MHz'},
-            '5G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '80MHz'}})
+           {'2.4G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
 a.set_info("192.168.200.5", '3', 'ThundeRobot', 'SR5301ZA',
-           {'2.4G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '20MHz'},
-            '5G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '80MHz'}})
+           {'2.4G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
 a.set_info("192.168.200.5", '5', 'Xiaomi', 'BE3600 RD15',
-           {'2.4G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '20MHz'},
-            '5G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '80MHz'}})
+           {'2.4G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
 a.set_info("192.168.200.5", '6', 'Xiaomi', 'R4A',
-           {'2.4G': {'mode': '11N', 'security_protocol': 'wpa2', 'bandwidth': '20MHz'},
-            '5G': {'mode': '11AC', 'security_protocol': 'wpa2', 'bandwidth': '80MHz'}})
+           {'2.4G': {'mode': '11N', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AC', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
 a.set_info("192.168.200.5", '7', 'Xiaomi', 'AX3000T RD03',
-           {'2.4G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '20MHz'},
-            '5G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '80MHz'}})
+           {'2.4G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
 a.set_info("192.168.200.4", '7', 'TP-LINK', 'TL-XDR5410yizhanban',
-           {'2.4G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '20MHz'},
-            '5G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '80MHz'}})
+           {'2.4G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
 a.set_info("192.168.200.6", '4', 'H3C', 'Magic NX54',
-           {'2.4G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '20MHz'},
-            '5G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '80MHz'}})
+           {'2.4G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
 a.set_info("192.168.200.4", '1', 'TP-LINK', 'TL-WDR7660qianzhaoyizhanban',
-           {'2.4G': {'mode': '11N', 'security_protocol': 'wpa2', 'bandwidth': '20MHz'},
-            '5G': {'mode': '11AC', 'security_protocol': 'wpa2', 'bandwidth': '80MHz'}})
+           {'2.4G': {'mode': '11N', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AC', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
 a.set_info("192.168.200.5", '8', 'ASUS', 'TX-AX6000',
-           {'2.4G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '20MHz'},
-            '5G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '80MHz'}})
+           {'2.4G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
 a.set_info("192.168.200.6", '1', 'ASUS', 'XD4 Pro',
-           {'2.4G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '20MHz'},
-            '5G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '80MHz'}})
+           {'2.4G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
 a.set_info("192.168.200.3", '4', 'NETGEAR', 'RAX50',
-           {'2.4G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '20MHz'},
-            '5G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '80MHz'}})
+           {'2.4G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
 a.set_info("192.168.200.3", '3', 'NETGEAR', 'RAX70',
-           {'2.4G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '20MHz'},
-            '5G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '80MHz'}})
+           {'2.4G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
 a.set_info("192.168.200.4", '8', 'RuiJie', 'RG-EW1300G',
-           {'2.4G': {'mode': '11N', 'security_protocol': 'wpa2', 'bandwidth': '20MHz'},
-            '5G': {'mode': '11AC', 'security_protocol': 'wpa2', 'bandwidth': '80MHz'}})
+           {'2.4G': {'mode': '11N', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AC', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
 a.set_info("192.168.200.3", '7', 'RuiJie', 'X60',
-           {'2.4G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '20MHz'},
-            '5G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '80MHz'}})
+           {'2.4G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
 a.set_info("192.168.200.3", '5', 'Netcore', 'LK-DS7587',
-           {'2.4G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '20MHz'},
-            '5G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '80MHz'}})
+           {'2.4G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
 a.set_info("192.168.200.6", '5', 'TP-LINK', 'TL-7DR3630yizhanban',
-           {'2.4G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '20MHz'},
-            '5G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '80MHz'}})
+           {'2.4G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
 a.set_info("192.168.200.3", '2', 'LINKSYS', 'E8450',
-           {'2.4G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '20MHz'},
-            '5G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '80MHz'}})
+           {'2.4G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 a.set_info("192.168.200.7", '1', 'ARRIS', 'TR4400',
-           {'2.4G': {'mode': '11N', 'security_protocol': 'wpa2', 'bandwidth': '20MHz'},
-            '5G': {'mode': '11AC', 'security_protocol': 'wpa2', 'bandwidth': '80MHz'}})
+           {'2.4G': {'mode': '11N', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AC', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
 a.set_info("192.168.200.7", '2', 'ARRIS', 'SBR-AC1200P',
-           {'2.4G': {'mode': '11N', 'security_protocol': 'wpa2', 'bandwidth': '20MHz'},
-            '5G': {'mode': '11AC', 'security_protocol': 'wpa2', 'bandwidth': '80MHz'}})
+           {'2.4G': {'mode': '11N', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AC', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
 a.set_info("192.168.200.7", '3', 'ARRIS', 'W21',
-           {'2.4G': {'mode': '11N', 'security_protocol': 'wpa2', 'bandwidth': '20MHz'},
-            '5G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '80MHz'}})
+           {'2.4G': {'mode': '11N', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
 a.set_info("192.168.200.7", '4', 'HUAWEI', 'BE7',
-           {'2.4G': {'mode': '11N', 'security_protocol': 'wpa2', 'bandwidth': '20MHz'},
-            '5G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '80MHz'}})
+           {'2.4G': {'mode': '11N', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
 a.set_info("192.168.200.7", '5', 'BAFFALO', 'WZR-1750DHP',
-           {'2.4G': {'mode': '11N', 'security_protocol': 'wpa2', 'bandwidth': '20MHz'},
-            '5G': {'mode': '11AC', 'security_protocol': 'wpa2', 'bandwidth': '80MHz'}})
+           {'2.4G': {'mode': '11N', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AC', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
 a.set_info("192.168.200.7", '7', 'HUAWEI', 'BE3 PRO',
-           {'2.4G': {'mode': '11N', 'security_protocol': 'wpa2', 'bandwidth': '20MHz'},
-            '5G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '80MHz'}})
+           {'2.4G': {'mode': '11N', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
 a.set_info("192.168.200.7", '8', 'ARRIS', 'TG3452',
-           {'2.4G': {'mode': '11N', 'security_protocol': 'wpa2', 'bandwidth': '20MHz'},
-            '5G': {'mode': '11N', 'security_protocol': 'wpa2', 'bandwidth': '20MHz'}})
+           {'2.4G': {'mode': '11N', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11N', 'security_mode': 'wpa2', 'bandwidth': '20MHz'}})
 
 a.set_info("192.168.200.8", '1', 'VANTIVA', 'SDX62',
-           {'2.4G': {'mode': '11N', 'security_protocol': 'wpa2', 'bandwidth': '20MHz'},
-            '5G': {'mode': '11AX', 'security_protocol': 'wpa2', 'bandwidth': '80MHz'}})
+           {'2.4G': {'mode': '11N', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
 a.set_info("192.168.200.8", '3', 'PORTAL', '2AFZUSAP102',
-           {'2.4G': {'mode': '11N', 'security_protocol': 'wpa2', 'bandwidth': '20MHz'},
-            '5G': {'mode': '11AC', 'security_protocol': 'wpa2', 'bandwidth': '80MHz'}})
+           {'2.4G': {'mode': '11N', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AC', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
 a.set_info("192.168.200.8", '8', 'ARRIS', 'SBR-AC1750',
-           {'2.4G': {'mode': '11N', 'security_protocol': 'wpa2', 'bandwidth': '20MHz'},
-            '5G': {'mode': '11AC', 'security_protocol': 'wpa2', 'bandwidth': '80MHz'}})
+           {'2.4G': {'mode': '11N', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AC', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
 a.save_expect()
 dut = dut_standard()
@@ -350,7 +350,7 @@ def handle_expectdata(router_info, band, direction, chip_info=None):
     根据路由器信息和芯片方案获取预期吞吐率
 
     Args:
-        router_info: 路由器信息字典，至少包含 band 对应的 mode、security_protocol、bandwidth
+        router_info: 路由器信息字典，至少包含 band 对应的 mode、security_mode、bandwidth
         band: '2.4G' or '5G'
         direction: 'UL' or 'DL'
         chip_info: 如 'w2_sdio'
@@ -391,7 +391,7 @@ def handle_expectdata(router_info, band, direction, chip_info=None):
 
     mode = _normalize_mode(router_info.get(band, {}).get('mode', '11AX'))
     bandwidth = _normalize_bandwidth(router_info.get(band, {}).get('bandwidth', '80MHz'))
-    security_protocol = _normalize_auth(router_info.get(band, {}).get('security_protocol', 'WPA2'))
+    security_mode = _normalize_auth(router_info.get(band, {}).get('security_mode', 'WPA2'))
 
     chip_key, interface = chip_info.split('_')
     if chip_key in ('W1', 'W1U'):
@@ -416,7 +416,7 @@ def handle_expectdata(router_info, band, direction, chip_info=None):
     data = _get_default(data, band.upper())
     data = _get_default(data, interface)
     data = _get_default(data, mode)
-    data = _get_default(data, security_protocol)
+    data = _get_default(data, security_mode)
     data = _get_default(data, bandwidth)
     data = _get_default(data, mimo_key)
     return _get_default(data, direction.upper())

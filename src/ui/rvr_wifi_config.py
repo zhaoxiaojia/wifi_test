@@ -100,7 +100,7 @@ class RvrWifiConfigPage(CardWidget):
         self.auth_combo = ComboBox(form_box)
         self.auth_combo.addItems(getattr(self.router, "AUTHENTICATION_METHOD", []))
         self.auth_combo.setMinimumWidth(150)
-        form_layout.addRow("security_protocol", self.auth_combo)
+        form_layout.addRow("security_mode", self.auth_combo)
         # 密码输入框，用于自动填充和测试流程引用
         self.ssid_edit = LineEdit(form_box)
         form_layout.addRow("ssid", self.ssid_edit)
@@ -133,7 +133,7 @@ class RvrWifiConfigPage(CardWidget):
         btn_layout.addWidget(self.add_btn)
         form_layout.addRow(btn_widget)
 
-        main_layout.addWidget(form_box, 1)
+        main_layout.addWidget(form_box, 2)
 
         self.table = WifiTableWidget(self)
 
@@ -145,7 +145,7 @@ class RvrWifiConfigPage(CardWidget):
         header.setStretchLastSection(True)
         # 无选中模式下使用 cellClicked 信号加载数据
         self.table.cellClicked.connect(lambda r, c: self._load_row_to_form())
-        main_layout.addWidget(self.table, 2)
+        main_layout.addWidget(self.table, 5)
 
         apply_theme(header)
         apply_font_and_selection(
@@ -242,7 +242,7 @@ class RvrWifiConfigPage(CardWidget):
             "wireless_mode",
             "channel",
             "bandwidth",
-            "security_protocol",
+            "security_mode",
             "ssid",
             "password",
             "tx",
@@ -377,7 +377,7 @@ class RvrWifiConfigPage(CardWidget):
         self.table.setColumnCount(len(self.headers) + 1)
         self.table.setHorizontalHeaderLabels(["选中", *self.headers])
         header = self.table.horizontalHeader()
-        idx = self.headers.index("security_protocol") + 1
+        idx = self.headers.index("security_mode") + 1
         ssid = self.headers.index("ssid") + 1
         header.setSectionResizeMode(idx, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(ssid, QHeaderView.ResizeToContents)
@@ -440,7 +440,7 @@ class RvrWifiConfigPage(CardWidget):
                     self.channel_combo.setCurrentText(data.get("channel", ""))
                     self.bandwidth_combo.setCurrentText(data.get("bandwidth", ""))
                     self._update_auth_options(self.wireless_combo.currentText())
-                    self.auth_combo.setCurrentText(data.get("security_protocol", ""))
+                    self.auth_combo.setCurrentText(data.get("security_mode", ""))
                     self._on_auth_changed(self.auth_combo.currentText())
                     self.passwd_edit.setText(data.get("password", ""))
                     self.ssid_edit.setText(data.get("ssid", ""))
@@ -508,7 +508,7 @@ class RvrWifiConfigPage(CardWidget):
             with QSignalBlocker(self.bandwidth_combo):
                 self.bandwidth_combo.setCurrentText(data.get("bandwidth", ""))
             with QSignalBlocker(self.auth_combo):
-                self.auth_combo.setCurrentText(data.get("security_protocol", ""))
+                self.auth_combo.setCurrentText(data.get("security_mode", ""))
             with QSignalBlocker(self.passwd_edit):
                 self._on_auth_changed(self.auth_combo.currentText())
             with QSignalBlocker(self.passwd_edit):
@@ -559,7 +559,7 @@ class RvrWifiConfigPage(CardWidget):
             "wireless_mode": self.wireless_combo.currentText(),
             "channel": self.channel_combo.currentText(),
             "bandwidth": self.bandwidth_combo.currentText(),
-            "security_protocol": self.auth_combo.currentText(),
+            "security_mode": self.auth_combo.currentText(),
             "ssid": self.ssid_edit.text(),
             "password": self.passwd_edit.text(),
             "data_row": self.data_row_edit.text(),
@@ -593,7 +593,7 @@ class RvrWifiConfigPage(CardWidget):
             "wireless_mode": self.wireless_combo.currentText(),
             "channel": self.channel_combo.currentText(),
             "bandwidth": self.bandwidth_combo.currentText(),
-            "security_protocol": self.auth_combo.currentText(),
+            "security_mode": self.auth_combo.currentText(),
             "ssid": ssid,
             "password": self.passwd_edit.text(),
             "tx": "1" if self.tx_check.isChecked() else "0",

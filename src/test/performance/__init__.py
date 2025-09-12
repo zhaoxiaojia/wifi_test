@@ -92,8 +92,8 @@ def common_setup(router: Router, router_info: Router) -> bool:
         connect_status = False
         for _ in range(3):
             try:
-                wpa_type = 'wpa3' if 'WPA3' in router_info.security_protocol else 'wpa2'
-                if router_info.security_protocol.lower() in [
+                wpa_type = 'wpa3' if 'WPA3' in router_info.security_mode else 'wpa2'
+                if router_info.security_mode.lower() in [
                     'open', '不加密', '无', 'open system', '无加密(允许所有人连接)', 'none'
                 ]:
                     logging.info('no passwd')
@@ -139,7 +139,7 @@ def common_setup(router: Router, router_info: Router) -> bool:
 def get_rf_step_list():
     cfg = get_cfg()
     rf_solution = cfg['rf_solution']
-    return [i for i in range(*rf_solution['step'])][::3]
+    return [i for i in range(*rf_solution['step'])][::6]
 
 
 @lru_cache(maxsize=1)

@@ -134,7 +134,7 @@ Func Init()
 EndFunc
 
 Func SetRf()
-	Local $hControl = ControlGetHandle($TARGET_TITLE,"","WindowsForms10.EDIT.app.0.141b42a_r8_ad11")
+	Local $hControl = ControlGetHandle($TARGET_TITLE,"","WindowsForms10.EDIT.app.0.141b42a_r8_ad12")
 	ControlSetText($TARGET_TITLE,"",$hControl,"")
 	Sleep(1000)
 	;输入需要开启的 COM
