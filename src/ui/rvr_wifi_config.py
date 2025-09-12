@@ -61,6 +61,13 @@ class WifiTableWidget(TableWidget):
             self.setCurrentItem(None)
             self.page.reset_form()
 
+    def resizeEvent(self, event):
+        """在表格尺寸变化时保持列宽比例"""
+        super().resizeEvent(event)
+        apply = getattr(self.page, "_apply_ratios", None)
+        if callable(apply):
+            apply()
+
 
 class RvrWifiConfigPage(CardWidget):
     """配置 RVR Wi-Fi 测试参数"""
@@ -386,6 +393,18 @@ class RvrWifiConfigPage(CardWidget):
                 item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
                 self.table.setItem(r, c + 1, item)
         self.table.resizeColumnsToContents()
+        widths = [self.table.columnWidth(i) for i in range(self.table.columnCount())]
+        total = sum(widths) or 1
+        header.setSectionResizeMode(QHeaderView.Stretch)
+
+        def _apply_ratios():
+            viewport_width = self.table.viewport().width()
+            for i, w in enumerate(widths):
+                r = w / total
+                self.table.setColumnWidth(i, max(int(viewport_width * r), 80))
+
+        self._apply_ratios = _apply_ratios
+        _apply_ratios()
         self.table.clearSelection()
         self.table.setCurrentItem(None)
         self._load_row_to_form()
