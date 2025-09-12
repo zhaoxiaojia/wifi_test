@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from src.tools.router_tool.Router import Router
 from src.tools.config_loader import load_config
-from src.util.constants import get_config_base
+from src.util.constants import get_config_base, RouterConst
 
 
 def get_testdata(router):
@@ -45,6 +45,7 @@ def get_testdata(router):
             f"CSV file not found at {csv_path}. Please check router name '{router_name}'."
         )
     ssid_verify = set()
+    default_wireless = RouterConst.DEFAULT_WIRELESS_MODES
 
     # 校验 csv 数据是否异常
     for i in test_data:
@@ -57,9 +58,7 @@ def get_testdata(router):
         if "5" in i.band:
             assert i.ssid not in ssid_verify, "5g ssid can't as the same as 2g , pls modify"
         assert i.band in ["2.4G", "5G"], "Pls check band info "
-        assert i.wireless_mode in {"2.4G": router.WIRELESS_2, "5G": router.WIRELESS_5}[
-            i.band
-        ], "Pls check wireless info"
+        assert i.wireless_mode in default_wireless[i.band], "Pls check wireless info"
         assert i.channel in {"2.4G": router.CHANNEL_2, "5G": router.CHANNEL_5}[
             i.band
         ], "Pls check channel info"
