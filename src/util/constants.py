@@ -89,6 +89,10 @@ class RouterConst:
     }
     INTERFACE_CONFIG = ['SDIO','PCIE','USB']
     dut_wifichip: Final[str] = 'w2_sdio'
+    DEFAULT_WIRELESS_MODES: Final[dict[str, list[str]]] = {
+        "2.4G": ["auto", "11n", "11b", "11g", "11a", "11ac", "11ax"],
+        "5G": ["11ac", "11ax"],
+    }
 
 
 class RokuConst:
