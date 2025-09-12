@@ -1595,8 +1595,8 @@ class adb(dut):
             raise Exception("Can't get hw addr")
 
     def get_wifi_cmd(self, router_info):
-        type = 'wpa3' if 'WPA3' in router_info.security_protocol else 'wpa2'
-        if router_info.security_protocol.lower() in \
+        type = 'wpa3' if 'WPA3' in router_info.security_mode else 'wpa2'
+        if router_info.security_mode.lower() in \
                 ['open', '不加密', '无', 'open system', '无加密(允许所有人连接)', 'none']:
             cmd = pytest.dut.CMD_WIFI_CONNECT.format(router_info.ssid, "open", "")
         else:

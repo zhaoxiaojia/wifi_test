@@ -139,7 +139,7 @@ class power_ctrl:
         self.check_output(cmd)
 
     def set_all(self, status):
-        for k in ['192.168.200.3', '192.168.200.3', '192.168.200.5', '192.168.200.6']:
+        for k in ['192.168.200.3', '192.168.200.4', '192.168.200.5', '192.168.200.6']:
             cmd = self.SET_CMD.format(k, 0 if status else 1)
             self.check_output(cmd)
 

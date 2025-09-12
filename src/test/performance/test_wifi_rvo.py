@@ -33,7 +33,6 @@ def setup_router(request):
     yield (connect_status, router_info)
     pytest.dut.kill_iperf()
 
-
 @pytest.fixture(scope="function", params=get_corner_step_list())
 @log_fixture_params()
 def setup_corner(request, setup_router):

@@ -359,7 +359,7 @@ class dut():
         router_cfg = {
             router_info.band: {
                 'mode': router_info.wireless_mode,
-                'security_protocol': router_info.security_protocol,
+                'security_mode': router_info.security_mode,
                 'bandwidth': router_info.bandwidth,
             }
         }
@@ -439,7 +439,7 @@ class dut():
         router_cfg = {
             router_info.band: {
                 'mode': router_info.wireless_mode,
-                'security_protocol': router_info.security_protocol,
+                'security_mode': router_info.security_mode,
                 'bandwidth': router_info.bandwidth,
             }
         }

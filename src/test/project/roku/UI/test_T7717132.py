@@ -30,7 +30,7 @@ Verify that DUT can scan and connect
 ssid = 'ATC_ASUS_AX88U'
 passwd = '123456789012345678901234567890123456789012345678901234567890123'
 router_2g = Router(band='2.4G', ssid=ssid, wireless_mode='11n', channel='1', bandwidth='20 MHz',
-                   security_protocol='WPA2-Personal')
+                   security_mode='WPA2-Personal')
 
 
 ax88uControl = Asusax88uControl()

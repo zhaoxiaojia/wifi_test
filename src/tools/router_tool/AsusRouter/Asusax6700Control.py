@@ -101,14 +101,14 @@ class Asusax6700Control:
                             router.band]: raise ConfigError('bandwidth element error')
                 self.router_control.change_bandwidth(router.bandwidth)
 
-            # 修改 security_protocol
-            if router.security_protocol:
+            # 修改 security_mode
+            if router.security_mode:
                 auth_list = (self.AUTHENTICATION_METHOD
                              if router.wireless_mode != 'Legacy'
                              else self.AUTHENTICATION_METHOD_LEGCY)
-                if router.security_protocol not in auth_list:
+                if router.security_mode not in auth_list:
                     raise ConfigError('security protocol method element error')
-                self.router_control.change_authentication(router.security_protocol)
+                self.router_control.change_authentication(router.security_mode)
 
             # 修改 wep_encrypt
             if (router.wep_encrypt):
@@ -167,7 +167,7 @@ class Asusax6700Control:
             self.router_control.driver.quit()
 
 
-# fields = ['serial', 'band', 'ssid', 'wireless_mode', 'channel', 'bandwidth', 'security_protocol', 'wep_encrypt',
+# fields = ['serial', 'band', 'ssid', 'wireless_mode', 'channel', 'bandwidth', 'security_mode', 'wep_encrypt',
 #           'passwd_index', 'wep_passwd', 'wpa_passwd', 'protect_frame', 'wpa_encrypt', 'hide_ssid', 'hide_type']
 # Router = namedtuple('Router', fields, defaults=[None, ] * len(fields))
 # router = Router(serial='1', band='5G', ssid='ASUSAX6700_5G', wireless_mode='Legacy',
