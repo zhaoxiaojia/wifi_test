@@ -11,7 +11,7 @@ from pathlib import Path
 import logging
 from contextlib import ExitStack
 from PyQt5.QtCore import Qt, QSignalBlocker
-from src.util.constants import Paths
+from src.util.constants import Paths, RouterConst
 from PyQt5.QtWidgets import (
     QHBoxLayout,
     QTableWidgetItem,
@@ -315,10 +315,7 @@ class RvrWifiConfigPage(CardWidget):
             self._loading = False
 
     def _update_band_options(self, band: str):
-        wireless = {
-            "2.4G": getattr(self.router, "WIRELESS_2", []),
-            "5G": getattr(self.router, "WIRELESS_5", []),
-        }[band]
+        wireless = RouterConst.DEFAULT_WIRELESS_MODES[band]
         channel = {
             "2.4G": getattr(self.router, "CHANNEL_2", []),
             "5G": getattr(self.router, "CHANNEL_5", []),
