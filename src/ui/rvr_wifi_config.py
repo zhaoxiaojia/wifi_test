@@ -39,8 +39,15 @@ from .theme import apply_theme, apply_font_and_selection
 if TYPE_CHECKING:
     from .windows_case_config import CaseConfigPage
 
+# 支持的认证方式
+AUTH_OPTIONS = [
+    "Open System",
+    "WPA2-Personal",
+    "WPA3-Personal",
+    "WPA2-Enterprise",
+]
 # 无需密码的认证方式集合
-OPEN_AUTH = {"Open System", "无加密(允许所有人连接)"}
+OPEN_AUTH = {"Open System"}
 
 
 class WifiTableWidget(TableWidget):
@@ -98,7 +105,7 @@ class RvrWifiConfigPage(CardWidget):
         form_layout.addRow("bandwidth", self.bandwidth_combo)
 
         self.auth_combo = ComboBox(form_box)
-        self.auth_combo.addItems(getattr(self.router, "AUTHENTICATION_METHOD", []))
+        self.auth_combo.addItems(AUTH_OPTIONS)
         self.auth_combo.setMinimumWidth(150)
         form_layout.addRow("security_mode", self.auth_combo)
         # 密码输入框，用于自动填充和测试流程引用
@@ -341,21 +348,18 @@ class RvrWifiConfigPage(CardWidget):
         self._update_current_row()
 
     def _update_auth_options(self, wireless: str):
+        """更新认证方式选项，固定为预设列表"""
         with QSignalBlocker(self.auth_combo):
             self.auth_combo.clear()
-            if "Legacy" in wireless:
-                self.auth_combo.addItems(
-                    getattr(self.router, "AUTHENTICATION_METHOD_LEGCY", [])
-                )
-            else:
-                self.auth_combo.addItems(
-                    getattr(self.router, "AUTHENTICATION_METHOD", [])
-                )
+            self.auth_combo.addItems(AUTH_OPTIONS)
         if not self._loading:
             self._on_auth_changed(self.auth_combo.currentText())
 
     def _on_auth_changed(self, auth: str):
-        # 根据认证方式启用或禁用密码框
+        """根据认证方式启用或禁用密码框"""
+        if auth not in AUTH_OPTIONS:
+            logging.warning("Unsupported auth method: %s", auth)
+            return
         no_password = auth in OPEN_AUTH
         self.passwd_edit.setEnabled(not no_password)
         if no_password:
