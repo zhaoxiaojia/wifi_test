@@ -14,10 +14,11 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
-from src.tools.router_tool.RouterControl import ConfigError, RouterTools
+from src.tools.router_tool.RouterControl import ConfigError
+from src.tools.router_tool.AsusRouter.AsusBaseControl import AsusBaseControl
 
 
-class Asusax88uControl(RouterTools):
+class Asusax88uControl(AsusBaseControl):
     '''
     Asus ac88u router
 
@@ -26,54 +27,6 @@ class Asusax88uControl(RouterTools):
     rvr
     0,2.4G, AX86U-2G,11ax ,6,40 MHz ,  Open System , ,rx,TCP,13 ,10 10
     '''
-    SCROL_JS = 'arguments[0].scrollIntoView();'
-
-    # asus router setup value
-    BAND_LIST = ['2.4G', '5G']
-    BANDWIDTH_2 = ['20/40 MHz', '20 MHz', '40 MHz']
-    BANDWIDTH_5 = ['20/40/80 MHz', '20 MHz', '40 MHz', '80 MHz']
-    WIRELESS_2 = ['自动', '11b', '11g', '11n', '11ax', 'Legacy', 'N only']
-    WIRELESS_5: list[str] = ['自动', '11a', '11ac', '11ax', 'Legacy', 'N/AC/AX mixed', 'AX only']
-
-    AUTHENTICATION_METHOD = ['Open System', 'WPA2-Personal', 'WPA3-Personal', 'WPA/WPA2-Personal', 'WPA2/WPA3-Personal',
-                             'WPA2-Enterprise', 'WPA/WPA2-Enterprise']
-
-    AUTHENTICATION_METHOD_LEGCY = ['Open System', 'Shared Key', 'WPA2-Personal', 'WPA3-Personal',
-                                   'WPA/WPA2-Personal', 'WPA2/WPA3-Personal', 'WPA2-Enterprise',
-                                   'WPA/WPA2-Enterprise', 'Radius with 802.1x']
-
-    PROTECT_FRAME = {
-        '停用': 1,
-        '非强制启用': 2,
-        '强制启用': 3
-    }
-
-    WEP_ENCRYPT = ['None', 'WEP-64bits', 'WEP-128bits']
-
-    WPA_ENCRYPT = {
-        'AES': 1,
-        'TKIP+AES': 2
-    }
-
-    PASSWD_INDEX_DICT = {
-        '1': '1',
-        '2': '2',
-        '3': '3',
-        '4': '4'
-    }
-    CHANNEL_2 = ['自动', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11']
-    CHANNEL_5 = ['自动', '36', '40', '44', '48', '52', '56', '60', '64', '100', '104', '108', '112', '116', '120',
-                 '124', '128', '132', '136', '140', '144', '149', '153', '157', '161', '165']
-    COUNTRY_CODE = {
-        '亚洲': '1',
-        '中国 (默认值)': '2',
-        '欧洲': '3',
-        '韩国': '4',
-        '俄罗斯': '5',
-        '新加坡': '6',
-        '美国': '7',
-        '澳大利亚': '8'
-    }
     MODE_PARAM = {
         'Open System': 'openowe',
         'Shared Key': 'shared',
@@ -99,6 +52,7 @@ class Asusax88uControl(RouterTools):
         '157': '12',
         '161': '13',
     }
+
 
     def __init__(self, address: str | None = None):
         super().__init__('asus_88u', display=True, address=address)
@@ -296,8 +250,8 @@ class Asusax88uControl(RouterTools):
 
         # 修改 wireless_mode
         if router.wireless_mode:
-            self.set_2g_wireless(router.wireless_mode) if '2' in router.band else self.set_5g_wireless(
-                router.wireless_mode)
+            mode = self.WIRELESS_MODE_MAP.get(router.wireless_mode, router.wireless_mode)
+            self.set_2g_wireless(mode) if '2' in router.band else self.set_5g_wireless(mode)
 
         # 修改 password
         if router.password:
@@ -306,9 +260,8 @@ class Asusax88uControl(RouterTools):
 
         # 修改 security_mode
         if router.security_mode:
-            self.set_2g_authentication(
-                router.security_mode) if '2' in router.band else self.set_5g_authentication(
-                router.security_mode)
+            mode = self.SECURITY_MODE_MAP.get(router.security_mode, router.security_mode)
+            self.set_2g_authentication(mode) if '2' in router.band else self.set_5g_authentication(mode)
 
         # 修改channel
         if router.channel:
