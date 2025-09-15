@@ -363,7 +363,7 @@ class RvrWifiConfigPage(CardWidget):
         self.table.setRowCount(len(self.rows))
         # 首列为勾选框，需额外预留一列
         self.table.setColumnCount(len(self.headers) + 1)
-        self.table.setHorizontalHeaderLabels(["选中", *self.headers])
+        self.table.setHorizontalHeaderLabels([" ", *self.headers])
         header = self.table.horizontalHeader()
         idx = self.headers.index("security_mode") + 1
         ssid = self.headers.index("ssid") + 1

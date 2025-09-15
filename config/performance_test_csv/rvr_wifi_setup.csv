@@ -1,13 +1,3 @@
 band,ssid,wireless_mode,channel,bandwidth,security_mode,password,tx,rx
-2.4G,AX88U-5G,auto,7,20 MHz,Open System,,0,1
-2.4G,AX88U-5G,auto,8,20 MHz,Open System,,0,1
-2.4G,AX88U-5G,auto,9,20 MHz,Open System,,0,1
-2.4G,AX88U-5G,auto,10,20 MHz,Open System,,0,1
-2.4G,AX88U-5G,auto,11,20 MHz,Open System,,0,1
-2.4G,AX88U-5G,auto,1,20 MHz,Open System,,0,1
-2.4G,AX88U-5G,auto,3,20 MHz,Open System,,0,1
-2.4G,AX88U-5G,auto,3,20 MHz,Open System,,0,1
-2.4G,AX88U-5G,auto,3,20 MHz,Open System,,0,1
-2.4G,AX88U-5G,auto,3,20 MHz,Open System,,0,1
-2.4G,AX88U-5G,auto,3,20 MHz,Open System,,0,1
-2.4G,AX88U-5G,auto,3,20 MHz,Open System,,0,1
+5G,coco_5g,11ax,60,160/80/40/20 MHz,Open System,,1,1
+2.4G,coco_5g,11n,auto,40/20 MHz,Open System,,1,1

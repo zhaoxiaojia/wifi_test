@@ -37,21 +37,7 @@ class Asusax88uControl(AsusBaseControl):
         # 'WPA2-Enterprise': '6',
         # 'WPA/WPA2-Enterprise': '7',
     }
-    CHANNEL_5_DICT = {
-        '自动': '1',
-        '36': '2',
-        '40': '3',
-        '44': '4',
-        '48': '5',
-        '52': '6',
-        '56': '7',
-        '60': '8',
-        '64': '9',
-        '149': '10',
-        '153': '11',
-        '157': '12',
-        '161': '13',
-    }
+
 
 
     def __init__(self, address: str | None = None):
@@ -128,7 +114,7 @@ class Asusax88uControl(AsusBaseControl):
 
     def set_2g_wireless(self, mode):
         cmd = {
-            '自动': 'nvram set wl0_he_features=0;nvram set wl0_nmode_x=0;',
+            'auto': 'nvram set wl0_he_features=0;nvram set wl0_nmode_x=0;',
             '11n': 'nvram set wl0_he_features=0;nvram set wl0_nmode_x=1;',
             '11g': 'nvram set wl0_he_features=0;nvram set wl0_nmode_x=5;',
             '11b': 'nvram set wl0_he_features=0;nvram set wl0_nmode_x=6;',
@@ -141,7 +127,7 @@ class Asusax88uControl(AsusBaseControl):
 
     def set_5g_wireless(self, mode):
         cmd = {
-            '自动': 'nvram set wl1_he_features=0;nvram set wl1_nmode_x=0;',
+            'auto': 'nvram set wl1_he_features=0;nvram set wl1_nmode_x=0;',
             '11a': 'nvram set wl1_he_features=0;nvram set wl1_nmode_x=7;',
             '11ac': 'nvram set wl1_he_features=0;nvram set wl1_nmode_x=3;',
             '11ax': 'nvram set wl1_he_features=7;nvram set wl1_nmode_x=9;nvram set wl1_vhtmode=2;',
@@ -184,7 +170,7 @@ class Asusax88uControl(AsusBaseControl):
         channel = str(channel)
         if channel not in self.CHANNEL_2:
             raise ConfigError('channel element error')
-        channel = 0 if channel == '自动' else channel
+        channel = 0 if channel == 'auto' else channel
         self.telnet_write(cmd.format(channel))
 
     def set_5g_channel(self, channel):
@@ -192,7 +178,7 @@ class Asusax88uControl(AsusBaseControl):
         channel = str(channel)
         if channel not in self.CHANNEL_5:
             raise ConfigError('channel element error')
-        channel = 0 if channel == '自动' else channel
+        channel = 0 if channel == 'auto' else channel
         self.telnet_write(cmd.format(channel))
 
     def set_2g_bandwidth(self, width):
@@ -250,8 +236,7 @@ class Asusax88uControl(AsusBaseControl):
 
         # 修改 wireless_mode
         if router.wireless_mode:
-            mode = self.WIRELESS_MODE_MAP.get(router.wireless_mode, router.wireless_mode)
-            self.set_2g_wireless(mode) if '2' in router.band else self.set_5g_wireless(mode)
+            self.set_2g_wireless(router.wireless_mode) if '2' in router.band else self.set_5g_wireless(router.wireless_mode)
 
         # 修改 password
         if router.password:
@@ -260,8 +245,7 @@ class Asusax88uControl(AsusBaseControl):
 
         # 修改 security_mode
         if router.security_mode:
-            mode = self.SECURITY_MODE_MAP.get(router.security_mode, router.security_mode)
-            self.set_2g_authentication(mode) if '2' in router.band else self.set_5g_authentication(mode)
+            self.set_2g_authentication(router.security_mode) if '2' in router.band else self.set_5g_authentication(router.security_mode)
 
         # 修改channel
         if router.channel:

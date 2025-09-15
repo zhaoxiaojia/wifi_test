@@ -19,15 +19,6 @@ import telnetlib3
 
 from src.tools.connect_tool.dut import dut
 
-cmd_line_wildcard = {
-    'sandia': b'sandia:/ #',
-    'sandia_latam': b'sandia_isdb:/ #',
-    'sandia_hkc': b'sandia manu:/ #',
-    'sandia_dvb': b'sandia_dvb:/ #',
-    'bayside': b'bayside:/ #'
-}
-
-
 class telnet_tool(dut):
     def __init__(self, ip):
         super().__init__()

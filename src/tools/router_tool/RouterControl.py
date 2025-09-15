@@ -1,4 +1,4 @@
-#!/usr/bin/env python 
+﻿#!/usr/bin/env python 
 # -*- coding: utf-8 -*-
 # @Time    : 2021/12/30 11:05
 # @Author  : chao.li
@@ -12,10 +12,11 @@ import time
 from abc import ABCMeta, abstractmethod
 
 from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select, WebDriverWait
-
+from selenium.common.exceptions import NoAlertPresentException, TimeoutException
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 from src.tools.yamlTool import yamlTool
 
 
@@ -52,8 +53,8 @@ class RouterControl(metaclass=ABCMeta):
 
 # option = webdriver.ChromeOptions()
 # option.add_argument(argument='headless')
-# option.add_argument("--start-maximized")  # 窗口最大化
-# option.add_experimental_option("detach", True)  # 不自动关闭浏览器
+# option.add_argument("--start-maximized")  # 绐楀彛鏈€澶у寲
+# option.add_experimental_option("detach", True)  # 涓嶈嚜鍔ㄥ叧闂祻瑙堝櫒
 # service = Service(executable_path=r"C:\Users\yu.zeng\ChromeWebDriver\chromedriver.exe")
 
 class ConfigError(Exception):
@@ -68,22 +69,22 @@ class RouterTools(RouterControl):
 
         load router info from csv than generate init to channge router setting
 
-        router_info : 路由器品牌_路由器型号
+        router_info : 璺敱鍣ㄥ搧鐗宊璺敱鍣ㄥ瀷鍙?
         display : if senlium runs silenty
 
 
 
     '''
 
-    # 操作 网页 页面 滚动  js 命令
+    # 鎿嶄綔 缃戦〉 椤甸潰 婊氬姩  js 鍛戒护
     SCROL_JS = 'arguments[0].scrollIntoView();'
 
     # asus router setup value
     BAND_LIST = ['2.4G', '5G']
     BANDWIDTH_2 = ['20/40 MHz', '20 MHz', '40 MHz']
     BANDWIDTH_5 = ['20/40/80 MHz', '20 MHz', '40 MHz', '80 MHz']
-    WIRELESS_2 = ['自动', '11b', '11g', '11n', '11ax', 'Legacy', 'N only']
-    WIRELESS_5: list[str] = ['自动', '11a', '11ac', '11ax', 'Legacy', 'N/AC/AX mixed', 'AX only']
+    WIRELESS_2 = ['auto', '11b', '11g', '11n', '11ax']
+    WIRELESS_5: list[str] = ['auto', '11a', '11ac', '11ax']
 
     AUTHENTICATION_METHOD = ['Open System', 'WPA2-Personal', 'WPA3-Personal', 'WPA/WPA2-Personal', 'WPA2/WPA3-Personal',
                              'WPA2-Enterprise', 'WPA/WPA2-Enterprise']
@@ -105,15 +106,14 @@ class RouterTools(RouterControl):
         'TKIP+AES': 2
     }
 
-
     PASSWD_INDEX_DICT = {
         '1': '1',
         '2': '2',
         '3': '3',
         '4': '4'
     }
-    CHANNEL_2 = ['自动', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11']
-    CHANNEL_5 = ['自动', '36', '40', '44', '48', '52', '56', '60', '64', '100', '104', '108', '112', '116', '120',
+    CHANNEL_2 = ['auto', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11']
+    CHANNEL_5 = ['auto', '36', '40', '44', '48', '52', '56', '60', '64', '100', '104', '108', '112', '116', '120',
                  '124', '128', '132', '136', '140', '144', '149', '153', '157', '161', '165']
     COUNTRY_CODE = {
         '亚洲': '1',
@@ -127,30 +127,30 @@ class RouterTools(RouterControl):
     }
 
     def __init__(self, router_info, display=True, address: str | None = None):
-        """初始化路由器控制对象
+        """鍒濆鍖栬矾鐢卞櫒鎺у埗瀵硅薄
 
         Parameters
         ----------
         router_info: str
-            路由器信息，格式为 ``品牌_型号``
+            璺敱鍣ㄤ俊鎭紝鏍煎紡涓?``鍝佺墝_鍨嬪彿``
         display: bool
-            是否显示浏览器界面
+            鏄惁鏄剧ず娴忚鍣ㄧ晫闈?
         address: str | None
-            路由器网关地址，如果为空则使用默认值
+            璺敱鍣ㄧ綉鍏冲湴鍧€锛屽鏋滀负绌哄垯浣跨敤榛樿鍊?
         """
 
-        # 路由器品牌
+        # 璺敱鍣ㄥ搧鐗?
         self.router_type = router_info.split("_")[0]
-        # 路由器完整信息
+        # 璺敱鍣ㄥ畬鏁翠俊鎭?
         self.router_info = router_info
-        # 路由器 各控件 元素 配置文件
+        # 璺敱鍣?鍚勬帶浠?鍏冪礌 閰嶇疆鏂囦欢
         self.yaml_info = yamlTool(os.getcwd() + f'\\config\\router_xpath\\{self.router_type.split("_")[0]}_xpath.yaml')
         # self.yaml_info = yamlTool(
         #     fr'C:\Users\SH171300-1522\PycharmProjects\wifi_test\config\router_xpath\{self.router_type.split("_")[0]}_xpath.yaml')
-        # 元素配置文件 根节点
+        # 鍏冪礌閰嶇疆鏂囦欢 鏍硅妭鐐?
         self.xpath = self.yaml_info.get_note(self.router_type)
         # print(self.xpath)
-        # 路由器登录地址，优先使用传入参数，其次使用预设默认值
+        # 璺敱鍣ㄧ櫥褰曞湴鍧€锛屼紭鍏堜娇鐢ㄤ紶鍏ュ弬鏁帮紝鍏舵浣跨敤棰勮榛樿鍊?
         default_address = {
             'xiaomi': '192.168.31.1',
             'asus': '192.168.50.1',
@@ -164,7 +164,7 @@ class RouterTools(RouterControl):
         logging.info(self.address)
         self.ping_address = self.address
 
-        # 全局等待3秒 （当driver 去查询 控件时生效）
+        # 鍏ㄥ眬绛夊緟3绉?锛堝綋driver 鍘绘煡璇?鎺т欢鏃剁敓鏁堬級
 
         logging.info('*' * 80)
         logging.info(f'* Router {self.router_info}')
@@ -176,8 +176,8 @@ class RouterTools(RouterControl):
     def _init(self):
         self.option = webdriver.ChromeOptions()
         # if display == True:
-        self.option.add_argument("--start-maximized")  # 窗口最大化
-        self.option.add_experimental_option("detach", True)  # 不自动关闭浏览器
+        self.option.add_argument("--start-maximized")  # 绐楀彛鏈€澶у寲
+        self.option.add_experimental_option("detach", True)  # 涓嶈嚜鍔ㄥ叧闂祻瑙堝櫒
         self.driver = webdriver.Chrome(options=self.option)
         # else:
         # self.option.add_argument(argument='headless')
@@ -189,7 +189,7 @@ class RouterTools(RouterControl):
         login in router
         @return:
         '''
-        # 实例 driver 用于对浏览器进行操作
+        # 瀹炰緥 driver 鐢ㄤ簬瀵规祻瑙堝櫒杩涜鎿嶄綔
         self._init()
         self.driver.get(f"http://{self.address}")
         time.sleep(1)
@@ -237,17 +237,6 @@ class RouterTools(RouterControl):
         bind_select.select_by_visible_text(band)
 
         # assert bind_select.first_selected_option.text == band, "Band not selected"
-
-    def change_wireless_mode(self, mode):
-        '''
-        select mode
-        @param mode:
-        @return:
-        '''
-        wireless_mode_select = Select(
-            self.driver.find_element(By.XPATH, self.xpath['wireless_mode_element'][self.router_info]))
-        wireless_mode_select.select_by_visible_text(mode)
-        assert wireless_mode_select.first_selected_option.text == mode, "Wireless mode not selected"
 
     def change_ssid(self, ssid):
         '''
@@ -405,53 +394,35 @@ class RouterTools(RouterControl):
         else:
             return False
 
-    def change_country(self, router_or_code):
-        self.login()
-        self.driver.find_element(By.ID, 'Advanced_Wireless_Content_menu').click()
-        # Wireless - General
-        WebDriverWait(driver=self.driver, timeout=5, poll_frequency=0.5).until(
-            EC.presence_of_element_located((By.ID, 'FormTitle'))
-        )
+    def handle_alert_or_popup(self, timeout=3):
+        # 鍏堝鐞嗗師鐢?alert
+        try:
+            alert = self.driver.switch_to.alert
+            alert.accept()
+            return True
+        except NoAlertPresentException:
+            pass
 
-        # 判断参数类型，提取 country_code
-        if isinstance(router_or_code, str):
-            country_code = router_or_code
-        else:
-            country_code = getattr(router_or_code, "country_code", None)
+        # 澶勭悊 HTML 寮圭獥 (OK/纭畾/纭)
+        selectors = [
+            "//button[text()='OK']",
+            "//button[text()='确定']",
+            "//button[contains(., '确认')]",
+            "//input[@value='OK']",
+            "//input[@value='确定']",
+        ]
+        for sel in selectors:
+            try:
+                btn = WebDriverWait(self.driver, timeout).until(
+                    EC.element_to_be_clickable((By.XPATH, sel))
+                )
+                btn.click()
+                return True
+            except TimeoutException:
+                continue
 
-        # 修改 国家码
-        if country_code:
-            if country_code not in self.COUNTRY_CODE:
-                raise ConfigError('country code error')
-
-            self.driver.find_element(
-                By.XPATH, '//*[@id="Advanced_WAdvanced_Content_tab"]/div'
-            ).click()
-
-            WebDriverWait(driver=self.driver, timeout=5, poll_frequency=0.5).until(
-                EC.presence_of_element_located((By.ID, 'titl_desc'))
-            )
-
-            index = self.COUNTRY_CODE[country_code]
-            self.driver.find_element(
-                By.XPATH,
-                self.xpath['country_code_element'][self.router_info].format(index)
-            ).click()
-
-            self.driver.find_element(
-                By.XPATH, '//*[@id="apply_btn"]/input'
-            ).click()
-
-            # 处理弹窗
-            for _ in range(2):
-                try:
-                    self.driver.switch_to.alert.accept()
-                except Exception:
-                    ...
-
-            WebDriverWait(driver=self.driver, timeout=120, poll_frequency=0.5).until_not(
-                EC.visibility_of_element_located((By.XPATH, '//*[@id="loadingBlock"]/tbody'))
-            )
+        # 濡傛灉閮芥病鏈夛紝鐩存帴杩斿洖 False锛屼笉鎶ラ敊
+        return False
 
     # def __del__(self):
     #     self.driver.quit()
