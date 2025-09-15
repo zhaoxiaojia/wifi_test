@@ -226,9 +226,9 @@ class dut():
                 line = tn.read_until(b'Mbits/sec').decode('gbk').strip()
                 self.iperf_log_list.append(line)
             logging.info('run thread done')
+
         if '-s' in command:
             self.iperf_log_list = []
-        if '-s' in command:
             if adb:
                 if pytest.connect_type == 'telnet':
                     t = Thread(target=telnet_iperf)
@@ -269,12 +269,6 @@ class dut():
         else:
             if adb:
                 async def run_adb_iperf():
-                    # 定义命令和参数
-                    # command = [
-                    # 	'adb', '-s', pytest.dut.serialnumber, 'shell',
-                    # 	'iperf', '-c',pytest.dut.pc_ip, '-w', '2m', '-i', '1', '-t',pytest.dut.IPERF_TEST_TIME, '-P5'
-                    # ]
-
                     # 创建子进程
                     process = await asyncio.create_subprocess_exec(
                         *command.split(),  # 解包命令和参数
@@ -291,7 +285,6 @@ class dut():
                         logging.warning("Command timed out")
                         process.terminate()  # 终止进程
                         await process.wait()  # 等待进程完全终止
-
                 logging.info(f'client adb command: {command}')
                 if pytest.connect_type == 'telnet':
                     pytest.dut.checkoutput(command)
@@ -305,6 +298,7 @@ class dut():
             else:
                 logging.info(f'client pc command: {command}')
                 subprocess.Popen(command.split())
+                time.sleep(self.iperf_wait_time)
 
     def _parse_iperf_log(self, lines):
         """解析 iperf 日志并计算吞吐量."""
@@ -326,7 +320,6 @@ class dut():
         if len(lines) > 30:
             return throughput
         return None
-
 
     def get_logcat(self):
         # pytest.dut.kill_iperf()
@@ -385,9 +378,8 @@ class dut():
                 time.sleep(1)
                 client_cmd = pytest.dut.iperf_client_cmd.replace('{ip}', self.dut_ip)
                 pytest.dut.run_iperf(client_cmd, '')
-                time.sleep(pytest.dut.iperf_wait_time)
                 if pytest.connect_type == 'telnet':
-                    time.sleep(15)
+                    time.sleep(5)
                 rx_result = self.get_logcat()
                 self.rvr_result = None
                 try:
@@ -468,9 +460,8 @@ class dut():
                 time.sleep(1)
                 client_cmd = pytest.dut.iperf_client_cmd.replace('{ip}', self.pc_ip)
                 pytest.dut.run_iperf(self.tool_path + client_cmd, self.serialnumber)
-                time.sleep(pytest.dut.iperf_wait_time)
                 if pytest.connect_type == 'telnet':
-                    time.sleep(15)
+                    time.sleep(5)
                 time.sleep(3)
                 tx_result = self.get_logcat()
                 self.rvr_result = None
@@ -591,9 +582,9 @@ class dut():
     @step
     def get_rssi(self):
         for i in range(10):
-            time.sleep(1)
+            time.sleep(3)
             rssi_info = pytest.dut.checkoutput(pytest.dut.IW_LINNK_COMMAND)
-            logging.info(f'Get WiFi link status via command iw dev wlan0 link {rssi_info}')
+            logging.info(f'Get WiFi link status via command {rssi_info}')
             if 'signal' in rssi_info:
                 break
         else:

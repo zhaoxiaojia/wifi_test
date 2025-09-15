@@ -25,162 +25,34 @@ class XiaomiBe7000Control(XiaomiBaseControl):
     def __init__(self, address: str | None = None):
         super().__init__('xiaomi_be7000', display=True, address=address)
 
-    def login(self):
-        super()._init()
-        # try:
-        self.driver.get(f"http://{self.address}")
-        # input passwd
-        self.driver.find_element(By.ID, self.xpath['password_element']).click()
-        self.driver.find_element(By.ID, self.xpath['password_element']).clear()
-        time.sleep(1)
-        self.driver.find_element(By.ID, self.xpath['password_element']).send_keys(
-            self.xpath['passwd'])
-        # click login
-        self.driver.find_element(By.ID, self.xpath['signin_element']).click()
-        # wait for login in done
-        WebDriverWait(driver=self.driver, timeout=10, poll_frequency=0.5).until(
-            EC.presence_of_element_located((By.ID, self.xpath['signin_done_element'])))
-        # except NoSuchElementException as e:
-        #     ...
-        time.sleep(1)
-
     def change_setting(self, router):
-        '''
-        set up wifi envrioment
-        @param router: Router instance
-        @return: status : boolean
-        '''
-        logging.info('Try to set router')
-        # try:
-        self.login()
-        WebDriverWait(driver=self.driver, timeout=10, poll_frequency=0.5).until(
-            EC.invisibility_of_element_located((By.CSS_SELECTOR, "div.mask-menu")))
-        element = self.driver.find_element(By.CSS_SELECTOR, "a.btn_wifi")
-        self.driver.execute_script("arguments[0].click();", element)
-        # Wireless - Profession
-        wait = WebDriverWait(driver=self.driver, timeout=5, poll_frequency=0.5)
-        wait.until(EC.presence_of_element_located((By.XPATH, '//*[@id="wifiset24"]/div[1]')))
-
-        if router.band == self.BAND_5:
-            # //*[@id="wifiset50"]/div[1]/span[1]
-            wait_for = self.driver.find_element(By.XPATH, '//*[@id="wifiset50"]/div[1]/span[1]')
-            self.scroll_to(wait_for)
-
-        # 修改 ssid
-        if router.ssid:
-            if self.BAND_2 == router.band:
-                target = 'ssid_2g'
-            else:
-                target = 'ssid_5g'
-            self.driver.find_element(
-                By.XPATH, self.xpath['ssid_element'][target]).clear()
-            self.driver.find_element(
-                By.XPATH, self.xpath['ssid_element'][target]).send_keys(router.ssid)
-
-        hide_2g = self.driver.find_element(
-            By.ID, self.xpath['hide_ssid']['hide_2g'])
-        hide_5g = self.driver.find_element(
-            By.ID, self.xpath['hide_ssid']['hide_5g'])
-
-        if self.BAND_2 == router.band:
-            target = hide_2g
-        else:
-            target = hide_5g
-        # 修改隐藏
-        if router.hide_ssid:
-            if router.hide_ssid == '是' and not target.is_selected():
-                target.click()
-            if router.hide_ssid == '否' and target.is_selected():
-                target.click()
-        else:
-            if target.is_selected():
-                target.click()
-        # 修改 security_mode
-        if router.security_mode:
-            try:
-                mode = self.SECURITY_MODE_MAP.get(router.security_mode, router.security_mode)
-                index = self.AUTHENTICATION_METHOD[mode]
-            except KeyError:
-                raise ConfigError('security protocol method element error')
-            target = 'authentication_2g' if self.BAND_2 == router.band else 'authentication_5g'
-            self.driver.find_element(
-                By.XPATH, self.xpath['authentication_select_element'][target]).click()
-            # //*[@id="dummydata"]/a[3]/span
-            self.driver.find_element(
-                By.XPATH, self.xpath['authentication_regu_element'].format(index)).click()
-
-        # 修改密码
-        if router.password:
-            if self.BAND_2 == router.band:
-                target = 'passwd_2g'
-            else:
-                target = 'passwd_5g'
-            self.driver.find_element(
-                By.XPATH, self.xpath['passwd_element'][target]).clear()
-            self.driver.find_element(
-                By.XPATH, self.xpath['passwd_element'][target]).send_keys(router.password)
-
-        if router.channel:
-            channel = str(router.channel)
-            try:
-                if router.band == '2.4G':
-                    index = self.CHANNEL_2[channel]
-                    target = 'channel_2g'
-                else:
-                    index = self.CHANNEL_5[channel]
-                    target = 'channel_5g'
-            except KeyError:
-                raise ConfigError('channel element error')
-
-            self.driver.find_element(
-                By.XPATH, self.xpath['channel_select_element'][target]).click()
+        super().change_setting(router)
+        try:
             wait_for = self.driver.find_element(
-                By.XPATH, self.xpath['channel_regu_element'].format(index))
+                By.XPATH, self.xpath['apply_element']['apply_5g'])
             self.scroll_to(wait_for)
-            time.sleep(1)
             wait_for.click()
-
-            try:
-                self.driver.find_element(By.XPATH, "/html/body/div[1]/div/div[3]/div/a").click()
-            except Exception:
-                ...
-
-        # 修改 bandwidth
-        if router.bandwidth:
-            if router.band == self.BAND_2:
-                target_dict = self.BANDWIDTH_2
-                target = 'bandwidth_2g'
+            self.driver.find_element(By.XPATH, '/html/body/div[1]/div/div[3]/div/a[1]/span').click()
+        except Exception as e:
+            logging.warning("Failed to click apply")
+        try:
+            if ('需要30秒请等待...' in self.driver.
+                    find_element(By.XPATH, '/html/body/div[1]/div/div[2]/div/div/div[2]').text):
+                logging.info('Need wait 30 seconds')
+                time.sleep(30)
             else:
-                target_dict = self.BANDWIDTH_5
-                target = 'bandwidth_5g'
-            if router.bandwidth not in target_dict: raise ConfigError('bandwidth element error')
-            self.driver.find_element(
-                By.XPATH, self.xpath['bandwidth_select_element'][target]).click()
-            time.sleep(1)
-            select_list = self.driver.find_element(By.ID, 'dummydata')
-            lis = select_list.find_elements(By.TAG_NAME, 'span')
-            if len(lis) > 1:
-                index = [i.text for i in lis].index(router.bandwidth) + 1
-                self.driver.find_element(
-                    By.XPATH, self.xpath['bandwidth_element'].format(index)).click()
-
-        time.sleep(5)
-        wait_for = self.driver.find_element(
-            By.XPATH, self.xpath['apply_element']['apply_5g'])
-        self.scroll_to(wait_for)
-        wait_for.click()
-        self.driver.find_element(By.XPATH, '/html/body/div[1]/div/div[3]/div/a[1]/span').click()
-        time.sleep(3)
+                logging.info('Need wait 75 seconds')
+                time.sleep(75)
+        except Exception:
+            logging.warning("Fail to find hold on windows")
         # 修改wiremode
         if router.wireless_mode:
             # //*[@id="WIFI6switch"]
             wifi6_switch = self.driver.find_element(By.XPATH, '//*[@id="WIFI6switch"]')
             self.scroll_to(wifi6_switch)
-            mode = self.WIRELESS_MODE_MAP.get(router.wireless_mode, router.wireless_mode)
-            if wifi6_switch.get_attribute("data-on") != {'11ax': '0', '11ac': '1', '11n': '1'}[mode]:
+            if wifi6_switch.get_attribute("data-on") != '0' if router.wireless_mode == '11ax' else '1':
                 wifi6_switch.click()
                 time.sleep(15)
-
         logging.info('Router setting done')
         self.driver.quit()
         return True

@@ -87,10 +87,10 @@ class RouterConst:
         'W2U': {'mimo': '2X2', '2.4G': '11AX', '5G': '11AX'},
         'W2L': {'mimo': '2X2', '2.4G': '11AX', '5G': '11AX'}
     }
-    INTERFACE_CONFIG = ['SDIO','PCIE','USB']
+    INTERFACE_CONFIG = ['SDIO', 'PCIE', 'USB']
     dut_wifichip: Final[str] = 'w2_sdio'
     DEFAULT_WIRELESS_MODES: Final[dict[str, list[str]]] = {
-        "2.4G": ["auto", "11n", "11b", "11g", "11a", "11ac", "11ax"],
+        "2.4G": ["auto", "11n", "11b", "11g", "11ax"],
         "5G": ["11ac", "11ax"],
     }
 

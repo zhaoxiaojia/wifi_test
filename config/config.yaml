@@ -2,7 +2,7 @@ connect_type:
   adb:
     device: coco5c6788c23f1804
   telnet:
-    ip: 192.168.1.102
+    ip: 192.168.5.12
   type: telnet
 corner_angle:
   ip_address: 192.168.5.11
@@ -19,11 +19,11 @@ rf_solution:
     ip_address: 192.168.5.75
   model: RC4DAT-8G-95
   step:
-  - 65
-  - 70
+  - 0
+  - 10
 router:
-  name: asusax88u
-  address: 192.168.5.1
+  name: xiaomiax3600
+  address: 192.168.50.1
 rvr:
   iperf:
     path: ''
