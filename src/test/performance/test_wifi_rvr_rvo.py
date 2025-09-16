@@ -22,6 +22,7 @@ from src.test.performance import (
     init_corner,
     init_rf,
     init_router,
+    wait_for_dut_connection_recover,
 )
 
 _test_data = get_testdata(init_router())
@@ -61,6 +62,9 @@ def setup_attenuation(request, setup_corner):
     db_set = request.param
     connect_status, router_info, corner_set = setup_corner
     rf_tool.execute_rf_cmd(db_set)
+    if connect_status:
+        recover_status, _ = wait_for_dut_connection_recover()
+        connect_status = connect_status and recover_status
     yield (connect_status, router_info, corner_set, db_set)
     pytest.dut.kill_iperf()
 
