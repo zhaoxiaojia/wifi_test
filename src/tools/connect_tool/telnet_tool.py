@@ -31,31 +31,98 @@ class telnet_tool(dut):
         self.writer = None
         self.command_post_delay = 0.2
 
+    def _ensure_loop(self):
+        loop = getattr(self, "loop", None)
+        if loop is None or loop.is_closed():
+            loop = asyncio.new_event_loop()
+            self.loop = loop
+        asyncio.set_event_loop(loop)
+        return loop
+
+    def _connection_active(self) -> bool:
+        if not (self.reader and self.writer):
+            return False
+
+        reader_at_eof = getattr(self.reader, "at_eof", None)
+        if callable(reader_at_eof):
+            try:
+                if reader_at_eof():
+                    return False
+            except Exception:
+                pass
+
+        reader_exception = getattr(self.reader, "exception", None)
+        if callable(reader_exception):
+            try:
+                if reader_exception():
+                    return False
+            except Exception:
+                pass
+
+        writer_is_closing = getattr(self.writer, "is_closing", None)
+        if callable(writer_is_closing):
+            try:
+                if writer_is_closing():
+                    return False
+            except Exception:
+                pass
+
+        writer_closed = getattr(self.writer, "closed", None)
+        if isinstance(writer_closed, bool) and writer_closed:
+            return False
+
+        transport = getattr(self.writer, "transport", None)
+        if transport is not None:
+            transport_is_closing = getattr(transport, "is_closing", None)
+            if callable(transport_is_closing):
+                try:
+                    if transport_is_closing():
+                        return False
+                except Exception:
+                    pass
+
+        return True
+
+    def _reset_connection_state(self):
+        loop = getattr(self, "loop", None)
+        if self.writer:
+            try:
+                self.writer.close()
+                if (
+                    loop
+                    and not loop.is_closed()
+                    and hasattr(self.writer, "wait_closed")
+                ):
+                    loop.run_until_complete(self.writer.wait_closed())
+            except Exception as e:
+                logging.warning(f'Error shutting down telnet writer: {e}')
+        self.writer = None
+        self.reader = None
+
     def connect(self):
-        if not hasattr(self, "loop"):
-            self.loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(self.loop)
-        if self.reader and self.writer:
+        loop = self._ensure_loop()
+        if self._connection_active():
             return
+        self._reset_connection_state()
+        loop = self._ensure_loop()
         try:
-            self.reader, self.writer = self.loop.run_until_complete(
+            self.reader, self.writer = loop.run_until_complete(
                 telnetlib3.open_connection(self.dut_ip, self.port)
             )
         except Exception as e:
             logging.error(f'Create telnet connection failed: {e}')
 
     def close(self):
-        if self.writer:
-            self.writer.close()
-            if hasattr(self.writer, "wait_closed"):
-                try:
-                    self.loop.run_until_complete(self.writer.wait_closed())
-                except Exception as e:
-                    logging.warning(f'Error closing telnet connection: {e}')
-            self.writer = None
-        self.reader = None
-        if hasattr(self,'loop') and not self.loop.is_closed():
-            self.loop.close()
+        self._reset_connection_state()
+        loop = getattr(self, "loop", None)
+        if loop:
+            try:
+                if not loop.is_closed():
+                    loop.close()
+            except Exception as e:
+                logging.warning(f'Error closing telnet loop: {e}')
+            finally:
+                self.loop = None
 
     def __del__(self):
         self.close()
@@ -112,13 +179,19 @@ class telnet_tool(dut):
                 output.append(data)
             except asyncio.TimeoutError:
                 break
-        return "".join(output)
+        result = "".join(output)
+        if not result and not self._connection_active():
+            raise ConnectionError('Telnet connection lost')
+        return result
 
     async def _send_command_and_collect(self, cmd: str, delay: float = 0.0):
         """写入命令后等待设备回显并收集所有输出。"""
 
-        self.writer.write(cmd + "\n")
-        await self.writer.drain()
+        try:
+            self.writer.write(cmd + "\n")
+            await self.writer.drain()
+        except Exception as e:
+            raise ConnectionError(f'Failed to send telnet command: {e}') from e
         if delay:
             await asyncio.sleep(delay)
         return await self._read_all()
@@ -134,13 +207,32 @@ class telnet_tool(dut):
             logging.error('Telnet execute cmd error: no connection')
 
     def checkoutput(self, cmd, wildcard=''):
-        if not (self.reader and self.writer):
+        self.connect()
+        if not self._connection_active():
+            logging.error('Telnet checkoutput error: no connection')
+            return ''
+        try:
+            output = self.loop.run_until_complete(
+                self._send_command_and_collect(cmd, self.command_post_delay)
+            )
+        except ConnectionError as e:
+            logging.warning(f'Telnet command failed, reconnecting: {e}')
+            self._reset_connection_state()
             self.connect()
-        if not (self.reader and self.writer):
-            return None
-        return self.loop.run_until_complete(
-            self._send_command_and_collect(cmd, self.command_post_delay)
-        )
+            if not self._connection_active():
+                return ''
+            output = self.loop.run_until_complete(
+                self._send_command_and_collect(cmd, self.command_post_delay)
+            )
+        if not output and not self._connection_active():
+            self._reset_connection_state()
+            self.connect()
+            if not self._connection_active():
+                return ''
+            output = self.loop.run_until_complete(
+                self._send_command_and_collect(cmd, self.command_post_delay)
+            )
+        return output
 
     def popen_term(self, command):
         return subprocess.Popen(command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
