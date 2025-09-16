@@ -6,7 +6,7 @@
 import logging
 import re
 import time
-from typing import Any, Tuple
+from typing import Any
 from functools import lru_cache
 
 import pytest
@@ -132,69 +132,6 @@ def common_setup(router: Router, router_info: Router) -> bool:
         time.sleep(3)
 
     return connect_status
-
-
-def wait_for_dut_connection_recover(timeout: int = 120, interval: int = 5) -> Tuple[bool, str]:
-    """等待 DUT 在调整射频衰减后恢复网络连通性。
-
-    Args:
-        timeout: 最大等待时间（秒）。
-        interval: 每次检测之间的间隔时间（秒）。
-
-    Returns:
-        Tuple[bool, str]: (是否成功恢复, 恢复后的 IP 地址)。
-    """
-
-    logging.info('Check DUT connectivity after changing RF attenuation')
-    start_time = time.time()
-    last_error = ''
-    target_prefix = ''
-
-    if pytest.connect_type != 'telnet':
-        try:
-            target_prefix = re.findall(r'(\d+\.\d+\.\d+\.)', pytest.dut.pc_ip)[0]
-        except Exception as err:
-            logging.warning(f'Parse PC IP failed: {err}')
-
-    while time.time() - start_time < timeout:
-        try:
-            if pytest.connect_type != 'telnet':
-                try:
-                    ifconfig_info = pytest.dut.checkoutput('ifconfig wlan0')
-                    logging.info(f'ifconfig wlan0 info:\n{ifconfig_info}')
-                except Exception as info_err:
-                    logging.info(f'Check ifconfig wlan0 failed: {info_err}')
-
-            connected, ip_address = pytest.dut.wait_for_wifi_address(target=target_prefix)
-
-            if connected and ip_address and ip_address != '0.0.0.0':
-                logging.info(f'DUT network recovered, ip: {ip_address}')
-
-                if pytest.connect_type != 'telnet':
-                    try:
-                        ping_cmd = f'ping -c 1 -W 1 {pytest.dut.pc_ip}'
-                        ping_result = pytest.dut.checkoutput(ping_cmd)
-                        logging.info(f'ping result:\n{ping_result}')
-                    except Exception as ping_err:
-                        logging.warning(f'Ping verification failed: {ping_err}')
-
-                return True, ip_address
-
-        except AssertionError as err:
-            last_error = str(err)
-            logging.info(f'wait_for_wifi_address failed: {err}')
-        except Exception as err:
-            last_error = str(err)
-            logging.info(f'Connectivity check error: {err}')
-
-        time.sleep(interval)
-
-    if last_error:
-        logging.error(f'DUT connectivity did not recover after RF command: {last_error}')
-    else:
-        logging.error('DUT connectivity did not recover after RF command')
-
-    return False, ''
 
 
 @lru_cache(maxsize=1)
