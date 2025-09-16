@@ -37,7 +37,6 @@ def init_rf():
         logging.info(f'rf_ip {rf_ip}')
     logging.info('Reset rf value')
     rf_tool.execute_rf_cmd(0)
-    logging.info(rf_tool.get_rf_current_value())
     time.sleep(3)
     return rf_tool
 
