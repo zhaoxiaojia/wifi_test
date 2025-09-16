@@ -29,6 +29,7 @@ class telnet_tool(dut):
         logging.info('*' * 80)
         self.reader = None
         self.writer = None
+        self.command_post_delay = 0.2
 
     def connect(self):
         if not hasattr(self, "loop"):
@@ -101,7 +102,7 @@ class telnet_tool(dut):
         except Exception as e:
             logging.error(f'Telnet login failed: {e}')
 
-    async def _read_all(self, timeout=2):
+    async def _read_all(self, timeout=5):
         output = []
         while True:
             try:
@@ -112,6 +113,15 @@ class telnet_tool(dut):
             except asyncio.TimeoutError:
                 break
         return "".join(output)
+
+    async def _send_command_and_collect(self, cmd: str, delay: float = 0.0):
+        """写入命令后等待设备回显并收集所有输出。"""
+
+        self.writer.write(cmd + "\n")
+        await self.writer.drain()
+        if delay:
+            await asyncio.sleep(delay)
+        return await self._read_all()
 
     def execute_cmd(self, cmd):
         if not (self.reader and self.writer):
@@ -128,9 +138,9 @@ class telnet_tool(dut):
             self.connect()
         if not (self.reader and self.writer):
             return None
-        self.writer.write(cmd + "\n")
-        self.loop.run_until_complete(self.writer.drain())
-        return self.loop.run_until_complete(self._read_all())
+        return self.loop.run_until_complete(
+            self._send_command_and_collect(cmd, self.command_post_delay)
+        )
 
     def popen_term(self, command):
         return subprocess.Popen(command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
