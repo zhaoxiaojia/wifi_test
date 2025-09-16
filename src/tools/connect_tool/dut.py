@@ -113,6 +113,11 @@ class dut():
         self.skip_tx = False
         self.skip_rx = False
         self.iperf_log_list: list[str] = []
+        self.last_iperf_client_output = ''
+        self.last_iperf_client_error = ''
+        self.last_iperf_client_success = True
+        self.last_iperf_client_connected = False
+        self.last_iperf_client_throughput = False
         if self.rvr_tool == 'iperf':
             cmds = f"{self.iperf_server_cmd} {self.iperf_client_cmd}"
             self.test_tool = 'iperf3' if 'iperf3' in cmds else 'iperf'
@@ -217,6 +222,85 @@ class dut():
             self.push(path, '/system/bin')
             self.checkoutput('chmod a+x /system/bin/iperf')
 
+    def _reset_iperf_client_state(self):
+        self.last_iperf_client_output = ''
+        self.last_iperf_client_error = ''
+        self.last_iperf_client_success = True
+        self.last_iperf_client_connected = False
+        self.last_iperf_client_throughput = False
+
+    def _update_iperf_client_state(self, stdout='', stderr='', returncode=None):
+        stdout = stdout or ''
+        stderr = stderr or ''
+        combined_lower = f"{stdout}\n{stderr}".lower()
+        failure_keywords = [
+            'connect failed',
+            'failed to connect',
+            'no route to host',
+            'connection refused',
+            'network is unreachable',
+            'timed out',
+        ]
+        if stdout.strip():
+            logging.debug(f'iPerf client stdout: {stdout.strip()}')
+        if stderr.strip():
+            logging.warning(f'iPerf client stderr: {stderr.strip()}')
+
+        self.last_iperf_client_output = stdout.strip()
+        self.last_iperf_client_error = stderr.strip()
+        self.last_iperf_client_connected = any(
+            key in combined_lower for key in ['connected', 'accepted connection', 'connection from']
+        )
+        throughput_match = re.search(r'\d+\.?\d*\s+[kmg]?bits/sec', stdout, re.I)
+        if not throughput_match:
+            throughput_match = re.search(r'\d+\.?\d*\s+[kmg]?bits/sec', stderr, re.I)
+        self.last_iperf_client_throughput = bool(throughput_match)
+
+        success = True
+        if not self.last_iperf_client_output:
+            logging.error('iPerf client produced no stdout output.')
+            success = False
+        if any(keyword in combined_lower for keyword in failure_keywords):
+            logging.error(f'iPerf client connection failure detected: {stdout.strip() or stderr.strip()}')
+            success = False
+        if returncode not in (0, None):
+            logging.error(f'iPerf client exited with return code {returncode}')
+            success = False
+
+        self.last_iperf_client_success = success
+
+    def _validate_iperf_logs(self, direction=''):
+        logs = '\n'.join(self.iperf_log_list)
+        logs_lower = logs.lower()
+        has_connected = any('connected' in line.lower() for line in self.iperf_log_list)
+        if not has_connected and ('accepted connection' in logs_lower or 'connection from' in logs_lower):
+            has_connected = True
+        if not has_connected and self.last_iperf_client_connected:
+            has_connected = True
+
+        has_throughput = bool(re.search(r'\d+\.?\d*\s+[kmg]?bits/sec', logs, re.I))
+        if not has_throughput and self.last_iperf_client_throughput:
+            has_throughput = True
+
+        success = self.last_iperf_client_success and has_connected and has_throughput
+        if not success:
+            logging.error(
+                'iperf %s validation failed: success=%s, connected=%s, throughput=%s',
+                direction or 'client',
+                self.last_iperf_client_success,
+                has_connected,
+                has_throughput,
+            )
+            if logs.strip():
+                logging.warning('iperf server log (%s): %s', direction or 'client', logs.strip())
+            else:
+                logging.warning('iperf server log (%s): <empty>', direction or 'client')
+            if self.last_iperf_client_output:
+                logging.warning('iperf client stdout (%s): %s', direction or 'client', self.last_iperf_client_output)
+            if self.last_iperf_client_error:
+                logging.warning('iperf client stderr (%s): %s', direction or 'client', self.last_iperf_client_error)
+        return success
+
     def run_iperf(self, command, adb):
         def telnet_iperf():
             tn = telnetlib.Telnet(pytest.dut.dut_ip)
@@ -267,38 +351,64 @@ class dut():
                 Thread(target=_read_output, args=(process,), daemon=True).start()
                 return process
         else:
+            self._reset_iperf_client_state()
             if adb:
-                async def run_adb_iperf():
-                    # 创建子进程
-                    process = await asyncio.create_subprocess_exec(
-                        *command.split(),  # 解包命令和参数
-                        stdout=asyncio.subprocess.PIPE,  # 捕获标准输出
-                        stderr=asyncio.subprocess.PIPE  # 捕获标准错误
-                    )
-                    try:
-                        # 等待命令完成，设置超时时间（例如 40 秒）
-                        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=35)
-                        # print("Command output:", stdout.decode())  # 打印标准输出
-                        if stderr:
-                            logging.warning(f"Command error: {stderr.decode()}")  # 打印标准错误
-                    except asyncio.TimeoutError:
-                        logging.warning("Command timed out")
-                        process.terminate()  # 终止进程
-                        await process.wait()  # 等待进程完全终止
                 logging.info(f'client adb command: {command}')
                 if pytest.connect_type == 'telnet':
-                    pytest.dut.checkoutput(command)
+                    try:
+                        output = pytest.dut.checkoutput(command)
+                    except Exception as e:
+                        logging.error(f'iPerf telnet client command failed: {e}')
+                        self._update_iperf_client_state('', str(e))
+                    else:
+                        self._update_iperf_client_state(output)
                 else:
-                    command = f'adb -s {pytest.dut.serialnumber} shell timeout 35 {command} '
-                    # command = f'adb -s {pytest.dut.serialnumber} shell {command} '
-                    logging.info(f'run over async {command}')
-                    # 运行异步函数
-                    asyncio.run(run_adb_iperf())
+                    timeout_s = max(self.iperf_wait_time, 35)
+                    adb_command = f'adb -s {pytest.dut.serialnumber} shell timeout {timeout_s} {command} '
+                    logging.info(f'run over async {adb_command}')
+
+                    async def run_adb_iperf(cmd_args):
+                        process = await asyncio.create_subprocess_exec(
+                            *cmd_args,
+                            stdout=asyncio.subprocess.PIPE,
+                            stderr=asyncio.subprocess.PIPE,
+                        )
+                        try:
+                            stdout, stderr = await asyncio.wait_for(
+                                process.communicate(),
+                                timeout=self.iperf_wait_time + 10,
+                            )
+                        except asyncio.TimeoutError:
+                            logging.error('iPerf client command timed out over adb.')
+                            process.terminate()
+                            stdout, stderr = await process.communicate()
+                        stdout_text = stdout.decode('utf-8', errors='ignore') if stdout else ''
+                        stderr_text = stderr.decode('utf-8', errors='ignore') if stderr else ''
+                        self._update_iperf_client_state(stdout_text, stderr_text, process.returncode)
+
+                    asyncio.run(run_adb_iperf(adb_command.split()))
                     logging.info('run over async done')
             else:
                 logging.info(f'client pc command: {command}')
-                subprocess.Popen(command.split())
-                time.sleep(self.iperf_wait_time)
+                try:
+                    process = subprocess.Popen(
+                        command.split(),
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        encoding='utf-8',
+                        errors='ignore',
+                    )
+                except Exception as e:
+                    logging.error(f'Failed to start iPerf client command: {e}')
+                    self._update_iperf_client_state('', str(e))
+                    return
+                try:
+                    stdout, stderr = process.communicate(timeout=self.iperf_wait_time + 5)
+                except subprocess.TimeoutExpired:
+                    logging.error('iPerf client command timed out on PC side.')
+                    process.kill()
+                    stdout, stderr = process.communicate()
+                self._update_iperf_client_state(stdout, stderr, process.returncode)
 
     def _parse_iperf_log(self, lines):
         """解析 iperf 日志并计算吞吐量."""
@@ -459,16 +569,34 @@ class dut():
                 terminal = pytest.dut.run_iperf(pytest.dut.iperf_server_cmd, '')
                 time.sleep(1)
                 client_cmd = pytest.dut.iperf_client_cmd.replace('{ip}', self.pc_ip)
-                pytest.dut.run_iperf(self.tool_path + client_cmd, self.serialnumber)
-                if pytest.connect_type == 'telnet':
-                    time.sleep(5)
-                time.sleep(3)
-                tx_result = self.get_logcat()
-                self.rvr_result = None
+                retry_required = False
+                tx_result = None
                 try:
-                    terminal.terminate()
-                except Exception as e:
-                    logging.warning(f'Fail to kill run_iperf terminal \n {e}')
+                    pytest.dut.run_iperf(self.tool_path + client_cmd, self.serialnumber)
+                    if pytest.connect_type == 'telnet':
+                        time.sleep(5)
+                    time.sleep(3)
+                    if not self._validate_iperf_logs('tx'):
+                        if c < self.repest_times:
+                            logging.warning(
+                                'iperf tx output missing connection or throughput data, retrying (%s/%s).',
+                                c + 1,
+                                self.repest_times + 1,
+                            )
+                            retry_required = True
+                        else:
+                            raise RuntimeError('iperf tx output missing connection or throughput data')
+                    else:
+                        tx_result = self.get_logcat()
+                        self.rvr_result = None
+                finally:
+                    if terminal:
+                        try:
+                            terminal.terminate()
+                        except Exception as e:
+                            logging.warning(f'Fail to kill run_iperf terminal \n {e}')
+                if retry_required:
+                    continue
             elif self.rvr_tool == 'ixchariot':
                 ix.ep1 = self.dut_ip
                 ix.ep2 = self.pc_ip
