@@ -67,14 +67,14 @@ class XiaomiBaseControl(RouterTools):
     }
 
     BANDWIDTH_5 = {
-        '160/80/40/20 MHz': '1',
+        '20/40/80 MHz': '1',
         '20 MHz': '2',
         '40 MHz': '3',
         '80 MHz': '4'
     }
 
     BANDWIDTH_2 = {
-        '40/20 MHz': '1',
+        '20/40 MHz': '1',
         '20 MHz': '2',
         '40 MHz': '3'
     }
