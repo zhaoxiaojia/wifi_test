@@ -31,11 +31,12 @@ class telnet_tool(dut):
         self.writer = None
 
     def connect(self):
-        if not hasattr(self, "loop"):
-            self.loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(self.loop)
         if self.reader and self.writer:
-            return
+            if self._connection_alive():
+                return
+            logging.warning('Telnet connection lost, reconnecting.')
+            self.close()
+        self._ensure_event_loop()
         try:
             self.reader, self.writer = self.loop.run_until_complete(
                 telnetlib3.open_connection(self.dut_ip, self.port)
@@ -44,20 +45,50 @@ class telnet_tool(dut):
             logging.error(f'Create telnet connection failed: {e}')
 
     def close(self):
+        loop = getattr(self, 'loop', None)
         if self.writer:
             self.writer.close()
-            if hasattr(self.writer, "wait_closed"):
+            if hasattr(self.writer, "wait_closed") and loop:
                 try:
-                    self.loop.run_until_complete(self.writer.wait_closed())
+                    loop.run_until_complete(self.writer.wait_closed())
                 except Exception as e:
                     logging.warning(f'Error closing telnet connection: {e}')
             self.writer = None
         self.reader = None
-        if hasattr(self,'loop') and not self.loop.is_closed():
-            self.loop.close()
+        if loop and not loop.is_closed():
+            loop.close()
+        self.loop = None
 
     def __del__(self):
         self.close()
+
+    def _ensure_event_loop(self):
+        if getattr(self, 'loop', None) is None or self.loop.is_closed():
+            self.loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self.loop)
+
+    def _connection_alive(self):
+        if not (self.reader and self.writer):
+            return False
+        at_eof = getattr(self.reader, 'at_eof', None)
+        if callable(at_eof):
+            try:
+                if at_eof():
+                    logging.warning('Telnet reader reports EOF state.')
+                    return False
+            except Exception as e:
+                logging.warning(f'Failed to query telnet EOF state: {e}')
+                return False
+        return True
+
+    def _ensure_connection_ready(self):
+        self.connect()
+        if not self._connection_alive():
+            raise ConnectionError('Telnet session is not connected')
+
+    def _reconnect(self):
+        self.close()
+        self.connect()
 
     def reboot(self):
         self.checkoutput('reboot')
@@ -104,6 +135,8 @@ class telnet_tool(dut):
     async def _read_all(self, timeout=2):
         output = []
         while True:
+            if hasattr(self.reader, "at_eof") and self.reader.at_eof():
+                break
             try:
                 data = await asyncio.wait_for(self.reader.read(1024), timeout)
                 if not data:
@@ -114,23 +147,42 @@ class telnet_tool(dut):
         return "".join(output)
 
     def execute_cmd(self, cmd):
-        if not (self.reader and self.writer):
-            self.connect()
-        if self.writer:
-            self.writer.write(cmd + "\n")
-            self.loop.run_until_complete(self.writer.drain())
-            time.sleep(1)
-        else:
-            logging.error('Telnet execute cmd error: no connection')
+        last_exc = None
+        for attempt in range(2):
+            try:
+                self._ensure_connection_ready()
+                self.writer.write(cmd + "\n")
+                self.loop.run_until_complete(self.writer.drain())
+                if not self._connection_alive():
+                    raise ConnectionError('Telnet session disconnected during execute_cmd')
+                time.sleep(1)
+                return
+            except Exception as exc:
+                last_exc = exc
+                logging.warning(f'Telnet execute_cmd failed (attempt {attempt + 1}): {exc}')
+                self._reconnect()
+        if last_exc:
+            raise last_exc
+        raise ConnectionError('Telnet execute_cmd failed')
 
     def checkoutput(self, cmd, wildcard=''):
-        if not (self.reader and self.writer):
-            self.connect()
-        if not (self.reader and self.writer):
-            return None
-        self.writer.write(cmd + "\n")
-        self.loop.run_until_complete(self.writer.drain())
-        return self.loop.run_until_complete(self._read_all())
+        last_exc = None
+        for attempt in range(2):
+            try:
+                self._ensure_connection_ready()
+                self.writer.write(cmd + "\n")
+                self.loop.run_until_complete(self.writer.drain())
+                output = self.loop.run_until_complete(self._read_all())
+                if not output and not self._connection_alive():
+                    raise ConnectionError('Telnet session disconnected while reading output')
+                return output
+            except Exception as exc:
+                last_exc = exc
+                logging.warning(f'Telnet checkoutput failed (attempt {attempt + 1}): {exc}')
+                self._reconnect()
+        if last_exc:
+            raise last_exc
+        raise ConnectionError('Telnet checkoutput failed')
 
     def popen_term(self, command):
         return subprocess.Popen(command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
