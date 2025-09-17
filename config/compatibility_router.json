@@ -670,5 +670,85 @@
             "security_mode": "wpa2",
             "bandwidth": "80MHz"
         }
+    },
+    {
+        "ip": "192.168.200.3",
+        "port": "8",
+        "brand": "AT&T",
+        "model": "BGW320-500",
+        "2.4G": {
+            "mode": "11AX",
+            "security_mode": "wpa2",
+            "bandwidth": "20MHz"
+        },
+        "5G": {
+            "mode": "11AX",
+            "security_mode": "wpa2",
+            "bandwidth": "80MHz"
+        }
+    },
+    {
+        "ip": "192.168.200.7",
+        "port": "2",
+        "brand": "TENDA",
+        "model": "BE6L-PRO",
+        "2.4G": {
+            "mode": "11AX",
+            "security_mode": "wpa2",
+            "bandwidth": "40MHz"
+        },
+        "5G": {
+            "mode": "11AX",
+            "security_mode": "wpa2",
+            "bandwidth": "80MHz"
+        }
+    },
+    {
+        "ip": "192.168.200.8",
+        "port": "3",
+        "brand": "VANTIVA",
+        "model": "SETUP-E089",
+        "2.4G": {
+            "mode": "11N",
+            "security_mode": "wpa2",
+            "bandwidth": "40MHz"
+        },
+        "5G": {
+            "mode": "11AX",
+            "security_mode": "wpa2",
+            "bandwidth": "80MHz"
+        }
+    },
+    {
+        "ip": "192.168.200.8",
+        "port": "4",
+        "brand": "MERCURY",
+        "model": "D126-LAN100M",
+        "2.4G": {
+            "mode": "11N",
+            "security_mode": "wpa2",
+            "bandwidth": "20MHz"
+        },
+        "5G": {
+            "mode": "11AC",
+            "security_mode": "wpa2",
+            "bandwidth": "80MHz"
+        }
+    },
+    {
+        "ip": "192.168.200.7",
+        "port": "6",
+        "brand": "ARRIS",
+        "model": "SBR-AC1200P-LAN100M",
+        "2.4G": {
+            "mode": "11N",
+            "security_mode": "wpa2",
+            "bandwidth": "20MHz"
+        },
+        "5G": {
+            "mode": "11AC",
+            "security_mode": "wpa2",
+            "bandwidth": "80MHz"
+        }
     }
 ]

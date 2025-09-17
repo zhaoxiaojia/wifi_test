@@ -267,6 +267,26 @@ a.set_info("192.168.200.8", '8', 'ARRIS', 'SBR-AC1750',
            {'2.4G': {'mode': '11N', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
             '5G': {'mode': '11AC', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
+a.set_info("192.168.200.3", '8', 'AT&T', 'BGW320-500',
+           {'2.4G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
+
+a.set_info("192.168.200.7", '2', 'Tenda', 'BE6L-Pro',
+           {'2.4G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '40MHz'},
+            '5G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
+
+a.set_info("192.168.200.8", '3', 'Vantiva', 'SETUP-E089',
+           {'2.4G': {'mode': '11N', 'security_mode': 'wpa2', 'bandwidth': '40MHz'},
+            '5G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
+
+a.set_info("192.168.200.8", '4', 'MERCURY', 'D126-LAN100M',  # 百兆网口
+           {'2.4G': {'mode': '11N', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AC', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
+
+a.set_info("192.168.200.7", '6', 'ARRIS', 'SBR-AC1200P-LAN100M',  # 百兆网口
+           {'2.4G': {'mode': '11N', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AC', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
+
 a.save_expect()
 dut = dut_standard()
 # w1
@@ -420,4 +440,3 @@ def handle_expectdata(router_info, band, direction, chip_info=None):
     data = _get_default(data, bandwidth)
     data = _get_default(data, mimo_key)
     return _get_default(data, direction.upper())
-
