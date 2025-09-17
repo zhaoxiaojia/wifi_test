@@ -115,7 +115,7 @@ def common_setup(router: Router, router_info: Router) -> bool:
                 logging.info(e)
                 connect_status = False
 
-    logging.info(f'dut_ip:{pytest.dut.dut_ip}')
+    logging.info(f'dut_ip:{pytest.dut.ip}')
     logging.info(f'pc_ip:{pytest.dut.pc_ip}')
     logging.info('dut connected')
 

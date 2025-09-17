@@ -535,7 +535,7 @@ class roku_ctrl(Roku):
             'off': 'echo 0x2 > /sys/class/remote/amremote/protocol'
         }
         logging.info(f'Set roku ir {status}')
-        pytest.dut.execute_cmd(ir_command[status])
+        pytest.dut.checkoutput(ir_command[status])
 
     def set_display_size(self, size):
         '''
@@ -721,15 +721,15 @@ class roku_ctrl(Roku):
 
         logging.info('start telnet 8080 to caputre kernel log ')
         tl = telnet_tool(self.ip, 'sandia')
-        info = tl.execute_cmd(f'telnet {self.ip} 8080', wildcard=b'onn. Roku TV')
+        info = tl.checkoutput(f'telnet {self.ip} 8080', wildcard=b'onn. Roku TV')
         # logging.info(info)
-        tl.execute_cmd('logcast start')
+        tl.checkoutput('logcast start')
         time.sleep(1)
-        tl.execute_cmd('\x03')  # ,wildcard=b'Console')
+        tl.checkoutput('\x03')  # ,wildcard=b'Console')
         time.sleep(1)
-        tl.execute_cmd('\x1A')
+        tl.checkoutput('\x1A')
         time.sleep(1)
-        tl.execute_cmd(f'telnet {self.ip} 8070')
+        tl.checkoutput(f'telnet {self.ip} 8070')
         t = Thread(target=run_logcast, args=(filename,))
         t.daemon = True
         t.start()
@@ -752,9 +752,9 @@ class roku_ctrl(Roku):
         import copy
         target_list = copy.deepcopy(re_list)
         # tl = TelnetTool(self.ip, pytest.dut.wildcard)
-        pytest.dut.execute_cmd('\x03')
-        pytest.dut.execute_cmd('\x03')
-        pytest.dut.execute_cmd('logcat')
+        pytest.dut.checkoutput('\x03')
+        pytest.dut.checkoutput('\x03')
+        pytest.dut.checkoutput('logcat')
         start = time.time()
         temp = []
         while (time.time() - start < timeout):

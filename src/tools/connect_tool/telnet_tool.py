@@ -19,13 +19,14 @@ import telnetlib3
 
 from src.tools.connect_tool.dut import dut
 
+
 class telnet_tool(dut):
     def __init__(self, ip):
         super().__init__()
-        self.dut_ip = ip
+        self.ip = ip
         self.port = 23
         logging.info('*' * 80)
-        logging.info(f'* Telnet {self.dut_ip}')
+        logging.info(f'* Telnet {self.ip}')
         logging.info('*' * 80)
         self.reader = None
         self.writer = None
@@ -36,12 +37,9 @@ class telnet_tool(dut):
             asyncio.set_event_loop(self.loop)
         if self.reader and self.writer:
             return
-        try:
-            self.reader, self.writer = self.loop.run_until_complete(
-                telnetlib3.open_connection(self.dut_ip, self.port)
-            )
-        except Exception as e:
-            logging.error(f'Create telnet connection failed: {e}')
+        self.reader, self.writer = self.loop.run_until_complete(
+            telnetlib3.open_connection(self.ip, self.port)
+        )
 
     def close(self):
         if self.writer:
@@ -53,7 +51,7 @@ class telnet_tool(dut):
                     logging.warning(f'Error closing telnet connection: {e}')
             self.writer = None
         self.reader = None
-        if hasattr(self,'loop') and not self.loop.is_closed():
+        if hasattr(self, 'loop') and not self.loop.is_closed():
             self.loop.close()
 
     def __del__(self):
@@ -113,17 +111,8 @@ class telnet_tool(dut):
                 break
         return "".join(output)
 
-    def execute_cmd(self, cmd):
-        if not (self.reader and self.writer):
-            self.connect()
-        if self.writer:
-            self.writer.write(cmd + "\n")
-            self.loop.run_until_complete(self.writer.drain())
-            time.sleep(1)
-        else:
-            logging.error('Telnet execute cmd error: no connection')
-
     def checkoutput(self, cmd, wildcard=''):
+        logging.info(f'ip {self.ip} {id(self)}')
         if not (self.reader and self.writer):
             self.connect()
         if not (self.reader and self.writer):
