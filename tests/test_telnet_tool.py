@@ -11,7 +11,8 @@ if str(ROOT_DIR) not in sys.path:
 
 sys.modules.setdefault("yaml", types.SimpleNamespace(safe_load=lambda *_args, **_kwargs: {}))
 
-from src.tools.connect_tool import telnet_tool as telnet_module
+from src.tools.connect_tool import telnet3_tool as telnet_module
+from src.tools.connect_tool import telnet_tool as sync_telnet_module
 
 
 class FakeReader:
@@ -119,7 +120,7 @@ def test_telnet_repeated_get_rssi(fake_telnet):
             )
         ]
     )
-    tool = telnet_module.telnet_tool("127.0.0.1")
+    tool = telnet_module.Telnet3Tool("127.0.0.1")
     try:
         first = tool.checkoutput("iw dev wlan0 link")
         second = tool.checkoutput("iw dev wlan0 link")
@@ -138,7 +139,7 @@ def test_telnet_reconnects_when_reader_hits_eof(fake_telnet):
             FakeTelnetConnection(responses=["round-two"]),
         ]
     )
-    tool = telnet_module.telnet_tool("127.0.0.1")
+    tool = telnet_module.Telnet3Tool("127.0.0.1")
     try:
         first = tool.checkoutput("iw dev wlan0 link")
         second = tool.checkoutput("iw dev wlan0 link")
@@ -160,7 +161,7 @@ def test_telnet_retry_on_connection_reset(fake_telnet):
             FakeTelnetConnection(responses=["iperf done"]),
         ]
     )
-    tool = telnet_module.telnet_tool("127.0.0.1")
+    tool = telnet_module.Telnet3Tool("127.0.0.1")
     try:
         result = tool.checkoutput("iperf -c 192.168.1.1")
     finally:
@@ -180,10 +181,51 @@ def test_telnet_retry_on_runtime_error(fake_telnet):
             FakeTelnetConnection(responses=["retry ok"]),
         ]
     )
-    tool = telnet_module.telnet_tool("127.0.0.1")
+    tool = telnet_module.Telnet3Tool("127.0.0.1")
     try:
         result = tool.checkoutput("iperf -c 192.168.1.1")
     finally:
         tool.close()
     assert result == "retry ok"
     assert factory.call_count == 2
+
+
+def test_sync_telnet_checkoutput_reads_until_quiet(monkeypatch):
+    responses = [b"", b"signal: -42 dBm\n", b""]
+
+    class DummyTelnet:
+        def __init__(self):
+            self.responses = list(responses)
+            self.sock = object()
+            self.write_history = []
+
+        def close(self):
+            self.sock = None
+
+        def read_very_eager(self):
+            return self.responses.pop(0) if self.responses else b""
+
+        def write(self, data: bytes):
+            self.write_history.append(data)
+
+        def read_until(self, expected, timeout=None):
+            return self.read_very_eager()
+
+    dummy = DummyTelnet()
+
+    def fake_telnet(*_args, **_kwargs):
+        dummy.responses = list(responses)
+        dummy.write_history.clear()
+        dummy.sock = object()
+        return dummy
+
+    monkeypatch.setattr(sync_telnet_module, "telnetlib", types.SimpleNamespace(Telnet=fake_telnet))
+
+    tool = sync_telnet_module.TelnetTool("127.0.0.1", timeout=0.05)
+    try:
+        output = tool.checkoutput("iw dev wlan0 link")
+    finally:
+        tool.close()
+
+    assert output == "signal: -42 dBm"
+    assert dummy.write_history[-1] == b"iw dev wlan0 link\n"

@@ -22,7 +22,7 @@ import requests
 from roku import Roku
 
 from src.tools.connect_tool.serial_tool import serial_tool
-from src.tools.connect_tool.telnet_tool import telnet_tool
+from src.tools.connect_tool import Telnet3Tool, TelnetTool
 from src.tools.config_loader import load_config
 from src.util.constants import RokuConst
 
@@ -720,7 +720,7 @@ class roku_ctrl(Roku):
                         f.write(info)
 
         logging.info('start telnet 8080 to caputre kernel log ')
-        tl = telnet_tool(self.ip, 'sandia')
+        tl = TelnetTool(self.ip, 'sandia')
         info = tl.checkoutput(f'telnet {self.ip} 8080', wildcard=b'onn. Roku TV')
         # logging.info(info)
         tl.checkoutput('logcast start')
@@ -1026,7 +1026,7 @@ class roku_ctrl(Roku):
             time.sleep(1)
             ip = self.ser.get_ip_address('wlan0')
             if ip:
-                pytest.dut = telnet_tool(ip)
+                pytest.dut = Telnet3Tool(ip)
                 pytest.dut.roku = roku_ctrl(ip)
                 self.ip = ip
                 logging.info(f'roku ip {self.ip}')
@@ -1039,7 +1039,7 @@ class roku_ctrl(Roku):
     def flush_ip(self):
         ip = self.ser.get_ip_address('wlan0')
         if ip:
-            pytest.dut = telnet_tool(ip)
+            pytest.dut = Telnet3Tool(ip)
             pytest.dut.roku = roku_ctrl(ip)
             return True
 
