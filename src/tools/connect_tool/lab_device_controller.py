@@ -13,7 +13,7 @@ import time
 
 import pytest
 
-from .telnet_tool import telnet_tool
+from src.tools.connect_tool import TelnetTool
 
 
 class LabDeviceController:
@@ -22,7 +22,7 @@ class LabDeviceController:
         self.model = pytest.config.get('rf_solution')['model']
         try:
             logging.info(f'Try to connect {ip}')
-            self.tn = telnet_tool(self.ip)
+            self.tn = TelnetTool(self.ip)
             logging.info('*' * 80)
             logging.info(f'* ip   : {ip}')
             logging.info(f'* port: 23')
