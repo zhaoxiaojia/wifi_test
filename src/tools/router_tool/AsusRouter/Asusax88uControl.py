@@ -9,10 +9,7 @@
 
 import logging
 import time
-from src.tools.connect_tool.telnet_tool import telnet_tool
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.ui import WebDriverWait
+import telnetlib
 
 from src.tools.router_tool.RouterControl import ConfigError
 from src.tools.router_tool.AsusRouter.AsusBaseControl import AsusBaseControl
@@ -38,71 +35,39 @@ class Asusax88uControl(AsusBaseControl):
         # 'WPA/WPA2-Enterprise': '7',
     }
 
-
-
     def __init__(self, address: str | None = None):
         super().__init__('asus_88u', display=True, address=address)
         self.host = self.address
         self.port = 23
         self.prompt = b':/tmp/home/root#'  # 命令提示符
-        self.telnet = telnet_tool(self.host)
+        self.telnet = telnetlib.Telnet(self.host, 23)
 
     def _init_telnet(self):
         """初始化Telnet连接并登录"""
-        self.telnet.login("admin", str(self.xpath['passwd']), self.prompt)
+        self.telnet.read_until(b'login:')
+        self.telnet.write("admin".encode('ascii') + b'\n')
+        self.telnet.read_until(b'Password:')
+        self.telnet.write(str(self.xpath['passwd']).encode("ascii") + b'\n')
 
-    def _ensure_telnet(self):
-        """确保Telnet连接可用，必要时尝试重新登录"""
-        if not (self.telnet.reader and self.telnet.writer):
-            try:
-                self.telnet.login("admin", str(self.xpath['passwd']), self.prompt)
-            except Exception as e:
-                logging.error(f"Telnet login exception: {e}")
-        if not (self.telnet.reader and self.telnet.writer):
-            raise ConnectionError("Telnet连接不可用")
+    def telnet_write(self, cmd, wait_prompt=False, timeout=30):
+        if isinstance(cmd, str):
+            data = (cmd + "\n").encode("ascii", errors="ignore")
+        else:
+            # 允许传 bytes，但仍保证换行
+            data = cmd + (b"" if cmd.endswith(b"\n") else b"\n")
 
-    def telnet_write(self, cmd, max_retries=3):
-        """使用已建立的Telnet连接执行命令（修复：复用连接）"""
-        logging.info("Executing command: %s", cmd)
-        retries = 0
-        while retries < max_retries:
-            try:
-                self._ensure_telnet()
-                output = self.telnet.checkoutput(cmd)
-                if output and "error" in output.lower():
-                    logging.warning(f"Command error: {output}")
-                return output
-            except Exception as e:
-                logging.warning(f"Connection error, retrying ({retries + 1}/{max_retries}): {e}")
-                self.telnet.close()
-                retries += 1
-        logging.error(f"Failed to execute command after {max_retries} retries")
-        return None
+        logging.info("Executing: %r", cmd)
+        self.telnet.write(data)
 
-    def kill_telnet_connections(self):
-        """强制终止路由器上的Telnet相关进程，释放端口"""
-        try:
-            self._ensure_telnet()
-            # 终止所有Telnet服务进程（包括残留连接）
-            output = self.telnet.checkoutput("killall telnetd")
-            logging.info("Terminate telnetd output: %s", output)
-            time.sleep(2)
-            # restart telnet service
-            output = self.telnet.checkoutput("telnetd")
-            logging.info("Restart telnetd output: %s", output)
-            logging.info("Telnet connection released, port 23 available")
-        except Exception as e:
-            logging.error(f"Kill telnet connections failed: {e}")
-            self.telnet.close()
+        if wait_prompt:
+            # 等提示符回归（你可用固定提示符或正则）
+            self.telnet.read_until(self.prompt, timeout=timeout)
 
     def quit(self):
         try:
-            self._ensure_telnet()
-            self.telnet.execute_cmd("exit")
+            self.telnet.write("exit")
         except Exception as e:
             logging.error(f"Telnet quit failed: {e}")
-        finally:
-            self.telnet.close()
 
     def set_2g_ssid(self, ssid):
         cmd = 'nvram set wl0_ssid={};'
@@ -192,23 +157,23 @@ class Asusax88uControl(AsusBaseControl):
         if width not in self.BANDWIDTH_5: raise ConfigError('bandwidth element error')
         self.telnet_write(cmd.format(self.BANDWIDTH_5.index(width)))
 
-    def set_2g_wep_encrypt(self, encrypt):
-        cmd = 'nvram set wl0_wep_x={};nvram set w1_wep_x={};'
-        if encrypt not in self.WEP_ENCRYPT:
-            raise ConfigError('wep encrypt elemenr error')
-        # passwd_wep
-        index = '1' if '64' in encrypt else '2'
-        index = '0' if encrypt == 'None' else index
-        self.telnet_write(cmd.format(index, index))
+    # def set_2g_wep_encrypt(self, encrypt):
+    #     cmd = 'nvram set wl0_wep_x={};nvram set w1_wep_x={};'
+    #     if encrypt not in self.WEP_ENCRYPT:
+    #         raise ConfigError('wep encrypt elemenr error')
+    #     # passwd_wep
+    #     index = '1' if '64' in encrypt else '2'
+    #     index = '0' if encrypt == 'None' else index
+    #     self.telnet_write(cmd.format(index, index))
 
-    def set_5g_wep_encrypt(self, encrypt):
-        cmd = 'nvram set wl1_wep_x={};nvram set w1_wep_x={};'
-        if encrypt not in self.WEP_ENCRYPT:
-            raise ConfigError('wep encrypt elemenr error')
-        # passwd_wep
-        index = '1' if '64' in encrypt else '2'
-        index = '0' if encrypt == 'None' else index
-        self.telnet_write(cmd.format(index, index))
+    # def set_5g_wep_encrypt(self, encrypt):
+    #     cmd = 'nvram set wl1_wep_x={};nvram set w1_wep_x={};'
+    #     if encrypt not in self.WEP_ENCRYPT:
+    #         raise ConfigError('wep encrypt elemenr error')
+    #     # passwd_wep
+    #     index = '1' if '64' in encrypt else '2'
+    #     index = '0' if encrypt == 'None' else index
+    #     self.telnet_write(cmd.format(index, index))
 
     def set_2g_wep_passwd(self, passwd):
         cmd = 'nvram set wl0_key1={};'
@@ -219,10 +184,35 @@ class Asusax88uControl(AsusBaseControl):
         self.telnet_write(cmd.format(passwd))
 
     def commit(self):
-        self.telnet_write('nvram commit;')
-        time.sleep(1)
-        self.telnet_write('restart_wireless;')
-        time.sleep(5)
+        self.telnet_write("nvram commit", wait_prompt=True, timeout=60)
+
+        # 方案 A：后台重启无线，立即归还控制权
+        self.telnet_write("restart_wireless &", wait_prompt=False)
+        time.sleep(2)
+
+        # 等路由器就绪（简单版：等提示符）
+        try:
+            self.telnet.read_until(self.prompt, timeout=60)
+        except EOFError:
+            # 如果远端重启过程把会话掐了，就重连
+            self._reconnect_after_restart()
+
+    def _reconnect_after_restart(self, max_wait=120):
+        try:
+            self.telnet.close()
+        except Exception:
+            pass
+        t0 = time.time()
+        while time.time() - t0 < max_wait:
+            try:
+                self.telnet = telnetlib.Telnet(self.host, self.port, timeout=5)
+                self._init_telnet()
+                # 到这步能读到提示符说明 OK
+                self.telnet.read_until(self.prompt, timeout=5)
+                return
+            except Exception:
+                time.sleep(2)
+        raise RuntimeError("Telnet reconnect after restart failed")
 
     def change_setting(self, router):
         '''
@@ -236,7 +226,8 @@ class Asusax88uControl(AsusBaseControl):
 
         # 修改 wireless_mode
         if router.wireless_mode:
-            self.set_2g_wireless(router.wireless_mode) if '2' in router.band else self.set_5g_wireless(router.wireless_mode)
+            self.set_2g_wireless(router.wireless_mode) if '2' in router.band else self.set_5g_wireless(
+                router.wireless_mode)
 
         # 修改 password
         if router.password:
@@ -245,7 +236,8 @@ class Asusax88uControl(AsusBaseControl):
 
         # 修改 security_mode
         if router.security_mode:
-            self.set_2g_authentication(router.security_mode) if '2' in router.band else self.set_5g_authentication(router.security_mode)
+            self.set_2g_authentication(router.security_mode) if '2' in router.band else self.set_5g_authentication(
+                router.security_mode)
 
         # 修改channel
         if router.channel:
@@ -256,9 +248,9 @@ class Asusax88uControl(AsusBaseControl):
             self.set_2g_bandwidth(router.bandwidth) if '2' in router.band else self.set_5g_bandwidth(router.bandwidth)
 
         # 修改 wep_encrypt
-        if router.wep_encrypt:
-            self.set_2g_wep_encrypt(router.wep_encrypt) if '2' in router.band else self.set_5g_wep_encrypt(
-                router.wep_encrypt)
+        # if router.wep_encrypt:
+        #     self.set_2g_wep_encrypt(router.wep_encrypt) if '2' in router.band else self.set_5g_wep_encrypt(
+        #         router.wep_encrypt)
 
         # 修改 wep_passwd
         # if router.wep_passwd:
@@ -269,10 +261,6 @@ class Asusax88uControl(AsusBaseControl):
         time.sleep(3)
         logging.info('Router setting done')
         return True
-
-
-
-
 
 # ['Open System', 'WPA2-Personal', 'WPA3-Personal', 'WPA/WPA2-Personal', 'WPA2/WPA3-Personal',
 #                              'WPA2-Enterprise', 'WPA/WPA2-Enterprise']
