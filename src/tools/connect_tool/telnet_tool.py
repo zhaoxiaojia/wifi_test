@@ -31,15 +31,57 @@ class telnet_tool(dut):
         self.reader = None
         self.writer = None
 
-    def connect(self):
-        if not hasattr(self, "loop"):
+    def _ensure_loop(self):
+        if not hasattr(self, "loop") or self.loop is None or self.loop.is_closed():
             self.loop = asyncio.new_event_loop()
+        try:
             asyncio.set_event_loop(self.loop)
-        if self.reader and self.writer:
+        except RuntimeError as e:
+            # ``set_event_loop`` may raise if the current thread already has a running
+            # loop; in that case we just ignore it because ``run_until_complete`` will
+            # use ``self.loop`` directly.
+            logging.debug(f"set_event_loop raised RuntimeError: {e}")
+
+    def _connection_alive(self):
+        if not (self.reader and self.writer):
+            return False
+        try:
+            if hasattr(self.reader, "at_eof") and self.reader.at_eof():
+                return False
+        except Exception as exc:
+            logging.debug(f"reader.at_eof check failed: {exc}")
+            return False
+        try:
+            if hasattr(self.writer, "is_closing") and self.writer.is_closing():
+                return False
+        except Exception as exc:
+            logging.debug(f"writer.is_closing check failed: {exc}")
+            return False
+        return True
+
+    def _reset_connection_state(self):
+        # Ensure the caller sees a disconnected state before attempting reconnect.
+        writer = self.writer
+        self.reader = None
+        self.writer = None
+        if writer:
+            try:
+                writer.close()
+            except Exception as exc:
+                logging.debug(f"Error closing telnet writer: {exc}")
+
+    def connect(self):
+        self._ensure_loop()
+        if self._connection_alive():
             return
-        self.reader, self.writer = self.loop.run_until_complete(
-            telnetlib3.open_connection(self.ip, self.port)
-        )
+        try:
+            self.reader, self.writer = self.loop.run_until_complete(
+                telnetlib3.open_connection(self.ip, self.port)
+            )
+        except Exception as exc:
+            logging.error(f"Telnet connect failed: {exc}")
+            self.reader = None
+            self.writer = None
 
     def close(self):
         if self.writer:
@@ -111,15 +153,31 @@ class telnet_tool(dut):
                 break
         return "".join(output)
 
+    async def _execute_command(self, cmd):
+        self.writer.write(cmd + "\n")
+        await self.writer.drain()
+        return await self._read_all()
+
     def checkoutput(self, cmd, wildcard=''):
         logging.info(f'ip {self.ip} {id(self)}')
-        if not (self.reader and self.writer):
-            self.connect()
-        if not (self.reader and self.writer):
-            return None
-        self.writer.write(cmd + "\n")
-        self.loop.run_until_complete(self.writer.drain())
-        return self.loop.run_until_complete(self._read_all())
+        self._ensure_loop()
+
+        for attempt in range(2):
+            if not self._connection_alive():
+                self._reset_connection_state()
+                self.connect()
+            if not self._connection_alive():
+                return None
+            try:
+                return self.loop.run_until_complete(self._execute_command(cmd))
+            except (ConnectionResetError, RuntimeError) as exc:
+                logging.warning(
+                    f"Telnet command '{cmd}' failed on attempt {attempt + 1}: {exc}"
+                )
+                self._reset_connection_state()
+                self.connect()
+        logging.error(f"Telnet command '{cmd}' failed after retries")
+        return None
 
     def popen_term(self, command):
         return subprocess.Popen(command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
