@@ -16,8 +16,8 @@ import subprocess
 import threading
 import time
 import asyncio
+import concurrent.futures
 import pytest
-import telnetlib
 from src.tools.ixchariot import ix
 from threading import Thread
 from src.tools.config_loader import load_config
@@ -113,6 +113,8 @@ class dut():
         self.skip_tx = False
         self.skip_rx = False
         self.iperf_log_list: list[str] = []
+        self._telnet_iperf_stop_event = None
+        self._telnet_iperf_future = None
         if self.rvr_tool == 'iperf':
             cmds = f"{self.iperf_server_cmd} {self.iperf_client_cmd}"
             self.test_tool = 'iperf3' if 'iperf3' in cmds else 'iperf'
@@ -185,6 +187,8 @@ class dut():
             return None
 
     def kill_iperf(self):
+        if getattr(pytest, 'connect_type', None) == 'telnet':
+            self._stop_telnet_iperf_thread()
         try:
             pytest.dut.subprocess_run(pytest.dut.IPERF_KILL.format(self.test_tool))
         except Exception:
@@ -209,6 +213,39 @@ class dut():
         # except Exception:
         #     ...
 
+    def _register_telnet_iperf_stream(self, stop_event, future):
+        self._telnet_iperf_stop_event = stop_event
+        self._telnet_iperf_future = future
+
+        def _cleanup(fut):
+            if getattr(self, '_telnet_iperf_future', None) is fut:
+                self._telnet_iperf_future = None
+                self._telnet_iperf_stop_event = None
+
+        try:
+            future.add_done_callback(_cleanup)
+        except Exception as exc:
+            logging.debug(f'Failed to add telnet iperf cleanup callback: {exc}')
+
+    def _stop_telnet_iperf_thread(self):
+        stop_event = getattr(self, '_telnet_iperf_stop_event', None)
+        future = getattr(self, '_telnet_iperf_future', None)
+
+        if stop_event:
+            stop_event.set()
+
+        if future:
+            try:
+                future.result(timeout=5)
+            except concurrent.futures.TimeoutError:
+                logging.warning('Timeout waiting for telnet iperf stream to stop')
+                future.cancel()
+            except Exception as exc:
+                logging.warning(f'Telnet iperf stream stop error: {exc}')
+
+        self._telnet_iperf_future = None
+        self._telnet_iperf_stop_event = None
+
     def push_iperf(self):
         if pytest.connect_type == 'telnet':
             return
@@ -218,22 +255,31 @@ class dut():
             self.checkoutput('chmod a+x /system/bin/iperf')
 
     def run_iperf(self, command, adb):
-        def telnet_iperf():
-            tn = telnetlib.Telnet(pytest.dut.ip)
-            logging.info(f'run thread: {command}')
-            tn.write(command.encode('ascii') + b'\n')
-            while True:
-                line = tn.read_until(b'Mbits/sec').decode('gbk').strip()
-                self.iperf_log_list.append(line)
-            logging.info('run thread done')
-
         if '-s' in command:
             self.iperf_log_list = []
             if adb:
                 if pytest.connect_type == 'telnet':
-                    t = Thread(target=telnet_iperf)
-                    t.daemon = True
-                    t.start()
+                    self._stop_telnet_iperf_thread()
+
+                    stop_event = threading.Event()
+
+                    def _append_telnet_line(line: str):
+                        try:
+                            content = line.strip()
+                        except Exception:
+                            content = str(line)
+                        if content:
+                            self.iperf_log_list.append(content)
+
+                    future = self.start_throughput_stream(
+                        command,
+                        stop_event,
+                        _append_telnet_line,
+                    )
+                    if future is None:
+                        logging.error('Failed to start telnet iperf stream')
+                        return None
+                    self._register_telnet_iperf_stream(stop_event, future)
                     return None
                 else:
                     command = f'adb -s {pytest.dut.serialnumber} shell {command} '

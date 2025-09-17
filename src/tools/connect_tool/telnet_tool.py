@@ -15,6 +15,7 @@ import subprocess
 import time
 
 import asyncio
+import threading
 import telnetlib3
 
 from src.tools.connect_tool.dut import dut
@@ -30,17 +31,40 @@ class telnet_tool(dut):
         logging.info('*' * 80)
         self.reader = None
         self.writer = None
+        self.loop = None
+        self._loop_thread = None
+        self._loop_ready = threading.Event()
 
     def _ensure_loop(self):
-        if not hasattr(self, "loop") or self.loop is None or self.loop.is_closed():
+        if self.loop and self.loop.is_closed():
+            self.loop = None
+
+        if not self.loop:
             self.loop = asyncio.new_event_loop()
-        try:
-            asyncio.set_event_loop(self.loop)
-        except RuntimeError as e:
-            # ``set_event_loop`` may raise if the current thread already has a running
-            # loop; in that case we just ignore it because ``run_until_complete`` will
-            # use ``self.loop`` directly.
-            logging.debug(f"set_event_loop raised RuntimeError: {e}")
+
+        if self._loop_thread and not self._loop_thread.is_alive():
+            self._loop_thread = None
+
+        if not self._loop_thread:
+            self._loop_ready.clear()
+
+            def _run_loop():
+                try:
+                    asyncio.set_event_loop(self.loop)
+                    self._loop_ready.set()
+                    self.loop.run_forever()
+                except Exception as exc:
+                    logging.debug(f'Telnet loop error: {exc}')
+                finally:
+                    self._loop_ready.set()
+
+            self._loop_thread = threading.Thread(
+                target=_run_loop,
+                name='telnet-tool-loop',
+                daemon=True,
+            )
+            self._loop_thread.start()
+            self._loop_ready.wait()
 
     def _connection_alive(self):
         if not (self.reader and self.writer):
@@ -66,7 +90,10 @@ class telnet_tool(dut):
         self.writer = None
         if writer:
             try:
-                writer.close()
+                if self.loop and self.loop.is_running():
+                    self.loop.call_soon_threadsafe(writer.close)
+                else:
+                    writer.close()
             except Exception as exc:
                 logging.debug(f"Error closing telnet writer: {exc}")
 
@@ -75,26 +102,60 @@ class telnet_tool(dut):
         if self._connection_alive():
             return
         try:
-            self.reader, self.writer = self.loop.run_until_complete(
-                telnetlib3.open_connection(self.ip, self.port)
+            future = asyncio.run_coroutine_threadsafe(
+                telnetlib3.open_connection(self.ip, self.port),
+                self.loop,
             )
+            self.reader, self.writer = future.result()
         except Exception as exc:
             logging.error(f"Telnet connect failed: {exc}")
             self.reader = None
             self.writer = None
 
     def close(self):
-        if self.writer:
-            self.writer.close()
-            if hasattr(self.writer, "wait_closed"):
+        try:
+            self._stop_telnet_iperf_thread()
+        except AttributeError:
+            # Base class may not be initialised yet in exceptional cases.
+            pass
+
+        writer = self.writer
+        self.reader = None
+        self.writer = None
+
+        if writer:
+            try:
+                if self.loop and self.loop.is_running():
+                    self.loop.call_soon_threadsafe(writer.close)
+                else:
+                    writer.close()
+            except Exception as exc:
+                logging.debug(f'Error closing telnet writer: {exc}')
+
+            if hasattr(writer, "wait_closed") and self.loop:
                 try:
-                    self.loop.run_until_complete(self.writer.wait_closed())
+                    future = asyncio.run_coroutine_threadsafe(
+                        writer.wait_closed(), self.loop
+                    )
+                    future.result(timeout=3)
                 except Exception as e:
                     logging.warning(f'Error closing telnet connection: {e}')
-            self.writer = None
-        self.reader = None
-        if hasattr(self, 'loop') and not self.loop.is_closed():
-            self.loop.close()
+
+        if self.loop:
+            try:
+                if self.loop.is_running():
+                    self.loop.call_soon_threadsafe(self.loop.stop)
+                    if self._loop_thread:
+                        self._loop_thread.join(timeout=2)
+                if not self.loop.is_closed():
+                    self.loop.close()
+            except Exception as exc:
+                logging.debug(f'Error stopping telnet loop: {exc}')
+
+        self.loop = None
+        self._loop_thread = None
+        if self._loop_ready:
+            self._loop_ready.clear()
 
     def __del__(self):
         self.close()
@@ -135,7 +196,8 @@ class telnet_tool(dut):
             await self.reader.readuntil(prompt)
 
         try:
-            self.loop.run_until_complete(_login())
+            future = asyncio.run_coroutine_threadsafe(_login(), self.loop)
+            future.result()
         except TypeError as e:
             logging.error(f'Telnet login failed (TypeError): {e}')
         except Exception as e:
@@ -169,8 +231,18 @@ class telnet_tool(dut):
             if not self._connection_alive():
                 return None
             try:
-                return self.loop.run_until_complete(self._execute_command(cmd))
+                future = asyncio.run_coroutine_threadsafe(
+                    self._execute_command(cmd),
+                    self.loop,
+                )
+                return future.result()
             except (ConnectionResetError, RuntimeError) as exc:
+                logging.warning(
+                    f"Telnet command '{cmd}' failed on attempt {attempt + 1}: {exc}"
+                )
+                self._reset_connection_state()
+                self.connect()
+            except Exception as exc:
                 logging.warning(
                     f"Telnet command '{cmd}' failed on attempt {attempt + 1}: {exc}"
                 )
@@ -178,6 +250,106 @@ class telnet_tool(dut):
                 self.connect()
         logging.error(f"Telnet command '{cmd}' failed after retries")
         return None
+
+    def start_throughput_stream(self, cmd, stop_event, line_callback=None, read_timeout=0.5):
+        self._ensure_loop()
+
+        if not self._connection_alive():
+            self._reset_connection_state()
+            self.connect()
+
+        if not self._connection_alive():
+            logging.error('Telnet throughput stream failed: no active connection')
+            return None
+
+        async def _stream():
+            buffer = ''
+            try:
+                self.writer.write(cmd + "\n")
+                await self.writer.drain()
+            except Exception as exc:
+                logging.error(f'Failed to send throughput command: {exc}')
+                return
+
+            async def _drain_pending(timeout):
+                nonlocal buffer
+                while True:
+                    try:
+                        chunk = await asyncio.wait_for(
+                            self.reader.readline(), timeout=timeout
+                        )
+                    except asyncio.TimeoutError:
+                        break
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception as exc:
+                        logging.debug(f'Throughput stream read error: {exc}')
+                        break
+                    if not chunk:
+                        break
+                    buffer += chunk
+                    while '\n' in buffer:
+                        line, buffer = buffer.split('\n', 1)
+                        clean_line = line.rstrip('\r')
+                        if clean_line and line_callback:
+                            try:
+                                line_callback(clean_line)
+                            except Exception as cb_exc:
+                                logging.debug(f'Throughput callback error: {cb_exc}')
+
+            try:
+                while not stop_event.is_set():
+                    try:
+                        chunk = await asyncio.wait_for(
+                            self.reader.readline(), timeout=read_timeout
+                        )
+                    except asyncio.TimeoutError:
+                        continue
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception as exc:
+                        logging.debug(f'Throughput stream read error: {exc}')
+                        break
+
+                    if not chunk:
+                        break
+                    buffer += chunk
+                    while '\n' in buffer:
+                        line, buffer = buffer.split('\n', 1)
+                        clean_line = line.rstrip('\r')
+                        if clean_line and line_callback:
+                            try:
+                                line_callback(clean_line)
+                            except Exception as cb_exc:
+                                logging.debug(f'Throughput callback error: {cb_exc}')
+
+                await _drain_pending(0.2)
+
+                if buffer.strip() and line_callback:
+                    try:
+                        line_callback(buffer.strip())
+                    except Exception as cb_exc:
+                        logging.debug(f'Throughput callback error: {cb_exc}')
+
+                try:
+                    self.writer.write("\n")
+                    await self.writer.drain()
+                    await asyncio.wait_for(self.reader.readline(), timeout=1)
+                except asyncio.TimeoutError:
+                    logging.debug('Timeout while restoring telnet prompt after throughput stream')
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:
+                    logging.debug(f'Error restoring telnet prompt: {exc}')
+            except asyncio.CancelledError:
+                logging.debug('Throughput stream cancelled')
+                raise
+
+        try:
+            return asyncio.run_coroutine_threadsafe(_stream(), self.loop)
+        except RuntimeError as exc:
+            logging.error(f'Failed to start throughput stream: {exc}')
+            return None
 
     def popen_term(self, command):
         return subprocess.Popen(command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
