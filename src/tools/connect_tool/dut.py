@@ -370,6 +370,13 @@ class dut():
     def get_logcat(self):
         # pytest.dut.kill_iperf()
         # 分析 iperf 测试结果
+        if getattr(pytest, 'connect_type', None) == 'telnet':
+            # telnet 模式下吞吐日志由后台协程持续读取，必须在解析前显式
+            # 停止该协程并等待其收尾，否则后续 telnet 命令的输出会被协程抢走。
+            # 这里调用自定义的 `_stop_telnet_iperf_thread`，在其它连接类型下
+            # 该方法为空操作，不会产生副作用。
+            self._stop_telnet_iperf_thread()
+
         result = self._parse_iperf_log(self.iperf_log_list)
         return round(result, 1) if result is not None else None
 
@@ -428,10 +435,11 @@ class dut():
                     time.sleep(5)
                 rx_result = self.get_logcat()
                 self.rvr_result = None
-                try:
-                    terminal.terminate()
-                except Exception as e:
-                    logging.warning(f'Fail to kill run_iperf terminal \n {e}')
+                if terminal and hasattr(terminal, 'terminate'):
+                    try:
+                        terminal.terminate()
+                    except Exception as e:
+                        logging.warning(f'Fail to kill run_iperf terminal \n {e}')
             elif self.rvr_tool == 'ixchariot':
                 ix.ep1 = self.pc_ip
                 ix.ep2 = self.dut_ip
@@ -511,10 +519,11 @@ class dut():
                 time.sleep(3)
                 tx_result = self.get_logcat()
                 self.rvr_result = None
-                try:
-                    terminal.terminate()
-                except Exception as e:
-                    logging.warning(f'Fail to kill run_iperf terminal \n {e}')
+                if terminal and hasattr(terminal, 'terminate'):
+                    try:
+                        terminal.terminate()
+                    except Exception as e:
+                        logging.warning(f'Fail to kill run_iperf terminal \n {e}')
             elif self.rvr_tool == 'ixchariot':
                 ix.ep1 = self.dut_ip
                 ix.ep2 = self.pc_ip

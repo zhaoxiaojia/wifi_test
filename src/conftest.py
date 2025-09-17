@@ -18,7 +18,7 @@ import pytest
 import csv
 from src.tools.connect_tool.adb import adb
 # from tools.connect_tool.host_os import host_os
-from src.tools.connect_tool.telnet_tool import telnet_tool
+from src.tools.connect_tool import Telnet3Tool
 from src.tools.TestResult import TestResult
 from src.tools.config_loader import load_config
 from src.dut_control.roku_ctrl import roku_ctrl
@@ -67,7 +67,7 @@ def pytest_sessionstart(session):
     elif pytest.connect_type == 'telnet':
         # Create telnet obj
         telnet_ip = pytest.config.get("connect_type")[pytest.connect_type]['ip']
-        pytest.dut = telnet_tool(telnet_ip)
+        pytest.dut = Telnet3Tool(telnet_ip)
         pytest.dut.roku = roku_ctrl(telnet_ip)
     else:
         raise EnvironmentError("Not support connect type %s" % pytest.connect_type)

@@ -9,7 +9,7 @@
 
 import logging
 import time
-from src.tools.connect_tool.telnet_tool import telnet_tool
+from src.tools.connect_tool import TelnetTool
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
@@ -45,7 +45,7 @@ class Asusax88uControl(AsusBaseControl):
         self.host = self.address
         self.port = 23
         self.prompt = b':/tmp/home/root#'  # 命令提示符
-        self.telnet = telnet_tool(self.host)
+        self.telnet = TelnetTool(self.host)
 
     def _init_telnet(self):
         """初始化Telnet连接并登录"""
@@ -53,12 +53,12 @@ class Asusax88uControl(AsusBaseControl):
 
     def _ensure_telnet(self):
         """确保Telnet连接可用，必要时尝试重新登录"""
-        if not (self.telnet.reader and self.telnet.writer):
+        if not self.telnet.is_connected():
             try:
                 self.telnet.login("admin", str(self.xpath['passwd']), self.prompt)
             except Exception as e:
                 logging.error(f"Telnet login exception: {e}")
-        if not (self.telnet.reader and self.telnet.writer):
+        if not self.telnet.is_connected():
             raise ConnectionError("Telnet连接不可用")
 
     def telnet_write(self, cmd, max_retries=3):
