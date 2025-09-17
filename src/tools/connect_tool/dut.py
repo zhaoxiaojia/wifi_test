@@ -219,7 +219,7 @@ class dut():
 
     def run_iperf(self, command, adb):
         def telnet_iperf():
-            tn = telnetlib.Telnet(pytest.dut.dut_ip)
+            tn = telnetlib.Telnet(pytest.dut.ip)
             logging.info(f'run thread: {command}')
             tn.write(command.encode('ascii') + b'\n')
             while True:
@@ -339,7 +339,7 @@ class dut():
 
     def get_dut_ip(self):
         if pytest.connect_type == 'telnet':
-            return pytest.dut.dut_ip
+            return pytest.dut.ip
         dut_info = pytest.dut.checkoutput('ifconfig wlan0')
         dut_ip = re.findall(r'inet addr:(\d+\.\d+\.\d+\.\d+)', dut_info, re.S)
         if dut_ip:
