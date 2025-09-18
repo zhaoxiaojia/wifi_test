@@ -85,7 +85,7 @@ def common_setup(router: Router, router_info: Router) -> bool:
     logging.info(f'dut try to connect {router_info.ssid}')
     if pytest.connect_type == 'telnet':
         connect_status = True
-        # time.sleep(90)
+        pytest.dut.wait_reconnect_sync(timeout=90)
     else:
         connect_status = False
         for _ in range(3):
