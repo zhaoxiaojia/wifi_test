@@ -9,6 +9,8 @@ corner_angle:
   step:
   - 0
   - 320
+  static_db: ''
+  target_rssi: ''
 fpga: W2U_USB
 rf_solution:
   RADIORACK-4-220:
