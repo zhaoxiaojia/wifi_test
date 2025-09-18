@@ -5,12 +5,12 @@ connect_type:
     ip: 192.168.5.12
   type: telnet
 corner_angle:
-  ip_address: 192.168.5.11
+  ip_address: 192.168.5.156
   step:
   - 0
-  - 320
-  static_db: ''
-  target_rssi: ''
+  - 90
+  static_db: 10,20
+  target_rssi: 35,45
 fpga: W2U_USB
 rf_solution:
   RADIORACK-4-220:
@@ -40,5 +40,5 @@ serial_port:
   baud: '961200'
   port: COM5
   status: false
-text_case: test/performance/test_wifi_rvr.py
+text_case: test/performance/test_wifi_rvo.py
 csv_path: performance_test_csv/rvr_wifi_setup.csv
