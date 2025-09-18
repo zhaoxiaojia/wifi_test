@@ -17,12 +17,12 @@ import pytest
 
 class LabDeviceController:
     def __init__(self, ip):
-        self.dut_ip = ip
+        self.ip = ip
         self.model = pytest.config['rf_solution']['model']
         try:
             logging.info(f'Try to connect {ip}')
             self.tn = telnetlib.Telnet()
-            self.tn.open(self.dut_ip, port=23)
+            self.tn.open(self.ip, port=23)
             logging.info('*' * 80)
             logging.info(f'* ip   : {ip}')
             logging.info(f'* port: 23')
