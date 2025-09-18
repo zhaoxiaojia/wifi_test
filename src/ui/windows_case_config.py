@@ -637,10 +637,28 @@ class CaseConfigPage(CardWidget):
                 self.corner_step_edit.setPlaceholderText("step; such as 0,361")
                 self.corner_step_edit.setText(",".join(map(str, value.get("step", []))))
 
+                static_db_value = value.get("static_db", "")
+                self.corner_static_db_edit = LineEdit(self)
+                self.corner_static_db_edit.setPlaceholderText("static attenuation (dB)")
+                self.corner_static_db_edit.setText(
+                    "" if static_db_value is None else str(static_db_value)
+                )
+
+                target_rssi_value = value.get("target_rssi", "")
+                self.corner_target_rssi_edit = LineEdit(self)
+                self.corner_target_rssi_edit.setPlaceholderText("target RSSI (dBm)")
+                self.corner_target_rssi_edit.setText(
+                    "" if target_rssi_value is None else str(target_rssi_value)
+                )
+
                 vbox.addWidget(QLabel("IP address:"))
                 vbox.addWidget(self.corner_ip_edit)
                 vbox.addWidget(QLabel("Step:"))
                 vbox.addWidget(self.corner_step_edit)
+                vbox.addWidget(QLabel("Static dB:"))
+                vbox.addWidget(self.corner_static_db_edit)
+                vbox.addWidget(QLabel("Target RSSI:"))
+                vbox.addWidget(self.corner_target_rssi_edit)
 
                 # 加入表单
                 self._add_group(group)
@@ -648,6 +666,8 @@ class CaseConfigPage(CardWidget):
                 # 注册控件（用于启用/禁用、保存回 YAML）
                 self.field_widgets["corner_angle.ip_address"] = self.corner_ip_edit
                 self.field_widgets["corner_angle.step"] = self.corner_step_edit
+                self.field_widgets["corner_angle.static_db"] = self.corner_static_db_edit
+                self.field_widgets["corner_angle.target_rssi"] = self.corner_target_rssi_edit
                 continue  # 跳过后面的通用处理
             if key == "router":
                 group = QGroupBox("Router")
@@ -850,6 +870,8 @@ class CaseConfigPage(CardWidget):
                 "corner_angle",
                 "corner_angle.ip_address",
                 "corner_angle.step",
+                "corner_angle.static_db",
+                "corner_angle.target_rssi",
             }
         if "rvr" in basename:
             info.fields |= {
