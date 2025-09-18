@@ -6,7 +6,7 @@
 import logging
 import re
 import time
-from typing import Any
+from typing import Any, Optional
 from functools import lru_cache
 
 import pytest
@@ -16,6 +16,8 @@ from src.tools.router_tool.Router import Router
 from src.tools.router_tool.router_factory import get_router
 from src.tools.connect_tool.lab_device_controller import LabDeviceController
 from src.tools.rs_test import rs
+
+
 @lru_cache(maxsize=1)
 def get_cfg() -> Any:
     """返回最新的配置"""
@@ -133,6 +135,54 @@ def common_setup(router: Router, router_info: Router) -> bool:
     return connect_status
 
 
+def _parse_optional_int(
+    value: Any,
+    *,
+    field_name: str = "value",
+    min_value: Optional[int] = None,
+    max_value: Optional[int] = None,
+) -> Optional[int]:
+    """将配置中的数值安全地转换为 int。"""
+
+    if isinstance(value, str):
+        value = value.strip()
+        if not value:
+            return None
+
+    if isinstance(value, (list, tuple, set)):
+        for item in value:
+            parsed = _parse_optional_int(
+                item,
+                field_name=field_name,
+                min_value=min_value,
+                max_value=max_value,
+            )
+            if parsed is not None:
+                return parsed
+        return None
+
+    if value is None:
+        return None
+
+    try:
+        number = int(float(value))
+    except (TypeError, ValueError):
+        logging.warning("Invalid %s: %r", field_name, value)
+        return None
+
+    if min_value is not None and number < min_value:
+        logging.warning(
+            "%s %s lower than minimum %s, clamped.", field_name, number, min_value
+        )
+        number = min_value
+    if max_value is not None and number > max_value:
+        logging.warning(
+            "%s %s higher than maximum %s, clamped.", field_name, number, max_value
+        )
+        number = max_value
+    return number
+
+
 @lru_cache(maxsize=1)
 def get_rf_step_list():
     cfg = get_cfg()
@@ -145,3 +195,27 @@ def get_corner_step_list():
     cfg = get_cfg()
     corner_step = cfg['corner_angle']['step']
     return [i for i in range(*corner_step)][::45]
+
+
+@lru_cache(maxsize=1)
+def get_rvo_static_db_list():
+    cfg = get_cfg()
+    raw_value = cfg.get('corner_angle', {}).get('static_db', '')
+    parsed = _parse_optional_int(
+        raw_value,
+        field_name='corner_angle.static_db',
+        min_value=0,
+        max_value=110,
+    )
+    return [parsed] if parsed is not None else [None]
+
+
+@lru_cache(maxsize=1)
+def get_rvo_target_rssi_list():
+    cfg = get_cfg()
+    raw_value = cfg.get('corner_angle', {}).get('target_rssi', '')
+    parsed = _parse_optional_int(
+        raw_value,
+        field_name='corner_angle.target_rssi',
+    )
+    return [parsed] if parsed is not None else [None]
