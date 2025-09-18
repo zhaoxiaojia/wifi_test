@@ -41,15 +41,38 @@ class Asusax88uControl(AsusBaseControl):
         self.port = 23
         self.prompt = b':/tmp/home/root#'  # 命令提示符
         self.telnet = telnetlib.Telnet(self.host, 23)
+        self._is_logged_in = False
 
-    def _init_telnet(self):
+    def _login(self):
         """初始化Telnet连接并登录"""
-        self.telnet.read_until(b'login:')
-        self.telnet.write("admin".encode('ascii') + b'\n')
-        self.telnet.read_until(b'Password:')
-        self.telnet.write(str(self.xpath['passwd']).encode("ascii") + b'\n')
+        self._is_logged_in = False
+        try:
+            if self.telnet is not None:
+                try:
+                    self.telnet.close()
+                except Exception:
+                    pass
+            self.telnet = telnetlib.Telnet(self.host, self.port, timeout=10)
+            self.telnet.read_until(b'login:', timeout=10)
+            self.telnet.write("admin".encode('ascii') + b'\n')
+            self.telnet.read_until(b'Password:', timeout=10)
+            self.telnet.write(str(self.xpath['passwd']).encode("ascii") + b'\n')
+            self.telnet.read_until(self.prompt, timeout=10)
+        except Exception as exc:
+            if self.telnet is not None:
+                try:
+                    self.telnet.close()
+                except Exception:
+                    pass
+            self.telnet = None
+            logging.error("Telnet login failed: %s", exc, exc_info=True)
+            raise RuntimeError(f"Telnet login failed: {exc}") from exc
+        else:
+            self._is_logged_in = True
 
     def telnet_write(self, cmd, wait_prompt=False, timeout=30):
+        if not self._is_logged_in or self.telnet is None or getattr(self.telnet, 'sock', None) is None:
+            self._login()
         if isinstance(cmd, str):
             data = (cmd + "\n").encode("ascii", errors="ignore")
         else:
@@ -57,17 +80,27 @@ class Asusax88uControl(AsusBaseControl):
             data = cmd + (b"" if cmd.endswith(b"\n") else b"\n")
 
         logging.info("Executing: %r", cmd)
-        self.telnet.write(data)
-
-        if wait_prompt:
-            # 等提示符回归（你可用固定提示符或正则）
-            self.telnet.read_until(self.prompt, timeout=timeout)
+        try:
+            self.telnet.write(data)
+            if wait_prompt:
+                # 等提示符回归（你可用固定提示符或正则）
+                self.telnet.read_until(self.prompt, timeout=timeout)
+        except Exception as exc:
+            self._is_logged_in = False
+            logging.error("Telnet command %r failed: %s", cmd, exc, exc_info=True)
+            raise RuntimeError(f"Telnet command failed: {exc}") from exc
 
     def quit(self):
         try:
-            self.telnet.write("exit")
+            if self.telnet is not None:
+                if self._is_logged_in:
+                    self.telnet_write("exit")
+                self.telnet.close()
         except Exception as e:
             logging.error(f"Telnet quit failed: {e}")
+        finally:
+            self.telnet = None
+            self._is_logged_in = False
 
     def set_2g_ssid(self, ssid):
         cmd = 'nvram set wl0_ssid={};'
@@ -198,17 +231,17 @@ class Asusax88uControl(AsusBaseControl):
             self._reconnect_after_restart()
 
     def _reconnect_after_restart(self, max_wait=120):
-        try:
-            self.telnet.close()
-        except Exception:
-            pass
+        self._is_logged_in = False
+        if self.telnet is not None:
+            try:
+                self.telnet.close()
+            except Exception:
+                pass
+        self.telnet = None
         t0 = time.time()
         while time.time() - t0 < max_wait:
             try:
-                self.telnet = telnetlib.Telnet(self.host, self.port, timeout=5)
-                self._init_telnet()
-                # 到这步能读到提示符说明 OK
-                self.telnet.read_until(self.prompt, timeout=5)
+                self._login()
                 return
             except Exception:
                 time.sleep(2)

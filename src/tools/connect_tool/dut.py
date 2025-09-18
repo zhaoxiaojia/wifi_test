@@ -378,7 +378,6 @@ class dut():
                 time.sleep(1)
                 client_cmd = pytest.dut.iperf_client_cmd.replace('{ip}', self.dut_ip)
                 pytest.dut.run_iperf(client_cmd, '')
-                time.sleep(self.iperf_wait_time)
                 if pytest.connect_type == 'telnet':
                     time.sleep(5)
                 rx_result = self.get_logcat()
@@ -461,7 +460,6 @@ class dut():
                 time.sleep(1)
                 client_cmd = pytest.dut.iperf_client_cmd.replace('{ip}', self.pc_ip)
                 pytest.dut.run_iperf(self.tool_path + client_cmd, self.serialnumber)
-                time.sleep(self.iperf_wait_time)
                 if pytest.connect_type == 'telnet':
                     time.sleep(5)
                 time.sleep(3)
