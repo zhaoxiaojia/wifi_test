@@ -7,7 +7,7 @@
 # Time       ：2023/6/30 16:57
 # Author     ：chao.li
 # version    ：python 3.9
-# Description：
+# Descrdut_iption：
 """
 
 import logging
@@ -35,12 +35,12 @@ cmd_line_wildcard = {
 
 
 class telnet_tool(dut):
-    def __init__(self, ip):
+    def __init__(self, dut_ip):
         super().__init__()
-        self.ip = ip
+        self.dut_ip = dut_ip
         self.port = 23
         logging.info('*' * 80)
-        logging.info(f'* Telnet {self.ip}')
+        logging.info(f'* Telnet {self.dut_ip}')
         logging.info('*' * 80)
 
 
@@ -61,7 +61,7 @@ class telnet_tool(dut):
                 except asyncio.TimeoutError:
                     break
             return "".join(output)
-        reader, writer = await telnetlib3.open_connection(self.ip, self.port)
+        reader, writer = await telnetlib3.open_connection(self.dut_ip, self.port)
 
         # 发送命令
         writer.write(command + "\n")
@@ -75,7 +75,7 @@ class telnet_tool(dut):
             writer.close()
 
     def popen_term(self, command):
-        return subprocess.Popen(command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        return subprocess.Popen(command.split(), stdout=subprocess.Pdut_ipE, stderr=subprocess.Pdut_ipE)
 
     def subprocess_run(self, cmd):
         return self.checkoutput(cmd)

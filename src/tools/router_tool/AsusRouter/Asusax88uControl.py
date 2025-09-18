@@ -157,23 +157,23 @@ class Asusax88uControl(AsusBaseControl):
         if width not in self.BANDWIDTH_5: raise ConfigError('bandwidth element error')
         self.telnet_write(cmd.format(self.BANDWIDTH_5.index(width)))
 
-    # def set_2g_wep_encrypt(self, encrypt):
-    #     cmd = 'nvram set wl0_wep_x={};nvram set w1_wep_x={};'
-    #     if encrypt not in self.WEP_ENCRYPT:
-    #         raise ConfigError('wep encrypt elemenr error')
-    #     # passwd_wep
-    #     index = '1' if '64' in encrypt else '2'
-    #     index = '0' if encrypt == 'None' else index
-    #     self.telnet_write(cmd.format(index, index))
+    def set_2g_wep_encrypt(self, encrypt):
+        cmd = 'nvram set wl0_wep_x={};nvram set w1_wep_x={};'
+        if encrypt not in self.WEP_ENCRYPT:
+            raise ConfigError('wep encrypt elemenr error')
+        # passwd_wep
+        index = '1' if '64' in encrypt else '2'
+        index = '0' if encrypt == 'None' else index
+        self.telnet_write(cmd.format(index, index))
 
-    # def set_5g_wep_encrypt(self, encrypt):
-    #     cmd = 'nvram set wl1_wep_x={};nvram set w1_wep_x={};'
-    #     if encrypt not in self.WEP_ENCRYPT:
-    #         raise ConfigError('wep encrypt elemenr error')
-    #     # passwd_wep
-    #     index = '1' if '64' in encrypt else '2'
-    #     index = '0' if encrypt == 'None' else index
-    #     self.telnet_write(cmd.format(index, index))
+    def set_5g_wep_encrypt(self, encrypt):
+        cmd = 'nvram set wl1_wep_x={};nvram set w1_wep_x={};'
+        if encrypt not in self.WEP_ENCRYPT:
+            raise ConfigError('wep encrypt elemenr error')
+        # passwd_wep
+        index = '1' if '64' in encrypt else '2'
+        index = '0' if encrypt == 'None' else index
+        self.telnet_write(cmd.format(index, index))
 
     def set_2g_wep_passwd(self, passwd):
         cmd = 'nvram set wl0_key1={};'
