@@ -23,9 +23,13 @@ from PyQt5.QtCore import (
     Qt,
     QSignalBlocker,
     QTimer,
+    QEasingCurve,
     QDir,
     QSortFilterProxyModel,
     QModelIndex,
+    QPropertyAnimation,
+    QPoint,
+    QRect,
     pyqtSignal,
 )
 
@@ -145,6 +149,9 @@ class CaseConfigPage(CardWidget):
             col_layout.setAlignment(Qt.AlignTop)
             cols.addLayout(col_layout, 1)
             self._column_layouts.append(col_layout)
+        self._group_entries: list[tuple[QWidget, int | None]] = []
+        self._group_positions: dict[QWidget, int] = {}
+        self._active_move_anims: dict[QWidget, QPropertyAnimation] = {}
         right.addWidget(self._columns_widget)
         self.run_btn = PushButton("Run", self)
         self.run_btn.setIcon(FluentIcon.PLAY)
@@ -167,6 +174,7 @@ class CaseConfigPage(CardWidget):
         self._col_weight = [0] * len(self._column_layouts)
         # render form fields from yaml
         self.render_all_fields()
+        QTimer.singleShot(0, self._rebalance_columns)
         self.routerInfoChanged.connect(self._update_csv_options)
         self._update_csv_options()
         # connect signals AFTER UI ready
@@ -317,6 +325,8 @@ class CaseConfigPage(CardWidget):
         """
         self.adb_group.setVisible(type_str == "adb")
         self.telnet_group.setVisible(type_str == "telnet")
+        self._rebalance_columns()
+        QTimer.singleShot(0, self._rebalance_columns)
 
     def on_rf_model_changed(self, model_str):
         """
@@ -327,15 +337,21 @@ class CaseConfigPage(CardWidget):
         self.xin_group.setVisible(model_str == "RS232Board5")
         self.rc4_group.setVisible(model_str == "RC4DAT-8G-95")
         self.rack_group.setVisible(model_str == "RADIORACK-4-220")
+        self._rebalance_columns()
+        QTimer.singleShot(0, self._rebalance_columns)
 
     # 添加到类里：响应 Tool 下拉，切换子参数可见性
     def on_rvr_tool_changed(self, tool: str):
         """选择 iperf / ixchariot 时，动态显示对应子参数"""
         self.rvr_iperf_group.setVisible(tool == "iperf")
         self.rvr_ix_group.setVisible(tool == "ixchariot")
+        self._rebalance_columns()
+        QTimer.singleShot(0, self._rebalance_columns)
 
     def on_serial_enabled_changed(self, text: str):
         self.serial_cfg_group.setVisible(text == "True")
+        self._rebalance_columns()
+        QTimer.singleShot(0, self._rebalance_columns)
 
     def on_router_changed(self, name: str):
         cfg = self.config.get("router", {})
@@ -416,10 +432,88 @@ class CaseConfigPage(CardWidget):
         apply_groupbox_style(group)
         if not self._column_layouts:
             return
-        w = self._estimate_group_weight(group) if weight is None else weight
-        ci = self._col_weight.index(min(self._col_weight))
-        self._column_layouts[ci].addWidget(group)
-        self._col_weight[ci] += w
+        for idx, (existing, _) in enumerate(self._group_entries):
+            if existing is group:
+                self._group_entries[idx] = (group, weight)
+                break
+        else:
+            self._group_entries.append((group, weight))
+        self._rebalance_columns()
+        QTimer.singleShot(0, self._rebalance_columns)
+
+    def _measure_group_height(self, group: QWidget, weight_override: int | None = None) -> int:
+        if weight_override is not None:
+            return max(1, int(weight_override))
+        hint = group.sizeHint()
+        height = hint.height() if hint.isValid() else 0
+        if height <= 0:
+            min_hint = group.minimumSizeHint()
+            height = min_hint.height() if min_hint.isValid() else 0
+        if height <= 0:
+            height = self._estimate_group_weight(group)
+        return max(1, int(height))
+
+    def _rebalance_columns(self) -> None:
+        if not self._column_layouts or not getattr(self, '_group_entries', None):
+            return
+        old_geometries: dict[QWidget, QRect] = {}
+        for group, _ in self._group_entries:
+            if group is not None and group.parent() is not None:
+                old_geometries[group] = group.geometry()
+        entries: list[tuple[QWidget, int]] = []
+        for group, weight_override in self._group_entries:
+            if group is None:
+                continue
+            entries.append((group, self._measure_group_height(group, weight_override)))
+        if not entries:
+            return
+        entries.sort(key=lambda item: item[1], reverse=True)
+        for layout in self._column_layouts:
+            while layout.count():
+                item = layout.takeAt(0)
+                widget = item.widget()
+                if widget is not None:
+                    widget.setParent(None)
+        self._col_weight = [0] * len(self._column_layouts)
+        initial_pass = not self._group_positions
+        moved_groups: list[tuple[QWidget, QRect | None]] = []
+        for group, height in entries:
+            column_index = self._col_weight.index(min(self._col_weight))
+            prev_col = self._group_positions.get(group)
+            self._column_layouts[column_index].addWidget(group)
+            self._col_weight[column_index] += height
+            self._group_positions[group] = column_index
+            if (prev_col is None and not initial_pass) or (prev_col is not None and prev_col != column_index):
+                moved_groups.append((group, old_geometries.get(group)))
+        self._columns_widget.updateGeometry()
+        if moved_groups:
+            QTimer.singleShot(0, lambda moves=tuple(moved_groups): self._animate_group_transitions(moves))
+
+    def _animate_group_transitions(self, moves: tuple[tuple[QWidget, QRect | None], ...]) -> None:
+        for group, old_rect in moves:
+            if group is None or not group.isVisible():
+                continue
+            self._start_move_animation(group, old_rect)
+
+    def _start_move_animation(self, group: QWidget, old_rect: QRect | None) -> None:
+        if old_rect is None:
+            return
+        current_rect = group.geometry()
+        if current_rect == old_rect:
+            return
+        existing = self._active_move_anims.pop(group, None)
+        if existing is not None:
+            existing.stop()
+        group.setGeometry(old_rect)
+        group.raise_()
+        animation = QPropertyAnimation(group, b'geometry', group)
+        animation.setDuration(320)
+        animation.setStartValue(old_rect)
+        animation.setEndValue(current_rect)
+        animation.setEasingCurve(QEasingCurve.InOutCubic)
+        self._active_move_anims[group] = animation
+        animation.finished.connect(lambda g=group: self._active_move_anims.pop(g, None))
+        animation.start()
 
     def render_all_fields(self):
         """
