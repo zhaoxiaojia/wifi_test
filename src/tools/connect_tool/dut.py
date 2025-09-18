@@ -218,87 +218,98 @@ class dut():
             self.checkoutput('chmod a+x /system/bin/iperf')
 
     def run_iperf(self, command, adb):
-        def telnet_iperf():
-            tn = telnetlib.Telnet(pytest.dut.dut_ip)
-            logging.info(f'run thread: {command}')
-            tn.write(command.encode('ascii') + b'\n')
-            while True:
-                line = tn.read_until(b'Mbits/sec').decode('gbk').strip()
-                self.iperf_log_list.append(line)
-            logging.info('run thread done')
+        encoding = 'gbk' if pytest.win_flag else 'utf-8'
+        use_adb = bool(adb)
+
+        def _read_output(proc):
+            if not proc.stdout:
+                return
+            with proc.stdout:
+                for line in iter(proc.stdout.readline, ''):
+                    if line:
+                        self.iperf_log_list.append(line)
+
+        def _start_background(cmd_list, desc):
+            logging.info(f'{desc} {command}')
+            process = subprocess.Popen(
+                cmd_list,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                encoding=encoding,
+                errors='ignore',
+            )
+            Thread(target=_read_output, args=(process,), daemon=True).start()
+            return process
+
+        def _run_blocking(cmd_list, desc):
+            logging.info(f'{desc} {command}')
+            process = subprocess.Popen(
+                cmd_list,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                encoding=encoding,
+                errors='ignore',
+            )
+            try:
+                stdout, stderr = process.communicate(timeout=self.iperf_wait_time)
+                if stderr:
+                    logging.warning(stderr.strip())
+                if stdout:
+                    logging.debug(stdout.strip())
+            except subprocess.TimeoutExpired:
+                logging.warning(f'{desc} timeout after {self.iperf_wait_time}s')
+                process.kill()
+                try:
+                    process.communicate(timeout=2)
+                except Exception:
+                    ...
+
+        def _build_cmd_list():
+            if use_adb and pytest.connect_type != 'telnet':
+                return ['adb', '-s', self.serialnumber, 'shell', *command.split()]
+            return command.split()
 
         if '-s' in command:
             self.iperf_log_list = []
-            if adb:
+            if use_adb:
                 if pytest.connect_type == 'telnet':
-                    t = Thread(target=telnet_iperf)
-                    t.daemon = True
+                    def telnet_iperf():
+                        logging.info(f'server telnet command: {command}')
+                        tn = telnetlib.Telnet(self.dut_ip)
+                        tn.write(command.encode('ascii') + b'\n')
+                        try:
+                            while True:
+                                line = tn.read_until(b'\n', timeout=1).decode('gbk', 'ignore').strip()
+                                if line:
+                                    self.iperf_log_list.append(line)
+                        except EOFError:
+                            logging.info('telnet server session closed')
+                        finally:
+                            tn.close()
+
+                    t = Thread(target=telnet_iperf, daemon=True)
                     t.start()
                     return None
                 else:
-                    command = f'adb -s {pytest.dut.serialnumber} shell {command} '
-                    logging.info(f'server adb command: {command}')
-                    process = subprocess.Popen(
-                        command.split(),
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.STDOUT,
-                        encoding='utf-8',
-                    )
-
-                    def _read_output(proc):
-                        for line in proc.stdout:
-                            self.iperf_log_list.append(line)
-
-                    Thread(target=_read_output, args=(process,), daemon=True).start()
-                    return process
+                    return _start_background(_build_cmd_list(), 'server adb command:')
             else:
-                logging.info(f'server pc command: {command}')
-                process = subprocess.Popen(
-                    command.split(),
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
-                    encoding='utf-8',
-                )
-
-                def _read_output(proc):
-                    for line in proc.stdout:
-                        self.iperf_log_list.append(line)
-
-                Thread(target=_read_output, args=(process,), daemon=True).start()
-                return process
+                return _start_background(_build_cmd_list(), 'server pc command:')
         else:
-            if adb:
-                async def run_adb_iperf():
-                    # 创建子进程
-                    process = await asyncio.create_subprocess_exec(
-                        *command.split(),  # 解包命令和参数
-                        stdout=asyncio.subprocess.PIPE,  # 捕获标准输出
-                        stderr=asyncio.subprocess.PIPE  # 捕获标准错误
-                    )
-                    try:
-                        # 等待命令完成，设置超时时间（例如 40 秒）
-                        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=35)
-                        # print("Command output:", stdout.decode())  # 打印标准输出
-                        if stderr:
-                            logging.warning(f"Command error: {stderr.decode()}")  # 打印标准错误
-                    except asyncio.TimeoutError:
-                        logging.warning("Command timed out")
-                        process.terminate()  # 终止进程
-                        await process.wait()  # 等待进程完全终止
-                logging.info(f'client adb command: {command}')
+            if use_adb:
                 if pytest.connect_type == 'telnet':
-                    pytest.dut.checkoutput(command)
+                    logging.info(f'client telnet command: {command}')
+
+                    async def _run_telnet_client():
+                        await asyncio.wait_for(self.telnet_client(command), timeout=self.iperf_wait_time)
+
+                    try:
+                        asyncio.run(_run_telnet_client())
+                    except asyncio.TimeoutError:
+                        logging.warning(f'client telnet command timeout after {self.iperf_wait_time}s')
                 else:
-                    command = f'adb -s {pytest.dut.serialnumber} shell timeout 35 {command} '
-                    # command = f'adb -s {pytest.dut.serialnumber} shell {command} '
-                    logging.info(f'run over async {command}')
-                    # 运行异步函数
-                    asyncio.run(run_adb_iperf())
-                    logging.info('run over async done')
+                    _run_blocking(_build_cmd_list(), 'client adb command:')
             else:
-                logging.info(f'client pc command: {command}')
-                subprocess.Popen(command.split())
-                time.sleep(self.iperf_wait_time)
+                _run_blocking(_build_cmd_list(), 'client pc command:')
 
     def _parse_iperf_log(self, lines):
         """解析 iperf 日志并计算吞吐量."""
