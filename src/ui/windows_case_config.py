@@ -113,6 +113,7 @@ class CaseConfigPage(CardWidget):
         self.selected_csv_path: str | None = None
         self._enable_rvr_wifi: bool = False
         self._locked_fields: set[str] | None = None
+        self._current_case_path: str = ""
         # -------------------- layout --------------------
         self.splitter = QSplitter(Qt.Horizontal, self)
         self.splitter.setChildrenCollapsible(False)
@@ -137,14 +138,13 @@ class CaseConfigPage(CardWidget):
         cols = QHBoxLayout(self._columns_widget)
         cols.setSpacing(8)
         cols.setContentsMargins(0, 0, 0, 0)
-        self._left_col = QVBoxLayout()
-        self._left_col.setSpacing(8)
-        self._left_col.setAlignment(Qt.AlignTop)
-        self._right_col = QVBoxLayout()
-        self._right_col.setSpacing(8)
-        self._right_col.setAlignment(Qt.AlignTop)
-        cols.addLayout(self._left_col, 1)
-        cols.addLayout(self._right_col, 1)
+        self._column_layouts: list[QVBoxLayout] = []
+        for _ in range(3):
+            col_layout = QVBoxLayout()
+            col_layout.setSpacing(8)
+            col_layout.setAlignment(Qt.AlignTop)
+            cols.addLayout(col_layout, 1)
+            self._column_layouts.append(col_layout)
         right.addWidget(self._columns_widget)
         self.run_btn = PushButton("Run", self)
         self.run_btn.setIcon(FluentIcon.PLAY)
@@ -164,7 +164,7 @@ class CaseConfigPage(CardWidget):
         main_layout.setSpacing(10)
         main_layout.setContentsMargins(5, 5, 5, 5)
         main_layout.addWidget(self.splitter)
-        self._col_weight = [0, 0]
+        self._col_weight = [0] * len(self._column_layouts)
         # render form fields from yaml
         self.render_all_fields()
         self.routerInfoChanged.connect(self._update_csv_options)
@@ -379,6 +379,29 @@ class CaseConfigPage(CardWidget):
             enabled = bool(self._enable_rvr_wifi and self.selected_csv_path)
             main_window.rvr_nav_button.setEnabled(enabled)
 
+    def _case_path_to_display(self, case_path: str) -> str:
+        if not case_path:
+            return ""
+        normalized = Path(case_path).as_posix()
+        return normalized[5:] if normalized.startswith("test/") else normalized
+
+    def _display_to_case_path(self, display_path: str) -> str:
+        if not display_path:
+            return ""
+        normalized = display_path.replace('\\', '/')
+        if normalized.startswith('./'):
+            normalized = normalized[2:]
+        path_obj = Path(normalized)
+        if path_obj.is_absolute() or normalized.startswith('../'):
+            return path_obj.as_posix()
+        return normalized if normalized.startswith("test/") else f"test/{normalized}"
+
+    def _update_test_case_display(self, storage_path: str) -> None:
+        normalized = Path(storage_path).as_posix() if storage_path else ""
+        self._current_case_path = normalized
+        if hasattr(self, 'test_case_edit'):
+            self.test_case_edit.setText(self._case_path_to_display(normalized))
+
     def _estimate_group_weight(self, group: QWidget) -> int:
         """粗略估算分组高度：以输入型子控件数量为权重"""
         from PyQt5.QtWidgets import (
@@ -391,9 +414,11 @@ class CaseConfigPage(CardWidget):
         """把 group 放到当前更“轻”的一列"""
         apply_theme(group)
         apply_groupbox_style(group)
+        if not self._column_layouts:
+            return
         w = self._estimate_group_weight(group) if weight is None else weight
-        ci = 0 if self._col_weight[0] <= self._col_weight[1] else 1
-        (self._left_col if ci == 0 else self._right_col).addWidget(group)
+        ci = self._col_weight.index(min(self._col_weight))
+        self._column_layouts[ci].addWidget(group)
         self._col_weight[ci] += w
 
     def render_all_fields(self):
@@ -413,9 +438,9 @@ class CaseConfigPage(CardWidget):
                 vbox = QVBoxLayout(group)
                 self.test_case_edit = LineEdit(self)
                 apply_theme(self.test_case_edit)
-                self.test_case_edit.setText(value or "")  # 默认值
                 self.test_case_edit.setReadOnly(True)  # 只读，由左侧树刷新
                 vbox.addWidget(self.test_case_edit)
+                self._update_test_case_display(value or "")  # 显示配置的默认值
                 self._add_group(group)
                 self.field_widgets["text_case"] = self.test_case_edit
                 continue
@@ -819,8 +844,8 @@ class CaseConfigPage(CardWidget):
             self.set_fields_editable(set())
             return
 
-        if hasattr(self, "test_case_edit"):
-            self.test_case_edit.setText(display_path)
+        normalized_display = Path(display_path).as_posix() if display_path else ""
+        self._update_test_case_display(normalized_display)
 
         # ---------- 有效用例 ----------
         if self._refreshing:
@@ -1028,9 +1053,10 @@ class CaseConfigPage(CardWidget):
         interface = self.fpga_if_combo.currentText()
         self.config["fpga"] = f"{chip}_{interface}"
         base = Path(self._get_application_base())
-        case_path = self.field_widgets["text_case"].text().strip()
-        # 默认将现有路径解析成 POSIX 字符串
-        case_path = Path(case_path).as_posix() if case_path else ""
+        case_display = self.field_widgets["text_case"].text().strip()
+        storage_path = self._current_case_path or self._display_to_case_path(case_display)
+        case_path = Path(storage_path).as_posix() if storage_path else ""
+        self._current_case_path = case_path
         abs_case_path = (
             (base / case_path).resolve().as_posix() if case_path else ""
         )
