@@ -23,7 +23,7 @@ from typing import Tuple
 import pytest
 import asyncio
 import telnetlib3
-from telnetlib3.client_base import BaseClient
+from telnetlib3.client import TelnetClient
 from src.tools.config_loader import load_config
 from src.tools.connect_tool.dut import dut
 
@@ -71,7 +71,7 @@ def _get_connect_wait_window() -> Tuple[float, float]:
     return minwait_val, maxwait_val
 
 
-class FastNegotiationTelnetClient(BaseClient):
+class FastNegotiationTelnetClient(TelnetClient):
     """快速确认握手状态的 Telnet 客户端。"""
 
     def begin_negotiation(self):
@@ -246,11 +246,15 @@ class telnet_tool(dut):
         return asyncio.run(self.wait_reconnect(timeout=timeout, interval=interval))
 
     def checkoutput(self, cmd, wildcard=''):
-        if not self.wait_reconnect_sync():
-            raise ConnectionError(
-                f"Failed to establish telnet connection to {self.dut_ip}:{self.port} before executing command"
-            )
-        return asyncio.run(self.telnet_client(cmd))
+        connection_errors = (ConnectionError, OSError, asyncio.TimeoutError, RuntimeError)
+        try:
+            return asyncio.run(self.telnet_client(cmd))
+        except connection_errors:
+            if not self.wait_reconnect_sync():
+                raise ConnectionError(
+                    f"Failed to establish telnet connection to {self.dut_ip}:{self.port} before executing command"
+                )
+            return asyncio.run(self.telnet_client(cmd))
 
     @pytest.mark.asyncio
     async def telnet_client(self, command):
