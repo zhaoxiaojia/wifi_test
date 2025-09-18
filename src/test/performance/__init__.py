@@ -58,7 +58,6 @@ def init_router() -> Router:
     """根据配置返回路由实例"""
     cfg = get_cfg()
     router = get_router(cfg['router']['name'])
-    logging.info(f'router {router}')
     return router
 
 

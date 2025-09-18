@@ -69,7 +69,7 @@ class telnet_tool(dut):
 
         # 读取命令执行结果
         result = await read_all(reader)
-        logging.info(f"Telnet Command Output: {result}")
+        # logging.info(f"Telnet Command Output: {result}")
         return result
         if writer:
             writer.close()
