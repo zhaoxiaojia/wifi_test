@@ -34,10 +34,6 @@ def setup_router(request):
     connect_status = common_setup(router, router_info)
     yield connect_status, router_info
     pytest.dut.kill_iperf()
-    logging.info('Reset rf value')
-    rf_tool.execute_rf_cmd(0)
-    logging.info(rf_tool.get_rf_current_value())
-    time.sleep(30)
 
 
 @pytest.fixture(scope='function', params=get_rf_step_list())
