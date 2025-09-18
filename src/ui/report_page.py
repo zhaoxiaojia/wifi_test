@@ -3,12 +3,17 @@
 
 from __future__ import annotations
 
+import logging
 import os
+import re
 from pathlib import Path
 from typing import Optional
 from html import escape
 
+import matplotlib.pyplot as plt
+import pandas as pd
 from PyQt5.QtCore import Qt, QTimer, QEvent
+from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import (
     QHBoxLayout,
     QVBoxLayout,
@@ -16,11 +21,14 @@ from PyQt5.QtWidgets import (
     QListWidgetItem,
     QTextEdit,
     QLabel,
+    QStackedWidget,
+    QTabWidget,
+    QScrollArea,
 )
 from qfluentwidgets import CardWidget, StrongBodyLabel
 
+from src.util.constants import Paths
 from .theme import apply_theme, FONT_FAMILY, STYLE_BASE, TEXT_COLOR
-
 
 class ReportPage(CardWidget):
     """Simple report viewer page.
@@ -73,16 +81,29 @@ class ReportPage(CardWidget):
         self.file_list.itemSelectionChanged.connect(self._on_file_selected)
         body.addWidget(self.file_list, 1)
 
-        # right: viewer
-        self.viewer = QTextEdit(self)
+        # right: stacked viewer (text tail + chart tabs)
+        self.viewer_stack = QStackedWidget(self)
+        body.addWidget(self.viewer_stack, 3)
+
+        self.viewer = QTextEdit(self.viewer_stack)
         self.viewer.setReadOnly(True)
         apply_theme(self.viewer)
-        # cap blocks to control memory
         self.viewer.document().setMaximumBlockCount(5000)
         self.viewer.setMinimumHeight(400)
-        body.addWidget(self.viewer, 3)
+        self.viewer_stack.addWidget(self.viewer)
+
+        self.chart_tabs = QTabWidget(self.viewer_stack)
+        apply_theme(self.chart_tabs)
+        self.chart_tabs.setDocumentMode(True)
+        self.chart_tabs.setElideMode(Qt.ElideRight)
+        self.viewer_stack.addWidget(self.chart_tabs)
+        self.viewer_stack.setCurrentWidget(self.viewer)
 
         self.setLayout(root)
+
+        self._rvr_config_cache: dict[tuple[str, str, str, str], dict[str, str]] | None = None
+        self._view_mode: str = 'text'
+        self._rvr_last_mtime: float | None = None
 
     # -------- public API ---------
     def set_report_dir(self, path: str | Path) -> None:
@@ -141,14 +162,300 @@ class ReportPage(CardWidget):
         items = self.file_list.selectedItems()
         if not items or not self._report_dir:
             self._stop_tail()
+            self.viewer_stack.setCurrentWidget(self.viewer)
             return
         name = items[0].text()
         path = (self._report_dir / name).resolve()
-        self._start_tail(path)
+        if self._should_show_rvr_chart(path):
+            self._display_rvr_summary(path)
+        else:
+            self.viewer_stack.setCurrentWidget(self.viewer)
+            self._start_tail(path)
 
-    def _start_tail(self, path: Path):
+
+    def _should_show_rvr_chart(self, path: Path) -> bool:
+        name = path.name.lower()
+        suffix = path.suffix.lower()
+        if suffix not in {'.csv', '.xlsx', '.xls'}:
+            return False
+        return 'rvr' in name
+
+    def _display_rvr_summary(self, path: Path) -> None:
+        self._stop_tail()
+        self._current_file = path
+        if self._render_rvr_charts(path, fallback_to_text=True):
+            self._start_tail(path, force_view=False)
+            self._view_mode = 'chart'
+            self.viewer_stack.setCurrentWidget(self.chart_tabs)
+            if not self._timer.isActive():
+                self._timer.start()
+        else:
+            self._start_tail(path)
+
+
+    def _render_rvr_charts(self, path: Path, fallback_to_text: bool) -> bool:
+        try:
+            mtime = path.stat().st_mtime
+        except FileNotFoundError:
+            if fallback_to_text:
+                self.viewer_stack.setCurrentWidget(self.viewer)
+                self.viewer.clear()
+                self.viewer.setPlainText('RVR result file not found')
+                self._view_mode = 'text'
+                self._rvr_last_mtime = None
+            return False
+        except Exception as exc:
+            logging.exception('Failed to stat RVR file: %s', exc)
+            if fallback_to_text:
+                self.viewer_stack.setCurrentWidget(self.viewer)
+                self.viewer.clear()
+                self.viewer.setPlainText(f'Failed to read RVR file: {exc}')
+                self._view_mode = 'text'
+                self._rvr_last_mtime = None
+            return False
+        charts = self._build_rvr_charts(path)
+        if not charts:
+            if fallback_to_text:
+                self.viewer_stack.setCurrentWidget(self.viewer)
+                self.viewer.clear()
+                self.viewer.setPlainText('No RVR data available for charting')
+                self._view_mode = 'text'
+                self._rvr_last_mtime = None
+            return False
+        current_index = self.chart_tabs.currentIndex()
+        self.chart_tabs.blockSignals(True)
+        try:
+            self.chart_tabs.clear()
+            for title, pixmap in charts:
+                scroll = QScrollArea(self.chart_tabs)
+                scroll.setWidgetResizable(True)
+                label = QLabel(scroll)
+                label.setAlignment(Qt.AlignCenter)
+                label.setPixmap(pixmap)
+                scroll.setWidget(label)
+                self.chart_tabs.addTab(scroll, title)
+        finally:
+            self.chart_tabs.blockSignals(False)
+        if 0 <= current_index < self.chart_tabs.count():
+            self.chart_tabs.setCurrentIndex(current_index)
+        elif self.chart_tabs.count() > 0:
+            self.chart_tabs.setCurrentIndex(0)
+        self._rvr_last_mtime = mtime
+        return True
+
+    def _refresh_rvr_charts(self) -> None:
+        if self._current_file is None:
+            return
+        try:
+            mtime = self._current_file.stat().st_mtime
+        except Exception:
+            return
+        if self._rvr_last_mtime is not None and mtime <= self._rvr_last_mtime:
+            return
+        if self._render_rvr_charts(self._current_file, fallback_to_text=False):
+            self._view_mode = 'chart'
+
+    def _build_rvr_charts(self, path: Path) -> list[tuple[str, QPixmap]]:
+        df = self._load_rvr_dataframe(path)
+        if df.empty:
+            return []
+        config_map = self._load_rvr_config_map()
+        charts_dir = path.parent / 'rvr_charts'
+        charts_dir.mkdir(exist_ok=True)
+        results: list[tuple[str, QPixmap]] = []
+        grouped = df.groupby(['Freq_Band', 'Standard', 'BW', 'CH_Freq_MHz'], dropna=False)
+        for (band, mode, bw, channel), group in grouped:
+            title = self._format_scenario_label(str(band or ''), str(mode or ''), str(channel or ''), str(bw or ''), config_map)
+            pixmap = self._create_chart_pixmap(group, title, charts_dir)
+            if pixmap is not None:
+                results.append((title, pixmap))
+        return results
+
+    def _load_rvr_dataframe(self, path: Path) -> pd.DataFrame:
+        try:
+            if path.suffix.lower() == '.csv':
+                try:
+                    df = pd.read_csv(path)
+                except UnicodeDecodeError:
+                    df = pd.read_csv(path, encoding='gbk')
+            else:
+                sheets = pd.read_excel(path, sheet_name=None)
+                frames = [sheet for sheet in sheets.values() if sheet is not None and not sheet.empty]
+                df = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+        except Exception as exc:
+            logging.exception('读取 RVR 结果失败: %s', exc)
+            return pd.DataFrame()
+        if df.empty:
+            return df
+        df = df.copy()
+        df.columns = [str(c).strip() for c in df.columns]
+        for col in df.columns:
+            df[col] = df[col].apply(lambda v: v if not isinstance(v, str) else v.strip())
+        if 'Direction' in df.columns:
+            df['Direction'] = df['Direction'].astype(str).str.upper()
+        for col in ('Freq_Band', 'Standard', 'BW', 'CH_Freq_MHz', 'DB'):
+            if col in df.columns:
+                df[col] = df[col].astype(str)
+            elif col != 'DB':
+                df[col] = ''
+        return df
+
+    def _load_rvr_config_map(self) -> dict[tuple[str, str, str, str], dict[str, str]]:
+        if self._rvr_config_cache is not None:
+            return self._rvr_config_cache
+        config_map: dict[tuple[str, str, str, str], dict[str, str]] = {}
+        cfg_path = Path(Paths.CONFIG_DIR) / 'performance_test_csv' / 'rvr_wifi_setup.csv'
+        if cfg_path.exists():
+            try:
+                cfg_df = pd.read_csv(cfg_path)
+                for _, row in cfg_df.iterrows():
+                    key = (
+                        self._normalize_value(row.get('band')),
+                        self._normalize_value(row.get('wireless_mode')),
+                        self._normalize_value(row.get('channel')),
+                        self._normalize_bandwidth(row.get('bandwidth')),
+                    )
+                    config_map[key] = {col: str(row.get(col, '')) for col in cfg_df.columns}
+            except Exception as exc:
+                logging.exception('Failed to read rvr_wifi_setup.csv: %s', exc)
+        else:
+            logging.info('rvr_wifi_setup.csv not found; fallback to result metadata')
+        self._rvr_config_cache = config_map
+        return config_map
+
+    def _format_scenario_label(self, band: str, mode: str, channel: str, bw: str,
+                               config_map: dict[tuple[str, str, str, str], dict[str, str]]) -> str:
+        key = (
+            self._normalize_value(band),
+            self._normalize_value(mode),
+            self._normalize_value(channel),
+            self._normalize_bandwidth(bw),
+        )
+        cfg = config_map.get(key)
+        if cfg:
+            parts = [cfg.get('band', ''), cfg.get('ssid', ''), cfg.get('wireless_mode', ''),
+                     cfg.get('channel', ''), cfg.get('bandwidth', ''), cfg.get('security_mode', '')]
+            parts = [p for p in parts if p]
+            return ','.join(parts)
+        fallback = [band, mode, channel, bw]
+        fallback = [p for p in fallback if p and p.lower() != 'nan']
+        return ','.join(fallback) or 'scenario'
+
+    def _create_chart_pixmap(self, group: pd.DataFrame, title: str, charts_dir: Path) -> Optional[QPixmap]:
+        if 'Direction' not in group.columns:
+            return None
+        ul_df = group[group['Direction'] == 'UL'].copy()
+        dl_df = group[group['Direction'] == 'DL'].copy()
+        steps: list[str] = []
+        for df_part in (ul_df, dl_df):
+            if 'DB' in df_part.columns:
+                for step in df_part['DB']:
+                    norm = self._normalize_step(step)
+                    if norm and norm not in steps:
+                        steps.append(norm)
+        if not steps:
+            count = max(len(ul_df), len(dl_df))
+            steps = [str(i + 1) for i in range(count)]
+        ul_throughput, ul_expect = self._build_series(ul_df, steps)
+        dl_throughput, dl_expect = self._build_series(dl_df, steps)
+        if not any(v is not None for v in ul_throughput + dl_throughput + ul_expect + dl_expect):
+            return None
+        x = range(len(steps))
+        fig, ax = plt.subplots(figsize=(7, 4), dpi=120)
+        if any(v is not None for v in ul_throughput):
+            ax.plot(x, self._fill_none(ul_throughput), marker='o', label='UL Throughput')
+        if any(v is not None for v in dl_throughput):
+            ax.plot(x, self._fill_none(dl_throughput), marker='o', label='DL Throughput')
+        if any(v is not None for v in ul_expect):
+            ax.plot(x, self._fill_none(ul_expect), linestyle='--', label='UL Expect_Rate')
+        if any(v is not None for v in dl_expect):
+            ax.plot(x, self._fill_none(dl_expect), linestyle='--', label='DL Expect_Rate')
+        ax.set_xticks(list(x))
+        ax.set_xticklabels(steps, rotation=30, ha='right')
+        ax.set_ylabel('Mbps')
+        ax.set_title(title)
+        ax.grid(alpha=0.3, linestyle='--')
+        ax.legend(loc='upper right')
+        fig.tight_layout()
+        safe_name = re.sub(r'[^0-9A-Za-z_-]+', '_', title).strip('_') or 'rvr_chart'
+        img_path = charts_dir / f'{safe_name}.png'
+        fig.savefig(img_path, dpi=150)
+        plt.close(fig)
+        pixmap = QPixmap(str(img_path))
+        return pixmap if not pixmap.isNull() else None
+
+    def _build_series(self, df: pd.DataFrame, steps: list[str]) -> tuple[list[Optional[float]], list[Optional[float]]]:
+        throughput_series: list[Optional[float]] = []
+        expect_series: list[Optional[float]] = []
+        if df.empty:
+            return [None] * len(steps), [None] * len(steps)
+        df = df.copy()
+        if 'DB' in df.columns:
+            df['__step__'] = df['DB'].apply(self._normalize_step)
+        else:
+            df['__step__'] = None
+        for step in steps:
+            subset = df[df['__step__'] == step]
+            if subset.empty:
+                throughput_series.append(None)
+                expect_series.append(None)
+                continue
+            throughput_col = subset['Throughput'] if 'Throughput' in subset.columns else pd.Series(dtype=float)
+            expect_col = subset['Expect_Rate'] if 'Expect_Rate' in subset.columns else pd.Series(dtype=float)
+            throughput_values = [self._safe_float(v) for v in throughput_col.tolist()]
+            throughput_values = [v for v in throughput_values if v is not None]
+            expect_values = [self._safe_float(v) for v in expect_col.tolist()]
+            expect_values = [v for v in expect_values if v is not None]
+            throughput_series.append(sum(throughput_values) / len(throughput_values) if throughput_values else None)
+            expect_series.append(sum(expect_values) / len(expect_values) if expect_values else None)
+        return throughput_series, expect_series
+
+    def _fill_none(self, values: list[Optional[float]]) -> list[float]:
+        cleaned: list[float] = []
+        last = 0.0
+        for value in values:
+            if value is None:
+                cleaned.append(last)
+            else:
+                last = float(value)
+                cleaned.append(last)
+        return cleaned
+
+    def _normalize_value(self, value) -> str:
+        return str(value).strip().lower() if value is not None else ''
+
+    def _normalize_bandwidth(self, value) -> str:
+        s = self._normalize_value(value)
+        return s.replace('mhz', '').strip()
+
+    def _normalize_step(self, value) -> Optional[str]:
+        if value is None:
+            return None
+        s = str(value).strip()
+        if not s or s.lower() in {'nan', 'null'}:
+            return None
+        return s
+
+    def _safe_float(self, value) -> Optional[float]:
+        if value is None:
+            return None
+        if isinstance(value, (int, float)):
+            return float(value)
+        s = str(value).strip()
+        if not s or s.lower() in {'nan', 'null', 'n/a', 'false'}:
+            return None
+        try:
+            return float(s)
+        except Exception:
+            return None
+
+    def _start_tail(self, path: Path, *, force_view: bool = True):
         # stop previous
         self._stop_tail()
+        if force_view:
+            self.viewer_stack.setCurrentWidget(self.viewer)
+            self._view_mode = 'text'
+            self._rvr_last_mtime = None
         self._current_file = path
         self.viewer.clear()
         # open and jump to last N lines
@@ -199,6 +506,8 @@ class ReportPage(CardWidget):
         self._partial = ""
 
     def _on_tail_tick(self):
+        if self._view_mode == 'chart':
+            self._refresh_rvr_charts()
         if not self._fh or not self._current_file:
             return
         try:
