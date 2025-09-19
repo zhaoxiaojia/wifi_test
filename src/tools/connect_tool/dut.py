@@ -113,6 +113,8 @@ class dut():
         self.skip_tx = False
         self.skip_rx = False
         self.iperf_log_list: list[str] = []
+        self._iperf_log_lock = threading.Lock()
+        self._iperf_log_token = 0
         if self.rvr_tool == 'iperf':
             cmds = f"{self.iperf_server_cmd} {self.iperf_client_cmd}"
             self.test_tool = 'iperf3' if 'iperf3' in cmds else 'iperf'
@@ -220,6 +222,26 @@ class dut():
     def run_iperf(self, command, adb):
         encoding = 'gbk' if pytest.win_flag else 'utf-8'
         use_adb = bool(adb)
+        current_token = self._iperf_log_token
+
+        def _append_iperf_lines(data):
+            if not data:
+                return
+            if isinstance(data, str):
+                lines = data.splitlines()
+            else:
+                lines = []
+                for item in data:
+                    if not item:
+                        continue
+                    if isinstance(item, str):
+                        lines.extend(item.splitlines())
+            if not lines:
+                return
+            with self._iperf_log_lock:
+                if current_token != self._iperf_log_token:
+                    return
+                self.iperf_log_list.extend(lines)
 
         def _read_output(proc):
             if not proc.stdout:
@@ -227,7 +249,7 @@ class dut():
             with proc.stdout:
                 for line in iter(proc.stdout.readline, ''):
                     if line:
-                        self.iperf_log_list.append(line)
+                        _append_iperf_lines([line])
 
         def _start_background(cmd_list, desc):
             logging.info(f'{desc} {command}')
@@ -252,6 +274,17 @@ class dut():
             )
             try:
                 stdout, stderr = process.communicate(timeout=self.iperf_wait_time)
+                def _is_iperf_related():
+                    targets = []
+                    if isinstance(cmd_list, (list, tuple)):
+                        targets.extend(str(item).lower() for item in cmd_list)
+                    if command:
+                        targets.append(command.lower())
+                    return any('iperf' in item for item in targets)
+
+                if _is_iperf_related():
+                    _append_iperf_lines(stdout)
+                    _append_iperf_lines(stderr)
                 if stderr:
                     logging.warning(stderr.strip())
                 if stdout:
@@ -270,7 +303,10 @@ class dut():
             return command.split()
 
         if '-s' in command:
-            self.iperf_log_list = []
+            with self._iperf_log_lock:
+                self._iperf_log_token += 1
+                current_token = self._iperf_log_token
+                self.iperf_log_list = []
             if use_adb:
                 if pytest.connect_type == 'telnet':
                     def telnet_iperf():
@@ -281,7 +317,7 @@ class dut():
                             while True:
                                 line = tn.read_until(b'\n', timeout=1).decode('gbk', 'ignore').strip()
                                 if line:
-                                    self.iperf_log_list.append(line)
+                                    _append_iperf_lines([line])
                         except EOFError:
                             logging.info('telnet server session closed')
                         finally:
@@ -311,6 +347,15 @@ class dut():
             else:
                 _run_blocking(_build_cmd_list(), 'client pc command:')
 
+    def _wait_for_iperf_logs(self, timeout=5.0, interval=0.2):
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            with self._iperf_log_lock:
+                if self.iperf_log_list:
+                    return True
+            time.sleep(interval)
+        return False
+
     def _parse_iperf_log(self, lines):
         """解析 iperf 日志并计算吞吐量."""
         result_list = []
@@ -335,7 +380,9 @@ class dut():
     def get_logcat(self):
         # pytest.dut.kill_iperf()
         # 分析 iperf 测试结果
-        result = self._parse_iperf_log(self.iperf_log_list)
+        with self._iperf_log_lock:
+            logs = list(self.iperf_log_list)
+        result = self._parse_iperf_log(logs)
         return round(result, 1) if result is not None else None
 
     def get_pc_ip(self):
@@ -391,6 +438,9 @@ class dut():
                 pytest.dut.run_iperf(client_cmd, '')
                 if pytest.connect_type == 'telnet':
                     time.sleep(5)
+                wait_timeout = max(1.0, min(self.iperf_wait_time, 5.0))
+                if not self._wait_for_iperf_logs(timeout=wait_timeout):
+                    logging.warning('iperf 日志为空，无法立即计算 RX 吞吐量')
                 rx_result = self.get_logcat()
                 self.rvr_result = None
                 try:
@@ -474,6 +524,9 @@ class dut():
                 if pytest.connect_type == 'telnet':
                     time.sleep(5)
                 time.sleep(3)
+                wait_timeout = max(1.0, min(self.iperf_wait_time, 5.0))
+                if not self._wait_for_iperf_logs(timeout=wait_timeout):
+                    logging.warning('iperf 日志为空，无法立即计算 TX 吞吐量')
                 tx_result = self.get_logcat()
                 self.rvr_result = None
                 try:
