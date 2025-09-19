@@ -351,9 +351,13 @@ class dut():
         deadline = time.time() + timeout
         while time.time() < deadline:
             with self._iperf_log_lock:
-                if self.iperf_log_list:
-                    return True
+                logs = list(self.iperf_log_list)
+            logging.debug('iperf logs len=%d', len(logs))
+            if logs and any(('Mbits/sec' in line) or ('[SUM]' in line) for line in logs):
+                logging.debug('iperf throughput keywords detected in logs')
+                return True
             time.sleep(interval)
+        logging.debug('wait for iperf logs timeout after %.1fs', timeout)
         return False
 
     def _parse_iperf_log(self, lines):
