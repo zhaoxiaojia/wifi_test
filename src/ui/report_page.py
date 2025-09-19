@@ -6,6 +6,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+import math
 from pathlib import Path
 from typing import Optional
 from html import escape
@@ -28,7 +29,7 @@ from PyQt5.QtWidgets import (
 from qfluentwidgets import CardWidget, StrongBodyLabel
 
 from src.util.constants import Paths
-from .theme import apply_theme, FONT_FAMILY, STYLE_BASE, TEXT_COLOR
+from .theme import apply_theme, FONT_FAMILY, STYLE_BASE, TEXT_COLOR, BACKGROUND_COLOR
 
 class ReportPage(CardWidget):
     """Simple report viewer page.
@@ -96,6 +97,33 @@ class ReportPage(CardWidget):
         apply_theme(self.chart_tabs)
         self.chart_tabs.setDocumentMode(True)
         self.chart_tabs.setElideMode(Qt.ElideRight)
+        pane_style = f"""
+        QTabWidget::pane {{
+            background: {BACKGROUND_COLOR};
+            border: 1px solid #3a3a3a;
+        }}
+        """
+        tab_bar_style = f"""
+        QTabBar::tab {{
+            {STYLE_BASE}
+            color: {TEXT_COLOR};
+            background: #3a3a3a;
+            padding: 6px 14px;
+            margin: 2px 8px 0 0;
+            border-radius: 4px;
+        }}
+        QTabBar::tab:selected {{
+            background: #565656;
+            color: {TEXT_COLOR};
+        }}
+        QTabBar::tab:hover {{
+            background: #464646;
+        }}
+        """
+        self.chart_tabs.setStyleSheet(self.chart_tabs.styleSheet() + pane_style)
+        tab_bar = self.chart_tabs.tabBar()
+        if tab_bar is not None:
+            tab_bar.setStyleSheet(tab_bar.styleSheet() + tab_bar_style)
         self.viewer_stack.addWidget(self.chart_tabs)
         self.viewer_stack.setCurrentWidget(self.viewer)
 
@@ -360,23 +388,24 @@ class ReportPage(CardWidget):
         dl_throughput, dl_expect = self._build_series(dl_df, steps)
         if not any(v is not None for v in ul_throughput + dl_throughput + ul_expect + dl_expect):
             return None
-        x = range(len(steps))
-        fig, ax = plt.subplots(figsize=(7, 4), dpi=120)
+        x_positions = list(range(len(steps)))
+        fig, ax = plt.subplots(figsize=(7.5, 4.2), dpi=120)
         if any(v is not None for v in ul_throughput):
-            ax.plot(x, self._fill_none(ul_throughput), marker='o', label='UL Throughput')
+            ax.plot(x_positions, self._series_with_nan(ul_throughput), marker='o', label='UL Throughput')
         if any(v is not None for v in dl_throughput):
-            ax.plot(x, self._fill_none(dl_throughput), marker='o', label='DL Throughput')
+            ax.plot(x_positions, self._series_with_nan(dl_throughput), marker='o', label='DL Throughput')
         if any(v is not None for v in ul_expect):
-            ax.plot(x, self._fill_none(ul_expect), linestyle='--', label='UL Expect_Rate')
+            ax.plot(x_positions, self._series_with_nan(ul_expect), linestyle='--', label='UL Expect_Rate')
         if any(v is not None for v in dl_expect):
-            ax.plot(x, self._fill_none(dl_expect), linestyle='--', label='DL Expect_Rate')
-        ax.set_xticks(list(x))
+            ax.plot(x_positions, self._series_with_nan(dl_expect), linestyle='--', label='DL Expect_Rate')
+        ax.set_xticks(x_positions)
         ax.set_xticklabels(steps, rotation=30, ha='right')
         ax.set_ylabel('Mbps')
         ax.set_title(title)
         ax.grid(alpha=0.3, linestyle='--')
-        ax.legend(loc='upper right')
-        fig.tight_layout()
+        ax.margins(y=0.08)
+        ax.legend(loc='upper left', bbox_to_anchor=(0.02, 0.98), ncol=2, frameon=False)
+        fig.tight_layout(rect=[0, 0, 1, 0.95])
         safe_name = re.sub(r'[^0-9A-Za-z_-]+', '_', title).strip('_') or 'rvr_chart'
         img_path = charts_dir / f'{safe_name}.png'
         fig.savefig(img_path, dpi=150)
@@ -410,16 +439,11 @@ class ReportPage(CardWidget):
             expect_series.append(sum(expect_values) / len(expect_values) if expect_values else None)
         return throughput_series, expect_series
 
-    def _fill_none(self, values: list[Optional[float]]) -> list[float]:
-        cleaned: list[float] = []
-        last = 0.0
+    def _series_with_nan(self, values: list[Optional[float]]) -> list[float]:
+        series: list[float] = []
         for value in values:
-            if value is None:
-                cleaned.append(last)
-            else:
-                last = float(value)
-                cleaned.append(last)
-        return cleaned
+            series.append(math.nan if value is None else float(value))
+        return series
 
     def _normalize_value(self, value) -> str:
         return str(value).strip().lower() if value is not None else ''
