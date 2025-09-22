@@ -9,7 +9,8 @@ def _cached_load_config():
     """实际读取 config.yaml 并缓存结果。"""
     config_path = get_config_base() / "config.yaml"
     with config_path.open(encoding="utf-8") as f:
-        return yaml.safe_load(f)
+        data = yaml.safe_load(f)
+        return data or {}
 
 
 def load_config(refresh: bool = False):
@@ -24,7 +25,7 @@ def load_config(refresh: bool = False):
     else:
         logging.debug("Loading config file without clearing cache: %s", config_path)
 
-    config = _cached_load_config()
+    config = _cached_load_config() or {}
 
     if refresh:
         try:
