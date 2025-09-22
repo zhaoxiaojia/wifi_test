@@ -32,6 +32,7 @@ from PyQt5.QtCore import (
     QRect,
     pyqtSignal,
 )
+from PyQt5.QtGui import QIntValidator
 
 from PyQt5.QtWidgets import (
     QSizePolicy,
@@ -328,6 +329,15 @@ class CaseConfigPage(CardWidget):
         self._rebalance_columns()
         QTimer.singleShot(0, self._rebalance_columns)
 
+    def on_third_party_toggled(self, checked: bool) -> None:
+        if not hasattr(self, "third_party_wait_edit"):
+            return
+        self.third_party_wait_edit.setEnabled(checked)
+        if hasattr(self, "third_party_wait_label"):
+            self.third_party_wait_label.setEnabled(self.third_party_wait_edit.isEnabled())
+        if not checked:
+            self.third_party_wait_edit.clear()
+
     def on_rf_model_changed(self, model_str):
         """
         切换rf_solution.model时，仅展示当前选项参数
@@ -560,17 +570,52 @@ class CaseConfigPage(CardWidget):
                 self.telnet_ip_edit.setPlaceholderText("telnet.ip")
                 telnet_vbox.addWidget(QLabel("Telnet IP:"))
                 telnet_vbox.addWidget(self.telnet_ip_edit)
+
+                third_party_cfg = value.get("third_party", {}) if isinstance(value, dict) else {}
+                third_party_enabled = bool(third_party_cfg.get("enabled", False))
+                wait_seconds = third_party_cfg.get("wait_seconds", "")
+                if isinstance(wait_seconds, (int, float)):
+                    wait_text = str(int(wait_seconds))
+                elif isinstance(wait_seconds, str):
+                    wait_text = wait_seconds.strip()
+                else:
+                    wait_text = ""
+                if not third_party_enabled:
+                    wait_text = ""
+
+                self.third_party_checkbox = QCheckBox("Enable third-party control", self)
+                self.third_party_wait_label = QLabel("Wait (s):", self)
+                self.third_party_wait_edit = LineEdit(self)
+                self.third_party_wait_edit.setPlaceholderText("wait_seconds")
+                self.third_party_wait_edit.setValidator(QIntValidator(1, 86400, self.third_party_wait_edit))
+                self.third_party_checkbox.setChecked(third_party_enabled)
+                
+                third_party_row = QHBoxLayout()
+                third_party_row.addWidget(self.third_party_checkbox)
+                third_party_row.addStretch()
+
+                wait_row = QHBoxLayout()
+                wait_row.addWidget(self.third_party_wait_label)
+                wait_row.addWidget(self.third_party_wait_edit)
+
                 # 只添加到布局，隐藏未选中的
                 vbox.addWidget(self.adb_group)
                 vbox.addWidget(self.telnet_group)
+                vbox.addLayout(third_party_row)
+                vbox.addLayout(wait_row)
                 self._add_group(group)
                 # 初始化
                 self.adb_device_edit.setText(value.get("adb", {}).get("device", ""))
                 self.telnet_ip_edit.setText(value.get("telnet", {}).get("ip", ""))
+                self.third_party_checkbox.toggled.connect(self.on_third_party_toggled)
+                self.on_third_party_toggled(self.third_party_checkbox.isChecked())
+                self.third_party_wait_edit.setText(wait_text)
                 self.on_connect_type_changed(self.connect_type_combo.currentText())
                 self.field_widgets["connect_type.type"] = self.connect_type_combo
                 self.field_widgets["connect_type.adb.device"] = self.adb_device_edit
                 self.field_widgets["connect_type.telnet.ip"] = self.telnet_ip_edit
+                self.field_widgets["connect_type.third_party.enabled"] = self.third_party_checkbox
+                self.field_widgets["connect_type.third_party.wait_seconds"] = self.third_party_wait_edit
                 continue
             if key == "fpga":
                 group = QGroupBox("Wi-Fi Chipset")
@@ -971,6 +1016,8 @@ class CaseConfigPage(CardWidget):
             "connect_type.adb.device",
             "connect_type.telnet.ip",
             "connect_type.telnet.wildcard",
+            "connect_type.third_party.enabled",
+            "connect_type.third_party.wait_seconds",
             "router.name",
             "router.address",
             "serial_port.status",
@@ -1068,6 +1115,8 @@ class CaseConfigPage(CardWidget):
                 # 屏蔽 widget 自己的信号，避免 setEnabled 时触发槽函数
                 with QSignalBlocker(widget):
                     widget.setEnabled(desired)
+            if hasattr(self, "third_party_checkbox") and hasattr(self, "third_party_wait_edit"):
+                self.on_third_party_toggled(self.third_party_checkbox.isChecked())
         finally:
             self.setUpdatesEnabled(True)
             self.update()  # 确保一次性刷新到屏幕
@@ -1112,6 +1161,23 @@ class CaseConfigPage(CardWidget):
             self.selected_csv_path,
             self.config,
         )
+        if (
+            hasattr(self, "third_party_checkbox")
+            and hasattr(self, "third_party_wait_edit")
+            and self.third_party_checkbox.isChecked()
+        ):
+            wait_text = self.third_party_wait_edit.text().strip()
+            if not wait_text or not wait_text.isdigit() or int(wait_text) <= 0:
+                InfoBar.error(
+                    title="Error",
+                    content="Please input a positive wait time for third-party control.",
+                    parent=self,
+                    position=InfoBarPosition.TOP,
+                    duration=2800,
+                )
+                self.third_party_wait_edit.setFocus()
+                self.third_party_wait_edit.selectAll()
+                return
         # 将字段值更新到 self.config（保持结构）
         for key, widget in self.field_widgets.items():
             # key 可能是 'connect_type.adb.device' → 拆成层级
@@ -1123,6 +1189,10 @@ class CaseConfigPage(CardWidget):
 
             if isinstance(widget, LineEdit):
                 val = widget.text()
+                if key == "connect_type.third_party.wait_seconds":
+                    val = val.strip()
+                    ref[leaf] = int(val) if val else 0
+                    continue
                 # 判断当前字段是否为 list 且不是字符串形式表示的
                 old_val = ref.get(leaf)
                 if isinstance(old_val, list):
