@@ -148,7 +148,7 @@ class RvrWifiConfigPage(CardWidget):
         header.setSectionResizeMode(QHeaderView.Stretch)
         header.setStretchLastSection(True)
         # 无选中模式下使用 cellClicked 信号加载数据
-        self.table.cellClicked.connect(lambda r, c: self._load_row_to_form())
+        self.table.cellClicked.connect(self._on_table_cell_clicked)
         main_layout.addWidget(self.table, 5)
 
         apply_theme(header)
@@ -284,7 +284,7 @@ class RvrWifiConfigPage(CardWidget):
         self.reload_csv()
         self._loading = True
         try:
-            self._load_row_to_form()
+            self._load_row_to_form(ensure_checked=True)
         finally:
             self._loading = False
         if not self.rows:
@@ -310,7 +310,7 @@ class RvrWifiConfigPage(CardWidget):
         self.reload_csv()
         self._loading = True
         try:
-            self._load_row_to_form()
+            self._load_row_to_form(ensure_checked=True)
         finally:
             self._loading = False
 
@@ -385,7 +385,7 @@ class RvrWifiConfigPage(CardWidget):
                 self.table.setItem(r, c + 1, item)
         self.table.clearSelection()
         self.table.setCurrentItem(None)
-        self._load_row_to_form()
+        self._load_row_to_form(ensure_checked=True)
 
     def _sync_rows(self):
         self._collect_table_data()
@@ -457,7 +457,30 @@ class RvrWifiConfigPage(CardWidget):
         finally:
             self._loading = False
 
-    def _load_row_to_form(self):
+    def _on_table_cell_clicked(self, row: int, column: int) -> None:
+        """When a row cell is clicked, sync form and checkbox state appropriately."""
+        item = self.table.item(row, 0) if 0 <= row < self.table.rowCount() else None
+        if item is None:
+            self._load_row_to_form(ensure_checked=False)
+            return
+        clicked_checkbox = column == 0
+        should_uncheck = item.checkState() == Qt.Checked and (clicked_checkbox or column != 0)
+        if should_uncheck:
+            item.setCheckState(Qt.Unchecked)
+            self._load_row_to_form(ensure_checked=False)
+            return
+        ensure_checked = column != 0
+        if ensure_checked:
+            self._ensure_row_checked(row)
+        self._load_row_to_form(ensure_checked=ensure_checked)
+
+    def _ensure_row_checked(self, row: int) -> None:
+        item = self.table.item(row, 0) if 0 <= row < self.table.rowCount() else None
+        if item is not None and item.flags() & Qt.ItemIsUserCheckable:
+            if item.checkState() != Qt.Checked:
+                item.setCheckState(Qt.Checked)
+
+    def _load_row_to_form(self, ensure_checked: bool = False):
         self._loading = True
         try:
             row_index = self.table.currentRow()
@@ -465,6 +488,8 @@ class RvrWifiConfigPage(CardWidget):
                 self.reset_form()
                 return
             data = self.rows[row_index]
+            if ensure_checked:
+                self._ensure_row_checked(row_index)
 
             band = data.get("band", "")
             with QSignalBlocker(self.band_combo):
