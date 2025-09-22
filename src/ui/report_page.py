@@ -12,9 +12,11 @@ from typing import Optional
 from html import escape
 
 import matplotlib.pyplot as plt
+from matplotlib.backends.backend_agg import FigureCanvasAgg
+
 import pandas as pd
 from PyQt5.QtCore import Qt, QTimer, QEvent
-from PyQt5.QtGui import QPixmap
+from PyQt5.QtGui import QPixmap, QImage, QFont
 from PyQt5.QtWidgets import (
     QHBoxLayout,
     QVBoxLayout,
@@ -25,11 +27,82 @@ from PyQt5.QtWidgets import (
     QStackedWidget,
     QTabWidget,
     QScrollArea,
+    QToolTip,
 )
 from qfluentwidgets import CardWidget, StrongBodyLabel
 
 from src.util.constants import Paths
 from .theme import apply_theme, FONT_FAMILY, STYLE_BASE, TEXT_COLOR, BACKGROUND_COLOR
+
+CHART_DPI = 150
+
+class InteractiveChartLabel(QLabel):
+    """QLabel subclass that shows tooltips for chart points when hovered."""
+
+    _TOOLTIP_CONFIGURED = False
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        if not InteractiveChartLabel._TOOLTIP_CONFIGURED:
+            QToolTip.setFont(QFont(FONT_FAMILY, 11))
+            if hasattr(QToolTip, 'setStyleSheet'):
+                QToolTip.setStyleSheet(
+                    "QToolTip { color: #202020; background-color: #f5f5f5; "
+                    "border: 1px solid #7f7f7f; padding: 4px; }"
+                )
+            InteractiveChartLabel._TOOLTIP_CONFIGURED = True
+        self._points: list[dict[str, object]] = []
+        self._hit_radius = 12
+        self._last_point: Optional[dict[str, object]] = None
+        self.setMouseTracking(True)
+
+    def set_points(self, points: list[dict[str, object]]) -> None:
+        self._points = points or []
+        self._last_point = None
+        has_points = bool(self._points)
+        self.setMouseTracking(has_points)
+        self.setCursor(Qt.PointingHandCursor if has_points else Qt.ArrowCursor)
+        if not has_points:
+            QToolTip.hideText()
+
+    def mouseMoveEvent(self, event):
+        if self._points:
+            target = self._find_point(event.pos())
+            if target is not self._last_point:
+                tooltip = target.get('tooltip', '') if target else ''
+                if tooltip:
+                    QToolTip.showText(self.mapToGlobal(event.pos()), tooltip, self)
+                else:
+                    QToolTip.hideText()
+                self._last_point = target
+        super().mouseMoveEvent(event)
+
+    def mousePressEvent(self, event):
+        QToolTip.hideText()
+        super().mousePressEvent(event)
+
+    def leaveEvent(self, event):
+        self._last_point = None
+        QToolTip.hideText()
+        super().leaveEvent(event)
+
+    def _find_point(self, pos):
+        radius_sq = float(self._hit_radius * self._hit_radius)
+        best_point = None
+        best_distance = radius_sq
+        x = float(pos.x())
+        y = float(pos.y())
+        for point in self._points:
+            px, py = point.get('position', (None, None))
+            if px is None or py is None:
+                continue
+            dx = x - float(px)
+            dy = y - float(py)
+            dist_sq = dx * dx + dy * dy
+            if dist_sq <= best_distance:
+                best_distance = dist_sq
+                best_point = point
+        return best_point
 
 class ReportPage(CardWidget):
     """Simple report viewer page.
@@ -254,13 +327,13 @@ class ReportPage(CardWidget):
         self.chart_tabs.blockSignals(True)
         try:
             self.chart_tabs.clear()
-            for title, pixmap in charts:
+            for title, chart_widget in charts:
+                if chart_widget is None:
+                    continue
                 scroll = QScrollArea(self.chart_tabs)
                 scroll.setWidgetResizable(True)
-                label = QLabel(scroll)
-                label.setAlignment(Qt.AlignCenter)
-                label.setPixmap(pixmap)
-                scroll.setWidget(label)
+                chart_widget.setParent(scroll)
+                scroll.setWidget(chart_widget)
                 self.chart_tabs.addTab(scroll, title)
         finally:
             self.chart_tabs.blockSignals(False)
@@ -282,21 +355,24 @@ class ReportPage(CardWidget):
             return
         if self._render_rvr_charts(self._current_file, fallback_to_text=False):
             self._view_mode = 'chart'
+            self.viewer_stack.setCurrentWidget(self.chart_tabs)
 
-    def _build_rvr_charts(self, path: Path) -> list[tuple[str, QPixmap]]:
+    def _build_rvr_charts(self, path: Path) -> list[tuple[str, InteractiveChartLabel]]:
         df = self._load_rvr_dataframe(path)
-        if df.empty:
-            return []
-        config_map = self._load_rvr_config_map()
         charts_dir = path.parent / 'rvr_charts'
         charts_dir.mkdir(exist_ok=True)
-        results: list[tuple[str, QPixmap]] = []
+        if df.empty:
+            title = path.stem or 'RVR Chart'
+            placeholder = self._create_empty_chart_widget(title, charts_dir)
+            return [(title, placeholder)] if placeholder is not None else []
+        config_map = self._load_rvr_config_map()
+        results: list[tuple[str, InteractiveChartLabel]] = []
         grouped = df.groupby(['Freq_Band', 'Standard', 'BW', 'CH_Freq_MHz'], dropna=False)
         for (band, mode, bw, channel), group in grouped:
             title = self._format_scenario_label(str(band or ''), str(mode or ''), str(channel or ''), str(bw or ''), config_map)
-            pixmap = self._create_chart_pixmap(group, title, charts_dir)
-            if pixmap is not None:
-                results.append((title, pixmap))
+            widget = self._create_chart_widget(group, title, charts_dir)
+            if widget is not None:
+                results.append((title, widget))
         return results
 
     def _load_rvr_dataframe(self, path: Path) -> pd.DataFrame:
@@ -369,7 +445,8 @@ class ReportPage(CardWidget):
         fallback = [p for p in fallback if p and p.lower() != 'nan']
         return ','.join(fallback) or 'scenario'
 
-    def _create_chart_pixmap(self, group: pd.DataFrame, title: str, charts_dir: Path) -> Optional[QPixmap]:
+
+    def _create_chart_widget(self, group: pd.DataFrame, title: str, charts_dir: Path) -> Optional[InteractiveChartLabel]:
         if 'Direction' not in group.columns:
             return None
         ul_df = group[group['Direction'] == 'UL'].copy()
@@ -387,9 +464,9 @@ class ReportPage(CardWidget):
         ul_throughput, ul_expect = self._build_series(ul_df, steps)
         dl_throughput, dl_expect = self._build_series(dl_df, steps)
         if not any(v is not None for v in ul_throughput + dl_throughput + ul_expect + dl_expect):
-            return None
+            return self._create_empty_chart_widget(title, charts_dir, steps)
         x_positions = list(range(len(steps)))
-        fig, ax = plt.subplots(figsize=(7.5, 4.2), dpi=120)
+        fig, ax = plt.subplots(figsize=(7.5, 4.2), dpi=CHART_DPI)
         if any(v is not None for v in ul_throughput):
             ax.plot(x_positions, self._series_with_nan(ul_throughput), marker='o', label='UL Throughput')
         if any(v is not None for v in dl_throughput):
@@ -400,18 +477,121 @@ class ReportPage(CardWidget):
             ax.plot(x_positions, self._series_with_nan(dl_expect), linestyle='--', label='DL Expect_Rate')
         ax.set_xticks(x_positions)
         ax.set_xticklabels(steps, rotation=30, ha='right')
-        ax.set_ylabel('Mbps')
-        ax.set_title(title)
+        ax.set_xlabel('attenuation (dB)')
+        ax.set_ylabel('throughput (Mbps)')
+        ax.set_title(title, loc='left', pad=4)
         ax.grid(alpha=0.3, linestyle='--')
         ax.margins(y=0.08)
-        ax.legend(loc='upper left', bbox_to_anchor=(0.02, 0.98), ncol=2, frameon=False)
-        fig.tight_layout(rect=[0, 0, 1, 0.95])
-        safe_name = re.sub(r'[^0-9A-Za-z_-]+', '_', title).strip('_') or 'rvr_chart'
-        img_path = charts_dir / f'{safe_name}.png'
-        fig.savefig(img_path, dpi=150)
-        plt.close(fig)
-        pixmap = QPixmap(str(img_path))
-        return pixmap if not pixmap.isNull() else None
+        legend = ax.legend(
+            loc='center left',
+            bbox_to_anchor=(1.02, 0.5),
+            borderaxespad=0.2,
+            frameon=False,
+        )
+        if legend is not None:
+            for text_item in legend.get_texts():
+                text_item.set_ha('left')
+        fig.tight_layout(pad=0.6)
+        fig.subplots_adjust(right=0.78)
+        save_path = charts_dir / f"{self._safe_chart_name(title)}.png"
+        return self._figure_to_label(fig, ax, steps, save_path)
+
+
+    def _create_empty_chart_widget(self, title: str, charts_dir: Path, steps: Optional[list[str]] = None) -> Optional[InteractiveChartLabel]:
+        fig, ax = plt.subplots(figsize=(7.5, 4.2), dpi=CHART_DPI)
+        steps = steps or []
+        if steps:
+            x_positions = list(range(len(steps)))
+            ax.set_xticks(x_positions)
+            ax.set_xticklabels(steps, rotation=30, ha='right')
+        else:
+            ax.set_xticks([])
+        ax.set_xlabel('attenuation (dB)')
+        ax.set_ylabel('throughput (Mbps)')
+        ax.set_title(title, loc='left', pad=4)
+        ax.grid(alpha=0.2, linestyle='--')
+        if steps:
+            ax.set_xlim(-0.5, len(steps) - 0.5)
+        else:
+            ax.set_xlim(0, 1)
+        ax.set_ylim(0, 1)
+        ax.text(0.5, 0.5, 'No data collected yet', transform=ax.transAxes, ha='center', va='center', color='#888888')
+        fig.tight_layout(pad=0.6)
+        save_path = charts_dir / f"{self._safe_chart_name(title)}.png"
+        return self._figure_to_label(fig, ax, steps, save_path)
+
+    def _figure_to_label(self, fig, ax, steps: list[str], save_path: Optional[Path]) -> Optional[InteractiveChartLabel]:
+        try:
+            canvas = FigureCanvasAgg(fig)
+            canvas.draw()
+            width, height = canvas.get_width_height()
+            buffer = canvas.buffer_rgba()
+            image = QImage(buffer, width, height, QImage.Format_RGBA8888).copy()
+            pixmap = QPixmap.fromImage(image)
+            label = InteractiveChartLabel()
+            label.setAlignment(Qt.AlignCenter)
+            label.setPixmap(pixmap)
+            label.setFixedSize(pixmap.size())
+            points = self._extract_chart_points(ax, steps, width, height)
+            label.set_points(points)
+            if save_path is not None:
+                save_path.parent.mkdir(parents=True, exist_ok=True)
+                fig.savefig(str(save_path), dpi=fig.dpi)
+            plt.close(fig)
+            return label
+        except Exception:
+            logging.exception('Failed to render chart figure')
+            plt.close(fig)
+            return None
+
+    def _extract_chart_points(self, ax, steps: list[str], width: int, height: int) -> list[dict[str, object]]:
+        points: list[dict[str, object]] = []
+        x_label = (ax.get_xlabel() or 'X').strip() or 'X'
+        y_label = (ax.get_ylabel() or 'Y').strip() or 'Y'
+        for line in ax.get_lines():
+            label = line.get_label()
+            if not label or label.startswith('_'):
+                continue
+            x_data = line.get_xdata()
+            y_data = line.get_ydata()
+            for x, y in zip(x_data, y_data):
+                if y is None:
+                    continue
+                try:
+                    y_val = float(y)
+                except (TypeError, ValueError):
+                    continue
+                if math.isnan(y_val):
+                    continue
+                try:
+                    idx = int(round(float(x)))
+                except (TypeError, ValueError):
+                    idx = -1
+                step_label = steps[idx] if 0 <= idx < len(steps) else str(x)
+                disp_x, disp_y = ax.transData.transform((x, y_val))
+                qt_x = float(disp_x)
+                qt_y = float(height) - float(disp_y)
+                tooltip = self._build_point_tooltip(label, step_label, y_val, x_label, y_label)
+                points.append({'position': (qt_x, qt_y), 'tooltip': tooltip})
+        return points
+
+    def _build_point_tooltip(self, series: str, step: str, value: float, x_label: str, y_label: str) -> str:
+        value_str = f"{value:.2f}".rstrip('0').rstrip('.')
+        safe_series = escape(series)
+        safe_step = escape(step)
+        safe_x_label = escape(x_label)
+        safe_y_label = escape(y_label)
+        return (
+            '<div style="color:#202020;">'
+            f'<b>{safe_series}</b><br/>'
+            f'{safe_x_label}: {safe_step}<br/>'
+            f'{safe_y_label}: {value_str}'
+            '</div>'
+        )
+
+    def _safe_chart_name(self, title: str) -> str:
+        safe = re.sub(r'[^0-9A-Za-z_-]+', '_', title).strip('_')
+        return safe or 'rvr_chart'
 
     def _build_series(self, df: pd.DataFrame, steps: list[str]) -> tuple[list[Optional[float]], list[Optional[float]]]:
         throughput_series: list[Optional[float]] = []

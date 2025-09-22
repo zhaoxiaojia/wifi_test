@@ -187,7 +187,7 @@ def _parse_optional_int(
 def get_rf_step_list():
     cfg = get_cfg()
     rf_solution = cfg['rf_solution']
-    return [i for i in range(*rf_solution['step'])][::6]
+    return [i for i in range(*rf_solution['step'])][::3]
 
 
 @lru_cache(maxsize=1)
