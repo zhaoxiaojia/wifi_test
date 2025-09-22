@@ -560,9 +560,26 @@ class CaseConfigPage(CardWidget):
                 self.telnet_ip_edit.setPlaceholderText("telnet.ip")
                 telnet_vbox.addWidget(QLabel("Telnet IP:"))
                 telnet_vbox.addWidget(self.telnet_ip_edit)
+                self.third_party_group = QWidget()
+                third_party_vbox = QVBoxLayout(self.third_party_group)
+                third_cfg = value.get("third_party", {})
+                self.third_party_enabled_combo = ComboBox(self)
+                self.third_party_enabled_combo.addItems(["False", "True"])
+                enabled = third_cfg.get("enabled", False)
+                self.third_party_enabled_combo.setCurrentText("True" if enabled else "False")
+                third_party_vbox.addWidget(QLabel("Enable third-party control:"))
+                third_party_vbox.addWidget(self.third_party_enabled_combo)
+                self.third_party_wait_edit = LineEdit(self)
+                self.third_party_wait_edit.setPlaceholderText("wait seconds (e.g. 3)")
+                wait_seconds = third_cfg.get("wait_seconds", 3)
+                wait_text = "" if wait_seconds is None else str(wait_seconds)
+                self.third_party_wait_edit.setText(wait_text)
+                third_party_vbox.addWidget(QLabel("Wait seconds:"))
+                third_party_vbox.addWidget(self.third_party_wait_edit)
                 # 只添加到布局，隐藏未选中的
                 vbox.addWidget(self.adb_group)
                 vbox.addWidget(self.telnet_group)
+                vbox.addWidget(self.third_party_group)
                 self._add_group(group)
                 # 初始化
                 self.adb_device_edit.setText(value.get("adb", {}).get("device", ""))
@@ -571,6 +588,8 @@ class CaseConfigPage(CardWidget):
                 self.field_widgets["connect_type.type"] = self.connect_type_combo
                 self.field_widgets["connect_type.adb.device"] = self.adb_device_edit
                 self.field_widgets["connect_type.telnet.ip"] = self.telnet_ip_edit
+                self.field_widgets["connect_type.third_party.enabled"] = self.third_party_enabled_combo
+                self.field_widgets["connect_type.third_party.wait_seconds"] = self.third_party_wait_edit
                 continue
             if key == "fpga":
                 group = QGroupBox("Wi-Fi Chipset")
@@ -971,6 +990,8 @@ class CaseConfigPage(CardWidget):
             "connect_type.adb.device",
             "connect_type.telnet.ip",
             "connect_type.telnet.wildcard",
+            "connect_type.third_party.enabled",
+            "connect_type.third_party.wait_seconds",
             "router.name",
             "router.address",
             "serial_port.status",

@@ -51,13 +51,16 @@ def pytest_sessionstart(session):
     else:
         pytest.win_flag = False
     # The configuration information of  DUT
-    pytest.config = load_config(refresh=True)
+    pytest.config = load_config(refresh=True) or {}
     # The connection method to the product to DUT
     pytest.chip_info = pytest.config.get('fpga')
-    pytest.connect_type = pytest.config.get('connect_type')['type']
+    connect_cfg = pytest.config.get('connect_type') or {}
+    pytest.connect_type = connect_cfg.get('type', 'adb')
+    pytest.third_party_cfg = connect_cfg.get('third_party', {})
     if pytest.connect_type == 'adb':
         # Create adb obj
-        device = pytest.config.get("connect_type")[pytest.connect_type]['device']
+        adb_cfg = connect_cfg.get('adb') or {}
+        device = adb_cfg.get('device')
         if device is None:
             # Obtain the device number dynamically
             info = subprocess.check_output("adb devices", shell=True, encoding='utf-8')
@@ -66,7 +69,10 @@ def pytest_sessionstart(session):
         pytest.dut = adb(serialnumber=device if device else '')
     elif pytest.connect_type == 'telnet':
         # Create telnet obj
-        telnet_ip = pytest.config.get("connect_type")[pytest.connect_type]['ip']
+        telnet_cfg = connect_cfg.get('telnet') or {}
+        telnet_ip = telnet_cfg.get('ip')
+        if not telnet_ip:
+            raise EnvironmentError("Not support connect type telnet: missing IP address")
         pytest.dut = telnet_tool(telnet_ip)
         pytest.dut.roku = roku_ctrl(telnet_ip)
     else:
