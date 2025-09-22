@@ -329,14 +329,16 @@ class CaseConfigPage(CardWidget):
         self._rebalance_columns()
         QTimer.singleShot(0, self._rebalance_columns)
 
-    def on_third_party_toggled(self, checked: bool) -> None:
+    def on_third_party_toggled(self, checked: bool, allow_wait_edit: bool | None = None) -> None:
         if not hasattr(self, "third_party_wait_edit"):
             return
-        self.third_party_wait_edit.setEnabled(checked)
+        if allow_wait_edit is None:
+            checkbox = getattr(self, "third_party_checkbox", None)
+            allow_wait_edit = checkbox.isEnabled() if isinstance(checkbox, QCheckBox) else True
+        enable_wait = bool(checked and allow_wait_edit)
+        self.third_party_wait_edit.setEnabled(enable_wait)
         if hasattr(self, "third_party_wait_label"):
-            self.third_party_wait_label.setEnabled(self.third_party_wait_edit.isEnabled())
-        if not checked:
-            self.third_party_wait_edit.clear()
+            self.third_party_wait_label.setEnabled(enable_wait)
 
     def on_rf_model_changed(self, model_str):
         """
@@ -572,19 +574,22 @@ class CaseConfigPage(CardWidget):
                 telnet_vbox.addWidget(self.telnet_ip_edit)
                 self.third_party_group = QWidget()
                 third_party_vbox = QVBoxLayout(self.third_party_group)
-                third_cfg = value.get("third_party", {})
-                self.third_party_enabled_combo = ComboBox(self)
-                self.third_party_enabled_combo.addItems(["False", "True"])
-                enabled = third_cfg.get("enabled", False)
-                self.third_party_enabled_combo.setCurrentText("True" if enabled else "False")
-                third_party_vbox.addWidget(QLabel("Enable third-party control:"))
-                third_party_vbox.addWidget(self.third_party_enabled_combo)
+                third_cfg = value.get("third_party", {}) if isinstance(value, dict) else {}
+                enabled = bool(third_cfg.get("enabled", False))
+                wait_seconds = third_cfg.get("wait_seconds")
+                wait_text = "" if wait_seconds in (None, "") else str(wait_seconds)
+
+                self.third_party_checkbox = QCheckBox("Enable third-party control", self)
+                self.third_party_checkbox.setChecked(enabled)
+                self.third_party_checkbox.toggled.connect(self.on_third_party_toggled)
+                third_party_vbox.addWidget(self.third_party_checkbox)
+
+                self.third_party_wait_label = QLabel("Wait seconds:")
+                third_party_vbox.addWidget(self.third_party_wait_label)
                 self.third_party_wait_edit = LineEdit(self)
                 self.third_party_wait_edit.setPlaceholderText("wait seconds (e.g. 3)")
-                wait_seconds = third_cfg.get("wait_seconds", 3)
-                wait_text = "" if wait_seconds is None else str(wait_seconds)
+                self.third_party_wait_edit.setValidator(QIntValidator(1, 999999, self))
                 self.third_party_wait_edit.setText(wait_text)
-                third_party_vbox.addWidget(QLabel("Wait seconds:"))
                 third_party_vbox.addWidget(self.third_party_wait_edit)
                 # 只添加到布局，隐藏未选中的
                 vbox.addWidget(self.adb_group)
@@ -594,14 +599,12 @@ class CaseConfigPage(CardWidget):
                 # 初始化
                 self.adb_device_edit.setText(value.get("adb", {}).get("device", ""))
                 self.telnet_ip_edit.setText(value.get("telnet", {}).get("ip", ""))
-                self.third_party_checkbox.toggled.connect(self.on_third_party_toggled)
                 self.on_third_party_toggled(self.third_party_checkbox.isChecked())
-                self.third_party_wait_edit.setText(wait_text)
                 self.on_connect_type_changed(self.connect_type_combo.currentText())
                 self.field_widgets["connect_type.type"] = self.connect_type_combo
                 self.field_widgets["connect_type.adb.device"] = self.adb_device_edit
                 self.field_widgets["connect_type.telnet.ip"] = self.telnet_ip_edit
-                self.field_widgets["connect_type.third_party.enabled"] = self.third_party_enabled_combo
+                self.field_widgets["connect_type.third_party.enabled"] = self.third_party_checkbox
                 self.field_widgets["connect_type.third_party.wait_seconds"] = self.third_party_wait_edit
                 continue
             if key == "fpga":
@@ -1103,7 +1106,11 @@ class CaseConfigPage(CardWidget):
                 with QSignalBlocker(widget):
                     widget.setEnabled(desired)
             if hasattr(self, "third_party_checkbox") and hasattr(self, "third_party_wait_edit"):
-                self.on_third_party_toggled(self.third_party_checkbox.isChecked())
+                allow_wait = (
+                    "connect_type.third_party.enabled" in editable_fields
+                    and "connect_type.third_party.wait_seconds" in editable_fields
+                )
+                self.on_third_party_toggled(self.third_party_checkbox.isChecked(), allow_wait)
         finally:
             self.setUpdatesEnabled(True)
             self.update()  # 确保一次性刷新到屏幕
@@ -1171,7 +1178,11 @@ class CaseConfigPage(CardWidget):
             parts = key.split('.')
             ref = self.config
             for part in parts[:-1]:
-                ref = ref.setdefault(part, {})  # 保证嵌套结构存在
+                child = ref.get(part)
+                if not isinstance(child, dict):
+                    child = {}
+                    ref[part] = child
+                ref = child
             leaf = parts[-1]
 
             if isinstance(widget, LineEdit):
