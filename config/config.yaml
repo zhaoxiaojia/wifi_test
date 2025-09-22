@@ -3,6 +3,9 @@ connect_type:
     device: coco5c6788c23f1804
   telnet:
     ip: 192.168.5.12
+  third_party:
+    enabled: false
+    wait_seconds: 3
   type: telnet
 corner_angle:
   ip_address: 192.168.5.156
