@@ -63,6 +63,7 @@ def _adjust_rssi_to_target(target_rssi: int, base_db: Optional[int]) -> Tuple[in
     max_iterations = 20
     applied_db = base_db if base_db is not None else _get_current_attenuation()
     applied_db = max(0, min(110, applied_db))
+    step = 10
     logging.info(
         'Start adjusting attenuation to %s dB for target RSSI %s dBm',
         applied_db,
@@ -72,18 +73,27 @@ def _adjust_rssi_to_target(target_rssi: int, base_db: Optional[int]) -> Tuple[in
     if current_rssi == -1:
         return current_rssi, applied_db
 
+    def _get_diff_sign(value: int) -> int:
+        if value > 0:
+            return 1
+        if value < 0:
+            return -1
+        return 0
+
+    diff = current_rssi - target_rssi
+    previous_diff_sign = _get_diff_sign(diff)
+
     for attempt in range(max_iterations):
         logging.info(f'current rssi {current_rssi} target rssi {target_rssi}')
-        if abs(current_rssi - target_rssi) <= tolerance:
+        if abs(diff) <= tolerance:
             break
 
-        if current_rssi < target_rssi:
-            next_db = max(0, applied_db - 1)
-        else:
-            next_db = min(110, applied_db + 1)
-
-        if next_db == applied_db:
-            break
+        current_diff_sign = previous_diff_sign
+        direction = -1 if diff < 0 else 1
+        next_db = applied_db + direction * step
+        next_db = max(0, min(110, next_db))
+        no_adjustment_possible = next_db == applied_db
+        overshoot_detected = no_adjustment_possible
 
         applied_db = next_db
         logging.info(
@@ -100,6 +110,19 @@ def _adjust_rssi_to_target(target_rssi: int, base_db: Optional[int]) -> Tuple[in
             break
         time.sleep(3)
         current_rssi = pytest.dut.get_rssi()
+        diff = current_rssi - target_rssi
+        new_diff_sign = _get_diff_sign(diff)
+        if abs(diff) <= tolerance:
+            previous_diff_sign = new_diff_sign
+            break
+        if (
+            current_diff_sign != 0
+            and new_diff_sign != 0
+            and new_diff_sign != current_diff_sign
+        ):
+            overshoot_detected = True
+        previous_diff_sign = new_diff_sign
+
         if applied_db == 0 and current_rssi < target_rssi - tolerance:
             logging.info(
                 'Attenuation already at 0 dB but RSSI %s dBm below target %s dBm, continue test.',
@@ -107,6 +130,15 @@ def _adjust_rssi_to_target(target_rssi: int, base_db: Optional[int]) -> Tuple[in
                 target_rssi,
             )
             break
+
+        if overshoot_detected:
+            new_step = step // 2 if step > 1 else 1
+            step = max(new_step, 1)
+            if step == 0:
+                break
+            if no_adjustment_possible and step == 1 and applied_db in (0, 110):
+                break
+            continue
 
     logging.info('Final RSSI %s dBm with attenuation %s dB', current_rssi, applied_db)
     return current_rssi, applied_db
