@@ -72,49 +72,61 @@ def common_setup(router: Router, router_info: Router) -> bool:
 
     router.change_setting(router_info), "Can't set ap , pls check first"
     if pytest.connect_type == 'telnet':
-        # if router_info.band == "2.4G":
-        #     router.change_country("欧洲")
-        # else:
-        #     router.change_country("美国")
-        # router.driver.quit()
+        if router_info.band == "2.4G":
+            router.change_country("欧洲")
+        else:
+            router.change_country("美国")
+        router.driver.quit()
         band = '5G' if '2' in router_info.band else '2.4G'
         ssid = router_info.ssid + "_bat"
         router.change_setting(Router(band=band, ssid=ssid))
-    time.sleep(3)
-
     logging.info('router set done')
-
-    logging.info(f'dut try to connect {router_info.ssid}')
-    if pytest.connect_type == 'telnet':
+    third_party_cfg = get_cfg().get("connect_type", {}).get("third_party", {})
+    if third_party_cfg:
+        wait_seconds = _parse_optional_int(
+            third_party_cfg.get("wait_seconds"),
+            field_name="connect_type.third_party.wait_seconds",
+            min_value=1,
+        )
+        actual_wait_seconds = wait_seconds if third_party_cfg.get("enabled") and wait_seconds else 3
+        logging.info(
+            "router setup waiting for %s seconds (enabled=%s, wait_seconds=%s)",
+            actual_wait_seconds,
+            third_party_cfg.get("enabled"),
+            wait_seconds,
+        )
+        time.sleep(actual_wait_seconds)
         connect_status = True
-        pytest.dut.wait_reconnect_sync(timeout=90)
     else:
-        connect_status = False
-        for _ in range(3):
-            try:
-                wpa_type = 'wpa3' if 'WPA3' in router_info.security_mode else 'wpa2'
-                if router_info.security_mode.lower() in [
-                    'open', '不加密', '无', 'open system', '无加密(允许所有人连接)', 'none'
-                ]:
-                    logging.info('no passwd')
-                    cmd = pytest.dut.CMD_WIFI_CONNECT.format(router_info.ssid, "open", "")
-                else:
-                    cmd = pytest.dut.CMD_WIFI_CONNECT.format(
-                        router_info.ssid, wpa_type, router_info.password
-                    )
-                if router_info.hide_ssid == '是':
-                    cmd += pytest.dut.CMD_WIFI_HIDE
-                pytest.dut.checkoutput(cmd)
-                time.sleep(5)
-                if pytest.dut.wait_for_wifi_address(
-                    cmd=cmd,
-                    target=re.findall(r'(\d+\.\d+\.\d+\.)', pytest.dut.pc_ip)[0],
-                ):
-                    connect_status = True
-                    break
-            except Exception as e:
-                logging.info(e)
-                connect_status = False
+        logging.info(f'dut try to connect {router_info.ssid}')
+        if pytest.connect_type == 'telnet':
+            connect_status = True
+            pytest.dut.wait_reconnect_sync(timeout=90)
+        else:
+            connect_status = False
+            for _ in range(3):
+                try:
+                    wpa_type = 'wpa3' if 'WPA3' in router_info.security_mode else 'wpa2'
+                    if router_info.security_mode.lower() == "open system":
+                        logging.info('no passwd')
+                        cmd = pytest.dut.CMD_WIFI_CONNECT.format(router_info.ssid, "open", "")
+                    else:
+                        cmd = pytest.dut.CMD_WIFI_CONNECT.format(
+                            router_info.ssid, wpa_type, router_info.password
+                        )
+                    if router_info.hide_ssid == '是':
+                        cmd += pytest.dut.CMD_WIFI_HIDE
+                    pytest.dut.checkoutput(cmd)
+                    time.sleep(5)
+                    if pytest.dut.wait_for_wifi_address(
+                        cmd=cmd,
+                        target=re.findall(r'(\d+\.\d+\.\d+\.)', pytest.dut.pc_ip)[0],
+                    ):
+                        connect_status = True
+                        break
+                except Exception as e:
+                    logging.info(e)
+                    connect_status = False
 
     logging.info(f'dut_ip:{pytest.dut.dut_ip}')
     logging.info(f'pc_ip:{pytest.dut.pc_ip}')
