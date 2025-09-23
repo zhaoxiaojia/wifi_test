@@ -81,8 +81,8 @@ def common_setup(router: Router, router_info: Router) -> bool:
         ssid = router_info.ssid + "_bat"
         router.change_setting(Router(band=band, ssid=ssid))
     logging.info('router set done')
-    third_party_cfg = get_cfg().get("connect_type", {}).get("third_party", {})
-    if third_party_cfg:
+    third_party_cfg = get_cfg().get("connect_type", {}).get("third_party", {}).get("enabled",{})
+    if third_party_cfg == 'true':
         wait_seconds = _parse_optional_int(
             third_party_cfg.get("wait_seconds"),
             field_name="connect_type.third_party.wait_seconds",

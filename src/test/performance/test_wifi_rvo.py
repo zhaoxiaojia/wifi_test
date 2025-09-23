@@ -73,6 +73,7 @@ def _adjust_rssi_to_target(target_rssi: int, base_db: Optional[int]) -> Tuple[in
         return current_rssi, applied_db
 
     for attempt in range(max_iterations):
+        logging.info(f'current rssi {current_rssi} target rssi {target_rssi}')
         if abs(current_rssi - target_rssi) <= tolerance:
             break
 
