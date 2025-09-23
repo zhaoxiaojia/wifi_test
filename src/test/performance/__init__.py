@@ -213,21 +213,51 @@ def get_corner_step_list():
 def get_rvo_static_db_list():
     cfg = get_cfg()
     raw_value = cfg.get('corner_angle', {}).get('static_db', '')
-    parsed = _parse_optional_int(
-        raw_value,
-        field_name='corner_angle.static_db',
-        min_value=0,
-        max_value=110,
-    )
-    return [parsed] if parsed is not None else [None]
+    candidates = []
+
+    if isinstance(raw_value, str):
+        segments = [segment.strip() for segment in re.split(r'[,，]', raw_value)]
+        candidates.extend(segment for segment in segments if segment)
+    elif isinstance(raw_value, (list, tuple, set)):
+        candidates.extend(raw_value)
+    else:
+        candidates.append(raw_value)
+
+    parsed_values = []
+    for item in candidates:
+        parsed = _parse_optional_int(
+            item,
+            field_name='corner_angle.static_db',
+            min_value=0,
+            max_value=110,
+        )
+        if parsed is not None:
+            parsed_values.append(parsed)
+
+    return parsed_values if parsed_values else [None]
 
 
 @lru_cache(maxsize=1)
 def get_rvo_target_rssi_list():
     cfg = get_cfg()
     raw_value = cfg.get('corner_angle', {}).get('target_rssi', '')
-    parsed = _parse_optional_int(
-        raw_value,
-        field_name='corner_angle.target_rssi',
-    )
-    return [parsed] if parsed is not None else [None]
+    candidates = []
+
+    if isinstance(raw_value, str):
+        segments = [segment.strip() for segment in re.split(r'[,，]', raw_value)]
+        candidates.extend(segment for segment in segments if segment)
+    elif isinstance(raw_value, (list, tuple, set)):
+        candidates.extend(raw_value)
+    else:
+        candidates.append(raw_value)
+
+    parsed_values = []
+    for item in candidates:
+        parsed = _parse_optional_int(
+            item,
+            field_name='corner_angle.target_rssi',
+        )
+        if parsed is not None:
+            parsed_values.append(parsed)
+
+    return parsed_values if parsed_values else [None]
