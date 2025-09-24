@@ -32,7 +32,6 @@ from PyQt5.QtWidgets import (
 from qfluentwidgets import CardWidget, StrongBodyLabel
 
 from .theme import apply_theme, FONT_FAMILY, STYLE_BASE, TEXT_COLOR, BACKGROUND_COLOR
-
 CHART_DPI = 150
 
 STANDARD_ORDER = ("11ax", "11ac", "11n")
@@ -1138,7 +1137,6 @@ class ReportPage(CardWidget):
                 return data.decode("gbk", errors="replace")
             except Exception:
                 return data.decode("latin1", errors="replace")
-
             data = self._fh.read(size - self._pos)
         except Exception:
             # read failed; try reopen next tick
