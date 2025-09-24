@@ -32,7 +32,6 @@ from PyQt5.QtWidgets import (
 from qfluentwidgets import CardWidget, StrongBodyLabel
 
 from .theme import apply_theme, FONT_FAMILY, STYLE_BASE, TEXT_COLOR, BACKGROUND_COLOR
-
 CHART_DPI = 150
 
 STANDARD_ORDER = ("11ax", "11ac", "11n")
@@ -939,18 +938,55 @@ class ReportPage(CardWidget):
             plt.close(fig)
             return None
 
-    def _extract_chart_points(self, ax, steps: list[str], width: int, height: int) -> list[dict[str, object]]:
-        points: list[dict[str, object]] = []
-        x_label = (ax.get_xlabel() or 'X').strip() or 'X'
-        y_label = (ax.get_ylabel() or 'Y').strip() or 'Y'
-        for line in ax.get_lines():
-            label = line.get_label()
-            if not label or label.startswith('_'):
-                continue
-            x_data = line.get_xdata()
-            y_data = line.get_ydata()
-            for x, y in zip(x_data, y_data):
-                if y is None:
+    def _extract_chart_points(self, ax, steps: list[str], width: int, height: int) -> list[dict[str, object]]:
+        points: list[dict[str, object]] = []
+        x_label = (ax.get_xlabel() or 'X').strip() or 'X'
+        y_label = (ax.get_ylabel() or 'Y').strip() or 'Y'
+        for line in ax.get_lines():
+            label = line.get_label()
+            if not label or label.startswith('_'):
+                continue
+            x_data = line.get_xdata()
+            y_data = line.get_ydata()
+            for x, y in zip(x_data, y_data):
+                if y is None:
+                    continue
+                try:
+                    y_val = float(y)
+                except (TypeError, ValueError):
+                    continue
+                if math.isnan(y_val):
+                    continue
+                try:
+                    idx = int(round(float(x)))
+                except (TypeError, ValueError):
+                    idx = -1
+                step_label = steps[idx] if 0 <= idx < len(steps) else str(x)
+                disp_x, disp_y = ax.transData.transform((x, y_val))
+                qt_x = float(disp_x)
+                qt_y = float(height) - float(disp_y)
+                tooltip = self._build_point_tooltip(label, step_label, y_val, x_label, y_label)
+                points.append({'position': (qt_x, qt_y), 'tooltip': tooltip})
+        return points
+
+    def _build_point_tooltip(self, series: str, step: str, value: float, x_label: str, y_label: str) -> str:
+        value_str = f"{value:.2f}".rstrip('0').rstrip('.')
+        safe_series = escape(series)
+        safe_step = escape(step)
+        safe_x_label = escape(x_label)
+        safe_y_label = escape(y_label)
+        return (
+            '<div style="color:#202020;">'
+            f'<b>{safe_series}</b><br/>'
+            f'{safe_x_label}: {safe_step}<br/>'
+            f'{safe_y_label}: {value_str}'
+            '</div>'
+        )
+
+    def _safe_chart_name(self, title: str) -> str:
+        safe = re.sub(r'[^0-9A-Za-z_-]+', '_', title).strip('_')
+        return safe or 'rvr_chart'
+
     def _series_with_nan(self, values: list[Optional[float]]) -> list[float]:
         series: list[float] = []
         for value in values:
@@ -980,73 +1016,6 @@ class ReportPage(CardWidget):
                 continue
             return value
         return None
-
-            '</div>'
-        )
-
-    def _safe_chart_name(self, title: str) -> str:
-        safe = re.sub(r'[^0-9A-Za-z_-]+', '_', title).strip('_')
-        return safe or 'rvr_chart'
-
-    def _build_series(self, df: pd.DataFrame, steps: list[str]) -> tuple[list[Optional[float]], list[Optional[float]]]:
-        throughput_series: list[Optional[float]] = []
-        expect_series: list[Optional[float]] = []
-        if df.empty:
-            return [None] * len(steps), [None] * len(steps)
-        df = df.copy()
-        if 'DB' in df.columns:
-            df['__step__'] = df['DB'].apply(self._normalize_step)
-        else:
-            df['__step__'] = None
-        for step in steps:
-            subset = df[df['__step__'] == step]
-            if subset.empty:
-                throughput_series.append(None)
-                expect_series.append(None)
-                continue
-            throughput_col = subset['Throughput'] if 'Throughput' in subset.columns else pd.Series(dtype=float)
-            expect_col = subset['Expect_Rate'] if 'Expect_Rate' in subset.columns else pd.Series(dtype=float)
-            throughput_values = [self._safe_float(v) for v in throughput_col.tolist()]
-            throughput_values = [v for v in throughput_values if v is not None]
-            expect_values = [self._safe_float(v) for v in expect_col.tolist()]
-            expect_values = [v for v in expect_values if v is not None]
-            throughput_series.append(sum(throughput_values) / len(throughput_values) if throughput_values else None)
-            expect_series.append(sum(expect_values) / len(expect_values) if expect_values else None)
-        return throughput_series, expect_series
-
-    def _series_with_nan(self, values: list[Optional[float]]) -> list[float]:
-        series: list[float] = []
-        for value in values:
-            series.append(math.nan if value is None else float(value))
-        return series
-
-    def _normalize_value(self, value) -> str:
-        return str(value).strip().lower() if value is not None else ''
-
-    def _normalize_bandwidth(self, value) -> str:
-        s = self._normalize_value(value)
-        return s.replace('mhz', '').strip()
-
-    def _normalize_step(self, value) -> Optional[str]:
-        if value is None:
-            return None
-        s = str(value).strip()
-        if not s or s.lower() in {'nan', 'null'}:
-            return None
-        return s
-
-    def _safe_float(self, value) -> Optional[float]:
-        if value is None:
-            return None
-        if isinstance(value, (int, float)):
-            return float(value)
-        s = str(value).strip()
-        if not s or s.lower() in {'nan', 'null', 'n/a', 'false'}:
-            return None
-        try:
-            return float(s)
-        except Exception:
-            return None
 
     def _start_tail(self, path: Path, *, force_view: bool = True):
         # stop previous
@@ -1124,6 +1093,50 @@ class ReportPage(CardWidget):
             return
         try:
             self._fh.seek(self._pos)
+            data = self._fh.read(size - self._pos)
+        except Exception:
+            # read failed; try reopen next tick
+            self._stop_tail()
+            return
+        self._pos = size
+        chunk = self._decode_bytes(data)
+        if not chunk:
+            return
+        buf = self._partial + chunk
+        lines = buf.split("\n")
+        if not buf.endswith("\n"):
+            self._partial = lines.pop() if lines else buf
+        else:
+            self._partial = ""
+        if lines:
+            self._append_lines(lines)
+
+    def _append_lines(self, lines: list[str]) -> None:
+        if not lines:
+            return
+        # limit render per tick to avoid UI jank
+        max_lines = 2000
+        lines = lines[-max_lines:]
+        html_lines = [
+            f"<span style='{STYLE_BASE} color:{TEXT_COLOR}; font-family: Consolas, \'Courier New\', monospace;'>{escape(l)}</span>"
+            for l in lines
+        ]
+        self.viewer.append("\n".join(html_lines))
+        # auto-scroll
+        cursor = self.viewer.textCursor()
+        cursor.movePosition(cursor.End)
+        self.viewer.setTextCursor(cursor)
+
+    def _decode_bytes(self, data: bytes) -> str:
+        if not data:
+            return ""
+        try:
+            return data.decode("utf-8", errors="replace")
+        except Exception:
+            try:
+                return data.decode("gbk", errors="replace")
+            except Exception:
+                return data.decode("latin1", errors="replace")
             data = self._fh.read(size - self._pos)
         except Exception:
             # read failed; try reopen next tick
