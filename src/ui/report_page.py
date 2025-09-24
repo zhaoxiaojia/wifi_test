@@ -402,6 +402,18 @@ class ReportPage(CardWidget):
                 df[col] = df[col].astype(str)
             elif col != 'DB':
                 df[col] = ''
+        display_columns = (
+            ('Standard', '__standard_display__', 'Unknown'),
+            ('BW', '__bandwidth_display__', 'Unknown'),
+            ('Test_Category', '__test_type_display__', 'RVR'),
+            ('CH_Freq_MHz', '__channel_display__', 'Unknown'),
+        )
+        for source_col, display_col, default_value in display_columns:
+            if source_col in df.columns:
+                base_series = df[source_col].astype(str).str.strip()
+            else:
+                base_series = pd.Series([''] * len(df), index=df.index)
+            df[display_col] = base_series.mask(base_series == '', default_value)
         return df
 
     def _load_rvr_config_map(self) -> dict[tuple[str, str, str, str], dict[str, str]]:
@@ -561,20 +573,85 @@ class ReportPage(CardWidget):
                     y_val = float(y)
                 except (TypeError, ValueError):
                     continue
-                if math.isnan(y_val):
-                    continue
-                try:
-                    idx = int(round(float(x)))
-                except (TypeError, ValueError):
-                    idx = -1
-                step_label = steps[idx] if 0 <= idx < len(steps) else str(x)
-                disp_x, disp_y = ax.transData.transform((x, y_val))
-                qt_x = float(disp_x)
-                qt_y = float(height) - float(disp_y)
-                tooltip = self._build_point_tooltip(label, step_label, y_val, x_label, y_label)
-                points.append({'position': (qt_x, qt_y), 'tooltip': tooltip})
-        return points
-
+        throughput_candidates = (
+            'Throughput',
+            'Throughput(Mbps)',
+            'Throughput rate Mb/s',
+            'Throughput_rate',
+        )
+        expect_candidates = (
+            'Expect_Rate',
+            'ExpectRate',
+            'Expect_Rate(Mbps)',
+        )
+        for step in steps:
+            subset = df[df['__step__'] == step]
+            if subset.empty:
+                throughput_series.append(None)
+                expect_series.append(None)
+                continue
+            throughput_col = pd.Series(dtype=object)
+            for candidate in throughput_candidates:
+                if candidate in subset.columns:
+                    throughput_col = subset[candidate]
+                    break
+            expect_col = pd.Series(dtype=object)
+            for candidate in expect_candidates:
+                if candidate in subset.columns:
+                    expect_col = subset[candidate]
+                    break
+            throughput_values = []
+            for raw_value in throughput_col.tolist():
+                if isinstance(raw_value, str) and raw_value:
+                    fragments = [frag.strip() for frag in re.split(r'[，,;\s]+', raw_value) if frag.strip()]
+                    if len(fragments) > 1:
+                        for frag in fragments:
+                            parsed = self._safe_float(frag)
+                            if parsed is not None:
+                                throughput_values.append(parsed)
+                        continue
+                parsed = self._safe_float(raw_value)
+                if parsed is not None:
+                    throughput_values.append(parsed)
+            expect_values = []
+            for raw_value in expect_col.tolist():
+                if isinstance(raw_value, str) and raw_value:
+                    fragments = [frag.strip() for frag in re.split(r'[，,;\s]+', raw_value) if frag.strip()]
+                    if len(fragments) > 1:
+                        for frag in fragments:
+                            parsed = self._safe_float(frag)
+                            if parsed is not None:
+                                expect_values.append(parsed)
+                        continue
+                parsed = self._safe_float(raw_value)
+                if parsed is not None:
+                    expect_values.append(parsed)
+            throughput_series.append(sum(throughput_values) / len(throughput_values) if throughput_values else None)
+            expect_series.append(sum(expect_values) / len(expect_values) if expect_values else None)
+        return throughput_series, expect_series
+
+    def _safe_float(self, value) -> Optional[float]:
+        if value is None:
+            return None
+        if isinstance(value, (int, float)):
+            return float(value)
+        s = str(value).strip()
+        if not s:
+            return None
+        lowered = s.lower()
+        if lowered in {'nan', 'null', 'n/a', 'false'}:
+            return None
+        normalized = s.replace('，', ',')
+        match = re.search(r'-?\d+(?:\.\d+)?', normalized)
+        if match:
+            try:
+                return float(match.group())
+            except ValueError:
+                return None
+        try:
+            return float(normalized)
+        except Exception:
+            return None
     def _build_point_tooltip(self, series: str, step: str, value: float, x_label: str, y_label: str) -> str:
         value_str = f"{value:.2f}".rstrip('0').rstrip('.')
         safe_series = escape(series)
