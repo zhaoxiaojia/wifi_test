@@ -538,7 +538,6 @@ class dut():
                 # logging.info(f'info {info}')
                 ip_address = re.findall(r'inet addr:(\d+\.\d+\.\d+\.\d+)', info, re.S)
                 if ip_address:
-                    logging.info(ip_address)
                     ip_address = ip_address[0]
                 if target in ip_address:
                     self.dut_ip = ip_address
