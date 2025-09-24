@@ -209,9 +209,8 @@ def get_corner_step_list():
     return [i for i in range(*corner_step)][::45]
 
 
-@lru_cache(maxsize=1)
 def get_rvo_static_db_list():
-    cfg = get_cfg()
+    cfg = load_config(refresh=True)
     raw_value = cfg.get('corner_angle', {}).get('static_db', '')
     candidates = []
 
@@ -237,9 +236,8 @@ def get_rvo_static_db_list():
     return parsed_values if parsed_values else [None]
 
 
-@lru_cache(maxsize=1)
 def get_rvo_target_rssi_list():
-    cfg = get_cfg()
+    cfg = load_config(refresh=True)
     raw_value = cfg.get('corner_angle', {}).get('target_rssi', '')
     candidates = []
 
