@@ -409,68 +409,45 @@ class ReportPage(CardWidget):
             return [(title, placeholder)] if placeholder is not None else []
         return results
 
-    def _prepare_rvr_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
+    def _load_rvr_dataframe(self, path: Path) -> pd.DataFrame:
+        try:
+            if path.suffix.lower() == '.csv':
+                try:
+                    df = pd.read_csv(path)
+                except UnicodeDecodeError:
+                    df = pd.read_csv(path, encoding='gbk')
+            else:
+                sheets = pd.read_excel(path, sheet_name=None)
+                frames = [sheet for sheet in sheets.values() if sheet is not None and not sheet.empty]
+                df = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+        except Exception as exc:
+            logging.exception('读取 RVR 结果失败: %s', exc)
+            return pd.DataFrame()
         if df.empty:
             return df
         df = df.copy()
-        throughput_cols = self._resolve_throughput_columns(df.columns)
-        if throughput_cols:
-            df['__throughput_value__'] = df.apply(
-                lambda row: self._aggregate_throughput_row(row, throughput_cols),
-                axis=1,
-            )
-        else:
-            df['__throughput_value__'] = pd.Series([None] * len(df), index=df.index)
-        df['__standard_display__'] = df.apply(
-            lambda row: self._format_standard_display(row.get('Standard')),
-            axis=1,
+        df.columns = [str(c).strip() for c in df.columns]
+        for col in df.columns:
+            df[col] = df[col].apply(lambda v: v if not isinstance(v, str) else v.strip())
+        if 'Direction' in df.columns:
+            df['Direction'] = df['Direction'].astype(str).str.upper()
+        for col in ('Freq_Band', 'Standard', 'BW', 'CH_Freq_MHz', 'DB'):
+            if col in df.columns:
+                df[col] = df[col].astype(str)
+            elif col != 'DB':
+                df[col] = ''
+        display_columns = (
+            ('Standard', '__standard_display__', 'Unknown'),
+            ('BW', '__bandwidth_display__', 'Unknown'),
+            ('Test_Category', '__test_type_display__', 'RVR'),
+            ('CH_Freq_MHz', '__channel_display__', 'Unknown'),
         )
-        df['__standard_display__'].replace('', 'Unknown', inplace=True)
-        df['__bandwidth_display__'] = df.apply(
-            lambda row: self._format_bandwidth_display(row.get('BW')),
-            axis=1,
-        )
-        df['__bandwidth_display__'].replace('', 'Unknown', inplace=True)
-        df['__direction_display__'] = df.apply(
-            lambda row: self._format_direction_display(row.get('Direction')),
-            axis=1,
-        )
-        df['__freq_band_display__'] = df.apply(
-            lambda row: self._format_freq_band_display(
-                self._extract_first_non_empty(
-                    row,
-                    ('Freq_Band', 'Freq Band', 'Band', 'FreqBand', 'CH_Freq_MHz'),
-                )
-            ),
-            axis=1,
-        )
-        df['__test_type_display__'] = df.apply(self._detect_test_type_from_row, axis=1)
-        df['__test_type_display__'].replace('', 'RVR', inplace=True)
-        df['__channel_display__'] = df.apply(
-            lambda row: self._format_channel_display(row.get('CH_Freq_MHz')),
-            axis=1,
-        )
-        df['__channel_display__'].replace('', 'Unknown', inplace=True)
-        df['__step__'] = df.apply(lambda row: self._normalize_step(row.get('DB')), axis=1)
-        df['__step_display__'] = df.apply(
-            lambda row: self._format_db_display(row.get('DB')),
-            axis=1,
-        )
-        df['__step_value__'] = df.apply(
-            lambda row: self._parse_db_numeric(row.get('DB')),
-            axis=1,
-        )
-        df['__rssi_display__'] = df.apply(
-            lambda row: self._format_metric_display(row.get('RSSI')),
-            axis=1,
-        )
-        df['__rssi_value__'] = df.apply(
-            lambda row: self._parse_db_numeric(row.get('RSSI')),
-            axis=1,
-        )
-        df['__db_display__'] = df['__step_display__']
-        df['__has_throughput__'] = df['__throughput_value__'].apply(lambda value: value is not None)
-        df = df[df['__direction_display__'].astype(bool)]
+        for source_col, display_col, default_value in display_columns:
+            if source_col in df.columns:
+                base_series = df[source_col].astype(str).str.strip()
+            else:
+                base_series = pd.Series([''] * len(df), index=df.index)
+            df[display_col] = base_series.mask(base_series == '', default_value)
         return df
 
     def _resolve_throughput_columns(self, columns: pd.Index) -> list[str]:
@@ -937,50 +914,144 @@ class ReportPage(CardWidget):
             logging.exception('Failed to render chart figure')
             plt.close(fig)
             return None
-
+          
     def _extract_chart_points(self, ax, steps: list[str], width: int, height: int) -> list[dict[str, object]]:
-        points: list[dict[str, object]] = []
-        x_label = (ax.get_xlabel() or 'X').strip() or 'X'
-        y_label = (ax.get_ylabel() or 'Y').strip() or 'Y'
-        for line in ax.get_lines():
-            label = line.get_label()
-            if not label or label.startswith('_'):
-                continue
-            x_data = line.get_xdata()
-            y_data = line.get_ydata()
-            for x, y in zip(x_data, y_data):
-                if y is None:
-                    continue
-                try:
-                    y_val = float(y)
-                except (TypeError, ValueError):
-                    continue
-                if math.isnan(y_val):
-                    continue
-                try:
-                    idx = int(round(float(x)))
-                except (TypeError, ValueError):
-                    idx = -1
-                step_label = steps[idx] if 0 <= idx < len(steps) else str(x)
-                disp_x, disp_y = ax.transData.transform((x, y_val))
-                qt_x = float(disp_x)
-                qt_y = float(height) - float(disp_y)
-                tooltip = self._build_point_tooltip(label, step_label, y_val, x_label, y_label)
-                points.append({'position': (qt_x, qt_y), 'tooltip': tooltip})
-        return points
 
+        points: list[dict[str, object]] = []
+
+        x_label = (ax.get_xlabel() or 'X').strip() or 'X'
+
+        y_label = (ax.get_ylabel() or 'Y').strip() or 'Y'
+
+        for line in ax.get_lines():
+
+            label = line.get_label()
+
+            if not label or label.startswith('_'):
+
+                continue
+
+            x_data = line.get_xdata()
+
+            y_data = line.get_ydata()
+
+            for x, y in zip(x_data, y_data):
+
+                if y is None:
+
+                    continue
+
+                try:
+
+                    y_val = float(y)
+
+                except (TypeError, ValueError):
+
+                    continue
+
+        throughput_candidates = (
+            'Throughput',
+            'Throughput(Mbps)',
+            'Throughput rate Mb/s',
+            'Throughput_rate',
+        )
+        expect_candidates = (
+            'Expect_Rate',
+            'ExpectRate',
+            'Expect_Rate(Mbps)',
+        )
+        for step in steps:
+            subset = df[df['__step__'] == step]
+            if subset.empty:
+                throughput_series.append(None)
+                expect_series.append(None)
+                continue
+            throughput_col = pd.Series(dtype=object)
+            for candidate in throughput_candidates:
+                if candidate in subset.columns:
+                    throughput_col = subset[candidate]
+                    break
+            expect_col = pd.Series(dtype=object)
+            for candidate in expect_candidates:
+                if candidate in subset.columns:
+                    expect_col = subset[candidate]
+                    break
+            throughput_values = []
+            for raw_value in throughput_col.tolist():
+                if isinstance(raw_value, str) and raw_value:
+                    fragments = [frag.strip() for frag in re.split(r'[，,;\s]+', raw_value) if frag.strip()]
+                    if len(fragments) > 1:
+                        for frag in fragments:
+                            parsed = self._safe_float(frag)
+                            if parsed is not None:
+                                throughput_values.append(parsed)
+                        continue
+                parsed = self._safe_float(raw_value)
+                if parsed is not None:
+                    throughput_values.append(parsed)
+            expect_values = []
+            for raw_value in expect_col.tolist():
+                if isinstance(raw_value, str) and raw_value:
+                    fragments = [frag.strip() for frag in re.split(r'[，,;\s]+', raw_value) if frag.strip()]
+                    if len(fragments) > 1:
+                        for frag in fragments:
+                            parsed = self._safe_float(frag)
+                            if parsed is not None:
+                                expect_values.append(parsed)
+                        continue
+                parsed = self._safe_float(raw_value)
+                if parsed is not None:
+                    expect_values.append(parsed)
+            throughput_series.append(sum(throughput_values) / len(throughput_values) if throughput_values else None)
+            expect_series.append(sum(expect_values) / len(expect_values) if expect_values else None)
+        return throughput_series, expect_series
+
+    def _safe_float(self, value) -> Optional[float]:
+        if value is None:
+            return None
+        if isinstance(value, (int, float)):
+            return float(value)
+        s = str(value).strip()
+        if not s:
+            return None
+        lowered = s.lower()
+        if lowered in {'nan', 'null', 'n/a', 'false'}:
+            return None
+        normalized = s.replace('，', ',')
+        match = re.search(r'-?\d+(?:\.\d+)?', normalized)
+        if match:
+            try:
+                return float(match.group())
+            except ValueError:
+                return None
+        try:
+            return float(normalized)
+        except Exception:
+            return None
     def _build_point_tooltip(self, series: str, step: str, value: float, x_label: str, y_label: str) -> str:
+
         value_str = f"{value:.2f}".rstrip('0').rstrip('.')
+
         safe_series = escape(series)
+
         safe_step = escape(step)
+
         safe_x_label = escape(x_label)
+
         safe_y_label = escape(y_label)
+
         return (
+
             '<div style="color:#202020;">'
+
             f'<b>{safe_series}</b><br/>'
+
             f'{safe_x_label}: {safe_step}<br/>'
+
             f'{safe_y_label}: {value_str}'
+
             '</div>'
+
         )
 
     def _safe_chart_name(self, title: str) -> str:
