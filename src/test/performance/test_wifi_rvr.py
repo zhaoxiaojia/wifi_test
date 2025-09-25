@@ -41,6 +41,9 @@ def setup_router(request):
 def setup_attenuation(request, setup_router):
     db_set = request.param
     connect_status, router_info = setup_router
+    pytest.dut.get_rssi()
+    if pytest.dut.rssi_num > 65:
+        db_set = 2
     rf_tool.execute_rf_cmd(db_set)
     yield (connect_status, router_info, db_set)
     pytest.dut.kill_iperf()
@@ -52,8 +55,6 @@ def test_rvr(setup_attenuation):
         logging.info("Can't connect wifi ,input 0")
         return
 
-
-    pytest.dut.get_rssi()
     logging.info(f'start test iperf tx {router_info.tx} rx {router_info.rx}')
 
     if int(router_info.tx):

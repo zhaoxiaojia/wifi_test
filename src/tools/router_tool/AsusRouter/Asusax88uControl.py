@@ -40,11 +40,11 @@ class Asusax88uControl(AsusBaseControl):
         self.host = self.address
         self.port = 23
         self.prompt = b':/tmp/home/root#'  # 命令提示符
-        self.telnet = telnetlib.Telnet(self.host, 23)
         self._is_logged_in = False
 
     def _login(self):
         """初始化Telnet连接并登录"""
+        self.telnet = telnetlib.Telnet(self.host, 23)
         self._is_logged_in = False
         try:
             if self.telnet is not None:

@@ -374,11 +374,6 @@ class ReportPage(CardWidget):
             title = path.stem or 'RVR Chart'
             placeholder = self._create_empty_chart_widget(title, charts_dir)
             return [(title, placeholder)] if placeholder is not None else []
-        df = self._prepare_rvr_dataframe(df)
-        if df.empty:
-            title = path.stem or 'RVR Chart'
-            placeholder = self._create_empty_chart_widget(title, charts_dir)
-            return [(title, placeholder)] if placeholder is not None else []
         results: list[tuple[str, InteractiveChartLabel]] = []
         grouped = df.groupby(
             [
@@ -421,34 +416,91 @@ class ReportPage(CardWidget):
                 frames = [sheet for sheet in sheets.values() if sheet is not None and not sheet.empty]
                 df = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
         except Exception as exc:
-            logging.exception('读取 RVR 结果失败: %s', exc)
+            logging.exception('Failed to read RVR results: %s', exc)
             return pd.DataFrame()
-        if df.empty:
-            return df
-        df = df.copy()
-        df.columns = [str(c).strip() for c in df.columns]
-        for col in df.columns:
-            df[col] = df[col].apply(lambda v: v if not isinstance(v, str) else v.strip())
-        if 'Direction' in df.columns:
-            df['Direction'] = df['Direction'].astype(str).str.upper()
+        if df is None or df.empty:
+            return pd.DataFrame()
+        return self._prepare_rvr_dataframe(df)
+
+    def _prepare_rvr_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
+        if df is None or df.empty:
+            return pd.DataFrame()
+        prepared = df.copy()
+        prepared.columns = [str(c).strip() for c in prepared.columns]
+        for column in prepared.columns:
+            prepared[column] = prepared[column].apply(lambda v: v.strip() if isinstance(v, str) else v)
+        if 'Direction' in prepared.columns:
+            prepared['Direction'] = prepared['Direction'].astype(str).str.upper()
         for col in ('Freq_Band', 'Standard', 'BW', 'CH_Freq_MHz', 'DB'):
-            if col in df.columns:
-                df[col] = df[col].astype(str)
-            elif col != 'DB':
-                df[col] = ''
-        display_columns = (
-            ('Standard', '__standard_display__', 'Unknown'),
-            ('BW', '__bandwidth_display__', 'Unknown'),
-            ('Test_Category', '__test_type_display__', 'RVR'),
-            ('CH_Freq_MHz', '__channel_display__', 'Unknown'),
+            if col in prepared.columns:
+                prepared[col] = prepared[col].astype(str)
+        row_count = len(prepared)
+
+        def source_series(*names: str) -> pd.Series:
+            for name in names:
+                if name in prepared.columns:
+                    return prepared[name]
+            return pd.Series([''] * row_count, index=prepared.index, dtype=object)
+
+        standard_series = source_series('Standard')
+        prepared['__standard_display__'] = standard_series.apply(self._format_standard_display).replace('', 'Unknown')
+
+        bandwidth_series = source_series('BW', 'Bandwidth')
+        prepared['__bandwidth_display__'] = bandwidth_series.apply(self._format_bandwidth_display).replace('', 'Unknown')
+
+        freq_series = source_series('Freq_Band', 'Frequency Band', 'Band')
+        freq_display = freq_series.apply(self._format_freq_band_display)
+        if freq_display.eq('').all() and 'CH_Freq_MHz' in prepared.columns:
+            channel_freq = source_series('CH_Freq_MHz').apply(self._format_freq_band_display)
+            freq_display = freq_display.where(freq_display != '', channel_freq)
+        prepared['__freq_band_display__'] = freq_display.replace('', 'Unknown')
+
+        prepared['__direction_display__'] = source_series('Direction').apply(self._format_direction_display)
+
+        prepared['__channel_display__'] = source_series('CH_Freq_MHz', 'Channel').apply(self._format_channel_display)
+
+        prepared['__db_display__'] = source_series('DB', 'Total_Path_Loss', 'RxP', 'Attenuation', 'Path_Loss').apply(self._format_db_display)
+
+        prepared['__rssi_display__'] = source_series('RSSI', 'Data_RSSI', 'Data RSSI').apply(self._format_metric_display)
+
+        prepared['__test_type_display__'] = prepared.apply(self._detect_test_type_from_row, axis=1)
+
+        step_candidates = ('DB', 'Total_Path_Loss', 'RxP', 'Step', 'Attenuation')
+
+        def resolve_step(row: pd.Series) -> str | None:
+            for name in step_candidates:
+                if name in row:
+                    value = row.get(name)
+                    display = self._format_db_display(value)
+                    if display:
+                        return display
+                    normalized = self._normalize_step(value)
+                    if normalized:
+                        return normalized
+            return None
+
+        prepared['__step__'] = prepared.apply(resolve_step, axis=1)
+        fallback_steps = pd.Series([str(i + 1) for i in range(row_count)], index=prepared.index)
+        prepared['__step__'] = prepared['__step__'].fillna(fallback_steps)
+        empty_mask = prepared['__step__'] == ''
+        if empty_mask.any():
+            prepared.loc[empty_mask, '__step__'] = fallback_steps[empty_mask]
+
+        throughput_columns = self._resolve_throughput_columns(prepared.columns)
+        if throughput_columns:
+            prepared['__throughput_value__'] = prepared.apply(
+                lambda row: self._aggregate_throughput_row(row, throughput_columns),
+                axis=1,
+            )
+        else:
+            prepared['__throughput_value__'] = source_series('Throughput').apply(self._safe_float)
+
+        prepared['__throughput_value__'] = prepared['__throughput_value__'].apply(
+            lambda value: float(value) if isinstance(value, (int, float)) else value
         )
-        for source_col, display_col, default_value in display_columns:
-            if source_col in df.columns:
-                base_series = df[source_col].astype(str).str.strip()
-            else:
-                base_series = pd.Series([''] * len(df), index=df.index)
-            df[display_col] = base_series.mask(base_series == '', default_value)
-        return df
+
+        return prepared.reset_index(drop=True)
+
 
     def _resolve_throughput_columns(self, columns: pd.Index) -> list[str]:
         if 'Throughput' not in columns:
@@ -702,14 +754,22 @@ class ReportPage(CardWidget):
         x_positions = list(range(len(steps)))
         has_series = False
         fig, ax = plt.subplots(figsize=(7.8, 4.4), dpi=CHART_DPI)
+        all_values: list[float] = []
         for channel, channel_df in group.groupby('__channel_display__', dropna=False):
             channel_name = channel or 'Unknown'
             values: list[Optional[float]] = []
             for step in steps:
                 subset = channel_df[channel_df['__step__'] == step]
-                throughput_values = [v for v in subset['__throughput_value__'].tolist() if v is not None]
-                if throughput_values:
-                    values.append(sum(throughput_values) / len(throughput_values))
+                raw_values = [v for v in subset['__throughput_value__'].tolist() if v is not None]
+                finite_values = [
+                    float(v)
+                    for v in raw_values
+                    if isinstance(v, (int, float)) and math.isfinite(float(v))
+                ]
+                if finite_values:
+                    avg_value = sum(finite_values) / len(finite_values)
+                    values.append(avg_value)
+                    all_values.append(avg_value)
                 else:
                     values.append(None)
             if any(v is not None for v in values):
@@ -729,18 +789,31 @@ class ReportPage(CardWidget):
         ax.set_ylabel('throughput (Mbps)')
         ax.set_title(title, loc='left', pad=4)
         ax.grid(alpha=0.3, linestyle='--')
-        ax.margins(y=0.08)
-        legend = ax.legend(
-            loc='center left',
-            bbox_to_anchor=(1.02, 0.5),
-            borderaxespad=0.2,
-            frameon=False,
-        )
+        if all_values:
+            y_max = max(all_values)
+            y_min = min(all_values)
+            span = max(y_max - y_min, 1.0)
+            extra = max(span * 0.15, y_max * 0.05, 1.0)
+            ax.set_ylim(bottom=0, top=y_max + extra)
+        else:
+            ax.set_ylim(bottom=0)
+        handles, labels = ax.get_legend_handles_labels()
+        legend = None
+        if handles:
+            column_count = max(1, min(len(handles), 4))
+            legend = ax.legend(
+                handles,
+                labels,
+                loc='lower center',
+                bbox_to_anchor=(0.5, 0.02),
+                ncol=column_count,
+                borderaxespad=0.2,
+                frameon=False,
+            )
         if legend is not None:
             for text_item in legend.get_texts():
-                text_item.set_ha('left')
+                text_item.set_ha('center')
         fig.tight_layout(pad=0.6)
-        fig.subplots_adjust(right=0.78)
         save_path = charts_dir / f"{self._safe_chart_name(title)}.png"
         return self._figure_to_label(fig, ax, steps, save_path)
 
@@ -839,34 +912,6 @@ class ReportPage(CardWidget):
 
         return _formatter
 
-    def _load_rvr_dataframe(self, path: Path) -> pd.DataFrame:
-        try:
-            if path.suffix.lower() == '.csv':
-                try:
-                    df = pd.read_csv(path)
-                except UnicodeDecodeError:
-                    df = pd.read_csv(path, encoding='gbk')
-            else:
-                sheets = pd.read_excel(path, sheet_name=None)
-                frames = [sheet for sheet in sheets.values() if sheet is not None and not sheet.empty]
-                df = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
-        except Exception as exc:
-            logging.exception('读取 RVR 结果失败: %s', exc)
-            return pd.DataFrame()
-        if df.empty:
-            return df
-        df = df.copy()
-        df.columns = [str(c).strip() for c in df.columns]
-        for col in df.columns:
-            df[col] = df[col].apply(lambda v: v if not isinstance(v, str) else v.strip())
-        if 'Direction' in df.columns:
-            df['Direction'] = df['Direction'].astype(str).str.upper()
-        for col in ('Freq_Band', 'Standard', 'BW', 'CH_Freq_MHz', 'DB'):
-            if col in df.columns:
-                df[col] = df[col].astype(str)
-            elif col != 'DB':
-                df[col] = ''
-        return df
 
     def _create_empty_chart_widget(self, title: str, charts_dir: Path, steps: Optional[list[str]] = None) -> Optional[InteractiveChartLabel]:
         fig, ax = plt.subplots(figsize=(7.5, 4.2), dpi=CHART_DPI)
@@ -915,96 +960,52 @@ class ReportPage(CardWidget):
             plt.close(fig)
             return None
           
+
     def _extract_chart_points(self, ax, steps: list[str], width: int, height: int) -> list[dict[str, object]]:
-
         points: list[dict[str, object]] = []
-
+        if ax is None:
+            return points
         x_label = (ax.get_xlabel() or 'X').strip() or 'X'
-
         y_label = (ax.get_ylabel() or 'Y').strip() or 'Y'
-
+        step_count = len(steps)
         for line in ax.get_lines():
-
             label = line.get_label()
-
             if not label or label.startswith('_'):
-
                 continue
-
             x_data = line.get_xdata()
-
             y_data = line.get_ydata()
-
             for x, y in zip(x_data, y_data):
-
                 if y is None:
-
                     continue
-
                 try:
-
                     y_val = float(y)
-
                 except (TypeError, ValueError):
-
                     continue
+                if math.isnan(y_val):
+                    continue
+                try:
+                    x_val = float(x)
+                except (TypeError, ValueError):
+                    continue
+                if math.isnan(x_val):
+                    continue
+                index = int(round(x_val))
+                if 0 <= index < step_count:
+                    raw_step = steps[index]
+                    step_label = self._format_step_label(str(raw_step)) or str(raw_step)
+                else:
+                    step_label = self._format_step_label(str(x_val)) or str(x_val)
+                step_label = step_label or str(x_val)
+                display_x, display_y = ax.transData.transform((x_val, y_val))
+                tooltip = self._build_point_tooltip(label, step_label, y_val, x_label, y_label)
+                points.append(
+                    {
+                        'position': (float(display_x), float(height - display_y)),
+                        'tooltip': tooltip,
+                    }
+                )
+        return points
 
-        throughput_candidates = (
-            'Throughput',
-            'Throughput(Mbps)',
-            'Throughput rate Mb/s',
-            'Throughput_rate',
-        )
-        expect_candidates = (
-            'Expect_Rate',
-            'ExpectRate',
-            'Expect_Rate(Mbps)',
-        )
-        for step in steps:
-            subset = df[df['__step__'] == step]
-            if subset.empty:
-                throughput_series.append(None)
-                expect_series.append(None)
-                continue
-            throughput_col = pd.Series(dtype=object)
-            for candidate in throughput_candidates:
-                if candidate in subset.columns:
-                    throughput_col = subset[candidate]
-                    break
-            expect_col = pd.Series(dtype=object)
-            for candidate in expect_candidates:
-                if candidate in subset.columns:
-                    expect_col = subset[candidate]
-                    break
-            throughput_values = []
-            for raw_value in throughput_col.tolist():
-                if isinstance(raw_value, str) and raw_value:
-                    fragments = [frag.strip() for frag in re.split(r'[，,;\s]+', raw_value) if frag.strip()]
-                    if len(fragments) > 1:
-                        for frag in fragments:
-                            parsed = self._safe_float(frag)
-                            if parsed is not None:
-                                throughput_values.append(parsed)
-                        continue
-                parsed = self._safe_float(raw_value)
-                if parsed is not None:
-                    throughput_values.append(parsed)
-            expect_values = []
-            for raw_value in expect_col.tolist():
-                if isinstance(raw_value, str) and raw_value:
-                    fragments = [frag.strip() for frag in re.split(r'[，,;\s]+', raw_value) if frag.strip()]
-                    if len(fragments) > 1:
-                        for frag in fragments:
-                            parsed = self._safe_float(frag)
-                            if parsed is not None:
-                                expect_values.append(parsed)
-                        continue
-                parsed = self._safe_float(raw_value)
-                if parsed is not None:
-                    expect_values.append(parsed)
-            throughput_series.append(sum(throughput_values) / len(throughput_values) if throughput_values else None)
-            expect_series.append(sum(expect_values) / len(expect_values) if expect_values else None)
-        return throughput_series, expect_series
 
     def _safe_float(self, value) -> Optional[float]:
         if value is None:
