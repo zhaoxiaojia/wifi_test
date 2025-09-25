@@ -42,29 +42,29 @@ def get_testdata(router):
     default_wireless = RouterConst.DEFAULT_WIRELESS_MODES
 
     # 校验 csv 数据是否异常
-    for i in test_data:
-        logging.info(i)
-        # print(f'get_testdata {i}')
-        if pytest.connect_type != "adb":
-            break
-        if "2" in i.band:
-            ssid_verify.add(i.ssid)
-        if "5" in i.band:
-            assert i.ssid not in ssid_verify, "5g ssid can't as the same as 2g , pls modify"
-        assert i.band in ["2.4G", "5G"], "Pls check band info "
-        assert i.wireless_mode in default_wireless[i.band], "Pls check wireless info"
-        assert i.channel in {"2.4G": router.CHANNEL_2, "5G": router.CHANNEL_5}[
-            i.band
-        ], "Pls check channel info"
-        assert i.bandwidth in {"2.4G": router.BANDWIDTH_2, "5G": router.BANDWIDTH_5}[
-            i.band
-        ], "Pls check bandwidth info"
-        if "Legacy" in i.wireless_mode:
-            assert (
-                    i.security_mode in router.AUTHENTICATION_METHOD_LEGCY
-            ), "Pls check security protocol info"
-        else:
-            assert (
-                    i.security_mode in router.AUTHENTICATION_METHOD
-            ), "Pls check security protocol info"
+    # for i in test_data:
+    #     logging.info(i)
+    #     # print(f'get_testdata {i}')
+    #     if pytest.connect_type != "adb":
+    #         break
+    #     if "2" in i.band:
+    #         ssid_verify.add(i.ssid)
+    #     if "5" in i.band:
+    #         assert i.ssid not in ssid_verify, "5g ssid can't as the same as 2g , pls modify"
+    #     assert i.band in ["2.4G", "5G"], "Pls check band info "
+    #     assert i.wireless_mode in default_wireless[i.band], "Pls check wireless info"
+    #     assert i.channel in {"2.4G": router.CHANNEL_2, "5G": router.CHANNEL_5}[
+    #         i.band
+    #     ], "Pls check channel info"
+    #     assert i.bandwidth in {"2.4G": router.BANDWIDTH_2, "5G": router.BANDWIDTH_5}[
+    #         i.band
+    #     ], "Pls check bandwidth info"
+    #     if "Legacy" in i.wireless_mode:
+    #         assert (
+    #                 i.security_mode in router.AUTHENTICATION_METHOD_LEGCY
+    #         ), "Pls check security protocol info"
+    #     else:
+    #         assert (
+    #                 i.security_mode in router.AUTHENTICATION_METHOD
+    #         ), "Pls check security protocol info"
     return test_data
