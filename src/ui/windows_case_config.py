@@ -346,9 +346,14 @@ class CaseConfigPage(CardWidget):
         现在只有RS232Board5，如果有别的model，添加隐藏/显示逻辑
         """
         # 当前只有RS232Board5，后续有其它model可以加if-else
-        self.xin_group.setVisible(model_str == "RS232Board5")
-        self.rc4_group.setVisible(model_str == "RC4DAT-8G-95")
-        self.rack_group.setVisible(model_str == "RADIORACK-4-220")
+        if hasattr(self, "xin_group"):
+            self.xin_group.setVisible(model_str == "RS232Board5")
+        if hasattr(self, "rc4_group"):
+            self.rc4_group.setVisible(model_str == "RC4DAT-8G-95")
+        if hasattr(self, "rack_group"):
+            self.rack_group.setVisible(model_str == "RADIORACK-4-220")
+        if hasattr(self, "lda_group"):
+            self.lda_group.setVisible(model_str == "LDA-908V-8")
         self._rebalance_columns()
         QTimer.singleShot(0, self._rebalance_columns)
 
@@ -633,7 +638,12 @@ class CaseConfigPage(CardWidget):
                 vbox = QVBoxLayout(group)
                 # -------- 下拉：选择型号 --------
                 self.rf_model_combo = ComboBox(self)
-                self.rf_model_combo.addItems(["RS232Board5", "RC4DAT-8G-95", "RADIORACK-4-220"])
+                self.rf_model_combo.addItems([
+                    "RS232Board5",
+                    "RC4DAT-8G-95",
+                    "RADIORACK-4-220",
+                    "LDA-908V-8",
+                ])
                 self.rf_model_combo.setCurrentText(value.get("model", "RS232Board5"))
                 self.rf_model_combo.currentTextChanged.connect(self.on_rf_model_changed)
                 vbox.addWidget(QLabel("Model:"))
@@ -677,6 +687,17 @@ class CaseConfigPage(CardWidget):
                 rack_box.addWidget(self.rack_ip_edit)
                 vbox.addWidget(self.rack_group)
 
+                # ========== ④ LDA-908V-8 参数区 ==========
+                self.lda_group = QWidget()
+                lda_box = QVBoxLayout(self.lda_group)
+                lda_cfg = value.get("LDA-908V-8", {})
+                self.lda_ip_edit = LineEdit(self)
+                self.lda_ip_edit.setPlaceholderText("ip_address")
+                self.lda_ip_edit.setText(lda_cfg.get("ip_address", ""))
+                lda_box.addWidget(QLabel("IP address :"))
+                lda_box.addWidget(self.lda_ip_edit)
+                vbox.addWidget(self.lda_group)
+
                 # -------- 通用字段：step --------
                 self.rf_step_edit = LineEdit(self)
                 self.rf_step_edit.setPlaceholderText("rf step; such as  0,50")
@@ -694,6 +715,7 @@ class CaseConfigPage(CardWidget):
                 self.field_widgets["rf_solution.RC4DAT-8G-95.idProduct"] = self.rc4_product_edit
                 self.field_widgets["rf_solution.RC4DAT-8G-95.ip_address"] = self.rc4_ip_edit
                 self.field_widgets["rf_solution.RADIORACK-4-220.ip_address"] = self.rack_ip_edit
+                self.field_widgets["rf_solution.LDA-908V-8.ip_address"] = self.lda_ip_edit
                 self.field_widgets["rf_solution.step"] = self.rf_step_edit
                 continue  # 跳过后面的通用字段处理
             if key == "rvr":
@@ -1037,6 +1059,7 @@ class CaseConfigPage(CardWidget):
                 "rf_solution.RC4DAT-8G-95.idProduct",
                 "rf_solution.RC4DAT-8G-95.ip_address",
                 "rf_solution.RADIORACK-4-220.ip_address",
+                "rf_solution.LDA-908V-8.ip_address",
             }
         # 如果你需要所有字段都可编辑，直接 return EditableInfo(set(self.field_widgets.keys()), True, True)
         return info
