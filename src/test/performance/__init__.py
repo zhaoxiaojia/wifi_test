@@ -29,7 +29,7 @@ def init_rf():
     cfg = get_cfg()
     rf_solution = cfg['rf_solution']
     model = rf_solution['model']
-    if model not in ['RADIORACK-4-220', 'RC4DAT-8G-95', 'RS232Board5']:
+    if model not in ['RADIORACK-4-220', 'RC4DAT-8G-95', 'RS232Board5', 'LDA-908V-8']:
         raise EnvironmentError("Doesn't support this model")
     if model == 'RS232Board5':
         rf_tool = rs()
