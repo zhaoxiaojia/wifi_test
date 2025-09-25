@@ -22,6 +22,8 @@ rf_solution:
     idProduct: '35'
     idVendor: '8398'
     ip_address: 192.168.5.75
+  LDA-908V-8:
+    ip_address: 192.168.5.200
   model: RC4DAT-8G-95
   step:
   - 0
