@@ -30,9 +30,10 @@ from PyQt5.QtCore import (
     QPropertyAnimation,
     QPoint,
     QRect,
+    QRegularExpression,
     pyqtSignal,
 )
-from PyQt5.QtGui import QIntValidator
+from PyQt5.QtGui import QIntValidator, QRegularExpressionValidator
 
 from PyQt5.QtWidgets import (
     QSizePolicy,
@@ -691,6 +692,10 @@ class CaseConfigPage(CardWidget):
                 self.lda_group = QWidget()
                 lda_box = QVBoxLayout(self.lda_group)
                 lda_cfg = value.get("LDA-908V-8", {})
+                if not isinstance(lda_cfg, dict):
+                    lda_cfg = {}
+                    value["LDA-908V-8"] = lda_cfg
+                channels_value = lda_cfg.setdefault("channels", [])
                 self.lda_ip_edit = LineEdit(self)
                 self.lda_ip_edit.setPlaceholderText("ip_address")
                 self.lda_ip_edit.setText(lda_cfg.get("ip_address", ""))
