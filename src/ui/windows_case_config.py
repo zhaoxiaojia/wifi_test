@@ -30,9 +30,10 @@ from PyQt5.QtCore import (
     QPropertyAnimation,
     QPoint,
     QRect,
+    QRegularExpression,
     pyqtSignal,
 )
-from PyQt5.QtGui import QIntValidator
+from PyQt5.QtGui import QIntValidator, QRegularExpressionValidator
 
 from PyQt5.QtWidgets import (
     QSizePolicy,
@@ -691,11 +692,27 @@ class CaseConfigPage(CardWidget):
                 self.lda_group = QWidget()
                 lda_box = QVBoxLayout(self.lda_group)
                 lda_cfg = value.get("LDA-908V-8", {})
+                if not isinstance(lda_cfg, dict):
+                    lda_cfg = {}
+                    value["LDA-908V-8"] = lda_cfg
+                channels_value = lda_cfg.setdefault("channels", [])
                 self.lda_ip_edit = LineEdit(self)
                 self.lda_ip_edit.setPlaceholderText("ip_address")
                 self.lda_ip_edit.setText(lda_cfg.get("ip_address", ""))
                 lda_box.addWidget(QLabel("IP address :"))
                 lda_box.addWidget(self.lda_ip_edit)
+                self.lda_channels_edit = LineEdit(self)
+                self.lda_channels_edit.setPlaceholderText("channels (1-8, separated by comma)")
+                channel_text = ""
+                if isinstance(channels_value, list):
+                    channel_text = ",".join(str(ch) for ch in channels_value)
+                elif isinstance(channels_value, str):
+                    channel_text = channels_value
+                self.lda_channels_edit.setText(channel_text)
+                pattern = QRegularExpression(r"^\s*(?:[1-8](?:\s*,\s*[1-8])*)?\s*$")
+                self.lda_channels_edit.setValidator(QRegularExpressionValidator(pattern, self))
+                lda_box.addWidget(QLabel("Channels:"))
+                lda_box.addWidget(self.lda_channels_edit)
                 vbox.addWidget(self.lda_group)
 
                 # -------- 通用字段：step --------
@@ -716,6 +733,7 @@ class CaseConfigPage(CardWidget):
                 self.field_widgets["rf_solution.RC4DAT-8G-95.ip_address"] = self.rc4_ip_edit
                 self.field_widgets["rf_solution.RADIORACK-4-220.ip_address"] = self.rack_ip_edit
                 self.field_widgets["rf_solution.LDA-908V-8.ip_address"] = self.lda_ip_edit
+                self.field_widgets["rf_solution.LDA-908V-8.channels"] = self.lda_channels_edit
                 self.field_widgets["rf_solution.step"] = self.rf_step_edit
                 continue  # 跳过后面的通用字段处理
             if key == "rvr":
