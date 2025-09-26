@@ -112,11 +112,11 @@ class Asusax88uControl(AsusBaseControl):
 
     def set_2g_wireless(self, mode):
         cmd = {
-            'auto': 'nvram set wl0_he_features=0;nvram set wl0_nmode_x=0;',
-            '11n': 'nvram set wl0_he_features=0;nvram set wl0_nmode_x=1;',
-            '11g': 'nvram set wl0_he_features=0;nvram set wl0_nmode_x=5;',
-            '11b': 'nvram set wl0_he_features=0;nvram set wl0_nmode_x=6;',
-            '11ax': 'nvram set wl0_he_features=31;nvram set wl0_nmode_x=9;nvram set wl0_vhtmode=2;',
+            'auto': 'nvram set wl0_11ax=0;nvram set wl0_nmode_x=0;',
+            '11n': 'nvram set wl0_11ax=0;nvram set wl0_nmode_x=1;',
+            '11g': 'nvram set wl0_11ax=0;nvram set wl0_nmode_x=5;',
+            '11b': 'nvram set wl0_11ax=0;nvram set wl0_nmode_x=6;',
+            '11ax': 'nvram set wl0_11ax=1;nvram set wl0_nmode_x=9',
             'Legacy': 'nvram set wl0_he_features=0;nvram set wl0_nmode_x=2;',
         }
         if mode not in self.WIRELESS_2:
@@ -125,10 +125,10 @@ class Asusax88uControl(AsusBaseControl):
 
     def set_5g_wireless(self, mode):
         cmd = {
-            'auto': 'nvram set wl1_he_features=0;nvram set wl1_nmode_x=0;',
-            '11a': 'nvram set wl1_he_features=0;nvram set wl1_nmode_x=7;',
-            '11ac': 'nvram set wl1_he_features=0;nvram set wl1_nmode_x=3;',
-            '11ax': 'nvram set wl1_he_features=7;nvram set wl1_nmode_x=9;nvram set wl1_vhtmode=2;',
+            'auto': 'nvram set wl1_11ax=0;nvram set wl1_nmode_x=0;',
+            '11a': 'nvram set wl1_11ax=0;nvram set wl1_nmode_x=7;',
+            '11ac': 'nvram set wl1_11ax=0;nvram set wl1_nmode_x=3;',
+            '11ax': 'nvram set wl1_11ax=1;nvram set wl1_nmode_x=9;',
             'Legacy': 'nvram set wl1_he_features=0;nvram set wl1_nmode_x=2;',
         }
         if mode not in self.WIRELESS_5:
@@ -217,6 +217,8 @@ class Asusax88uControl(AsusBaseControl):
         self.telnet_write(cmd.format(passwd))
 
     def commit(self):
+        self.telnet_write("nvram set wl0_radio=1", wait_prompt=False)
+        self.telnet_write("nvram set wl1_radio=1", wait_prompt=False)
         self.telnet_write("nvram commit", wait_prompt=True, timeout=60)
 
         # 方案 A：后台重启无线，立即归还控制权
