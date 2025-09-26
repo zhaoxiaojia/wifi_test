@@ -26,14 +26,21 @@ class LabDeviceController:
         self.model = pytest.config['rf_solution']['model']
         self._channels = [1]
         self._last_set_value = None
+        self._lda_ports = {1}
+        self._last_used_ports = None
         self.tn = None
         if self.model == 'LDA-908V-8':
-            self._channels = self._load_lda_channels()
+            lda_config = pytest.config['rf_solution'].get('LDA-908V-8', {})
+            try:
+                self._lda_ports = self._parse_port_config(lda_config.get('ports'))
+            except Exception as exc:
+                logging.error('Invalid LDA-908V-8 ports configuration: %s', exc)
+                raise
             logging.info(
-                'Initialize HTTP attenuator controller %s at %s (channels=%s)',
+                'Initialize HTTP attenuator controller %s at %s with ports %s',
                 self.model,
                 ip,
-                ','.join(map(str, self._channels)),
+                sorted(self._lda_ports),
             )
             return
         try:
@@ -64,9 +71,11 @@ class LabDeviceController:
         logging.info(f'Set rf value to {value}')
         if self.model == 'LDA-908V-8':
             self._last_set_value = int(value)
-            for channel in self._channels:
-                params = {'chnl': channel, 'attn': self._last_set_value}
-                self._send_http_request('setup.cgi', params)
+            self._last_used_ports = set(self._lda_ports)
+            for port in sorted(self._last_used_ports):
+                params = {'chnl': port, 'attn': self._last_set_value}
+                logging.debug('Set attenuation for channel %s with params %s', port, params)
+                self._run_curl_command('setup.cgi', params)
         elif self.model == 'RC4DAT-8G-95':
             self.tn.write(f":CHAN:1:2:3:4:SETATT:{value};".encode('ascii') + b'\r\n')
             self.tn.read_some()
@@ -78,15 +87,23 @@ class LabDeviceController:
 
     def get_rf_current_value(self):
         if self.model == 'LDA-908V-8':
-            channel = self._channels[0]
-            params = {'chnl': channel}
-            if self._last_set_value is not None:
-                params['attn'] = self._last_set_value
-            response = self._send_http_request('status.shtm', params)
-            if response is None:
-                return None
-            match = re.search(r'(\d+)', response)
-            return int(match.group(1)) if match else response
+            ports_to_query = self._last_used_ports or self._lda_ports
+            results = {}
+            for port in sorted(ports_to_query):
+                params = {'chnl': port}
+                if self._last_set_value is not None:
+                    params['attn'] = self._last_set_value
+                logging.debug('Query attenuation for channel %s with params %s', port, params)
+                response = self._run_curl_command('status.shtm', params)
+                if response is None:
+                    logging.warning('No response received for channel %s', port)
+                    results[port] = None
+                    continue
+                match = re.search(r'(\d+)', response)
+                results[port] = int(match.group(1)) if match else response
+            if len(results) == 1:
+                return next(iter(results.values()))
+            return results
         if self.model == 'RC4DAT-8G-95':
             self.tn.write("ATT?;".encode('ascii') + b'\r')
             # self.tn.read_some().decode('ascii')
@@ -99,7 +116,7 @@ class LabDeviceController:
             res = self.tn.read_some().decode('utf-8')
             return list(map(int, re.findall(r'\s(\d+);', res)))
 
-    def _send_http_request(self, endpoint, params):
+    def _run_curl_command(self, endpoint, params):
         url = f"http://{self.ip}/{endpoint}"
         query = urlencode(params)
         full_url = f"{url}?{query}" if query else url
@@ -113,51 +130,48 @@ class LabDeviceController:
             logging.error('Failed to request %s: %s', full_url, exc)
             raise
 
-    def _load_lda_channels(self):
-        cfg = pytest.config.get('rf_solution', {})
-        model_cfg = cfg.get(self.model, {}) if isinstance(cfg, dict) else {}
-        raw = model_cfg.get('channels')
-        try:
-            channels = self._parse_channel_values(raw)
-        except ValueError as exc:
-            raise ValueError(
-                'Invalid rf_solution.LDA-908V-8.channels configuration'
-            ) from exc
-        if not channels:
-            raise ValueError('rf_solution.LDA-908V-8.channels must contain at least one valid channel')
-        return channels
+    @staticmethod
+    def _parse_port_config(raw_ports):
+        if raw_ports is None:
+            return {1}
+        if isinstance(raw_ports, (list, tuple, set)):
+            tokens = list(raw_ports)
+        else:
+            tokens = re.split(r'[\s,]+', str(raw_ports).strip())
+        ports = set()
+        for token in tokens:
+            if token is None:
+                continue
+            token_str = str(token).strip()
+            if not token_str:
+                continue
+            if '-' in token_str:
+                start_str, end_str = token_str.split('-', 1)
+                try:
+                    start = int(start_str)
+                    end = int(end_str)
+                except ValueError as exc:
+                    raise ValueError(f'invalid range segment "{token_str}"') from exc
+                if start > end:
+                    raise ValueError(f'range start greater than end in "{token_str}"')
+                for port in range(start, end + 1):
+                    LabDeviceController._validate_port(port)
+                    ports.add(port)
+            else:
+                try:
+                    port = int(token_str)
+                except ValueError as exc:
+                    raise ValueError(f'invalid port "{token_str}"') from exc
+                LabDeviceController._validate_port(port)
+                ports.add(port)
+        if not ports:
+            raise ValueError('no valid ports specified')
+        return ports
 
     @staticmethod
-    def _parse_channel_values(raw):
-        if raw is None:
-            return [1]
-        if isinstance(raw, str):
-            raw = raw.strip()
-            if not raw:
-                return [1]
-            items = [item for item in re.split(r'[\s,]+', raw) if item]
-        elif isinstance(raw, Iterable) and not isinstance(raw, (bytes, bytearray)):
-            items = list(raw)
-        else:
-            raise ValueError(f'Invalid channel configuration type: {type(raw)!r}')
-
-        channels = []
-        for item in items:
-            if isinstance(item, str):
-                item = item.strip()
-            if item == '' or item is None:
-                continue
-            try:
-                channel = int(item)
-            except (TypeError, ValueError) as exc:
-                raise ValueError(f'Invalid channel value: {item!r}') from exc
-            if not 1 <= channel <= 8:
-                raise ValueError(f'Channel {channel} out of range (1-8)')
-            if channel not in channels:
-                channels.append(channel)
-        if not channels:
-            return [1]
-        return channels
+    def _validate_port(port):
+        if port < 1 or port > 8:
+            raise ValueError(f'port {port} is out of range 1-8')
 
     def execute_turntable_cmd(self, type, angle=''):
         if type not in ['gs', 'rt', 'gcp']:
