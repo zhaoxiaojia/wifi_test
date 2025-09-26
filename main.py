@@ -21,6 +21,7 @@ from src.ui.windows_case_config import CaseConfigPage
 from src.ui.rvr_wifi_config import RvrWifiConfigPage
 from src.ui.run import RunPage
 from src.ui.report_page import ReportPage
+from src.ui.about_page import AboutPage
 from qfluentwidgets import setTheme, Theme
 from PyQt5.QtGui import QGuiApplication, QFont
 from PyQt5.QtCore import (
@@ -128,6 +129,16 @@ class MainWindow(FluentWindow):
         self.report_nav_button.setVisible(True)
         self.report_nav_button.setEnabled(False)
         self.last_report_dir = None
+
+        self.about_page = AboutPage(self)
+        self.about_nav_button = self.addSubInterface(
+            self.about_page,
+            FluentIcon.INFO,
+            "About",
+            position=NavigationItemPosition.BOTTOM,
+        )
+        self.about_nav_button.setVisible(True)
+        self.about_nav_button.setEnabled(True)
 
         # 兼容旧属性
         self._run_nav_button = self.run_nav_button
