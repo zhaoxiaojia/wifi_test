@@ -20,6 +20,7 @@ from qfluentwidgets import FluentIcon, FluentWindow, NavigationItemPosition
 from src.ui.windows_case_config import CaseConfigPage
 from src.ui.rvr_wifi_config import RvrWifiConfigPage
 from src.ui.run import RunPage
+from src.ui.about_page import AboutPage
 from src.ui.report_page import ReportPage
 from qfluentwidgets import setTheme, Theme
 from PyQt5.QtGui import QGuiApplication, QFont
@@ -94,6 +95,8 @@ class MainWindow(FluentWindow):
         self.run_page.reset()
         # 报告页：默认置灰，等待 report_dir 创建后启用
         self.report_page = ReportPage(self)
+        # 关于页
+        self.about_page = AboutPage(self)
         # 导航按钮引用
         self.case_nav_button = self.addSubInterface(
             self.case_config_page, FluentIcon.SETTING, "Config Setup", "Case Config"
@@ -108,6 +111,13 @@ class MainWindow(FluentWindow):
         )
         self.rvr_nav_button.setVisible(True)
         self.rvr_nav_button.setEnabled(False)
+        self.about_nav_button = self.addSubInterface(
+            self.about_page,
+            FluentIcon.INFO,
+            "About",
+        )
+        self.about_nav_button.setVisible(True)
+        self.about_nav_button.setEnabled(True)
         self.run_nav_button = self.addSubInterface(
             self.run_page,
             FluentIcon.PLAY,
