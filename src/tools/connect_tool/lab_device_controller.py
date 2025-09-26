@@ -93,6 +93,7 @@ class LabDeviceController:
         else:
             if not self.tn:
                 raise RuntimeError('Telnet connection not initialized')
+            logging.info(f"ATT 1 {value};2 {value};3 {value};4 {value};")
             self.tn.write(f"ATT 1 {value};2 {value};3 {value};4 {value};".encode('ascii') + b'\r')
         time.sleep(2)
 

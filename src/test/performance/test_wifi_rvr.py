@@ -45,6 +45,7 @@ def setup_attenuation(request, setup_router):
     if pytest.dut.rssi_num > 65:
         db_set = 2
     rf_tool.execute_rf_cmd(db_set)
+    logging.info(rf_tool.get_rf_current_value())
     yield (connect_status, router_info, db_set)
     pytest.dut.kill_iperf()
 
