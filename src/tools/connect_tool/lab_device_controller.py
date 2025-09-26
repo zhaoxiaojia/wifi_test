@@ -9,8 +9,11 @@
 
 import logging
 import re
+import shlex
+import subprocess
 import time
 import telnetlib
+
 import pytest
 
 
@@ -19,6 +22,11 @@ class LabDeviceController:
     def __init__(self, ip):
         self.ip = ip
         self.model = pytest.config['rf_solution']['model']
+        self._last_set_value = None
+        self.tn = None
+        if self.model == 'LDA-908V-8':
+            logging.info(f'Initialize HTTP attenuator controller {self.model} at {ip}')
+            return
         try:
             logging.info(f'Try to connect {ip}')
             self.tn = telnetlib.Telnet()
@@ -45,23 +53,66 @@ class LabDeviceController:
         if int(value) < 0 or int(value) > 110:
             assert 0, 'value must be in range 1-110'
         logging.info(f'Set rf value to {value}')
-        if self.model == 'RC4DAT-8G-95':
+        if self.model == 'LDA-908V-8':
+            self._last_set_value = int(value)
+            params = {'chnl': 1, 'attn': self._last_set_value}
+            self._run_curl_command('setup.cgi', params)
+        elif self.model == 'RC4DAT-8G-95':
             self.tn.write(f":CHAN:1:2:3:4:SETATT:{value};".encode('ascii') + b'\r\n')
             self.tn.read_some()
         else:
+            if not self.tn:
+                raise RuntimeError('Telnet connection not initialized')
             self.tn.write(f"ATT 1 {value};2 {value};3 {value};4 {value};".encode('ascii') + b'\r')
         time.sleep(2)
 
     def get_rf_current_value(self):
+        if self.model == 'LDA-908V-8':
+            params = {'chnl': 1}
+            if self._last_set_value is not None:
+                params['attn'] = self._last_set_value
+            response = self._run_curl_command('status.shtm', params)
+            if response is None:
+                return None
+            match = re.search(r'(\d+)', response)
+            return int(match.group(1)) if match else response
         if self.model == 'RC4DAT-8G-95':
             self.tn.write("ATT?;".encode('ascii') + b'\r')
             # self.tn.read_some().decode('ascii')
             res = self.tn.read_some().decode('ascii')
             return res.split()[0]
         else:
+            if not self.tn:
+                raise RuntimeError('Telnet connection not initialized')
             self.tn.write("ATT".encode('ascii') + b'\r\n')
             res = self.tn.read_some().decode('utf-8')
             return list(map(int, re.findall(r'\s(\d+);', res)))
+
+    def _run_curl_command(self, endpoint, params):
+        url = f"http://{self.ip}/{endpoint}"
+        cmd = ['curl', '-G']
+        for key, value in params.items():
+            cmd.extend(['-d', f'{key}={value}'])
+        cmd.append(url)
+        logging.info('Execute curl command: %s', ' '.join(shlex.quote(part) for part in cmd))
+        try:
+            result = subprocess.run(
+                cmd,
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+        except subprocess.CalledProcessError as exc:
+            logging.error('Curl command failed: %s', exc.stderr.strip())
+            raise
+        except subprocess.TimeoutExpired:
+            logging.error('Curl command timeout when requesting %s', url)
+            raise
+
+        content = result.stdout.strip()
+        logging.debug('Response from %s: %s', endpoint, content)
+        return content
 
     def execute_turntable_cmd(self, type, angle=''):
         if type not in ['gs', 'rt', 'gcp']:
