@@ -9,12 +9,10 @@
 
 import logging
 import re
+import shlex
+import subprocess
 import time
 import telnetlib
-from urllib.error import URLError
-from urllib.parse import urlencode
-from urllib.request import urlopen
-
 import pytest
 
 
@@ -57,7 +55,7 @@ class LabDeviceController:
         if self.model == 'LDA-908V-8':
             self._last_set_value = int(value)
             params = {'chnl': 1, 'attn': self._last_set_value}
-            self._send_http_request('setup.cgi', params)
+            self._run_curl_command('setup.cgi', params)
         elif self.model == 'RC4DAT-8G-95':
             self.tn.write(f":CHAN:1:2:3:4:SETATT:{value};".encode('ascii') + b'\r\n')
             self.tn.read_some()
@@ -72,7 +70,7 @@ class LabDeviceController:
             params = {'chnl': 1}
             if self._last_set_value is not None:
                 params['attn'] = self._last_set_value
-            response = self._send_http_request('status.shtm', params)
+            response = self._run_curl_command('status.shtm', params)
             if response is None:
                 return None
             match = re.search(r'(\d+)', response)
@@ -89,19 +87,31 @@ class LabDeviceController:
             res = self.tn.read_some().decode('utf-8')
             return list(map(int, re.findall(r'\s(\d+);', res)))
 
-    def _send_http_request(self, endpoint, params):
+    def _run_curl_command(self, endpoint, params):
         url = f"http://{self.ip}/{endpoint}"
-        query = urlencode(params)
-        full_url = f"{url}?{query}" if query else url
-        logging.info('Send HTTP request to %s', full_url)
+        cmd = ['curl', '-G']
+        for key, value in params.items():
+            cmd.extend(['-d', f'{key}={value}'])
+        cmd.append(url)
+        logging.info('Execute curl command: %s', ' '.join(shlex.quote(part) for part in cmd))
         try:
-            with urlopen(full_url, timeout=5) as resp:
-                content = resp.read().decode('utf-8', errors='ignore')
-                logging.debug('Response from %s: %s', endpoint, content)
-                return content
-        except URLError as exc:
-            logging.error('Failed to request %s: %s', full_url, exc)
+            result = subprocess.run(
+                cmd,
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+        except subprocess.CalledProcessError as exc:
+            logging.error('Curl command failed: %s', exc.stderr.strip())
             raise
+        except subprocess.TimeoutExpired:
+            logging.error('Curl command timeout when requesting %s', url)
+            raise
+
+        content = result.stdout.strip()
+        logging.debug('Response from %s: %s', endpoint, content)
+        return content
 
     def execute_turntable_cmd(self, type, angle=''):
         if type not in ['gs', 'rt', 'gcp']:
