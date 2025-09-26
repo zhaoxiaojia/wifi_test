@@ -24,6 +24,7 @@ rf_solution:
     ip_address: 192.168.5.75
   LDA-908V-8:
     ip_address: 192.168.5.200
+    channels: "1"  # 支持范围 1-8，使用逗号分隔多个端口
   model: RC4DAT-8G-95
   step:
   - 0

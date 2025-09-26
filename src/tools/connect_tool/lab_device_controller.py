@@ -11,6 +11,7 @@ import logging
 import re
 import time
 import telnetlib
+from collections.abc import Iterable
 from urllib.error import URLError
 from urllib.parse import urlencode
 from urllib.request import urlopen
@@ -23,10 +24,17 @@ class LabDeviceController:
     def __init__(self, ip):
         self.ip = ip
         self.model = pytest.config['rf_solution']['model']
+        self._channels = [1]
         self._last_set_value = None
         self.tn = None
         if self.model == 'LDA-908V-8':
-            logging.info(f'Initialize HTTP attenuator controller {self.model} at {ip}')
+            self._channels = self._load_lda_channels()
+            logging.info(
+                'Initialize HTTP attenuator controller %s at %s (channels=%s)',
+                self.model,
+                ip,
+                ','.join(map(str, self._channels)),
+            )
             return
         try:
             logging.info(f'Try to connect {ip}')
@@ -56,8 +64,9 @@ class LabDeviceController:
         logging.info(f'Set rf value to {value}')
         if self.model == 'LDA-908V-8':
             self._last_set_value = int(value)
-            params = {'chnl': 1, 'attn': self._last_set_value}
-            self._send_http_request('setup.cgi', params)
+            for channel in self._channels:
+                params = {'chnl': channel, 'attn': self._last_set_value}
+                self._send_http_request('setup.cgi', params)
         elif self.model == 'RC4DAT-8G-95':
             self.tn.write(f":CHAN:1:2:3:4:SETATT:{value};".encode('ascii') + b'\r\n')
             self.tn.read_some()
@@ -69,7 +78,8 @@ class LabDeviceController:
 
     def get_rf_current_value(self):
         if self.model == 'LDA-908V-8':
-            params = {'chnl': 1}
+            channel = self._channels[0]
+            params = {'chnl': channel}
             if self._last_set_value is not None:
                 params['attn'] = self._last_set_value
             response = self._send_http_request('status.shtm', params)
@@ -102,6 +112,52 @@ class LabDeviceController:
         except URLError as exc:
             logging.error('Failed to request %s: %s', full_url, exc)
             raise
+
+    def _load_lda_channels(self):
+        cfg = pytest.config.get('rf_solution', {})
+        model_cfg = cfg.get(self.model, {}) if isinstance(cfg, dict) else {}
+        raw = model_cfg.get('channels')
+        try:
+            channels = self._parse_channel_values(raw)
+        except ValueError as exc:
+            raise ValueError(
+                'Invalid rf_solution.LDA-908V-8.channels configuration'
+            ) from exc
+        if not channels:
+            raise ValueError('rf_solution.LDA-908V-8.channels must contain at least one valid channel')
+        return channels
+
+    @staticmethod
+    def _parse_channel_values(raw):
+        if raw is None:
+            return [1]
+        if isinstance(raw, str):
+            raw = raw.strip()
+            if not raw:
+                return [1]
+            items = [item for item in re.split(r'[\s,]+', raw) if item]
+        elif isinstance(raw, Iterable) and not isinstance(raw, (bytes, bytearray)):
+            items = list(raw)
+        else:
+            raise ValueError(f'Invalid channel configuration type: {type(raw)!r}')
+
+        channels = []
+        for item in items:
+            if isinstance(item, str):
+                item = item.strip()
+            if item == '' or item is None:
+                continue
+            try:
+                channel = int(item)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f'Invalid channel value: {item!r}') from exc
+            if not 1 <= channel <= 8:
+                raise ValueError(f'Channel {channel} out of range (1-8)')
+            if channel not in channels:
+                channels.append(channel)
+        if not channels:
+            return [1]
+        return channels
 
     def execute_turntable_cmd(self, type, angle=''):
         if type not in ['gs', 'rt', 'gcp']:
