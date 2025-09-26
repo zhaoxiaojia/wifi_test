@@ -108,7 +108,11 @@ class AboutPage(CardWidget):
         ticket_btn.clicked.connect(self._open_ticket_portal)
         support_layout.addWidget(ticket_btn)
 
-        doc_btn = HyperlinkButton("内部文档", self.resources_card)
+        doc_btn = HyperlinkButton(
+            "https://intranet.example.com/docs/wifi-compliance",
+            "内部文档",
+            self.resources_card,
+        )
         doc_btn.clicked.connect(self._open_internal_doc)
         support_layout.addWidget(doc_btn)
         support_layout.addStretch(1)
