@@ -112,7 +112,8 @@ class dut():
         self.throughput_threshold = float(rvr_cfg.get('throughput_threshold', 0))
         self.skip_tx = False
         self.skip_rx = False
-        self.iperf_log_list: list[str] = []
+        self.iperf_server_log_list: list[str] = []
+        self.iperf_client_log_list: list[str] = []
         if self.rvr_tool == 'iperf':
             cmds = f"{self.iperf_server_cmd} {self.iperf_client_cmd}"
             self.test_tool = 'iperf3' if 'iperf3' in cmds else 'iperf'
@@ -221,13 +222,27 @@ class dut():
         encoding = 'gbk' if pytest.win_flag else 'utf-8'
         use_adb = bool(adb)
 
-        def _read_output(proc):
+        def _extend_logs(target_list: list[str], lines):
+            if not lines:
+                return
+            if isinstance(lines, str):
+                iterable = lines.splitlines()
+            else:
+                iterable = lines
+            for line in iterable:
+                if line is None:
+                    continue
+                text = line.rstrip('\r\n') if isinstance(line, str) else str(line)
+                if text:
+                    target_list.append(text)
+
+        def _read_output(proc, target_list: list[str]):
             if not proc.stdout:
                 return
             with proc.stdout:
                 for line in iter(proc.stdout.readline, ''):
                     if line:
-                        self.iperf_log_list.append(line)
+                        _extend_logs(target_list, [line])
 
         def _start_background(cmd_list, desc):
             logging.info(f'{desc} {command}')
@@ -238,7 +253,7 @@ class dut():
                 encoding=encoding,
                 errors='ignore',
             )
-            Thread(target=_read_output, args=(process,), daemon=True).start()
+            Thread(target=_read_output, args=(process, self.iperf_server_log_list), daemon=True).start()
             return process
 
         def _run_blocking(cmd_list, desc):
@@ -256,6 +271,7 @@ class dut():
                     logging.warning(stderr.strip())
                 if stdout:
                     logging.debug(stdout.strip())
+                    _extend_logs(self.iperf_client_log_list, stdout.splitlines())
             except subprocess.TimeoutExpired:
                 logging.warning(f'{desc} timeout after {self.iperf_wait_time}s')
                 process.kill()
@@ -270,7 +286,8 @@ class dut():
             return command.split()
 
         if '-s' in command:
-            self.iperf_log_list = []
+            self.iperf_server_log_list = []
+            self.iperf_client_log_list = []
             if use_adb:
                 if pytest.connect_type == 'telnet':
                     def telnet_iperf():
@@ -281,7 +298,7 @@ class dut():
                             while True:
                                 line = tn.read_until(b'\n', timeout=1).decode('gbk', 'ignore').strip()
                                 if line:
-                                    self.iperf_log_list.append(line)
+                                    _extend_logs(self.iperf_server_log_list, [line])
                         except EOFError:
                             logging.info('telnet server session closed')
                         finally:
@@ -300,7 +317,8 @@ class dut():
                     logging.info(f'client telnet command: {command}')
 
                     async def _run_telnet_client():
-                        await asyncio.wait_for(self.telnet_client(command), timeout=self.iperf_wait_time)
+                        output = await asyncio.wait_for(self.telnet_client(command), timeout=self.iperf_wait_time)
+                        _extend_logs(self.iperf_client_log_list, output)
 
                     try:
                         asyncio.run(_run_telnet_client())
@@ -335,7 +353,10 @@ class dut():
     def get_logcat(self):
         # pytest.dut.kill_iperf()
         # 分析 iperf 测试结果
-        result = self._parse_iperf_log(self.iperf_log_list)
+        lines = self.iperf_server_log_list if self.iperf_server_log_list else self.iperf_client_log_list
+        result = self._parse_iperf_log(lines)
+        self.iperf_server_log_list.clear()
+        self.iperf_client_log_list.clear()
         return round(result, 1) if result is not None else None
 
     def get_pc_ip(self):
