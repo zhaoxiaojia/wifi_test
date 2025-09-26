@@ -30,9 +30,10 @@ from PyQt5.QtCore import (
     QPropertyAnimation,
     QPoint,
     QRect,
+    QRegularExpression,
     pyqtSignal,
 )
-from PyQt5.QtGui import QIntValidator
+from PyQt5.QtGui import QIntValidator, QRegularExpressionValidator
 
 from PyQt5.QtWidgets import (
     QSizePolicy,
@@ -691,11 +692,25 @@ class CaseConfigPage(CardWidget):
                 self.lda_group = QWidget()
                 lda_box = QVBoxLayout(self.lda_group)
                 lda_cfg = value.get("LDA-908V-8", {})
+                if not isinstance(lda_cfg, dict):
+                    lda_cfg = {}
+                    value["LDA-908V-8"] = lda_cfg
+                channels_value = lda_cfg.setdefault("channels", [])
                 self.lda_ip_edit = LineEdit(self)
                 self.lda_ip_edit.setPlaceholderText("ip_address")
                 self.lda_ip_edit.setText(lda_cfg.get("ip_address", ""))
+                lda_channels = lda_cfg.get("channels", "")
+                if isinstance(lda_channels, (list, tuple, set)):
+                    lda_channels_text = ",".join(map(str, lda_channels))
+                else:
+                    lda_channels_text = str(lda_channels or "")
+                self.lda_channels_edit = LineEdit(self)
+                self.lda_channels_edit.setPlaceholderText("channels (1-8, e.g. 1,2,3)")
+                self.lda_channels_edit.setText(lda_channels_text)
                 lda_box.addWidget(QLabel("IP address :"))
                 lda_box.addWidget(self.lda_ip_edit)
+                lda_box.addWidget(QLabel("Channels (1-8):"))
+                lda_box.addWidget(self.lda_channels_edit)
                 vbox.addWidget(self.lda_group)
 
                 # -------- 通用字段：step --------
@@ -716,6 +731,7 @@ class CaseConfigPage(CardWidget):
                 self.field_widgets["rf_solution.RC4DAT-8G-95.ip_address"] = self.rc4_ip_edit
                 self.field_widgets["rf_solution.RADIORACK-4-220.ip_address"] = self.rack_ip_edit
                 self.field_widgets["rf_solution.LDA-908V-8.ip_address"] = self.lda_ip_edit
+                self.field_widgets["rf_solution.LDA-908V-8.channels"] = self.lda_channels_edit
                 self.field_widgets["rf_solution.step"] = self.rf_step_edit
                 continue  # 跳过后面的通用字段处理
             if key == "rvr":
@@ -1060,6 +1076,7 @@ class CaseConfigPage(CardWidget):
                 "rf_solution.RC4DAT-8G-95.ip_address",
                 "rf_solution.RADIORACK-4-220.ip_address",
                 "rf_solution.LDA-908V-8.ip_address",
+                "rf_solution.LDA-908V-8.channels",
             }
         # 如果你需要所有字段都可编辑，直接 return EditableInfo(set(self.field_widgets.keys()), True, True)
         return info

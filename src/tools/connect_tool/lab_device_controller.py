@@ -11,6 +11,7 @@ import logging
 import re
 import time
 import telnetlib
+from collections.abc import Iterable
 from urllib.error import URLError
 from urllib.parse import urlencode
 from urllib.request import urlopen
@@ -23,6 +24,7 @@ class LabDeviceController:
     def __init__(self, ip):
         self.ip = ip
         self.model = pytest.config['rf_solution']['model']
+        self._channels = [1]
         self._last_set_value = None
         self._lda_ports = {1}
         self._last_used_ports = None
