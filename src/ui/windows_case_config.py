@@ -699,19 +699,17 @@ class CaseConfigPage(CardWidget):
                 self.lda_ip_edit = LineEdit(self)
                 self.lda_ip_edit.setPlaceholderText("ip_address")
                 self.lda_ip_edit.setText(lda_cfg.get("ip_address", ""))
+                lda_channels = lda_cfg.get("channels", "")
+                if isinstance(lda_channels, (list, tuple, set)):
+                    lda_channels_text = ",".join(map(str, lda_channels))
+                else:
+                    lda_channels_text = str(lda_channels or "")
+                self.lda_channels_edit = LineEdit(self)
+                self.lda_channels_edit.setPlaceholderText("channels (1-8, e.g. 1,2,3)")
+                self.lda_channels_edit.setText(lda_channels_text)
                 lda_box.addWidget(QLabel("IP address :"))
                 lda_box.addWidget(self.lda_ip_edit)
-                self.lda_channels_edit = LineEdit(self)
-                self.lda_channels_edit.setPlaceholderText("channels (1-8, separated by comma)")
-                channel_text = ""
-                if isinstance(channels_value, list):
-                    channel_text = ",".join(str(ch) for ch in channels_value)
-                elif isinstance(channels_value, str):
-                    channel_text = channels_value
-                self.lda_channels_edit.setText(channel_text)
-                pattern = QRegularExpression(r"^\s*(?:[1-8](?:\s*,\s*[1-8])*)?\s*$")
-                self.lda_channels_edit.setValidator(QRegularExpressionValidator(pattern, self))
-                lda_box.addWidget(QLabel("Channels:"))
+                lda_box.addWidget(QLabel("Channels (1-8):"))
                 lda_box.addWidget(self.lda_channels_edit)
                 vbox.addWidget(self.lda_group)
 
@@ -1078,6 +1076,7 @@ class CaseConfigPage(CardWidget):
                 "rf_solution.RC4DAT-8G-95.ip_address",
                 "rf_solution.RADIORACK-4-220.ip_address",
                 "rf_solution.LDA-908V-8.ip_address",
+                "rf_solution.LDA-908V-8.channels",
             }
         # 如果你需要所有字段都可编辑，直接 return EditableInfo(set(self.field_widgets.keys()), True, True)
         return info
