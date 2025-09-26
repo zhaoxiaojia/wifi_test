@@ -24,23 +24,30 @@ class LabDeviceController:
     def __init__(self, ip):
         self.ip = ip
         self.model = pytest.config['rf_solution']['model']
-        self._channels = [1]
         self._last_set_value = None
-        self._lda_ports = {1}
-        self._last_used_ports = None
+        self.lda_channels = [1]
+        self._last_used_channels = None
         self.tn = None
         if self.model == 'LDA-908V-8':
             lda_config = pytest.config['rf_solution'].get('LDA-908V-8', {})
             try:
-                self._lda_ports = self._parse_port_config(lda_config.get('ports'))
+                raw_channels = lda_config.get('channels')
+                if raw_channels is None and 'ports' in lda_config:
+                    logging.warning(
+                        'Deprecated configuration key "ports" detected for %s; '
+                        'please rename it to "channels"',
+                        self.model,
+                    )
+                    raw_channels = lda_config.get('ports')
+                self.lda_channels = self._parse_channels(raw_channels)
             except Exception as exc:
-                logging.error('Invalid LDA-908V-8 ports configuration: %s', exc)
+                logging.error('Invalid LDA-908V-8 channels configuration: %s', exc)
                 raise
             logging.info(
-                'Initialize HTTP attenuator controller %s at %s with ports %s',
+                'Initialize HTTP attenuator controller %s at %s with channels %s',
                 self.model,
                 ip,
-                sorted(self._lda_ports),
+                self.lda_channels,
             )
             return
         try:
@@ -71,10 +78,14 @@ class LabDeviceController:
         logging.info(f'Set rf value to {value}')
         if self.model == 'LDA-908V-8':
             self._last_set_value = int(value)
-            self._last_used_ports = set(self._lda_ports)
-            for port in sorted(self._last_used_ports):
-                params = {'chnl': port, 'attn': self._last_set_value}
-                logging.debug('Set attenuation for channel %s with params %s', port, params)
+            self._last_used_channels = list(self.lda_channels)
+            for channel in self._last_used_channels:
+                params = {'chnl': channel, 'attn': self._last_set_value}
+                logging.debug(
+                    'Set attenuation for channel %s with params %s',
+                    channel,
+                    params,
+                )
                 self._run_curl_command('setup.cgi', params)
         elif self.model == 'RC4DAT-8G-95':
             self.tn.write(f":CHAN:1:2:3:4:SETATT:{value};".encode('ascii') + b'\r\n')
@@ -87,20 +98,24 @@ class LabDeviceController:
 
     def get_rf_current_value(self):
         if self.model == 'LDA-908V-8':
-            ports_to_query = self._last_used_ports or self._lda_ports
+            channels_to_query = self._last_used_channels or self.lda_channels
             results = {}
-            for port in sorted(ports_to_query):
-                params = {'chnl': port}
+            for channel in channels_to_query:
+                params = {'chnl': channel}
                 if self._last_set_value is not None:
                     params['attn'] = self._last_set_value
-                logging.debug('Query attenuation for channel %s with params %s', port, params)
+                logging.debug(
+                    'Query attenuation for channel %s with params %s',
+                    channel,
+                    params,
+                )
                 response = self._run_curl_command('status.shtm', params)
                 if response is None:
-                    logging.warning('No response received for channel %s', port)
-                    results[port] = None
+                    logging.warning('No response received for channel %s', channel)
+                    results[channel] = None
                     continue
                 match = re.search(r'(\d+)', response)
-                results[port] = int(match.group(1)) if match else response
+                results[channel] = int(match.group(1)) if match else response
             if len(results) == 1:
                 return next(iter(results.values()))
             return results
@@ -131,16 +146,22 @@ class LabDeviceController:
             raise
 
     @staticmethod
-    def _parse_port_config(raw_ports):
-        if raw_ports is None:
-            return {1}
-        if isinstance(raw_ports, (list, tuple, set)):
-            tokens = list(raw_ports)
+    def _parse_channels(raw_channels):
+        if raw_channels is None:
+            return [1]
+
+        if isinstance(raw_channels, Iterable) and not isinstance(raw_channels, (str, bytes)):
+            tokens = []
+            for item in raw_channels:
+                if item is None:
+                    continue
+                tokens.extend(re.split(r'[\s,]+', str(item).strip()))
         else:
-            tokens = re.split(r'[\s,]+', str(raw_ports).strip())
-        ports = set()
+            tokens = re.split(r'[\s,]+', str(raw_channels).strip())
+
+        channels = set()
         for token in tokens:
-            if token is None:
+            if not token:
                 continue
             token_str = str(token).strip()
             if not token_str:
@@ -154,19 +175,20 @@ class LabDeviceController:
                     raise ValueError(f'invalid range segment "{token_str}"') from exc
                 if start > end:
                     raise ValueError(f'range start greater than end in "{token_str}"')
-                for port in range(start, end + 1):
-                    LabDeviceController._validate_port(port)
-                    ports.add(port)
+                for channel in range(start, end + 1):
+                    LabDeviceController._validate_port(channel)
+                    channels.add(channel)
             else:
                 try:
-                    port = int(token_str)
+                    channel = int(token_str)
                 except ValueError as exc:
-                    raise ValueError(f'invalid port "{token_str}"') from exc
-                LabDeviceController._validate_port(port)
-                ports.add(port)
-        if not ports:
-            raise ValueError('no valid ports specified')
-        return ports
+                    raise ValueError(f'invalid channel "{token_str}"') from exc
+                LabDeviceController._validate_port(channel)
+                channels.add(channel)
+
+        if not channels:
+            raise ValueError('no valid channels specified')
+        return sorted(channels)
 
     @staticmethod
     def _validate_port(port):
