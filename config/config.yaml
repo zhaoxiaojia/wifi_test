@@ -14,7 +14,7 @@ corner_angle:
   - 90
   static_db: 10,20
   target_rssi: 35,45
-fpga: W2U_USB
+fpga: W1U_PCIE
 rf_solution:
   RADIORACK-4-220:
     ip_address: 192.168.50.19
