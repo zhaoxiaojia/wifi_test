@@ -1,7 +1,5 @@
 band,ssid,wireless_mode,channel,bandwidth,security_mode,password,tx,rx
-5G,coco_5g,auto,36,80 MHz,Open System,,1,1
-5G,coco_5g,auto,40,80 MHz,Open System,,1,1
-5G,coco_5g,auto,40,80 MHz,Open System,,1,1
-5G,coco_5g,auto,40,80 MHz,Open System,,1,1
-5G,coco_5g,auto,56,80 MHz,Open System,,1,1
-5G,coco_5g,auto,40,80 MHz,Open System,,1,1
+2.4G,coco_5g,11ax,auto,40 MHz,WPA2-Personal,12345678,1,1
+2.4G,coco_5g,11n,1,20 MHz,WPA2-Personal,12345678,1,1
+5G,coco_5g,11ac,auto,20/40/80 MHz,WPA2-Personal,12345678,1,1
+5G,coco_5g,11ac,40,80 MHz,Open System,,1,1

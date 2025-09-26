@@ -24,7 +24,7 @@ rf_solution:
     ip_address: 192.168.5.75
   LDA-908V-8:
     ip_address: 192.168.5.200
-    channels: "1"  # 支持范围 1-8，使用逗号分隔多个端口，或使用列表格式
+    channels: '1'
   model: RC4DAT-8G-95
   step:
   - 0
@@ -46,5 +46,5 @@ serial_port:
   baud: '961200'
   port: COM5
   status: false
-text_case: test/performance/test_wifi_rvr.py
+text_case: test/performance/test_wifi_peak_throughput.py
 csv_path: performance_test_csv/rvr_wifi_setup.csv
