@@ -1,9 +1,12 @@
 import os
 import sys
+import json
 import shutil
-import tempfile
 import signal
+import tempfile
+import subprocess
 import atexit
+from datetime import datetime
 from pathlib import Path
 from typing import Final
 from contextlib import suppress
@@ -69,6 +72,206 @@ class Paths:
     CONFIG_DIR: Final[str] = os.path.join(BASE_DIR, "config")
     RES_DIR: Final[str] = os.path.join(BASE_DIR, "res")
     SRC_DIR: Final[str] = str(get_src_base())
+
+
+_DEFAULT_METADATA = {
+    "package_name": "未知",
+    "version": "未知",
+    "build_time": "未知",
+    "branch": "未知",
+    "commit_hash": "未知",
+    "commit_short": "未知",
+    "commit_author": "未知",
+    "commit_date": "未知",
+}
+
+
+def _format_timestamp(ts: float | int | None) -> str:
+    if not ts:
+        return "未知"
+    try:
+        return datetime.fromtimestamp(float(ts)).strftime("%Y-%m-%d %H:%M:%S")
+    except Exception:
+        return "未知"
+
+
+def _parse_build_spec(spec_path: Path) -> tuple[dict[str, str], list[str]]:
+    info: dict[str, str] = {}
+    sources: list[str] = []
+    if not spec_path.exists():
+        return info, sources
+    sources.append("build.spec")
+    try:
+        content = spec_path.read_text(encoding="utf-8", errors="ignore")
+    except Exception:
+        content = ""
+    for line in content.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "version" in line and "=" in line:
+            key, value = line.split("=", 1)
+            key = key.strip().lower()
+            value = value.strip().strip(",")
+            if key in {"version", "app_version", "build_version"}:
+                info["version"] = value.strip("'\"")
+        if line.startswith("name="):
+            info["package_name"] = line.split("=", 1)[1].strip().strip(",'")
+    try:
+        info.setdefault("build_time", _format_timestamp(spec_path.stat().st_mtime))
+    except Exception:
+        pass
+    return info, sources
+
+
+def _run_git_command(args: list[str], cwd: Path) -> str | None:
+    if shutil.which("git") is None:
+        return None
+    try:
+        result = subprocess.run(
+            ["git", *args],
+            cwd=str(cwd),
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        return result.stdout.strip()
+    except Exception:
+        return None
+
+
+def _get_git_metadata(repo_path: Path) -> tuple[dict[str, str], list[str]]:
+    info: dict[str, str] = {}
+    sources: list[str] = []
+    head = _run_git_command(["rev-parse", "HEAD"], repo_path)
+    if not head:
+        return info, sources
+    sources.append("Git")
+    info["commit_hash"] = head
+    info["commit_short"] = head[:7]
+    describe = _run_git_command(["describe", "--tags", "--always"], repo_path)
+    if describe:
+        info.setdefault("version", describe)
+    branch = _run_git_command(["rev-parse", "--abbrev-ref", "HEAD"], repo_path)
+    if branch:
+        info["branch"] = branch
+    author = _run_git_command(["show", "-s", "--format=%cn", "HEAD"], repo_path)
+    if author:
+        info["commit_author"] = author
+    commit_date = _run_git_command(["show", "-s", "--format=%cI", "HEAD"], repo_path)
+    if commit_date:
+        info["commit_date"] = commit_date
+        try:
+            info.setdefault(
+                "build_time",
+                datetime.fromisoformat(commit_date.replace("Z", "+00:00")).astimezone().strftime("%Y-%m-%d %H:%M:%S"),
+            )
+        except Exception:
+            pass
+    return info, sources
+
+
+def _read_version_file(base_dir: Path) -> tuple[dict[str, str], list[str]]:
+    candidates = [
+        "VERSION",
+        "version.txt",
+        "build_version.txt",
+        "build_metadata.json",
+        "build_info.json",
+    ]
+    info: dict[str, str] = {}
+    sources: list[str] = []
+    for name in candidates:
+        path = base_dir / name
+        if not path.exists():
+            continue
+        sources.append(name)
+        try:
+            if path.suffix.lower() == ".json":
+                payload = json.loads(path.read_text(encoding="utf-8"))
+                if isinstance(payload, dict):
+                    for key in ("version", "build_time", "commit_hash", "commit_author", "commit_date", "branch"):
+                        if key in payload and payload[key]:
+                            info[key] = str(payload[key])
+            else:
+                text = path.read_text(encoding="utf-8").strip()
+                for line in text.splitlines():
+                    line = line.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    if "=" in line:
+                        k, v = line.split("=", 1)
+                        k = k.strip().lower()
+                        v = v.strip()
+                        if k in {"version", "build_time", "commit_hash", "commit_author", "commit_date", "branch"}:
+                            info[k] = v
+                    elif "version" not in info:
+                        info["version"] = line
+                if "build_time" not in info:
+                    info["build_time"] = _format_timestamp(path.stat().st_mtime)
+            break
+        except Exception:
+            continue
+    return info, sources
+
+
+def _metadata_cache_path(base_dir: Path) -> Path:
+    return base_dir / ".build_metadata_cache.json"
+
+
+def _load_metadata_cache(base_dir: Path) -> dict[str, str] | None:
+    cache_path = _metadata_cache_path(base_dir)
+    if not cache_path.exists():
+        return None
+    try:
+        payload = json.loads(cache_path.read_text(encoding="utf-8"))
+        if isinstance(payload, dict):
+            return {str(k): str(v) for k, v in payload.items()}
+    except Exception:
+        pass
+    return None
+
+
+def _store_metadata_cache(base_dir: Path, metadata: dict[str, str]) -> None:
+    cache_path = _metadata_cache_path(base_dir)
+    try:
+        cache_path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def get_build_metadata() -> dict[str, str]:
+    base_dir = Path(Paths.BASE_DIR)
+    metadata = dict(_DEFAULT_METADATA)
+    sources: list[str] = []
+
+    spec_info, spec_sources = _parse_build_spec(base_dir / "build.spec")
+    if spec_info:
+        metadata.update({k: v for k, v in spec_info.items() if v})
+        sources.extend(spec_sources)
+
+    git_info, git_sources = _get_git_metadata(base_dir)
+    if git_info:
+        metadata.update({k: v for k, v in git_info.items() if v})
+        sources.extend(git_sources)
+
+    version_info, version_sources = _read_version_file(base_dir)
+    if version_info:
+        metadata.update({k: v for k, v in version_info.items() if v})
+        sources.extend(version_sources)
+
+    if not sources:
+        cache = _load_metadata_cache(base_dir)
+        if cache:
+            metadata.update({k: v for k, v in cache.items() if v})
+            sources.append("缓存")
+
+    if sources and "缓存" not in sources:
+        _store_metadata_cache(base_dir, {k: v for k, v in metadata.items() if k != "data_source"})
+
+    metadata["data_source"] = "、".join(dict.fromkeys(sources)) if sources else "未知"
+    return metadata
 
 
 class RouterConst:
