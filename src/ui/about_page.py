@@ -113,16 +113,6 @@ class AboutPage(CardWidget):
         config_files_layout.addStretch(1)
         resources_layout.addLayout(config_files_layout)
 
-        tools_layout = QHBoxLayout()
-        tools_layout.setSpacing(6)
-        for tool in ("ADBKeyboard.apk", "iperf3", "script"):
-            btn = PushButton(tool, self.resources_card)
-            btn.clicked.connect(lambda _, name=tool: self._open_path(os.path.join(Paths.RES_DIR, name)))
-            btn.setFont(base_font)
-            tools_layout.addWidget(btn)
-        tools_layout.addStretch(1)
-        resources_layout.addLayout(tools_layout)
-
         support_layout = QHBoxLayout()
         support_layout.setSpacing(6)
         email_btn = PushButton("Contact Maintainer", self.resources_card)
@@ -130,16 +120,12 @@ class AboutPage(CardWidget):
         email_btn.setFont(base_font)
         support_layout.addWidget(email_btn)
 
-        ticket_btn = PushButton("Submit Ticket", self.resources_card)
-        ticket_btn.clicked.connect(self._open_ticket_portal)
-        ticket_btn.setFont(base_font)
-        support_layout.addWidget(ticket_btn)
+        jira_btn = PushButton("Jira Submit", self.resources_card)
+        jira_btn.clicked.connect(self._open_ticket_portal)
+        jira_btn.setFont(base_font)
+        support_layout.addWidget(jira_btn)
 
-        doc_btn = HyperlinkButton(
-            "https://intranet.example.com/docs/wifi-compliance",
-            "Internal Documentation",
-            self.resources_card,
-        )
+        doc_btn = PushButton("Internal Documentation",self.resources_card)
         doc_btn.clicked.connect(self._open_internal_doc)
         doc_btn.setFont(base_font)
         support_layout.addWidget(doc_btn)
@@ -178,14 +164,14 @@ class AboutPage(CardWidget):
         QMessageBox.information(
             self,
             "Maintainer Contact",
-            "For assistance, contact the testing platform maintainer: qa-support@example.com",
+            "For assistance, contact the testing platform maintainer: chao.li@amlogic.com",
         )
 
     def _open_ticket_portal(self) -> None:
-        QDesktopServices.openUrl(QUrl("https://intranet.example.com/support/tickets"))
+        QDesktopServices.openUrl(QUrl("https://jira.amlogic.com/browse/FQ-383"))
 
     def _open_internal_doc(self) -> None:
-        QDesktopServices.openUrl(QUrl("https://intranet.example.com/docs/wifi-compliance"))
+        QDesktopServices.openUrl(QUrl("https://confluence.amlogic.com/pages/viewpage.action?pageId=448826402"))
 
     def _populate_metadata(self) -> None:
         metadata = get_build_metadata()
@@ -194,11 +180,11 @@ class AboutPage(CardWidget):
             ("Application Name", metadata.get("package_name", "Unknown")),
             ("Version", latest_version or "Unknown"),
             ("Build Time", metadata.get("build_time", "Unknown")),
-            ("Git Branch", metadata.get("branch", "Unknown")),
-            ("Commit Hash", metadata.get("commit_hash", "Unknown")),
-            ("Commit Short Hash", metadata.get("commit_short", "Unknown")),
-            ("Commit Author", metadata.get("commit_author", "Unknown")),
-            ("Commit Date", metadata.get("commit_date", "Unknown")),
+            # ("Git Branch", metadata.get("branch", "Unknown")),
+            # ("Commit Hash", metadata.get("commit_hash", "Unknown")),
+            # ("Commit Short Hash", metadata.get("commit_short", "Unknown")),
+            # ("Commit Author", metadata.get("commit_author", "Unknown")),
+            # ("Commit Date", metadata.get("commit_date", "Unknown")),
             ("Author", "chao.li"),
             ("Acknowledgements", "zijie.chen, yifeng.xu, meng.wang1"),
         ]
