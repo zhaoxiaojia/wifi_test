@@ -53,7 +53,7 @@ class AboutPage(CardWidget):
         apply_font_and_selection(self.info_table)
         layout.addWidget(self.info_table)
 
-        self.source_label = QLabel("数据来源：Unknown", self)
+        self.source_label = QLabel("Data Source: Unknown", self)
         apply_theme(self.source_label)
         layout.addWidget(self.source_label)
 
@@ -62,7 +62,7 @@ class AboutPage(CardWidget):
         resources_layout = QVBoxLayout(self.resources_card)
         resources_layout.setSpacing(8)
 
-        resource_title = StrongBodyLabel("资源与支持")
+        resource_title = StrongBodyLabel("Resources & Support")
         apply_theme(resource_title)
         resource_title.setStyleSheet(
             "border-left: 4px solid #0067c0; padding-left: 8px;"
@@ -72,11 +72,11 @@ class AboutPage(CardWidget):
 
         config_layout = QHBoxLayout()
         config_layout.setSpacing(6)
-        open_config_btn = PushButton("打开 config 目录", self.resources_card)
+        open_config_btn = PushButton("Open config directory", self.resources_card)
         open_config_btn.clicked.connect(lambda: self._open_path(Paths.CONFIG_DIR))
         config_layout.addWidget(open_config_btn)
 
-        open_res_btn = PushButton("打开 res 目录", self.resources_card)
+        open_res_btn = PushButton("Open res directory", self.resources_card)
         open_res_btn.clicked.connect(lambda: self._open_path(Paths.RES_DIR))
         config_layout.addWidget(open_res_btn)
         config_layout.addStretch(1)
@@ -102,17 +102,17 @@ class AboutPage(CardWidget):
 
         support_layout = QHBoxLayout()
         support_layout.setSpacing(6)
-        email_btn = PushButton("联系维护者", self.resources_card)
+        email_btn = PushButton("Contact Maintainer", self.resources_card)
         email_btn.clicked.connect(self._show_support_email)
         support_layout.addWidget(email_btn)
 
-        ticket_btn = PushButton("提交工单", self.resources_card)
+        ticket_btn = PushButton("Submit Ticket", self.resources_card)
         ticket_btn.clicked.connect(self._open_ticket_portal)
         support_layout.addWidget(ticket_btn)
 
         doc_btn = HyperlinkButton(
             "https://intranet.example.com/docs/wifi-compliance",
-            "内部文档",
+            "Internal Documentation",
             self.resources_card,
         )
         doc_btn.clicked.connect(self._open_internal_doc)
@@ -121,14 +121,18 @@ class AboutPage(CardWidget):
         resources_layout.addLayout(support_layout)
 
         compliance_label = QLabel(
-            "仅限内部使用：请遵循数据采集、传输与存储合规要求，敏感日志需按流程加密并在 30 天内清理。",
+            "Internal use only: Follow data collection, transfer, and storage compliance policies."
+            " Encrypt sensitive logs as required and purge them within 30 days.",
             self.resources_card,
         )
         compliance_label.setWordWrap(True)
         apply_theme(compliance_label)
         resources_layout.addWidget(compliance_label)
 
-        hint_label = QLabel("更多规范详见企业内网《无线测试数据合规手册》。", self.resources_card)
+        hint_label = QLabel(
+            "Refer to the corporate intranet Wireless Testing Data Compliance Manual for more guidance.",
+            self.resources_card,
+        )
         hint_label.setWordWrap(True)
         apply_theme(hint_label)
         resources_layout.addWidget(hint_label)
@@ -145,8 +149,8 @@ class AboutPage(CardWidget):
     def _show_support_email(self) -> None:
         QMessageBox.information(
             self,
-            "维护者联系方式",
-            "如需支持，请联系测试平台维护者：qa-support@example.com",
+            "Maintainer Contact",
+            "For assistance, contact the testing platform maintainer: qa-support@example.com",
         )
 
     def _open_ticket_portal(self) -> None:
@@ -184,7 +188,13 @@ class AboutPage(CardWidget):
         self.info_table.resizeColumnsToContents()
 
         source = metadata.get("data_source", "Unknown") or "Unknown"
-        self.source_label.setText(f"数据来源：{source}")
+        source = source.replace("、", ", ")
+        source = source.replace("，", ", ")
+        source = source.replace("缓存", "Cache")
+        source = source.replace("未知", "Unknown")
+        source = re.sub(r"\s*,\s*", ", ", source)
+        source = re.sub(r"\s+", " ", source).strip()
+        self.source_label.setText(f"Data Source: {source}")
 
     def _get_latest_version_from_changelog(self, metadata: dict[str, str]) -> str:
         default_version = metadata.get("version") or "Unknown"
