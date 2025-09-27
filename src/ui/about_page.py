@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import os
+import re
+from pathlib import Path
 
 from PyQt5.QtCore import Qt, QUrl
 from PyQt5.QtGui import QDesktopServices
@@ -42,7 +44,7 @@ class AboutPage(CardWidget):
         layout.addWidget(title)
 
         self.info_table = QTableWidget(0, 2, self)
-        self.info_table.setHorizontalHeaderLabels(["字段", "信息"])
+        self.info_table.setHorizontalHeaderLabels(["Field", "Details"])
         self.info_table.verticalHeader().setVisible(False)
         self.info_table.setEditTriggers(self.info_table.NoEditTriggers)
         self.info_table.setSelectionMode(self.info_table.NoSelection)
@@ -51,7 +53,7 @@ class AboutPage(CardWidget):
         apply_font_and_selection(self.info_table)
         layout.addWidget(self.info_table)
 
-        self.source_label = QLabel("数据来源：未知", self)
+        self.source_label = QLabel("数据来源：Unknown", self)
         apply_theme(self.source_label)
         layout.addWidget(self.source_label)
 
@@ -155,27 +157,63 @@ class AboutPage(CardWidget):
 
     def _populate_metadata(self) -> None:
         metadata = get_build_metadata()
+        latest_version = self._get_latest_version_from_changelog(metadata)
         display_rows = [
-            ("应用名称", metadata.get("package_name", "未知")),
-            ("版本", metadata.get("version", "未知")),
-            ("构建时间", metadata.get("build_time", "未知")),
-            ("Git 分支", metadata.get("branch", "未知")),
-            ("提交哈希", metadata.get("commit_hash", "未知")),
-            ("提交短哈希", metadata.get("commit_short", "未知")),
-            ("提交作者", metadata.get("commit_author", "未知")),
-            ("提交时间", metadata.get("commit_date", "未知")),
+            ("Application Name", metadata.get("package_name", "Unknown")),
+            ("Version", latest_version or "Unknown"),
+            ("Build Time", metadata.get("build_time", "Unknown")),
+            ("Git Branch", metadata.get("branch", "Unknown")),
+            ("Commit Hash", metadata.get("commit_hash", "Unknown")),
+            ("Commit Short Hash", metadata.get("commit_short", "Unknown")),
+            ("Commit Author", metadata.get("commit_author", "Unknown")),
+            ("Commit Date", metadata.get("commit_date", "Unknown")),
+            ("Author", "chao.li"),
+            ("Acknowledgements", "zijie.chen, yifeng.xu, meng.wang1"),
         ]
 
         self.info_table.setRowCount(len(display_rows))
         for row, (label, value) in enumerate(display_rows):
             key_item = QTableWidgetItem(label)
-            value_item = QTableWidgetItem(value or "未知")
+            if not isinstance(value, str):
+                value = str(value) if value is not None else ""
+            value_item = QTableWidgetItem(value.strip() or "Unknown")
             key_item.setFlags(Qt.ItemIsEnabled)
             value_item.setFlags(Qt.ItemIsEnabled)
             self.info_table.setItem(row, 0, key_item)
             self.info_table.setItem(row, 1, value_item)
         self.info_table.resizeColumnsToContents()
 
-        source = metadata.get("data_source", "未知") or "未知"
+        source = metadata.get("data_source", "Unknown") or "Unknown"
         self.source_label.setText(f"数据来源：{source}")
+
+    def _get_latest_version_from_changelog(self, metadata: dict[str, str]) -> str:
+        default_version = metadata.get("version") or "Unknown"
+        readme_path = Path(Paths.BASE_DIR) / "README.md"
+        try:
+            content = readme_path.read_text(encoding="utf-8", errors="ignore")
+        except Exception:
+            return default_version
+
+        lines = content.splitlines()
+        in_changelog = False
+        latest_entry: str | None = None
+        for line in lines:
+            stripped = line.strip()
+            if not in_changelog:
+                if stripped.lower().startswith("## changelog"):
+                    in_changelog = True
+                continue
+            if stripped.startswith("## ") and not stripped.lower().startswith("## changelog"):
+                break
+            if stripped:
+                latest_entry = stripped
+
+        if not latest_entry:
+            return default_version or "Unknown"
+
+        match = re.search(r"v\s*[0-9][\w.]*", latest_entry, re.IGNORECASE)
+        if match:
+            return match.group(0).replace(" ", "")
+
+        return latest_entry or (default_version or "Unknown")
 
