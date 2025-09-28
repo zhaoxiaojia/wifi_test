@@ -31,6 +31,7 @@ rf_tool = init_rf()
 @pytest.fixture(scope='session', params=_test_data, ids=[str(i) for i in _test_data])
 @log_fixture_params()
 def setup_router(request):
+    _attenuation_scheduler.reset()
     router_info = request.param
     router = init_router()
     connect_status = common_setup(router, router_info)
@@ -46,6 +47,12 @@ RSSI_THRESHOLD = 65
 class AttenuationScheduler:
     def __init__(self) -> None:
         self._last_applied: Optional[int] = None
+        self._current_step = DEFAULT_STEP
+        self._max_db = self._compute_max_db()
+
+    def reset(self) -> None:
+        """重置内部状态，确保新的路由/信道组合从 0 dB 开始。"""
+        self._last_applied = None
         self._current_step = DEFAULT_STEP
         self._max_db = self._compute_max_db()
 
@@ -152,6 +159,7 @@ def setup_attenuation(request, setup_router):
     )
 
     rf_tool.execute_rf_cmd(applied_db)
+    logging.info('设置衰减：请求 %s dB，实际 %s dB', db_set, applied_db)
     logging.info(rf_tool.get_rf_current_value())
 
     pytest.dut.get_rssi()
