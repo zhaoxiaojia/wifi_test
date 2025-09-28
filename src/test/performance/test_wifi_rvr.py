@@ -79,10 +79,18 @@ class AttenuationScheduler:
             applied = target
         else:
             candidate = min(self._last_applied + self._current_step, self._max_db)
-            if self._current_step < DEFAULT_STEP and candidate < target:
-                applied = candidate
+
+            if candidate < target:
+                logging.info(
+                    '计划衰减值 %s dB 高于按照当前步进（%s dB）计算得到的 %s dB，'
+                    '为保证覆盖完整区间，将直接应用计划值。',
+                    target,
+                    self._current_step,
+                    candidate,
+                )
+                applied = target
             else:
-                applied = max(target, candidate)
+                applied = candidate
 
         if self._last_applied is not None and applied < self._last_applied:
             applied = self._last_applied
@@ -149,12 +157,13 @@ def setup_attenuation(request, setup_router):
 
     applied_db = _attenuation_scheduler.next_value(db_set)
 
+    previous_step = _attenuation_scheduler.current_step
     update_fixture_params(
         request,
         {
             'requested': db_set,
             'applied': applied_db,
-            'step': _attenuation_scheduler.current_step,
+            'step': previous_step,
         },
     )
 
@@ -164,6 +173,16 @@ def setup_attenuation(request, setup_router):
 
     pytest.dut.get_rssi()
     _attenuation_scheduler.record_rssi(pytest.dut.rssi_num)
+
+    if _attenuation_scheduler.current_step != previous_step:
+        update_fixture_params(
+            request,
+            {
+                'requested': db_set,
+                'applied': applied_db,
+                'step': _attenuation_scheduler.current_step,
+            },
+        )
 
     yield (connect_status, router_info, applied_db)
     pytest.dut.kill_iperf()
