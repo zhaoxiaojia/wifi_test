@@ -16,6 +16,25 @@ from src.tools.router_tool.AsusRouter.AsusBaseControl import AsusBaseControl
 class AsusTelnetNvramControl(AsusBaseControl):
     """封装通过 Telnet 修改 NVRAM 的常见操作."""
 
+    CHANNEL_2 = ['auto', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14']
+    CHANNEL_2_CHANSPEC_MAP = {
+        'auto': '0',
+        '1': '1l',
+        '2': '2l',
+        '3': '3l',
+        '4': '4l',
+        '5': '5l',
+        '6': '6l',
+        '7': '7l',
+        '8': '8l',
+        '9': '9l',
+        '10': '10u',
+        '11': '11u',
+        '12': '12u',
+        '13': '13u',
+        '14': '14',
+    }
+
     MODE_PARAM = {
         'Open System': 'openowe',
         'Shared Key': 'shared',
@@ -168,7 +187,8 @@ class AsusTelnetNvramControl(AsusBaseControl):
         channel = str(channel)
         if channel not in self.CHANNEL_2:
             raise ConfigError('channel element error')
-        self.telnet_write(f'nvram set wl0_chanspec={0 if channel == "auto" else channel};')
+        chanspec = self.CHANNEL_2_CHANSPEC_MAP[channel]
+        self.telnet_write(f'nvram set wl0_chanspec={chanspec};')
 
     def set_5g_channel(self, channel: Union[str, int]) -> None:
         channel = str(channel)
