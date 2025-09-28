@@ -9,6 +9,7 @@ asus:
     asus_5400: //*[@id="login_filed"]/div[8]
     asus_86u: //*[@id="login_filed"]/input
     asus_88u: //*[@id="login_filed"]/div[9]
+    asus_88u_pro: //*[@id="login_filed"]/div[9]
     asus_6700: //*[@id="login_filed"]/div[8]
   signin_done_element: helpname
 
@@ -16,11 +17,13 @@ asus:
     asus_5400:
     asus_86u:
     asus_88u: //*[@id="region_div"]/select/option[{}]
+    asus_88u_pro: //*[@id="region_div"]/select/option[{}]
     asus_6700:
   smart_connect_element:
     asus_5400:
     asus_86u:
     asus_88u: iphone_switch
+    asus_88u_pro: iphone_switch
     asus_6700:
 
   band_element: //*[@id="wl_unit_field"]/td/select
@@ -28,13 +31,14 @@ asus:
     asus_5400: //*[@id="WLgeneral"]/tbody/tr[6]/td/select
     asus_86u: //*[@id="WLgeneral"]/tbody/tr[6]/td/select
     asus_88u: //*[@id="WLgeneral"]/tbody/tr[6]/td/select
-#    //*[@id="WLgeneral"]/tbody/tr[6]/td/select/option[1]
+    asus_88u_pro: //*[@id="WLgeneral"]/tbody/tr[6]/td/select
     asus_6700: //*[@id="WLgeneral"]/tbody/tr[6]/td/select/option[{}]
 
   wireless_ax_element:
     asus_5400: //*[@id="button"]
     asus_86u: //*[@id="he_mode_field"]/td/div/select/option[{}]
     asus_88u: //*[@id="he_mode_field"]/td/div/select/option[{}]
+    asus_88u_pro: //*[@id="he_mode_field"]/td/div/select/option[{}]
     asus_6700: //*[@id="login_filed"]/div[8]
   ssid_element: wl_ssid
 
@@ -43,6 +47,7 @@ asus:
     asus_5400: //*[@id="WLgeneral"]/tbody/tr[11]/td/select
     asus_86u: //*[@id="WLgeneral"]/tbody/tr[11]/td/select
     asus_88u: //*[@id="WLgeneral"]/tbody/tr[11]/td/select
+    asus_88u_pro: //*[@id="WLgeneral"]/tbody/tr[11]/td/select
     asus_6700: //*[@id="WLgeneral"]/tbody/tr[9]/td/select
   bandwidth_element: //*[@id="wl_bw_field"]/td/select
 
@@ -50,12 +55,14 @@ asus:
     asus_5400: //*[@id="WLgeneral"]/tbody/tr[13]/td/div[1]/select
     asus_86u: //*[@id="WLgeneral"]/tbody/tr[13]/td/div[1]/select
     asus_88u: //*[@id="WLgeneral"]/tbody/tr[13]/td/div[1]/select
+    asus_88u_pro: //*[@id="WLgeneral"]/tbody/tr[13]/td/div[1]/select
     asus_6700: //*[@id="WLgeneral"]/tbody/tr[11]/td/select
 
   wep_encrypt_regu_element:
     asus_5400: //*[@id="WLgeneral"]/tbody/tr[16]/td/select/option[{}]
     asus_86u: //*[@id="WLgeneral"]/tbody/tr[16]/td/select
     asus_88u: //*[@id="WLgeneral"]/tbody/tr[16]/td/select
+    asus_88u_pro: //*[@id="WLgeneral"]/tbody/tr[16]/td/select
     asus_6700: //*[@id="WLgeneral"]/tbody/tr[14]/td/select/option[{}]
 
   wpa_encrypt_element: //*[@id="WLgeneral"]/tbody/tr[14]/td/select
@@ -63,6 +70,7 @@ asus:
     asus_5400: //*[@id="WLgeneral"]/tbody/tr[17]/td/select
     asus_86u: //*[@id="WLgeneral"]/tbody/tr[17]/td/select
     asus_88u: //*[@id="WLgeneral"]/tbody/tr[17]/td/select
+    asus_88u_pro: //*[@id="WLgeneral"]/tbody/tr[17]/td/select
     asus_6700: //*[@id="WLgeneral"]/tbody/tr[15]/td/select
 
   wep_passwd_element: wl_key1
@@ -70,12 +78,14 @@ asus:
     asus_5400: //*[@id="wpa_psk_key_field"]/td/div/div[1]/input
     asus_86u: //*[@id="wpa_psk_key_field"]/td/div/div[1]/input
     asus_88u: //*[@id="wpa_psk_key_field"]/td/div/div[1]/input
+    asus_88u_pro: //*[@id="wpa_psk_key_field"]/td/div/div[1]/input
     asus_6700: //*[@id="WLgeneral"]/tbody/tr[13]/td/input
 
   protect_frame_element:
     asus_5400: //*[@id="WLgeneral"]/tbody/tr[26]/td/select
     asus_86u: //*[@id="WLgeneral"]/tbody/tr[26]/td/select
     asus_88u: //*[@id="WLgeneral"]/tbody/tr[26]/td/select
+    asus_88u_pro: //*[@id="WLgeneral"]/tbody/tr[26]/td/select
     asus_6700: //*[@id="WLgeneral"]/tbody/tr[24]/td/select
   apply_element: applyButton
   setting_load_element: //*[@id="loadingBlock"]/tbody/tr/td[2]
@@ -84,3 +94,5 @@ asus:
     asus_5400: /html/body/form/div/div/div[1]/div[1]
     asus_86u: /html/body/form/div/div/div[1]/div[2]
     asus_88u: /html/body/form/div/div/div[2]
+    asus_88u_pro: /html/body/form/div/div/div[2]
+
