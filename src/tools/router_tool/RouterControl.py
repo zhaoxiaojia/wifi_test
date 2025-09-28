@@ -218,10 +218,12 @@ class RouterTools(RouterControl):
         self.driver.execute_script('reboot()')
         self.driver.switch_to.alert.accept()
 
-        element = {'asus_86u': self.xpath['wait_reboot_element']['asus_86u'],
-                   'asus_88u': self.xpath['wait_reboot_element']['asus_88u'],
-                   'asus_5400': self.xpath['wait_reboot_element']['asus_5400'],
-                   }
+        element = {
+            'asus_86u': self.xpath['wait_reboot_element']['asus_86u'],
+            'asus_88u': self.xpath['wait_reboot_element']['asus_88u'],
+            'asus_88u_pro': self.xpath['wait_reboot_element']['asus_88u_pro'],
+            'asus_5400': self.xpath['wait_reboot_element']['asus_5400'],
+        }
         WebDriverWait(self.driver, 180).until(
             EC.visibility_of_element_located((By.XPATH, element[self.router_info]))
         )
