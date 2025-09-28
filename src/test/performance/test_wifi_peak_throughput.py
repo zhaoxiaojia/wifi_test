@@ -13,13 +13,14 @@ import logging
 from src.test import get_testdata
 from src.test.pyqt_log import log_fixture_params
 import pytest
+from src.tools.router_tool.Router import router_str
 
 from src.test.performance import common_setup, init_router
 
 _test_data = get_testdata(init_router())
 
 
-@pytest.fixture(scope='session', params=_test_data, ids=[str(i) for i in _test_data])
+@pytest.fixture(scope='session', params=_test_data, ids=[router_str(i) for i in _test_data])
 @log_fixture_params()
 def setup_router(request):
     router_info = request.param
