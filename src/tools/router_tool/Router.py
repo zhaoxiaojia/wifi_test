@@ -13,11 +13,26 @@ from src.util.constants import RouterConst
 
 
 def _info(info):
-    return 'Default' if info == None else info
+    if info is None:
+        return 'Default'
+
+    cleaned = str(info).strip()
+    if not cleaned or cleaned.lower() in {"none", "null"}:
+        return 'Default'
+
+    return cleaned
 
 
 def router_str(self):
-    return f'{_info(self.band)},{_info(self.ssid)},{_info(self.wireless_mode)},{_info(self.channel)},{_info(self.bandwidth)},{_info(self.security_mode)}'
+    parts = (
+        _info(self.band),
+        _info(self.ssid),
+        _info(self.wireless_mode),
+        _info(self.channel),
+        _info(self.bandwidth),
+        _info(self.security_mode),
+    )
+    return ''.join(parts)
 
 
 RUN_SETTING_ACTIVITY = RouterConst.RUN_SETTING_ACTIVITY
