@@ -116,7 +116,7 @@ class Asusax88uControl(AsusBaseControl):
             '11n': 'nvram set wl0_11ax=0;nvram set wl0_nmode_x=1;',
             '11g': 'nvram set wl0_11ax=0;nvram set wl0_nmode_x=5;',
             '11b': 'nvram set wl0_11ax=0;nvram set wl0_nmode_x=6;',
-            '11ax': 'nvram set wl0_11ax=1;nvram set wl0_nmode_x=9',
+            '11ax': 'nvram set wl0_11ax=1;nvram set wl0_nmode_x=0',
             'Legacy': 'nvram set wl0_he_features=0;nvram set wl0_nmode_x=2;',
         }
         if mode not in self.WIRELESS_2:
@@ -128,7 +128,7 @@ class Asusax88uControl(AsusBaseControl):
             'auto': 'nvram set wl1_11ax=0;nvram set wl1_nmode_x=0;',
             '11a': 'nvram set wl1_11ax=0;nvram set wl1_nmode_x=7;',
             '11ac': 'nvram set wl1_11ax=0;nvram set wl1_nmode_x=3;',
-            '11ax': 'nvram set wl1_11ax=1;nvram set wl1_nmode_x=9;',
+            '11ax': 'nvram set wl1_11ax=1;nvram set wl1_nmode_x=0;',
             'Legacy': 'nvram set wl1_he_features=0;nvram set wl1_nmode_x=2;',
         }
         if mode not in self.WIRELESS_5:
