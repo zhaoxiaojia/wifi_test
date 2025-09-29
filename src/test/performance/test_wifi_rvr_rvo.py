@@ -35,6 +35,10 @@ corner_tool = init_corner()
 @log_fixture_params()
 def setup_router(request):
     router_info = request.param
+    logging.info('Reset rf value before router setup')
+    rf_tool.execute_rf_cmd(0)
+    logging.info(rf_tool.get_rf_current_value())
+    time.sleep(3)
     connect_status = common_setup(router, router_info)
     yield connect_status, router_info
     pytest.dut.kill_iperf()

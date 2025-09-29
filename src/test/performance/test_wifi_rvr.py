@@ -10,6 +10,7 @@ Description：
 """
 
 import logging
+import time
 from typing import Optional
 
 from src.test import get_testdata
@@ -34,10 +35,18 @@ rf_tool = init_rf()
 def setup_router(request):
     _attenuation_scheduler.reset()
     router_info = request.param
+    logging.info('Reset rf value before router setup')
+    rf_tool.execute_rf_cmd(0)
+    logging.info(rf_tool.get_rf_current_value())
+    time.sleep(3)
     router = init_router()
     connect_status = common_setup(router, router_info)
     yield connect_status, router_info
     pytest.dut.kill_iperf()
+    logging.info('Reset rf value during teardown')
+    rf_tool.execute_rf_cmd(0)
+    logging.info(rf_tool.get_rf_current_value())
+    time.sleep(3)
 
 
 DEFAULT_STEP = 3
