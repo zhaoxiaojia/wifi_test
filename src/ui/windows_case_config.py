@@ -120,6 +120,7 @@ class CaseConfigPage(CardWidget):
         self._enable_rvr_wifi: bool = False
         self._locked_fields: set[str] | None = None
         self._current_case_path: str = ""
+        self._graph_client = None
         # -------------------- layout --------------------
         self.splitter = QSplitter(Qt.Horizontal, self)
         self.splitter.setChildrenCollapsible(False)
@@ -187,6 +188,11 @@ class CaseConfigPage(CardWidget):
     def resizeEvent(self, event):
         super().resizeEvent(event)
         self.splitter.setSizes([int(self.width() * 0.2), int(self.width() * 0.8)])
+
+    def set_graph_client(self, client) -> None:
+        """注入 Graph 客户端，供后续 Teams 功能使用。"""
+
+        self._graph_client = client
 
     def _is_performance_case(self, abs_case_path) -> bool:
         """
