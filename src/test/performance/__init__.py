@@ -70,18 +70,18 @@ def common_setup(router: Router, router_info: Router) -> bool:
     pytest.dut.skip_tx = False
     pytest.dut.skip_rx = False
 
-    router.change_setting(router_info), "Can't set ap , pls check first"
-    band = '5G' if '2' in router_info.band else '2.4G'
-    ssid = router_info.ssid + "_bat"
-    router.change_setting(Router(band=band, ssid=ssid))
-    if pytest.connect_type == 'telnet':
-        if router_info.band == "2.4G":
-            router.change_country("欧洲")
-        else:
-            router.change_country("美国")
-        router.driver.quit()
-    logging.info('router set done')
-    third_party_cfg = get_cfg().get("connect_type", {}).get("third_party", {}).get("enabled",{})
+    # router.change_setting(router_info), "Can't set ap , pls check first"
+    # band = '5G' if '2' in router_info.band else '2.4G'
+    # ssid = router_info.ssid + "_bat"
+    # router.change_setting(Router(band=band, ssid=ssid))
+    # if pytest.connect_type == 'telnet':
+    #     if router_info.band == "2.4G":
+    #         router.change_country("欧洲")
+    #     else:
+    #         router.change_country("美国")
+    #     router.driver.quit()
+    # logging.info('router set done')
+    third_party_cfg = get_cfg().get("connect_type", {}).get("third_party", {}).get("enabled", {})
     if third_party_cfg == 'true':
         wait_seconds = _parse_optional_int(
             third_party_cfg.get("wait_seconds"),
@@ -119,8 +119,8 @@ def common_setup(router: Router, router_info: Router) -> bool:
                     pytest.dut.checkoutput(cmd)
                     time.sleep(5)
                     if pytest.dut.wait_for_wifi_address(
-                        cmd=cmd,
-                        target=re.findall(r'(\d+\.\d+\.\d+\.)', pytest.dut.pc_ip)[0],
+                            cmd=cmd,
+                            target=re.findall(r'(\d+\.\d+\.\d+\.)', pytest.dut.pc_ip)[0],
                     ):
                         connect_status = True
                         break
@@ -148,11 +148,11 @@ def common_setup(router: Router, router_info: Router) -> bool:
 
 
 def _parse_optional_int(
-    value: Any,
-    *,
-    field_name: str = "value",
-    min_value: Optional[int] = None,
-    max_value: Optional[int] = None,
+        value: Any,
+        *,
+        field_name: str = "value",
+        min_value: Optional[int] = None,
+        max_value: Optional[int] = None,
 ) -> Optional[int]:
     """将配置中的数值安全地转换为 int。"""
 
@@ -198,8 +198,13 @@ def _parse_optional_int(
 @lru_cache(maxsize=1)
 def get_rf_step_list():
     cfg = get_cfg()
-    rf_solution = cfg['rf_solution']
-    return [i for i in range(*rf_solution['step'])][::3]
+    start, stop = cfg['rf_solution']['step']  # (start, stop)，stop 为上限（不含）
+    out = []
+    i = start
+    while i < stop:
+        out.append(i)
+        i += 3 if i < 45 else 2   # 45 之前步长 3；到达/超过 45 后步长 2
+    return out
 
 
 @lru_cache(maxsize=1)

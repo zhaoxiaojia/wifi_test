@@ -208,14 +208,15 @@ class MainWindow(FluentWindow):
         )
         self.about_nav_button.setVisible(True)
 
-        self._nav_post_login_states = {
+        self._nav_default_states = {
             self.case_nav_button: True,
             self.rvr_nav_button: False,
             self.run_nav_button: True,
             self.report_nav_button: False,
             self.about_nav_button: True,
         }
-        self._apply_nav_enabled({btn: False for btn in self._nav_post_login_states})
+        self._nav_post_login_states = dict(self._nav_default_states)
+        self._apply_nav_enabled(self._nav_default_states)
         self.setCurrentIndex(self.login_page)
 
         # 兼容旧属性
@@ -401,11 +402,11 @@ class MainWindow(FluentWindow):
             self._apply_nav_enabled(self._nav_post_login_states)
             self.setCurrentIndex(self.case_config_page)
         else:
-            self._apply_nav_enabled({btn: False for btn in self._nav_post_login_states})
+            self._apply_nav_enabled(self._nav_default_states)
             self.setCurrentIndex(self.login_page)
 
     def _on_logout_requested(self) -> None:
-        self._apply_nav_enabled({btn: False for btn in self._nav_post_login_states})
+        self._apply_nav_enabled(self._nav_default_states)
         self.setCurrentIndex(self.login_page)
         self._active_teams_account = None
         self._clear_graph_client()

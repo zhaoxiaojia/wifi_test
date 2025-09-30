@@ -101,7 +101,6 @@ class MySql:
     # 插入数据
     def insert(self, *value):
         if not hasattr(self,'_filed_'):
-            logging.debug('aaaaaaaaaaaaaaaa')
             self._get_field()
         if not isinstance(value[0], tuple): raise Exception("要求传入的参数类型为tuple元组！！！")
         if len(value) == 1:
