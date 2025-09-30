@@ -102,21 +102,35 @@ class TeamsLoginPage(QWidget):
         self.account_edit.setEnabled(not loading and not self._logged_in)
         self.password_edit.setEnabled(not loading and not self._logged_in)
 
+    def set_status_message(self, message: str, *, state: str = "info") -> None:
+        """更新状态标签文案及颜色。"""
+
+        color_map = {
+            "info": "#2F80ED",
+            "success": "#4CAF50",
+            "error": "#FF6B6B",
+        }
+        color = color_map.get(state, color_map["info"])
+        if message:
+            self.status_label.setStyleSheet(f"color:{color};")
+            self.status_label.setText(message)
+        else:
+            self.status_label.setStyleSheet("")
+            self.status_label.clear()
+
     def set_login_result(self, success: bool, message: str = "") -> None:
         """更新登录状态并对外广播结果"""
         self._logged_in = success
         self.set_loading(False)
         if success:
-            self.status_label.setStyleSheet("color:#4CAF50;")
-            self.status_label.setText(message or "登录成功，欢迎使用！")
+            self.set_status_message(message or "登录成功，欢迎使用！", state="success")
             self.login_button.setVisible(False)
             self.logout_button.setVisible(True)
             self.logout_button.setEnabled(True)
             self.account_edit.setEnabled(False)
             self.password_edit.setEnabled(False)
         else:
-            self.status_label.setStyleSheet("color:#FF6B6B;")
-            self.status_label.setText(message or "登录失败，请重试。")
+            self.set_status_message(message or "登录失败，请重试。", state="error")
             self.login_button.setVisible(True)
             self.login_button.setEnabled(True)
             self.logout_button.setVisible(False)
@@ -139,6 +153,7 @@ class TeamsLoginPage(QWidget):
         self.login_button.setEnabled(True)
         self.logout_button.setVisible(False)
         self.logout_button.setEnabled(False)
+        self.status_label.setStyleSheet("")
         self.status_label.clear()
 
     # ------------------------------ slots ------------------------------
@@ -147,7 +162,7 @@ class TeamsLoginPage(QWidget):
             return
         account = self.account_edit.text().strip()
         password = self.password_edit.text()
-        self.status_label.clear()
+        self.set_status_message("正在发起登录请求，请稍候…")
         self.set_loading(True)
         self.loginRequested.emit(account, password)
 
