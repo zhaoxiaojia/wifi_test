@@ -1,6 +1,7 @@
 # !/usr/bin/env python
 # -*-coding:utf-8 -*-
 
+import json
 import sys
 from pathlib import Path
 import traceback
@@ -31,8 +32,11 @@ from PyQt5.QtCore import (
     QEasingCurve,
     QParallelAnimationGroup,
     QPoint,
+    QObject,
+    QThread,
+    pyqtSignal,
 )
-from src.util.constants import Paths
+from src.util.auth import TeamsIdentityClient, TeamsAuthError
 from src.util.constants import Paths, cleanup_temp_dir
 
 # 确保工作目录为可执行文件所在目录
@@ -41,6 +45,49 @@ os.chdir(Paths.BASE_DIR)
 
 def log_exception(exc_type, exc_value, exc_tb):
     logging.error("".join(traceback.format_exception(exc_type, exc_value, exc_tb)))
+
+
+class TeamsAuthWorker(QObject):
+    """后台线程中执行 Teams 登录流程。"""
+
+    finished = pyqtSignal(bool, str, dict)
+    progress = pyqtSignal(str)
+
+    def __init__(
+        self,
+        client: TeamsIdentityClient,
+        *,
+        login_hint: str | None = None,
+        scopes: list[str] | None = None,
+        use_device_code: bool = False,
+    ) -> None:
+        super().__init__()
+        self._client = client
+        self._login_hint = login_hint or None
+        self._scopes = scopes
+        self._use_device_code = use_device_code
+
+    def run(self) -> None:
+        try:
+            result = self._client.refresh_token(
+                username=self._login_hint,
+                scopes=self._scopes,
+                use_device_code=self._use_device_code,
+                progress_callback=self.progress.emit,
+            )
+            account = result.get("account") or {}
+            display_name = (
+                account.get("name")
+                or account.get("username")
+                or self._login_hint
+                or "Microsoft 账户"
+            )
+            self.finished.emit(True, f"登录成功，欢迎 {display_name}", result)
+        except TeamsAuthError as exc:
+            self.finished.emit(False, str(exc), {})
+        except Exception as exc:  # pragma: no cover - 运行期异常记录
+            logging.exception("Teams 登录失败")
+            self.finished.emit(False, f"登录失败：{exc}", {})
 
 
 class MainWindow(FluentWindow):
@@ -54,6 +101,13 @@ class MainWindow(FluentWindow):
         self.setMinimumSize(width, height)
         self.center_window()
         self.show()
+
+        self._teams_client: TeamsIdentityClient | None = None
+        self._teams_scopes: list[str] | None = None
+        self._teams_use_device_code = False
+        self._auth_thread: QThread | None = None
+        self._auth_worker: TeamsAuthWorker | None = None
+        self._active_teams_account: dict | None = None
 
         final_rect = self.geometry()
         start_rect = final_rect.adjusted(
@@ -93,6 +147,7 @@ class MainWindow(FluentWindow):
         self.login_page.loginRequested.connect(self._on_login_requested)
         self.login_page.loginResult.connect(self._on_login_result)
         self.login_page.logoutRequested.connect(self._on_logout_requested)
+        self._load_teams_client()
 
         self.case_config_page = CaseConfigPage(self.on_run)
         self.rvr_wifi_config_page = RvrWifiConfigPage(self.case_config_page)
@@ -177,12 +232,94 @@ class MainWindow(FluentWindow):
             if btn and not sip.isdeleted(btn):
                 btn.setEnabled(bool(enabled))
 
-    def _on_login_requested(self, account: str, password: str) -> None:
-        """处理登录请求：简单校验账号密码是否为空"""
-        if not account or not password:
-            self.login_page.set_login_result(False, "账号和密码不能为空")
+    def _load_teams_client(self) -> None:
+        """加载 Teams 身份配置并初始化认证客户端。"""
+
+        config_path = Path(Paths.CONFIG_DIR) / "teams_identity.json"
+        self._teams_client = None
+        self._teams_scopes = None
+        self._teams_use_device_code = False
+        if not config_path.exists():
+            logging.warning("未找到 Teams 身份配置文件：%s", config_path)
+            self.login_page.set_status_message(
+                "未找到 Teams 配置文件，请在 config/teams_identity.json 中填写 client_id 等信息。",
+            )
             return
-        self.login_page.set_login_result(True, "登录成功")
+        try:
+            raw = config_path.read_text(encoding="utf-8")
+            data = json.loads(raw) if raw.strip() else {}
+        except Exception as exc:
+            logging.exception("读取 Teams 身份配置失败")
+            self.login_page.set_status_message(f"读取 Teams 配置失败：{exc}")
+            return
+        client_id = data.get("client_id")
+        if not client_id:
+            self.login_page.set_status_message("Teams 配置缺少 client_id，请更新 config/teams_identity.json。")
+            return
+        scopes_raw = data.get("scopes")
+        if scopes_raw is None:
+            scopes_list: list[str] | None = None
+        elif isinstance(scopes_raw, str):
+            scopes_list = [scopes_raw]
+        elif isinstance(scopes_raw, (list, tuple, set)):
+            scopes_list = [str(scope) for scope in scopes_raw if scope]
+        else:
+            scopes_list = [str(scopes_raw)]
+        cache_name = data.get("cache_file", "teams_auth.json")
+        cache_path = Path(Paths.CONFIG_DIR) / cache_name
+        try:
+            self._teams_client = TeamsIdentityClient(
+                client_id=client_id,
+                tenant_id=data.get("tenant_id"),
+                authority=data.get("authority"),
+                redirect_uri=data.get("redirect_uri"),
+                default_scopes=scopes_list,
+                cache_path=cache_path,
+            )
+        except Exception as exc:
+            logging.exception("初始化 Teams 身份客户端失败")
+            self.login_page.set_status_message(f"初始化 Teams 身份客户端失败：{exc}")
+            return
+        self._teams_scopes = scopes_list
+        self._teams_use_device_code = bool(data.get("use_device_code"))
+        self.login_page.set_status_message("请点击登录按钮完成微软账户授权。")
+
+    def _on_login_requested(self, account: str, _password: str) -> None:
+        """处理登录请求，调用 Teams 身份模块执行登录。"""
+
+        if not self._teams_client:
+            self.login_page.set_login_result(False, "未配置 Teams 应用信息，请检查 config/teams_identity.json。")
+            return
+        if self._auth_thread and self._auth_thread.isRunning():
+            self.login_page.set_status_message("正在登录，请稍候…")
+            return
+        self.login_page.set_status_message("正在尝试刷新登录状态…")
+        self._auth_thread = QThread(self)
+        scopes_config = self._teams_scopes or self._teams_client.default_scopes
+        scopes = list(scopes_config) if scopes_config else None
+        self._auth_worker = TeamsAuthWorker(
+            self._teams_client,
+            login_hint=account or None,
+            scopes=scopes,
+            use_device_code=self._teams_use_device_code,
+        )
+        self._auth_worker.moveToThread(self._auth_thread)
+        self._auth_thread.started.connect(self._auth_worker.run)
+        self._auth_worker.progress.connect(self.login_page.set_status_message)
+        self._auth_worker.finished.connect(self._handle_auth_finished)
+        self._auth_worker.finished.connect(self._auth_thread.quit)
+        self._auth_worker.finished.connect(self._auth_worker.deleteLater)
+        self._auth_thread.finished.connect(self._auth_thread.deleteLater)
+        self._auth_thread.start()
+
+    def _handle_auth_finished(self, success: bool, message: str, payload: dict | None) -> None:
+        self._auth_thread = None
+        self._auth_worker = None
+        if success:
+            self._active_teams_account = (payload or {}).get("account")
+        else:
+            self._active_teams_account = None
+        self.login_page.set_login_result(success, message)
 
     def _on_login_result(self, success: bool, _message: str) -> None:
         if success:
@@ -195,6 +332,11 @@ class MainWindow(FluentWindow):
     def _on_logout_requested(self) -> None:
         self._apply_nav_enabled({btn: False for btn in self._nav_post_login_states})
         self.setCurrentIndex(self.login_page)
+        self._active_teams_account = None
+        if self._teams_client:
+            with suppress(Exception):
+                self._teams_client.sign_out()
+        self.login_page.set_status_message("已清除 Teams 登录状态，请重新登录。")
 
     def show_rvr_wifi_config(self):
         """在导航栏中显示 RVR Wi-Fi 配置页（幂等：已存在则只显示）"""
