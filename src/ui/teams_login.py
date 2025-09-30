@@ -71,12 +71,12 @@ class TeamsLoginPage(QWidget):
         button_row.addItem(QSpacerItem(20, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
 
         self.login_button = PushButton("登录", self)
-        self.login_button.setIcon(FluentIcon.LOGIN)
+        # self.login_button.setIcon(FluentIcon.LOGIN)
         self.login_button.clicked.connect(self._emit_login)
         button_row.addWidget(self.login_button)
 
         self.logout_button = PushButton("注销", self)
-        self.logout_button.setIcon(FluentIcon.SIGN_OUT)
+        # self.logout_button.setIcon(FluentIcon.SIGN_OUT)
         self.logout_button.clicked.connect(self._emit_logout)
         self.logout_button.setVisible(False)
         self.logout_button.setEnabled(False)
