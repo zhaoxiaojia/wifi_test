@@ -34,10 +34,12 @@ from PyQt5.QtCore import (
     QPoint,
     QObject,
     QThread,
+    QTimer,
     pyqtSignal,
 )
 from src.util.auth import TeamsIdentityClient, TeamsAuthError
 from src.util.constants import Paths, cleanup_temp_dir
+from src.tools import GraphClient, GraphAuthError
 
 # 确保工作目录为可执行文件所在目录
 os.chdir(Paths.BASE_DIR)
@@ -108,6 +110,7 @@ class MainWindow(FluentWindow):
         self._auth_thread: QThread | None = None
         self._auth_worker: TeamsAuthWorker | None = None
         self._active_teams_account: dict | None = None
+        self._graph_client: GraphClient | None = None
 
         final_rect = self.geometry()
         start_rect = final_rect.adjusted(
@@ -232,6 +235,74 @@ class MainWindow(FluentWindow):
             if btn and not sip.isdeleted(btn):
                 btn.setEnabled(bool(enabled))
 
+    # ------------------------------------------------------------------
+    def _set_graph_client_for_pages(self, client: GraphClient | None) -> None:
+        for page in (
+            getattr(self, "case_config_page", None),
+            getattr(self, "rvr_wifi_config_page", None),
+            getattr(self, "run_page", None),
+        ):
+            if page and not sip.isdeleted(page) and hasattr(page, "set_graph_client"):
+                try:
+                    page.set_graph_client(client)
+                except Exception:
+                    logging.exception("向页面注入 GraphClient 失败：%s", page)
+
+    def _clear_graph_client(self) -> None:
+        if self._graph_client:
+            with suppress(Exception):
+                self._graph_client.close()
+        self._graph_client = None
+        self._set_graph_client_for_pages(None)
+
+    def _handle_graph_auth_failure(self, message: str) -> None:
+        logging.warning("Graph 访问需要重新认证：%s", message)
+        self._clear_graph_client()
+        self._active_teams_account = None
+
+        def _notify() -> None:
+            text = message or "Teams 登录已过期，请重新登录。"
+            self.login_page.set_status_message(text, state="error")
+            self.login_page.set_login_result(False, text)
+
+        QTimer.singleShot(0, _notify)
+
+    def _create_graph_client(self, payload: dict | None) -> None:
+        self._clear_graph_client()
+        if not payload:
+            logging.warning("登录结果缺少令牌信息，无法初始化 Graph 客户端。")
+            return
+        token = payload.get("access_token")
+        if not token:
+            logging.warning("登录结果缺少 access_token，无法初始化 Graph 客户端。")
+            return
+        account = payload.get("account") or {}
+        username = account.get("username") or account.get("upn") or None
+        scopes = list(self._teams_scopes) if self._teams_scopes else None
+
+        def _token_provider(force_refresh: bool = False):
+            if not self._teams_client:
+                return token
+            try:
+                result = self._teams_client.refresh_token(
+                    username=username,
+                    scopes=scopes,
+                    force_refresh=bool(force_refresh),
+                    allow_interactive=False,
+                )
+            except TeamsAuthError as exc:
+                logging.warning("静默刷新 Teams 令牌失败：%s", exc)
+                raise GraphAuthError(str(exc)) from exc
+            return result.get("access_token")
+
+        self._graph_client = GraphClient(
+            access_token=token,
+            token_provider=_token_provider,
+            on_auth_failure=self._handle_graph_auth_failure,
+        )
+        self._set_graph_client_for_pages(self._graph_client)
+
+
     def _load_teams_client(self) -> None:
         """加载 Teams 身份配置并初始化认证客户端。"""
 
@@ -317,8 +388,12 @@ class MainWindow(FluentWindow):
         self._auth_worker = None
         if success:
             self._active_teams_account = (payload or {}).get("account")
+            self._create_graph_client(payload or {})
+            if not self._graph_client:
+                logging.warning("Teams 登录成功，但 Graph 客户端未初始化，部分功能可能不可用。")
         else:
             self._active_teams_account = None
+            self._clear_graph_client()
         self.login_page.set_login_result(success, message)
 
     def _on_login_result(self, success: bool, _message: str) -> None:
@@ -333,6 +408,7 @@ class MainWindow(FluentWindow):
         self._apply_nav_enabled({btn: False for btn in self._nav_post_login_states})
         self.setCurrentIndex(self.login_page)
         self._active_teams_account = None
+        self._clear_graph_client()
         if self._teams_client:
             with suppress(Exception):
                 self._teams_client.sign_out()
