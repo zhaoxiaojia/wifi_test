@@ -18,3 +18,4 @@ pysnmp
 roku
 pytest-dependency
 scapy
+msal
