@@ -22,6 +22,7 @@ from src.ui.rvr_wifi_config import RvrWifiConfigPage
 from src.ui.run import RunPage
 from src.ui.report_page import ReportPage
 from src.ui.about_page import AboutPage
+from src.ui.teams_login import TeamsLoginPage
 from qfluentwidgets import setTheme, Theme
 from PyQt5.QtGui import QGuiApplication, QFont
 from PyQt5.QtCore import (
@@ -88,6 +89,11 @@ class MainWindow(FluentWindow):
         self._show_group.start()
 
         # 页面实例化
+        self.login_page = TeamsLoginPage(self)
+        self.login_page.loginRequested.connect(self._on_login_requested)
+        self.login_page.loginResult.connect(self._on_login_result)
+        self.login_page.logoutRequested.connect(self._on_logout_requested)
+
         self.case_config_page = CaseConfigPage(self.on_run)
         self.rvr_wifi_config_page = RvrWifiConfigPage(self.case_config_page)
         self.run_page = RunPage("", parent=self)
@@ -96,11 +102,19 @@ class MainWindow(FluentWindow):
         # 报告页：默认置灰，等待 report_dir 创建后启用
         self.report_page = ReportPage(self)
         # 导航按钮引用
+        self.login_nav_button = self.addSubInterface(
+            self.login_page,
+            FluentIcon.PEOPLE,
+            "Login",
+        )
+        self.login_nav_button.setVisible(True)
+        self.login_nav_button.setEnabled(True)
+
         self.case_nav_button = self.addSubInterface(
             self.case_config_page, FluentIcon.SETTING, "Config Setup", "Case Config"
         )
         self.case_nav_button.setVisible(True)
-        self.case_nav_button.setEnabled(True)
+
         self.rvr_nav_button = self.addSubInterface(
             self.rvr_wifi_config_page,
             FluentIcon.WIFI,
@@ -108,7 +122,7 @@ class MainWindow(FluentWindow):
             "RVR Wi-Fi Config",
         )
         self.rvr_nav_button.setVisible(True)
-        self.rvr_nav_button.setEnabled(False)
+
         self.run_nav_button = self.addSubInterface(
             self.run_page,
             FluentIcon.PLAY,
@@ -116,10 +130,7 @@ class MainWindow(FluentWindow):
             position=NavigationItemPosition.BOTTOM,
         )
         self.run_nav_button.setVisible(True)
-        # 默认启用运行页按钮，便于直接查看
-        self.run_nav_button.setEnabled(True)
 
-        # 报告页导航按钮：默认不可用
         self.report_nav_button = self.addSubInterface(
             self.report_page,
             FluentIcon.DOCUMENT,
@@ -127,7 +138,7 @@ class MainWindow(FluentWindow):
             position=NavigationItemPosition.BOTTOM,
         )
         self.report_nav_button.setVisible(True)
-        self.report_nav_button.setEnabled(False)
+
         self.last_report_dir = None
 
         self.about_page = AboutPage(self)
@@ -138,7 +149,16 @@ class MainWindow(FluentWindow):
             position=NavigationItemPosition.BOTTOM,
         )
         self.about_nav_button.setVisible(True)
-        self.about_nav_button.setEnabled(True)
+
+        self._nav_post_login_states = {
+            self.case_nav_button: True,
+            self.rvr_nav_button: False,
+            self.run_nav_button: True,
+            self.report_nav_button: False,
+            self.about_nav_button: True,
+        }
+        self._apply_nav_enabled({btn: False for btn in self._nav_post_login_states})
+        self.setCurrentIndex(self.login_page)
 
         # 兼容旧属性
         self._run_nav_button = self.run_nav_button
@@ -150,6 +170,31 @@ class MainWindow(FluentWindow):
 
         # 可加更多页面，比如“历史记录”“关于”等
         self.setMicaEffectEnabled(True)  # Win11下生效毛玻璃
+
+    def _apply_nav_enabled(self, states: dict) -> None:
+        """批量设置导航按钮的 enable 状态"""
+        for btn, enabled in states.items():
+            if btn and not sip.isdeleted(btn):
+                btn.setEnabled(bool(enabled))
+
+    def _on_login_requested(self, account: str, password: str) -> None:
+        """处理登录请求：简单校验账号密码是否为空"""
+        if not account or not password:
+            self.login_page.set_login_result(False, "账号和密码不能为空")
+            return
+        self.login_page.set_login_result(True, "登录成功")
+
+    def _on_login_result(self, success: bool, _message: str) -> None:
+        if success:
+            self._apply_nav_enabled(self._nav_post_login_states)
+            self.setCurrentIndex(self.case_config_page)
+        else:
+            self._apply_nav_enabled({btn: False for btn in self._nav_post_login_states})
+            self.setCurrentIndex(self.login_page)
+
+    def _on_logout_requested(self) -> None:
+        self._apply_nav_enabled({btn: False for btn in self._nav_post_login_states})
+        self.setCurrentIndex(self.login_page)
 
     def show_rvr_wifi_config(self):
         """在导航栏中显示 RVR Wi-Fi 配置页（幂等：已存在则只显示）"""
