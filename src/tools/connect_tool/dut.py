@@ -612,7 +612,7 @@ class dut():
 
     @step
     def get_rssi(self):
-        for i in range(10):
+        for i in range(3):
             time.sleep(3)
             rssi_info = pytest.dut.checkoutput(pytest.dut.IW_LINNK_COMMAND)
             logging.info(f'Get WiFi link status via command {rssi_info}')
