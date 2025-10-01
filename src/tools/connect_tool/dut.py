@@ -553,7 +553,7 @@ class dut():
             logging.info(f"waiting for wifi {target}")
             step = 0
             while True:
-                time.sleep(5)
+                time.sleep(3)
                 step += 1
                 info = self.checkoutput('ifconfig wlan0')
                 # logging.info(f'info {info}')
@@ -567,7 +567,7 @@ class dut():
                     logging.info('repeat command')
                     if cmd:
                         info = self.checkoutput(cmd)
-                if step > 10:
+                if step > 6:
                     assert False, f"Can't catch the address:{target} "
             logging.info(f'ip address {ip_address}')
             return True, ip_address
