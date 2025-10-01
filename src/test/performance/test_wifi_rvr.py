@@ -20,21 +20,23 @@ from src.test.performance import (
     get_cfg,
     get_rf_step_list,
     init_rf,
-    init_router,
+    init_router, wait_connect,
 )
 from src.tools.router_tool.Router import router_str
 
-
 _test_data = get_testdata(init_router())
 rf_tool = init_rf()
+
 
 @pytest.fixture(scope="session", params=_test_data, ids=[router_str(i) for i in _test_data])
 @log_fixture_params()
 def setup_router(request):
     router_info = request.param
     router = init_router()
-    connect_status = common_setup(router, router_info)
-    yield connect_status, router_info
+    common_setup(router, router_info)
+    rf_tool.execute_rf_cmd(0)
+    logging.info(rf_tool.get_rf_current_value())
+    yield router_info
     pytest.dut.kill_iperf()
 
 
@@ -42,15 +44,14 @@ def setup_router(request):
 @log_fixture_params()
 def setup_attenuation(request, setup_router):
     db_set = request.param
-    connect_status, router_info = setup_router
+    router_info = setup_router
 
     rf_tool.execute_rf_cmd(db_set)
     logging.info("Set attenuation: %s dB", db_set)
     logging.info(rf_tool.get_rf_current_value())
-
+    connect_status = wait_connect(router_info)
     pytest.dut.get_rssi()
     logging.info("Measured RSSI: %s", pytest.dut.rssi_num)
-
     yield connect_status, router_info, db_set
     pytest.dut.kill_iperf()
 

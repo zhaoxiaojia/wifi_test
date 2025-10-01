@@ -70,17 +70,31 @@ def common_setup(router: Router, router_info: Router) -> bool:
     pytest.dut.skip_tx = False
     pytest.dut.skip_rx = False
 
-    # router.change_setting(router_info), "Can't set ap , pls check first"
-    # band = '5G' if '2' in router_info.band else '2.4G'
-    # ssid = router_info.ssid + "_bat"
-    # router.change_setting(Router(band=band, ssid=ssid))
-    # if pytest.connect_type == 'telnet':
-    #     if router_info.band == "2.4G":
-    #         router.change_country("欧洲")
-    #     else:
-    #         router.change_country("美国")
-    #     router.driver.quit()
-    # logging.info('router set done')
+    router.change_setting(router_info), "Can't set ap , pls check first"
+    band = '5G' if '2' in router_info.band else '2.4G'
+    ssid = router_info.ssid + "_bat"
+    router.change_setting(Router(band=band, ssid=ssid))
+    if pytest.connect_type == 'telnet':
+        if router_info.band == "2.4G":
+            router.change_country("欧洲")
+        else:
+            router.change_country("美国")
+        router.driver.quit()
+    logging.info('router set done')
+    cfg = load_config(refresh=True)
+    rvr_tool = cfg['rvr']['tool']
+    if rvr_tool == 'ixchariot':
+        script = (
+            'set script "$ixchariot_installation_dir/Scripts/High_Performance_Throughput.scr"\n'
+            if '5' in router_info.band
+            else 'set script "$ixchariot_installation_dir/Scripts/Throughput.scr"\n'
+        )
+        pytest.dut.ix.modify_tcl_script("set script ", script)
+        pytest.dut.checkoutput(pytest.dut.IX_ENDPOINT_COMMAND)
+        time.sleep(3)
+
+
+def wait_connect(router_info: Router):
     third_party_cfg = get_cfg().get("connect_type", {}).get("third_party", {}).get("enabled", {})
     if third_party_cfg == 'true':
         wait_seconds = _parse_optional_int(
@@ -131,19 +145,6 @@ def common_setup(router: Router, router_info: Router) -> bool:
     logging.info(f'dut_ip:{pytest.dut.dut_ip}')
     logging.info(f'pc_ip:{pytest.dut.pc_ip}')
     logging.info('dut connected')
-
-    cfg = load_config(refresh=True)
-    rvr_tool = cfg['rvr']['tool']
-    if rvr_tool == 'ixchariot':
-        script = (
-            'set script "$ixchariot_installation_dir/Scripts/High_Performance_Throughput.scr"\n'
-            if '5' in router_info.band
-            else 'set script "$ixchariot_installation_dir/Scripts/Throughput.scr"\n'
-        )
-        pytest.dut.ix.modify_tcl_script("set script ", script)
-        pytest.dut.checkoutput(pytest.dut.IX_ENDPOINT_COMMAND)
-        time.sleep(3)
-
     return connect_status
 
 
@@ -203,7 +204,7 @@ def get_rf_step_list():
     i = start
     while i < stop:
         out.append(i)
-        i += 3 if i < 45 else 2   # 45 之前步长 3；到达/超过 45 后步长 2
+        i += 3 if i < 45 else 2  # 45 之前步长 3；到达/超过 45 后步长 2
     return out
 
 
