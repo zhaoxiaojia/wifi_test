@@ -1,46 +1,102 @@
-from functools import lru_cache
-from src.util.constants import get_config_base
-import yaml
+﻿from __future__ import annotations
+
 import logging
+from functools import lru_cache
+from pathlib import Path
+from typing import Tuple
+
+import yaml
+
+from src.tools.config_sections import (
+    DUT_CONFIG_FILENAME,
+    OTHER_CONFIG_FILENAME,
+    merge_config_sections,
+    split_config_data,
+)
+from src.util.constants import get_config_base
+
+
+def _read_yaml(path: Path) -> dict:
+    if not path.exists():
+        return {}
+    try:
+        with path.open(encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+    except Exception as exc:
+        logging.error("Failed to load config section %s: %s", path, exc)
+        return {}
+    return data or {}
+
+
+def _write_yaml(path: Path, data: dict) -> None:
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", encoding="utf-8") as f:
+            yaml.safe_dump(data or {}, f, allow_unicode=True, sort_keys=False, width=4096)
+    except Exception as exc:
+        logging.error("Failed to write config section %s: %s", path, exc)
+
+
+def _load_sections() -> Tuple[dict, dict]:
+    config_dir = get_config_base()
+    dut_path = config_dir / DUT_CONFIG_FILENAME
+    other_path = config_dir / OTHER_CONFIG_FILENAME
+    legacy_path = config_dir / "config.yaml"
+
+    dut_section = _read_yaml(dut_path)
+    other_section = _read_yaml(other_path)
+
+    if not dut_section and not other_section and legacy_path.exists():
+        legacy_data = _read_yaml(legacy_path)
+        dut_section, other_section = split_config_data(legacy_data)
+        _write_yaml(dut_path, dut_section)
+        _write_yaml(other_path, other_section)
+
+    return dut_section, other_section
 
 
 @lru_cache()
 def _cached_load_config():
-    """实际读取 config.yaml 并缓存结果。"""
-    config_path = get_config_base() / "config.yaml"
-    with config_path.open(encoding="utf-8") as f:
-        data = yaml.safe_load(f)
-        return data or {}
+    dut_section, other_section = _load_sections()
+    merged = merge_config_sections(dut_section, other_section)
+
+    legacy_path = get_config_base() / "config.yaml"
+    if merged:
+        _write_yaml(legacy_path, merged)
+    elif legacy_path.exists():
+        # Keep legacy file in sync even when empty
+        _write_yaml(legacy_path, {})
+
+    return merged
 
 
 def load_config(refresh: bool = False):
-    """加载 config.yaml。
-
-    默认返回缓存内容；当 ``refresh=True`` 时清除缓存并重新读取文件。
-    """
-    config_path = get_config_base() / "config.yaml"
+    """Load merged configuration composed from DUT and other sections."""
     if refresh:
         load_config.cache_clear()
-        logging.debug("Cache cleared, reloading %s", config_path)
+        dut_path = get_config_base() / DUT_CONFIG_FILENAME
+        other_path = get_config_base() / OTHER_CONFIG_FILENAME
+        logging.debug("Cache cleared, reloading %s and %s", dut_path, other_path)
     else:
-        logging.debug("Loading config file without clearing cache: %s", config_path)
+        logging.debug("Loading config sections with cache: %s, %s",
+                      get_config_base() / DUT_CONFIG_FILENAME,
+                      get_config_base() / OTHER_CONFIG_FILENAME)
 
     config = _cached_load_config() or {}
 
     if refresh:
         try:
-            logging.debug("config_path: %s", config_path)
-            logging.debug("rf_solution['step']: %s", config['rf_solution']['step'])
-        except Exception as e:
-            logging.warning("Failed to get rf_solution['step']: %s", e)
+            logging.debug("DUT section keys: %s", list(config.keys()))
+        except Exception as exc:
+            logging.warning("Failed to introspect config keys: %s", exc)
         try:
-            with open(config_path, encoding="utf-8") as f:
-                logging.debug("Config file content:\n%s", f.read())
-        except Exception as e:
-            logging.warning("Failed to read config file content: %s", e)
+            legacy_path = get_config_base() / "config.yaml"
+            with legacy_path.open(encoding="utf-8") as f:
+                logging.debug("Legacy config snapshot:\n%s", f.read())
+        except Exception as exc:
+            logging.warning("Failed to read legacy config file: %s", exc)
 
     return config
 
 
-# 兼容外部直接调用 ``load_config.cache_clear``
 load_config.cache_clear = _cached_load_config.cache_clear
