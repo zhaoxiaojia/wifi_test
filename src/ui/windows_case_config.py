@@ -45,7 +45,8 @@ from PyQt5.QtWidgets import (
     QLabel,
     QFileSystemModel,
     QCheckBox,
-    QSplitter
+    QSplitter,
+    QStackedWidget
 )
 
 from qfluentwidgets import (
@@ -59,6 +60,10 @@ from qfluentwidgets import (
     InfoBarPosition,
     ScrollArea
 )
+try:
+    from qfluentwidgets import StepView  # type: ignore
+except Exception:  # pragma: no cover - 运行环境缺失时退化为自定义指示器
+    StepView = None
 from .animated_tree_view import AnimatedTreeView
 from .theme import apply_theme, FONT_FAMILY, TEXT_COLOR, apply_font_and_selection, apply_groupbox_style
 
@@ -96,6 +101,179 @@ class TestFileFilterModel(QSortFilterProxyModel):
         # 强制认为目录有子项（即便都被过滤了）
         return True
 
+
+class _FallbackStepView(QWidget):
+    """在缺少 StepView 时使用的简易步骤指示器"""
+
+    def __init__(self, steps: list[str], parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._steps: list[str] = []
+        self._labels: list[QLabel] = []
+        self._layout = QHBoxLayout(self)
+        self._layout.setContentsMargins(0, 0, 0, 0)
+        self._layout.setSpacing(16)
+        self.set_steps(steps)
+
+    def set_steps(self, steps: list[str]) -> None:
+        self._steps = list(steps)
+        while self._layout.count():
+            item = self._layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+        self._labels.clear()
+        for idx, text in enumerate(self._steps, start=1):
+            label = QLabel(f"{idx}. {text}", self)
+            label.setObjectName("wizardStepLabel")
+            label.setStyleSheet("color: #6c6c6c;")
+            self._layout.addWidget(label)
+            self._labels.append(label)
+        self._layout.addStretch(1)
+        self.set_current_index(0)
+
+    def set_current_index(self, index: int) -> None:
+        for i, label in enumerate(self._labels):
+            if i == index:
+                label.setStyleSheet("color: #0078d4; font-weight: 600;")
+            else:
+                label.setStyleSheet("color: #6c6c6c; font-weight: 400;")
+
+
+class ConfigGroupPanel(QWidget):
+    """负责三列分组布局及动画效果的容器"""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
+        self._column_layouts: list[QVBoxLayout] = []
+        for _ in range(3):
+            column = QVBoxLayout()
+            column.setSpacing(8)
+            column.setAlignment(Qt.AlignTop)
+            layout.addLayout(column, 1)
+            self._column_layouts.append(column)
+        self._group_entries: list[tuple[QWidget, int | None]] = []
+        self._group_positions: dict[QWidget, int] = {}
+        self._col_weight: list[int] = [0] * len(self._column_layouts)
+        self._active_move_anims: dict[QWidget, QPropertyAnimation] = {}
+
+    def clear(self) -> None:
+        self._group_entries.clear()
+        self._group_positions.clear()
+        self._col_weight = [0] * len(self._column_layouts)
+        for column in self._column_layouts:
+            while column.count():
+                item = column.takeAt(0)
+                widget = item.widget()
+                if widget is not None:
+                    widget.setParent(None)
+
+    def add_group(self, group: QWidget | None, weight: int | None = None, defer: bool = False) -> None:
+        if group is None:
+            return
+        apply_theme(group)
+        apply_groupbox_style(group)
+        for idx, (existing, _) in enumerate(self._group_entries):
+            if existing is group:
+                self._group_entries[idx] = (group, weight)
+                break
+        else:
+            self._group_entries.append((group, weight))
+        if not defer:
+            self.request_rebalance()
+
+    def set_groups(self, groups: list[QWidget]) -> None:
+        self.clear()
+        for group in groups:
+            self.add_group(group, defer=True)
+        self.request_rebalance()
+
+    def request_rebalance(self) -> None:
+        self._rebalance_columns()
+        QTimer.singleShot(0, self._rebalance_columns)
+
+    def _estimate_group_weight(self, group: QWidget) -> int:
+        from PyQt5.QtWidgets import (
+            QLineEdit, QComboBox, QTextEdit, QSpinBox, QDoubleSpinBox, QCheckBox
+        )
+        inputs = group.findChildren((QLineEdit, QComboBox, QTextEdit, QSpinBox, QDoubleSpinBox, QCheckBox))
+        return max(1, len(inputs))
+
+    def _measure_group_height(self, group: QWidget, weight_override: int | None = None) -> int:
+        if weight_override is not None:
+            return max(1, int(weight_override))
+        hint = group.sizeHint()
+        height = hint.height() if hint.isValid() else 0
+        if height <= 0:
+            min_hint = group.minimumSizeHint()
+            height = min_hint.height() if min_hint.isValid() else 0
+        if height <= 0:
+            height = self._estimate_group_weight(group)
+        return max(1, int(height))
+
+    def _rebalance_columns(self) -> None:
+        if not self._column_layouts or not self._group_entries:
+            return
+        old_geometries: dict[QWidget, QRect] = {}
+        for group, _ in self._group_entries:
+            if group is not None and group.parent() is not None:
+                old_geometries[group] = group.geometry()
+        entries: list[tuple[QWidget, int]] = []
+        for group, weight_override in self._group_entries:
+            if group is None:
+                continue
+            entries.append((group, self._measure_group_height(group, weight_override)))
+        if not entries:
+            return
+        entries.sort(key=lambda item: item[1], reverse=True)
+        for layout in self._column_layouts:
+            while layout.count():
+                item = layout.takeAt(0)
+                widget = item.widget()
+                if widget is not None:
+                    widget.setParent(None)
+        self._col_weight = [0] * len(self._column_layouts)
+        initial_pass = not self._group_positions
+        moved_groups: list[tuple[QWidget, QRect | None]] = []
+        for group, height in entries:
+            column_index = self._col_weight.index(min(self._col_weight))
+            prev_col = self._group_positions.get(group)
+            self._column_layouts[column_index].addWidget(group)
+            self._col_weight[column_index] += height
+            self._group_positions[group] = column_index
+            if (prev_col is None and not initial_pass) or (prev_col is not None and prev_col != column_index):
+                moved_groups.append((group, old_geometries.get(group)))
+        self.updateGeometry()
+        if moved_groups:
+            QTimer.singleShot(0, lambda moves=tuple(moved_groups): self._animate_group_transitions(moves))
+
+    def _animate_group_transitions(self, moves: tuple[tuple[QWidget, QRect | None], ...]) -> None:
+        for group, old_rect in moves:
+            if group is None or not group.isVisible():
+                continue
+            self._start_move_animation(group, old_rect)
+
+    def _start_move_animation(self, group: QWidget, old_rect: QRect | None) -> None:
+        if old_rect is None:
+            return
+        current_rect = group.geometry()
+        if current_rect == old_rect:
+            return
+        existing = self._active_move_anims.pop(group, None)
+        if existing is not None:
+            existing.stop()
+        group.setGeometry(old_rect)
+        group.raise_()
+        animation = QPropertyAnimation(group, b"geometry", group)
+        animation.setDuration(320)
+        animation.setStartValue(old_rect)
+        animation.setEndValue(current_rect)
+        animation.setEasingCurve(QEasingCurve.InOutCubic)
+        self._active_move_anims[group] = animation
+        animation.finished.connect(lambda g=group: self._active_move_anims.pop(g, None))
+        animation.start()
 
 class CaseConfigPage(CardWidget):
     """用例配置主页面"""
@@ -140,22 +318,43 @@ class CaseConfigPage(CardWidget):
         container = QWidget()
         right = QVBoxLayout(container)
         right.setContentsMargins(0, 0, 0, 0)
-        right.setSpacing(5)
-        self._columns_widget = QWidget()
-        cols = QHBoxLayout(self._columns_widget)
-        cols.setSpacing(8)
-        cols.setContentsMargins(0, 0, 0, 0)
-        self._column_layouts: list[QVBoxLayout] = []
-        for _ in range(3):
-            col_layout = QVBoxLayout()
-            col_layout.setSpacing(8)
-            col_layout.setAlignment(Qt.AlignTop)
-            cols.addLayout(col_layout, 1)
-            self._column_layouts.append(col_layout)
-        self._group_entries: list[tuple[QWidget, int | None]] = []
-        self._group_positions: dict[QWidget, int] = {}
-        self._active_move_anims: dict[QWidget, QPropertyAnimation] = {}
-        right.addWidget(self._columns_widget)
+        right.setSpacing(10)
+        self._step_labels = ["DUT Settings", "Execution Settings"]
+        self._fallback_step_view: _FallbackStepView | None = None
+        self.step_view_widget = self._create_step_view()
+        right.addWidget(self.step_view_widget)
+
+        self.stack = QStackedWidget(self)
+        right.addWidget(self.stack, 1)
+
+        self._dut_panel = ConfigGroupPanel(self)
+        self._other_panel = ConfigGroupPanel(self)
+        self._config_panels: tuple[ConfigGroupPanel, ConfigGroupPanel] = (
+            self._dut_panel,
+            self._other_panel,
+        )
+        self._wizard_pages: list[QWidget] = []
+        for panel in self._config_panels:
+            page = QWidget()
+            page_layout = QVBoxLayout(page)
+            page_layout.setContentsMargins(0, 0, 0, 0)
+            page_layout.setSpacing(8)
+            page_layout.addWidget(panel)
+            page_layout.addStretch(1)
+            self.stack.addWidget(page)
+            self._wizard_pages.append(page)
+
+        nav_bar = QHBoxLayout()
+        nav_bar.setContentsMargins(0, 0, 0, 0)
+        nav_bar.setSpacing(8)
+        self.prev_btn = PushButton("Previous", self)
+        self.prev_btn.clicked.connect(self.on_previous_clicked)
+        self.next_btn = PushButton("Next", self)
+        self.next_btn.clicked.connect(self.on_next_clicked)
+        nav_bar.addWidget(self.prev_btn)
+        nav_bar.addWidget(self.next_btn)
+        nav_bar.addStretch(1)
+
         self.run_btn = PushButton("Run", self)
         self.run_btn.setIcon(FluentIcon.PLAY)
         if hasattr(self.run_btn, "setUseRippleEffect"):
@@ -164,7 +363,8 @@ class CaseConfigPage(CardWidget):
             self.run_btn.setUseStateEffect(True)
         self.run_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.run_btn.clicked.connect(self.on_run)
-        right.addWidget(self.run_btn)
+        nav_bar.addWidget(self.run_btn)
+        right.addLayout(nav_bar)
         scroll_area.setWidget(container)
         self.splitter.addWidget(scroll_area)
         self.splitter.setStretchFactor(0, 2)
@@ -174,10 +374,14 @@ class CaseConfigPage(CardWidget):
         main_layout.setSpacing(10)
         main_layout.setContentsMargins(5, 5, 5, 5)
         main_layout.addWidget(self.splitter)
-        self._col_weight = [0] * len(self._column_layouts)
         # render form fields from yaml
+        self._dut_groups: dict[str, QWidget] = {}
+        self._other_groups: dict[str, QWidget] = {}
         self.render_all_fields()
-        QTimer.singleShot(0, self._rebalance_columns)
+        self._build_wizard_pages()
+        self.stack.currentChanged.connect(self._on_page_changed)
+        self._request_rebalance_for_panels()
+        self._on_page_changed(self.stack.currentIndex())
         self.routerInfoChanged.connect(self._update_csv_options)
         self._update_csv_options()
         # connect signals AFTER UI ready
@@ -188,6 +392,235 @@ class CaseConfigPage(CardWidget):
     def resizeEvent(self, event):
         super().resizeEvent(event)
         self.splitter.setSizes([int(self.width() * 0.2), int(self.width() * 0.8)])
+
+    def _create_step_view(self) -> QWidget:
+        labels = list(self._step_labels)
+        if StepView is not None:
+            try:
+                step_view = StepView(self)
+                configured = False
+                for attr in ("setSteps", "setStepList", "setStepTextList"):
+                    if hasattr(step_view, attr):
+                        try:
+                            getattr(step_view, attr)(labels)
+                            configured = True
+                            break
+                        except Exception as exc:
+                            logging.debug("StepView.%s failed: %s", attr, exc)
+                if not configured and hasattr(step_view, "addStep"):
+                    add_step = getattr(step_view, "addStep")
+                    for label in labels:
+                        try:
+                            add_step(label)
+                        except TypeError:
+                            add_step(label, label)
+                self._fallback_step_view = None
+                return step_view
+            except Exception as exc:  # pragma: no cover - 动态环境差异
+                logging.debug("Failed to initialize StepView: %s", exc)
+        fallback = _FallbackStepView(labels, self)
+        self._fallback_step_view = fallback
+        return fallback
+
+    def _update_step_indicator(self, index: int) -> None:
+        if self._fallback_step_view is not None:
+            self._fallback_step_view.set_current_index(index)
+            return
+        view = getattr(self, "step_view_widget", None)
+        if view is None:
+            return
+        for attr in ("setCurrentIndex", "setCurrentStep", "setCurrentRow", "setCurrent"):
+            if hasattr(view, attr):
+                try:
+                    getattr(view, attr)(index)
+                    return
+                except Exception as exc:
+                    logging.debug("StepView %s failed: %s", attr, exc)
+
+    def _request_rebalance_for_panels(self, *panels: ConfigGroupPanel) -> None:
+        targets = panels or self._config_panels
+        for panel in targets:
+            panel.request_rebalance()
+
+    def _build_wizard_pages(self) -> None:
+        self._dut_panel.set_groups(list(self._dut_groups.values()))
+        self._other_panel.set_groups(list(self._other_groups.values()))
+
+    def _register_group(self, key: str, group: QWidget, is_dut: bool) -> None:
+        if is_dut:
+            self._dut_groups[key] = group
+        else:
+            self._other_groups[key] = group
+
+    @staticmethod
+    def _is_dut_key(key: str) -> bool:
+        return key in {"text_case", "connect_type", "router", "fpga", "serial_port"}
+
+    def _sync_widgets_to_config(self) -> None:
+        if not isinstance(self.config, dict):
+            self.config = {}
+        for key, widget in self.field_widgets.items():
+            parts = key.split('.')
+            ref = self.config
+            for part in parts[:-1]:
+                child = ref.get(part)
+                if not isinstance(child, dict):
+                    child = {}
+                    ref[part] = child
+                ref = child
+            leaf = parts[-1]
+            if isinstance(widget, LineEdit):
+                val = widget.text()
+                if key == "connect_type.third_party.wait_seconds":
+                    val = val.strip()
+                    ref[leaf] = int(val) if val else 0
+                    continue
+                old_val = ref.get(leaf)
+                if isinstance(old_val, list):
+                    items = [x.strip() for x in val.split(',') if x.strip()]
+                    if all(i.isdigit() for i in items):
+                        ref[leaf] = [int(i) for i in items]
+                    else:
+                        ref[leaf] = items
+                else:
+                    val = val.strip()
+                    if len(parts) >= 2 and parts[-2] == "router" and leaf.startswith("passwd") and not val:
+                        ref[leaf] = ""
+                    else:
+                        ref[leaf] = val
+            elif isinstance(widget, ComboBox):
+                text = widget.currentText()
+                ref[leaf] = True if text == 'True' else False if text == 'False' else text
+            elif isinstance(widget, QCheckBox):
+                ref[leaf] = widget.isChecked()
+        if hasattr(self, "fpga_chip_combo") and hasattr(self, "fpga_if_combo"):
+            chip = self.fpga_chip_combo.currentText()
+            interface = self.fpga_if_combo.currentText()
+            self.config["fpga"] = f"{chip}_{interface}" if chip or interface else ""
+        base = Path(self._get_application_base())
+        case_display = self.field_widgets.get("text_case")
+        display_text = case_display.text().strip() if isinstance(case_display, LineEdit) else ""
+        storage_path = self._current_case_path or self._display_to_case_path(display_text)
+        case_path = Path(storage_path).as_posix() if storage_path else ""
+        self._current_case_path = case_path
+        if case_path:
+            abs_case_path = (base / case_path).resolve().as_posix()
+        else:
+            abs_case_path = ""
+        self.config["text_case"] = case_path
+        if self.selected_csv_path:
+            base_cfg = get_config_base()
+            try:
+                rel_csv = os.path.relpath(Path(self.selected_csv_path).resolve(), base_cfg)
+            except ValueError:
+                rel_csv = Path(self.selected_csv_path).resolve().as_posix()
+            self.config["csv_path"] = Path(rel_csv).as_posix()
+        else:
+            self.config.pop("csv_path", None)
+        proxy_idx = self.case_tree.currentIndex()
+        model = self.case_tree.model()
+        src_idx = (
+            model.mapToSource(proxy_idx)
+            if isinstance(model, QSortFilterProxyModel)
+            else proxy_idx
+        )
+        selected_path = self.fs_model.filePath(src_idx)
+        if os.path.isfile(selected_path) and selected_path.endswith(".py"):
+            abs_path = Path(selected_path).resolve()
+            display_path = os.path.relpath(abs_path, base)
+            case_path = Path(display_path).as_posix()
+            self._current_case_path = case_path
+            self.config["text_case"] = case_path
+        self._update_step_indicator(self.stack.currentIndex())
+
+    def _validate_first_page(self) -> bool:
+        errors: list[str] = []
+        focus_widget: QWidget | None = None
+        if hasattr(self, "connect_type_combo"):
+            connect_type = self.connect_type_combo.currentText().strip()
+            if not connect_type:
+                errors.append("Connect type is required.")
+                focus_widget = focus_widget or self.connect_type_combo
+            elif connect_type == "adb" and hasattr(self, "adb_device_edit"):
+                if not self.adb_device_edit.text().strip():
+                    errors.append("ADB device is required.")
+                    focus_widget = focus_widget or self.adb_device_edit
+            elif connect_type == "telnet" and hasattr(self, "telnet_ip_edit"):
+                if not self.telnet_ip_edit.text().strip():
+                    errors.append("Telnet IP is required.")
+                    focus_widget = focus_widget or self.telnet_ip_edit
+            if hasattr(self, "third_party_checkbox") and self.third_party_checkbox.isChecked():
+                wait_text = self.third_party_wait_edit.text().strip() if hasattr(self, "third_party_wait_edit") else ""
+                if not wait_text or not wait_text.isdigit() or int(wait_text) <= 0:
+                    errors.append("Third-party wait time must be a positive integer.")
+                    if hasattr(self, "third_party_wait_edit"):
+                        focus_widget = focus_widget or self.third_party_wait_edit
+        else:
+            errors.append("Connect type widget missing.")
+        fpga_valid = hasattr(self, "fpga_chip_combo") and hasattr(self, "fpga_if_combo")
+        if not fpga_valid or not self.fpga_chip_combo.currentText().strip() or not self.fpga_if_combo.currentText().strip():
+            errors.append("FPGA configuration is required.")
+            if fpga_valid:
+                focus_widget = focus_widget or self.fpga_chip_combo
+        if errors:
+            InfoBar.warning(
+                title="Validation",
+                content="\n".join(errors),
+                parent=self,
+                position=InfoBarPosition.TOP,
+                duration=3000,
+            )
+            if focus_widget is not None:
+                focus_widget.setFocus()
+                if hasattr(focus_widget, "selectAll"):
+                    focus_widget.selectAll()
+            return False
+        return True
+
+    def _reset_second_page_inputs(self) -> None:
+        if hasattr(self, "csv_combo"):
+            with QSignalBlocker(self.csv_combo):
+                self.csv_combo.setCurrentIndex(-1)
+            self.csv_combo.setEnabled(bool(self._enable_rvr_wifi))
+        self.selected_csv_path = None
+        self._update_rvr_nav_button()
+
+    def _reset_wizard_after_run(self) -> None:
+        self.stack.setCurrentIndex(0)
+        self._update_step_indicator(0)
+        self._update_navigation_state()
+        self._reset_second_page_inputs()
+
+    def _on_page_changed(self, index: int) -> None:
+        self._update_step_indicator(index)
+        self._update_navigation_state()
+
+    def _update_navigation_state(self) -> None:
+        index = self.stack.currentIndex()
+        last = max(0, self.stack.count() - 1)
+        if hasattr(self, "prev_btn"):
+            self.prev_btn.setEnabled(index > 0)
+        if hasattr(self, "next_btn"):
+            self.next_btn.setEnabled(index < last)
+        if hasattr(self, "run_btn"):
+            self.run_btn.setEnabled(index == last)
+
+    def on_next_clicked(self) -> None:
+        current = self.stack.currentIndex()
+        last = self.stack.count() - 1
+        if current >= last:
+            return
+        if current == 0 and not self._validate_first_page():
+            return
+        self._sync_widgets_to_config()
+        self.stack.setCurrentIndex(current + 1)
+
+    def on_previous_clicked(self) -> None:
+        current = self.stack.currentIndex()
+        if current <= 0:
+            return
+        self._sync_widgets_to_config()
+        self.stack.setCurrentIndex(current - 1)
 
     def set_graph_client(self, client) -> None:
         """注入 Graph 客户端，供后续 Teams 功能使用。"""
@@ -333,8 +766,7 @@ class CaseConfigPage(CardWidget):
         """
         self.adb_group.setVisible(type_str == "adb")
         self.telnet_group.setVisible(type_str == "telnet")
-        self._rebalance_columns()
-        QTimer.singleShot(0, self._rebalance_columns)
+        self._request_rebalance_for_panels(self._dut_panel)
 
     def on_third_party_toggled(self, checked: bool, allow_wait_edit: bool | None = None) -> None:
         if not hasattr(self, "third_party_wait_edit"):
@@ -361,21 +793,18 @@ class CaseConfigPage(CardWidget):
             self.rack_group.setVisible(model_str == "RADIORACK-4-220")
         if hasattr(self, "lda_group"):
             self.lda_group.setVisible(model_str == "LDA-908V-8")
-        self._rebalance_columns()
-        QTimer.singleShot(0, self._rebalance_columns)
+        self._request_rebalance_for_panels(self._other_panel)
 
     # 添加到类里：响应 Tool 下拉，切换子参数可见性
     def on_rvr_tool_changed(self, tool: str):
         """选择 iperf / ixchariot 时，动态显示对应子参数"""
         self.rvr_iperf_group.setVisible(tool == "iperf")
         self.rvr_ix_group.setVisible(tool == "ixchariot")
-        self._rebalance_columns()
-        QTimer.singleShot(0, self._rebalance_columns)
+        self._request_rebalance_for_panels(self._other_panel)
 
     def on_serial_enabled_changed(self, text: str):
         self.serial_cfg_group.setVisible(text == "True")
-        self._rebalance_columns()
-        QTimer.singleShot(0, self._rebalance_columns)
+        self._request_rebalance_for_panels(self._dut_panel)
 
     def on_router_changed(self, name: str):
         cfg = self.config.get("router", {})
@@ -442,109 +871,14 @@ class CaseConfigPage(CardWidget):
         if hasattr(self, 'test_case_edit'):
             self.test_case_edit.setText(self._case_path_to_display(normalized))
 
-    def _estimate_group_weight(self, group: QWidget) -> int:
-        """粗略估算分组高度：以输入型子控件数量为权重"""
-        from PyQt5.QtWidgets import (
-            QLineEdit, QComboBox, QTextEdit, QSpinBox, QDoubleSpinBox, QCheckBox
-        )
-        inputs = group.findChildren((QLineEdit, QComboBox, QTextEdit, QSpinBox, QDoubleSpinBox, QCheckBox))
-        return max(1, len(inputs))
-
-    def _add_group(self, group: QWidget, weight: int | None = None):
-        """把 group 放到当前更“轻”的一列"""
-        apply_theme(group)
-        apply_groupbox_style(group)
-        if not self._column_layouts:
-            return
-        for idx, (existing, _) in enumerate(self._group_entries):
-            if existing is group:
-                self._group_entries[idx] = (group, weight)
-                break
-        else:
-            self._group_entries.append((group, weight))
-        self._rebalance_columns()
-        QTimer.singleShot(0, self._rebalance_columns)
-
-    def _measure_group_height(self, group: QWidget, weight_override: int | None = None) -> int:
-        if weight_override is not None:
-            return max(1, int(weight_override))
-        hint = group.sizeHint()
-        height = hint.height() if hint.isValid() else 0
-        if height <= 0:
-            min_hint = group.minimumSizeHint()
-            height = min_hint.height() if min_hint.isValid() else 0
-        if height <= 0:
-            height = self._estimate_group_weight(group)
-        return max(1, int(height))
-
-    def _rebalance_columns(self) -> None:
-        if not self._column_layouts or not getattr(self, '_group_entries', None):
-            return
-        old_geometries: dict[QWidget, QRect] = {}
-        for group, _ in self._group_entries:
-            if group is not None and group.parent() is not None:
-                old_geometries[group] = group.geometry()
-        entries: list[tuple[QWidget, int]] = []
-        for group, weight_override in self._group_entries:
-            if group is None:
-                continue
-            entries.append((group, self._measure_group_height(group, weight_override)))
-        if not entries:
-            return
-        entries.sort(key=lambda item: item[1], reverse=True)
-        for layout in self._column_layouts:
-            while layout.count():
-                item = layout.takeAt(0)
-                widget = item.widget()
-                if widget is not None:
-                    widget.setParent(None)
-        self._col_weight = [0] * len(self._column_layouts)
-        initial_pass = not self._group_positions
-        moved_groups: list[tuple[QWidget, QRect | None]] = []
-        for group, height in entries:
-            column_index = self._col_weight.index(min(self._col_weight))
-            prev_col = self._group_positions.get(group)
-            self._column_layouts[column_index].addWidget(group)
-            self._col_weight[column_index] += height
-            self._group_positions[group] = column_index
-            if (prev_col is None and not initial_pass) or (prev_col is not None and prev_col != column_index):
-                moved_groups.append((group, old_geometries.get(group)))
-        self._columns_widget.updateGeometry()
-        if moved_groups:
-            QTimer.singleShot(0, lambda moves=tuple(moved_groups): self._animate_group_transitions(moves))
-
-    def _animate_group_transitions(self, moves: tuple[tuple[QWidget, QRect | None], ...]) -> None:
-        for group, old_rect in moves:
-            if group is None or not group.isVisible():
-                continue
-            self._start_move_animation(group, old_rect)
-
-    def _start_move_animation(self, group: QWidget, old_rect: QRect | None) -> None:
-        if old_rect is None:
-            return
-        current_rect = group.geometry()
-        if current_rect == old_rect:
-            return
-        existing = self._active_move_anims.pop(group, None)
-        if existing is not None:
-            existing.stop()
-        group.setGeometry(old_rect)
-        group.raise_()
-        animation = QPropertyAnimation(group, b'geometry', group)
-        animation.setDuration(320)
-        animation.setStartValue(old_rect)
-        animation.setEndValue(current_rect)
-        animation.setEasingCurve(QEasingCurve.InOutCubic)
-        self._active_move_anims[group] = animation
-        animation.finished.connect(lambda g=group: self._active_move_anims.pop(g, None))
-        animation.start()
-
     def render_all_fields(self):
         """
         自动渲染config.yaml中的所有一级字段。
         控件支持 LineEdit / ComboBox（可扩展 Checkbox）。
         字段映射到 self.field_widgets，方便后续操作。
         """
+        self._dut_groups.clear()
+        self._other_groups.clear()
         for i, (key, value) in enumerate(self.config.items()):
             if key == "text_case":
                 group = QGroupBox("Test Case")
@@ -559,7 +893,7 @@ class CaseConfigPage(CardWidget):
                 self.test_case_edit.setReadOnly(True)  # 只读，由左侧树刷新
                 vbox.addWidget(self.test_case_edit)
                 self._update_test_case_display(value or "")  # 显示配置的默认值
-                self._add_group(group)
+                self._register_group(key, group, self._is_dut_key(key))
                 self.field_widgets["text_case"] = self.test_case_edit
                 continue
             if key == "connect_type":
@@ -607,7 +941,7 @@ class CaseConfigPage(CardWidget):
                 vbox.addWidget(self.adb_group)
                 vbox.addWidget(self.telnet_group)
                 vbox.addWidget(self.third_party_group)
-                self._add_group(group)
+                self._register_group(key, group, self._is_dut_key(key))
                 # 初始化
                 self.adb_device_edit.setText(value.get("adb", {}).get("device", ""))
                 self.telnet_ip_edit.setText(value.get("telnet", {}).get("ip", ""))
@@ -637,7 +971,7 @@ class CaseConfigPage(CardWidget):
                 vbox.addWidget(self.fpga_chip_combo)
                 vbox.addWidget(QLabel("Interface:"))
                 vbox.addWidget(self.fpga_if_combo)
-                self._add_group(group)
+                self._register_group(key, group, self._is_dut_key(key))
                 self.field_widgets["fpga"] = group
                 continue
             if key == "rf_solution":
@@ -727,7 +1061,7 @@ class CaseConfigPage(CardWidget):
                 vbox.addWidget(self.rf_step_edit)
 
                 # ---- 加入表单 & 初始化可见性 ----
-                self._add_group(group)
+                self._register_group(key, group, self._is_dut_key(key))
                 self.on_rf_model_changed(self.rf_model_combo.currentText())
 
                 # ---- 注册控件 ----
@@ -806,7 +1140,7 @@ class CaseConfigPage(CardWidget):
                 vbox.addWidget(QLabel("Zero Point Threshold:"))
                 vbox.addWidget(self.rvr_threshold_edit)
                 # 加入表单
-                self._add_group(group)
+                self._register_group(key, group, self._is_dut_key(key))
 
                 # 字段注册（供启用/禁用和收集参数用）
                 self.field_widgets["rvr.tool"] = self.rvr_tool_combo
@@ -859,7 +1193,7 @@ class CaseConfigPage(CardWidget):
                 vbox.addWidget(self.corner_target_rssi_edit)
 
                 # 加入表单
-                self._add_group(group)
+                self._register_group(key, group, self._is_dut_key(key))
 
                 # 注册控件（用于启用/禁用、保存回 YAML）
                 self.field_widgets["corner_angle.ip_address"] = self.corner_ip_edit
@@ -885,7 +1219,7 @@ class CaseConfigPage(CardWidget):
                 vbox.addWidget(self.router_name_combo)
                 vbox.addWidget(QLabel("Gateway:"))
                 vbox.addWidget(self.router_addr_edit)
-                self._add_group(group)
+                self._register_group(key, group, self._is_dut_key(key))
                 # 注册控件
                 self.field_widgets["router.name"] = self.router_name_combo
                 self.field_widgets["router.address"] = self.router_addr_edit
@@ -926,7 +1260,7 @@ class CaseConfigPage(CardWidget):
                 cfg_box.addWidget(self.serial_baud_edit)
 
                 vbox.addWidget(self.serial_cfg_group)
-                self._add_group(group)
+                self._register_group(key, group, self._is_dut_key(key))
 
                 # 初始化显隐
                 self.on_serial_enabled_changed(self.serial_enable_combo.currentText())
@@ -944,7 +1278,7 @@ class CaseConfigPage(CardWidget):
             edit = LineEdit(self)
             edit.setText(str(value) if value is not None else "")
             vbox.addWidget(edit)
-            self._add_group(group)
+            self._register_group(key, group, self._is_dut_key(key))
             self.field_widgets[key] = edit
 
     def populate_case_tree(self, root_dir):
@@ -1164,12 +1498,23 @@ class CaseConfigPage(CardWidget):
     def lock_for_running(self, locked: bool) -> None:
         """运行期间锁定页面控件"""
         self.case_tree.setEnabled(not locked)
+        if hasattr(self, "prev_btn"):
+            self.prev_btn.setEnabled(not locked and self.stack.currentIndex() > 0)
+        if hasattr(self, "next_btn"):
+            self.next_btn.setEnabled(
+                not locked and self.stack.currentIndex() < self.stack.count() - 1
+            )
         if hasattr(self, "run_btn"):
-            self.run_btn.setEnabled(not locked)
+            if locked:
+                self.run_btn.setEnabled(False)
+            else:
+                self.run_btn.setEnabled(self.stack.currentIndex() == self.stack.count() - 1)
         for w in self.field_widgets.values():
             w.setEnabled(not locked)
         if hasattr(self, "csv_combo"):
-            self.csv_combo.setEnabled(not locked)
+            self.csv_combo.setEnabled(not locked and self._enable_rvr_wifi)
+        if not locked:
+            self._update_navigation_state()
 
     def on_csv_activated(self, index: int) -> None:
         """用户手动点击同一项时也需要重新加载"""
@@ -1194,93 +1539,25 @@ class CaseConfigPage(CardWidget):
         self.csvFileChanged.emit(self.selected_csv_path or "")
 
     def on_run(self):
+        if not self._validate_first_page():
+            self.stack.setCurrentIndex(0)
+            return
         self.config = self._load_config()
+        self._sync_widgets_to_config()
         logging.info(
             "[on_run] start case=%s csv=%s config=%s",
             self.field_widgets['text_case'].text().strip(),
             self.selected_csv_path,
             self.config,
         )
-        if (
-            hasattr(self, "third_party_checkbox")
-            and hasattr(self, "third_party_wait_edit")
-            and self.third_party_checkbox.isChecked()
-        ):
-            wait_text = self.third_party_wait_edit.text().strip()
-            if not wait_text or not wait_text.isdigit() or int(wait_text) <= 0:
-                InfoBar.error(
-                    title="Error",
-                    content="Please input a positive wait time for third-party control.",
-                    parent=self,
-                    position=InfoBarPosition.TOP,
-                    duration=2800,
-                )
-                self.third_party_wait_edit.setFocus()
-                self.third_party_wait_edit.selectAll()
-                return
-        # 将字段值更新到 self.config（保持结构）
-        for key, widget in self.field_widgets.items():
-            # key 可能是 'connect_type.adb.device' → 拆成层级
-            parts = key.split('.')
-            ref = self.config
-            for part in parts[:-1]:
-                child = ref.get(part)
-                if not isinstance(child, dict):
-                    child = {}
-                    ref[part] = child
-                ref = child
-            leaf = parts[-1]
-
-            if isinstance(widget, LineEdit):
-                val = widget.text()
-                if key == "connect_type.third_party.wait_seconds":
-                    val = val.strip()
-                    ref[leaf] = int(val) if val else 0
-                    continue
-                # 判断当前字段是否为 list 且不是字符串形式表示的
-                old_val = ref.get(leaf)
-                if isinstance(old_val, list):
-                    # 判断是否是纯数字，如果都是数字，则保留为 int，否则保留字符串
-                    items = [x.strip() for x in val.split(',') if x.strip()]
-                    if all(i.isdigit() for i in items):
-                        ref[leaf] = [int(i) for i in items]
-                    else:
-                        ref[leaf] = items
-                else:
-                    val = val.strip()
-                    if len(parts) >= 2 and parts[-2] == "router" and leaf.startswith("passwd") and not val:
-                        ref[leaf] = ""  # 空密码表示开放网络
-                    else:
-                        ref[leaf] = val
-            elif isinstance(widget, ComboBox):
-                text = widget.currentText()
-                ref[leaf] = True if text == 'True' else False if text == 'False' else text
-            elif isinstance(widget, QCheckBox):
-                ref[leaf] = widget.isChecked()
-        chip = self.fpga_chip_combo.currentText()
-        interface = self.fpga_if_combo.currentText()
-        self.config["fpga"] = f"{chip}_{interface}"
         base = Path(self._get_application_base())
-        case_display = self.field_widgets["text_case"].text().strip()
-        storage_path = self._current_case_path or self._display_to_case_path(case_display)
-        case_path = Path(storage_path).as_posix() if storage_path else ""
-        self._current_case_path = case_path
+        case_path = self.config.get("text_case", "")
         abs_case_path = (
             (base / case_path).resolve().as_posix() if case_path else ""
         )
         logging.debug("[on_run] before performance check abs_case_path=%s csv=%s", abs_case_path,
                       self.selected_csv_path)
         # 先将当前用例路径及 CSV 选择写入配置
-        self.config["text_case"] = case_path
-        if self.selected_csv_path:
-            base_cfg = get_config_base()
-            try:
-                rel_csv = os.path.relpath(Path(self.selected_csv_path).resolve(), base_cfg)
-            except ValueError:
-                rel_csv = Path(self.selected_csv_path).resolve().as_posix()
-            self.config["csv_path"] = Path(rel_csv).as_posix()
-        else:
-            self.config.pop("csv_path", None)
         logging.debug("[on_run] after performance check abs_case_path=%s csv=%s", abs_case_path, self.selected_csv_path)
         # 若树状视图中选择了有效用例，则覆盖默认路径
         proxy_idx = self.case_tree.currentIndex()
@@ -1297,8 +1574,7 @@ class CaseConfigPage(CardWidget):
             case_path = Path(display_path).as_posix()
 
             abs_case_path = abs_path.as_posix()
-            # 更新配置中的用例路径
-        self.config["text_case"] = case_path
+            self.config["text_case"] = case_path
         # 保存配置
         logging.debug("[on_run] before _save_config")
         self._save_config()
@@ -1328,7 +1604,12 @@ class CaseConfigPage(CardWidget):
             pass
 
         if os.path.isfile(abs_case_path) and abs_case_path.endswith(".py"):
-            self.on_run_callback(abs_case_path, case_path, self.config)
+            try:
+                self.on_run_callback(abs_case_path, case_path, self.config)
+            except Exception as exc:  # pragma: no cover - 运行回调抛错时记录日志
+                logging.exception("Run callback failed: %s", exc)
+            else:
+                self._reset_wizard_after_run()
         else:
             InfoBar.warning(
                 title="Hint",
