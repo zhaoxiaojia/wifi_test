@@ -11,6 +11,7 @@ from src.tools.config_sections import (
     DUT_CONFIG_FILENAME,
     OTHER_CONFIG_FILENAME,
     merge_config_sections,
+    save_config_sections,
     split_config_data,
 )
 from src.util.constants import get_config_base
@@ -49,8 +50,12 @@ def _load_sections() -> Tuple[dict, dict]:
     if not dut_section and not other_section and legacy_path.exists():
         legacy_data = _read_yaml(legacy_path)
         dut_section, other_section = split_config_data(legacy_data)
-        _write_yaml(dut_path, dut_section)
-        _write_yaml(other_path, other_section)
+        try:
+            save_config_sections(dut_section, other_section, base_dir=config_dir)
+        except Exception:
+            # 回退到旧行为，至少保持内存中的拆分结果
+            _write_yaml(dut_path, dut_section)
+            _write_yaml(other_path, other_section)
 
     return dut_section, other_section
 
@@ -100,3 +105,17 @@ def load_config(refresh: bool = False):
 
 
 load_config.cache_clear = _cached_load_config.cache_clear
+
+
+def save_config(config: dict | None) -> None:
+    """保存配置，并保持新旧配置文件的同步。"""
+
+    config = config or {}
+    dut_section, other_section = split_config_data(config)
+    base_dir = get_config_base()
+    save_config_sections(dut_section, other_section, base_dir=base_dir)
+
+    merged = merge_config_sections(dut_section, other_section)
+    legacy_path = base_dir / "config.yaml"
+    _write_yaml(legacy_path, merged)
+    load_config.cache_clear()

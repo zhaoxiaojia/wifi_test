@@ -30,21 +30,3 @@ rvr:
   throughput_threshold: '5'
   tool: iperf
 csv_path: performance_test_csv/rvr_wifi_setup.csv
-connect_type:
-  adb:
-    device: coco5c6788c23f1804
-  telnet:
-    ip: 192.168.5.12
-  third_party:
-    enabled: false
-    wait_seconds: 45
-  type: telnet
-fpga: W1U_PCIE
-router:
-  name: asusax88u
-  address: 192.168.5.1
-serial_port:
-  baud: '961200'
-  port: COM5
-  status: false
-text_case: test/performance/test_wifi_rvr.py
