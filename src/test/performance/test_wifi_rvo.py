@@ -1,12 +1,12 @@
-# !/usr/bin/env python
+﻿# !/usr/bin/env python
 # -*-coding:utf-8 -*-
 
 """
 File       : test_wifi_rvo.py
-Time       ：2023/9/15 14:03
-Author     ：chao.li
-version    ：python 3.9
-Description：
+Time       : 2023/9/15 14:03
+Author     : chao.li
+version    : python 3.9
+Description:
 """
 
 import logging
@@ -18,6 +18,7 @@ from src.tools.router_tool.Router import router_str
 
 from src.test import get_testdata
 from src.test.pyqt_log import log_fixture_params
+from src.tools.mysql_tool.MySqlControl import sync_file_to_db
 from src.test.performance import (
     common_setup,
     get_corner_step_list,
@@ -103,7 +104,7 @@ def _adjust_rssi_to_target(target_rssi: int, base_db: Optional[int]) -> Tuple[in
 
         applied_db = next_db
         logging.info(
-            'Adjust attenuation to %s dB (attempt %s) for RSSI %s dBm → target %s dBm',
+            'Adjust attenuation to %s dB (attempt %s) for RSSI %s dBm -> target %s dBm',
             applied_db,
             attempt + 1,
             current_rssi,
@@ -216,25 +217,30 @@ def test_rvo(setup_rssi):
     connect_status, router_info, corner_tool_obj, corner_set, attenuation_db, rssi_num = setup_rssi
     if not connect_status:
         logging.info("Can't connect wifi ,input 0")
-        return
+    else:
+        logging.info('corner angle set to %s', corner_set)
+        if attenuation_db is not None:
+            logging.info('attenuation set to %s dB', attenuation_db)
+        logging.info(f'start test iperf tx {router_info.tx} rx {router_info.rx}')
+        if int(router_info.tx):
+            logging.info(f'rssi : {rssi_num}')
+            pytest.dut.get_tx_rate(
+                router_info,
+                'TCP',
+                corner_tool=corner_tool_obj,
+                db_set='' if attenuation_db is None else attenuation_db,
+            )
+        if int(router_info.rx):
+            logging.info(f'rssi : {rssi_num}')
+            pytest.dut.get_rx_rate(
+                router_info,
+                'TCP',
+                corner_tool=corner_tool_obj,
+                db_set='' if attenuation_db is None else attenuation_db,
+            )
 
-    logging.info('corner angle set to %s', corner_set)
-    if attenuation_db is not None:
-        logging.info('attenuation set to %s dB', attenuation_db)
-    logging.info(f'start test iperf tx {router_info.tx} rx {router_info.rx}')
-    if int(router_info.tx):
-        logging.info(f'rssi : {rssi_num}')
-        pytest.dut.get_tx_rate(
-            router_info,
-            'TCP',
-            corner_tool=corner_tool_obj,
-            db_set='' if attenuation_db is None else attenuation_db,
-        )
-    if int(router_info.rx):
-        logging.info(f'rssi : {rssi_num}')
-        pytest.dut.get_rx_rate(
-            router_info,
-            'TCP',
-            corner_tool=corner_tool_obj,
-            db_set='' if attenuation_db is None else attenuation_db,
-        )
+    if not getattr(pytest, "_rvo_data_synced", False):
+        rows_stored = sync_file_to_db(pytest.testResult.log_file, "RVO")
+        if rows_stored:
+            logging.info("RVO data rows stored in database: %s", rows_stored)
+        pytest._rvo_data_synced = True

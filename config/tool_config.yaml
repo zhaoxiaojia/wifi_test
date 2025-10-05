@@ -4,7 +4,7 @@ host_os:
   password: 'Linux2024'
 
 mysql:
-  host: 192.168.50.169
-  user: visitor
+  host: 127.0.0.1
+  user: root
   passwd: 123456
   database: wifi_test
