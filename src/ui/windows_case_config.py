@@ -12,13 +12,12 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-import yaml
 import logging
 from dataclasses import dataclass, field
 from src.tools.router_tool.router_factory import router_list, get_router
-from src.util.constants import Paths, RouterConst
+from src.util.constants import RouterConst
 from src.util.constants import get_config_base, get_src_base
-from src.tools.config_loader import load_config
+from src.tools.config_loader import load_config, save_config
 from PyQt5.QtCore import (
     Qt,
     QSignalBlocker,
@@ -286,8 +285,7 @@ class CaseConfigPage(CardWidget):
         self.setObjectName("caseConfigPage")
         self.on_run_callback = on_run_callback
         apply_theme(self)
-        # -------------------- load yaml --------------------
-        self.config_path = (Path(Paths.CONFIG_DIR) / "config.yaml").resolve()
+        # -------------------- load config --------------------
         self.config: dict = self._load_config()
         # -------------------- state --------------------
         self._refreshing = False
@@ -670,19 +668,7 @@ class CaseConfigPage(CardWidget):
             self.case_tree.hideColumn(col)
 
     def _load_config(self) -> dict:
-        if not self.config_path.exists():
-            QTimer.singleShot(
-                0,
-                lambda: InfoBar.warning(
-                    title="Error",
-                    content="Failed to find config",
-                    parent=self,
-                    position=InfoBarPosition.TOP,
-                ),
-            )
-            return {}
         try:
-            load_config.cache_clear()
             config = load_config(refresh=True) or {}
 
             app_base = self._get_application_base()
@@ -712,9 +698,9 @@ class CaseConfigPage(CardWidget):
 
             if changed:
                 try:
-                    with self.config_path.open("w", encoding="utf-8") as wf:
-                        yaml.safe_dump(config, wf, allow_unicode=True, sort_keys=False, width=4096)
+                    save_config(config)
                 except Exception as exc:
+                    logging.error("Failed to normalize and persist config: %s", exc)
                     QTimer.singleShot(
                         0,
                         lambda exc=exc: InfoBar.error(
@@ -738,15 +724,23 @@ class CaseConfigPage(CardWidget):
             return {}
 
     def _save_config(self):
-        logging.debug("[save] path=%s data=%s", self.config_path, self.config)
+        logging.debug("[save] data=%s", self.config)
         try:
-            with self.config_path.open("w", encoding="utf-8") as f:
-                yaml.safe_dump(self.config, f, allow_unicode=True, sort_keys=False, width=4096)
-                logging.info("Configuration saved")
+            save_config(self.config)
+            logging.info("Configuration saved")
             self.config = self._load_config()
             logging.info("Configuration saved")
         except Exception as exc:
             logging.error("[save] failed: %s", exc)
+            QTimer.singleShot(
+                0,
+                lambda exc=exc: InfoBar.error(
+                    title="Error",
+                    content=f"Failed to save config: {exc}",
+                    parent=self,
+                    position=InfoBarPosition.TOP,
+                ),
+            )
 
     def _get_application_base(self) -> Path:
         """获取应用根路径"""
