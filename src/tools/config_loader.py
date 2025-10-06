@@ -14,6 +14,7 @@ from src.tools.config_sections import (
     save_config_sections,
     split_config_data,
 )
+from src.tools.mysql_tool.MySqlControl import sync_configuration
 from src.util.constants import get_config_base
 
 
@@ -119,3 +120,7 @@ def save_config(config: dict | None) -> None:
     legacy_path = base_dir / "config.yaml"
     _write_yaml(legacy_path, merged)
     load_config.cache_clear()
+    try:
+        sync_configuration(merged)
+    except Exception:
+        logging.exception("Failed to sync configuration to database")
