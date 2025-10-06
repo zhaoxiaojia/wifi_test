@@ -17,9 +17,10 @@ _DUT_SECTION_KEYS: frozenset[str] = frozenset(
     {
         "connect_type",
         "fpga",
-        "router",
         "serial_port",
-        "text_case",
+        "software_info",
+        "hardware_info",
+        "android_system",
     }
 )
 

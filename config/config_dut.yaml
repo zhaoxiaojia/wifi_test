@@ -1,3 +1,11 @@
+software_info:
+  software_version: ''
+  driver_version: ''
+hardware_info:
+  hardware_version: ''
+android_system:
+  version: ''
+  kernel_version: ''
 connect_type:
   adb:
     device: coco5c6788c23f1804
@@ -8,11 +16,8 @@ connect_type:
     wait_seconds: 45
   type: telnet
 fpga: W1U_PCIE
-router:
-  name: asusax88u
-  address: 192.168.5.1
 serial_port:
   baud: '961200'
   port: COM5
   status: false
-text_case: test/performance/test_wifi_rvr.py
+

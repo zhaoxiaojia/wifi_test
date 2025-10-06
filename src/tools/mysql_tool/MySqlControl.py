@@ -46,6 +46,7 @@ CSV_FIELD_MAP: Tuple[Tuple[str, str], ...] = (
     ("Expect_Rate", "expect_rate"),
 )
 TABLE_COLUMN_SQL: Tuple[Tuple[str, str], ...] = (
+    ("execution_id", "INT"),
     ("data_type", "VARCHAR(32) NOT NULL"),
     ("file_name", "VARCHAR(255) NOT NULL"),
     ("serial_number", "VARCHAR(128)"),
