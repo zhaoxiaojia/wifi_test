@@ -48,6 +48,26 @@ from PyQt5.QtWidgets import (
     QStackedWidget
 )
 
+DEFAULT_ANDROID_VERSION_CHOICES = [
+    "Android 15",
+    "Android 14",
+    "Android 13",
+    "Android 12",
+    "Android 11",
+    "Android 10",
+]
+
+ANDROID_KERNEL_MAP = {
+    "Android 15": "Kernel 6.1",
+    "Android 14": "Kernel 6.1",
+    "Android 13": "Kernel 5.15",
+    "Android 12": "Kernel 5.10",
+    "Android 11": "Kernel 5.4",
+    "Android 10": "Kernel 4.14",
+}
+
+DEFAULT_KERNEL_VERSION_CHOICES = sorted(set(ANDROID_KERNEL_MAP.values()))
+
 from qfluentwidgets import (
     CardWidget,
     LineEdit,
@@ -69,7 +89,8 @@ from .theme import apply_theme, FONT_FAMILY, TEXT_COLOR, apply_font_and_selectio
 
 @dataclass
 class EditableInfo:
-    """描述某个用例的可编辑字段及相关 UI 使能状态"""
+    
+    """Metadata describing which fields are editable for a test case."""
     fields: set[str] = field(default_factory=set)
     enable_csv: bool = False
     enable_rvr_wifi: bool = False
@@ -92,7 +113,8 @@ class TestFileFilterModel(QSortFilterProxyModel):
         return True
 
     def hasChildren(self, parent: QModelIndex) -> bool:
-        """修复文件夹无法展开的问题：即使子项被过滤，也认为目录有子节点"""
+        
+        """Ensure directories remain expandable even when children are filtered."""
         src_parent = self.mapToSource(parent)
         # 原始模型中的节点是否是目录
         if not self.sourceModel().isDir(src_parent):
@@ -102,7 +124,8 @@ class TestFileFilterModel(QSortFilterProxyModel):
 
 
 class _FallbackStepView(QWidget):
-    """在缺少 StepView 时使用的简易步骤指示器"""
+    
+    """Fallback step indicator used when StepView is unavailable."""
 
     def __init__(self, steps: list[str], parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -139,7 +162,8 @@ class _FallbackStepView(QWidget):
 
 
 class ConfigGroupPanel(QWidget):
-    """负责三列分组布局及动画效果的容器"""
+    
+    """Container that arranges groups into three columns with animations."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -275,7 +299,8 @@ class ConfigGroupPanel(QWidget):
         animation.start()
 
 class CaseConfigPage(CardWidget):
-    """用例配置主页面"""
+    
+    """Main page widget for configuring test cases."""
 
     routerInfoChanged = pyqtSignal()
     csvFileChanged = pyqtSignal(str)
@@ -317,6 +342,8 @@ class CaseConfigPage(CardWidget):
         right = QVBoxLayout(container)
         right.setContentsMargins(0, 0, 0, 0)
         right.setSpacing(10)
+        self._android_versions = list(DEFAULT_ANDROID_VERSION_CHOICES)
+        self._kernel_versions = list(DEFAULT_KERNEL_VERSION_CHOICES)
         self._step_labels = ["DUT Settings", "Execution Settings"]
         self._fallback_step_view: _FallbackStepView | None = None
         self.step_view_widget = self._create_step_view()
@@ -452,7 +479,14 @@ class CaseConfigPage(CardWidget):
 
     @staticmethod
     def _is_dut_key(key: str) -> bool:
-        return key in {"text_case", "connect_type", "router", "fpga", "serial_port"}
+        return key in {
+            "connect_type",
+            "fpga",
+            "serial_port",
+            "software_info",
+            "hardware_info",
+            "android_system",
+        }
 
     def _sync_widgets_to_config(self) -> None:
         if not isinstance(self.config, dict):
@@ -533,6 +567,7 @@ class CaseConfigPage(CardWidget):
 
     def _validate_first_page(self) -> bool:
         errors: list[str] = []
+        connect_type = ""
         focus_widget: QWidget | None = None
         if hasattr(self, "connect_type_combo"):
             connect_type = self.connect_type_combo.currentText().strip()
@@ -547,6 +582,12 @@ class CaseConfigPage(CardWidget):
                 if not self.telnet_ip_edit.text().strip():
                     errors.append("Telnet IP is required.")
                     focus_widget = focus_widget or self.telnet_ip_edit
+                kernel_text = ""
+                if hasattr(self, "kernel_version_combo"):
+                    kernel_text = self.kernel_version_combo.currentText().strip()
+                if not kernel_text:
+                    errors.append("Kernel version is required for telnet access.")
+                    focus_widget = focus_widget or getattr(self, "kernel_version_combo", None)
             if hasattr(self, "third_party_checkbox") and self.third_party_checkbox.isChecked():
                 wait_text = self.third_party_wait_edit.text().strip() if hasattr(self, "third_party_wait_edit") else ""
                 if not wait_text or not wait_text.isdigit() or int(wait_text) <= 0:
@@ -555,6 +596,9 @@ class CaseConfigPage(CardWidget):
                         focus_widget = focus_widget or self.third_party_wait_edit
         else:
             errors.append("Connect type widget missing.")
+        if hasattr(self, "android_version_combo") and connect_type == "adb" and not self.android_version_combo.currentText().strip():
+            errors.append("Android version is required.")
+            focus_widget = focus_widget or self.android_version_combo
         fpga_valid = hasattr(self, "fpga_chip_combo") and hasattr(self, "fpga_if_combo")
         if not fpga_valid or not self.fpga_chip_combo.currentText().strip() or not self.fpga_if_combo.currentText().strip():
             errors.append("FPGA configuration is required.")
@@ -755,12 +799,56 @@ class CaseConfigPage(CardWidget):
         return str(p) if p.is_absolute() else str((base / p).resolve())
 
     def on_connect_type_changed(self, type_str):
-        """
-        切换连接方式时，仅展示对应参数组
-        """
+        """切换连接方式时，仅展示对应参数组"""
         self.adb_group.setVisible(type_str == "adb")
         self.telnet_group.setVisible(type_str == "telnet")
+        self._update_android_system_for_connect_type(type_str)
         self._request_rebalance_for_panels(self._dut_panel)
+    def _update_android_system_for_connect_type(self, connect_type: str) -> None:
+        if not hasattr(self, "android_version_combo") or not hasattr(self, "kernel_version_combo"):
+            return
+        is_adb = connect_type == "adb"
+        # Android version selectors are only shown for ADB connections.
+        self.android_version_label.setVisible(is_adb)
+        self.android_version_combo.setVisible(is_adb)
+        # Kernel selector is always visible but toggles between auto-fill and manual modes.
+        self.kernel_version_label.setVisible(True)
+        self.kernel_version_combo.setVisible(True)
+        if is_adb:
+            self.kernel_version_combo.setEnabled(False)
+            self._apply_android_kernel_mapping()
+        else:
+            self.kernel_version_combo.setEnabled(True)
+            if not self.kernel_version_combo.currentText().strip():
+                self.kernel_version_combo.setCurrentIndex(-1)
+
+    def _on_android_version_changed(self, version: str) -> None:
+        if not hasattr(self, "connect_type_combo"):
+            return
+        if self.connect_type_combo.currentText().strip() == "adb":
+            self._apply_android_kernel_mapping()
+
+    def _apply_android_kernel_mapping(self) -> None:
+        if not hasattr(self, "android_version_combo") or not hasattr(self, "kernel_version_combo"):
+            return
+        version = self.android_version_combo.currentText().strip()
+        kernel = ANDROID_KERNEL_MAP.get(version, "")
+        if kernel:
+            self._ensure_kernel_option(kernel)
+            self.kernel_version_combo.setCurrentText(kernel)
+        else:
+            self.kernel_version_combo.setCurrentIndex(-1)
+
+    def _ensure_kernel_option(self, kernel: str) -> None:
+        if not kernel or not hasattr(self, "kernel_version_combo"):
+            return
+        combo = self.kernel_version_combo
+        existing = {combo.itemText(i) for i in range(combo.count())}
+        if kernel not in existing:
+            combo.addItem(kernel)
+        if kernel not in self._kernel_versions:
+            self._kernel_versions.append(kernel)
+
 
     def on_third_party_toggled(self, checked: bool, allow_wait_edit: bool | None = None) -> None:
         if not hasattr(self, "third_party_wait_edit"):
@@ -873,32 +961,94 @@ class CaseConfigPage(CardWidget):
         """
         self._dut_groups.clear()
         self._other_groups.clear()
+        # Ensure DUT metadata placeholders exist
+        defaults_for_dut = {
+            "software_info": {},
+            "hardware_info": {},
+            "android_system": {},
+        }
+        for _key, _default in defaults_for_dut.items():
+            existing = self.config.get(_key)
+            if not isinstance(existing, dict):
+                self.config[_key] = _default.copy()
+            else:
+                self.config[_key] = dict(existing)
+        telnet_cfg = self.config.get("connect_type", {}).get("telnet")
+        if isinstance(telnet_cfg, dict) and "kernel_version" in telnet_cfg:
+            self.config.setdefault("android_system", {})["kernel_version"] = telnet_cfg.pop("kernel_version")
         for i, (key, value) in enumerate(self.config.items()):
-            if key == "text_case":
-                group = QGroupBox("Test Case")
-                group.setStyleSheet(
-                    group.styleSheet()
-                    + f"QGroupBox{{border:1px solid #444444;border-radius:4px;margin-top:6px;color:{TEXT_COLOR};font-family:{FONT_FAMILY};}}"
-                    + f"QGroupBox::title{{left:8px;padding:0 3px;font-family:{FONT_FAMILY};}}"
-                )
+            if key == "software_info":
+                data = value if isinstance(value, dict) else {}
+                group = QGroupBox("Software Info")
                 vbox = QVBoxLayout(group)
-                self.test_case_edit = LineEdit(self)
-                apply_theme(self.test_case_edit)
-                self.test_case_edit.setReadOnly(True)  # 只读，由左侧树刷新
-                vbox.addWidget(self.test_case_edit)
-                self._update_test_case_display(value or "")  # 显示配置的默认值
-                self._register_group(key, group, self._is_dut_key(key))
-                self.field_widgets["text_case"] = self.test_case_edit
+                self.software_version_edit = LineEdit(self)
+                self.software_version_edit.setPlaceholderText("e.g. V1.2.3")
+                self.software_version_edit.setText(str(data.get("software_version", "")))
+                vbox.addWidget(QLabel("Software Version:"))
+                vbox.addWidget(self.software_version_edit)
+                self.driver_version_edit = LineEdit(self)
+                self.driver_version_edit.setPlaceholderText("Driver build")
+                self.driver_version_edit.setText(str(data.get("driver_version", "")))
+                vbox.addWidget(QLabel("Driver Version:"))
+                vbox.addWidget(self.driver_version_edit)
+                self._register_group(key, group, True)
+                self.field_widgets["software_info.software_version"] = self.software_version_edit
+                self.field_widgets["software_info.driver_version"] = self.driver_version_edit
+                continue
+            if key == "hardware_info":
+                data = value if isinstance(value, dict) else {}
+                group = QGroupBox("Hardware Info")
+                vbox = QVBoxLayout(group)
+                self.hardware_version_edit = LineEdit(self)
+                self.hardware_version_edit.setPlaceholderText("PCB revision / BOM")
+                self.hardware_version_edit.setText(str(data.get("hardware_version", "")))
+                vbox.addWidget(QLabel("Hardware Version:"))
+                vbox.addWidget(self.hardware_version_edit)
+                self._register_group(key, group, True)
+                self.field_widgets["hardware_info.hardware_version"] = self.hardware_version_edit
+                continue
+            if key == "android_system":
+                data = value if isinstance(value, dict) else {}
+                group = QGroupBox("Android System")
+                vbox = QVBoxLayout(group)
+                self.android_version_label = QLabel("Android Version:")
+                vbox.addWidget(self.android_version_label)
+                self.android_version_combo = ComboBox(self)
+                self.android_version_combo.addItems(self._android_versions)
+                current_version = str(data.get("version", ""))
+                if current_version and current_version not in self._android_versions:
+                    self.android_version_combo.addItem(current_version)
+                if current_version:
+                    self.android_version_combo.setCurrentText(current_version)
+                else:
+                    self.android_version_combo.setCurrentIndex(-1)
+                self.android_version_combo.currentTextChanged.connect(self._on_android_version_changed)
+                vbox.addWidget(self.android_version_combo)
+                self.kernel_version_label = QLabel("Kernel Version:")
+                vbox.addWidget(self.kernel_version_label)
+                self.kernel_version_combo = ComboBox(self)
+                self.kernel_version_combo.addItems(self._kernel_versions)
+                kernel_value = str(data.get("kernel_version", ""))
+                if kernel_value and kernel_value not in self._kernel_versions:
+                    self.kernel_version_combo.addItem(kernel_value)
+                if kernel_value:
+                    self.kernel_version_combo.setCurrentText(kernel_value)
+                else:
+                    self.kernel_version_combo.setCurrentIndex(-1)
+                vbox.addWidget(self.kernel_version_combo)
+                self._register_group(key, group, True)
+                self.field_widgets["android_system.version"] = self.android_version_combo
+                self.field_widgets["android_system.kernel_version"] = self.kernel_version_combo
                 continue
             if key == "connect_type":
                 group = QGroupBox("Control Type")
                 vbox = QVBoxLayout(group)
                 self.connect_type_combo = ComboBox(self)
                 self.connect_type_combo.addItems(["adb", "telnet"])
-                self.connect_type_combo.setCurrentText(value.get('type', 'adb'))
+                self.connect_type_combo.setCurrentText(value.get("type", "adb"))
                 self.connect_type_combo.currentTextChanged.connect(self.on_connect_type_changed)
                 vbox.addWidget(self.connect_type_combo)
-                # 只为每个子类型建独立的参数区
+                # 独立的 ADB / Telnet 参数面板
                 self.adb_group = QWidget()
                 adb_vbox = QVBoxLayout(self.adb_group)
                 self.adb_device_edit = LineEdit(self)
@@ -908,10 +1058,12 @@ class CaseConfigPage(CardWidget):
 
                 self.telnet_group = QWidget()
                 telnet_vbox = QVBoxLayout(self.telnet_group)
+                telnet_cfg = value.get("telnet", {}) if isinstance(value, dict) else {}
                 self.telnet_ip_edit = LineEdit(self)
                 self.telnet_ip_edit.setPlaceholderText("telnet.ip")
                 telnet_vbox.addWidget(QLabel("Telnet IP:"))
                 telnet_vbox.addWidget(self.telnet_ip_edit)
+
                 self.third_party_group = QWidget()
                 third_party_vbox = QVBoxLayout(self.third_party_group)
                 third_cfg = value.get("third_party", {}) if isinstance(value, dict) else {}
@@ -931,14 +1083,13 @@ class CaseConfigPage(CardWidget):
                 self.third_party_wait_edit.setValidator(QIntValidator(1, 999999, self))
                 self.third_party_wait_edit.setText(wait_text)
                 third_party_vbox.addWidget(self.third_party_wait_edit)
-                # 只添加到布局，隐藏未选中的
+
                 vbox.addWidget(self.adb_group)
                 vbox.addWidget(self.telnet_group)
                 vbox.addWidget(self.third_party_group)
                 self._register_group(key, group, self._is_dut_key(key))
-                # 初始化
                 self.adb_device_edit.setText(value.get("adb", {}).get("device", ""))
-                self.telnet_ip_edit.setText(value.get("telnet", {}).get("ip", ""))
+                self.telnet_ip_edit.setText(telnet_cfg.get("ip", ""))
                 self.on_third_party_toggled(self.third_party_checkbox.isChecked())
                 self.on_connect_type_changed(self.connect_type_combo.currentText())
                 self.field_widgets["connect_type.type"] = self.connect_type_combo
@@ -946,6 +1097,7 @@ class CaseConfigPage(CardWidget):
                 self.field_widgets["connect_type.telnet.ip"] = self.telnet_ip_edit
                 self.field_widgets["connect_type.third_party.enabled"] = self.third_party_checkbox
                 self.field_widgets["connect_type.third_party.wait_seconds"] = self.third_party_wait_edit
+                continue
                 continue
             if key == "fpga":
                 group = QGroupBox("Wi-Fi Chipset")
@@ -1467,16 +1619,17 @@ class CaseConfigPage(CardWidget):
         return info
 
     def set_fields_editable(self, editable_fields: set[str]) -> None:
-        """批量控制字段可编辑状态（高效且不触发级联信号）"""
-        # 暂停窗口刷新，提升批量操作速度
+        """批量更新字段的可编辑状态；DUT 区域始终保持可操作"""
         self.setUpdatesEnabled(False)
         try:
             for key, widget in self.field_widgets.items():
-                desired = key in editable_fields
+                root_key = key.split(".", 1)[0]
+                if self._is_dut_key(root_key):
+                    desired = True
+                else:
+                    desired = key in editable_fields
                 if widget.isEnabled() == desired:
-                    continue  # 状态没变就别动
-
-                # 屏蔽 widget 自己的信号，避免 setEnabled 时触发槽函数
+                    continue
                 with QSignalBlocker(widget):
                     widget.setEnabled(desired)
             if hasattr(self, "third_party_checkbox") and hasattr(self, "third_party_wait_edit"):
@@ -1487,10 +1640,11 @@ class CaseConfigPage(CardWidget):
                 self.on_third_party_toggled(self.third_party_checkbox.isChecked(), allow_wait)
         finally:
             self.setUpdatesEnabled(True)
-            self.update()  # 确保一次性刷新到屏幕
+            self.update()
 
     def lock_for_running(self, locked: bool) -> None:
-        """运行期间锁定页面控件"""
+        
+        """Enable or disable widgets while a test run is active."""
         self.case_tree.setEnabled(not locked)
         if hasattr(self, "prev_btn"):
             self.prev_btn.setEnabled(not locked and self.stack.currentIndex() > 0)
@@ -1511,12 +1665,14 @@ class CaseConfigPage(CardWidget):
             self._update_navigation_state()
 
     def on_csv_activated(self, index: int) -> None:
-        """用户手动点击同一项时也需要重新加载"""
+        
+        """Reload CSV data even if the same entry is activated again."""
         logging.debug("on_csv_activated index=%s", index)
         self.on_csv_changed(index, force=True)
 
     def on_csv_changed(self, index: int, force: bool = False) -> None:
-        """记录当前选择的 CSV 文件路径并发出信号"""
+        
+        """Store the selected CSV path and emit a change signal."""
         if index < 0:
             self.selected_csv_path = None
             self._update_rvr_nav_button()

@@ -29,4 +29,7 @@ rvr:
   repeat: '0'
   throughput_threshold: '5'
   tool: iperf
-csv_path: performance_test_csv/rvr_wifi_setup.csv
+router:
+  name: asusax88u
+  address: 192.168.5.1
+text_case: test/performance/test_wifi_rvr.py
