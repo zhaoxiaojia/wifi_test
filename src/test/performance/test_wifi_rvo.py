@@ -18,7 +18,7 @@ from src.tools.router_tool.Router import router_str
 
 from src.test import get_testdata
 from src.test.pyqt_log import log_fixture_params
-from src.tools.mysql_tool.MySqlControl import sync_file_to_db
+# from src.tools.mysql_tool.MySqlControl import sync_file_to_db
 from src.test.performance import (
     common_setup,
     get_corner_step_list,
@@ -239,8 +239,8 @@ def test_rvo(setup_rssi):
                 db_set='' if attenuation_db is None else attenuation_db,
             )
 
-    if not getattr(pytest, "_rvo_data_synced", False):
-        rows_stored = sync_file_to_db(pytest.testResult.log_file, "RVO")
-        if rows_stored:
-            logging.info("RVO data rows stored in database: %s", rows_stored)
-        pytest._rvo_data_synced = True
+    # if not getattr(pytest, "_rvo_data_synced", False):
+    #     rows_stored = sync_file_to_db(pytest.testResult.log_file, "RVO")
+    #     if rows_stored:
+    #         logging.info("RVO data rows stored in database: %s", rows_stored)
+    #     pytest._rvo_data_synced = True

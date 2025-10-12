@@ -111,6 +111,7 @@ class MainWindow(FluentWindow):
         self._auth_worker: TeamsAuthWorker | None = None
         self._active_teams_account: dict | None = None
         self._graph_client: GraphClient | None = None
+        self._teams_login_disabled = False
 
         final_rect = self.geometry()
         start_rect = final_rect.adjusted(
@@ -216,8 +217,15 @@ class MainWindow(FluentWindow):
             self.about_nav_button: True,
         }
         self._nav_post_login_states = dict(self._nav_default_states)
-        self._apply_nav_enabled(self._nav_default_states)
-        self.setCurrentIndex(self.login_page)
+        target_states = self._nav_post_login_states if self._teams_login_disabled else self._nav_default_states
+        self._apply_nav_enabled(target_states)
+        if self._teams_login_disabled:
+            if self.login_nav_button and not sip.isdeleted(self.login_nav_button):
+                self.login_nav_button.setVisible(False)
+                self.login_nav_button.setEnabled(False)
+            self.setCurrentIndex(self.case_config_page)
+        else:
+            self.setCurrentIndex(self.login_page)
 
         # 兼容旧属性
         self._run_nav_button = self.run_nav_button
@@ -312,10 +320,17 @@ class MainWindow(FluentWindow):
         self._teams_scopes = None
         self._teams_use_device_code = False
         if not config_path.exists():
-            logging.warning("未找到 Teams 身份配置文件：%s", config_path)
+            self._teams_login_disabled = True
+            logging.info("Teams identity config not found; skipping login flow: %s", config_path)
             self.login_page.set_status_message(
-                "未找到 Teams 配置文件，请在 config/teams_identity.json 中填写 client_id 等信息。",
+                "Teams 登录验证已跳过，无需配置 teams_identity.json。", state="info"
             )
+            self.login_page.login_button.setVisible(False)
+            self.login_page.login_button.setEnabled(False)
+            self.login_page.logout_button.setVisible(False)
+            self.login_page.logout_button.setEnabled(False)
+            self.login_page.account_edit.setEnabled(False)
+            self.login_page.password_edit.setEnabled(False)
             return
         try:
             raw = config_path.read_text(encoding="utf-8")

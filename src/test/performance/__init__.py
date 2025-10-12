@@ -204,7 +204,7 @@ def get_rf_step_list():
     i = start
     while i < stop:
         out.append(i)
-        i += 3 if i < 45 else 2  # 45 之前步长 3；到达/超过 45 后步长 2
+        i += 1  # 45 之前步长 3；到达/超过 45 后步长 2
     return out
 
 

@@ -44,6 +44,16 @@ class AsusTelnetNvramControl(AsusBaseControl):
         'WPA2/WPA3-Personal': 'psk2sae',
     }
 
+    WL1_BANDWIDTH_MAP = {
+        '20MHZ': ('0', '20'),
+        '40MHZ': ('1', '40'),
+        '80MHZ': ('2', '80'),
+        '160MHZ': ('3', '160'),
+        '20/40/80MHZ': ('2', '80'),
+        '20/40MHZ': ('1', '40'),
+        '20/40/80/160MHZ': ('3', '160'),
+    }
+
     TELNET_PORT = 23
     TELNET_USER = 'admin'
 
@@ -55,6 +65,9 @@ class AsusTelnetNvramControl(AsusBaseControl):
         self.prompt = prompt
         self.telnet: telnetlib.Telnet | None = None
         self._is_logged_in = False
+        self._wl1_channel: str | None = 'auto'
+        self._wl1_chanspec_suffix: str | None = '80'
+        self._last_wl1_chanspec: str | None = None
 
     # ------------------------------------------------------------------
     # Telnet helpers
@@ -109,6 +122,22 @@ class AsusTelnetNvramControl(AsusBaseControl):
             self._is_logged_in = False
             logging.error("Telnet command %r failed: %s", cmd, exc, exc_info=True)
             raise RuntimeError(f"Telnet command failed: {exc}") from exc
+
+    @staticmethod
+    def _normalize_bandwidth(width: str) -> str:
+        return width.replace(' ', '').upper()
+
+    def _update_wl1_chanspec(self, *, force: bool = False) -> None:
+        suffix = self._wl1_chanspec_suffix
+        if not suffix:
+            return
+        channel = self._wl1_channel or 'auto'
+        channel_value = '0' if channel == 'auto' else channel
+        chanspec = f'{channel_value}/{suffix}'
+        if not force and chanspec == self._last_wl1_chanspec:
+            return
+        self.telnet_write(f'nvram set wl1_chanspec={chanspec};')
+        self._last_wl1_chanspec = chanspec
 
     def quit(self) -> None:
         try:
@@ -190,21 +219,42 @@ class AsusTelnetNvramControl(AsusBaseControl):
         chanspec = self.CHANNEL_2_CHANSPEC_MAP[channel]
         self.telnet_write(f'nvram set wl0_chanspec={chanspec};')
 
-    def set_5g_channel(self, channel: Union[str, int]) -> None:
-        channel = str(channel)
-        if channel not in self.CHANNEL_5:
-            raise ConfigError('channel element error')
-        self.telnet_write(f'nvram set wl1_chanspec={0 if channel == "auto" else channel}/80;')
-
     def set_2g_bandwidth(self, width: str) -> None:
         if width not in self.BANDWIDTH_2:
             raise ConfigError('bandwidth element error')
         self.telnet_write(f'nvram set wl0_bw={self.BANDWIDTH_2.index(width)};')
 
-    def set_5g_bandwidth(self, width: str) -> None:
-        if width not in self.BANDWIDTH_5:
-            raise ConfigError('bandwidth element error')
-        self.telnet_write(f'nvram set wl1_bw={self.BANDWIDTH_5.index(width)};')
+    def set_5g_channel_bandwidth(
+        self,
+        *,
+        bandwidth: str | None = None,
+        channel: Union[str, int, None] = None,
+    ) -> None:
+        """同时配置 5G 信道与带宽，避免重复写入 chanspec."""
+        needs_update = False
+        if channel is not None:
+            channel = str(channel)
+            if channel not in self.CHANNEL_5:
+                raise ConfigError('channel element error')
+            if channel != self._wl1_channel:
+                self._wl1_channel = channel
+                needs_update = True
+        if bandwidth is not None:
+            normalized_width = self._normalize_bandwidth(bandwidth)
+            mapping = self.WL1_BANDWIDTH_MAP.get(normalized_width)
+            if mapping is None:
+                raise ConfigError('bandwidth element error')
+            bw_value, suffix = mapping
+            if suffix != self._wl1_chanspec_suffix:
+                self._wl1_chanspec_suffix = suffix
+                needs_update = True
+            if needs_update:
+                self._update_wl1_chanspec(force=True)
+                needs_update = False
+            self.telnet_write(f'nvram set wl1_bw={bw_value};')
+        elif needs_update:
+            self._update_wl1_chanspec(force=True)
+
 
     def set_2g_wep_encrypt(self, encrypt: str) -> None:
         if encrypt not in self.WEP_ENCRYPT:
@@ -227,6 +277,7 @@ class AsusTelnetNvramControl(AsusBaseControl):
         self.telnet_write(f'nvram set wl1_key1={passwd};')
 
     def commit(self) -> None:
+        self._update_wl1_chanspec()
         self.telnet_write('nvram set wl0_radio=1', wait_prompt=False)
         self.telnet_write('nvram set wl1_radio=1', wait_prompt=False)
         self.telnet_write('nvram commit', wait_prompt=True, timeout=60)
@@ -283,17 +334,20 @@ class AsusTelnetNvramControl(AsusBaseControl):
             else:
                 self.set_5g_authentication(router.security_mode)
 
+        channel_5g: Union[str, int, None] = None
         if router.channel:
             if '2' in router.band:
                 self.set_2g_channel(router.channel)
             else:
-                self.set_5g_channel(router.channel)
+                channel_5g = router.channel
 
         if router.bandwidth:
             if '2' in router.band:
                 self.set_2g_bandwidth(router.bandwidth)
             else:
-                self.set_5g_bandwidth(router.bandwidth)
+                self.set_5g_channel_bandwidth(bandwidth=router.bandwidth, channel=channel_5g)
+        elif channel_5g is not None:
+            self.set_5g_channel_bandwidth(channel=channel_5g)
 
         self.commit()
         time.sleep(3)
