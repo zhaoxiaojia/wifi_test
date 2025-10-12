@@ -82,7 +82,7 @@ class RouterTools(RouterControl):
     # asus router setup value
     BAND_LIST = ['2.4G', '5G']
     BANDWIDTH_2 = ['20/40 MHz', '20 MHz', '40 MHz']
-    BANDWIDTH_5 = ['20/40/80 MHz', '20 MHz', '40 MHz', '80 MHz']
+    BANDWIDTH_5 = ['20/40/80 MHz', '20 MHz', '40 MHz', '80 MHz', '160 MHz']
     WIRELESS_2 = ['auto', '11b', '11g', '11n', '11ax']
     WIRELESS_5: list[str] = ['auto', '11a', '11ac', '11ax']
 
