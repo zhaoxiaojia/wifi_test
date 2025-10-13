@@ -1,7 +1,8 @@
 # !/usr/bin/env python
 # -*-coding:utf-8 -*-
 
-import json
+from __future__ import annotations
+
 import sys
 from pathlib import Path
 import traceback
@@ -23,7 +24,7 @@ from src.ui.rvr_wifi_config import RvrWifiConfigPage
 from src.ui.run import RunPage
 from src.ui.report_page import ReportPage
 from src.ui.about_page import AboutPage
-from src.ui.teams_login import TeamsLoginPage
+from src.ui.company_login import CompanyLoginPage
 from qfluentwidgets import setTheme, Theme
 from PyQt5.QtGui import QGuiApplication, QFont
 from PyQt5.QtCore import (
@@ -34,12 +35,14 @@ from PyQt5.QtCore import (
     QPoint,
     QObject,
     QThread,
-    QTimer,
     pyqtSignal,
 )
-from src.util.auth import TeamsIdentityClient, TeamsAuthError
+from src.util.ldap_auth import (
+    LDAPAuthenticationError,
+    get_configured_ldap_server,
+    ldap_authenticate,
+)
 from src.util.constants import Paths, cleanup_temp_dir
-from src.tools import GraphClient, GraphAuthError
 
 # 确保工作目录为可执行文件所在目录
 os.chdir(Paths.BASE_DIR)
@@ -49,47 +52,44 @@ def log_exception(exc_type, exc_value, exc_tb):
     logging.error("".join(traceback.format_exception(exc_type, exc_value, exc_tb)))
 
 
-class TeamsAuthWorker(QObject):
-    """后台线程中执行 Teams 登录流程。"""
+class LDAPAuthWorker(QObject):
+    """后台线程中执行 LDAP 登录流程。"""
 
     finished = pyqtSignal(bool, str, dict)
     progress = pyqtSignal(str)
 
-    def __init__(
-        self,
-        client: TeamsIdentityClient,
-        *,
-        login_hint: str | None = None,
-        scopes: list[str] | None = None,
-        use_device_code: bool = False,
-    ) -> None:
+    def __init__(self, username: str, password: str) -> None:
         super().__init__()
-        self._client = client
-        self._login_hint = login_hint or None
-        self._scopes = scopes
-        self._use_device_code = use_device_code
+        self._username = username or ""
+        self._password = password or ""
 
-    def run(self) -> None:
+    def run(self) -> None:  # pragma: no cover - 线程执行难以覆盖
+        server = get_configured_ldap_server()
+        logging.info(
+            "LDAPAuthWorker.run: start authentication (username=%s, server=%s)",
+            self._username,
+            server,
+        )
         try:
-            result = self._client.refresh_token(
-                username=self._login_hint,
-                scopes=self._scopes,
-                use_device_code=self._use_device_code,
-                progress_callback=self.progress.emit,
-            )
-            account = result.get("account") or {}
-            display_name = (
-                account.get("name")
-                or account.get("username")
-                or self._login_hint
-                or "Microsoft 账户"
-            )
-            self.finished.emit(True, f"登录成功，欢迎 {display_name}", result)
-        except TeamsAuthError as exc:
-            self.finished.emit(False, str(exc), {})
+            self.progress.emit(f"正在连接 LDAP 服务器：{server}")
+            result = ldap_authenticate(self._username, self._password)
+            payload = {
+                "username": result.username,
+                "domain_user": result.domain_user,
+                "server": result.server,
+            }
+            self.progress.emit(f"LDAP 验证成功（服务器：{server}），正在更新界面...")
+            self.finished.emit(True, f"登录成功，欢迎 {result.username}", payload)
+        except LDAPAuthenticationError as exc:
+            logging.warning("LDAP 登录失败（server=%s）：%s", server, exc)
+            self.finished.emit(False, f"{exc}", {})
         except Exception as exc:  # pragma: no cover - 运行期异常记录
-            logging.exception("Teams 登录失败")
-            self.finished.emit(False, f"登录失败：{exc}", {})
+            logging.exception("LDAP 登录失败 (unexpected)")
+            self.finished.emit(
+                False,
+                f"登录失败：{exc}（服务器：{server}）",
+                {},
+            )
 
 
 class MainWindow(FluentWindow):
@@ -104,14 +104,9 @@ class MainWindow(FluentWindow):
         self.center_window()
         self.show()
 
-        self._teams_client: TeamsIdentityClient | None = None
-        self._teams_scopes: list[str] | None = None
-        self._teams_use_device_code = False
         self._auth_thread: QThread | None = None
-        self._auth_worker: TeamsAuthWorker | None = None
-        self._active_teams_account: dict | None = None
-        self._graph_client: GraphClient | None = None
-        self._teams_login_disabled = False
+        self._auth_worker: LDAPAuthWorker | None = None
+        self._active_account: dict | None = None
 
         final_rect = self.geometry()
         start_rect = final_rect.adjusted(
@@ -147,11 +142,10 @@ class MainWindow(FluentWindow):
         self._show_group.start()
 
         # 页面实例化
-        self.login_page = TeamsLoginPage(self)
+        self.login_page = CompanyLoginPage(self)
         self.login_page.loginRequested.connect(self._on_login_requested)
         self.login_page.loginResult.connect(self._on_login_result)
         self.login_page.logoutRequested.connect(self._on_logout_requested)
-        self._load_teams_client()
 
         self.case_config_page = CaseConfigPage(self.on_run)
         self.rvr_wifi_config_page = RvrWifiConfigPage(self.case_config_page)
@@ -209,23 +203,16 @@ class MainWindow(FluentWindow):
         )
         self.about_nav_button.setVisible(True)
 
-        self._nav_default_states = {
+        self._nav_logged_out_states = {
             self.case_nav_button: True,
             self.rvr_nav_button: False,
             self.run_nav_button: True,
             self.report_nav_button: False,
             self.about_nav_button: True,
         }
-        self._nav_post_login_states = dict(self._nav_default_states)
-        target_states = self._nav_post_login_states if self._teams_login_disabled else self._nav_default_states
-        self._apply_nav_enabled(target_states)
-        if self._teams_login_disabled:
-            if self.login_nav_button and not sip.isdeleted(self.login_nav_button):
-                self.login_nav_button.setVisible(False)
-                self.login_nav_button.setEnabled(False)
-            self.setCurrentIndex(self.case_config_page)
-        else:
-            self.setCurrentIndex(self.login_page)
+        self._nav_logged_in_states = dict(self._nav_logged_out_states)
+        self._apply_nav_enabled(self._nav_logged_out_states)
+        self.setCurrentIndex(self.login_page)
 
         # 兼容旧属性
         self._run_nav_button = self.run_nav_button
@@ -245,154 +232,32 @@ class MainWindow(FluentWindow):
                 btn.setEnabled(bool(enabled))
 
     # ------------------------------------------------------------------
-    def _set_graph_client_for_pages(self, client: GraphClient | None) -> None:
-        for page in (
-            getattr(self, "case_config_page", None),
-            getattr(self, "rvr_wifi_config_page", None),
-            getattr(self, "run_page", None),
-        ):
-            if page and not sip.isdeleted(page) and hasattr(page, "set_graph_client"):
-                try:
-                    page.set_graph_client(client)
-                except Exception:
-                    logging.exception("向页面注入 GraphClient 失败：%s", page)
+    def _on_login_requested(self, account: str, password: str) -> None:
+        """处理登录请求，调用 LDAP 完成身份验证。"""
 
-    def _clear_graph_client(self) -> None:
-        if self._graph_client:
-            with suppress(Exception):
-                self._graph_client.close()
-        self._graph_client = None
-        self._set_graph_client_for_pages(None)
-
-    def _handle_graph_auth_failure(self, message: str) -> None:
-        logging.warning("Graph 访问需要重新认证：%s", message)
-        self._clear_graph_client()
-        self._active_teams_account = None
-
-        def _notify() -> None:
-            text = message or "Teams 登录已过期，请重新登录。"
-            self.login_page.set_status_message(text, state="error")
-            self.login_page.set_login_result(False, text)
-
-        QTimer.singleShot(0, _notify)
-
-    def _create_graph_client(self, payload: dict | None) -> None:
-        self._clear_graph_client()
-        if not payload:
-            logging.warning("登录结果缺少令牌信息，无法初始化 Graph 客户端。")
-            return
-        token = payload.get("access_token")
-        if not token:
-            logging.warning("登录结果缺少 access_token，无法初始化 Graph 客户端。")
-            return
-        account = payload.get("account") or {}
-        username = account.get("username") or account.get("upn") or None
-        scopes = list(self._teams_scopes) if self._teams_scopes else None
-
-        def _token_provider(force_refresh: bool = False):
-            if not self._teams_client:
-                return token
-            try:
-                result = self._teams_client.refresh_token(
-                    username=username,
-                    scopes=scopes,
-                    force_refresh=bool(force_refresh),
-                    allow_interactive=False,
-                )
-            except TeamsAuthError as exc:
-                logging.warning("静默刷新 Teams 令牌失败：%s", exc)
-                raise GraphAuthError(str(exc)) from exc
-            return result.get("access_token")
-
-        self._graph_client = GraphClient(
-            access_token=token,
-            token_provider=_token_provider,
-            on_auth_failure=self._handle_graph_auth_failure,
-        )
-        self._set_graph_client_for_pages(self._graph_client)
-
-
-    def _load_teams_client(self) -> None:
-        """加载 Teams 身份配置并初始化认证客户端。"""
-
-        config_path = Path(Paths.CONFIG_DIR) / "teams_identity.json"
-        self._teams_client = None
-        self._teams_scopes = None
-        self._teams_use_device_code = False
-        if not config_path.exists():
-            self._teams_login_disabled = True
-            logging.info("Teams identity config not found; skipping login flow: %s", config_path)
-            self.login_page.set_status_message(
-                "Teams 登录验证已跳过，无需配置 teams_identity.json。", state="info"
-            )
-            self.login_page.login_button.setVisible(False)
-            self.login_page.login_button.setEnabled(False)
-            self.login_page.logout_button.setVisible(False)
-            self.login_page.logout_button.setEnabled(False)
-            self.login_page.account_edit.setEnabled(False)
-            self.login_page.password_edit.setEnabled(False)
-            return
-        try:
-            raw = config_path.read_text(encoding="utf-8")
-            data = json.loads(raw) if raw.strip() else {}
-        except Exception as exc:
-            logging.exception("读取 Teams 身份配置失败")
-            self.login_page.set_status_message(f"读取 Teams 配置失败：{exc}")
-            return
-        client_id = data.get("client_id")
-        if not client_id:
-            self.login_page.set_status_message("Teams 配置缺少 client_id，请更新 config/teams_identity.json。")
-            return
-        scopes_raw = data.get("scopes")
-        if scopes_raw is None:
-            scopes_list: list[str] | None = None
-        elif isinstance(scopes_raw, str):
-            scopes_list = [scopes_raw]
-        elif isinstance(scopes_raw, (list, tuple, set)):
-            scopes_list = [str(scope) for scope in scopes_raw if scope]
-        else:
-            scopes_list = [str(scopes_raw)]
-        cache_name = data.get("cache_file", "teams_auth.json")
-        cache_path = Path(Paths.CONFIG_DIR) / cache_name
-        try:
-            self._teams_client = TeamsIdentityClient(
-                client_id=client_id,
-                tenant_id=data.get("tenant_id"),
-                authority=data.get("authority"),
-                redirect_uri=data.get("redirect_uri"),
-                default_scopes=scopes_list,
-                cache_path=cache_path,
-            )
-        except Exception as exc:
-            logging.exception("初始化 Teams 身份客户端失败")
-            self.login_page.set_status_message(f"初始化 Teams 身份客户端失败：{exc}")
-            return
-        self._teams_scopes = scopes_list
-        self._teams_use_device_code = bool(data.get("use_device_code"))
-        self.login_page.set_status_message("请点击登录按钮完成微软账户授权。")
-
-    def _on_login_requested(self, account: str, _password: str) -> None:
-        """处理登录请求，调用 Teams 身份模块执行登录。"""
-
-        if not self._teams_client:
-            self.login_page.set_login_result(False, "未配置 Teams 应用信息，请检查 config/teams_identity.json。")
+        username = (account or "").strip()
+        logging.info("MainWindow: 收到登录请求 username=%s", username)
+        if not username or not password:
+            self.login_page.set_loading(False)
+            self.login_page.set_status_message("账号或密码不能为空。", state="error")
+            logging.warning("MainWindow: 登录失败，缺少账号或密码")
             return
         if self._auth_thread and self._auth_thread.isRunning():
-            self.login_page.set_status_message("正在登录，请稍候…")
+            self.login_page.set_status_message("登录正在进行，请稍候…")
+            logging.info("MainWindow: 已有登录线程运行，忽略新的请求")
             return
-        self.login_page.set_status_message("正在尝试刷新登录状态…")
-        self._auth_thread = QThread(self)
-        scopes_config = self._teams_scopes or self._teams_client.default_scopes
-        scopes = list(scopes_config) if scopes_config else None
-        self._auth_worker = TeamsAuthWorker(
-            self._teams_client,
-            login_hint=account or None,
-            scopes=scopes,
-            use_device_code=self._teams_use_device_code,
+        server = get_configured_ldap_server()
+        self.login_page.set_loading(True)
+        self.login_page.set_status_message(
+            f"正在发起 LDAP 验证（服务器：{server}），请稍候…"
         )
+        self._auth_thread = QThread(self)
+        self._auth_worker = LDAPAuthWorker(username, password)
         self._auth_worker.moveToThread(self._auth_thread)
         self._auth_thread.started.connect(self._auth_worker.run)
-        self._auth_worker.progress.connect(self.login_page.set_status_message)
+        self._auth_worker.progress.connect(
+            lambda msg: self.login_page.set_status_message(msg)
+        )
         self._auth_worker.finished.connect(self._handle_auth_finished)
         self._auth_worker.finished.connect(self._auth_thread.quit)
         self._auth_worker.finished.connect(self._auth_worker.deleteLater)
@@ -400,35 +265,34 @@ class MainWindow(FluentWindow):
         self._auth_thread.start()
 
     def _handle_auth_finished(self, success: bool, message: str, payload: dict | None) -> None:
+        logging.info(
+            "MainWindow: 登录完成 success=%s message=%s payload=%s",
+            success,
+            message,
+            payload,
+        )
         self._auth_thread = None
         self._auth_worker = None
         if success:
-            self._active_teams_account = (payload or {}).get("account")
-            self._create_graph_client(payload or {})
-            if not self._graph_client:
-                logging.warning("Teams 登录成功，但 Graph 客户端未初始化，部分功能可能不可用。")
+            self._active_account = dict(payload or {})
         else:
-            self._active_teams_account = None
-            self._clear_graph_client()
+            self._active_account = None
         self.login_page.set_login_result(success, message)
 
     def _on_login_result(self, success: bool, _message: str) -> None:
         if success:
-            self._apply_nav_enabled(self._nav_post_login_states)
+            self._apply_nav_enabled(self._nav_logged_in_states)
             self.setCurrentIndex(self.case_config_page)
         else:
-            self._apply_nav_enabled(self._nav_default_states)
+            self._apply_nav_enabled(self._nav_logged_out_states)
             self.setCurrentIndex(self.login_page)
 
     def _on_logout_requested(self) -> None:
-        self._apply_nav_enabled(self._nav_default_states)
+        logging.info("MainWindow: 用户请求注销 (active_account=%s)", self._active_account)
+        self._apply_nav_enabled(self._nav_logged_out_states)
         self.setCurrentIndex(self.login_page)
-        self._active_teams_account = None
-        self._clear_graph_client()
-        if self._teams_client:
-            with suppress(Exception):
-                self._teams_client.sign_out()
-        self.login_page.set_status_message("已清除 Teams 登录状态，请重新登录。")
+        self._active_account = None
+        self.login_page.set_status_message("已注销当前账号，请重新登录。", state="info")
 
     def show_rvr_wifi_config(self):
         """在导航栏中显示 RVR Wi-Fi 配置页（幂等：已存在则只显示）"""

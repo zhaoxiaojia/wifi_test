@@ -18,4 +18,5 @@ pysnmp
 roku
 pytest-dependency
 scapy
-msal
+ldap3
+pycryptodome
