@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # encoding: utf-8
-"""登录页面，提供微软 Teams 凭据输入与登录状态管理"""
+"""Amlogic 公司账号登录页面。"""
 from __future__ import annotations
 
 from PyQt5.QtCore import Qt, pyqtSignal
@@ -14,14 +14,14 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import QLineEdit
-from qfluentwidgets import LineEdit, PushButton, FluentIcon
+from qfluentwidgets import LineEdit, PushButton
 
 from src.util.constants import FONT_FAMILY
 from .theme import apply_theme
 
 
-class TeamsLoginPage(QWidget):
-    """简单的 Teams 登录页，收集账号信息并对外暴露登录相关信号"""
+class CompanyLoginPage(QWidget):
+    """公司账号登录页，收集凭据并对外暴露登录相关信号。"""
 
     loginRequested = pyqtSignal(str, str)
     """当用户点击登录按钮时发出 (account, password)"""
@@ -34,7 +34,7 @@ class TeamsLoginPage(QWidget):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setObjectName("teamsLoginPage")
+        self.setObjectName("companyLoginPage")
         self._loading = False
         self._logged_in = False
         apply_theme(self, recursive=True)
@@ -44,7 +44,7 @@ class TeamsLoginPage(QWidget):
         main_layout.setSpacing(24)
         main_layout.setAlignment(Qt.AlignCenter)
 
-        title = QLabel("Teams 登录", self)
+        title = QLabel("Amlogic 公司账户登录", self)
         title_font = QFont(FONT_FAMILY, 24)
         title.setFont(title_font)
         title.setAlignment(Qt.AlignCenter)
@@ -56,7 +56,7 @@ class TeamsLoginPage(QWidget):
         form_layout.setContentsMargins(0, 0, 0, 0)
 
         self.account_edit = LineEdit(form_widget)
-        self.account_edit.setPlaceholderText("账号，例如 your.name@example.com")
+        self.account_edit.setPlaceholderText("账号，例如 your.name 或 your.name@amlogic.com")
         form_layout.addWidget(self.account_edit)
 
         self.password_edit = LineEdit(form_widget)
@@ -163,7 +163,7 @@ class TeamsLoginPage(QWidget):
             return
         account = self.account_edit.text().strip()
         password = self.password_edit.text()
-        self.set_status_message("正在发起登录请求，请稍候…")
+        self.set_status_message("正在发起 LDAP 登录请求，请稍候…")
         self.set_loading(True)
         self.loginRequested.emit(account, password)
 
