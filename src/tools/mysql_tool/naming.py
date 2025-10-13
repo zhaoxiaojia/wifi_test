@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import re
 from typing import Dict, Sequence
-
-_IDENTIFIER_RE = re.compile(r"[^0-9a-zA-Z]+")
+from src.util.constants import IDENTIFIER_SANITIZE_PATTERN
 
 
 class IdentifierBuilder:
@@ -15,7 +13,7 @@ class IdentifierBuilder:
     def build(self, parts: Sequence[str], *, fallback: str = "field") -> str:
         sanitized_parts = []
         for part in parts:
-            sanitized = _IDENTIFIER_RE.sub("_", str(part).strip())
+            sanitized = IDENTIFIER_SANITIZE_PATTERN.sub("_", str(part).strip())
             sanitized = sanitized.strip("_").lower()
             if not sanitized:
                 sanitized = fallback
@@ -37,7 +35,7 @@ class IdentifierBuilder:
 def sanitize_identifier(value: str, *, fallback: str) -> str:
     """Sanitize a single identifier, preserving SQL validity."""
 
-    sanitized = _IDENTIFIER_RE.sub("_", value.strip())
+    sanitized = IDENTIFIER_SANITIZE_PATTERN.sub("_", value.strip())
     sanitized = sanitized.strip("_").lower()
     if not sanitized:
         sanitized = fallback

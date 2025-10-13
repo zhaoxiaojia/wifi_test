@@ -24,11 +24,9 @@ import pytest
 import asyncio
 import telnetlib3
 from telnetlib3.client import TelnetClient
-from src.tools.config_loader import load_config
 from src.tools.connect_tool.dut import dut
+from src.util.constants import DEFAULT_CONNECT_MINWAIT, DEFAULT_CONNECT_MAXWAIT, get_telnet_connect_window
 
-DEFAULT_CONNECT_MINWAIT = 0.1
-DEFAULT_CONNECT_MAXWAIT = 0.5
 
 
 def _get_connect_wait_window() -> Tuple[float, float]:
@@ -114,7 +112,7 @@ class telnet_tool(dut):
         super().__init__()
         self.dut_ip = dut_ip
         self.port = 23
-        self._connect_minwait, self._connect_maxwait = _get_connect_wait_window()
+        self._connect_minwait, self._connect_maxwait = get_telnet_connect_window()
         self._client_factory = FastNegotiationTelnetClient
         logging.debug(
             "telnet 握手等待窗口：min=%ss max=%ss",
