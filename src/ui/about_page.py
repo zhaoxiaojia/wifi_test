@@ -105,7 +105,7 @@ class AboutPage(CardWidget):
 
         config_files_layout = QHBoxLayout()
         config_files_layout.setSpacing(6)
-        for file_name in ("config.yaml", "tool_config.yaml", "compatibility_dut.json"):
+        for file_name in ("config_dut.yaml", "config_other.yaml", "tool_config.yaml", "compatibility_dut.json"):
             btn = PushButton(file_name, self.resources_card)
             btn.clicked.connect(lambda _, name=file_name: self._open_path(os.path.join(Paths.CONFIG_DIR, name)))
             btn.setFont(base_font)

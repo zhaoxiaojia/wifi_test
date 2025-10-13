@@ -1216,11 +1216,7 @@ class CaseConfigPage(CardWidget):
             self.test_case_edit.setText(self._case_path_to_display(normalized))
 
     def render_all_fields(self):
-        """
-        自动渲染config.yaml中的所有一级字段。
-        控件支持 LineEdit / ComboBox（可扩展 Checkbox）。
-        字段映射到 self.field_widgets，方便后续操作。
-        """
+        """自动渲染配置字段，支持 LineEdit / ComboBox（可扩展 Checkbox）。"""
         self._dut_groups.clear()
         self._other_groups.clear()
         # Ensure DUT metadata placeholders exist
