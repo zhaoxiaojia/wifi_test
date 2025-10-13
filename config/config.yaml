@@ -16,7 +16,7 @@ rf_solution:
     ip_address: 192.168.5.200
     channels: '1'
   model: RC4DAT-8G-95
-  step: '0,75:3'
+  step: 30,45:5;0,30:10
 rvr:
   iperf:
     path: ''
@@ -31,6 +31,7 @@ router:
   name: asusax88u
   address: 192.168.5.1
 text_case: test/performance/test_wifi_rvr.py
+csv_path: performance_test_csv/rvr_wifi_setup.csv
 software_info:
   software_version: ''
   driver_version: ''
@@ -38,7 +39,7 @@ hardware_info:
   hardware_version: ''
 android_system:
   version: ''
-  kernel_version: ''
+  kernel_version: Kernel 5.10
 connect_type:
   adb:
     device: coco5c6788c23f1804
