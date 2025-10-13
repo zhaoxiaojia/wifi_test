@@ -14,6 +14,15 @@ from ldap3.core.exceptions import LDAPException
 LDAP_SERVER = os.getenv("AMLOGIC_LDAP_SERVER", "ldaps://ad.amlogic.com")
 LDAP_DOMAIN = os.getenv("AMLOGIC_LDAP_DOMAIN", "amlogic.com")
 
+def get_configured_ldap_server() -> str:
+    """返回当前配置的 LDAP 服务器地址。"""
+
+    return LDAP_SERVER
+
+
+def get_configured_ldap_domain() -> str:
+    """返回当前配置的 LDAP 域名。"""
+    return LDAP_DOMAIN
 
 @dataclass(slots=True)
 class LDAPLoginResult:
@@ -50,8 +59,23 @@ def ldap_authenticate(username: str, password: str) -> LDAPLoginResult:
         raise LDAPAuthenticationError("账号或密码不能为空。")
 
     domain_user = _build_domain_user(clean_username)
-    logging.info("ldap_authenticate: 使用 LDAP 服务器 %s", LDAP_SERVER)
+    env_server = os.getenv("AMLOGIC_LDAP_SERVER") or "<未设置>"
+    env_domain = os.getenv("AMLOGIC_LDAP_DOMAIN") or "<未设置>"
+    logging.info(
+        "ldap_authenticate: 使用 LDAP 服务器 %s (环境变量 AMLOGIC_LDAP_SERVER=%s)",
+        LDAP_SERVER,
+        env_server,
+    )
+    logging.info(
+        "ldap_authenticate: 使用 LDAP 域 %s (环境变量 AMLOGIC_LDAP_DOMAIN=%s)",
+        LDAP_DOMAIN,
+        env_domain,
+    )
     logging.info("ldap_authenticate: 尝试为账号 %s 发起绑定", domain_user)
+    print(
+        f"[ldap_authenticate] LDAP server={LDAP_SERVER}, domain={LDAP_DOMAIN}",
+        flush=True,
+    )
 
     server = Server(LDAP_SERVER, get_info="ALL")
     connection: Connection | None = None
@@ -66,7 +90,9 @@ def ldap_authenticate(username: str, password: str) -> LDAPLoginResult:
         logging.debug("ldap_authenticate: Connection 对象创建完成 (server=%s)", server)
         if not connection.bind():
             logging.error("ldap_authenticate: LDAP 绑定失败 -> %s", connection.result)
-            raise LDAPAuthenticationError("LDAP 认证失败，请检查账号或密码。")
+            raise LDAPAuthenticationError(
+                f"LDAP 认证失败，请检查账号或密码。（服务器：{LDAP_SERVER}）"
+            )
         logging.info("ldap_authenticate: LDAP 绑定成功 (user=%s)", domain_user)
         return LDAPLoginResult(
             username=clean_username,
@@ -77,10 +103,14 @@ def ldap_authenticate(username: str, password: str) -> LDAPLoginResult:
         raise
     except LDAPException as exc:  # pragma: no cover - 运行时异常记录
         logging.exception("ldap_authenticate: LDAP 异常 -> %s", exc)
-        raise LDAPAuthenticationError(f"LDAP 服务异常：{exc}") from exc
+        raise LDAPAuthenticationError(
+            f"LDAP 服务异常：{exc}（服务器：{LDAP_SERVER}）"
+        ) from exc
     except Exception as exc:  # pragma: no cover - 运行期防御
         logging.exception("ldap_authenticate: 未知异常 -> %s", exc)
-        raise LDAPAuthenticationError(f"LDAP 认证过程中出现异常：{exc}") from exc
+        raise LDAPAuthenticationError(
+            f"LDAP 认证过程中出现异常：{exc}（服务器：{LDAP_SERVER}）"
+        ) from exc
     finally:
         if connection is not None:
             with contextlib.suppress(Exception):
