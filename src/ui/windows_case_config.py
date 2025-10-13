@@ -15,8 +15,12 @@ from pathlib import Path
 import logging
 from dataclasses import dataclass, field
 from src.tools.router_tool.router_factory import router_list, get_router
-from src.util.constants import RouterConst
-from src.util.constants import get_config_base, get_src_base
+from src.util.constants import (
+    RouterConst,
+    DEFAULT_RF_STEP_SPEC,
+    get_config_base,
+    get_src_base,
+)
 from src.tools.config_loader import load_config, save_config
 from PyQt5.QtCore import (
     Qt,
@@ -506,6 +510,9 @@ class CaseConfigPage(CardWidget):
                 if key == "connect_type.third_party.wait_seconds":
                     val = val.strip()
                     ref[leaf] = int(val) if val else 0
+                    continue
+                if key == "rf_solution.step":
+                    ref[leaf] = val.strip()
                     continue
                 old_val = ref.get(leaf)
                 if isinstance(old_val, list):
@@ -1201,8 +1208,42 @@ class CaseConfigPage(CardWidget):
 
                 # -------- 通用字段：step --------
                 self.rf_step_edit = LineEdit(self)
-                self.rf_step_edit.setPlaceholderText("rf step; such as  0,50")
-                self.rf_step_edit.setText(",".join(map(str, value.get("step", []))))
+                self.rf_step_edit.setPlaceholderText(
+                    "例如: 0,30:3;45,60:2 (起始,结束:步长)"
+                )
+                step_value = value.get("step")
+                if isinstance(step_value, str):
+                    rf_step_text = step_value.strip()
+                elif isinstance(step_value, (list, tuple, set)):
+                    items = list(step_value)
+                    rf_step_text = ""
+                    if (
+                        len(items) == 2
+                        and all(isinstance(i, (int, float, str)) for i in items)
+                    ):
+                        start, stop = (str(items[0]).strip(), str(items[1]).strip())
+                        if start and stop:
+                            rf_step_text = f"{start},{stop}"
+                    else:
+                        parts: list[str] = []
+                        for item in items:
+                            text = str(item).strip()
+                            if text:
+                                parts.append(text)
+                        rf_step_text = ";".join(parts)
+                elif step_value is None:
+                    rf_step_text = ""
+                else:
+                    rf_step_text = str(step_value).strip()
+
+                if not rf_step_text:
+                    rf_step_text = DEFAULT_RF_STEP_SPEC
+
+                self.rf_step_edit.setText(rf_step_text)
+                self.rf_step_edit.setToolTip(
+                    "支持多段范围，例如 0,30:3;45,60:2；留空时使用默认值 "
+                    f"{DEFAULT_RF_STEP_SPEC}"
+                )
                 vbox.addWidget(QLabel("Step:"))
                 vbox.addWidget(self.rf_step_edit)
 
