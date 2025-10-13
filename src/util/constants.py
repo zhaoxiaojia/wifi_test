@@ -11,6 +11,10 @@ from pathlib import Path
 from typing import Final
 from contextlib import suppress
 
+# 默认的 RF 衰减配置（start,stop:step 格式）。
+# 供 UI 与性能测试模块共享，避免魔法字符串散落各处。
+DEFAULT_RF_STEP_SPEC: Final[str] = "0,75:3"
+
 
 def get_config_base() -> Path:
     """获取配置目录路径。
