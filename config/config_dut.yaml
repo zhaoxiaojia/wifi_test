@@ -5,7 +5,7 @@ hardware_info:
   hardware_version: ''
 android_system:
   version: ''
-  kernel_version: ''
+  kernel_version: Kernel 5.10
 connect_type:
   adb:
     device: coco5c6788c23f1804
@@ -20,4 +20,3 @@ serial_port:
   baud: '961200'
   port: COM5
   status: false
-

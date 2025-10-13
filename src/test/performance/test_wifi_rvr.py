@@ -36,7 +36,6 @@ def setup_router(request):
     router = init_router()
     common_setup(router, router_info)
     rf_tool.execute_rf_cmd(0)
-    logging.info(rf_tool.get_rf_current_value())
     yield router_info
     pytest.dut.kill_iperf()
 
@@ -48,11 +47,9 @@ def setup_attenuation(request, setup_router):
     router_info = setup_router
 
     rf_tool.execute_rf_cmd(db_set)
-    logging.info("Set attenuation: %s dB", db_set)
-    logging.info(rf_tool.get_rf_current_value())
+    logging.info("Set attenuation: %s dB", rf_tool.get_rf_current_value())
     connect_status = wait_connect(router_info)
     pytest.dut.get_rssi()
-    logging.info("Measured RSSI: %s", pytest.dut.rssi_num)
     yield connect_status, router_info, db_set
     pytest.dut.kill_iperf()
 
