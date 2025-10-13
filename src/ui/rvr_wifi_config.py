@@ -11,7 +11,7 @@ from pathlib import Path
 import logging
 from contextlib import ExitStack
 from PyQt5.QtCore import Qt, QSignalBlocker
-from src.util.constants import Paths, RouterConst
+from src.util.constants import AUTH_OPTIONS, OPEN_AUTH, Paths, RouterConst
 from PyQt5.QtWidgets import (
     QHBoxLayout,
     QTableWidgetItem,
@@ -38,17 +38,6 @@ from .theme import apply_theme, apply_font_and_selection
 
 if TYPE_CHECKING:
     from .windows_case_config import CaseConfigPage
-
-# 支持的认证方式
-AUTH_OPTIONS = [
-    "Open System",
-    "WPA2-Personal",
-    "WPA3-Personal",
-    "WPA2-Enterprise",
-]
-# 无需密码的认证方式集合
-OPEN_AUTH = {"Open System"}
-
 
 class WifiTableWidget(TableWidget):
     """支持拖拽排序并通知父页面同步行顺序的表格"""

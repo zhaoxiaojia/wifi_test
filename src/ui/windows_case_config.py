@@ -17,8 +17,13 @@ import logging
 from dataclasses import dataclass, field
 from src.tools.router_tool.router_factory import router_list, get_router
 from src.util.constants import (
-    RouterConst,
+    ANDROID_KERNEL_MAP,
+    DEFAULT_ANDROID_VERSION_CHOICES,
+    DEFAULT_KERNEL_VERSION_CHOICES,
     DEFAULT_RF_STEP_SPEC,
+    FONT_FAMILY,
+    RouterConst,
+    TEXT_COLOR,
     get_config_base,
     get_src_base,
 )
@@ -55,26 +60,6 @@ from PyQt5.QtWidgets import (
     QListWidgetItem,
 )
 
-DEFAULT_ANDROID_VERSION_CHOICES = [
-    "Android 15",
-    "Android 14",
-    "Android 13",
-    "Android 12",
-    "Android 11",
-    "Android 10",
-]
-
-ANDROID_KERNEL_MAP = {
-    "Android 15": "Kernel 6.1",
-    "Android 14": "Kernel 6.1",
-    "Android 13": "Kernel 5.15",
-    "Android 12": "Kernel 5.10",
-    "Android 11": "Kernel 5.4",
-    "Android 10": "Kernel 4.14",
-}
-
-DEFAULT_KERNEL_VERSION_CHOICES = sorted(set(ANDROID_KERNEL_MAP.values()))
-
 from qfluentwidgets import (
     CardWidget,
     LineEdit,
@@ -91,7 +76,7 @@ try:
 except Exception:  # pragma: no cover - 运行环境缺失时退化为自定义指示器
     StepView = None
 from .animated_tree_view import AnimatedTreeView
-from .theme import apply_theme, FONT_FAMILY, TEXT_COLOR, apply_font_and_selection, apply_groupbox_style
+from .theme import apply_theme, apply_font_and_selection, apply_groupbox_style
 
 
 @dataclass

@@ -7,14 +7,14 @@ from typing import Any, Dict
 import pymysql
 import yaml
 
-BASE_DIR = Path(__file__).resolve().parents[3]
-_TOOL_CONFIG_PATH = BASE_DIR / "config" / "tool_config.yaml"
+from src.util.constants import Paths, TOOL_CONFIG_FILENAME
+
 
 
 def get_tool_config_path() -> Path:
     """Return the absolute path to tool_config.yaml."""
 
-    return _TOOL_CONFIG_PATH
+    return Path(Paths.CONFIG_DIR) / TOOL_CONFIG_FILENAME
 
 
 def load_mysql_config() -> Dict[str, Any]:

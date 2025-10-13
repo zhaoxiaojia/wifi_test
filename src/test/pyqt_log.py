@@ -4,9 +4,7 @@ import inspect
 from collections.abc import Mapping, Sequence
 import pytest
 
-
-_ACTUAL_PARAMS_ATTR = "_pyqt_actual_fixture_params"
-
+from src.util.constants import PYQT_ACTUAL_PARAMS_ATTR as _ACTUAL_PARAMS_ATTR
 
 def _ensure_actual_params(node):
     actual_params = getattr(node, _ACTUAL_PARAMS_ATTR, None)

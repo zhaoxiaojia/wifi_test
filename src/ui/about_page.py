@@ -20,15 +20,15 @@ from PyQt5.QtWidgets import (
 )
 from qfluentwidgets import CardWidget, StrongBodyLabel, PushButton, HyperlinkButton
 
-from src.util.constants import get_build_metadata, Paths
-from .theme import (
-    apply_theme,
-    apply_font_and_selection,
+from src.util.constants import (
     FONT_FAMILY,
     FONT_SIZE,
     STYLE_BASE,
     TEXT_COLOR,
+    Paths,
+    get_build_metadata,
 )
+from .theme import apply_theme, apply_font_and_selection
 
 
 class AboutPage(CardWidget):

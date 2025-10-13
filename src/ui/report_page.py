@@ -31,20 +31,24 @@ from PyQt5.QtWidgets import (
 )
 from qfluentwidgets import CardWidget, StrongBodyLabel
 
-from .theme import apply_theme, FONT_FAMILY, STYLE_BASE, TEXT_COLOR, BACKGROUND_COLOR
-CHART_DPI = 150
-
-STANDARD_ORDER = ("11ax", "11ac", "11n")
-BANDWIDTH_ORDER = ("20MHz", "40MHz", "80MHz", "160MHz")
-FREQ_BAND_ORDER = ("2.4G", "5G", "6G")
-TEST_TYPE_ORDER = ("RVR", "RVO")
-DIRECTION_ORDER = ("TX", "RX")
-
-STANDARD_ORDER_MAP = {value.lower(): index for index, value in enumerate(STANDARD_ORDER)}
-BANDWIDTH_ORDER_MAP = {value.lower(): index for index, value in enumerate(BANDWIDTH_ORDER)}
-FREQ_BAND_ORDER_MAP = {value.lower(): index for index, value in enumerate(FREQ_BAND_ORDER)}
-TEST_TYPE_ORDER_MAP = {value.upper(): index for index, value in enumerate(TEST_TYPE_ORDER)}
-DIRECTION_ORDER_MAP = {value.upper(): index for index, value in enumerate(DIRECTION_ORDER)}
+from .theme import apply_theme
+from src.util.constants import (
+    BACKGROUND_COLOR,
+    BANDWIDTH_ORDER,
+    BANDWIDTH_ORDER_MAP,
+    CHART_DPI,
+    DIRECTION_ORDER,
+    DIRECTION_ORDER_MAP,
+    FREQ_BAND_ORDER,
+    FREQ_BAND_ORDER_MAP,
+    FONT_FAMILY,
+    STANDARD_ORDER,
+    STANDARD_ORDER_MAP,
+    STYLE_BASE,
+    TEST_TYPE_ORDER,
+    TEST_TYPE_ORDER_MAP,
+    TEXT_COLOR,
+)
 
 class InteractiveChartLabel(QLabel):
     """QLabel subclass that shows tooltips for chart points when hovered."""

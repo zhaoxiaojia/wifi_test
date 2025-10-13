@@ -16,7 +16,7 @@ from src.tools.router_tool.Router import Router
 from src.tools.router_tool.router_factory import get_router
 from src.tools.connect_tool.lab_device_controller import LabDeviceController
 from src.tools.rs_test import rs
-from src.util.constants import DEFAULT_RF_STEP_SPEC
+from src.util.constants import DEFAULT_RF_STEP_SPEC, RF_STEP_SPLIT_PATTERN
 
 
 @lru_cache(maxsize=1)
@@ -197,8 +197,6 @@ def _parse_optional_int(
     return number
 
 
-_RF_STEP_SPLIT_PATTERN = re.compile(r"[;；|\n]+")
-
 
 def _is_scalar(value: Any) -> bool:
     return not isinstance(value, (list, tuple, set, dict))
@@ -219,7 +217,7 @@ def _collect_rf_step_segments(raw_step: Any) -> list[str]:
                 .replace("，", ",")
                 .replace("：", ":")
             )
-            for part in _RF_STEP_SPLIT_PATTERN.split(normalized):
+            for part in RF_STEP_SPLIT_PATTERN.split(normalized):
                 part = part.strip()
                 if part:
                     segments.append(part)

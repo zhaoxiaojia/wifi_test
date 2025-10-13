@@ -50,16 +50,21 @@ import pytest
 import io
 import json
 from contextlib import suppress
-from src.util.constants import Paths, get_src_base
+from src.util.constants import (
+    ACCENT_COLOR,
+    CONTROL_HEIGHT,
+    ICON_SIZE,
+    ICON_TEXT_SPACING,
+    LEFT_PAD,
+    Paths,
+    STYLE_BASE,
+    TEXT_COLOR,
+    FONT_FAMILY,
+    get_src_base,
+)
 from src.util.pytest_redact import install_redactor_for_current_process
-from .theme import apply_theme, STYLE_BASE, TEXT_COLOR, FONT_FAMILY
-from .theme import format_log_html
+from .theme import apply_theme, format_log_html
 
-CONTROL_HEIGHT = 32
-ACCENT_COLOR = "#0067c0"
-ICON_SIZE = 18
-ICON_TEXT_SPACING = 8
-LEFT_PAD = ICON_SIZE + ICON_TEXT_SPACING  # 给文本预留的左侧内边距
 
 
 class LiveLogWriter:
