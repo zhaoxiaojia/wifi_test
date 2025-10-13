@@ -784,6 +784,9 @@ class CaseConfigPage(CardWidget):
                     val = val.strip()
                     ref[leaf] = int(val) if val else 0
                     continue
+                if key == "rf_solution.step":
+                    ref[leaf] = val.strip()
+                    continue
                 old_val = ref.get(leaf)
                 if isinstance(old_val, list):
                     items = [x.strip() for x in val.split(',') if x.strip()]
