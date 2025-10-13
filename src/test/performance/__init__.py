@@ -16,6 +16,7 @@ from src.tools.router_tool.Router import Router
 from src.tools.router_tool.router_factory import get_router
 from src.tools.connect_tool.lab_device_controller import LabDeviceController
 from src.tools.rs_test import rs
+from src.util.constants import DEFAULT_RF_STEP_SPEC
 
 
 @lru_cache(maxsize=1)
@@ -196,16 +197,156 @@ def _parse_optional_int(
     return number
 
 
+_RF_STEP_SPLIT_PATTERN = re.compile(r"[;；|\n]+")
+
+
+def _is_scalar(value: Any) -> bool:
+    return not isinstance(value, (list, tuple, set, dict))
+
+
+def _collect_rf_step_segments(raw_step: Any) -> list[str]:
+    segments: list[str] = []
+
+    def _collect(value: Any) -> None:
+        if value is None:
+            return
+        if isinstance(value, str):
+            text = value.strip()
+            if not text:
+                return
+            normalized = (
+                text.replace("；", ";")
+                .replace("，", ",")
+                .replace("：", ":")
+            )
+            for part in _RF_STEP_SPLIT_PATTERN.split(normalized):
+                part = part.strip()
+                if part:
+                    segments.append(part)
+            return
+        if isinstance(value, (list, tuple, set)):
+            items = list(value)
+            if len(items) == 2 and all(_is_scalar(i) for i in items):
+                start = str(items[0]).strip()
+                stop = str(items[1]).strip()
+                if start and stop:
+                    segments.append(f"{start},{stop}")
+                return
+            for item in items:
+                _collect(item)
+            return
+        text = str(value).strip()
+        if text:
+            segments.append(text)
+
+    _collect(raw_step)
+    return segments
+
+
+def _expand_rf_step_segments(segment_specs: list[str]) -> list[int]:
+    values: list[int] = []
+    seen: set[int] = set()
+
+    for original in segment_specs:
+        segment = original.strip()
+        if not segment:
+            continue
+
+        normalized = (
+            segment.replace("；", ";")
+            .replace("，", ",")
+            .replace("：", ":")
+        )
+        include_stop = ":" in normalized
+        if include_stop:
+            range_part, step_part = normalized.split(":", 1)
+        else:
+            range_part, step_part = normalized, None
+
+        tokens = [tok for tok in re.split(r"[\s,]+", range_part.strip()) if tok]
+        if not tokens:
+            logging.warning("Empty rf_solution.step segment ignored: %r", original)
+            continue
+        if len(tokens) > 2:
+            logging.warning(
+                "rf_solution.step segment %r has too many bounds, only the first two values are used.",
+                original,
+            )
+
+        start_token = tokens[0]
+        stop_token = tokens[1] if len(tokens) >= 2 else tokens[0]
+
+        start = _parse_optional_int(
+            start_token,
+            field_name="rf_solution.step.start",
+        )
+        stop = _parse_optional_int(
+            stop_token,
+            field_name="rf_solution.step.stop",
+        )
+
+        if start is None:
+            continue
+        if stop is None:
+            stop = start
+
+        if step_part is not None:
+            step = _parse_optional_int(
+                step_part,
+                field_name="rf_solution.step.step",
+                min_value=1,
+            )
+            if step is None:
+                step = 1
+        else:
+            step = 1
+
+        if step <= 0:
+            logging.warning("rf_solution.step step %s <= 0, fallback to 1", step)
+            step = 1
+
+        if stop < start:
+            logging.warning(
+                "rf_solution.step stop %s lower than start %s, swapping.",
+                stop,
+                start,
+            )
+            start, stop = stop, start
+
+        exclusive = step_part is None and len(tokens) >= 2 and start != stop
+        current = start
+        while current <= stop:
+            if exclusive and current == stop:
+                break
+            if current not in seen:
+                values.append(current)
+                seen.add(current)
+            current += step
+
+    return values
+
+
+def parse_rf_step_spec(raw_step: Any) -> list[int]:
+    segments = _collect_rf_step_segments(raw_step)
+    values = _expand_rf_step_segments(segments)
+    if values:
+        return values
+    if raw_step not in (None, "", DEFAULT_RF_STEP_SPEC):
+        logging.warning(
+            "rf_solution.step is empty or invalid (%r), fallback to default %s",
+            raw_step,
+            DEFAULT_RF_STEP_SPEC,
+        )
+    default_values = _expand_rf_step_segments(_collect_rf_step_segments(DEFAULT_RF_STEP_SPEC))
+    return default_values if default_values else [0]
+
+
 @lru_cache(maxsize=1)
 def get_rf_step_list():
     cfg = get_cfg()
-    start, stop = cfg['rf_solution']['step']  # (start, stop)，stop 为上限（不含）
-    out = []
-    i = start
-    while i < stop:
-        out.append(i)
-        i += 1  # 45 之前步长 3；到达/超过 45 后步长 2
-    return out
+    rf_solution = cfg.get('rf_solution', {}) if isinstance(cfg, dict) else {}
+    raw_step = rf_solution.get('step') if isinstance(rf_solution, dict) else None
+    return parse_rf_step_spec(raw_step)
 
 
 @lru_cache(maxsize=1)

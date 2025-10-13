@@ -11,12 +11,17 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 import logging
 from dataclasses import dataclass, field
 from src.tools.router_tool.router_factory import router_list, get_router
-from src.util.constants import RouterConst
-from src.util.constants import get_config_base, get_src_base
+from src.util.constants import (
+    RouterConst,
+    DEFAULT_RF_STEP_SPEC,
+    get_config_base,
+    get_src_base,
+)
 from src.tools.config_loader import load_config, save_config
 from PyQt5.QtCore import (
     Qt,
@@ -45,7 +50,9 @@ from PyQt5.QtWidgets import (
     QFileSystemModel,
     QCheckBox,
     QSplitter,
-    QStackedWidget
+    QStackedWidget,
+    QListWidget,
+    QListWidgetItem,
 )
 
 DEFAULT_ANDROID_VERSION_CHOICES = [
@@ -160,6 +167,276 @@ class _FallbackStepView(QWidget):
             else:
                 label.setStyleSheet("color: #6c6c6c; font-weight: 400;")
 
+
+class RfStepSegmentsWidget(QWidget):
+
+    """RF Step 多段输入控件，支持通过表单维护区间列表。"""
+
+    DEFAULT_SEGMENT = (0, 75, 3)
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._segments: list[tuple[int, int, int]] = []
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(6)
+
+        form = QGridLayout()
+        form.setContentsMargins(0, 0, 0, 0)
+        form.setHorizontalSpacing(8)
+        form.setVerticalSpacing(4)
+
+        self.start_edit = LineEdit(self)
+        self.start_edit.setPlaceholderText("起始 (默认 0)")
+        self.start_edit.setValidator(QIntValidator(0, 9999, self))
+        self.start_edit.setText(str(self.DEFAULT_SEGMENT[0]))
+
+        self.stop_edit = LineEdit(self)
+        self.stop_edit.setPlaceholderText("结束 (默认 75)")
+        self.stop_edit.setValidator(QIntValidator(0, 9999, self))
+        self.stop_edit.setText(str(self.DEFAULT_SEGMENT[1]))
+
+        self.step_edit = LineEdit(self)
+        self.step_edit.setPlaceholderText("步长 (默认 3)")
+        self.step_edit.setValidator(QIntValidator(1, 9999, self))
+        self.step_edit.setText(str(self.DEFAULT_SEGMENT[2]))
+
+        form.addWidget(QLabel("起始"), 0, 0)
+        form.addWidget(self.start_edit, 0, 1)
+        form.addWidget(QLabel("结束"), 1, 0)
+        form.addWidget(self.stop_edit, 1, 1)
+        form.addWidget(QLabel("步长"), 2, 0)
+        form.addWidget(self.step_edit, 2, 1)
+
+        layout.addLayout(form)
+
+        btn_row = QHBoxLayout()
+        btn_row.setContentsMargins(0, 0, 0, 0)
+        btn_row.setSpacing(8)
+
+        self.add_btn = PushButton("Add", self)
+        self.add_btn.clicked.connect(self._on_add_segment)
+        btn_row.addWidget(self.add_btn)
+
+        self.del_btn = PushButton("Del", self)
+        self.del_btn.clicked.connect(self._on_delete_segment)
+        btn_row.addWidget(self.del_btn)
+
+        btn_row.addStretch(1)
+        layout.addLayout(btn_row)
+
+        self.segment_list = QListWidget(self)
+        self.segment_list.setSelectionMode(QListWidget.SingleSelection)
+        self.segment_list.currentRowChanged.connect(self._on_segment_selected)
+        layout.addWidget(self.segment_list, 1)
+
+        self.default_hint = QLabel("默认始终包含区间 0-75，步长 3。")
+        self.default_hint.setObjectName("rfStepDefaultHint")
+        layout.addWidget(self.default_hint)
+
+        self._ensure_default_present()
+        self._refresh_segment_list()
+
+    def _ensure_default_present(self) -> None:
+        if self.DEFAULT_SEGMENT not in self._segments:
+            self._segments.insert(0, self.DEFAULT_SEGMENT)
+
+    def _refresh_segment_list(self) -> None:
+        self.segment_list.clear()
+        for start, stop, step in self._segments:
+            item_text = f"{start} - {stop} (step {step})"
+            item = QListWidgetItem(item_text)
+            item.setData(Qt.UserRole, (start, stop, step))
+            self.segment_list.addItem(item)
+
+    def _on_segment_selected(self, row: int) -> None:
+        if 0 <= row < len(self._segments):
+            start, stop, step = self._segments[row]
+            self.start_edit.setText(str(start))
+            self.stop_edit.setText(str(stop))
+            self.step_edit.setText(str(step))
+
+    def _show_error(self, message: str) -> None:
+        InfoBar.error(
+            title="RF Step",
+            content=message,
+            parent=self,
+            position=InfoBarPosition.TOP,
+            duration=3000,
+        )
+
+    def _parse_inputs(self) -> tuple[int, int, int] | None:
+        start_text = self.start_edit.text().strip()
+        stop_text = self.stop_edit.text().strip()
+        step_text = self.step_edit.text().strip() or str(self.DEFAULT_SEGMENT[2])
+
+        if not start_text or not stop_text:
+            self._show_error("请填写起始与结束值。")
+            return None
+
+        try:
+            start = int(start_text)
+            stop = int(stop_text)
+            step = int(step_text)
+        except ValueError:
+            self._show_error("起始、结束与步长必须为整数。")
+            return None
+
+        if step <= 0:
+            self._show_error("步长必须大于 0。")
+            return None
+
+        if stop < start:
+            start, stop = stop, start
+
+        return start, stop, step
+
+    def _on_add_segment(self) -> None:
+        parsed = self._parse_inputs()
+        if parsed is None:
+            return
+
+        if parsed == self.DEFAULT_SEGMENT and self.DEFAULT_SEGMENT in self._segments:
+            self._show_error("默认区间已存在，无需重复添加。")
+            return
+
+        if parsed in self._segments:
+            self._show_error("该区间已存在。")
+            return
+
+        self._segments.append(parsed)
+        self._ensure_default_present()
+        self._refresh_segment_list()
+
+    def _on_delete_segment(self) -> None:
+        row = self.segment_list.currentRow()
+        if row < 0 or row >= len(self._segments):
+            self._show_error("请先选择要删除的区间。")
+            return
+
+        segment = self._segments[row]
+        if segment == self.DEFAULT_SEGMENT:
+            self._show_error("默认区间 0-75 (步长 3) 无法删除。")
+            return
+
+        del self._segments[row]
+        self._ensure_default_present()
+        self._refresh_segment_list()
+
+    def segments(self) -> list[tuple[int, int, int]]:
+        return list(self._segments)
+
+    def set_segments_from_config(self, raw_value: object) -> None:
+        segments = self._convert_raw_to_segments(raw_value)
+        self._segments = segments
+        self._ensure_default_present()
+        self._refresh_segment_list()
+
+    def serialize(self) -> str:
+        unique_segments: list[tuple[int, int, int]] = []
+        seen: set[tuple[int, int, int]] = set()
+        for segment in self._segments:
+            if segment not in seen:
+                unique_segments.append(segment)
+                seen.add(segment)
+
+        if not unique_segments:
+            unique_segments.append(self.DEFAULT_SEGMENT)
+
+        parts = [f"{start},{stop}:{step}" for start, stop, step in unique_segments]
+        return ";".join(parts)
+
+    def _convert_raw_to_segments(self, raw_value: object) -> list[tuple[int, int, int]]:
+        segments: list[tuple[int, int, int]] = []
+
+        for text in self._collect_segments(raw_value):
+            parsed = self._parse_segment_text(text)
+            if parsed is not None:
+                segments.append(parsed)
+
+        return segments
+
+    def _collect_segments(self, raw_value: object) -> list[str]:
+        segments: list[str] = []
+
+        def _collect(value: object) -> None:
+            if value is None:
+                return
+            if isinstance(value, str):
+                text = value.strip()
+                if not text:
+                    return
+                normalized = (
+                    text.replace("；", ";")
+                    .replace("，", ",")
+                    .replace("：", ":")
+                )
+                for part in re.split(r"[;；|\n]+", normalized):
+                    part = part.strip()
+                    if part:
+                        segments.append(part)
+                return
+            if isinstance(value, (list, tuple, set)):
+                items = list(value)
+                if len(items) == 2 and all(not isinstance(i, (list, tuple, set, dict)) for i in items):
+                    start = str(items[0]).strip()
+                    stop = str(items[1]).strip()
+                    if start and stop:
+                        segments.append(f"{start},{stop}")
+                    return
+                for item in items:
+                    _collect(item)
+                return
+            text = str(value).strip()
+            if text:
+                segments.append(text)
+
+        _collect(raw_value)
+        return segments
+
+    def _parse_segment_text(self, segment: str) -> tuple[int, int, int] | None:
+        normalized = (
+            segment.replace("；", ";")
+            .replace("，", ",")
+            .replace("：", ":")
+        )
+
+        if ":" in normalized:
+            range_part, step_part = normalized.split(":", 1)
+            step_text = step_part.strip()
+        else:
+            range_part = normalized
+            step_text = ""
+
+        tokens = [tok for tok in re.split(r"[\s,]+", range_part) if tok]
+        if not tokens:
+            return None
+
+        start_text = tokens[0]
+        stop_text = tokens[1] if len(tokens) >= 2 else tokens[0]
+
+        try:
+            start = int(start_text)
+            stop = int(stop_text)
+        except ValueError:
+            return None
+
+        if step_text:
+            try:
+                step = int(step_text)
+            except ValueError:
+                step = self.DEFAULT_SEGMENT[2]
+        else:
+            step = self.DEFAULT_SEGMENT[2]
+
+        if step <= 0:
+            step = self.DEFAULT_SEGMENT[2]
+
+        if stop < start:
+            start, stop = stop, start
+
+        return start, stop, step
 
 class ConfigGroupPanel(QWidget):
     
@@ -520,6 +797,8 @@ class CaseConfigPage(CardWidget):
                         ref[leaf] = ""
                     else:
                         ref[leaf] = val
+            elif isinstance(widget, RfStepSegmentsWidget):
+                ref[leaf] = widget.serialize()
             elif isinstance(widget, ComboBox):
                 text = widget.currentText()
                 ref[leaf] = True if text == 'True' else False if text == 'False' else text
@@ -1200,11 +1479,18 @@ class CaseConfigPage(CardWidget):
                 vbox.addWidget(self.lda_group)
 
                 # -------- 通用字段：step --------
-                self.rf_step_edit = LineEdit(self)
-                self.rf_step_edit.setPlaceholderText("rf step; such as  0,50")
-                self.rf_step_edit.setText(",".join(map(str, value.get("step", []))))
+                self.rf_step_widget = RfStepSegmentsWidget(self)
+                self.rf_step_widget.set_segments_from_config(value.get("step"))
                 vbox.addWidget(QLabel("Step:"))
-                vbox.addWidget(self.rf_step_edit)
+                vbox.addWidget(self.rf_step_widget)
+
+                self.rf_step_hint = QLabel(
+                    "使用下方输入框依次填写起始、结束与步长，点击 Add 添加，"
+                    "选中后可 Del 删除。系统会固定保留 0-75 (步长 3) 的默认区间。"
+                )
+                self.rf_step_hint.setWordWrap(True)
+                self.rf_step_hint.setObjectName("rfStepHintLabel")
+                vbox.addWidget(self.rf_step_hint)
 
                 # ---- 加入表单 & 初始化可见性 ----
                 self._register_group(key, group, self._is_dut_key(key))
@@ -1218,7 +1504,7 @@ class CaseConfigPage(CardWidget):
                 self.field_widgets["rf_solution.RADIORACK-4-220.ip_address"] = self.rack_ip_edit
                 self.field_widgets["rf_solution.LDA-908V-8.ip_address"] = self.lda_ip_edit
                 self.field_widgets["rf_solution.LDA-908V-8.channels"] = self.lda_channels_edit
-                self.field_widgets["rf_solution.step"] = self.rf_step_edit
+                self.field_widgets["rf_solution.step"] = self.rf_step_widget
                 continue  # 跳过后面的通用字段处理
             if key == "rvr":
                 group = QGroupBox("RvR Config")  # 外层分组
