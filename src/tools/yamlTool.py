@@ -8,7 +8,9 @@
 import logging
 from pathlib import Path
 from typing import Union
+
 import yaml
+
 from src.util.constants import get_config_base
 '''
 yaml 格式现在校验网站
@@ -17,17 +19,24 @@ https://www.bejson.com/validators/yaml_editor/
 
 
 class yamlTool:
-    def __init__(self, path: Union[str, Path, None] = None):
-        if path is None:
-            path = get_config_base() / "config.yaml"
-        else:
-            path = Path(path)
-            if not path.is_absolute():
-                path = get_config_base() / path
-        self.path = path
-        with open(self.path, encoding="gbk") as a_yaml_file:
-            # 解析yaml
-            self.parsed_yaml_file = yaml.load(a_yaml_file, Loader=yaml.FullLoader)
+    def __init__(self, path: Union[str, Path]):
+        resolved = Path(path)
+        if not resolved.is_absolute():
+            resolved = get_config_base() / resolved
+        self.path = resolved
+        self.parsed_yaml_file = self._load_file()
+
+    def _load_file(self) -> dict:
+        for encoding in ("utf-8", "gbk"):
+            try:
+                with self.path.open(encoding=encoding) as stream:
+                    return yaml.load(stream, Loader=yaml.FullLoader) or {}
+            except UnicodeDecodeError:
+                continue
+            except Exception as exc:  # pragma: no cover - I/O 依赖环境
+                logging.error("Failed to load yaml %s: %s", self.path, exc)
+                break
+        return {}
 
     def get_note(self, note):
         return self.parsed_yaml_file.get(note)
