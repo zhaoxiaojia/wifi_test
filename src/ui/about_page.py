@@ -176,6 +176,8 @@ class AboutPage(CardWidget):
     def _populate_metadata(self) -> None:
         metadata = get_build_metadata()
         latest_version = self._get_latest_version_from_changelog(metadata)
+        acknowledgements = self._get_acknowledgements_from_readme()
+
         display_rows = [
             ("Application Name", metadata.get("package_name", "Unknown")),
             ("Version", latest_version or "Unknown"),
@@ -186,7 +188,10 @@ class AboutPage(CardWidget):
             # ("Commit Author", metadata.get("commit_author", "Unknown")),
             # ("Commit Date", metadata.get("commit_date", "Unknown")),
             ("Author", "chao.li"),
-            ("Acknowledgements", "zijie.chen, yifeng.xu, meng.wang1"),
+            (
+                "Acknowledgements",
+                acknowledgements if acknowledgements else "Unknown",
+            ),
         ]
 
         self.info_table.setRowCount(len(display_rows))
@@ -240,4 +245,39 @@ class AboutPage(CardWidget):
             return match.group(0).replace(" ", "")
 
         return latest_entry or (default_version or "Unknown")
+
+    def _get_acknowledgements_from_readme(self) -> str:
+        readme_path = Path(Paths.BASE_DIR) / "README.md"
+        try:
+            content = readme_path.read_text(encoding="utf-8", errors="ignore")
+        except Exception:
+            return ""
+
+        lines = content.splitlines()
+        in_section = False
+        ack_lines: list[str] = []
+
+        section_pattern = re.compile(r"#+\s*Authors?\s+and\s+acknowledg?ment", re.IGNORECASE)
+
+        for line in lines:
+            stripped = line.strip()
+            if not in_section:
+                if section_pattern.match(stripped):
+                    in_section = True
+                continue
+
+            if stripped.startswith("#"):
+                break
+
+            if not stripped:
+                continue
+
+            # Remove common leading markers like bullets or '@'
+            cleaned = stripped.lstrip("-*•").strip()
+            if cleaned.startswith("@"):
+                cleaned = cleaned[1:]
+            if cleaned:
+                ack_lines.append(cleaned)
+
+        return ", ".join(dict.fromkeys(ack_lines))
 
