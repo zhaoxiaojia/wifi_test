@@ -230,13 +230,12 @@ class RfStepSegmentsWidget(QWidget):
         self.segment_list.setSelectionMode(QListWidget.SingleSelection)
         self.segment_list.currentRowChanged.connect(self._on_segment_selected)
         layout.addWidget(self.segment_list, 1)
-
+        
         self.default_hint = QLabel("若未添加任何区间，执行时将自动使用 0-75 (步长 3)。")
         self.default_hint.setObjectName("rfStepDefaultHint")
         layout.addWidget(self.default_hint)
 
         self._refresh_segment_list()
-
     def _refresh_segment_list(self) -> None:
         self.segment_list.clear()
         for start, stop, step in self._segments:
@@ -291,7 +290,6 @@ class RfStepSegmentsWidget(QWidget):
         parsed = self._parse_inputs()
         if parsed is None:
             return
-
         if parsed in self._segments:
             self._show_error("该区间已存在。")
             return
@@ -326,7 +324,6 @@ class RfStepSegmentsWidget(QWidget):
 
         if not unique_segments:
             return ""
-
         parts = [f"{start},{stop}:{step}" for start, stop, step in unique_segments]
         return ";".join(parts)
 
@@ -766,6 +763,9 @@ class CaseConfigPage(CardWidget):
                 if key == "connect_type.third_party.wait_seconds":
                     val = val.strip()
                     ref[leaf] = int(val) if val else 0
+                    continue
+                if key == "rf_solution.step":
+                    ref[leaf] = val.strip()
                     continue
                 old_val = ref.get(leaf)
                 if isinstance(old_val, list):
