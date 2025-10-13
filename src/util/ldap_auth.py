@@ -14,7 +14,6 @@ from ldap3.core.exceptions import LDAPException
 LDAP_SERVER = os.getenv("AMLOGIC_LDAP_SERVER", "ldaps://ad.amlogic.com")
 LDAP_DOMAIN = os.getenv("AMLOGIC_LDAP_DOMAIN", "amlogic.com")
 
-
 def get_configured_ldap_server() -> str:
     """返回当前配置的 LDAP 服务器地址。"""
 
@@ -23,9 +22,7 @@ def get_configured_ldap_server() -> str:
 
 def get_configured_ldap_domain() -> str:
     """返回当前配置的 LDAP 域名。"""
-
     return LDAP_DOMAIN
-
 
 @dataclass(slots=True)
 class LDAPLoginResult:
