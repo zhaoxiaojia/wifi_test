@@ -39,6 +39,7 @@ from PyQt5.QtCore import (
 )
 from src.util.ldap_auth import (
     LDAPAuthenticationError,
+    get_configured_ldap_server,
     ldap_authenticate,
 )
 from src.util.constants import Paths, cleanup_temp_dir
@@ -63,25 +64,32 @@ class LDAPAuthWorker(QObject):
         self._password = password or ""
 
     def run(self) -> None:  # pragma: no cover - 线程执行难以覆盖
+        server = get_configured_ldap_server()
         logging.info(
-            "LDAPAuthWorker.run: start authentication (username=%s)", self._username
+            "LDAPAuthWorker.run: start authentication (username=%s, server=%s)",
+            self._username,
+            server,
         )
         try:
-            self.progress.emit("正在连接 LDAP 服务器...")
+            self.progress.emit(f"正在连接 LDAP 服务器：{server}")
             result = ldap_authenticate(self._username, self._password)
             payload = {
                 "username": result.username,
                 "domain_user": result.domain_user,
                 "server": result.server,
             }
-            self.progress.emit("LDAP 验证成功，正在更新界面...")
+            self.progress.emit(f"LDAP 验证成功（服务器：{server}），正在更新界面...")
             self.finished.emit(True, f"登录成功，欢迎 {result.username}", payload)
         except LDAPAuthenticationError as exc:
-            logging.warning("LDAP 登录失败：%s", exc)
-            self.finished.emit(False, str(exc), {})
+            logging.warning("LDAP 登录失败（server=%s）：%s", server, exc)
+            self.finished.emit(False, f"{exc}", {})
         except Exception as exc:  # pragma: no cover - 运行期异常记录
             logging.exception("LDAP 登录失败 (unexpected)")
-            self.finished.emit(False, f"登录失败：{exc}", {})
+            self.finished.emit(
+                False,
+                f"登录失败：{exc}（服务器：{server}）",
+                {},
+            )
 
 
 class MainWindow(FluentWindow):
@@ -238,8 +246,11 @@ class MainWindow(FluentWindow):
             self.login_page.set_status_message("登录正在进行，请稍候…")
             logging.info("MainWindow: 已有登录线程运行，忽略新的请求")
             return
+        server = get_configured_ldap_server()
         self.login_page.set_loading(True)
-        self.login_page.set_status_message("正在发起 LDAP 验证，请稍候…")
+        self.login_page.set_status_message(
+            f"正在发起 LDAP 验证（服务器：{server}），请稍候…"
+        )
         self._auth_thread = QThread(self)
         self._auth_worker = LDAPAuthWorker(username, password)
         self._auth_worker.moveToThread(self._auth_thread)
