@@ -18,13 +18,21 @@ __all__ = [
     "sync_file_to_db",
 ]
 
-
 @dataclass(frozen=True)
 class _ColumnInfo:
     mapping: HeaderMapping
     sql_type: str
 
-
+@dataclass(frozen=True)
+class _ColumnInfo:
+    mapping: HeaderMapping
+    sql_type: str
+    kind: str  # "scalar" 或 "json"
+      
+@dataclass(frozen=True)
+class _ColumnInfo:
+    mapping: HeaderMapping
+    sql_type: str
 class PerformanceTableManager:
     """管理 `performance` 表：结构随 CSV 头动态重建，并完整同步行数据。"""
 
@@ -166,14 +174,12 @@ class PerformanceTableManager:
         )
         create_sql = "\n".join(statements)
         self._client.execute(create_sql)
-
     def ensure_schema_initialized(self) -> None:
         tables = self._client.query_all("SHOW TABLES")
         if tables:
             return
         logging.info("Database contains no tables; initializing performance schema.")
         self._recreate_table([])
-
     def replace_with_csv(
         self,
         *,
@@ -184,7 +190,6 @@ class PerformanceTableManager:
         run_source: str,
     ) -> int:
         """重建 `performance` 表结构并写入当前 CSV 的所有记录。"""
-
         logging.info(
             "Preparing to rebuild %s using CSV %s | headers=%s rows=%s",  # noqa: G004
             self.TABLE_NAME,
@@ -206,7 +211,6 @@ class PerformanceTableManager:
             len(column_infos),
         )
         self._recreate_table(column_infos)
-
         if not rows:
             logging.info(
                 "CSV %s contains no rows; %s table recreated without data.",
@@ -253,13 +257,11 @@ class PerformanceTableManager:
                     csv_name,
                     self.TABLE_NAME,
                 )
-
         return affected_total
 
 
 def sync_configuration(config: dict | None) -> None:
     """Kept for backward compatibility; configuration is no longer persisted."""
-
     if config:
         logging.debug("Configuration sync skipped; persistence has been removed.")
     return None
