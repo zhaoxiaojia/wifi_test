@@ -18,7 +18,6 @@ from src.tools.router_tool.Router import router_str
 
 from src.test import get_testdata
 from src.test.pyqt_log import log_fixture_params
-from src.tools.mysql_tool.MySqlControl import sync_file_to_db
 from src.test.performance import (
     common_setup,
     get_corner_step_list,
@@ -213,7 +212,7 @@ def setup_rssi(request, setup_static_db):
     yield connect_status, router_info, corner_tool_obj, corner_set, final_db, measured_rssi
 
 
-def test_rvo(setup_rssi):
+def test_rvo(setup_rssi, performance_sync_manager):
     connect_status, router_info, corner_tool_obj, corner_set, attenuation_db, rssi_num = setup_rssi
     if not connect_status:
         logging.info("Can't connect wifi ,input 0")
@@ -239,8 +238,8 @@ def test_rvo(setup_rssi):
                 db_set='' if attenuation_db is None else attenuation_db,
             )
 
-    if not getattr(pytest, "_rvo_data_synced", False):
-        rows_stored = sync_file_to_db(pytest.testResult.log_file, "RVO")
-        if rows_stored:
-            logging.info("RVO data rows stored in database: %s", rows_stored)
-        pytest._rvo_data_synced = True
+    performance_sync_manager(
+        "RVO",
+        pytest.testResult.log_file,
+        message="RVO data rows stored in database",
+    )

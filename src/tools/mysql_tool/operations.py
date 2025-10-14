@@ -1,317 +1,339 @@
 from __future__ import annotations
 
-import logging
 import json
-from hashlib import md5
+import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence
+from dataclasses import dataclass
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from .client import MySqlClient
-from .models import SyncResult, TestResultContext
+from .models import HeaderMapping
+from .naming import IdentifierBuilder
 from .schema import read_csv_rows
 
-_LATEST_SYNC_RESULT: Optional[SyncResult] = None
-
-_TESTER_KEYS = (
-    "tester",
-    "test_operator",
-    "operator",
-    "test_engineer",
-    "test_user",
-)
-
-_CASE_NAME_KEYS = (
-    "case_name",
-    "test_case_name",
-    "testcase_name",
-    "testcase",
-    "case",
-)
-
-def _make_fingerprint(payload: Any) -> str:
-    serialized = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    return md5(serialized.encode("utf-8")).hexdigest()
-def _extract_tester(config: Optional[dict]) -> Optional[str]:
-    if not isinstance(config, dict):
-        return None
-    for key in _TESTER_KEYS:
-        value = config.get(key)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-    metadata = config.get("metadata") if isinstance(config, dict) else None
-    if isinstance(metadata, dict):
-        for key in _TESTER_KEYS:
-            value = metadata.get(key)
-            if isinstance(value, str) and value.strip():
-                return value.strip()
-    return None
-
-
-def _extract_case_name(
-    config: Optional[dict], case_path: Optional[str], data_type: Optional[str]
-) -> Optional[str]:
-    if isinstance(config, dict):
-        for key in _CASE_NAME_KEYS:
-            value = config.get(key)
-            if isinstance(value, str) and value.strip():
-                return value.strip()
-    if case_path:
-        return Path(case_path).stem
-    if data_type:
-        stripped = data_type.strip()
-        return stripped.upper() if stripped else None
-    return None
-
 __all__ = [
-    "ConfigSchemaSynchronizer",
-    "TestReportManager",
-    "TestResultTableManager",
+    "PerformanceTableManager",
     "sync_configuration",
     "sync_test_result_to_db",
     "sync_file_to_db",
 ]
 
 
-class ConfigSchemaSynchronizer:
-    """Persist DUT / Execution 配置信息并避免重复写入。"""
-
-    DUT_TABLE = "dut_settings"
-    EXECUTION_TABLE = "execution_settings"
-
-    def __init__(self, client: MySqlClient) -> None:
-        self._client = client
-
-    def sync(self, config: dict) -> SyncResult:
-        from src.tools.config_sections import split_config_data  # local import to avoid cycle
-
-        dut_section, execution_section = split_config_data(config)
-        dut_id = self._ensure_dut_record(dut_section)
-        execution_id = self._ensure_execution_record(execution_section, dut_id)
-        return SyncResult(dut_id=dut_id, execution_id=execution_id)
-
-    def _ensure_dut_record(self, payload: Optional[dict]) -> int:
-        self._ensure_table(self.DUT_TABLE)
-        normalized = payload or {}
-        fingerprint = _make_fingerprint(normalized)
-        row = self._client.query_one(
-            f"SELECT id FROM `{self.DUT_TABLE}` WHERE fingerprint=%s",
-            [fingerprint],
-        )
-        if row:
-            return int(row["id"])
-        logging.debug("Insert new DUT settings with fingerprint %s", fingerprint)
-        payload_json = json.dumps(normalized, ensure_ascii=False, sort_keys=True)
-        sql = (
-            f"INSERT INTO `{self.DUT_TABLE}` (fingerprint, payload) "
-            "VALUES (%s, %s)"
-        )
-        return self._client.insert(sql, [fingerprint, payload_json])
-
-    def _ensure_execution_record(self, payload: Optional[dict], dut_id: int) -> int:
-        self._ensure_table(self.EXECUTION_TABLE, include_dut=True)
-        normalized = payload or {}
-        fingerprint = _make_fingerprint({"dut_id": dut_id, "payload": normalized})
-        row = self._client.query_one(
-            f"SELECT id FROM `{self.EXECUTION_TABLE}` WHERE fingerprint=%s",
-            [fingerprint],
-        )
-        if row:
-            return int(row["id"])
-        logging.debug(
-            "Insert new execution settings with fingerprint %s (dut_id=%s)",
-            fingerprint,
-            dut_id,
-        )
-        payload_json = json.dumps(normalized, ensure_ascii=False, sort_keys=True)
-        sql = (
-            f"INSERT INTO `{self.EXECUTION_TABLE}` (dut_id, fingerprint, payload) "
-            "VALUES (%s, %s, %s)"
-        )
-        return self._client.insert(sql, [dut_id, fingerprint, payload_json])
-
-    def _ensure_table(self, table_name: str, *, include_dut: bool = False) -> None:
-        parts = [
-            f"CREATE TABLE IF NOT EXISTS `{table_name}` (",
-            "    `id` INT PRIMARY KEY AUTO_INCREMENT,",
-        ]
-        if include_dut:
-            parts.append("    `dut_id` INT NOT NULL,")
-        parts.extend(
-            [
-                "    `fingerprint` CHAR(32) NOT NULL,",
-                "    `payload` JSON NOT NULL,",
-                "    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,",
-                "    `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,",
-                "    UNIQUE KEY `uniq_fingerprint` (`fingerprint`)",
-                ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;",
-            ]
-        )
-        create_sql = "\n".join(parts)
-        self._client.execute(create_sql)
+@dataclass(frozen=True)
+class _ColumnInfo:
+    mapping: HeaderMapping
+    sql_type: str
+    kind: str  # "scalar" 或 "json"
 
 
-class TestResultTableManager:
-    """将性能 CSV 行写入统一的 performance 表。"""
+class PerformanceTableManager:
+    """管理 `performance` 表：结构随 CSV 头动态重建，并完整同步行数据。"""
 
     TABLE_NAME = "performance"
+    JSON_TABLE_NAME = "performance_json"
+    _BASE_COLUMNS: Tuple[Tuple[str, str], ...] = (
+        ("csv_name", "VARCHAR(255) NOT NULL"),
+        ("row_index", "INT NOT NULL"),
+        ("data_type", "VARCHAR(64) NULL DEFAULT NULL"),
+        ("run_source", "VARCHAR(32) NULL DEFAULT NULL"),
+    )
 
     def __init__(self, client: MySqlClient) -> None:
         self._client = client
-        self._ensure_table()
 
-    def _ensure_table(self) -> None:
-        create_sql = (
-            "CREATE TABLE IF NOT EXISTS `performance` ("
-            "    `id` INT PRIMARY KEY AUTO_INCREMENT,"
-            "    `test_report_id` INT NOT NULL,"
-            "    `row_index` INT NOT NULL,"
-            "    `data_type` VARCHAR(64) NULL DEFAULT NULL,"
-            "    `run_source` VARCHAR(32) NOT NULL,"
-            "    `metrics` JSON NOT NULL,"
-            "    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,"
-            "    `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"
-            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"
+    @staticmethod
+    def _classify_value(value: Any) -> Tuple[str, Any]:
+        if value is None:
+            return "empty", None
+        if isinstance(value, (dict, list)):
+            return "json", value
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            if isinstance(value, float) and not value.is_integer():
+                return "float", float(value)
+            return "int", int(value)
+        if isinstance(value, str):
+            stripped = value.strip()
+            if not stripped:
+                return "empty", None
+            lowered = stripped.lower()
+            if lowered in {"null", "none", "nan"}:
+                return "empty", None
+            if stripped[0] in {"{", "["}:
+                try:
+                    parsed = json.loads(stripped)
+                    if isinstance(parsed, (dict, list)):
+                        return "json", parsed
+                except Exception:
+                    pass
+            try:
+                return "int", int(stripped)
+            except Exception:
+                pass
+            try:
+                return "float", float(stripped)
+            except Exception:
+                pass
+            return "text", stripped
+        return "text", str(value)
+
+    @classmethod
+    def _infer_sql_type(cls, values: Iterable[Any]) -> Tuple[str, str]:
+        seen_float = False
+        seen_int = False
+        for value in values:
+            value_type, _ = cls._classify_value(value)
+            if value_type == "json":
+                return "JSON", "json"
+            if value_type == "text":
+                return "TEXT", "scalar"
+            if value_type == "float":
+                seen_float = True
+            elif value_type == "int":
+                seen_int = True
+        if seen_float:
+            return "DOUBLE", "scalar"
+        if seen_int:
+            return "BIGINT", "scalar"
+        return "TEXT", "scalar"
+
+    @staticmethod
+    def _normalize_cell(value: Any, sql_type: str) -> Any:
+        value_type, parsed = PerformanceTableManager._classify_value(value)
+        if parsed is None:
+            return None
+        if sql_type == "JSON":
+            if value_type in {"json", "float", "int"}:
+                return json.dumps(parsed, ensure_ascii=False)
+            return json.dumps(str(parsed), ensure_ascii=False)
+        if sql_type == "DOUBLE":
+            if value_type in {"float", "int"}:
+                return float(parsed)
+            return None
+        if sql_type == "BIGINT":
+            if value_type == "int":
+                return int(parsed)
+            if value_type == "float":
+                float_value = float(parsed)
+                if float_value.is_integer():
+                    return int(float_value)
+            return None
+        return str(parsed)
+
+    @staticmethod
+    def _build_mappings(headers: Sequence[str]) -> List[HeaderMapping]:
+        builder = IdentifierBuilder()
+        reserved = {name for name, _ in PerformanceTableManager._BASE_COLUMNS}
+        used = set(reserved)
+        mappings: List[HeaderMapping] = []
+        for header in headers:
+            if not header:
+                continue
+            candidate = builder.build((header,), fallback="column")
+            if candidate in used:
+                candidate = builder.build((header, "field"), fallback="column")
+            while candidate in used:
+                candidate = builder.build((header, str(len(used))), fallback="column")
+            used.add(candidate)
+            mappings.append(HeaderMapping(original=header, sanitized=candidate))
+        return mappings
+
+    def _prepare_columns(
+        self, mappings: Sequence[HeaderMapping], rows: Sequence[Dict[str, Any]]
+    ) -> List[_ColumnInfo]:
+        columns: List[_ColumnInfo] = []
+        for mapping in mappings:
+            values = [row.get(mapping.original) for row in rows]
+            sql_type, kind = self._infer_sql_type(values)
+            columns.append(_ColumnInfo(mapping=mapping, sql_type=sql_type, kind=kind))
+        return columns
+
+    def _recreate_table(self, columns: Sequence[_ColumnInfo]) -> None:
+        self._client.execute(f"DROP TABLE IF EXISTS `{self.TABLE_NAME}`")
+        statements: List[str] = ["CREATE TABLE `performance` ("]
+        statements.append("    `id` INT PRIMARY KEY AUTO_INCREMENT,")
+        for name, definition in self._BASE_COLUMNS:
+            statements.append(f"    `{name}` {definition},")
+        for column in columns:
+            if column.kind != "scalar":
+                continue
+            definition = f"{column.sql_type} NULL DEFAULT NULL"
+            comment = column.mapping.original.replace("'", "''")
+            statements.append(
+                f"    `{column.mapping.sanitized}` {definition} COMMENT '{comment}',"
+            )
+        statements.extend(
+            [
+                "    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,",
+                "    `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
+            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;",
+        ]
         )
+        create_sql = "\n".join(statements)
         self._client.execute(create_sql)
 
-    def store_results(
+    def _recreate_json_table(self) -> None:
+        self._client.execute(f"DROP TABLE IF EXISTS `{self.JSON_TABLE_NAME}`")
+        statements = [
+            f"CREATE TABLE `{self.JSON_TABLE_NAME}` (",
+            "    `id` INT PRIMARY KEY AUTO_INCREMENT,",
+            "    `csv_name` VARCHAR(255) NOT NULL,",
+            "    `row_index` INT NOT NULL,",
+            "    `field_name` VARCHAR(255) NOT NULL,",
+            "    `field_alias` VARCHAR(255) NOT NULL,",
+            "    `data_type` VARCHAR(64) NULL DEFAULT NULL,",
+            "    `run_source` VARCHAR(32) NULL DEFAULT NULL,",
+            "    `value_type` VARCHAR(32) NULL DEFAULT NULL,",
+            "    `json_value` JSON NOT NULL,",
+            "    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,",
+            "    `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
+            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;",
+        ]
+        create_sql = "\n".join(statements)
+        self._client.execute(create_sql)
+
+    def ensure_schema_initialized(self) -> None:
+        tables = self._client.query_all("SHOW TABLES")
+        if tables:
+            return
+        logging.info("Database contains no tables; initializing performance schema.")
+        self._recreate_table([])
+        self._recreate_json_table()
+
+    def replace_with_csv(
         self,
-        report_id: int,
+        *,
+        csv_name: str,
         headers: Sequence[str],
         rows: Sequence[Dict[str, Any]],
-        context: TestResultContext,
+        data_type: Optional[str],
+        run_source: str,
     ) -> int:
+        """重建 `performance` 表结构并写入当前 CSV 的所有记录。"""
+
+        logging.info(
+            "Preparing to rebuild %s using CSV %s | headers=%s rows=%s",  # noqa: G004
+            self.TABLE_NAME,
+            csv_name,
+            len(headers),
+            len(rows),
+        )
+
+        mappings = self._build_mappings(headers)
+        logging.debug(
+            "Header mappings: %s",
+            {mapping.original: mapping.sanitized for mapping in mappings},
+        )
+
+        column_infos = self._prepare_columns(mappings, rows)
+        scalar_columns = [info for info in column_infos if info.kind == "scalar"]
+        json_columns = [info for info in column_infos if info.kind == "json"]
+        logging.info(
+            "Recreating %s with %s scalar columns and %s JSON columns",
+            self.TABLE_NAME,
+            len(scalar_columns),
+            len(json_columns),
+        )
+        self._recreate_table(scalar_columns)
+        self._recreate_json_table()
+
         if not rows:
             logging.info(
-                "No rows parsed from %s, skip inserting into %s",
-                context.log_file_path,
+                "CSV %s contains no rows; %s table recreated without data.",
+                csv_name,
                 self.TABLE_NAME,
             )
             return 0
 
-        normalized_headers = [header for header in headers if header]
-        sql = (
-            "INSERT INTO `performance` ("
-            "`test_report_id`, `row_index`, `data_type`, `run_source`, `metrics`) "
-            "VALUES (%s, %s, %s, %s, %s)"
+        insert_columns = [name for name, _ in self._BASE_COLUMNS]
+        insert_columns.extend(info.mapping.sanitized for info in scalar_columns)
+        column_clause = ", ".join(f"`{name}`" for name in insert_columns)
+        placeholders = ", ".join(["%s"] * len(insert_columns))
+        insert_sql = (
+            f"INSERT INTO `{self.TABLE_NAME}` ({column_clause}) VALUES ({placeholders})"
         )
-        values_list: List[List[Any]] = []
+
+        values: List[List[Any]] = []
         for index, row in enumerate(rows, start=1):
-            metrics: Dict[str, Any] = {}
-            for header in normalized_headers:
-                value = row.get(header)
-                if value is None:
-                    continue
-                if isinstance(value, str):
-                    text = value.strip()
-                    if not text:
-                        continue
-                    metrics[header] = text
-                else:
-                    metrics[header] = value
-            values_list.append(
-                [
-                    report_id,
-                    index,
-                    context.data_type.upper() if context.data_type else None,
-                    context.run_source,
-                    json.dumps(metrics, ensure_ascii=False),
-                ]
-            )
-
-        affected = self._client.executemany(sql, values_list)
-        logging.info("Stored %s rows into %s", affected, self.TABLE_NAME)
-        return affected
-
-
-class TestReportManager:
-    """Record a summary entry referencing DUT, execution and performance data."""
-
-    TABLE_NAME = "test_report"
-
-    def __init__(self, client: MySqlClient) -> None:
-        self._client = client
-        self._ensure_table()
-
-    def _ensure_table(self) -> None:
-        create_sql = (
-            "CREATE TABLE IF NOT EXISTS `test_report` ("
-            "    `id` INT PRIMARY KEY AUTO_INCREMENT,"
-            "    `tester` VARCHAR(128) NULL DEFAULT NULL,"
-            "    `test_case_name` VARCHAR(255) NULL DEFAULT NULL,"
-            "    `case_path` TEXT NULL DEFAULT NULL,"
-            "    `data_type` VARCHAR(64) NULL DEFAULT NULL,"
-            "    `log_file_path` TEXT NULL DEFAULT NULL,"
-            "    `run_source` VARCHAR(32) NOT NULL,"
-            "    `dut_settings_id` INT NOT NULL,"
-            "    `execution_settings_id` INT NOT NULL,"
-            "    `performance_rows` INT NOT NULL DEFAULT 0,"
-            "    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,"
-            "    `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"
-            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"
-        )
-        self._client.execute(create_sql)
-    def create(
-        self,
-        *,
-        tester: Optional[str],
-        test_case_name: Optional[str],
-        case_path: Optional[str],
-        data_type: Optional[str],
-        log_file_path: str,
-        run_source: str,
-        dut_id: int,
-        execution_id: int,
-    ) -> int:
-        sql = (
-            "INSERT INTO `test_report` ("
-            "`tester`, `test_case_name`, `case_path`, `data_type`, "
-            "`log_file_path`, `run_source`, `dut_settings_id`, `execution_settings_id`) "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"
-        )
-        return self._client.insert(
-            sql,
-            [
-                tester,
-                test_case_name,
-                case_path,
+            row_values: List[Any] = [
+                csv_name,
+                index,
                 data_type,
-                log_file_path,
                 run_source,
-                dut_id,
-                execution_id,
-            ],
-        )
-    def update_row_count(self, report_id: int, rows: int) -> None:
-        self._client.execute(
-            "UPDATE `test_report` SET `performance_rows`=%s WHERE `id`=%s",
-            [rows, report_id],
-        )
+            ]
+            for info in scalar_columns:
+                row_values.append(
+                    self._normalize_cell(row.get(info.mapping.original), info.sql_type)
+                )
+            values.append(row_values)
+
+        affected_total = 0
+        if values:
+            affected_total = self._client.executemany(insert_sql, values)
+            if affected_total != len(values):
+                logging.warning(
+                    "Expected to insert %s rows but database reported %s",  # noqa: G004
+                    len(values),
+                    affected_total,
+                )
+            else:
+                logging.info(
+                    "Stored %s rows from %s into %s",  # noqa: G004
+                    affected_total,
+                    csv_name,
+                    self.TABLE_NAME,
+                )
+
+        json_rows: List[List[Any]] = []
+        for index, row in enumerate(rows, start=1):
+            for info in json_columns:
+                value_type, parsed = self._classify_value(row.get(info.mapping.original))
+                if parsed is None:
+                    continue
+                serialized = json.dumps(parsed, ensure_ascii=False)
+                json_rows.append(
+                    [
+                        csv_name,
+                        index,
+                        info.mapping.original,
+                        info.mapping.sanitized,
+                        data_type,
+                        run_source,
+                        value_type,
+                        serialized,
+                    ]
+                )
+
+        if json_rows:
+            json_insert_sql = (
+                f"INSERT INTO `{self.JSON_TABLE_NAME}` ("
+                "`csv_name`, `row_index`, `field_name`, `field_alias`, "
+                "`data_type`, `run_source`, `value_type`, `json_value`) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"
+            )
+            json_affected = self._client.executemany(json_insert_sql, json_rows)
+            if json_affected != len(json_rows):
+                logging.warning(
+                    "Expected to insert %s JSON rows but database reported %s",  # noqa: G004
+                    len(json_rows),
+                    json_affected,
+                )
+            else:
+                logging.info(
+                    "Stored %s JSON rows from %s into %s",
+                    json_affected,
+                    csv_name,
+                    self.JSON_TABLE_NAME,
+                )
+
+        return affected_total
 
 
-def sync_configuration(config: dict | None) -> Optional[SyncResult]:
-    """Synchronize DUT / Execution configuration and store latest ids globally."""
+def sync_configuration(config: dict | None) -> None:
+    """Kept for backward compatibility; configuration is no longer persisted."""
 
-    global _LATEST_SYNC_RESULT
-    if not isinstance(config, dict) or not config:
-        logging.debug("skip sync_configuration: empty config")
-        return None
-    try:
-        with MySqlClient() as client:
-            synchronizer = ConfigSchemaSynchronizer(client)
-            result = synchronizer.sync(config)
-            # 确保测试报告表在首次同步配置时即被创建
-            TestReportManager(client)
-        _LATEST_SYNC_RESULT = result
-        logging.info(
-            "Synchronized configuration to database (dut_id=%s, execution_id=%s)",
-            result.dut_id,
-            result.execution_id,
-        )
-        return result
-    except Exception:
-        logging.exception("Failed to sync configuration to database")
-        return None
+    if config:
+        logging.debug("Configuration sync skipped; persistence has been removed.")
+    return None
 
 
 def sync_test_result_to_db(
@@ -322,16 +344,9 @@ def sync_test_result_to_db(
     case_path: Optional[str] = None,
     run_source: str = "local",
 ) -> int:
-    """Persist parsed CSV log file results into a dynamically created table."""
+    """Load the CSV file and mirror its rows into the performance table."""
 
-    config = config or {}
-    sync_result = sync_configuration(config)
-    if sync_result is None:
-        logging.warning("Skip syncing test results because configuration sync failed.")
-        return 0
-
-    normalized_source = (run_source or "local").strip() or "local"
-    run_source = normalized_source[:32].upper()
+    del config, case_path  # Unused but kept for signature compatibility.
 
     file_path = Path(log_file)
     if not file_path.is_file():
@@ -339,41 +354,33 @@ def sync_test_result_to_db(
         return 0
 
     headers, rows = read_csv_rows(file_path)
-    if not headers:
-        logging.warning("CSV file %s does not contain a header row, skip syncing.", log_file)
-        return 0
-
-    target_case_path = case_path or config.get("text_case")
-    context = TestResultContext(
-        dut_id=sync_result.dut_id,
-        execution_id=sync_result.execution_id,
-        case_path=target_case_path,
-        data_type=data_type,
-        log_file_path=file_path.resolve().as_posix(),
-        run_source=run_source,
+    logging.info(
+        "Loaded CSV %s | header_count=%s row_count=%s",  # noqa: G004
+        file_path,
+        len(headers),
+        len(rows),
     )
+    if not headers:
+        logging.warning("CSV file %s does not contain a header row.", log_file)
+
+    normalized_data_type = data_type.strip().upper() if isinstance(data_type, str) else None
+    normalized_source = (run_source or "local").strip() or "local"
+    normalized_source = normalized_source.upper()[:32]
 
     try:
         with MySqlClient() as client:
-            report_manager = TestReportManager(client)
-            tester = _extract_tester(config)
-            case_name = _extract_case_name(config, target_case_path, context.data_type)
-            report_id = report_manager.create(
-                tester=tester,
-                test_case_name=case_name,
-                case_path=target_case_path,
-                data_type=context.data_type.upper() if context.data_type else None,
-                log_file_path=context.log_file_path,
-                run_source=context.run_source,
-                dut_id=context.dut_id,
-                execution_id=context.execution_id,
+            manager = PerformanceTableManager(client)
+            manager.ensure_schema_initialized()
+            affected = manager.replace_with_csv(
+                csv_name=file_path.name,
+                headers=headers,
+                rows=rows,
+                data_type=normalized_data_type,
+                run_source=normalized_source,
             )
-            manager = TestResultTableManager(client)
-            affected = manager.store_results(report_id, headers, rows, context)
-            report_manager.update_row_count(report_id, affected)
         return affected
     except Exception:
-        logging.exception("Failed to sync test results into performance table")
+        logging.exception("Failed to sync CSV results into performance table")
         return 0
 
 
@@ -385,24 +392,10 @@ def sync_file_to_db(
     case_path: Optional[str] = None,
     run_source: str = "FRAMEWORK",
 ) -> int:
-    """High-level helper for syncing a log file to the database."""
-
-    resolved_config = config
-    if resolved_config is None:
-        try:
-            from src.tools.config_loader import load_config  # delayed import
-        except Exception:
-            logging.exception("Failed to import load_config for database sync")
-            resolved_config = {}
-        else:
-            try:
-                resolved_config = load_config(refresh=True)
-            except Exception:
-                logging.exception("Failed to load configuration for database sync")
-                resolved_config = {}
+    """Convenience wrapper mirroring :func:`sync_test_result_to_db`."""
 
     return sync_test_result_to_db(
-        resolved_config or {},
+        config or {},
         log_file=file_path,
         data_type=data_type,
         case_path=case_path,
