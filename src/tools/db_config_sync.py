@@ -9,6 +9,7 @@ from typing import Any, Dict, Tuple
 import pymysql
 import yaml
 from pymysql.cursors import DictCursor
+import hashlib
 
 from src.tools.mysql_tool.schema import ensure_report_tables
 BASE_DIR = Path(__file__).resolve().parents[2]
@@ -85,6 +86,20 @@ def derive_case_root(case_path: str) -> str:
         candidate = case_path
     sanitized = re.sub(r"[^A-Za-z0-9_]+", "_", candidate).strip("_")
     return sanitized.lower() or "default_case"
+
+
+def _hash_values(*values: Any) -> str:
+    parts: list[str] = []
+    for value in values:
+        if isinstance(value, bool):
+            normalized = "1" if value else "0"
+        elif value is None:
+            normalized = "<NULL>"
+        else:
+            normalized = str(value)
+        parts.append(normalized)
+    payload = "\u001f".join(parts)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 class _ConnectionAdapter:
@@ -164,8 +179,9 @@ class ConfigDatabaseSync:
                     "serial_port_status",
                     "serial_port_port",
                     "serial_port_baud",
+                    "profile_hash",
                 ]
-                dut_values = [
+                base_dut_values = [
                     dut_payload.get("software_version"),
                     dut_payload.get("driver_version"),
                     dut_payload.get("hardware_version"),
@@ -182,39 +198,50 @@ class ConfigDatabaseSync:
                     dut_payload.get("serial_port_port"),
                     dut_payload.get("serial_port_baud"),
                 ]
-                logging.debug("Prepared DUT values: %s", dut_values)
+                dut_hash = _hash_values(*base_dut_values)
+                dut_values = base_dut_values + [dut_hash]
+                logging.debug("Prepared DUT values: %s | hash=%s", base_dut_values, dut_hash)
                 cursor.execute(
-                    f"INSERT INTO dut ({', '.join(dut_columns)}) VALUES ({', '.join(['%s'] * len(dut_columns))})",
+                    f"INSERT INTO dut ({', '.join(dut_columns)}) VALUES ({', '.join(['%s'] * len(dut_columns))}) "
+                    "ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)",
                     dut_values,
                 )
                 dut_id = cursor.lastrowid
-                logging.info("Inserted DUT row id=%s", dut_id)
+                if cursor.rowcount == 1:
+                    logging.info("Inserted DUT row id=%s", dut_id)
+                else:
+                    logging.info("Reused existing DUT row id=%s", dut_id)
 
                 case_path = execution_payload.get("case_path")
                 case_root = execution_payload.get("case_root") or derive_case_root(case_path or "")
                 execution_columns = [
-                    "dut_id",
                     "case_path",
                     "case_root",
                     "router_name",
                     "router_address",
                     "csv_path",
+                    "profile_hash",
                 ]
-                execution_values = [
-                    dut_id,
+                base_execution_values = [
                     case_path,
                     case_root,
                     execution_payload.get("router_name"),
                     execution_payload.get("router_address"),
                     execution_payload.get("csv_path"),
                 ]
-                logging.debug("Prepared execution values: %s", execution_values)
+                execution_hash = _hash_values(*base_execution_values)
+                execution_values = base_execution_values + [execution_hash]
+                logging.debug("Prepared execution values: %s | hash=%s", base_execution_values, execution_hash)
                 cursor.execute(
-                    f"INSERT INTO execution ({', '.join(execution_columns)}) VALUES ({', '.join(['%s'] * len(execution_columns))})",
+                    f"INSERT INTO execution ({', '.join(execution_columns)}) VALUES ({', '.join(['%s'] * len(execution_columns))}) "
+                    "ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)",
                     execution_values,
                 )
                 execution_id = cursor.lastrowid
-                logging.info("Inserted execution row id=%s (dut_id=%s)", execution_id, dut_id)
+                if cursor.rowcount == 1:
+                    logging.info("Inserted execution row id=%s", execution_id)
+                else:
+                    logging.info("Reused existing execution row id=%s", execution_id)
             self.connection.commit()
             return ConfigSyncResult(dut_id=dut_id, execution_id=execution_id)
         except Exception:
