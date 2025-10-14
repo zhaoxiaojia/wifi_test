@@ -208,7 +208,6 @@ class RvrWifiConfigPage(CardWidget):
         from src.tools.config_loader import load_config
 
         try:
-            load_config.cache_clear()
             cfg = load_config(refresh=True) or {}
             router_name = name or cfg.get("router", {}).get("name", "asusax86u")
             if address is None and cfg.get("router", {}).get("name") == router_name:
