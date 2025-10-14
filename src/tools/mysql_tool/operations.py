@@ -17,8 +17,57 @@ from .schema import (
 
 _LATEST_SYNC_RESULT: Optional[SyncResult] = None
 
+_TESTER_KEYS = (
+    "tester",
+    "test_operator",
+    "operator",
+    "test_engineer",
+    "test_user",
+)
+
+_CASE_NAME_KEYS = (
+    "case_name",
+    "test_case_name",
+    "testcase_name",
+    "testcase",
+    "case",
+)
+
+
+def _extract_tester(config: Optional[dict]) -> Optional[str]:
+    if not isinstance(config, dict):
+        return None
+    for key in _TESTER_KEYS:
+        value = config.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    metadata = config.get("metadata") if isinstance(config, dict) else None
+    if isinstance(metadata, dict):
+        for key in _TESTER_KEYS:
+            value = metadata.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+    return None
+
+
+def _extract_case_name(
+    config: Optional[dict], case_path: Optional[str], data_type: Optional[str]
+) -> Optional[str]:
+    if isinstance(config, dict):
+        for key in _CASE_NAME_KEYS:
+            value = config.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+    if case_path:
+        return Path(case_path).stem
+    if data_type:
+        stripped = data_type.strip()
+        return stripped.upper() if stripped else None
+    return None
+
 __all__ = [
     "ConfigSchemaSynchronizer",
+    "TestReportManager",
     "TestResultTableManager",
     "sync_configuration",
     "sync_test_result_to_db",
@@ -75,11 +124,9 @@ class TestResultTableManager:
     BASE_COLUMNS: Sequence[ColumnDefinition] = (
         ColumnDefinition("dut_id", "INT NOT NULL"),
         ColumnDefinition("execution_id", "INT NOT NULL"),
-        ColumnDefinition("case_path", "TEXT NULL DEFAULT NULL"),
         ColumnDefinition("data_type", "VARCHAR(64) NULL DEFAULT NULL"),
         ColumnDefinition("log_file_path", "TEXT NULL DEFAULT NULL"),
         ColumnDefinition("run_source", "VARCHAR(32) NOT NULL"),
-        ColumnDefinition("row_index", "INT NOT NULL"),
     )
 
     def __init__(self, client: MySqlClient) -> None:
@@ -120,15 +167,13 @@ class TestResultTableManager:
             return 0
 
         values_list: List[List[Any]] = []
-        for index, row in enumerate(rows, start=1):
+        for row in rows:
             row_values: List[Any] = [
                 context.dut_id,
                 context.execution_id,
-                context.case_path,
                 context.data_type.upper() if context.data_type else None,
                 context.log_file_path,
                 context.run_source,
-                index,
             ]
             for mapping in header_mappings:
                 value = row.get(mapping.original)
@@ -142,6 +187,73 @@ class TestResultTableManager:
         affected = self._client.executemany(sql, values_list)
         logging.info("Stored %s rows into %s", affected, table_name)
         return affected
+
+
+class TestReportManager:
+    """Record a summary entry referencing DUT, execution and performance data."""
+
+    TABLE_NAME = "test_report"
+
+    def __init__(self, client: MySqlClient) -> None:
+        self._client = client
+        self._ensure_table()
+
+    def _ensure_table(self) -> None:
+        create_sql = (
+            "CREATE TABLE IF NOT EXISTS `test_report` ("
+            "    `id` INT PRIMARY KEY AUTO_INCREMENT,"
+            "    `tester` VARCHAR(128) NULL DEFAULT NULL,"
+            "    `test_case_name` VARCHAR(255) NULL DEFAULT NULL,"
+            "    `case_path` TEXT NULL DEFAULT NULL,"
+            "    `data_type` VARCHAR(64) NULL DEFAULT NULL,"
+            "    `performance_table` VARCHAR(128) NOT NULL,"
+            "    `performance_rows` INT NOT NULL DEFAULT 0,"
+            "    `log_file_path` TEXT NULL DEFAULT NULL,"
+            "    `run_source` VARCHAR(32) NOT NULL,"
+            "    `dut_settings_id` INT NOT NULL,"
+            "    `execution_settings_id` INT NOT NULL,"
+            "    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,"
+            "    `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"
+            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"
+        )
+        self._client.execute(create_sql)
+
+    def record(
+        self,
+        *,
+        tester: Optional[str],
+        test_case_name: Optional[str],
+        case_path: Optional[str],
+        data_type: Optional[str],
+        performance_table: str,
+        performance_rows: int,
+        log_file_path: str,
+        run_source: str,
+        dut_id: int,
+        execution_id: int,
+    ) -> int:
+        sql = (
+            "INSERT INTO `test_report` ("
+            "`tester`, `test_case_name`, `case_path`, `data_type`, "
+            "`performance_table`, `performance_rows`, `log_file_path`, `run_source`, "
+            "`dut_settings_id`, `execution_settings_id`) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+        )
+        return self._client.insert(
+            sql,
+            [
+                tester,
+                test_case_name,
+                case_path,
+                data_type,
+                performance_table,
+                performance_rows,
+                log_file_path,
+                run_source,
+                dut_id,
+                execution_id,
+            ],
+        )
 
 
 def sync_configuration(config: dict | None) -> Optional[SyncResult]:
@@ -211,6 +323,21 @@ def sync_test_result_to_db(
         with MySqlClient() as client:
             manager = TestResultTableManager(client)
             affected = manager.store_results(table_name, headers, rows, context)
+            report_manager = TestReportManager(client)
+            tester = _extract_tester(config)
+            case_name = _extract_case_name(config, target_case_path, context.data_type)
+            report_manager.record(
+                tester=tester,
+                test_case_name=case_name,
+                case_path=target_case_path,
+                data_type=context.data_type.upper() if context.data_type else None,
+                performance_table=table_name,
+                performance_rows=affected,
+                log_file_path=context.log_file_path,
+                run_source=context.run_source,
+                dut_id=context.dut_id,
+                execution_id=context.execution_id,
+            )
         return affected
     except Exception:
         logging.exception("Failed to sync test results into table %s", table_name)
