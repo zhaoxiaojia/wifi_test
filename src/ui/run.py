@@ -282,7 +282,6 @@ class RunPage(CardWidget):
         self.case_path = case_path
         self.config = config
         self.main_window = parent  # 保存主窗口引用（用于InfoBar父窗口）
-        self._graph_client = None
 
         self.display_case_path = self._calc_display_path(case_path, display_case_path)
 
@@ -661,11 +660,6 @@ class RunPage(CardWidget):
         self.action_btn.clicked.connect(lambda: logging.info("action_btn clicked"))
         self.action_btn.clicked.connect(slot)
         logging.info("Action button set to %s mode for RunPage id=%s", mode, id(self))
-
-    def set_graph_client(self, client) -> None:
-        """注入 Graph 客户端，后续可用于 Teams 通知。"""
-
-        self._graph_client = client
 
     def reset(self):
         """重置页面状态"""
