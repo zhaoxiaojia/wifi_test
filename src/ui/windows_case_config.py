@@ -1894,9 +1894,10 @@ class CaseConfigPage(CardWidget):
         """批量更新字段的可编辑状态；DUT 区域始终保持可操作"""
         self.setUpdatesEnabled(False)
         try:
+            always_enabled_roots = {"debug"}
             for key, widget in self.field_widgets.items():
                 root_key = key.split(".", 1)[0]
-                if self._is_dut_key(root_key):
+                if self._is_dut_key(root_key) or root_key in always_enabled_roots:
                     desired = True
                 else:
                     desired = key in editable_fields
