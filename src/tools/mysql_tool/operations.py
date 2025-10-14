@@ -23,6 +23,10 @@ class _ColumnInfo:
     mapping: HeaderMapping
     sql_type: str
 
+@dataclass(frozen=True)
+class _ColumnInfo:
+    mapping: HeaderMapping
+    sql_type: str
 
 class PerformanceTableManager:
     """管理 `performance` 表：结构随 CSV 头动态重建，并完整同步行数据。"""
@@ -175,13 +179,24 @@ class PerformanceTableManager:
         run_source: str,
     ) -> int:
         """重建 `performance` 表结构并写入当前 CSV 的所有记录。"""
-
-        logging.debug(
-            "Recreating %s table with headers from %s", self.TABLE_NAME, csv_name
+        logging.info(
+            "Preparing to rebuild %s using CSV %s | headers=%s rows=%s",  # noqa: G004
+            self.TABLE_NAME,
+            csv_name,
+            len(headers),
+            len(rows),
         )
 
         mappings = self._build_mappings(headers)
+        logging.debug(
+            "Header mappings: %s",
+            {mapping.original: mapping.sanitized for mapping in mappings},
+        )
+
         column_infos = self._prepare_columns(mappings, rows)
+        logging.info(
+            "Recreating %s with %s dynamic columns", self.TABLE_NAME, len(column_infos)
+        )
         self._recreate_table(column_infos)
 
         if not rows:
@@ -213,17 +228,33 @@ class PerformanceTableManager:
                     self._normalize_cell(row.get(info.mapping.original), info.sql_type)
                 )
             values.append(row_values)
+        affected_total = 0
+        for row_values in values:
+            logging.debug(
+                "Inserting row %s/%s into %s",  # noqa: G004
+                row_values[1],
+                len(values),
+                self.TABLE_NAME,
+            )
+            affected_total += self._client.execute(insert_sql, row_values)
 
-        affected = self._client.executemany(insert_sql, values)
-        logging.info(
-            "Stored %s rows from %s into %s", affected, csv_name, self.TABLE_NAME
-        )
-        return affected
-
+        if affected_total != len(values):
+            logging.warning(
+                "Expected to insert %s rows but database reported %s",  # noqa: G004
+                len(values),
+                affected_total,
+            )
+        else:
+            logging.info(
+                "Stored %s rows from %s into %s",  # noqa: G004
+                affected_total,
+                csv_name,
+                self.TABLE_NAME,
+            )
+        return affected_total
 
 def sync_configuration(config: dict | None) -> None:
     """Kept for backward compatibility; configuration is no longer persisted."""
-
     if config:
         logging.debug("Configuration sync skipped; persistence has been removed.")
     return None
@@ -247,6 +278,12 @@ def sync_test_result_to_db(
         return 0
 
     headers, rows = read_csv_rows(file_path)
+    logging.info(
+        "Loaded CSV %s | header_count=%s row_count=%s",  # noqa: G004
+        file_path,
+        len(headers),
+        len(rows),
+    )
     if not headers:
         logging.warning("CSV file %s does not contain a header row.", log_file)
 
