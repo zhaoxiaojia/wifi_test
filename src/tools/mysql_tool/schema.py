@@ -3,10 +3,17 @@ from __future__ import annotations
 import csv
 import json
 import logging
+import re
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, TYPE_CHECKING
 
-from .models import ColumnDefinition, HeaderMapping
+from .models import (
+    ColumnDefinition,
+    HeaderMapping,
+    TableConstraint,
+    TableIndex,
+    TableSpec,
+)
 from .naming import IdentifierBuilder, sanitize_identifier
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -19,7 +26,225 @@ __all__ = [
     "insert_rows",
     "read_csv_rows",
     "resolve_case_table_name",
+    "ensure_table",
+    "ensure_config_tables",
+    "ensure_report_tables",
 ]
+
+_AUDIT_COLUMNS: Tuple[ColumnDefinition, ...] = (
+    ColumnDefinition("created_at", "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"),
+    ColumnDefinition(
+        "updated_at",
+        "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
+    ),
+)
+
+_TABLE_SPECS: Dict[str, TableSpec] = {
+    "dut": TableSpec(
+        columns=(
+            ColumnDefinition("software_version", "VARCHAR(128)"),
+            ColumnDefinition("driver_version", "VARCHAR(128)"),
+            ColumnDefinition("hardware_version", "VARCHAR(128)"),
+            ColumnDefinition("android_version", "VARCHAR(64)"),
+            ColumnDefinition("kernel_version", "VARCHAR(64)"),
+            ColumnDefinition("connect_type", "VARCHAR(32)"),
+            ColumnDefinition("adb_device", "VARCHAR(128)"),
+            ColumnDefinition("telnet_ip", "VARCHAR(128)"),
+            ColumnDefinition("third_party_enabled", "TINYINT(1)"),
+            ColumnDefinition("third_party_wait", "INT"),
+            ColumnDefinition("fpga_series", "VARCHAR(64)"),
+            ColumnDefinition("fpga_interface", "VARCHAR(64)"),
+            ColumnDefinition("serial_port_status", "TINYINT(1)"),
+            ColumnDefinition("serial_port_port", "VARCHAR(64)"),
+            ColumnDefinition("serial_port_baud", "VARCHAR(64)"),
+        ),
+        include_audit_columns=False,
+    ),
+    "execution": TableSpec(
+        columns=(
+            ColumnDefinition("dut_id", "INT NULL DEFAULT NULL"),
+            ColumnDefinition("case_path", "VARCHAR(512)"),
+            ColumnDefinition("case_root", "VARCHAR(128)"),
+            ColumnDefinition("router_name", "VARCHAR(128)"),
+            ColumnDefinition("router_address", "VARCHAR(128)"),
+            ColumnDefinition("csv_path", "VARCHAR(512)"),
+        ),
+        indexes=(TableIndex("idx_execution_dut", "INDEX idx_execution_dut (`dut_id`)"),),
+        constraints=(
+            TableConstraint(
+                "fk_execution_dut",
+                "CONSTRAINT fk_execution_dut FOREIGN KEY (`dut_id`) REFERENCES `dut`(`id`) ON DELETE SET NULL",
+            ),
+        ),
+        include_audit_columns=False,
+    ),
+    "test_report": TableSpec(
+        columns=(
+            ColumnDefinition("execution_id", "INT NULL DEFAULT NULL"),
+            ColumnDefinition("dut_id", "INT NULL DEFAULT NULL"),
+            ColumnDefinition("csv_name", "VARCHAR(255) NOT NULL"),
+            ColumnDefinition("csv_path", "VARCHAR(512)"),
+            ColumnDefinition("data_type", "VARCHAR(64)"),
+            ColumnDefinition("case_path", "VARCHAR(512)"),
+        ),
+        indexes=(
+            TableIndex(
+                "idx_test_report_execution", "INDEX idx_test_report_execution (`execution_id`)"
+            ),
+            TableIndex(
+                "idx_test_report_dut", "INDEX idx_test_report_dut (`dut_id`)"
+            ),
+        ),
+        constraints=(
+            TableConstraint(
+                "fk_test_report_execution",
+                "CONSTRAINT fk_test_report_execution FOREIGN KEY (`execution_id`) REFERENCES `execution`(`id`) ON DELETE SET NULL",
+            ),
+            TableConstraint(
+                "fk_test_report_dut",
+                "CONSTRAINT fk_test_report_dut FOREIGN KEY (`dut_id`) REFERENCES `dut`(`id`) ON DELETE SET NULL",
+            ),
+        ),
+    ),
+    "performance": TableSpec(
+        columns=(
+            ColumnDefinition("test_report_id", "INT NOT NULL"),
+            ColumnDefinition("csv_name", "VARCHAR(255) NOT NULL"),
+            ColumnDefinition("data_type", "VARCHAR(64)"),
+        ),
+        indexes=(
+            TableIndex(
+                "idx_performance_report", "INDEX idx_performance_report (`test_report_id`)"
+            ),
+        ),
+        constraints=(
+            TableConstraint(
+                "fk_performance_report",
+                "CONSTRAINT fk_performance_report FOREIGN KEY (`test_report_id`) REFERENCES `test_report`(`id`) ON DELETE CASCADE",
+            ),
+        ),
+    ),
+}
+
+
+def ensure_table(client, table_name: str, spec: TableSpec) -> None:
+    if not _table_exists(client, table_name):
+        _create_table(client, table_name, spec)
+        return
+    _ensure_columns(client, table_name, spec)
+    _ensure_indexes(client, table_name, spec.indexes)
+
+
+def ensure_config_tables(client) -> None:
+    ensure_table(client, "dut", _TABLE_SPECS["dut"])
+    ensure_table(client, "execution", _TABLE_SPECS["execution"])
+
+
+def ensure_report_tables(client) -> None:
+    ensure_config_tables(client)
+    ensure_table(client, "test_report", _TABLE_SPECS["test_report"])
+    ensure_table(client, "performance", _TABLE_SPECS["performance"])
+
+
+def _table_exists(client, table_name: str) -> bool:
+    try:
+        rows = client.query_all("SHOW TABLES LIKE %s", (table_name,))
+    except Exception:
+        logging.debug("Failed to inspect table %s", table_name, exc_info=True)
+        return False
+    return bool(rows)
+
+
+def _fetch_columns(client, table_name: str) -> Dict[str, Dict[str, Any]]:
+    try:
+        rows = client.query_all(f"SHOW FULL COLUMNS FROM `{table_name}`")
+    except Exception:
+        logging.debug("Failed to fetch columns for %s", table_name, exc_info=True)
+        return {}
+    return {row["Field"]: row for row in rows}
+
+
+def _ensure_columns(client, table_name: str, spec: TableSpec) -> None:
+    existing = _fetch_columns(client, table_name)
+    required = list(spec.columns)
+    if spec.include_audit_columns:
+        required.extend(_AUDIT_COLUMNS)
+    for column in required:
+        if column.name in existing:
+            continue
+        definition = column.definition
+        if "NOT NULL" in definition.upper():
+            definition = re.sub(
+                r"\bNOT\s+NULL\b", "NULL DEFAULT NULL", definition, flags=re.IGNORECASE
+            )
+        client.execute(
+            f"ALTER TABLE `{table_name}` ADD COLUMN `{column.name}` {definition}"
+        )
+        existing = _fetch_columns(client, table_name)
+    if not spec.include_audit_columns:
+        for audit in _AUDIT_COLUMNS:
+            if audit.name not in existing:
+                continue
+            try:
+                client.execute(
+                    f"ALTER TABLE `{table_name}` DROP COLUMN `{audit.name}`"
+                )
+            except Exception:
+                logging.debug(
+                    "Failed to drop audit column %s from %s",
+                    audit.name,
+                    table_name,
+                    exc_info=True,
+                )
+            else:
+                existing = _fetch_columns(client, table_name)
+
+
+def _get_existing_indexes(client, table_name: str) -> Dict[str, Dict[str, Any]]:
+    try:
+        rows = client.query_all(f"SHOW INDEX FROM `{table_name}`")
+    except Exception:
+        logging.debug("Failed to fetch indexes for %s", table_name, exc_info=True)
+        return {}
+    indexes: Dict[str, Dict[str, Any]] = {}
+    for row in rows:
+        key_name = row.get("Key_name")
+        if not key_name:
+            continue
+        indexes[key_name] = row
+    return indexes
+
+
+def _ensure_indexes(
+    client,
+    table_name: str,
+    indexes: Sequence[TableIndex],
+) -> None:
+    if not indexes:
+        return
+    existing = _get_existing_indexes(client, table_name)
+    for index in indexes:
+        if index.name in existing:
+            continue
+        client.execute(f"ALTER TABLE `{table_name}` ADD {index.definition}")
+
+
+def _create_table(client, table_name: str, spec: TableSpec) -> None:
+    all_columns = [ColumnDefinition("id", "INT PRIMARY KEY AUTO_INCREMENT")]
+    all_columns.extend(spec.columns)
+    if spec.include_audit_columns:
+        all_columns.extend(_AUDIT_COLUMNS)
+    column_lines = [f"`{column.name}` {column.definition}" for column in all_columns]
+    extra_lines = [item.definition for item in spec.indexes] + [
+        item.definition for item in spec.constraints
+    ]
+    lines = column_lines + extra_lines
+    statement = (
+        f"CREATE TABLE `{table_name}` (\n    "
+        + ",\n    ".join(lines)
+        + f"\n) ENGINE={spec.engine} DEFAULT CHARSET={spec.charset};"
+    )
+    client.execute(statement)
 
 
 def _flatten_section(
@@ -117,19 +342,19 @@ def drop_and_create_table(
     client: "MySqlClient", table_name: str, columns: Sequence[ColumnDefinition]
 ) -> None:
     client.execute(f"DROP TABLE IF EXISTS `{table_name}`")
-    column_lines = [f"`{column.name}` {column.definition}" for column in columns]
     statements = [
         f"CREATE TABLE `{table_name}` (",
         "    id INT PRIMARY KEY AUTO_INCREMENT,",
     ]
     statements.extend(f"    {line}," for line in column_lines)
-    statements.extend(
-        [
-            "    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,",
-            "    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
-            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;",
-        ]
-    )
+    if spec.include_audit_columns:
+        statements.extend(
+            [
+                "    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,",
+                "    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
+            ]
+        )
+    statements.append(f") ENGINE={spec.engine} DEFAULT CHARSET={spec.charset};")
     create_sql = "\n".join(statements)
     client.execute(create_sql)
 

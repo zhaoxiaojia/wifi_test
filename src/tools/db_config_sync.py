@@ -10,6 +10,7 @@ import pymysql
 import yaml
 from pymysql.cursors import DictCursor
 
+from src.tools.mysql_tool.schema import ensure_report_tables
 BASE_DIR = Path(__file__).resolve().parents[2]
 CONFIG_PATH = BASE_DIR / "config" / "tool_config.yaml"
 
@@ -28,8 +29,8 @@ def load_mysql_settings() -> Dict[str, Any]:
     settings = {
         "host": mysql_cfg.get("host"),
         "port": int(mysql_cfg.get("port", 3306)) if mysql_cfg.get("port") else 3306,
-        "user": mysql_cfg.get("user"),
-        "password": mysql_cfg.get("passwd"),
+        "user": str(mysql_cfg.get("user")) if mysql_cfg.get("user") is not None else None,
+        "password": str(mysql_cfg.get("passwd")) if mysql_cfg.get("passwd") is not None else None,
         "database": mysql_cfg.get("database"),
         "charset": mysql_cfg.get("charset", "utf8mb4"),
     }
@@ -86,41 +87,23 @@ def derive_case_root(case_path: str) -> str:
     return sanitized.lower() or "default_case"
 
 
-class ConfigDatabaseSync:
-    DUT_TABLE_SQL = (
-        "id INT PRIMARY KEY AUTO_INCREMENT",
-        "software_version VARCHAR(128)",
-        "driver_version VARCHAR(128)",
-        "hardware_version VARCHAR(128)",
-        "android_version VARCHAR(64)",
-        "kernel_version VARCHAR(64)",
-        "connect_type VARCHAR(32)",
-        "adb_device VARCHAR(128)",
-        "telnet_ip VARCHAR(128)",
-        "third_party_enabled TINYINT(1)",
-        "third_party_wait INT",
-        "fpga_series VARCHAR(64)",
-        "fpga_interface VARCHAR(64)",
-        "serial_port_status TINYINT(1)",
-        "serial_port_port VARCHAR(64)",
-        "serial_port_baud VARCHAR(64)",
-        "created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP",
-        "updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
-    )
+class _ConnectionAdapter:
+    def __init__(self, connection: pymysql.connections.Connection) -> None:
+        self._connection = connection
 
-    EXECUTION_TABLE_SQL = (
-        "id INT PRIMARY KEY AUTO_INCREMENT",
-        "dut_info_id INT NOT NULL",
-        "case_path VARCHAR(255)",
-        "case_root VARCHAR(128)",
-        "router_name VARCHAR(128)",
-        "router_address VARCHAR(128)",
-        "csv_path VARCHAR(255)",
-        "created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP",
-        "updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
-        "INDEX idx_case_root (case_root)",
-        "CONSTRAINT fk_execution_dut FOREIGN KEY (dut_info_id) REFERENCES dut_info(id) ON DELETE CASCADE",
-    )
+    def execute(self, sql: str, params: Tuple[Any, ...] | Dict[str, Any] | None = None) -> None:
+        with self._connection.cursor() as cursor:
+            cursor.execute(sql, params)
+        self._connection.commit()
+
+    def query_all(self, sql: str, params: Tuple[Any, ...] | Dict[str, Any] | None = None):
+        with self._connection.cursor() as cursor:
+            cursor.execute(sql, params)
+            rows = cursor.fetchall()
+        return list(rows)
+
+
+class ConfigDatabaseSync:
 
     def __init__(self) -> None:
         self.settings = load_mysql_settings()
@@ -137,6 +120,7 @@ class ConfigDatabaseSync:
             autocommit=False,
             cursorclass=DictCursor,
         )
+        self.ensure_tables()
 
     def close(self) -> None:
         if self.connection:
@@ -150,27 +134,10 @@ class ConfigDatabaseSync:
             self.connection.rollback()
         self.close()
 
-    def _execute(self, sql: str, params: Tuple[Any, ...] | Dict[str, Any] | None = None) -> None:
-        with self.connection.cursor() as cursor:
-            cursor.execute(sql, params)
-
     def ensure_tables(self) -> None:
-        dut_columns = ",\n            ".join(self.DUT_TABLE_SQL)
-        exec_columns = ",\n            ".join(self.EXECUTION_TABLE_SQL)
-        self._execute(
-            f"""
-            CREATE TABLE IF NOT EXISTS dut_info (
-                {dut_columns}
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-            """
-        )
-        self._execute(
-            f"""
-            CREATE TABLE IF NOT EXISTS execution_info (
-                {exec_columns}
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-            """
-        )
+        adapter = _ConnectionAdapter(self.connection)
+        logging.debug("Ensuring reporting tables exist in %s", self.settings.get("database"))
+        ensure_report_tables(adapter)
 
     @staticmethod
     def _bool(value: Any) -> int:
@@ -178,77 +145,91 @@ class ConfigDatabaseSync:
 
     def sync_config(self, dut_payload: Dict[str, Any], execution_payload: Dict[str, Any]) -> ConfigSyncResult:
         self.ensure_tables()
-        with self.connection.cursor() as cursor:
-            cursor.execute("DELETE FROM execution_info")
-            cursor.execute("DELETE FROM dut_info")
-            dut_columns = [
-                "software_version",
-                "driver_version",
-                "hardware_version",
-                "android_version",
-                "kernel_version",
-                "connect_type",
-                "adb_device",
-                "telnet_ip",
-                "third_party_enabled",
-                "third_party_wait",
-                "fpga_series",
-                "fpga_interface",
-                "serial_port_status",
-                "serial_port_port",
-                "serial_port_baud",
-            ]
-            dut_values = [
-                dut_payload.get("software_version"),
-                dut_payload.get("driver_version"),
-                dut_payload.get("hardware_version"),
-                dut_payload.get("android_version"),
-                dut_payload.get("kernel_version"),
-                dut_payload.get("connect_type"),
-                dut_payload.get("adb_device"),
-                dut_payload.get("telnet_ip"),
-                self._bool(dut_payload.get("third_party_enabled")),
-                dut_payload.get("third_party_wait"),
-                dut_payload.get("fpga_series"),
-                dut_payload.get("fpga_interface"),
-                self._bool(dut_payload.get("serial_port_status")),
-                dut_payload.get("serial_port_port"),
-                dut_payload.get("serial_port_baud"),
-            ]
-            cursor.execute(
-                f"INSERT INTO dut_info ({', '.join(dut_columns)}) VALUES ({', '.join(['%s'] * len(dut_columns))})",
-                dut_values,
-            )
-            dut_id = cursor.lastrowid
-            execution_columns = [
-                "dut_info_id",
-                "case_path",
-                "case_root",
-                "router_name",
-                "router_address",
-                "csv_path",
-            ]
-            execution_values = [
-                dut_id,
-                execution_payload.get("case_path"),
-                execution_payload.get("case_root"),
-                execution_payload.get("router_name"),
-                execution_payload.get("router_address"),
-                execution_payload.get("csv_path"),
-            ]
-            cursor.execute(
-                f"INSERT INTO execution_info ({', '.join(execution_columns)}) VALUES ({', '.join(['%s'] * len(execution_columns))})",
-                execution_values,
-            )
-            execution_id = cursor.lastrowid
-        self.connection.commit()
-        return ConfigSyncResult(dut_id=dut_id, execution_id=execution_id)
+        logging.debug("Syncing configuration to DB | dut=%s | execution=%s", dut_payload, execution_payload)
+        try:
+            with self.connection.cursor() as cursor:
+                dut_columns = [
+                    "software_version",
+                    "driver_version",
+                    "hardware_version",
+                    "android_version",
+                    "kernel_version",
+                    "connect_type",
+                    "adb_device",
+                    "telnet_ip",
+                    "third_party_enabled",
+                    "third_party_wait",
+                    "fpga_series",
+                    "fpga_interface",
+                    "serial_port_status",
+                    "serial_port_port",
+                    "serial_port_baud",
+                ]
+                dut_values = [
+                    dut_payload.get("software_version"),
+                    dut_payload.get("driver_version"),
+                    dut_payload.get("hardware_version"),
+                    dut_payload.get("android_version"),
+                    dut_payload.get("kernel_version"),
+                    dut_payload.get("connect_type"),
+                    dut_payload.get("adb_device"),
+                    dut_payload.get("telnet_ip"),
+                    self._bool(dut_payload.get("third_party_enabled")),
+                    dut_payload.get("third_party_wait"),
+                    dut_payload.get("fpga_series"),
+                    dut_payload.get("fpga_interface"),
+                    self._bool(dut_payload.get("serial_port_status")),
+                    dut_payload.get("serial_port_port"),
+                    dut_payload.get("serial_port_baud"),
+                ]
+                logging.debug("Prepared DUT values: %s", dut_values)
+                cursor.execute(
+                    f"INSERT INTO dut ({', '.join(dut_columns)}) VALUES ({', '.join(['%s'] * len(dut_columns))})",
+                    dut_values,
+                )
+                dut_id = cursor.lastrowid
+                logging.info("Inserted DUT row id=%s", dut_id)
+
+                case_path = execution_payload.get("case_path")
+                case_root = execution_payload.get("case_root") or derive_case_root(case_path or "")
+                execution_columns = [
+                    "dut_id",
+                    "case_path",
+                    "case_root",
+                    "router_name",
+                    "router_address",
+                    "csv_path",
+                ]
+                execution_values = [
+                    dut_id,
+                    case_path,
+                    case_root,
+                    execution_payload.get("router_name"),
+                    execution_payload.get("router_address"),
+                    execution_payload.get("csv_path"),
+                ]
+                logging.debug("Prepared execution values: %s", execution_values)
+                cursor.execute(
+                    f"INSERT INTO execution ({', '.join(execution_columns)}) VALUES ({', '.join(['%s'] * len(execution_columns))})",
+                    execution_values,
+                )
+                execution_id = cursor.lastrowid
+                logging.info("Inserted execution row id=%s (dut_id=%s)", execution_id, dut_id)
+            self.connection.commit()
+            return ConfigSyncResult(dut_id=dut_id, execution_id=execution_id)
+        except Exception:
+            logging.exception("Failed to sync configuration to database")
+            self.connection.rollback()
+            raise
 
     def fetch_latest_execution_id(self) -> int | None:
         with self.connection.cursor() as cursor:
-            cursor.execute("SELECT id FROM execution_info ORDER BY updated_at DESC LIMIT 1")
+            cursor.execute("SELECT id FROM execution ORDER BY id DESC LIMIT 1")
             row = cursor.fetchone()
-        return row["id"] if row else None
+        if not row:
+            logging.debug("No execution rows found when fetching latest id.")
+            return None
+        return row["id"]
 
 
 __all__ = ["ConfigDatabaseSync", "ConfigSyncResult", "derive_case_root", "load_mysql_settings"]
