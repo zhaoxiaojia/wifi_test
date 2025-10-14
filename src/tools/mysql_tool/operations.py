@@ -18,7 +18,6 @@ __all__ = [
     "sync_file_to_db",
 ]
 
-
 @dataclass(frozen=True)
 class _ColumnInfo:
     mapping: HeaderMapping
@@ -166,7 +165,6 @@ class PerformanceTableManager:
         )
         create_sql = "\n".join(statements)
         self._client.execute(create_sql)
-
     def replace_with_csv(
         self,
         *,
