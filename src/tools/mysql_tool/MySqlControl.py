@@ -9,6 +9,7 @@ if __package__:
     from . import (
         ConfigSchemaSynchronizer,
         MySqlClient,
+        TestReportManager,
         TestResultTableManager,
         bootstrap_mysql_environment,
         sync_configuration,
@@ -25,6 +26,7 @@ else:
     from src.tools.mysql_tool import (
         ConfigSchemaSynchronizer,
         MySqlClient,
+        TestReportManager,
         TestResultTableManager,
         bootstrap_mysql_environment,
         sync_configuration,
@@ -35,6 +37,7 @@ else:
 __all__ = [
     "MySqlClient",
     "ConfigSchemaSynchronizer",
+    "TestReportManager",
     "TestResultTableManager",
     "bootstrap_mysql_environment",
     "sync_configuration",
