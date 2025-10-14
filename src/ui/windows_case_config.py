@@ -15,6 +15,7 @@ import re
 from pathlib import Path
 import logging
 from dataclasses import dataclass, field
+from typing import Any, Mapping, Optional
 from src.tools.router_tool.router_factory import router_list, get_router
 from src.util.constants import (
     ANDROID_KERNEL_MAP,
@@ -24,6 +25,7 @@ from src.util.constants import (
     FONT_FAMILY,
     RouterConst,
     TEXT_COLOR,
+    WIFI_PRODUCT_PROJECT_MAP,
     get_config_base,
     get_src_base,
 )
@@ -729,6 +731,154 @@ class CaseConfigPage(CardWidget):
             "android_system",
         }
 
+    @staticmethod
+    def _normalize_fpga_token(value: Any) -> str:
+        if value is None:
+            return ""
+        return str(value).strip().upper()
+
+    @staticmethod
+    def _split_legacy_fpga_value(raw: str) -> tuple[str, str]:
+        parts = raw.split("_", 1)
+        wifi_module = parts[0] if parts and parts[0] else ""
+        interface = parts[1] if len(parts) > 1 and parts[1] else ""
+        return wifi_module.upper(), interface.upper()
+
+    def _guess_fpga_project(
+        self,
+        wifi_module: str,
+        interface: str,
+        main_chip: str = "",
+    ) -> tuple[str, str, Optional[dict[str, str]]]:
+        wifi_upper = wifi_module.strip().upper()
+        interface_upper = interface.strip().upper()
+        chip_upper = main_chip.strip().upper()
+        for product_line, projects in WIFI_PRODUCT_PROJECT_MAP.items():
+            for project_name, info in projects.items():
+                info_wifi = self._normalize_fpga_token(info.get("wifi_module"))
+                info_if = self._normalize_fpga_token(info.get("interface"))
+                info_chip = self._normalize_fpga_token(info.get("main_chip"))
+                if wifi_upper and info_wifi != wifi_upper:
+                    continue
+                if interface_upper and info_if != interface_upper:
+                    continue
+                if chip_upper and info_chip != chip_upper:
+                    continue
+                return product_line, project_name, info
+        return "", "", None
+
+    def _normalize_fpga_section(self, raw_value: Any) -> dict[str, str]:
+        normalized = {
+            "product_line": "",
+            "project": "",
+            "main_chip": "",
+            "wifi_module": "",
+            "interface": "",
+        }
+        if isinstance(raw_value, Mapping):
+            product_line = self._normalize_fpga_token(raw_value.get("product_line"))
+            project = self._normalize_fpga_token(raw_value.get("project"))
+            main_chip = self._normalize_fpga_token(raw_value.get("main_chip"))
+            wifi_module = raw_value.get("wifi_module") or raw_value.get("series") or ""
+            interface = raw_value.get("interface") or ""
+            normalized.update(
+                {
+                    "product_line": product_line,
+                    "project": project,
+                    "main_chip": main_chip,
+                    "wifi_module": self._normalize_fpga_token(wifi_module),
+                    "interface": self._normalize_fpga_token(interface),
+                }
+            )
+            if not product_line or not project:
+                guessed_product, guessed_project, info = self._guess_fpga_project(
+                    normalized["wifi_module"],
+                    normalized["interface"],
+                    main_chip,
+                )
+                if guessed_product:
+                    normalized["product_line"] = guessed_product
+                if guessed_project:
+                    normalized["project"] = guessed_project
+                if info:
+                    if not normalized["main_chip"]:
+                        normalized["main_chip"] = self._normalize_fpga_token(info.get("main_chip"))
+                    if not normalized["wifi_module"]:
+                        normalized["wifi_module"] = self._normalize_fpga_token(info.get("wifi_module"))
+                    if not normalized["interface"]:
+                        normalized["interface"] = self._normalize_fpga_token(info.get("interface"))
+        elif isinstance(raw_value, str):
+            wifi_module, interface = self._split_legacy_fpga_value(raw_value)
+            normalized["wifi_module"] = wifi_module
+            normalized["interface"] = interface
+            product, project, info = self._guess_fpga_project(wifi_module, interface)
+            if product:
+                normalized["product_line"] = product
+            if project:
+                normalized["project"] = project
+            if info:
+                normalized["main_chip"] = self._normalize_fpga_token(info.get("main_chip"))
+                normalized["wifi_module"] = self._normalize_fpga_token(info.get("wifi_module"))
+                normalized["interface"] = self._normalize_fpga_token(info.get("interface"))
+        return normalized
+
+    def _refresh_fpga_projects(
+        self,
+        product_line: str,
+        project_to_select: Optional[str] = None,
+        *,
+        block_signals: bool = False,
+    ) -> None:
+        if not hasattr(self, "fpga_project_combo"):
+            return
+        combo = self.fpga_project_combo
+        blocker = QSignalBlocker(combo) if block_signals else None
+        projects = WIFI_PRODUCT_PROJECT_MAP.get(product_line.strip().upper(), {})
+        combo.clear()
+        for project_name in projects.keys():
+            combo.addItem(project_name)
+        if project_to_select and project_to_select in projects:
+            combo.setCurrentText(project_to_select)
+        else:
+            combo.setCurrentIndex(-1)
+        if blocker is not None:
+            del blocker
+
+    def _update_fpga_hidden_fields(self) -> None:
+        product = self.fpga_product_combo.currentText().strip().upper() if hasattr(self, "fpga_product_combo") else ""
+        project = self.fpga_project_combo.currentText().strip().upper() if hasattr(self, "fpga_project_combo") else ""
+        if product and project:
+            info = WIFI_PRODUCT_PROJECT_MAP.get(product, {}).get(project, {})
+            normalized = {
+                "product_line": product,
+                "project": project,
+                "main_chip": self._normalize_fpga_token(info.get("main_chip")),
+                "wifi_module": self._normalize_fpga_token(info.get("wifi_module")),
+                "interface": self._normalize_fpga_token(info.get("interface")),
+            }
+        else:
+            normalized = {
+                "product_line": product,
+                "project": project,
+                "main_chip": "",
+                "wifi_module": "",
+                "interface": "",
+            }
+        self._fpga_details = normalized
+        self.config["fpga"] = dict(normalized)
+
+    def on_fpga_product_line_changed(self, product_line: str) -> None:
+        if not hasattr(self, "fpga_project_combo"):
+            return
+        current_project = self.fpga_project_combo.currentText().strip().upper()
+        projects = WIFI_PRODUCT_PROJECT_MAP.get(product_line.strip().upper(), {})
+        project_to_select = current_project if current_project in projects else None
+        self._refresh_fpga_projects(product_line, project_to_select, block_signals=True)
+        self._update_fpga_hidden_fields()
+
+    def on_fpga_project_changed(self, project: str) -> None:
+        self._update_fpga_hidden_fields()
+
     def _sync_widgets_to_config(self) -> None:
         if not isinstance(self.config, dict):
             self.config = {}
@@ -771,10 +921,8 @@ class CaseConfigPage(CardWidget):
                 ref[leaf] = True if text == 'True' else False if text == 'False' else text
             elif isinstance(widget, QCheckBox):
                 ref[leaf] = widget.isChecked()
-        if hasattr(self, "fpga_chip_combo") and hasattr(self, "fpga_if_combo"):
-            chip = self.fpga_chip_combo.currentText()
-            interface = self.fpga_if_combo.currentText()
-            self.config["fpga"] = f"{chip}_{interface}" if chip or interface else ""
+        if hasattr(self, "_fpga_details"):
+            self.config["fpga"] = dict(self._fpga_details)
         base = Path(self._get_application_base())
         case_display = self.field_widgets.get("text_case")
         display_text = case_display.text().strip() if isinstance(case_display, LineEdit) else ""
@@ -845,11 +993,15 @@ class CaseConfigPage(CardWidget):
         if hasattr(self, "android_version_combo") and connect_type == "adb" and not self.android_version_combo.currentText().strip():
             errors.append("Android version is required.")
             focus_widget = focus_widget or self.android_version_combo
-        fpga_valid = hasattr(self, "fpga_chip_combo") and hasattr(self, "fpga_if_combo")
-        if not fpga_valid or not self.fpga_chip_combo.currentText().strip() or not self.fpga_if_combo.currentText().strip():
-            errors.append("FPGA configuration is required.")
+        fpga_valid = hasattr(self, "fpga_product_combo") and hasattr(self, "fpga_project_combo")
+        product_text = self.fpga_product_combo.currentText().strip() if fpga_valid else ""
+        project_text = self.fpga_project_combo.currentText().strip() if fpga_valid else ""
+        if not fpga_valid or not product_text or not project_text:
+            errors.append("Wi-Fi chipset product line and project are required.")
             if fpga_valid:
-                focus_widget = focus_widget or self.fpga_chip_combo
+                focus_widget = focus_widget or (
+                    self.fpga_product_combo if not product_text else self.fpga_project_combo
+                )
         if errors:
             InfoBar.warning(
                 title="Validation",
@@ -1224,6 +1376,7 @@ class CaseConfigPage(CardWidget):
         telnet_cfg = self.config.get("connect_type", {}).get("telnet")
         if isinstance(telnet_cfg, dict) and "kernel_version" in telnet_cfg:
             self.config.setdefault("android_system", {})["kernel_version"] = telnet_cfg.pop("kernel_version")
+        self.config["fpga"] = self._normalize_fpga_section(self.config.get("fpga"))
         for i, (key, value) in enumerate(self.config.items()):
             if key == "software_info":
                 data = value if isinstance(value, dict) else {}
@@ -1350,23 +1503,40 @@ class CaseConfigPage(CardWidget):
             if key == "fpga":
                 group = QGroupBox("Wi-Fi Chipset")
                 vbox = QVBoxLayout(group)
-                self.fpga_chip_combo = ComboBox(self)
-                self.fpga_chip_combo.addItems(RouterConst.FPGA_CONFIG.keys())
-                self.fpga_if_combo = ComboBox(self)
-                self.fpga_if_combo.addItems(RouterConst.INTERFACE_CONFIG)
-                chip_default, if_default = "W2", "SDIO"
-                if isinstance(value, str) and "_" in value:
-                    chip_default, if_default = value.split("_", 1)
-                    chip_default = chip_default.upper()
-                    if_default = if_default.upper()
-                self.fpga_chip_combo.setCurrentText(chip_default)
-                self.fpga_if_combo.setCurrentText(if_default)
-                vbox.addWidget(QLabel("Series:"))
-                vbox.addWidget(self.fpga_chip_combo)
-                vbox.addWidget(QLabel("Interface:"))
-                vbox.addWidget(self.fpga_if_combo)
+                self.fpga_product_combo = ComboBox(self)
+                self.fpga_project_combo = ComboBox(self)
+                for product_name in WIFI_PRODUCT_PROJECT_MAP.keys():
+                    self.fpga_product_combo.addItem(product_name)
+                product_default = (
+                    self._normalize_fpga_token(value.get("product_line"))
+                    if isinstance(value, Mapping)
+                    else ""
+                )
+                project_default = (
+                    self._normalize_fpga_token(value.get("project"))
+                    if isinstance(value, Mapping)
+                    else ""
+                )
+                if product_default and product_default in WIFI_PRODUCT_PROJECT_MAP:
+                    self.fpga_product_combo.setCurrentText(product_default)
+                else:
+                    self.fpga_product_combo.setCurrentIndex(-1)
+                self._refresh_fpga_projects(product_default, project_default, block_signals=True)
+                if project_default and project_default in WIFI_PRODUCT_PROJECT_MAP.get(product_default, {}):
+                    self.fpga_project_combo.setCurrentText(project_default)
+                else:
+                    self.fpga_project_combo.setCurrentIndex(-1)
+                self.fpga_product_combo.currentTextChanged.connect(self.on_fpga_product_line_changed)
+                self.fpga_project_combo.currentTextChanged.connect(self.on_fpga_project_changed)
+                vbox.addWidget(QLabel("Product Line:"))
+                vbox.addWidget(self.fpga_product_combo)
+                vbox.addWidget(QLabel("Project:"))
+                vbox.addWidget(self.fpga_project_combo)
+                self._fpga_details = dict(value) if isinstance(value, Mapping) else {}
+                self._update_fpga_hidden_fields()
                 self._register_group(key, group, self._is_dut_key(key))
-                self.field_widgets["fpga"] = group
+                self.field_widgets["fpga.product_line"] = self.fpga_product_combo
+                self.field_widgets["fpga.project"] = self.fpga_project_combo
                 continue
             if key == "rf_solution":
                 group = QGroupBox("Attenuator")
@@ -1809,7 +1979,8 @@ class CaseConfigPage(CardWidget):
             "serial_port.status",
             "serial_port.port",
             "serial_port.baud",
-            "fpga",
+            "fpga.product_line",
+            "fpga.project",
         }
         if basename == "test_wifi_peak_throughput.py":
             info.fields |= peak_keys
