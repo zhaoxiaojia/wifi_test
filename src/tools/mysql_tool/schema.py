@@ -57,25 +57,23 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
             ColumnDefinition("serial_port_status", "TINYINT(1)"),
             ColumnDefinition("serial_port_port", "VARCHAR(64)"),
             ColumnDefinition("serial_port_baud", "VARCHAR(64)"),
+            ColumnDefinition("profile_hash", "CHAR(64) NOT NULL"),
+        ),
+        indexes=(
+            TableIndex("uniq_dut_profile", "UNIQUE KEY uniq_dut_profile (`profile_hash`)"),
         ),
         include_audit_columns=False,
     ),
     "execution": TableSpec(
         columns=(
-            ColumnDefinition("dut_id", "INT NULL DEFAULT NULL"),
             ColumnDefinition("case_path", "VARCHAR(512)"),
             ColumnDefinition("case_root", "VARCHAR(128)"),
             ColumnDefinition("router_name", "VARCHAR(128)"),
             ColumnDefinition("router_address", "VARCHAR(128)"),
             ColumnDefinition("csv_path", "VARCHAR(512)"),
+            ColumnDefinition("profile_hash", "CHAR(64) NOT NULL"),
         ),
-        indexes=(TableIndex("idx_execution_dut", "INDEX idx_execution_dut (`dut_id`)"),),
-        constraints=(
-            TableConstraint(
-                "fk_execution_dut",
-                "CONSTRAINT fk_execution_dut FOREIGN KEY (`dut_id`) REFERENCES `dut`(`id`) ON DELETE SET NULL",
-            ),
-        ),
+        indexes=(TableIndex("uniq_execution_profile", "UNIQUE KEY uniq_execution_profile (`profile_hash`)"),),
         include_audit_columns=False,
     ),
     "test_report": TableSpec(
