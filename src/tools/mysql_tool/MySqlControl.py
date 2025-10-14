@@ -7,10 +7,8 @@ from __future__ import annotations
 
 if __package__:
     from . import (
-        ConfigSchemaSynchronizer,
         MySqlClient,
-        TestReportManager,
-        TestResultTableManager,
+        PerformanceTableManager,
         bootstrap_mysql_environment,
         sync_configuration,
         sync_file_to_db,
@@ -24,10 +22,8 @@ else:
     if str(_package_root) not in _sys.path:
         _sys.path.insert(0, str(_package_root))
     from src.tools.mysql_tool import (
-        ConfigSchemaSynchronizer,
         MySqlClient,
-        TestReportManager,
-        TestResultTableManager,
+        PerformanceTableManager,
         bootstrap_mysql_environment,
         sync_configuration,
         sync_file_to_db,
@@ -36,9 +32,7 @@ else:
 
 __all__ = [
     "MySqlClient",
-    "ConfigSchemaSynchronizer",
-    "TestReportManager",
-    "TestResultTableManager",
+    "PerformanceTableManager",
     "bootstrap_mysql_environment",
     "sync_configuration",
     "sync_test_result_to_db",
