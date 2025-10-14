@@ -16,12 +16,14 @@ import subprocess
 import threading
 import time
 import asyncio
+import random
 import pytest
 import telnetlib
 from src.tools.ixchariot import ix
 from threading import Thread
 from src.tools.config_loader import load_config
 from src.tools.router_tool.router_performance import handle_expectdata
+from src.util.constants import is_database_debug_enabled
 
 lock = threading.Lock()
 
@@ -400,46 +402,57 @@ class dut():
 
         rx_result_list = []
         self.rvr_result = None
-        for c in range(self.repest_times + 1):
-            logging.info(f'run rx {c} loop')
-            rx_result = 0
-            mcs_rx = 0
-            if self.rvr_tool == 'iperf':
-                pytest.dut.kill_iperf()
-                terminal = pytest.dut.run_iperf(self.tool_path + pytest.dut.iperf_server_cmd, self.serialnumber)
-                time.sleep(1)
-                client_cmd = pytest.dut.iperf_client_cmd.replace('{ip}', self.dut_ip)
-                pytest.dut.run_iperf(client_cmd, '')
-                if pytest.connect_type == 'telnet':
-                    time.sleep(5)
-                rx_result = self.get_logcat()
-                self.rvr_result = None
-                try:
-                    terminal.terminate()
-                except Exception as e:
-                    logging.warning(f'Fail to kill run_iperf terminal \n {e}')
-            elif self.rvr_tool == 'ixchariot':
-                ix.ep1 = self.pc_ip
-                ix.ep2 = self.dut_ip
-                ix.pair = self.pair
-                rx_result = ix.run_rvr()
+        mcs_rx = None
 
-            if rx_result == False:
-                logging.info("Connect failed")
-                if self.rvr_tool == 'ixchariot':
-                    pytest.dut.checkoutput(pytest.dut.STOP_IX_ENDPOINT_COMMAND)
+        if is_database_debug_enabled():
+            simulated = round(random.uniform(100, 200), 2)
+            logging.info(
+                "Database debug mode enabled, skip iperf RX test and return %.2f Mbps",
+                simulated,
+            )
+            rx_result_list.append(f"{simulated:.2f}")
+            mcs_rx = "DEBUG"
+        else:
+            for c in range(self.repest_times + 1):
+                logging.info(f'run rx {c} loop')
+                rx_result = 0
+                mcs_rx = 0
+                if self.rvr_tool == 'iperf':
+                    pytest.dut.kill_iperf()
+                    terminal = pytest.dut.run_iperf(self.tool_path + pytest.dut.iperf_server_cmd, self.serialnumber)
                     time.sleep(1)
-                    pytest.dut.checkoutput(pytest.dut.IX_ENDPOINT_COMMAND)
-                    time.sleep(3)
-                continue
+                    client_cmd = pytest.dut.iperf_client_cmd.replace('{ip}', self.dut_ip)
+                    pytest.dut.run_iperf(client_cmd, '')
+                    if pytest.connect_type == 'telnet':
+                        time.sleep(5)
+                    rx_result = self.get_logcat()
+                    self.rvr_result = None
+                    try:
+                        terminal.terminate()
+                    except Exception as e:
+                        logging.warning(f'Fail to kill run_iperf terminal \n {e}')
+                elif self.rvr_tool == 'ixchariot':
+                    ix.ep1 = self.pc_ip
+                    ix.ep2 = self.dut_ip
+                    ix.pair = self.pair
+                    rx_result = ix.run_rvr()
 
-            time.sleep(3)
-            logging.info(f'rx result {rx_result}')
-            mcs_rx = pytest.dut.get_mcs_rx()
-            logging.info(f'{rx_result}, {mcs_rx}')
-            rx_result_list.append(rx_result)
-            if len(rx_result_list) > self.repest_times:
-                break
+                if rx_result == False:
+                    logging.info("Connect failed")
+                    if self.rvr_tool == 'ixchariot':
+                        pytest.dut.checkoutput(pytest.dut.STOP_IX_ENDPOINT_COMMAND)
+                        time.sleep(1)
+                        pytest.dut.checkoutput(pytest.dut.IX_ENDPOINT_COMMAND)
+                        time.sleep(3)
+                    continue
+
+                time.sleep(3)
+                logging.info(f'rx result {rx_result}')
+                mcs_rx = pytest.dut.get_mcs_rx()
+                logging.info(f'{rx_result}, {mcs_rx}')
+                rx_result_list.append(rx_result)
+                if len(rx_result_list) > self.repest_times:
+                    break
 
         if rx_result_list:
             try:
@@ -480,47 +493,57 @@ class dut():
 
         tx_result_list = []
         self.rvr_result = None
+        mcs_tx = None
 
-        for c in range(self.repest_times + 1):
-            logging.info(f'run tx:  {c} loop ')
-            tx_result = 0
-            mcs_tx = 0
-            if self.rvr_tool == 'iperf':
-                pytest.dut.kill_iperf()
-                time.sleep(1)
-                terminal = pytest.dut.run_iperf(pytest.dut.iperf_server_cmd, '')
-                time.sleep(1)
-                client_cmd = pytest.dut.iperf_client_cmd.replace('{ip}', self.pc_ip)
-                pytest.dut.run_iperf(self.tool_path + client_cmd, self.serialnumber)
-                if pytest.connect_type == 'telnet':
-                    time.sleep(5)
-                time.sleep(3)
-                tx_result = self.get_logcat()
-                self.rvr_result = None
-                try:
-                    terminal.terminate()
-                except Exception as e:
-                    logging.warning(f'Fail to kill run_iperf terminal \n {e}')
-            elif self.rvr_tool == 'ixchariot':
-                ix.ep1 = self.dut_ip
-                ix.ep2 = self.pc_ip
-                ix.pair = self.pair
-                tx_result = ix.run_rvr()
-
-            if tx_result == False:
-                logging.info("Connect failed")
-                if self.rvr_tool == 'ixchariot':
-                    pytest.dut.checkoutput(pytest.dut.STOP_IX_ENDPOINT_COMMAND)
+        if is_database_debug_enabled():
+            simulated = round(random.uniform(100, 200), 2)
+            logging.info(
+                "Database debug mode enabled, skip iperf TX test and return %.2f Mbps",
+                simulated,
+            )
+            tx_result_list.append(f"{simulated:.2f}")
+            mcs_tx = "DEBUG"
+        else:
+            for c in range(self.repest_times + 1):
+                logging.info(f'run tx:  {c} loop ')
+                tx_result = 0
+                mcs_tx = 0
+                if self.rvr_tool == 'iperf':
+                    pytest.dut.kill_iperf()
                     time.sleep(1)
-                    pytest.dut.checkoutput(pytest.dut.IX_ENDPOINT_COMMAND)
+                    terminal = pytest.dut.run_iperf(pytest.dut.iperf_server_cmd, '')
+                    time.sleep(1)
+                    client_cmd = pytest.dut.iperf_client_cmd.replace('{ip}', self.pc_ip)
+                    pytest.dut.run_iperf(self.tool_path + client_cmd, self.serialnumber)
+                    if pytest.connect_type == 'telnet':
+                        time.sleep(5)
                     time.sleep(3)
-                continue
+                    tx_result = self.get_logcat()
+                    self.rvr_result = None
+                    try:
+                        terminal.terminate()
+                    except Exception as e:
+                        logging.warning(f'Fail to kill run_iperf terminal \n {e}')
+                elif self.rvr_tool == 'ixchariot':
+                    ix.ep1 = self.dut_ip
+                    ix.ep2 = self.pc_ip
+                    ix.pair = self.pair
+                    tx_result = ix.run_rvr()
 
-            mcs_tx = pytest.dut.get_mcs_tx()
-            logging.info(f'{tx_result}, {mcs_tx}')
-            tx_result_list.append(tx_result)
-            if len(tx_result_list) > self.repest_times:
-                break
+                if tx_result == False:
+                    logging.info("Connect failed")
+                    if self.rvr_tool == 'ixchariot':
+                        pytest.dut.checkoutput(pytest.dut.STOP_IX_ENDPOINT_COMMAND)
+                        time.sleep(1)
+                        pytest.dut.checkoutput(pytest.dut.IX_ENDPOINT_COMMAND)
+                        time.sleep(3)
+                    continue
+
+                mcs_tx = pytest.dut.get_mcs_tx()
+                logging.info(f'{tx_result}, {mcs_tx}')
+                tx_result_list.append(tx_result)
+                if len(tx_result_list) > self.repest_times:
+                    break
 
         if tx_result_list:
             try:
