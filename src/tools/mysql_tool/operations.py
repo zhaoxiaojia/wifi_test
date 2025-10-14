@@ -28,12 +28,9 @@ _CASE_NAME_KEYS = (
     "case",
 )
 
-
 def _make_fingerprint(payload: Any) -> str:
     serialized = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return md5(serialized.encode("utf-8")).hexdigest()
-
-
 def _extract_tester(config: Optional[dict]) -> Optional[str]:
     if not isinstance(config, dict):
         return None
@@ -254,7 +251,6 @@ class TestReportManager:
             ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"
         )
         self._client.execute(create_sql)
-
     def create(
         self,
         *,
@@ -286,7 +282,6 @@ class TestReportManager:
                 execution_id,
             ],
         )
-
     def update_row_count(self, report_id: int, rows: int) -> None:
         self._client.execute(
             "UPDATE `test_report` SET `performance_rows`=%s WHERE `id`=%s",
