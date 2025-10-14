@@ -16,12 +16,14 @@ import subprocess
 import threading
 import time
 import asyncio
+import random
 import pytest
 import telnetlib
 from src.tools.ixchariot import ix
 from threading import Thread
 from src.tools.config_loader import load_config
 from src.tools.router_tool.router_performance import handle_expectdata
+from src.util.constants import is_database_debug_enabled
 
 lock = threading.Lock()
 
@@ -157,6 +159,15 @@ class dut():
     def freq_num(self, value):
         self._freq_num = int(value)
         self.channel = int((self._freq_num - 2412) / 5 + 1 if self._freq_num < 3000 else (self._freq_num - 5000) / 5)
+
+    @staticmethod
+    def _format_result_row(values):
+        def normalize(value):
+            if value is None:
+                return ''
+            return str(value)
+
+        return ' '.join(normalize(value) for value in values).replace(' ', ',')
 
     def step(func):
         def wrapper(*args, **kwargs):
@@ -391,55 +402,81 @@ class dut():
         expect_rate = handle_expectdata(router_cfg, router_info.band, 'DL', pytest.chip_info)
         if self.skip_rx:
             corner = corner_tool.get_turntanle_current_angle() if corner_tool else ''
-            rx_result_info = (
-                f'{self.serialnumber} Throughput Standalone NULL Null {router_info.wireless_mode.split()[0]} '
-                f'{router_info.band.split()[0]} {router_info.bandwidth.split()[0]} Rate_Adaptation '
-                f'{router_info.channel} {type} DL NULL NULL {db_set} {self.rssi_num} {corner} NULL "NULL" 0 {expect_rate}')
-            pytest.testResult.save_result(rx_result_info.replace(' ', ','))
+            values = [
+                self.serialnumber,
+                'Throughput',
+                router_info.wireless_mode.split()[0],
+                router_info.band.split()[0],
+                router_info.bandwidth.split()[0],
+                'Rate_Adaptation',
+                router_info.channel,
+                type,
+                'DL',
+                'NULL',
+                db_set,
+                self.rssi_num,
+                corner,
+                'NULL',
+                '"NULL"',
+                0,
+                expect_rate,
+            ]
+            pytest.testResult.save_result(self._format_result_row(values))
             return 'N/A'
 
         rx_result_list = []
         self.rvr_result = None
-        for c in range(self.repest_times + 1):
-            logging.info(f'run rx {c} loop')
-            rx_result = 0
-            mcs_rx = 0
-            if self.rvr_tool == 'iperf':
-                pytest.dut.kill_iperf()
-                terminal = pytest.dut.run_iperf(self.tool_path + pytest.dut.iperf_server_cmd, self.serialnumber)
-                time.sleep(1)
-                client_cmd = pytest.dut.iperf_client_cmd.replace('{ip}', self.dut_ip)
-                pytest.dut.run_iperf(client_cmd, '')
-                if pytest.connect_type == 'telnet':
-                    time.sleep(5)
-                rx_result = self.get_logcat()
-                self.rvr_result = None
-                try:
-                    terminal.terminate()
-                except Exception as e:
-                    logging.warning(f'Fail to kill run_iperf terminal \n {e}')
-            elif self.rvr_tool == 'ixchariot':
-                ix.ep1 = self.pc_ip
-                ix.ep2 = self.dut_ip
-                ix.pair = self.pair
-                rx_result = ix.run_rvr()
+        mcs_rx = None
 
-            if rx_result == False:
-                logging.info("Connect failed")
-                if self.rvr_tool == 'ixchariot':
-                    pytest.dut.checkoutput(pytest.dut.STOP_IX_ENDPOINT_COMMAND)
+        if is_database_debug_enabled():
+            simulated = round(random.uniform(100, 200), 2)
+            logging.info(
+                "Database debug mode enabled, skip iperf RX test and return %.2f Mbps",
+                simulated,
+            )
+            rx_result_list.append(f"{simulated:.2f}")
+            mcs_rx = "DEBUG"
+        else:
+            for c in range(self.repest_times + 1):
+                logging.info(f'run rx {c} loop')
+                rx_result = 0
+                mcs_rx = 0
+                if self.rvr_tool == 'iperf':
+                    pytest.dut.kill_iperf()
+                    terminal = pytest.dut.run_iperf(self.tool_path + pytest.dut.iperf_server_cmd, self.serialnumber)
                     time.sleep(1)
-                    pytest.dut.checkoutput(pytest.dut.IX_ENDPOINT_COMMAND)
-                    time.sleep(3)
-                continue
+                    client_cmd = pytest.dut.iperf_client_cmd.replace('{ip}', self.dut_ip)
+                    pytest.dut.run_iperf(client_cmd, '')
+                    if pytest.connect_type == 'telnet':
+                        time.sleep(5)
+                    rx_result = self.get_logcat()
+                    self.rvr_result = None
+                    try:
+                        terminal.terminate()
+                    except Exception as e:
+                        logging.warning(f'Fail to kill run_iperf terminal \n {e}')
+                elif self.rvr_tool == 'ixchariot':
+                    ix.ep1 = self.pc_ip
+                    ix.ep2 = self.dut_ip
+                    ix.pair = self.pair
+                    rx_result = ix.run_rvr()
 
-            time.sleep(3)
-            logging.info(f'rx result {rx_result}')
-            mcs_rx = pytest.dut.get_mcs_rx()
-            logging.info(f'{rx_result}, {mcs_rx}')
-            rx_result_list.append(rx_result)
-            if len(rx_result_list) > self.repest_times:
-                break
+                if rx_result == False:
+                    logging.info("Connect failed")
+                    if self.rvr_tool == 'ixchariot':
+                        pytest.dut.checkoutput(pytest.dut.STOP_IX_ENDPOINT_COMMAND)
+                        time.sleep(1)
+                        pytest.dut.checkoutput(pytest.dut.IX_ENDPOINT_COMMAND)
+                        time.sleep(3)
+                    continue
+
+                time.sleep(3)
+                logging.info(f'rx result {rx_result}')
+                mcs_rx = pytest.dut.get_mcs_rx()
+                logging.info(f'{rx_result}, {mcs_rx}')
+                rx_result_list.append(rx_result)
+                if len(rx_result_list) > self.repest_times:
+                    break
 
         if rx_result_list:
             try:
@@ -450,12 +487,27 @@ class dut():
                 self.skip_rx = True
 
         corner = corner_tool.get_turntanle_current_angle() if corner_tool else ''
-        rx_result_info = (
-            f'{self.serialnumber} Throughput Standalone NULL Null {router_info.wireless_mode.split()[0]} '
-            f'{router_info.band.split()[0]} {router_info.bandwidth.split()[0]} Rate_Adaptation '
-            f'{router_info.channel} {type} DL NULL NULL {db_set} {self.rssi_num} {corner} NULL '
-            f'{mcs_rx if mcs_rx else "NULL"} {",".join(map(str, rx_result_list))} {expect_rate}')
-        pytest.testResult.save_result(rx_result_info.replace(' ', ','))
+        throughput_values = ','.join(map(str, rx_result_list))
+        values = [
+            self.serialnumber,
+            'Throughput',
+            router_info.wireless_mode.split()[0],
+            router_info.band.split()[0],
+            router_info.bandwidth.split()[0],
+            'Rate_Adaptation',
+            router_info.channel,
+            type,
+            'DL',
+            'NULL',
+            db_set,
+            self.rssi_num,
+            corner,
+            'NULL',
+            mcs_rx if mcs_rx else 'NULL',
+            throughput_values,
+            expect_rate,
+        ]
+        pytest.testResult.save_result(self._format_result_row(values))
         return ','.join(map(str, rx_result_list)) if rx_result_list else 'N/A'
 
     @step
@@ -470,57 +522,83 @@ class dut():
         expect_rate = handle_expectdata(router_cfg, router_info.band, 'UL', pytest.chip_info)
         if self.skip_tx:
             corner = corner_tool.get_turntanle_current_angle() if corner_tool else ''
-            tx_result_info = (
-                f'{self.serialnumber} Throughput Standalone NULL Null {router_info.wireless_mode.split()[0]} '
-                f'{router_info.band.split()[0]} {router_info.bandwidth.split()[0]} Rate_Adaptation '
-                f'{router_info.channel} {type} UL NULL NULL {db_set} {self.rssi_num} {corner} NULL "NULL" 0 {expect_rate}')
-            logging.info(tx_result_info)
-            pytest.testResult.save_result(tx_result_info.replace(' ', ','))
+            values = [
+                self.serialnumber,
+                'Throughput',
+                router_info.wireless_mode.split()[0],
+                router_info.band.split()[0],
+                router_info.bandwidth.split()[0],
+                'Rate_Adaptation',
+                router_info.channel,
+                type,
+                'UL',
+                'NULL',
+                db_set,
+                self.rssi_num,
+                corner,
+                'NULL',
+                '"NULL"',
+                0,
+                expect_rate,
+            ]
+            formatted = self._format_result_row(values)
+            logging.info(formatted)
+            pytest.testResult.save_result(formatted)
             return 'N/A'
 
         tx_result_list = []
         self.rvr_result = None
+        mcs_tx = None
 
-        for c in range(self.repest_times + 1):
-            logging.info(f'run tx:  {c} loop ')
-            tx_result = 0
-            mcs_tx = 0
-            if self.rvr_tool == 'iperf':
-                pytest.dut.kill_iperf()
-                time.sleep(1)
-                terminal = pytest.dut.run_iperf(pytest.dut.iperf_server_cmd, '')
-                time.sleep(1)
-                client_cmd = pytest.dut.iperf_client_cmd.replace('{ip}', self.pc_ip)
-                pytest.dut.run_iperf(self.tool_path + client_cmd, self.serialnumber)
-                if pytest.connect_type == 'telnet':
-                    time.sleep(5)
-                time.sleep(3)
-                tx_result = self.get_logcat()
-                self.rvr_result = None
-                try:
-                    terminal.terminate()
-                except Exception as e:
-                    logging.warning(f'Fail to kill run_iperf terminal \n {e}')
-            elif self.rvr_tool == 'ixchariot':
-                ix.ep1 = self.dut_ip
-                ix.ep2 = self.pc_ip
-                ix.pair = self.pair
-                tx_result = ix.run_rvr()
-
-            if tx_result == False:
-                logging.info("Connect failed")
-                if self.rvr_tool == 'ixchariot':
-                    pytest.dut.checkoutput(pytest.dut.STOP_IX_ENDPOINT_COMMAND)
+        if is_database_debug_enabled():
+            simulated = round(random.uniform(100, 200), 2)
+            logging.info(
+                "Database debug mode enabled, skip iperf TX test and return %.2f Mbps",
+                simulated,
+            )
+            tx_result_list.append(f"{simulated:.2f}")
+            mcs_tx = "DEBUG"
+        else:
+            for c in range(self.repest_times + 1):
+                logging.info(f'run tx:  {c} loop ')
+                tx_result = 0
+                mcs_tx = 0
+                if self.rvr_tool == 'iperf':
+                    pytest.dut.kill_iperf()
                     time.sleep(1)
-                    pytest.dut.checkoutput(pytest.dut.IX_ENDPOINT_COMMAND)
+                    terminal = pytest.dut.run_iperf(pytest.dut.iperf_server_cmd, '')
+                    time.sleep(1)
+                    client_cmd = pytest.dut.iperf_client_cmd.replace('{ip}', self.pc_ip)
+                    pytest.dut.run_iperf(self.tool_path + client_cmd, self.serialnumber)
+                    if pytest.connect_type == 'telnet':
+                        time.sleep(5)
                     time.sleep(3)
-                continue
+                    tx_result = self.get_logcat()
+                    self.rvr_result = None
+                    try:
+                        terminal.terminate()
+                    except Exception as e:
+                        logging.warning(f'Fail to kill run_iperf terminal \n {e}')
+                elif self.rvr_tool == 'ixchariot':
+                    ix.ep1 = self.dut_ip
+                    ix.ep2 = self.pc_ip
+                    ix.pair = self.pair
+                    tx_result = ix.run_rvr()
 
-            mcs_tx = pytest.dut.get_mcs_tx()
-            logging.info(f'{tx_result}, {mcs_tx}')
-            tx_result_list.append(tx_result)
-            if len(tx_result_list) > self.repest_times:
-                break
+                if tx_result == False:
+                    logging.info("Connect failed")
+                    if self.rvr_tool == 'ixchariot':
+                        pytest.dut.checkoutput(pytest.dut.STOP_IX_ENDPOINT_COMMAND)
+                        time.sleep(1)
+                        pytest.dut.checkoutput(pytest.dut.IX_ENDPOINT_COMMAND)
+                        time.sleep(3)
+                    continue
+
+                mcs_tx = pytest.dut.get_mcs_tx()
+                logging.info(f'{tx_result}, {mcs_tx}')
+                tx_result_list.append(tx_result)
+                if len(tx_result_list) > self.repest_times:
+                    break
 
         if tx_result_list:
             try:
@@ -532,13 +610,29 @@ class dut():
 
         corner = corner_tool.get_turntanle_current_angle() if corner_tool else ''
 
-        tx_result_info = (
-            f'{self.serialnumber} Throughput Standalone NULL Null {router_info.wireless_mode.split()[0]} '
-            f'{router_info.band.split()[0]} {router_info.bandwidth.split()[0]} Rate_Adaptation '
-            f'{router_info.channel} {type} UL NULL NULL {db_set} {self.rssi_num} {corner} NULL '
-            f'{mcs_tx if mcs_tx else "NULL"} {",".join(map(str, tx_result_list))} {expect_rate}')
-        logging.info(tx_result_info)
-        pytest.testResult.save_result(tx_result_info.replace(' ', ','))
+        throughput_values = ','.join(map(str, tx_result_list))
+        values = [
+            self.serialnumber,
+            'Throughput',
+            router_info.wireless_mode.split()[0],
+            router_info.band.split()[0],
+            router_info.bandwidth.split()[0],
+            'Rate_Adaptation',
+            router_info.channel,
+            type,
+            'UL',
+            'NULL',
+            db_set,
+            self.rssi_num,
+            corner,
+            'NULL',
+            mcs_tx if mcs_tx else 'NULL',
+            throughput_values,
+            expect_rate,
+        ]
+        formatted = self._format_result_row(values)
+        logging.info(formatted)
+        pytest.testResult.save_result(formatted)
         return ','.join(map(str, tx_result_list)) if tx_result_list else 'N/A'
 
     def wait_for_wifi_address(self, cmd: str = '', target=''):

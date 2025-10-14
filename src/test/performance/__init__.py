@@ -16,7 +16,51 @@ from src.tools.router_tool.Router import Router
 from src.tools.router_tool.router_factory import get_router
 from src.tools.connect_tool.lab_device_controller import LabDeviceController
 from src.tools.rs_test import rs
-from src.util.constants import DEFAULT_RF_STEP_SPEC, RF_STEP_SPLIT_PATTERN
+from src.util.constants import (
+    DEFAULT_RF_STEP_SPEC,
+    RF_STEP_SPLIT_PATTERN,
+    is_database_debug_enabled,
+)
+
+
+class _DebugRFController:
+    """No-op RF controller used when database debug mode is enabled."""
+
+    def __init__(self) -> None:
+        self._current_value = 0
+
+    def execute_rf_cmd(self, value) -> None:
+        try:
+            self._current_value = int(float(value))
+        except Exception:
+            self._current_value = 0
+        logging.info("[Debug] Skip RF command, simulated attenuation: %s dB", self._current_value)
+
+    def get_rf_current_value(self):
+        return self._current_value
+
+
+class _DebugCornerController:
+    """No-op corner controller used when database debug mode is enabled."""
+
+    def __init__(self) -> None:
+        self._angle = 0
+
+    def set_turntable_zero(self) -> None:
+        self._angle = 0
+        logging.info("[Debug] Skip corner reset, simulated angle reset to 0°")
+
+    def execute_turntable_cmd(self, command, angle='') -> None:
+        if angle not in (None, ''):
+            self._angle = angle
+        logging.info(
+            "[Debug] Skip corner command %s, simulated angle: %s",
+            command,
+            self._angle,
+        )
+
+    def get_turntanle_current_angle(self):
+        return self._angle
 
 
 @lru_cache(maxsize=1)
@@ -27,6 +71,9 @@ def get_cfg() -> Any:
 
 def init_rf():
     """根据配置初始化射频衰减器"""
+    if is_database_debug_enabled():
+        logging.info("Database debug mode enabled, skip RF attenuator initialization")
+        return _DebugRFController()
     cfg = get_cfg()
     rf_solution = cfg['rf_solution']
     model = rf_solution['model']
@@ -46,6 +93,11 @@ def init_rf():
 
 def init_corner():
     """根据配置初始化转台"""
+    if is_database_debug_enabled():
+        logging.info("Database debug mode enabled, skip corner initialization")
+        controller = _DebugCornerController()
+        controller.set_turntable_zero()
+        return controller
     cfg = get_cfg()
     corner_ip = cfg['corner_angle']['ip_address']
     corner_tool = rs() if corner_ip == '192.168.5.11' else LabDeviceController(corner_ip)
@@ -70,6 +122,10 @@ def common_setup(router: Router, router_info: Router) -> bool:
 
     pytest.dut.skip_tx = False
     pytest.dut.skip_rx = False
+
+    if is_database_debug_enabled():
+        logging.info("Database debug mode enabled, skip router setup steps")
+        return True
 
     router.change_setting(router_info), "Can't set ap , pls check first"
     band = '5G' if '2' in router_info.band else '2.4G'
