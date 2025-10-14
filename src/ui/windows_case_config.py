@@ -1210,6 +1210,17 @@ class CaseConfigPage(CardWidget):
                 self.config[_key] = _default.copy()
             else:
                 self.config[_key] = dict(existing)
+        def _coerce_debug_flag(value) -> bool:
+            if isinstance(value, str):
+                return value.strip().lower() in {"1", "true", "yes", "on"}
+            return bool(value)
+        debug_cfg_raw = self.config.get("debug")
+        if isinstance(debug_cfg_raw, dict):
+            debug_cfg = dict(debug_cfg_raw)
+        else:
+            debug_cfg = {"database_mode": _coerce_debug_flag(debug_cfg_raw)}
+        debug_cfg.setdefault("database_mode", False)
+        self.config["debug"] = debug_cfg
         telnet_cfg = self.config.get("connect_type", {}).get("telnet")
         if isinstance(telnet_cfg, dict) and "kernel_version" in telnet_cfg:
             self.config.setdefault("android_system", {})["kernel_version"] = telnet_cfg.pop("kernel_version")
@@ -1464,6 +1475,23 @@ class CaseConfigPage(CardWidget):
                 self.field_widgets["rf_solution.LDA-908V-8.channels"] = self.lda_channels_edit
                 self.field_widgets["rf_solution.step"] = self.rf_step_widget
                 continue  # 跳过后面的通用字段处理
+            if key == "debug":
+                data = value if isinstance(value, dict) else {}
+                group = QGroupBox("Debug Options")
+                vbox = QVBoxLayout(group)
+                self.database_debug_checkbox = QCheckBox("Enable database debug mode", self)
+                self.database_debug_checkbox.setChecked(bool(data.get("database_mode")))
+                vbox.addWidget(self.database_debug_checkbox)
+                debug_hint = QLabel(
+                    "When enabled, performance tests skip router/RF/corner setup and "
+                    "simulate iperf results for database debugging."
+                )
+                debug_hint.setWordWrap(True)
+                debug_hint.setObjectName("debugHintLabel")
+                vbox.addWidget(debug_hint)
+                self._register_group(key, group, self._is_dut_key(key))
+                self.field_widgets["debug.database_mode"] = self.database_debug_checkbox
+                continue
             if key == "rvr":
                 group = QGroupBox("RvR Config")  # 外层分组
                 vbox = QVBoxLayout(group)
@@ -1866,9 +1894,10 @@ class CaseConfigPage(CardWidget):
         """批量更新字段的可编辑状态；DUT 区域始终保持可操作"""
         self.setUpdatesEnabled(False)
         try:
+            always_enabled_roots = {"debug"}
             for key, widget in self.field_widgets.items():
                 root_key = key.split(".", 1)[0]
-                if self._is_dut_key(root_key):
+                if self._is_dut_key(root_key) or root_key in always_enabled_roots:
                     desired = True
                 else:
                     desired = key in editable_fields
