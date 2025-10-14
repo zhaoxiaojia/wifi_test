@@ -88,7 +88,10 @@ def build_section_payload(
 
 
 def resolve_case_table_name(
-    case_path: Optional[str], data_type: Optional[str]
+    case_path: Optional[str],
+    data_type: Optional[str],
+    *,
+    log_file_path: Optional[Path] = None,
 ) -> str:
     candidate = None
     if case_path:
@@ -98,7 +101,16 @@ def resolve_case_table_name(
         candidate = data_type
     if not candidate:
         candidate = "test_results"
-    return sanitize_identifier(candidate, fallback="test_results")
+
+    base = sanitize_identifier(candidate, fallback="test_results")
+
+    if not log_file_path:
+        return base
+
+    stem = sanitize_identifier(log_file_path.stem, fallback="result")
+    if not stem or stem == base:
+        return base
+    return f"{base}_{stem}"
 
 
 def drop_and_create_table(
