@@ -10,6 +10,7 @@
 '''
 import logging
 import sys
+from collections.abc import Mapping
 from dataclasses import dataclass
 import re
 import os
@@ -373,7 +374,8 @@ def handle_expectdata(router_info, band, direction, chip_info=None):
         router_info: 路由器信息字典，至少包含 band 对应的 mode、security_mode、bandwidth
         band: '2.4G' or '5G'
         direction: 'UL' or 'DL'
-        chip_info: 如 'w2_sdio'
+        chip_info: 可以是旧版的 'w2_sdio' 字符串，也可以是包含
+            "wifi_module"、"interface" 等键的新字典结构
     Returns:
         float expected throughput
     """
@@ -413,14 +415,45 @@ def handle_expectdata(router_info, band, direction, chip_info=None):
     bandwidth = _normalize_bandwidth(router_info.get(band, {}).get('bandwidth', '80MHz'))
     security_mode = _normalize_auth(router_info.get(band, {}).get('security_mode', 'WPA2'))
 
-    chip_key, interface = chip_info.split('_')
+    def _parse_chip_payload(payload):
+        wifi_module = ""
+        interface = ""
+        if isinstance(payload, str):
+            parts = payload.split('_', 1)
+            wifi_module = parts[0].strip().upper() if parts and parts[0] else ""
+            if len(parts) > 1 and parts[1]:
+                interface = parts[1].strip().upper()
+        elif isinstance(payload, Mapping):
+            wifi_module = str(
+                payload.get("wifi_module")
+                or payload.get("series")
+                or payload.get("main_chip")
+                or ""
+            ).strip().upper()
+            interface = str(payload.get("interface") or "").strip().upper()
+        elif isinstance(payload, (list, tuple)):
+            if payload:
+                wifi_module = str(payload[0]).strip().upper()
+            if len(payload) > 1:
+                interface = str(payload[1]).strip().upper()
+        return wifi_module, interface
+
+    default_chip, default_interface = _parse_chip_payload(RouterConst.dut_wifichip)
+    raw_chip, raw_interface = _parse_chip_payload(chip_info)
+    chip_key = raw_chip or default_chip
+    interface = raw_interface or default_interface
+
     if chip_key in ('W1', 'W1U'):
         chip_key = 'W1'
     elif chip_key in ('W2', 'W2U'):
         chip_key = 'W2'
     elif chip_key == 'W2L':
         chip_key = 'W2L'
-    interface = interface.upper()
+
+    if chip_key not in RouterConst.FPGA_CONFIG:
+        chip_key = default_chip if default_chip in RouterConst.FPGA_CONFIG else next(iter(RouterConst.FPGA_CONFIG))
+
+    interface = (interface or default_interface or '').upper().replace('-', '').replace(' ', '')
     mimo_key = RouterConst.FPGA_CONFIG[chip_key]['mimo']
 
     with open(f"{os.getcwd()}/config/compatibility_dut.json", 'r', encoding='utf-8') as f2:
