@@ -37,11 +37,7 @@ from PyQt5.QtCore import (
     QThread,
     pyqtSignal,
 )
-from src.util.ldap_auth import (
-    LDAPAuthenticationError,
-    get_configured_ldap_server,
-    ldap_authenticate,
-)
+from src.util.ldap_auth import get_configured_ldap_server, ldap_authenticate
 from src.util.constants import Paths, cleanup_temp_dir
 
 # 确保工作目录为可执行文件所在目录
@@ -73,16 +69,17 @@ class LDAPAuthWorker(QObject):
         try:
             self.progress.emit(f"正在连接 LDAP 服务器：{server}")
             result = ldap_authenticate(self._username, self._password)
-            payload = {
-                "username": result.username,
-                "domain_user": result.domain_user,
-                "server": result.server,
-            }
-            self.progress.emit(f"LDAP 验证成功（服务器：{server}），正在更新界面...")
-            self.finished.emit(True, f"登录成功，欢迎 {result.username}", payload)
-        except LDAPAuthenticationError as exc:
-            logging.warning("LDAP 登录失败（server=%s）：%s", server, exc)
-            self.finished.emit(False, f"{exc}", {})
+            if result:
+                payload = {
+                    "username": result,
+                    "server": server,
+                }
+                self.progress.emit(f"LDAP 验证成功（服务器：{server}），正在更新界面...")
+                self.finished.emit(True, f"登录成功，欢迎 {result}", payload)
+            else:
+                message = f"LDAP 登录失败，请检查账号或密码。（服务器：{server}）"
+                logging.warning("LDAP 登录失败（server=%s）", server)
+                self.finished.emit(False, message, {})
         except Exception as exc:  # pragma: no cover - 运行期异常记录
             logging.exception("LDAP 登录失败 (unexpected)")
             self.finished.emit(
