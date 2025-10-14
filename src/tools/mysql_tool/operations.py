@@ -27,11 +27,15 @@ class _ColumnInfo:
 class _ColumnInfo:
     mapping: HeaderMapping
     sql_type: str
+    kind: str  # "scalar" 或 "json"
+
 
 class PerformanceTableManager:
     """管理 `performance` 表：结构随 CSV 头动态重建，并完整同步行数据。"""
 
     TABLE_NAME = "performance"
+    JSON_TABLE_NAME = "performance_json"
+
     _BASE_COLUMNS: Tuple[Tuple[str, str], ...] = (
         ("csv_name", "VARCHAR(255) NOT NULL"),
         ("row_index", "INT NOT NULL"),
@@ -78,24 +82,24 @@ class PerformanceTableManager:
         return "text", str(value)
 
     @classmethod
-    def _infer_sql_type(cls, values: Iterable[Any]) -> str:
+    def _infer_sql_type(cls, values: Iterable[Any]) -> Tuple[str, str]:
         seen_float = False
         seen_int = False
         for value in values:
             value_type, _ = cls._classify_value(value)
             if value_type == "json":
-                return "JSON"
+                return "JSON", "json"
             if value_type == "text":
-                return "TEXT"
+                return "TEXT", "scalar"
             if value_type == "float":
                 seen_float = True
             elif value_type == "int":
                 seen_int = True
         if seen_float:
-            return "DOUBLE"
+            return "DOUBLE", "scalar"
         if seen_int:
-            return "BIGINT"
-        return "TEXT"
+            return "BIGINT", "scalar"
+        return "TEXT", "scalar"
 
     @staticmethod
     def _normalize_cell(value: Any, sql_type: str) -> Any:
@@ -144,8 +148,8 @@ class PerformanceTableManager:
         columns: List[_ColumnInfo] = []
         for mapping in mappings:
             values = [row.get(mapping.original) for row in rows]
-            sql_type = self._infer_sql_type(values)
-            columns.append(_ColumnInfo(mapping=mapping, sql_type=sql_type))
+            sql_type, kind = self._infer_sql_type(values)
+            columns.append(_ColumnInfo(mapping=mapping, sql_type=sql_type, kind=kind))
         return columns
 
     def _recreate_table(self, columns: Sequence[_ColumnInfo]) -> None:
@@ -155,6 +159,8 @@ class PerformanceTableManager:
         for name, definition in self._BASE_COLUMNS:
             statements.append(f"    `{name}` {definition},")
         for column in columns:
+            if column.kind != "scalar":
+                continue
             definition = f"{column.sql_type} NULL DEFAULT NULL"
             comment = column.mapping.original.replace("'", "''")
             statements.append(
@@ -164,11 +170,39 @@ class PerformanceTableManager:
             [
                 "    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,",
                 "    `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
-                ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;",
-            ]
+            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;",
+        ]
         )
         create_sql = "\n".join(statements)
         self._client.execute(create_sql)
+
+    def _recreate_json_table(self) -> None:
+        self._client.execute(f"DROP TABLE IF EXISTS `{self.JSON_TABLE_NAME}`")
+        statements = [
+            f"CREATE TABLE `{self.JSON_TABLE_NAME}` (",
+            "    `id` INT PRIMARY KEY AUTO_INCREMENT,",
+            "    `csv_name` VARCHAR(255) NOT NULL,",
+            "    `row_index` INT NOT NULL,",
+            "    `field_name` VARCHAR(255) NOT NULL,",
+            "    `field_alias` VARCHAR(255) NOT NULL,",
+            "    `data_type` VARCHAR(64) NULL DEFAULT NULL,",
+            "    `run_source` VARCHAR(32) NULL DEFAULT NULL,",
+            "    `value_type` VARCHAR(32) NULL DEFAULT NULL,",
+            "    `json_value` JSON NOT NULL,",
+            "    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,",
+            "    `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
+            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;",
+        ]
+        create_sql = "\n".join(statements)
+        self._client.execute(create_sql)
+
+    def ensure_schema_initialized(self) -> None:
+        tables = self._client.query_all("SHOW TABLES")
+        if tables:
+            return
+        logging.info("Database contains no tables; initializing performance schema.")
+        self._recreate_table([])
+        self._recreate_json_table()
     def replace_with_csv(
         self,
         *,
@@ -194,10 +228,16 @@ class PerformanceTableManager:
         )
 
         column_infos = self._prepare_columns(mappings, rows)
+        scalar_columns = [info for info in column_infos if info.kind == "scalar"]
+        json_columns = [info for info in column_infos if info.kind == "json"]
         logging.info(
-            "Recreating %s with %s dynamic columns", self.TABLE_NAME, len(column_infos)
+            "Recreating %s with %s scalar columns and %s JSON columns",
+            self.TABLE_NAME,
+            len(scalar_columns),
+            len(json_columns),
         )
-        self._recreate_table(column_infos)
+        self._recreate_table(scalar_columns)
+        self._recreate_json_table()
 
         if not rows:
             logging.info(
@@ -208,7 +248,7 @@ class PerformanceTableManager:
             return 0
 
         insert_columns = [name for name, _ in self._BASE_COLUMNS]
-        insert_columns.extend(info.mapping.sanitized for info in column_infos)
+        insert_columns.extend(info.mapping.sanitized for info in scalar_columns)
         column_clause = ", ".join(f"`{name}`" for name in insert_columns)
         placeholders = ", ".join(["%s"] * len(insert_columns))
         insert_sql = (
@@ -223,35 +263,73 @@ class PerformanceTableManager:
                 data_type,
                 run_source,
             ]
-            for info in column_infos:
+            for info in scalar_columns:
                 row_values.append(
                     self._normalize_cell(row.get(info.mapping.original), info.sql_type)
                 )
             values.append(row_values)
-        affected_total = 0
-        for row_values in values:
-            logging.debug(
-                "Inserting row %s/%s into %s",  # noqa: G004
-                row_values[1],
-                len(values),
-                self.TABLE_NAME,
-            )
-            affected_total += self._client.execute(insert_sql, row_values)
 
-        if affected_total != len(values):
-            logging.warning(
-                "Expected to insert %s rows but database reported %s",  # noqa: G004
-                len(values),
-                affected_total,
+        affected_total = 0
+        if values:
+            affected_total = self._client.executemany(insert_sql, values)
+            if affected_total != len(values):
+                logging.warning(
+                    "Expected to insert %s rows but database reported %s",  # noqa: G004
+                    len(values),
+                    affected_total,
+                )
+            else:
+                logging.info(
+                    "Stored %s rows from %s into %s",  # noqa: G004
+                    affected_total,
+                    csv_name,
+                    self.TABLE_NAME,
+                )
+
+        json_rows: List[List[Any]] = []
+        for index, row in enumerate(rows, start=1):
+            for info in json_columns:
+                value_type, parsed = self._classify_value(row.get(info.mapping.original))
+                if parsed is None:
+                    continue
+                serialized = json.dumps(parsed, ensure_ascii=False)
+                json_rows.append(
+                    [
+                        csv_name,
+                        index,
+                        info.mapping.original,
+                        info.mapping.sanitized,
+                        data_type,
+                        run_source,
+                        value_type,
+                        serialized,
+                    ]
+                )
+
+        if json_rows:
+            json_insert_sql = (
+                f"INSERT INTO `{self.JSON_TABLE_NAME}` ("
+                "`csv_name`, `row_index`, `field_name`, `field_alias`, "
+                "`data_type`, `run_source`, `value_type`, `json_value`) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"
             )
-        else:
-            logging.info(
-                "Stored %s rows from %s into %s",  # noqa: G004
-                affected_total,
-                csv_name,
-                self.TABLE_NAME,
-            )
+            json_affected = self._client.executemany(json_insert_sql, json_rows)
+            if json_affected != len(json_rows):
+                logging.warning(
+                    "Expected to insert %s JSON rows but database reported %s",  # noqa: G004
+                    len(json_rows),
+                    json_affected,
+                )
+            else:
+                logging.info(
+                    "Stored %s JSON rows from %s into %s",
+                    json_affected,
+                    csv_name,
+                    self.JSON_TABLE_NAME,
+                )
+
         return affected_total
+
 
 def sync_configuration(config: dict | None) -> None:
     """Kept for backward compatibility; configuration is no longer persisted."""
@@ -294,6 +372,7 @@ def sync_test_result_to_db(
     try:
         with MySqlClient() as client:
             manager = PerformanceTableManager(client)
+            manager.ensure_schema_initialized()
             affected = manager.replace_with_csv(
                 csv_name=file_path.name,
                 headers=headers,
