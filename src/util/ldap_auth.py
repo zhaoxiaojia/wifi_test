@@ -1,5 +1,3 @@
-"""Amlogic LDAP 登录工具，提供最简化的验证流程。"""
-
 import logging
 import os
 
@@ -14,7 +12,6 @@ def get_configured_ldap_server() -> str:
     """返回当前使用的 LDAP 服务器地址。"""
 
     return LDAP_SERVER
-
 
 def ldap_authenticate(username: str, password: str) -> str | None:
     """按照示例代码实现的最小化 LDAP 登录流程。"""
