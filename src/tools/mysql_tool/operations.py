@@ -125,7 +125,6 @@ class TestResultTableManager:
         ColumnDefinition("dut_id", "INT NOT NULL"),
         ColumnDefinition("execution_id", "INT NOT NULL"),
         ColumnDefinition("data_type", "VARCHAR(64) NULL DEFAULT NULL"),
-        ColumnDefinition("log_file_path", "TEXT NULL DEFAULT NULL"),
         ColumnDefinition("run_source", "VARCHAR(32) NOT NULL"),
     )
 
@@ -172,7 +171,6 @@ class TestResultTableManager:
                 context.dut_id,
                 context.execution_id,
                 context.data_type.upper() if context.data_type else None,
-                context.log_file_path,
                 context.run_source,
             ]
             for mapping in header_mappings:
@@ -267,6 +265,8 @@ def sync_configuration(config: dict | None) -> Optional[SyncResult]:
         with MySqlClient() as client:
             synchronizer = ConfigSchemaSynchronizer(client)
             result = synchronizer.sync(config)
+            # 确保测试报告表在首次同步配置时即被创建
+            TestReportManager(client)
         _LATEST_SYNC_RESULT = result
         logging.info(
             "Synchronized configuration to database (dut_id=%s, execution_id=%s)",
