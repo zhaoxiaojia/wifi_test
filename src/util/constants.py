@@ -272,6 +272,32 @@ def load_config(
     return copy.deepcopy(data)
 
 
+def _coerce_truthy(value: Any) -> bool:
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
+
+
+def is_database_debug_enabled(
+    *, config: Mapping[str, Any] | None = None, refresh: bool = False
+) -> bool:
+    """Return whether database debug mode is enabled in the configuration."""
+
+    try:
+        data = config if config is not None else load_config(refresh=refresh)
+    except Exception:
+        logging.debug("Failed to load config for debug flag", exc_info=True)
+        return False
+    if not isinstance(data, Mapping):
+        return False
+    debug_section = data.get("debug")
+    if isinstance(debug_section, Mapping):
+        candidate = debug_section.get("database_mode")
+    else:
+        candidate = debug_section
+    return _coerce_truthy(candidate)
+
+
 def save_config_sections(
     dut_section: Mapping[str, Any] | None,
     other_section: Mapping[str, Any] | None,
