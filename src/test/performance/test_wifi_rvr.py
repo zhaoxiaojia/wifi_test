@@ -14,8 +14,7 @@ import logging
 import pytest
 
 from src.test import get_testdata
-from src.test.pyqt_log import log_fixture_params, update_fixture_params
-from src.tools.mysql_tool.MySqlControl import sync_file_to_db
+from src.test.pyqt_log import log_fixture_params
 from src.test.performance import (
     common_setup,
     get_cfg,
@@ -54,7 +53,7 @@ def setup_attenuation(request, setup_router):
     pytest.dut.kill_iperf()
 
 
-def test_rvr(setup_attenuation):
+def test_rvr(setup_attenuation, performance_sync_manager):
     connect_status, router_info, db_set = setup_attenuation
     if not connect_status:
         logging.info("Cannot connect to Wi-Fi, skip remaining steps")
@@ -68,8 +67,8 @@ def test_rvr(setup_attenuation):
             logging.info("RSSI during RX: %s", pytest.dut.rssi_num)
             pytest.dut.get_rx_rate(router_info, "TCP", db_set=db_set)
 
-    if not getattr(pytest, "_rvr_data_synced", False):
-        rows_stored = sync_file_to_db(pytest.testResult.log_file, "RVR")
-        if rows_stored:
-            logging.info("RVR data rows stored in database: %s", rows_stored)
-        pytest._rvr_data_synced = True
+    performance_sync_manager(
+        "RVR",
+        pytest.testResult.log_file,
+        message="RVR data rows stored in database",
+    )
