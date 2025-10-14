@@ -74,7 +74,6 @@ class RvrWifiConfigPage(CardWidget):
         self.headers, self.rows = self._load_csv()
         # 标记是否处于数据加载阶段，用于屏蔽信号回调
         self._loading = False
-        self._graph_client = None
         main_layout = QHBoxLayout(self)
 
         form_box = QGroupBox(self)
@@ -185,11 +184,6 @@ class RvrWifiConfigPage(CardWidget):
     def get_router_credentials(self) -> tuple[str, str]:
         """返回当前页面的路由器 SSID 和密码"""
         return self.ssid_edit.text(), self.passwd_edit.text()
-
-    def set_graph_client(self, client) -> None:
-        """注入 Graph 客户端以支持 Teams 相关操作。"""
-
-        self._graph_client = client
 
     def set_readonly(self, readonly: bool) -> None:
         """切换页面只读状态"""
