@@ -572,6 +572,35 @@ class RouterConst:
     }
 
 
+# TODO: 后续补充更多产品线和项目映射
+WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, str]]]] = {
+    "OTT": {
+        "OB1": {
+            "main_chip": "905X5M",
+            "wifi_module": "W2",
+            "interface": "USB",
+        },
+        "OB2": {
+            "main_chip": "905X5M",
+            "wifi_module": "W2",
+            "interface": "USB",
+        },
+    },
+    "SH": {
+        "OB6": {
+            "main_chip": "905X5M",
+            "wifi_module": "W2",
+            "interface": "USB",
+        },
+        "OB7": {
+            "main_chip": "S805X3",
+            "wifi_module": "W1U",
+            "interface": "SDIO",
+        },
+    },
+}
+
+
 class RokuConst:
     """Roku 控制常量"""
     COMMANDS: Final[dict[str, str]] = {

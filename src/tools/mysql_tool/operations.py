@@ -343,9 +343,13 @@ def _extract_first(mapping: Mapping[str, Any] | None, *keys: str) -> Optional[An
 
 def _split_fpga(value: Any) -> tuple[Optional[str], Optional[str]]:
     if isinstance(value, Mapping):
+        series_value = value.get("series")
+        if series_value is None:
+            series_value = value.get("wifi_module")
+        interface_value = value.get("interface")
         return (
-            str(value.get("series")) if value.get("series") is not None else None,
-            str(value.get("interface")) if value.get("interface") is not None else None,
+            str(series_value) if series_value is not None else None,
+            str(interface_value) if interface_value is not None else None,
         )
     if isinstance(value, str):
         parts = value.split("_", 1)
