@@ -3,12 +3,11 @@ from __future__ import annotations
 import logging
 from typing import Optional, Tuple
 
-from .models import SyncResult
 from .operations import sync_configuration
 
 
-def bootstrap_mysql_environment(*, refresh_config: bool = False) -> Tuple[dict, Optional[SyncResult]]:
-    """Bootstrap database state by loading config and syncing it to MySQL."""
+def bootstrap_mysql_environment(*, refresh_config: bool = False) -> Tuple[dict, Optional[object]]:
+    """Bootstrap database state by loading config (no DB persistence)."""
 
     try:
         from src.tools import config_loader
