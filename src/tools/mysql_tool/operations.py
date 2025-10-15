@@ -1,13 +1,18 @@
 from __future__ import annotations
-
 import json
 import logging
 from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Mapping
 
 from .client import MySqlClient
-from .schema import PERFORMANCE_STATIC_COLUMNS, ensure_report_tables, read_csv_rows
+from .schema import (
+    PERFORMANCE_COLUMN_RENAMES,
+    PERFORMANCE_STATIC_COLUMNS,
+    ensure_report_tables,
+    read_csv_rows,
+)
 from src.util.constants import WIFI_PRODUCT_PROJECT_MAP
 
 __all__ = [
@@ -81,12 +86,20 @@ class PerformanceTableManager:
     @staticmethod
     def _canonical_sql_type(sql_type: str) -> str:
         normalized = (sql_type or "").upper()
+        if normalized.startswith("DECIMAL"):
+            return "DECIMAL"
         if normalized.startswith("DOUBLE"):
             return "DOUBLE"
-        if normalized.startswith("BIGINT") or normalized.startswith("INT"):
-            return "BIGINT"
+        if normalized.startswith("FLOAT"):
+            return "DOUBLE"
+        if normalized.startswith("ENUM"):
+            return "ENUM"
         if normalized.startswith("JSON"):
             return "JSON"
+        if normalized.startswith("BIGINT") or normalized.startswith("INT"):
+            return "INT"
+        if normalized.startswith("SMALLINT") or normalized.startswith("TINYINT") or normalized.startswith("MEDIUMINT"):
+            return "INT"
         if "CHAR" in normalized:
             return "VARCHAR"
         return "TEXT"
@@ -105,7 +118,7 @@ class PerformanceTableManager:
             if value_type in {"float", "int"}:
                 return float(parsed)
             return None
-        if canonical == "BIGINT":
+        if canonical == "INT":
             if value_type == "int":
                 return int(parsed)
             if value_type == "float":
@@ -113,6 +126,17 @@ class PerformanceTableManager:
                 if float_value.is_integer():
                     return int(float_value)
             return None
+        if canonical == "DECIMAL":
+            if value_type in {"float", "int"}:
+                return Decimal(str(parsed))
+            if value_type == "text":
+                try:
+                    return Decimal(str(parsed))
+                except InvalidOperation:
+                    return None
+            return None
+        if canonical == "ENUM":
+            return str(parsed)
         return str(parsed)
 
     def _describe_columns(self) -> Dict[str, Dict[str, Any]]:
@@ -123,15 +147,38 @@ class PerformanceTableManager:
 
     def _ensure_static_columns(self) -> None:
         snapshot = self._describe_columns()
+        snapshot = self._apply_column_renames(snapshot)
         for column in self._STATIC_COLUMNS:
-            if column.name in snapshot:
+            definition = self._format_column_definition(column)
+            if column.name not in snapshot:
+                self._client.execute(
+                    f"ALTER TABLE `{self.TABLE_NAME}` "
+                    f"ADD COLUMN `{column.name}` {definition}"
+                )
+                snapshot = self._describe_columns()
                 continue
-            comment = column.original.replace("'", "''")
             self._client.execute(
                 f"ALTER TABLE `{self.TABLE_NAME}` "
-                f"ADD COLUMN `{column.name}` {column.sql_type} NULL DEFAULT NULL COMMENT '{comment}'"
+                f"MODIFY COLUMN `{column.name}` {definition}"
             )
-            snapshot = self._describe_columns()
+
+    def _apply_column_renames(
+        self, snapshot: Dict[str, Dict[str, Any]]
+    ) -> Dict[str, Dict[str, Any]]:
+        updated = snapshot
+        for old_name, new_name in PERFORMANCE_COLUMN_RENAMES:
+            if old_name in updated and new_name not in updated:
+                self._client.execute(
+                    f"ALTER TABLE `{self.TABLE_NAME}` "
+                    f"RENAME COLUMN `{old_name}` TO `{new_name}`"
+                )
+                updated = self._describe_columns()
+        return updated
+
+    @staticmethod
+    def _format_column_definition(column: _StaticColumn) -> str:
+        comment = column.original.replace("'", "''")
+        return f"{column.sql_type} NULL DEFAULT NULL COMMENT '{comment}'"
 
     def _resolve_execution_id(self, case_path: Optional[str]) -> Optional[int]:
         if not case_path:
