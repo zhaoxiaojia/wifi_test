@@ -822,6 +822,69 @@ class CaseConfigPage(CardWidget):
                 normalized["interface"] = self._normalize_fpga_token(info.get("interface"))
         return normalized
 
+    def _normalize_connect_type_section(self, raw_value: Any) -> dict[str, Any]:
+        normalized: dict[str, Any] = {}
+        if isinstance(raw_value, Mapping):
+            normalized.update(raw_value)
+
+        type_value = normalized.get("type", "adb")
+        if isinstance(type_value, str):
+            type_value = type_value.strip() or "adb"
+        else:
+            type_value = str(type_value).strip() or "adb"
+        normalized["type"] = type_value
+
+        adb_cfg = normalized.get("adb")
+        if isinstance(adb_cfg, Mapping):
+            adb_dict = dict(adb_cfg)
+        else:
+            adb_dict = {}
+            if adb_cfg not in (None, ""):
+                adb_dict["device"] = str(adb_cfg)
+        device = adb_dict.get("device", "")
+        adb_dict["device"] = str(device).strip() if device is not None else ""
+        normalized["adb"] = adb_dict
+
+        telnet_cfg = normalized.get("telnet")
+        if isinstance(telnet_cfg, Mapping):
+            telnet_dict = dict(telnet_cfg)
+        else:
+            telnet_dict = {}
+            if isinstance(telnet_cfg, str) and telnet_cfg.strip():
+                telnet_dict["ip"] = telnet_cfg.strip()
+        telnet_ip = telnet_dict.get("ip", "")
+        telnet_dict["ip"] = str(telnet_ip).strip() if telnet_ip is not None else ""
+        wildcard = telnet_dict.get("wildcard", "")
+        telnet_dict["wildcard"] = str(wildcard).strip() if wildcard is not None else ""
+        normalized["telnet"] = telnet_dict
+
+        third_cfg = normalized.get("third_party")
+        if isinstance(third_cfg, Mapping):
+            third_dict = dict(third_cfg)
+        else:
+            third_dict = {}
+        enabled_val = third_dict.get("enabled", False)
+        if isinstance(enabled_val, str):
+            enabled_bool = enabled_val.strip().lower() in {"1", "true", "yes", "on"}
+        else:
+            enabled_bool = bool(enabled_val)
+        third_dict["enabled"] = enabled_bool
+        wait_val = third_dict.get("wait_seconds")
+        wait_seconds: Optional[int]
+        if wait_val in (None, ""):
+            wait_seconds = None
+        else:
+            try:
+                wait_seconds = int(str(wait_val).strip())
+            except (TypeError, ValueError):
+                wait_seconds = None
+        if wait_seconds is not None and wait_seconds < 0:
+            wait_seconds = None
+        third_dict["wait_seconds"] = wait_seconds
+        normalized["third_party"] = third_dict
+
+        return normalized
+
     def _refresh_fpga_projects(
         self,
         product_line: str,
@@ -1373,7 +1436,8 @@ class CaseConfigPage(CardWidget):
             debug_cfg = {"database_mode": _coerce_debug_flag(debug_cfg_raw)}
         debug_cfg.setdefault("database_mode", False)
         self.config["debug"] = debug_cfg
-        telnet_cfg = self.config.get("connect_type", {}).get("telnet")
+        self.config["connect_type"] = self._normalize_connect_type_section(self.config.get("connect_type"))
+        telnet_cfg = self.config["connect_type"].get("telnet")
         if isinstance(telnet_cfg, dict) and "kernel_version" in telnet_cfg:
             self.config.setdefault("android_system", {})["kernel_version"] = telnet_cfg.pop("kernel_version")
         self.config["fpga"] = self._normalize_fpga_section(self.config.get("fpga"))
