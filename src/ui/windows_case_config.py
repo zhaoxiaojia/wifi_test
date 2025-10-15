@@ -117,14 +117,30 @@ class TestFileFilterModel(QSortFilterProxyModel):
         return True
 
 
+class _ClickableLabel(QLabel):
+    clicked = pyqtSignal(int)
+
+    def __init__(self, index: int, text: str, parent: QWidget | None = None) -> None:
+        super().__init__(text, parent)
+        self._index = index
+        self.setCursor(Qt.PointingHandCursor)
+
+    def mouseReleaseEvent(self, event):  # type: ignore[override]
+        if event.button() == Qt.LeftButton:
+            self.clicked.emit(self._index)
+        super().mouseReleaseEvent(event)
+
+
 class _FallbackStepView(QWidget):
     
     """Fallback step indicator used when StepView is unavailable."""
 
+    stepActivated = pyqtSignal(int)
+
     def __init__(self, steps: list[str], parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._steps: list[str] = []
-        self._labels: list[QLabel] = []
+        self._labels: list[_ClickableLabel] = []
         self._layout = QHBoxLayout(self)
         self._layout.setContentsMargins(0, 0, 0, 0)
         self._layout.setSpacing(16)
@@ -138,10 +154,11 @@ class _FallbackStepView(QWidget):
             if widget is not None:
                 widget.deleteLater()
         self._labels.clear()
-        for idx, text in enumerate(self._steps, start=1):
-            label = QLabel(f"{idx}. {text}", self)
+        for idx, text in enumerate(self._steps):
+            label = _ClickableLabel(idx, text, self)
             label.setObjectName("wizardStepLabel")
             label.setStyleSheet("color: #6c6c6c;")
+            label.clicked.connect(self.stepActivated.emit)
             self._layout.addWidget(label)
             self._labels.append(label)
         self._layout.addStretch(1)
@@ -581,6 +598,7 @@ class CaseConfigPage(CardWidget):
         scroll_area = ScrollArea(self)
         scroll_area.setWidgetResizable(True)
         scroll_area.setContentsMargins(0, 0, 0, 0)
+        self.scroll_area = scroll_area
         container = QWidget()
         right = QVBoxLayout(container)
         right.setContentsMargins(0, 0, 0, 0)
@@ -602,6 +620,8 @@ class CaseConfigPage(CardWidget):
             self._other_panel,
         )
         self._wizard_pages: list[QWidget] = []
+        self._run_buttons: list[PushButton] = []
+        self._run_locked = False
         for panel in self._config_panels:
             page = QWidget()
             page_layout = QVBoxLayout(page)
@@ -609,30 +629,11 @@ class CaseConfigPage(CardWidget):
             page_layout.setSpacing(8)
             page_layout.addWidget(panel)
             page_layout.addStretch(1)
+            run_btn = self._create_run_button(page)
+            page_layout.addWidget(run_btn)
             self.stack.addWidget(page)
             self._wizard_pages.append(page)
-
-        nav_bar = QHBoxLayout()
-        nav_bar.setContentsMargins(0, 0, 0, 0)
-        nav_bar.setSpacing(8)
-        self.prev_btn = PushButton("Previous", self)
-        self.prev_btn.clicked.connect(self.on_previous_clicked)
-        self.next_btn = PushButton("Next", self)
-        self.next_btn.clicked.connect(self.on_next_clicked)
-        nav_bar.addWidget(self.prev_btn)
-        nav_bar.addWidget(self.next_btn)
-        nav_bar.addStretch(1)
-
-        self.run_btn = PushButton("Run", self)
-        self.run_btn.setIcon(FluentIcon.PLAY)
-        if hasattr(self.run_btn, "setUseRippleEffect"):
-            self.run_btn.setUseRippleEffect(True)
-        if hasattr(self.run_btn, "setUseStateEffect"):
-            self.run_btn.setUseStateEffect(True)
-        self.run_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.run_btn.clicked.connect(self.on_run)
-        nav_bar.addWidget(self.run_btn)
-        right.addLayout(nav_bar)
+        self._sync_run_buttons_enabled()
         scroll_area.setWidget(container)
         self.splitter.addWidget(scroll_area)
         self.splitter.setStretchFactor(0, 2)
@@ -661,6 +662,18 @@ class CaseConfigPage(CardWidget):
         super().resizeEvent(event)
         self.splitter.setSizes([int(self.width() * 0.2), int(self.width() * 0.8)])
 
+    def _create_run_button(self, parent: QWidget) -> PushButton:
+        button = PushButton("Run", parent)
+        button.setIcon(FluentIcon.PLAY)
+        if hasattr(button, "setUseRippleEffect"):
+            button.setUseRippleEffect(True)
+        if hasattr(button, "setUseStateEffect"):
+            button.setUseStateEffect(True)
+        button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        button.clicked.connect(self.on_run)
+        self._run_buttons.append(button)
+        return button
+
     def _create_step_view(self) -> QWidget:
         labels = list(self._step_labels)
         if StepView is not None:
@@ -682,11 +695,31 @@ class CaseConfigPage(CardWidget):
                             add_step(label)
                         except TypeError:
                             add_step(label, label)
+                for attr in (
+                    "setStepNumberVisible",
+                    "setNumberVisible",
+                    "setIndexVisible",
+                    "setShowNumber",
+                    "setDisplayIndex",
+                ):
+                    if hasattr(step_view, attr):
+                        try:
+                            getattr(step_view, attr)(False)
+                        except Exception as exc:
+                            logging.debug("StepView.%s failed: %s", attr, exc)
+                for attr in ("setStepClickable", "setStepsClickable", "setAllClickable"):
+                    if hasattr(step_view, attr):
+                        try:
+                            getattr(step_view, attr)(True)
+                        except Exception as exc:
+                            logging.debug("StepView.%s failed: %s", attr, exc)
                 self._fallback_step_view = None
+                self._attach_step_navigation(step_view)
                 return step_view
             except Exception as exc:  # pragma: no cover - 动态环境差异
                 logging.debug("Failed to initialize StepView: %s", exc)
         fallback = _FallbackStepView(labels, self)
+        fallback.stepActivated.connect(self._on_step_activated)
         self._fallback_step_view = fallback
         return fallback
 
@@ -704,6 +737,142 @@ class CaseConfigPage(CardWidget):
                     return
                 except Exception as exc:
                     logging.debug("StepView %s failed: %s", attr, exc)
+
+    def _attach_step_navigation(self, view: QWidget) -> None:
+        if isinstance(view, _FallbackStepView):
+            view.stepActivated.connect(self._on_step_activated)
+            return
+        handler_connected = False
+
+        def _handler(*args, **kwargs):
+            index = self._coerce_step_index(*(args or []), *(kwargs.values()))
+            if index is not None:
+                self._on_step_activated(index)
+
+        for signal_name in (
+            "stepClicked",
+            "currentIndexChanged",
+            "currentChanged",
+            "currentRowChanged",
+            "clicked",
+            "activated",
+        ):
+            signal = getattr(view, signal_name, None)
+            if signal is None or not hasattr(signal, "connect"):
+                continue
+            try:
+                signal.connect(_handler)
+                handler_connected = True
+                break
+            except Exception as exc:
+                logging.debug("Failed to connect StepView.%s: %s", signal_name, exc)
+        if handler_connected:
+            return
+        for child in view.findChildren(QWidget):
+            if child is view:
+                continue
+            try:
+                self._attach_step_navigation(child)
+                handler_connected = True
+                break
+            except Exception as exc:
+                logging.debug("StepView child hookup failed: %s", exc)
+        if not handler_connected:
+            logging.debug("Step navigation hookup failed; relying on fallback behaviour")
+
+    def _on_step_activated(self, *args) -> None:
+        index = self._coerce_step_index(*args)
+        if index is None:
+            return
+        self._navigate_to_index(index)
+
+    def _coerce_step_index(self, *args) -> Optional[int]:
+        for arg in args:
+            if isinstance(arg, int):
+                return arg
+            if isinstance(arg, (list, tuple)):
+                nested = self._coerce_step_index(*arg)
+                if nested is not None:
+                    return nested
+            if isinstance(arg, str) and arg.strip().isdigit():
+                return int(arg.strip())
+            if hasattr(arg, "row") and callable(getattr(arg, "row")):
+                row = arg.row()
+                if isinstance(row, int) and row >= 0:
+                    return row
+            if isinstance(arg, Mapping) and "index" in arg:
+                nested = self._coerce_step_index(arg["index"])
+                if nested is not None:
+                    return nested
+            if hasattr(arg, "index"):
+                idx = getattr(arg, "index")
+                if isinstance(idx, int):
+                    return idx
+        return None
+
+    def _navigate_to_index(self, target_index: int) -> None:
+        if self.stack.count() == 0:
+            return
+        target_index = max(0, min(target_index, self.stack.count() - 1))
+        current = self.stack.currentIndex()
+        if target_index == current:
+            return
+        if current == 0 and target_index > current and not self._validate_first_page():
+            self.stack.setCurrentIndex(0)
+            return
+        self._sync_widgets_to_config()
+        self.stack.setCurrentIndex(target_index)
+
+    def _sync_run_buttons_enabled(self) -> None:
+        enabled = not self._run_locked
+        for btn in self._run_buttons:
+            btn.setEnabled(enabled)
+
+    def _info_bar_parent(self) -> QWidget:
+        parent = self.window()
+        if isinstance(parent, QWidget):
+            return parent
+        return self
+
+    def _show_info_bar(
+        self,
+        level: str,
+        title: str,
+        content: str,
+        **kwargs: Any,
+    ):
+        bar_fn = getattr(InfoBar, level, None)
+        if not callable(bar_fn):
+            logging.debug("InfoBar level %s unavailable", level)
+            return None
+        info_parent = self._info_bar_parent()
+        params = {
+            "title": title,
+            "content": content,
+            "parent": info_parent,
+            "position": InfoBarPosition.TOP,
+        }
+        params.update(kwargs)
+        try:
+            bar = bar_fn(**params)
+        except Exception as exc:
+            logging.debug("InfoBar.%s failed: %s", level, exc)
+            return None
+        scroll = getattr(self, "scroll_area", None)
+        if scroll is not None:
+            try:
+                scrollbar = scroll.verticalScrollBar()
+                if scrollbar is not None:
+                    scrollbar.setValue(scrollbar.minimum())
+            except Exception as exc:
+                logging.debug("Failed to reset scroll position: %s", exc)
+        if hasattr(bar, "raise_"):
+            bar.raise_()
+        if hasattr(info_parent, "raise_"):
+            info_parent.raise_()
+        if hasattr(info_parent, "activateWindow"):
+            info_parent.activateWindow()
+        return bar
 
     def _request_rebalance_for_panels(self, *panels: ConfigGroupPanel) -> None:
         targets = panels or self._config_panels
@@ -1066,11 +1235,10 @@ class CaseConfigPage(CardWidget):
                     self.fpga_product_combo if not product_text else self.fpga_project_combo
                 )
         if errors:
-            InfoBar.warning(
-                title="Validation",
-                content="\n".join(errors),
-                parent=self,
-                position=InfoBarPosition.TOP,
+            self._show_info_bar(
+                "warning",
+                "Validation",
+                "\n".join(errors),
                 duration=3000,
             )
             if focus_widget is not None:
@@ -1099,31 +1267,13 @@ class CaseConfigPage(CardWidget):
         self._update_navigation_state()
 
     def _update_navigation_state(self) -> None:
-        index = self.stack.currentIndex()
-        last = max(0, self.stack.count() - 1)
-        if hasattr(self, "prev_btn"):
-            self.prev_btn.setEnabled(index > 0)
-        if hasattr(self, "next_btn"):
-            self.next_btn.setEnabled(index < last)
-        if hasattr(self, "run_btn"):
-            self.run_btn.setEnabled(index == last)
+        self._sync_run_buttons_enabled()
 
     def on_next_clicked(self) -> None:
-        current = self.stack.currentIndex()
-        last = self.stack.count() - 1
-        if current >= last:
-            return
-        if current == 0 and not self._validate_first_page():
-            return
-        self._sync_widgets_to_config()
-        self.stack.setCurrentIndex(current + 1)
+        self._navigate_to_index(self.stack.currentIndex() + 1)
 
     def on_previous_clicked(self) -> None:
-        current = self.stack.currentIndex()
-        if current <= 0:
-            return
-        self._sync_widgets_to_config()
-        self.stack.setCurrentIndex(current - 1)
+        self._navigate_to_index(self.stack.currentIndex() - 1)
 
     def _is_performance_case(self, abs_case_path) -> bool:
         """
@@ -1971,15 +2121,17 @@ class CaseConfigPage(CardWidget):
             "The other field has been cleared."
         )
         try:
-            InfoBar.warning(
-                title="Configuration Conflict",
-                content=message,
-                parent=self,
-                position=InfoBarPosition.TOP,
+            bar = self._show_info_bar(
+                "warning",
+                "Configuration Conflict",
+                message,
                 duration=2600,
             )
+            if bar is None:
+                raise RuntimeError("InfoBar unavailable")
         except Exception:
             from PyQt5.QtWidgets import QMessageBox
+
             QMessageBox.warning(self, "Configuration Conflict", message)
 
     def populate_case_tree(self, root_dir):
@@ -2203,17 +2355,8 @@ class CaseConfigPage(CardWidget):
         
         """Enable or disable widgets while a test run is active."""
         self.case_tree.setEnabled(not locked)
-        if hasattr(self, "prev_btn"):
-            self.prev_btn.setEnabled(not locked and self.stack.currentIndex() > 0)
-        if hasattr(self, "next_btn"):
-            self.next_btn.setEnabled(
-                not locked and self.stack.currentIndex() < self.stack.count() - 1
-            )
-        if hasattr(self, "run_btn"):
-            if locked:
-                self.run_btn.setEnabled(False)
-            else:
-                self.run_btn.setEnabled(self.stack.currentIndex() == self.stack.count() - 1)
+        self._run_locked = locked
+        self._sync_run_buttons_enabled()
         for w in self.field_widgets.values():
             w.setEnabled(not locked)
         if hasattr(self, "csv_combo"):
@@ -2290,13 +2433,14 @@ class CaseConfigPage(CardWidget):
             if self._is_performance_case(abs_case_path) and not getattr(self, "selected_csv_path", None):
                 try:
                     # 如果你工程里有 InfoBar（QFluentWidgets），用这个更友好
-                    InfoBar.warning(
-                        title="Hint",
-                        content="This is a performance test. Please select a CSV file before running.",
-                        parent=self,
-                        position=InfoBarPosition.TOP,
-                        duration=3000
+                    bar = self._show_info_bar(
+                        "warning",
+                        "Hint",
+                        "This is a performance test. Please select a CSV file before running.",
+                        duration=3000,
                     )
+                    if bar is None:
+                        raise RuntimeError("InfoBar unavailable")
                 except Exception:
                     # 没有 InfoBar 就退化到标准对话框
                     from PyQt5.QtWidgets import QMessageBox
@@ -2318,10 +2462,9 @@ class CaseConfigPage(CardWidget):
             else:
                 self._reset_wizard_after_run()
         else:
-            InfoBar.warning(
-                title="Hint",
-                content="Pls select a test case before test",
-                parent=self,
-                position=InfoBarPosition.TOP,
-                duration=1800
+            self._show_info_bar(
+                "warning",
+                "Hint",
+                "Pls select a test case before test",
+                duration=1800,
             )
