@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import json
 import logging
+import textwrap
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, TYPE_CHECKING
 
@@ -32,22 +33,43 @@ __all__ = [
 
 
 PERFORMANCE_STATIC_COLUMNS: Tuple[Tuple[str, str, str], ...] = (
-    ("serialnumber", "VARCHAR(255)", "SerianNumber"),
+    ("serial_number", "VARCHAR(255)", "SerianNumber"),
     ("test_category", "VARCHAR(255)", "Test_Category"),
-    ("standard", "VARCHAR(255)", "Standard"),
-    ("freq_band", "VARCHAR(255)", "Freq_Band"),
-    ("bw", "VARCHAR(255)", "BW"),
-    ("data_rate", "VARCHAR(255)", "Data_Rate"),
-    ("ch_freq_mhz", "VARCHAR(255)", "CH_Freq_MHz"),
+    (
+        "standard",
+        "ENUM('11a','11b','11g','11n','11ac','11ax','11be')",
+        "Standard",
+    ),
+    ("band", "ENUM('2.4','5','6')", "Freq_Band"),
+    ("bandwidth_mhz", "SMALLINT", "BW"),
+    ("phy_rate_mbps", "DECIMAL(10,3)", "Data_Rate"),
+    ("center_freq_mhz", "SMALLINT", "CH_Freq_MHz"),
     ("protocol", "VARCHAR(255)", "Protocol"),
-    ("direction", "VARCHAR(255)", "Direction"),
-    ("total_path_loss", "VARCHAR(255)", "Total_Path_Loss"),
-    ("db", "DOUBLE", "DB"),
-    ("rssi", "DOUBLE", "RSSI"),
-    ("angel", "VARCHAR(255)", "Angel"),
+    ("direction", "ENUM('uplink','downlink','bi')", "Direction"),
+    ("total_path_loss", "DECIMAL(6,2)", "Total_Path_Loss"),
+    ("path_loss_db", "DECIMAL(6,2)", "DB"),
+    ("rssi", "DECIMAL(6,2)", "RSSI"),
+    ("angle_deg", "DECIMAL(6,2)", "Angel"),
     ("mcs_rate", "VARCHAR(255)", "MCS_Rate"),
-    ("throughput", "DOUBLE", "Throughput"),
-    ("expect_rate", "DOUBLE", "Expect_Rate"),
+    ("throughput_peak_mbps", "DECIMAL(10,3)", "Max_Rate"),
+    ("throughput_avg_mbps", "DECIMAL(10,3)", "Throughput"),
+    ("target_throughput_mbps", "DECIMAL(10,3)", "Expect_Rate"),
+)
+
+PERFORMANCE_COLUMN_RENAMES: Tuple[Tuple[str, str], ...] = (
+    ("seriannumber", "serial_number"),
+    ("serialnumber", "serial_number"),
+    ("freq_band", "band"),
+    ("freg_band", "band"),
+    ("btw", "bandwidth_mhz"),
+    ("bw", "bandwidth_mhz"),
+    ("data_rate", "phy_rate_mbps"),
+    ("ch_freq_mhz", "center_freq_mhz"),
+    ("db", "path_loss_db"),
+    ("angel", "angle_deg"),
+    ("throughput", "throughput_avg_mbps"),
+    ("max_rate", "throughput_peak_mbps"),
+    ("expect_rate", "target_throughput_mbps"),
 )
 
 _AUDIT_COLUMNS: Tuple[ColumnDefinition, ...] = (
@@ -122,15 +144,23 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
             TableIndex(
                 "idx_test_report_dut", "INDEX idx_test_report_dut (`dut_id`)"
             ),
+            TableIndex(
+                "idx_test_report_created_at",
+                "INDEX idx_test_report_created_at (`created_at`)",
+            ),
         ),
         constraints=(
             TableConstraint(
+                "uq_test_report_execution_csv",
+                "CONSTRAINT uq_test_report_execution_csv UNIQUE (`execution_id`, `csv_name`)",
+            ),
+            TableConstraint(
                 "fk_test_report_execution",
-                "CONSTRAINT fk_test_report_execution FOREIGN KEY (`execution_id`) REFERENCES `execution`(`id`) ON DELETE SET NULL",
+                "CONSTRAINT fk_test_report_execution FOREIGN KEY (`execution_id`) REFERENCES `execution`(`id`)",
             ),
             TableConstraint(
                 "fk_test_report_dut",
-                "CONSTRAINT fk_test_report_dut FOREIGN KEY (`dut_id`) REFERENCES `dut`(`id`) ON DELETE SET NULL",
+                "CONSTRAINT fk_test_report_dut FOREIGN KEY (`dut_id`) REFERENCES `dut`(`id`)",
             ),
         ),
     ),
@@ -140,14 +170,138 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
             TableIndex(
                 "idx_performance_report", "INDEX idx_performance_report (`test_report_id`)"
             ),
+            TableIndex(
+                "idx_performance_band",
+                "INDEX idx_performance_band (`band`, `bandwidth_mhz`, `standard`)",
+            ),
+            TableIndex(
+                "idx_performance_created_at",
+                "INDEX idx_performance_created_at (`created_at`)",
+            ),
         ),
         constraints=(
             TableConstraint(
                 "fk_performance_report",
-                "CONSTRAINT fk_performance_report FOREIGN KEY (`test_report_id`) REFERENCES `test_report`(`id`) ON DELETE CASCADE",
+                "CONSTRAINT fk_performance_report FOREIGN KEY (`test_report_id`) REFERENCES `test_report`(`id`)",
             ),
         ),
     ),
+    "perf_metric_kv": TableSpec(
+        columns=(
+            ColumnDefinition("test_report_id", "INT NOT NULL"),
+            ColumnDefinition("metric_name", "VARCHAR(64) NOT NULL"),
+            ColumnDefinition("metric_unit", "VARCHAR(16)"),
+            ColumnDefinition("metric_value", "DECIMAL(12,4) NOT NULL"),
+            ColumnDefinition("stage", "VARCHAR(64)"),
+        ),
+        indexes=(
+            TableIndex(
+                "idx_kv_report", "INDEX idx_kv_report (`test_report_id`)"
+            ),
+            TableIndex(
+                "idx_kv_name", "INDEX idx_kv_name (`metric_name`, `stage`)"
+            ),
+        ),
+        constraints=(
+            TableConstraint(
+                "fk_kv_report",
+                "CONSTRAINT fk_kv_report FOREIGN KEY (`test_report_id`) REFERENCES `test_report`(`id`)",
+            ),
+        ),
+    ),
+}
+
+_VIEW_DEFINITIONS: Dict[str, str] = {
+    "v_run_overview": """
+        SELECT
+            tr.id AS test_report_id,
+            tr.execution_id,
+            tr.dut_id,
+            tr.csv_name,
+            tr.csv_path,
+            tr.data_type,
+            tr.case_path,
+            tr.created_at AS report_created_at,
+            tr.updated_at AS report_updated_at,
+            e.case_path AS execution_case_path,
+            e.case_root,
+            e.router_name,
+            e.router_address,
+            e.rf_model,
+            e.corner_model,
+            e.lab_name,
+            d.software_version,
+            d.driver_version,
+            d.hardware_version,
+            d.android_version,
+            d.kernel_version,
+            d.connect_type,
+            d.adb_device,
+            d.telnet_ip,
+            d.product_line,
+            d.project,
+            d.main_chip,
+            d.wifi_module,
+            d.interface,
+            agg.throughput_avg_max_mbps,
+            agg.throughput_peak_max_mbps,
+            agg.throughput_avg_mean_mbps,
+            agg.target_throughput_avg_mbps
+        FROM test_report AS tr
+        LEFT JOIN execution AS e ON tr.execution_id = e.id
+        LEFT JOIN dut AS d ON tr.dut_id = d.id
+        LEFT JOIN (
+            SELECT
+                test_report_id,
+                MAX(throughput_avg_mbps) AS throughput_avg_max_mbps,
+                MAX(throughput_peak_mbps) AS throughput_peak_max_mbps,
+                AVG(throughput_avg_mbps) AS throughput_avg_mean_mbps,
+                AVG(target_throughput_mbps) AS target_throughput_avg_mbps
+            FROM performance
+            GROUP BY test_report_id
+        ) AS agg ON agg.test_report_id = tr.id
+    """,
+    "v_perf_latest": """
+        SELECT
+            ranked.id,
+            ranked.test_report_id,
+            ranked.csv_name,
+            ranked.data_type,
+            ranked.serial_number,
+            ranked.test_category,
+            ranked.standard,
+            ranked.band,
+            ranked.bandwidth_mhz,
+            ranked.phy_rate_mbps,
+            ranked.center_freq_mhz,
+            ranked.protocol,
+            ranked.direction,
+            ranked.total_path_loss,
+            ranked.path_loss_db,
+            ranked.rssi,
+            ranked.angle_deg,
+            ranked.mcs_rate,
+            ranked.throughput_peak_mbps,
+            ranked.throughput_avg_mbps,
+            ranked.target_throughput_mbps,
+            ranked.created_at,
+            ranked.updated_at,
+            ranked.dut_id,
+            ranked.report_case_path AS case_path
+        FROM (
+            SELECT
+                p.*,
+                tr.dut_id,
+                tr.case_path AS report_case_path,
+                ROW_NUMBER() OVER (
+                    PARTITION BY tr.dut_id, tr.case_path, p.band, p.bandwidth_mhz
+                    ORDER BY p.created_at DESC, p.id DESC
+                ) AS rn
+            FROM performance AS p
+            JOIN test_report AS tr ON tr.id = p.test_report_id
+        ) AS ranked
+        WHERE ranked.rn = 1
+    """,
 }
 
 
@@ -166,6 +320,14 @@ def ensure_report_tables(client) -> None:
     ensure_config_tables(client)
     ensure_table(client, "test_report", _TABLE_SPECS["test_report"])
     ensure_table(client, "performance", _TABLE_SPECS["performance"])
+    ensure_table(client, "perf_metric_kv", _TABLE_SPECS["perf_metric_kv"])
+    _ensure_table_indexes(client, "test_report", _TABLE_SPECS["test_report"].indexes)
+    _ensure_table_constraints(client, "test_report", _TABLE_SPECS["test_report"].constraints)
+    _ensure_table_indexes(client, "performance", _TABLE_SPECS["performance"].indexes)
+    _ensure_table_constraints(client, "performance", _TABLE_SPECS["performance"].constraints)
+    _ensure_table_indexes(client, "perf_metric_kv", _TABLE_SPECS["perf_metric_kv"].indexes)
+    _ensure_table_constraints(client, "perf_metric_kv", _TABLE_SPECS["perf_metric_kv"].constraints)
+    _ensure_views(client)
 
 def _table_exists(client, table_name: str) -> bool:
     try:
@@ -192,6 +354,91 @@ def _create_table(client, table_name: str, spec: TableSpec) -> None:
         + f"\n) ENGINE={spec.engine} DEFAULT CHARSET={spec.charset};"
     )
     client.execute(statement)
+
+
+def _ensure_index(client, table_name: str, index_name: str, definition: str) -> None:
+    rows = client.query_all(
+        f"SHOW INDEX FROM `{table_name}` WHERE Key_name = %s",
+        (index_name,),
+    )
+    if rows:
+        return
+    client.execute(f"ALTER TABLE `{table_name}` ADD {definition}")
+
+
+def _ensure_unique(client, table_name: str, constraint: TableConstraint) -> None:
+    rows = client.query_all(
+        f"SHOW INDEX FROM `{table_name}` WHERE Key_name = %s",
+        (constraint.name,),
+    )
+    if rows:
+        return
+    client.execute(f"ALTER TABLE `{table_name}` ADD {constraint.definition}")
+
+
+def _ensure_foreign_key(
+    client,
+    table_name: str,
+    constraint: TableConstraint,
+    *,
+    delete_rule: str = "RESTRICT",
+    update_rule: Optional[str] = None,
+) -> None:
+    rows = client.query_all(
+        """
+        SELECT rc.DELETE_RULE, rc.UPDATE_RULE
+        FROM information_schema.REFERENTIAL_CONSTRAINTS AS rc
+        WHERE rc.CONSTRAINT_SCHEMA = DATABASE()
+          AND rc.TABLE_NAME = %s
+          AND rc.CONSTRAINT_NAME = %s
+        """,
+        (table_name, constraint.name),
+    )
+    expected_delete = (delete_rule or "").upper()
+    expected_update = (update_rule or "").upper() if update_rule is not None else None
+    if not rows:
+        client.execute(f"ALTER TABLE `{table_name}` ADD {constraint.definition}")
+        return
+    current_delete = (rows[0].get("DELETE_RULE") or "").upper()
+    current_update = (rows[0].get("UPDATE_RULE") or "").upper()
+    needs_replace = False
+    if expected_delete and current_delete != expected_delete:
+        needs_replace = True
+    if expected_update is not None and current_update != expected_update:
+        needs_replace = True
+    if needs_replace:
+        client.execute(f"ALTER TABLE `{table_name}` DROP FOREIGN KEY `{constraint.name}`")
+        client.execute(f"ALTER TABLE `{table_name}` ADD {constraint.definition}")
+
+
+def _ensure_table_indexes(
+    client,
+    table_name: str,
+    indexes: Sequence[TableIndex],
+) -> None:
+    for index in indexes:
+        _ensure_index(client, table_name, index.name, index.definition)
+
+
+def _ensure_table_constraints(
+    client,
+    table_name: str,
+    constraints: Sequence[TableConstraint],
+) -> None:
+    for constraint in constraints:
+        normalized = constraint.definition.upper()
+        if "FOREIGN KEY" in normalized:
+            _ensure_foreign_key(client, table_name, constraint)
+        elif "UNIQUE" in normalized:
+            _ensure_unique(client, table_name, constraint)
+
+
+def _ensure_views(client) -> None:
+    for name, definition in _VIEW_DEFINITIONS.items():
+        statement = textwrap.dedent(definition).strip()
+        if not statement:
+            continue
+        client.execute(f"CREATE OR REPLACE VIEW `{name}` AS\n{statement}")
 
 
 def _flatten_section(
