@@ -3,7 +3,6 @@ from __future__ import annotations
 import csv
 import json
 import logging
-import re
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, TYPE_CHECKING
 
@@ -22,7 +21,6 @@ if TYPE_CHECKING:  # pragma: no cover
 __all__ = [
     "build_section_payload",
     "build_header_mappings",
-    "drop_and_create_table",
     "insert_rows",
     "read_csv_rows",
     "resolve_case_table_name",
@@ -47,20 +45,14 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
             ColumnDefinition("hardware_version", "VARCHAR(128)"),
             ColumnDefinition("android_version", "VARCHAR(64)"),
             ColumnDefinition("kernel_version", "VARCHAR(64)"),
-            ColumnDefinition("connect_type", "VARCHAR(32)"),
+            ColumnDefinition("connect_type", "VARCHAR(64)"),
             ColumnDefinition("adb_device", "VARCHAR(128)"),
             ColumnDefinition("telnet_ip", "VARCHAR(128)"),
-            ColumnDefinition("third_party_enabled", "TINYINT(1)"),
-            ColumnDefinition("third_party_wait", "INT"),
-            ColumnDefinition("fpga_series", "VARCHAR(64)"),
-            ColumnDefinition("fpga_interface", "VARCHAR(64)"),
-            ColumnDefinition("serial_port_status", "TINYINT(1)"),
-            ColumnDefinition("serial_port_port", "VARCHAR(64)"),
-            ColumnDefinition("serial_port_baud", "VARCHAR(64)"),
-            ColumnDefinition("profile_hash", "CHAR(64) NOT NULL"),
-        ),
-        indexes=(
-            TableIndex("uniq_dut_profile", "UNIQUE KEY uniq_dut_profile (`profile_hash`)"),
+            ColumnDefinition("product_line", "VARCHAR(64)"),
+            ColumnDefinition("project", "VARCHAR(64)"),
+            ColumnDefinition("main_chip", "VARCHAR(64)"),
+            ColumnDefinition("wifi_module", "VARCHAR(64)"),
+            ColumnDefinition("interface", "VARCHAR(64)"),
         ),
         include_audit_columns=False,
     ),
@@ -70,10 +62,10 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
             ColumnDefinition("case_root", "VARCHAR(128)"),
             ColumnDefinition("router_name", "VARCHAR(128)"),
             ColumnDefinition("router_address", "VARCHAR(128)"),
-            ColumnDefinition("csv_path", "VARCHAR(512)"),
-            ColumnDefinition("profile_hash", "CHAR(64) NOT NULL"),
+            ColumnDefinition("rf_model", "VARCHAR(128)"),
+            ColumnDefinition("corner_model", "VARCHAR(128)"),
+            ColumnDefinition("lab_name", "VARCHAR(128)"),
         ),
-        indexes=(TableIndex("uniq_execution_profile", "UNIQUE KEY uniq_execution_profile (`profile_hash`)"),),
         include_audit_columns=False,
     ),
     "test_report": TableSpec(
@@ -126,11 +118,9 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
 
 
 def ensure_table(client, table_name: str, spec: TableSpec) -> None:
-    if not _table_exists(client, table_name):
-        _create_table(client, table_name, spec)
+    if _table_exists(client, table_name):
         return
-    _ensure_columns(client, table_name, spec)
-    _ensure_indexes(client, table_name, spec.indexes)
+    _create_table(client, table_name, spec)
 
 
 def ensure_config_tables(client) -> None:
@@ -143,7 +133,6 @@ def ensure_report_tables(client) -> None:
     ensure_table(client, "test_report", _TABLE_SPECS["test_report"])
     ensure_table(client, "performance", _TABLE_SPECS["performance"])
 
-
 def _table_exists(client, table_name: str) -> bool:
     try:
         rows = client.query_all("SHOW TABLES LIKE %s", (table_name,))
@@ -151,80 +140,6 @@ def _table_exists(client, table_name: str) -> bool:
         logging.debug("Failed to inspect table %s", table_name, exc_info=True)
         return False
     return bool(rows)
-
-
-def _fetch_columns(client, table_name: str) -> Dict[str, Dict[str, Any]]:
-    try:
-        rows = client.query_all(f"SHOW FULL COLUMNS FROM `{table_name}`")
-    except Exception:
-        logging.debug("Failed to fetch columns for %s", table_name, exc_info=True)
-        return {}
-    return {row["Field"]: row for row in rows}
-
-
-def _ensure_columns(client, table_name: str, spec: TableSpec) -> None:
-    existing = _fetch_columns(client, table_name)
-    required = list(spec.columns)
-    if spec.include_audit_columns:
-        required.extend(_AUDIT_COLUMNS)
-    for column in required:
-        if column.name in existing:
-            continue
-        definition = column.definition
-        if "NOT NULL" in definition.upper():
-            definition = re.sub(
-                r"\bNOT\s+NULL\b", "NULL DEFAULT NULL", definition, flags=re.IGNORECASE
-            )
-        client.execute(
-            f"ALTER TABLE `{table_name}` ADD COLUMN `{column.name}` {definition}"
-        )
-        existing = _fetch_columns(client, table_name)
-    if not spec.include_audit_columns:
-        for audit in _AUDIT_COLUMNS:
-            if audit.name not in existing:
-                continue
-            try:
-                client.execute(
-                    f"ALTER TABLE `{table_name}` DROP COLUMN `{audit.name}`"
-                )
-            except Exception:
-                logging.debug(
-                    "Failed to drop audit column %s from %s",
-                    audit.name,
-                    table_name,
-                    exc_info=True,
-                )
-            else:
-                existing = _fetch_columns(client, table_name)
-
-
-def _get_existing_indexes(client, table_name: str) -> Dict[str, Dict[str, Any]]:
-    try:
-        rows = client.query_all(f"SHOW INDEX FROM `{table_name}`")
-    except Exception:
-        logging.debug("Failed to fetch indexes for %s", table_name, exc_info=True)
-        return {}
-    indexes: Dict[str, Dict[str, Any]] = {}
-    for row in rows:
-        key_name = row.get("Key_name")
-        if not key_name:
-            continue
-        indexes[key_name] = row
-    return indexes
-
-
-def _ensure_indexes(
-    client,
-    table_name: str,
-    indexes: Sequence[TableIndex],
-) -> None:
-    if not indexes:
-        return
-    existing = _get_existing_indexes(client, table_name)
-    for index in indexes:
-        if index.name in existing:
-            continue
-        client.execute(f"ALTER TABLE `{table_name}` ADD {index.definition}")
 
 
 def _create_table(client, table_name: str, spec: TableSpec) -> None:
