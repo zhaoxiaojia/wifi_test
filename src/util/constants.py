@@ -574,6 +574,13 @@ class RouterConst:
 
 # TODO: 后续补充更多产品线和项目映射
 WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, str]]]] = {
+    "TV":{
+        "Blueplanet":{
+            "main_chip": "T963D4",
+            "wifi_module": "W2",
+            "interface": "USB",
+        },
+    },
     "OTT": {
         "OB1": {
             "main_chip": "905X5M",
@@ -585,8 +592,6 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, str]]]] = {
             "wifi_module": "W2",
             "interface": "USB",
         },
-    },
-    "SH": {
         "OB6": {
             "main_chip": "905X5M",
             "wifi_module": "W2",

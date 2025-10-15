@@ -1779,6 +1779,13 @@ class CaseConfigPage(CardWidget):
                 vbox.addWidget(self.corner_static_db_edit)
                 vbox.addWidget(QLabel("Target RSSI:"))
                 vbox.addWidget(self.corner_target_rssi_edit)
+                self.corner_static_db_edit.textChanged.connect(
+                    lambda _text, source="static": self._ensure_corner_inputs_exclusive(source)
+                )
+                self.corner_target_rssi_edit.textChanged.connect(
+                    lambda _text, source="target": self._ensure_corner_inputs_exclusive(source)
+                )
+                self._ensure_corner_inputs_exclusive(None)
 
                 # 加入表单
                 self._register_group(key, group, self._is_dut_key(key))
@@ -1868,6 +1875,48 @@ class CaseConfigPage(CardWidget):
             vbox.addWidget(edit)
             self._register_group(key, group, self._is_dut_key(key))
             self.field_widgets[key] = edit
+
+    def _ensure_corner_inputs_exclusive(self, source: str | None) -> None:
+        if not hasattr(self, "corner_static_db_edit") or not hasattr(self, "corner_target_rssi_edit"):
+            return
+        static_text = self.corner_static_db_edit.text().strip()
+        target_text = self.corner_target_rssi_edit.text().strip()
+        if not static_text or not target_text:
+            return
+
+        if source == "target":
+            cleared = self.corner_static_db_edit
+            focus_widget = self.corner_target_rssi_edit
+        elif source == "static":
+            cleared = self.corner_target_rssi_edit
+            focus_widget = self.corner_static_db_edit
+        else:
+            cleared = self.corner_target_rssi_edit
+            focus_widget = None
+
+        with QSignalBlocker(cleared):
+            cleared.clear()
+
+        self._show_corner_conflict_warning(focus_widget)
+
+    def _show_corner_conflict_warning(self, focus_widget: QWidget | None) -> None:
+        if focus_widget is None or not focus_widget.hasFocus():
+            return
+        message = (
+            "Static dB and Target RSSI cannot be configured at the same time. "
+            "The other field has been cleared."
+        )
+        try:
+            InfoBar.warning(
+                title="Configuration Conflict",
+                content=message,
+                parent=self,
+                position=InfoBarPosition.TOP,
+                duration=2600,
+            )
+        except Exception:
+            from PyQt5.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "Configuration Conflict", message)
 
     def populate_case_tree(self, root_dir):
         """
