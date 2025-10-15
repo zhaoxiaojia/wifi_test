@@ -27,7 +27,28 @@ __all__ = [
     "ensure_table",
     "ensure_config_tables",
     "ensure_report_tables",
+    "PERFORMANCE_STATIC_COLUMNS",
 ]
+
+
+PERFORMANCE_STATIC_COLUMNS: Tuple[Tuple[str, str, str], ...] = (
+    ("serialnumber", "VARCHAR(255)", "SerianNumber"),
+    ("test_category", "VARCHAR(255)", "Test_Category"),
+    ("standard", "VARCHAR(255)", "Standard"),
+    ("freq_band", "VARCHAR(255)", "Freq_Band"),
+    ("bw", "VARCHAR(255)", "BW"),
+    ("data_rate", "VARCHAR(255)", "Data_Rate"),
+    ("ch_freq_mhz", "VARCHAR(255)", "CH_Freq_MHz"),
+    ("protocol", "VARCHAR(255)", "Protocol"),
+    ("direction", "VARCHAR(255)", "Direction"),
+    ("total_path_loss", "VARCHAR(255)", "Total_Path_Loss"),
+    ("db", "DOUBLE", "DB"),
+    ("rssi", "DOUBLE", "RSSI"),
+    ("angel", "VARCHAR(255)", "Angel"),
+    ("mcs_rate", "VARCHAR(255)", "MCS_Rate"),
+    ("throughput", "DOUBLE", "Throughput"),
+    ("expect_rate", "DOUBLE", "Expect_Rate"),
+)
 
 _AUDIT_COLUMNS: Tuple[ColumnDefinition, ...] = (
     ColumnDefinition("created_at", "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"),
@@ -36,6 +57,23 @@ _AUDIT_COLUMNS: Tuple[ColumnDefinition, ...] = (
         "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
     ),
 )
+
+_PERFORMANCE_BASE_COLUMNS: Tuple[ColumnDefinition, ...] = (
+    ColumnDefinition("test_report_id", "INT NOT NULL"),
+    ColumnDefinition("csv_name", "VARCHAR(255) NOT NULL"),
+    ColumnDefinition("data_type", "VARCHAR(64)"),
+)
+
+def _build_performance_definition(definition: str, comment: str) -> str:
+    escaped = comment.replace("'", "''")
+    return f"{definition} NULL DEFAULT NULL COMMENT '{escaped}'"
+
+
+_PERFORMANCE_EXTRA_COLUMNS: Tuple[ColumnDefinition, ...] = tuple(
+    ColumnDefinition(name, _build_performance_definition(definition, comment))
+    for name, definition, comment in PERFORMANCE_STATIC_COLUMNS
+)
+
 
 _TABLE_SPECS: Dict[str, TableSpec] = {
     "dut": TableSpec(
@@ -97,11 +135,7 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
         ),
     ),
     "performance": TableSpec(
-        columns=(
-            ColumnDefinition("test_report_id", "INT NOT NULL"),
-            ColumnDefinition("csv_name", "VARCHAR(255) NOT NULL"),
-            ColumnDefinition("data_type", "VARCHAR(64)"),
-        ),
+        columns=_PERFORMANCE_BASE_COLUMNS + _PERFORMANCE_EXTRA_COLUMNS,
         indexes=(
             TableIndex(
                 "idx_performance_report", "INDEX idx_performance_report (`test_report_id`)"

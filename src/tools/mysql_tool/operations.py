@@ -4,12 +4,10 @@ import json
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Mapping
+from typing import Any, Dict, List, Optional, Sequence, Mapping
 
 from .client import MySqlClient
-from .models import HeaderMapping
-from .naming import IdentifierBuilder
-from .schema import ensure_report_tables, read_csv_rows
+from .schema import PERFORMANCE_STATIC_COLUMNS, ensure_report_tables, read_csv_rows
 from src.util.constants import WIFI_PRODUCT_PROJECT_MAP
 
 __all__ = [
@@ -21,13 +19,14 @@ __all__ = [
 
 
 @dataclass(frozen=True)
-class _ColumnInfo:
-    mapping: HeaderMapping
+class _StaticColumn:
+    name: str
     sql_type: str
+    original: str
 
 
 class PerformanceTableManager:
-    """Manage the performance table with dynamic schema extension and cumulative writes."""
+    """Manage the performance table with a fixed schema and cumulative writes."""
 
     TABLE_NAME = "performance"
     REPORT_TABLE_NAME = "test_report"
@@ -36,6 +35,11 @@ class PerformanceTableManager:
         ("test_report_id", "INT NOT NULL"),
         ("csv_name", "VARCHAR(255) NOT NULL"),
         ("data_type", "VARCHAR(64) NULL DEFAULT NULL"),
+    )
+
+    _STATIC_COLUMNS: Sequence[_StaticColumn] = tuple(
+        _StaticColumn(name=name, sql_type=sql_type, original=original)
+        for name, sql_type, original in PERFORMANCE_STATIC_COLUMNS
     )
 
     def __init__(self, client: MySqlClient) -> None:
@@ -74,26 +78,6 @@ class PerformanceTableManager:
             return "text", stripped
         return "text", str(value)
 
-    @classmethod
-    def _infer_sql_type(cls, values: Iterable[Any]) -> str:
-        seen_float = False
-        seen_int = False
-        for value in values:
-            value_type, _ = cls._classify_value(value)
-            if value_type == "json":
-                return "JSON"
-            if value_type == "text":
-                return "TEXT"
-            if value_type == "float":
-                seen_float = True
-            elif value_type == "int":
-                seen_int = True
-        if seen_float:
-            return "DOUBLE"
-        if seen_int:
-            return "BIGINT"
-        return "TEXT"
-
     @staticmethod
     def _canonical_sql_type(sql_type: str) -> str:
         normalized = (sql_type or "").upper()
@@ -103,6 +87,8 @@ class PerformanceTableManager:
             return "BIGINT"
         if normalized.startswith("JSON"):
             return "JSON"
+        if "CHAR" in normalized:
+            return "VARCHAR"
         return "TEXT"
 
     @staticmethod
@@ -129,73 +115,23 @@ class PerformanceTableManager:
             return None
         return str(parsed)
 
-    @staticmethod
-    def _build_mappings(headers: Sequence[str]) -> List[HeaderMapping]:
-        builder = IdentifierBuilder()
-        reserved = {name for name, _ in PerformanceTableManager._BASE_COLUMNS}
-        used = set(reserved)
-        mappings: List[HeaderMapping] = []
-        for header in headers:
-            if not header:
-                continue
-            candidate = builder.build((header,), fallback="column")
-            if candidate in used:
-                candidate = builder.build((header, "field"), fallback="column")
-            while candidate in used:
-                candidate = builder.build((header, str(len(used))), fallback="column")
-            used.add(candidate)
-            mappings.append(HeaderMapping(original=header, sanitized=candidate))
-        return mappings
-
-    def _prepare_columns(
-        self, mappings: Sequence[HeaderMapping], rows: Sequence[Dict[str, Any]]
-    ) -> List[_ColumnInfo]:
-        columns: List[_ColumnInfo] = []
-        for mapping in mappings:
-            values = [row.get(mapping.original) for row in rows]
-            sql_type = self._infer_sql_type(values)
-            columns.append(_ColumnInfo(mapping=mapping, sql_type=sql_type))
-        return columns
-
     def _describe_columns(self) -> Dict[str, Dict[str, Any]]:
         return {
             column["Field"]: column
             for column in self._client.query_all(f"SHOW FULL COLUMNS FROM `{self.TABLE_NAME}`")
         }
 
-    def _ensure_column(self, existing: Dict[str, Dict[str, Any]], column: _ColumnInfo) -> str:
-        name = column.mapping.sanitized
-        comment = column.mapping.original.replace("'", "''")
-        target_type = column.sql_type
-        if name not in existing:
+    def _ensure_static_columns(self) -> None:
+        snapshot = self._describe_columns()
+        for column in self._STATIC_COLUMNS:
+            if column.name in snapshot:
+                continue
+            comment = column.original.replace("'", "''")
             self._client.execute(
                 f"ALTER TABLE `{self.TABLE_NAME}` "
-                f"ADD COLUMN `{name}` {target_type} NULL DEFAULT NULL COMMENT '{comment}'"
+                f"ADD COLUMN `{column.name}` {column.sql_type} NULL DEFAULT NULL COMMENT '{comment}'"
             )
-            existing = self._describe_columns()
-            return PerformanceTableManager._canonical_sql_type(existing[name]["Type"])
-        current_type = PerformanceTableManager._canonical_sql_type(existing[name]["Type"])
-        if current_type == target_type:
-            return current_type
-        if current_type == "TEXT":
-            return current_type
-        self._client.execute(
-            f"ALTER TABLE `{self.TABLE_NAME}` "
-            f"MODIFY COLUMN `{name}` TEXT NULL DEFAULT NULL COMMENT '{comment}'"
-        )
-        existing = self._describe_columns()
-        return PerformanceTableManager._canonical_sql_type(existing[name]["Type"])
-
-    def _ensure_columns(self, columns: Sequence[_ColumnInfo]) -> List[_ColumnInfo]:
-        if not columns:
-            return []
-        snapshot = self._describe_columns()
-        adjusted: List[_ColumnInfo] = []
-        for column in columns:
-            canonical = self._ensure_column(snapshot, column)
             snapshot = self._describe_columns()
-            adjusted.append(_ColumnInfo(mapping=column.mapping, sql_type=canonical))
-        return adjusted
 
     def _resolve_execution_id(self, case_path: Optional[str]) -> Optional[int]:
         if not case_path:
@@ -248,6 +184,7 @@ class PerformanceTableManager:
 
     def ensure_schema_initialized(self) -> None:
         ensure_report_tables(self._client)
+        self._ensure_static_columns()
 
     def replace_with_csv(
         self,
@@ -269,6 +206,8 @@ class PerformanceTableManager:
             len(rows),
         )
 
+        self.ensure_schema_initialized()
+
         report_id = self._register_test_report(
             csv_name=csv_name,
             csv_path=csv_path,
@@ -279,12 +218,8 @@ class PerformanceTableManager:
         )
         logging.debug("Created test_report entry id=%s", report_id)
 
-        mappings = self._build_mappings(headers)
-        column_infos = self._prepare_columns(mappings, rows)
-        prepared_columns = self._ensure_columns(column_infos)
-
         insert_columns = [name for name, _ in self._BASE_COLUMNS]
-        insert_columns.extend(info.mapping.sanitized for info in prepared_columns)
+        insert_columns.extend(column.name for column in self._STATIC_COLUMNS)
         column_clause = ", ".join(f"`{name}`" for name in insert_columns)
         placeholders = ", ".join(["%s"] * len(insert_columns))
         insert_sql = f"INSERT INTO `{self.TABLE_NAME}` ({column_clause}) VALUES ({placeholders})"
@@ -296,9 +231,9 @@ class PerformanceTableManager:
                 csv_name,
                 data_type,
             ]
-            for info in prepared_columns:
+            for column in self._STATIC_COLUMNS:
                 row_values.append(
-                    self._normalize_cell(row.get(info.mapping.original), info.sql_type)
+                    self._normalize_cell(row.get(column.original), column.sql_type)
                 )
             values.append(row_values)
 
