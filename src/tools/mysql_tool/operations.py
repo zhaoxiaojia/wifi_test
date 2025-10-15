@@ -587,6 +587,38 @@ def sync_test_result_to_db(
     normalized_source = (run_source or "local").strip() or "local"
     normalized_source = normalized_source.upper()[:32]
 
+    if normalized_data_type in {"RVR", "RVO"}:
+        try:
+            from src.tools.performance import generate_rvr_charts
+        except Exception:
+            logging.exception(
+                "sync_test_result_to_db: unable to import chart generator for %s", normalized_data_type
+            )
+        else:
+            try:
+                generated = generate_rvr_charts(file_path)
+            except Exception:
+                logging.exception(
+                    "sync_test_result_to_db: failed to auto-generate %s charts for %s",
+                    normalized_data_type,
+                    file_path,
+                )
+            else:
+                if generated:
+                    charts_dir = Path(generated[0]).parent
+                    logging.info(
+                        "sync_test_result_to_db: saved %d %s chart image(s) under %s",
+                        len(generated),
+                        normalized_data_type,
+                        charts_dir,
+                    )
+                else:
+                    logging.warning(
+                        "sync_test_result_to_db: no chart images were produced for %s (%s)",
+                        normalized_data_type,
+                        file_path,
+                    )
+
     try:
         with MySqlClient() as client:
             manager = PerformanceTableManager(client)
