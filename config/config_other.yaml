@@ -4,7 +4,7 @@ corner_angle:
   - 0
   - 90
   static_db: 10,20
-  target_rssi: 35,45
+  target_rssi: ''
 rf_solution:
   RADIORACK-4-220:
     ip_address: 192.168.50.19
@@ -33,4 +33,3 @@ router:
 text_case: test/performance/test_wifi_rvr.py
 debug:
   database_mode: true
-csv_path: performance_test_csv/rvr_wifi_setup.csv
