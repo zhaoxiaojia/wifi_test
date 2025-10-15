@@ -227,11 +227,11 @@ class LabDeviceController:
         assert 0, 'wait for standby over time'
 
     def get_turntanle_current_angle(self):
-        logging.info('Try to get status')
         # self.tn.read_some().decode('utf-8')
         self.tn.write('gcp'.encode('ascii') + b'\r\n')
         current_angle = int(self.tn.read_some().decode('utf-8'))
         self.angle = int(current_angle)
+        logging.info(f'Current angle {self.angle}')
         return self.angle
 
 # tn = TelnetInterface("192.168.50.200")

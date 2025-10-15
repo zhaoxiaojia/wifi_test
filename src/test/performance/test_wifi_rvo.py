@@ -26,6 +26,7 @@ from src.test.performance import (
     init_corner,
     init_rf,
     init_router,
+    wait_connect
 )
 
 
@@ -128,9 +129,9 @@ def _adjust_rssi_to_target(target_rssi: int, base_db: Optional[int]) -> Tuple[in
         else:
             break
         if (
-            current_diff_sign != 0
-            and new_diff_sign != 0
-            and new_diff_sign != current_diff_sign
+                current_diff_sign != 0
+                and new_diff_sign != 0
+                and new_diff_sign != current_diff_sign
         ):
             overshoot_detected = True
         previous_diff_sign = new_diff_sign
@@ -166,7 +167,8 @@ _test_data = get_testdata(router)
 @log_fixture_params()
 def setup_router(request):
     router_info = request.param
-    connect_status = common_setup(router, router_info)
+    common_setup(router, router_info)
+    connect_status = wait_connect(router_info)
     yield connect_status, router_info
     pytest.dut.kill_iperf()
 
@@ -176,6 +178,7 @@ def setup_router(request):
 def setup_corner(request, setup_router):
     corner_set = request.param[0] if isinstance(request.param, tuple) else request.param
     corner_tool.execute_turntable_cmd('rt', angle=corner_set)
+    corner_tool.get_turntanle_current_angle()
     yield setup_router[0], setup_router[1], corner_tool, corner_set
     pytest.dut.kill_iperf()
 
@@ -200,8 +203,8 @@ def setup_static_db(request, setup_corner):
 
 @pytest.fixture(scope='function', params=get_rvo_target_rssi_list())
 @log_fixture_params()
-def setup_rssi(request, setup_static_db):
-    connect_status, router_info, corner_tool_obj, corner_set, static_db = setup_static_db
+def setup_rssi(request, setup_corner):
+    connect_status, router_info, corner_tool_obj, corner_set, static_db = setup_corner
     target_rssi = request.param
     if target_rssi is None:
         logging.info('No target RSSI configured, skip attenuation adjustment.')
@@ -218,8 +221,6 @@ def test_rvo(setup_rssi, performance_sync_manager):
         logging.info("Can't connect wifi ,input 0")
     else:
         logging.info('corner angle set to %s', corner_set)
-        if attenuation_db is not None:
-            logging.info('attenuation set to %s dB', attenuation_db)
         logging.info(f'start test iperf tx {router_info.tx} rx {router_info.rx}')
         if int(router_info.tx):
             logging.info(f'rssi : {rssi_num}')
@@ -238,8 +239,8 @@ def test_rvo(setup_rssi, performance_sync_manager):
                 db_set='' if attenuation_db is None else attenuation_db,
             )
 
-    performance_sync_manager(
-        "RVO",
-        pytest.testResult.log_file,
-        message="RVO data rows stored in database",
-    )
+    # performance_sync_manager(
+    #     "RVO",
+    #     pytest.testResult.log_file,
+    #     message="RVO data rows stored in database",
+    # )
