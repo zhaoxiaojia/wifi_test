@@ -230,14 +230,26 @@ class RfStepSegmentsWidget(QWidget):
         btn_row.addStretch(1)
         layout.addLayout(btn_row)
 
+        hint_text = (
+            "未添加区间时将自动使用默认区间 0-75（步长 3）。\n"
+            "填写起始、结束与步长后点击 Add 添加区间，选中后可用 Del 删除。"
+        )
+
+        self.segment_stack = QStackedWidget(self)
+
+        self.segment_hint = QLabel(hint_text, self)
+        self.segment_hint.setWordWrap(True)
+        self.segment_hint.setAlignment(Qt.AlignTop | Qt.AlignLeft)
+        self.segment_hint.setStyleSheet("color: #6c6c6c;")
+        self.segment_hint.setContentsMargins(4, 4, 4, 4)
+
         self.segment_list = QListWidget(self)
         self.segment_list.setSelectionMode(QListWidget.SingleSelection)
         self.segment_list.currentRowChanged.connect(self._on_segment_selected)
-        layout.addWidget(self.segment_list, 1)
-        
-        self.default_hint = QLabel("若未添加任何区间，执行时将自动使用 0-75 (步长 3)。")
-        self.default_hint.setObjectName("rfStepDefaultHint")
-        layout.addWidget(self.default_hint)
+
+        self.segment_stack.addWidget(self.segment_hint)
+        self.segment_stack.addWidget(self.segment_list)
+        layout.addWidget(self.segment_stack, 1)
 
         self._refresh_segment_list()
     def _refresh_segment_list(self) -> None:
@@ -247,6 +259,12 @@ class RfStepSegmentsWidget(QWidget):
             item = QListWidgetItem(item_text)
             item.setData(Qt.UserRole, (start, stop, step))
             self.segment_list.addItem(item)
+
+        if self._segments:
+            self.segment_stack.setCurrentWidget(self.segment_list)
+            self.segment_list.setCurrentRow(len(self._segments) - 1)
+        else:
+            self.segment_stack.setCurrentWidget(self.segment_hint)
 
     def _on_segment_selected(self, row: int) -> None:
         if 0 <= row < len(self._segments):
