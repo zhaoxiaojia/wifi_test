@@ -15,7 +15,12 @@ connect_type:
     enabled: false
     wait_seconds: 45
   type: telnet
-fpga: W1U_PCIE
+fpga:
+  product_line: OTT
+  project: OB1
+  main_chip: 905X5M
+  wifi_module: W2
+  interface: USB
 serial_port:
   baud: '961200'
   port: COM5

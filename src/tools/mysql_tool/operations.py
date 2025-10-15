@@ -10,6 +10,7 @@ from .client import MySqlClient
 from .models import HeaderMapping
 from .naming import IdentifierBuilder
 from .schema import ensure_report_tables, read_csv_rows
+from src.util.constants import WIFI_PRODUCT_PROJECT_MAP
 
 __all__ = [
     "PerformanceTableManager",
@@ -196,32 +197,23 @@ class PerformanceTableManager:
             adjusted.append(_ColumnInfo(mapping=column.mapping, sql_type=canonical))
         return adjusted
 
-    def _resolve_execution_id(
-        self, case_path: Optional[str], csv_path: Optional[str]
-    ) -> Optional[int]:
-        queries = []
-        if csv_path:
-            queries.append(
-                (
-                    "SELECT id FROM `execution` WHERE csv_path = %s ORDER BY id DESC LIMIT 1",
-                    (csv_path,),
-                )
+    def _resolve_execution_id(self, case_path: Optional[str]) -> Optional[int]:
+        if not case_path:
+            return None
+        try:
+            row = self._client.query_one(
+                "SELECT id FROM `execution` WHERE case_path = %s ORDER BY id DESC LIMIT 1",
+                (case_path,),
             )
-        if case_path:
-            queries.append(
-                (
-                    "SELECT id FROM `execution` WHERE case_path = %s ORDER BY id DESC LIMIT 1",
-                    (case_path,),
-                )
+        except Exception:
+            logging.debug(
+                "Failed to resolve execution id via case_path=%s",
+                case_path,
+                exc_info=True,
             )
-        for sql, params in queries:
-            try:
-                row = self._client.query_one(sql, params)
-            except Exception:
-                logging.debug("Failed to resolve execution id via %s", sql, exc_info=True)
-                continue
-            if row and "id" in row and row["id"] is not None:
-                return int(row["id"])
+            return None
+        if row and "id" in row and row["id"] is not None:
+            return int(row["id"])
         return None
 
     def _register_test_report(
@@ -236,7 +228,7 @@ class PerformanceTableManager:
     ) -> int:
         resolved_execution_id = execution_id
         if resolved_execution_id is None:
-            resolved_execution_id = self._resolve_execution_id(case_path, csv_path)
+            resolved_execution_id = self._resolve_execution_id(case_path)
         insert_sql = (
             "INSERT INTO `test_report` "
             "(`execution_id`, `dut_id`, `csv_name`, `csv_path`, `data_type`, `case_path`) "
@@ -341,22 +333,101 @@ def _extract_first(mapping: Mapping[str, Any] | None, *keys: str) -> Optional[An
     return current
 
 
+def _normalize_upper_token(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    return text.upper()
+
+
 def _split_fpga(value: Any) -> tuple[Optional[str], Optional[str]]:
     if isinstance(value, Mapping):
-        series_value = value.get("series")
-        if series_value is None:
-            series_value = value.get("wifi_module")
+        module_value = value.get("wifi_module", value.get("series"))
         interface_value = value.get("interface")
-        return (
-            str(series_value) if series_value is not None else None,
-            str(interface_value) if interface_value is not None else None,
-        )
+        return _normalize_upper_token(module_value), _normalize_upper_token(interface_value)
     if isinstance(value, str):
         parts = value.split("_", 1)
-        series = parts[0] if parts and parts[0] else None
-        interface = parts[1] if len(parts) > 1 else None
-        return series, interface
+        module = _normalize_upper_token(parts[0]) if parts and parts[0] else None
+        interface = _normalize_upper_token(parts[1]) if len(parts) > 1 else None
+        return module, interface
     return None, None
+
+
+def _guess_product_by_mapping(
+    wifi_module: Optional[str],
+    interface: Optional[str],
+    main_chip: Optional[str],
+) -> tuple[Optional[str], Optional[str], Optional[dict[str, str]]]:
+    wifi_upper = _normalize_upper_token(wifi_module)
+    interface_upper = _normalize_upper_token(interface)
+    chip_upper = _normalize_upper_token(main_chip)
+
+    for product_line, projects in WIFI_PRODUCT_PROJECT_MAP.items():
+        for project_name, info in projects.items():
+            info_wifi = _normalize_upper_token(info.get("wifi_module"))
+            info_interface = _normalize_upper_token(info.get("interface"))
+            info_chip = _normalize_upper_token(info.get("main_chip"))
+            if wifi_upper and info_wifi and info_wifi != wifi_upper:
+                continue
+            if interface_upper and info_interface and info_interface != interface_upper:
+                continue
+            if chip_upper and info_chip and info_chip != chip_upper:
+                continue
+            return product_line, project_name, info
+    return None, None, None
+
+
+def _resolve_wifi_product_details(fpga_section: Any) -> Dict[str, Optional[str]]:
+    details: Dict[str, Optional[str]] = {
+        "product_line": None,
+        "project": None,
+        "main_chip": None,
+        "wifi_module": None,
+        "interface": None,
+    }
+
+    if isinstance(fpga_section, Mapping):
+        details["product_line"] = _normalize_upper_token(fpga_section.get("product_line"))
+        details["project"] = _normalize_upper_token(fpga_section.get("project"))
+        details["main_chip"] = _normalize_upper_token(fpga_section.get("main_chip"))
+        details["wifi_module"] = _normalize_upper_token(
+            fpga_section.get("wifi_module") or fpga_section.get("series")
+        )
+        details["interface"] = _normalize_upper_token(fpga_section.get("interface"))
+    else:
+        wifi_module, interface = _split_fpga(fpga_section)
+        details["wifi_module"] = wifi_module
+        details["interface"] = interface
+
+    info: Optional[dict[str, str]] = None
+    if details["product_line"] and details["project"]:
+        info = (
+            WIFI_PRODUCT_PROJECT_MAP.get(details["product_line"], {})
+            .get(details["project"], {})
+        )
+    else:
+        guessed_product, guessed_project, guessed_info = _guess_product_by_mapping(
+            details["wifi_module"],
+            details["interface"],
+            details["main_chip"],
+        )
+        if guessed_product:
+            details["product_line"] = guessed_product
+        if guessed_project:
+            details["project"] = guessed_project
+        info = guessed_info
+
+    if info:
+        if not details["main_chip"]:
+            details["main_chip"] = _normalize_upper_token(info.get("main_chip"))
+        if not details["wifi_module"]:
+            details["wifi_module"] = _normalize_upper_token(info.get("wifi_module"))
+        if not details["interface"]:
+            details["interface"] = _normalize_upper_token(info.get("interface"))
+
+    return details
 
 
 def _build_dut_payload(config: Mapping[str, Any]) -> Dict[str, Any]:
@@ -364,9 +435,7 @@ def _build_dut_payload(config: Mapping[str, Any]) -> Dict[str, Any]:
     hardware = _extract_first(config, "hardware_info") or _extract_first(config, "hardware")
     android = _extract_first(config, "android_system") or _extract_first(config, "android")
     connect = _extract_first(config, "connect_type") or {}
-    third_party = _extract_first(connect, "third_party") or {}
-    serial = _extract_first(config, "serial_port") or {}
-    fpga_series, fpga_interface = _split_fpga(config.get("fpga"))
+    wifi_details = _resolve_wifi_product_details(config.get("fpga"))
 
     return {
         "software_version": _extract_first(software, "software_version"),
@@ -377,31 +446,55 @@ def _build_dut_payload(config: Mapping[str, Any]) -> Dict[str, Any]:
         "connect_type": connect.get("type") if isinstance(connect, Mapping) else None,
         "adb_device": _extract_first(connect, "adb", "device"),
         "telnet_ip": _extract_first(connect, "telnet", "ip"),
-        "third_party_enabled": third_party.get("enabled"),
-        "third_party_wait": third_party.get("wait_seconds"),
-        "fpga_series": fpga_series,
-        "fpga_interface": fpga_interface,
-        "serial_port_status": serial.get("status"),
-        "serial_port_port": serial.get("port"),
-        "serial_port_baud": serial.get("baud"),
+        "product_line": wifi_details.get("product_line"),
+        "project": wifi_details.get("project"),
+        "main_chip": wifi_details.get("main_chip"),
+        "wifi_module": wifi_details.get("wifi_module"),
+        "interface": wifi_details.get("interface"),
     }
 
 
 def _build_execution_payload(config: Mapping[str, Any]) -> Dict[str, Any]:
     router = _extract_first(config, "router") or {}
-    csv_path = config.get("csv_path") or config.get("performance_csv")
+    rf_solution = config.get("rf_solution") if isinstance(config, Mapping) else {}
+    corner_cfg = config.get("corner_angle") if isinstance(config, Mapping) else {}
+    lab_info = config.get("lab") if isinstance(config, Mapping) else {}
     case_path = (
         config.get("case_path")
         or config.get("test_case")
         or config.get("text_case")
         or config.get("testcase")
     )
+    if isinstance(rf_solution, Mapping):
+        rf_model = str(rf_solution.get("model") or "").strip() or None
+    else:
+        rf_model = None
+    if isinstance(corner_cfg, Mapping):
+        corner_model = str(corner_cfg.get("model") or "").strip() or None
+    else:
+        corner_model = None
+    lab_name = None
+    if isinstance(config, Mapping):
+        lab_name = config.get("lab_name")
+    if lab_name is None and isinstance(lab_info, Mapping):
+        lab_name_value = lab_info.get("name")
+        if isinstance(lab_name_value, str):
+            lab_name = lab_name_value.strip() or None
+        else:
+            lab_name = None
+    elif isinstance(lab_name, str):
+        lab_name = lab_name.strip() or None
+    else:
+        lab_name = None
+
     return {
         "case_path": case_path,
         "case_root": None,  # derive later inside sync_config
         "router_name": router.get("name"),
         "router_address": router.get("address"),
-        "csv_path": csv_path,
+        "rf_model": rf_model,
+        "corner_model": corner_model,
+        "lab_name": lab_name,
     }
 
 

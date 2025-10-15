@@ -4,12 +4,11 @@ import logging
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Sequence, Tuple
 
 import pymysql
 import yaml
 from pymysql.cursors import DictCursor
-import hashlib
 
 from src.tools.mysql_tool.schema import ensure_report_tables
 BASE_DIR = Path(__file__).resolve().parents[2]
@@ -88,20 +87,6 @@ def derive_case_root(case_path: str) -> str:
     return sanitized.lower() or "default_case"
 
 
-def _hash_values(*values: Any) -> str:
-    parts: list[str] = []
-    for value in values:
-        if isinstance(value, bool):
-            normalized = "1" if value else "0"
-        elif value is None:
-            normalized = "<NULL>"
-        else:
-            normalized = str(value)
-        parts.append(normalized)
-    payload = "\u001f".join(parts)
-    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
-
-
 class _ConnectionAdapter:
     def __init__(self, connection: pymysql.connections.Connection) -> None:
         self._connection = connection
@@ -155,8 +140,31 @@ class ConfigDatabaseSync:
         ensure_report_tables(adapter)
 
     @staticmethod
-    def _bool(value: Any) -> int:
-        return 1 if bool(value) else 0
+    def _build_null_safe_conditions(columns: Sequence[str]) -> str:
+        segments = []
+        for column in columns:
+            segments.append(f"((`{column}` IS NULL AND %s IS NULL) OR (`{column}` = %s))")
+        return " AND ".join(segments)
+
+    def _find_existing_row_id(
+        self,
+        cursor,
+        table: str,
+        columns: Sequence[str],
+        values: Sequence[Any],
+    ) -> int | None:
+        if not columns:
+            return None
+        conditions = self._build_null_safe_conditions(columns)
+        params: list[Any] = []
+        for value in values:
+            params.extend([value, value])
+        sql = f"SELECT id FROM `{table}` WHERE {conditions} ORDER BY id DESC LIMIT 1"
+        cursor.execute(sql, params)
+        row = cursor.fetchone()
+        if not row:
+            return None
+        return row.get("id")
 
     def sync_config(self, dut_payload: Dict[str, Any], execution_payload: Dict[str, Any]) -> ConfigSyncResult:
         self.ensure_tables()
@@ -172,16 +180,13 @@ class ConfigDatabaseSync:
                     "connect_type",
                     "adb_device",
                     "telnet_ip",
-                    "third_party_enabled",
-                    "third_party_wait",
-                    "fpga_series",
-                    "fpga_interface",
-                    "serial_port_status",
-                    "serial_port_port",
-                    "serial_port_baud",
-                    "profile_hash",
+                    "product_line",
+                    "project",
+                    "main_chip",
+                    "wifi_module",
+                    "interface",
                 ]
-                base_dut_values = [
+                dut_values = [
                     dut_payload.get("software_version"),
                     dut_payload.get("driver_version"),
                     dut_payload.get("hardware_version"),
@@ -190,27 +195,24 @@ class ConfigDatabaseSync:
                     dut_payload.get("connect_type"),
                     dut_payload.get("adb_device"),
                     dut_payload.get("telnet_ip"),
-                    self._bool(dut_payload.get("third_party_enabled")),
-                    dut_payload.get("third_party_wait"),
-                    dut_payload.get("fpga_series"),
-                    dut_payload.get("fpga_interface"),
-                    self._bool(dut_payload.get("serial_port_status")),
-                    dut_payload.get("serial_port_port"),
-                    dut_payload.get("serial_port_baud"),
+                    dut_payload.get("product_line"),
+                    dut_payload.get("project"),
+                    dut_payload.get("main_chip"),
+                    dut_payload.get("wifi_module"),
+                    dut_payload.get("interface"),
                 ]
-                dut_hash = _hash_values(*base_dut_values)
-                dut_values = base_dut_values + [dut_hash]
-                logging.debug("Prepared DUT values: %s | hash=%s", base_dut_values, dut_hash)
-                cursor.execute(
-                    f"INSERT INTO dut ({', '.join(dut_columns)}) VALUES ({', '.join(['%s'] * len(dut_columns))}) "
-                    "ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)",
-                    dut_values,
-                )
-                dut_id = cursor.lastrowid
-                if cursor.rowcount == 1:
-                    logging.info("Inserted DUT row id=%s", dut_id)
-                else:
+                existing_dut_id = self._find_existing_row_id(cursor, "dut", dut_columns, dut_values)
+                if existing_dut_id is not None:
+                    dut_id = existing_dut_id
                     logging.info("Reused existing DUT row id=%s", dut_id)
+                else:
+                    cursor.execute(
+                        f"INSERT INTO dut ({', '.join(f'`{column}`' for column in dut_columns)}) "
+                        f"VALUES ({', '.join(['%s'] * len(dut_columns))})",
+                        dut_values,
+                    )
+                    dut_id = cursor.lastrowid
+                    logging.info("Inserted DUT row id=%s", dut_id)
 
                 case_path = execution_payload.get("case_path")
                 case_root = execution_payload.get("case_root") or derive_case_root(case_path or "")
@@ -219,29 +221,35 @@ class ConfigDatabaseSync:
                     "case_root",
                     "router_name",
                     "router_address",
-                    "csv_path",
-                    "profile_hash",
+                    "rf_model",
+                    "corner_model",
+                    "lab_name",
                 ]
-                base_execution_values = [
+                execution_values = [
                     case_path,
                     case_root,
                     execution_payload.get("router_name"),
                     execution_payload.get("router_address"),
-                    execution_payload.get("csv_path"),
+                    execution_payload.get("rf_model"),
+                    execution_payload.get("corner_model"),
+                    execution_payload.get("lab_name"),
                 ]
-                execution_hash = _hash_values(*base_execution_values)
-                execution_values = base_execution_values + [execution_hash]
-                logging.debug("Prepared execution values: %s | hash=%s", base_execution_values, execution_hash)
-                cursor.execute(
-                    f"INSERT INTO execution ({', '.join(execution_columns)}) VALUES ({', '.join(['%s'] * len(execution_columns))}) "
-                    "ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)",
-                    execution_values,
+                logging.debug("Prepared execution values: %s", execution_values)
+
+                existing_execution_id = self._find_existing_row_id(
+                    cursor, "execution", execution_columns, execution_values
                 )
-                execution_id = cursor.lastrowid
-                if cursor.rowcount == 1:
-                    logging.info("Inserted execution row id=%s", execution_id)
-                else:
+                if existing_execution_id is not None:
+                    execution_id = existing_execution_id
                     logging.info("Reused existing execution row id=%s", execution_id)
+                else:
+                    cursor.execute(
+                        f"INSERT INTO execution ({', '.join(f'`{column}`' for column in execution_columns)}) "
+                        f"VALUES ({', '.join(['%s'] * len(execution_columns))})",
+                        execution_values,
+                    )
+                    execution_id = cursor.lastrowid
+                    logging.info("Inserted execution row id=%s", execution_id)
             self.connection.commit()
             return ConfigSyncResult(dut_id=dut_id, execution_id=execution_id)
         except Exception:
