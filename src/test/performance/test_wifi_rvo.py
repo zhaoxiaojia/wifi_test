@@ -1,23 +1,17 @@
-﻿# !/usr/bin/env python
-# -*-coding:utf-8 -*-
-
-"""
-File       : test_wifi_rvo.py
-Time       : 2023/9/15 14:03
-Author     : chao.li
-version    : python 3.9
-Description:
-"""
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+"""RVO performance test flow with streamlined fixture handling."""
 
 import logging
 import time
+from collections import namedtuple
 from typing import Optional, Tuple
 
 import pytest
 from src.tools.router_tool.Router import router_str
 
 from src.test import get_testdata
-from src.test.pyqt_log import log_fixture_params
+from src.test.pyqt_log import log_fixture_params, update_fixture_params
 from src.test.performance import (
     common_setup,
     get_corner_step_list,
@@ -26,7 +20,7 @@ from src.test.performance import (
     init_corner,
     init_rf,
     init_router,
-    wait_connect
+    wait_connect,
 )
 
 
@@ -86,7 +80,7 @@ def _adjust_rssi_to_target(target_rssi: int, base_db: Optional[int]) -> Tuple[in
     previous_diff_sign = _get_diff_sign(diff)
 
     for attempt in range(max_iterations):
-        logging.info(f'current rssi {current_rssi} target rssi {target_rssi}')
+        logging.info('current rssi %s target rssi %s', current_rssi, target_rssi)
         if abs(diff) <= tolerance:
             break
 
@@ -129,9 +123,9 @@ def _adjust_rssi_to_target(target_rssi: int, base_db: Optional[int]) -> Tuple[in
         else:
             break
         if (
-                current_diff_sign != 0
-                and new_diff_sign != 0
-                and new_diff_sign != current_diff_sign
+            current_diff_sign != 0
+            and new_diff_sign != 0
+            and new_diff_sign != current_diff_sign
         ):
             overshoot_detected = True
         previous_diff_sign = new_diff_sign
@@ -157,6 +151,78 @@ def _adjust_rssi_to_target(target_rssi: int, base_db: Optional[int]) -> Tuple[in
     return current_rssi, applied_db
 
 
+RVOProfile = namedtuple("RVOProfile", "mode value")
+RVOCase = namedtuple("RVOCase", "profile corner")
+
+_MODE_DEFAULT = "default"
+_MODE_STATIC = "static"
+_MODE_TARGET = "target"
+
+
+def _profile_id(profile: RVOProfile) -> str:
+    if profile.mode == _MODE_STATIC:
+        return f'static-{profile.value}'
+    if profile.mode == _MODE_TARGET:
+        return f'target-{profile.value}'
+    return _MODE_DEFAULT
+
+
+def _case_id(case: RVOCase) -> str:
+    return f'{_profile_id(case.profile)}|corner-{case.corner}'
+
+
+def _get_rvo_profiles() -> list[RVOProfile]:
+    static_values = [value for value in get_rvo_static_db_list() if value is not None]
+    target_values = [value for value in get_rvo_target_rssi_list() if value is not None]
+
+    if static_values and target_values:
+        logging.error(
+            'Both corner_angle.static_db %s and corner_angle.target_rssi %s detected; '
+            'only one group is supported. Target RSSI values take precedence.',
+            static_values,
+            target_values,
+        )
+        static_values = []
+
+    if static_values:
+        return [RVOProfile(_MODE_STATIC, value) for value in static_values]
+    if target_values:
+        return [RVOProfile(_MODE_TARGET, value) for value in target_values]
+    return [RVOProfile(_MODE_DEFAULT, None)]
+
+
+def _build_rvo_cases() -> list[RVOCase]:
+    profiles = _get_rvo_profiles()
+    corners = get_corner_step_list() or [0]
+    return [RVOCase(profile, corner) for profile in profiles for corner in corners]
+
+
+RVO_CASES = _build_rvo_cases()
+RVO_CASE_IDS = [_case_id(case) for case in RVO_CASES]
+
+
+def _apply_static_attenuation(static_db: Optional[int]) -> Tuple[int, Optional[int]]:
+    if static_db is None:
+        measured = pytest.dut.get_rssi()
+        return measured, None
+    logging.info('Set static attenuation to %s dB before RVO test.', static_db)
+    try:
+        rf_tool.execute_rf_cmd(static_db)
+    except Exception as exc:
+        logging.warning('Failed to set static attenuation %s dB: %s', static_db, exc)
+    measured = pytest.dut.get_rssi()
+    return measured, static_db
+
+
+def _apply_profile(profile: RVOProfile) -> Tuple[int, Optional[int]]:
+    if profile.mode == _MODE_STATIC:
+        return _apply_static_attenuation(profile.value)
+    if profile.mode == _MODE_TARGET:
+        return _adjust_rssi_to_target(profile.value, None)
+    measured = pytest.dut.get_rssi()
+    return measured, None
+
+
 router = init_router()
 corner_tool = init_corner()
 rf_tool = init_rf()
@@ -173,69 +239,61 @@ def setup_router(request):
     pytest.dut.kill_iperf()
 
 
-@pytest.fixture(scope='function', params=get_corner_step_list())
+@pytest.fixture(scope='function', params=RVO_CASES, ids=RVO_CASE_IDS)
 @log_fixture_params()
-def setup_corner(request, setup_router):
-    corner_set = request.param[0] if isinstance(request.param, tuple) else request.param
-    corner_tool.execute_turntable_cmd('rt', angle=corner_set)
+def setup_rvo_case(request, setup_router):
+    connect_status, router_info = setup_router
+    case: RVOCase = request.param
+    profile = case.profile
+    corner_angle = case.corner
+
+    corner_tool.execute_turntable_cmd('rt', angle=corner_angle)
     corner_tool.get_turntanle_current_angle()
-    yield setup_router[0], setup_router[1], corner_tool, corner_set
-    pytest.dut.kill_iperf()
+    measured_rssi, attenuation_db = _apply_profile(profile)
+
+    update_fixture_params(
+        request,
+        {
+            'corner': corner_angle,
+            'mode': profile.mode,
+            'value': profile.value,
+            'attenuation_db': attenuation_db,
+            'rssi': measured_rssi,
+        },
+    )
+
+    try:
+        yield connect_status, router_info, corner_angle, attenuation_db, measured_rssi, profile
+    finally:
+        pytest.dut.kill_iperf()
 
 
-@pytest.fixture(scope='function', params=get_rvo_static_db_list())
-@log_fixture_params()
-def setup_static_db(request, setup_corner):
-    connect_status, router_info, corner_tool_obj, corner_set = setup_corner
-    static_db = request.param
-    if static_db is None:
-        logging.info('No static attenuation configured, skip setting attenuation.')
-    else:
-        logging.info('Set static attenuation to %s dB before RVO test.', static_db)
-        try:
-            rf_tool.execute_rf_cmd(static_db)
-        except Exception as exc:
-            logging.warning('Failed to set static attenuation %s dB: %s', static_db, exc)
-    yield connect_status, router_info, corner_tool_obj, corner_set, static_db
-
-
-@pytest.fixture(scope='function', params=get_rvo_target_rssi_list())
-@log_fixture_params()
-def setup_rssi(request, setup_corner):
-    connect_status, router_info, corner_tool_obj, corner_set, static_db = setup_corner
-    target_rssi = request.param
-    if target_rssi is None:
-        logging.info('No target RSSI configured, skip attenuation adjustment.')
-        measured_rssi = pytest.dut.get_rssi()
-        final_db = static_db
-    else:
-        measured_rssi, final_db = _adjust_rssi_to_target(target_rssi, static_db)
-    yield connect_status, router_info, corner_tool_obj, corner_set, final_db, measured_rssi
-
-
-def test_rvo(setup_rssi, performance_sync_manager):
-    connect_status, router_info, corner_tool_obj, corner_set, attenuation_db, rssi_num = setup_rssi
+def test_rvo(setup_rvo_case, performance_sync_manager):
+    connect_status, router_info, corner_angle, attenuation_db, rssi_num, profile = setup_rvo_case
     if not connect_status:
         logging.info("Can't connect wifi ,input 0")
-    else:
-        logging.info('corner angle set to %s', corner_set)
-        logging.info(f'start test iperf tx {router_info.tx} rx {router_info.rx}')
-        if int(router_info.tx):
-            logging.info(f'rssi : {rssi_num}')
-            pytest.dut.get_tx_rate(
-                router_info,
-                'TCP',
-                corner_tool=corner_tool_obj,
-                db_set='' if attenuation_db is None else attenuation_db,
-            )
-        if int(router_info.rx):
-            logging.info(f'rssi : {rssi_num}')
-            pytest.dut.get_rx_rate(
-                router_info,
-                'TCP',
-                corner_tool=corner_tool_obj,
-                db_set='' if attenuation_db is None else attenuation_db,
-            )
+        return
+
+    logging.info('RVO profile %s', _profile_id(profile))
+    logging.info('corner angle set to %s', corner_angle)
+    logging.info('start test iperf tx %s rx %s', router_info.tx, router_info.rx)
+
+    if int(router_info.tx):
+        logging.info('rssi : %s', rssi_num)
+        pytest.dut.get_tx_rate(
+            router_info,
+            'TCP',
+            corner_tool=corner_tool,
+            db_set='' if attenuation_db is None else attenuation_db,
+        )
+    if int(router_info.rx):
+        logging.info('rssi : %s', rssi_num)
+        pytest.dut.get_rx_rate(
+            router_info,
+            'TCP',
+            corner_tool=corner_tool,
+            db_set='' if attenuation_db is None else attenuation_db,
+        )
 
     # performance_sync_manager(
     #     "RVO",
