@@ -188,7 +188,6 @@ def setup_corner(request, setup_router):
 def setup_static_db(request, setup_corner):
     connect_status, router_info, corner_tool_obj, corner_set = setup_corner
     static_db = request.param
-    applied_db = static_db
     if static_db is None:
         logging.info('No static attenuation configured, skip setting attenuation.')
     else:
@@ -197,8 +196,7 @@ def setup_static_db(request, setup_corner):
             rf_tool.execute_rf_cmd(static_db)
         except Exception as exc:
             logging.warning('Failed to set static attenuation %s dB: %s', static_db, exc)
-            applied_db = None
-    yield connect_status, router_info, corner_tool_obj, corner_set, applied_db
+    yield connect_status, router_info, corner_tool_obj, corner_set, static_db
 
 
 @pytest.fixture(scope='function', params=get_rvo_target_rssi_list())
