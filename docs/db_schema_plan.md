@@ -10,6 +10,17 @@
 
 ## 数据模型设计
 
+### 最新结构规范（2024 更新）
+- **字段命名统一：** `performance` 表中的核心字段已统一为蛇形命名，例如 `serial_number`、`band`、`bandwidth_mhz`、`phy_rate_mbps`、`path_loss_db`、`angle_deg`、`throughput_peak_mbps`、`throughput_avg_mbps`、`target_throughput_mbps`、`center_freq_mhz` 等，便于理解与跨团队协作。
+- **字段类型规范：**
+  - 速率、吞吐指标改为 `DECIMAL(10,3)`，RSSI/损耗指标改为 `DECIMAL(6,2)`，带宽/信道频点改为 `SMALLINT`。
+  - `band` 使用 `ENUM('2.4','5','6')`，`standard` 使用 `ENUM('11a','11b','11g','11n','11ac','11ax','11be')`，`direction` 使用 `ENUM('uplink','downlink','bi')`，所有审计时间戳统一为 `TIMESTAMP DEFAULT CURRENT_TIMESTAMP`，`updated_at` 带 `ON UPDATE CURRENT_TIMESTAMP`。
+- **约束与索引：** `test_report` 表增加 `UNIQUE(execution_id, csv_name)` 约束，并建立 `execution_id`、`dut_id`、`created_at` 索引；`performance` 表补充 `test_report_id`、`created_at` 以及 `(band, bandwidth_mhz, standard)` 组合索引，外键全部使用 `RESTRICT` 删除策略以避免误删。
+- **视图：**
+  - `v_run_overview` 汇总 `test_report`、`execution`、`dut` 及关键吞吐指标，方便快速展示执行总览。
+  - `v_perf_latest` 利用窗口函数提取每个 `(dut, case_path, band, bandwidth_mhz)` 组合最新的性能记录，减少前端聚合压力。
+- **扩展表：** 新增 `perf_metric_kv` 宽口径指标表，结构包含 `metric_name`、`metric_unit`、`metric_value`、`stage` 等字段，可在不改动主表结构的情况下快速接入新指标，后续前端可基于指标字典动态渲染。
+
 ### 1. DUT 层（第一层表）
 - **表名：** `dut_settings`
 - **主键：** `dut_id`（自增或 UUID）
