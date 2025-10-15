@@ -1,13 +1,19 @@
 from __future__ import annotations
-
 import json
 import logging
+import re
 from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Mapping
+from typing import Any, Dict, List, Optional, Sequence, Mapping, Callable
 
 from .client import MySqlClient
-from .schema import PERFORMANCE_STATIC_COLUMNS, ensure_report_tables, read_csv_rows
+from .schema import (
+    PERFORMANCE_COLUMN_RENAMES,
+    PERFORMANCE_STATIC_COLUMNS,
+    ensure_report_tables,
+    read_csv_rows,
+)
 from src.util.constants import WIFI_PRODUCT_PROJECT_MAP
 
 __all__ = [
@@ -18,11 +24,103 @@ __all__ = [
 ]
 
 
+ColumnNormalizer = Callable[[Any], Any]
+
+
 @dataclass(frozen=True)
 class _StaticColumn:
     name: str
     sql_type: str
     original: str
+    normalizer: Optional[ColumnNormalizer] = None
+
+
+_ALLOWED_BANDS = {"2.4", "5", "6"}
+_ALLOWED_DIRECTIONS = {"uplink", "downlink", "bi"}
+_ALLOWED_STANDARDS = [
+    "11be",
+    "11ax",
+    "11ac",
+    "11n",
+    "11g",
+    "11b",
+    "11a",
+]
+
+
+def _normalize_band_token(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    lowered = text.lower()
+    # Allow direct matches first
+    if lowered in _ALLOWED_BANDS:
+        return lowered
+    # Remove unit suffixes like "ghz" or "g"
+    simplified = re.sub(r"[\s_\-]", "", lowered)
+    simplified = re.sub(r"ghz$", "", simplified)
+    simplified = re.sub(r"g$", "", simplified)
+    if simplified in _ALLOWED_BANDS:
+        return simplified
+    match = re.search(r"2\s*\.\s*4", lowered)
+    if match:
+        return "2.4"
+    match = re.search(r"\b(5|6)\b", lowered)
+    if match and match.group(1) in _ALLOWED_BANDS:
+        return match.group(1)
+    return None
+
+
+def _normalize_direction_token(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    text = str(value).strip().lower()
+    if not text:
+        return None
+    if text in _ALLOWED_DIRECTIONS:
+        return text
+    mapping = {
+        "up": "uplink",
+        "uplinked": "uplink",
+        "ul": "uplink",
+        "down": "downlink",
+        "dl": "downlink",
+        "downlinked": "downlink",
+        "bi-direction": "bi",
+        "bidirectional": "bi",
+        "bi-directional": "bi",
+        "both": "bi",
+    }
+    return mapping.get(text)
+
+
+def _normalize_standard_token(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    text = str(value).strip().lower()
+    if not text:
+        return None
+    if text in _ALLOWED_STANDARDS:
+        return text
+    for candidate in _ALLOWED_STANDARDS:
+        if candidate in text:
+            return candidate
+    # Handle values like 802.11ax, 11AX, etc.
+    match = re.search(r"11[a-z]{1,2}", text)
+    if match:
+        candidate = match.group(0)
+        if candidate in _ALLOWED_STANDARDS:
+            return candidate
+    return None
+
+
+_COLUMN_NORMALIZERS: Dict[str, ColumnNormalizer] = {
+    "band": _normalize_band_token,
+    "direction": _normalize_direction_token,
+    "standard": _normalize_standard_token,
+}
 
 
 class PerformanceTableManager:
@@ -38,7 +136,12 @@ class PerformanceTableManager:
     )
 
     _STATIC_COLUMNS: Sequence[_StaticColumn] = tuple(
-        _StaticColumn(name=name, sql_type=sql_type, original=original)
+        _StaticColumn(
+            name=name,
+            sql_type=sql_type,
+            original=original,
+            normalizer=_COLUMN_NORMALIZERS.get(name),
+        )
         for name, sql_type, original in PERFORMANCE_STATIC_COLUMNS
     )
 
@@ -81,12 +184,20 @@ class PerformanceTableManager:
     @staticmethod
     def _canonical_sql_type(sql_type: str) -> str:
         normalized = (sql_type or "").upper()
+        if normalized.startswith("DECIMAL"):
+            return "DECIMAL"
         if normalized.startswith("DOUBLE"):
             return "DOUBLE"
-        if normalized.startswith("BIGINT") or normalized.startswith("INT"):
-            return "BIGINT"
+        if normalized.startswith("FLOAT"):
+            return "DOUBLE"
+        if normalized.startswith("ENUM"):
+            return "ENUM"
         if normalized.startswith("JSON"):
             return "JSON"
+        if normalized.startswith("BIGINT") or normalized.startswith("INT"):
+            return "INT"
+        if normalized.startswith("SMALLINT") or normalized.startswith("TINYINT") or normalized.startswith("MEDIUMINT"):
+            return "INT"
         if "CHAR" in normalized:
             return "VARCHAR"
         return "TEXT"
@@ -105,7 +216,7 @@ class PerformanceTableManager:
             if value_type in {"float", "int"}:
                 return float(parsed)
             return None
-        if canonical == "BIGINT":
+        if canonical == "INT":
             if value_type == "int":
                 return int(parsed)
             if value_type == "float":
@@ -113,6 +224,17 @@ class PerformanceTableManager:
                 if float_value.is_integer():
                     return int(float_value)
             return None
+        if canonical == "DECIMAL":
+            if value_type in {"float", "int"}:
+                return Decimal(str(parsed))
+            if value_type == "text":
+                try:
+                    return Decimal(str(parsed))
+                except InvalidOperation:
+                    return None
+            return None
+        if canonical == "ENUM":
+            return str(parsed)
         return str(parsed)
 
     def _describe_columns(self) -> Dict[str, Dict[str, Any]]:
@@ -123,15 +245,38 @@ class PerformanceTableManager:
 
     def _ensure_static_columns(self) -> None:
         snapshot = self._describe_columns()
+        snapshot = self._apply_column_renames(snapshot)
         for column in self._STATIC_COLUMNS:
-            if column.name in snapshot:
+            definition = self._format_column_definition(column)
+            if column.name not in snapshot:
+                self._client.execute(
+                    f"ALTER TABLE `{self.TABLE_NAME}` "
+                    f"ADD COLUMN `{column.name}` {definition}"
+                )
+                snapshot = self._describe_columns()
                 continue
-            comment = column.original.replace("'", "''")
             self._client.execute(
                 f"ALTER TABLE `{self.TABLE_NAME}` "
-                f"ADD COLUMN `{column.name}` {column.sql_type} NULL DEFAULT NULL COMMENT '{comment}'"
+                f"MODIFY COLUMN `{column.name}` {definition}"
             )
-            snapshot = self._describe_columns()
+
+    def _apply_column_renames(
+        self, snapshot: Dict[str, Dict[str, Any]]
+    ) -> Dict[str, Dict[str, Any]]:
+        updated = snapshot
+        for old_name, new_name in PERFORMANCE_COLUMN_RENAMES:
+            if old_name in updated and new_name not in updated:
+                self._client.execute(
+                    f"ALTER TABLE `{self.TABLE_NAME}` "
+                    f"RENAME COLUMN `{old_name}` TO `{new_name}`"
+                )
+                updated = self._describe_columns()
+        return updated
+
+    @staticmethod
+    def _format_column_definition(column: _StaticColumn) -> str:
+        comment = column.original.replace("'", "''")
+        return f"{column.sql_type} NULL DEFAULT NULL COMMENT '{comment}'"
 
     def _resolve_execution_id(self, case_path: Optional[str]) -> Optional[int]:
         if not case_path:
@@ -232,8 +377,19 @@ class PerformanceTableManager:
                 data_type,
             ]
             for column in self._STATIC_COLUMNS:
+                raw_value = row.get(column.original)
+                if column.normalizer is not None:
+                    try:
+                        raw_value = column.normalizer(raw_value)
+                    except Exception:
+                        logging.debug(
+                            "Failed to normalize column %s with value %s",
+                            column.name,
+                            raw_value,
+                            exc_info=True,
+                        )
                 row_values.append(
-                    self._normalize_cell(row.get(column.original), column.sql_type)
+                    self._normalize_cell(raw_value, column.sql_type)
                 )
             values.append(row_values)
 
