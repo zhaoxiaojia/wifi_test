@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import logging
 import os
-import re
 import math
 from pathlib import Path
 from typing import Optional
@@ -49,6 +48,7 @@ from src.util.constants import (
     TEST_TYPE_ORDER_MAP,
     TEXT_COLOR,
 )
+from src.util.rvr_chart_logic import RvrChartLogic
 
 class InteractiveChartLabel(QLabel):
     """QLabel subclass that shows tooltips for chart points when hovered."""
@@ -118,7 +118,7 @@ class InteractiveChartLabel(QLabel):
                 best_point = point
         return best_point
 
-class ReportPage(CardWidget):
+class ReportPage(RvrChartLogic, CardWidget):
     """Simple report viewer page.
 
     - Disabled in navigation by default; MainWindow enables it once report_dir is created
@@ -408,344 +408,6 @@ class ReportPage(CardWidget):
             return [(title, placeholder)] if placeholder is not None else []
         return results
 
-    def _load_rvr_dataframe(self, path: Path) -> pd.DataFrame:
-        try:
-            if path.suffix.lower() == '.csv':
-                try:
-                    df = pd.read_csv(path)
-                except UnicodeDecodeError:
-                    df = pd.read_csv(path, encoding='gbk')
-            else:
-                sheets = pd.read_excel(path, sheet_name=None)
-                frames = [sheet for sheet in sheets.values() if sheet is not None and not sheet.empty]
-                df = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
-        except Exception as exc:
-            logging.exception('Failed to read RVR results: %s', exc)
-            return pd.DataFrame()
-        if df is None or df.empty:
-            return pd.DataFrame()
-        return self._prepare_rvr_dataframe(df)
-
-    def _prepare_rvr_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
-        if df is None or df.empty:
-            return pd.DataFrame()
-        prepared = df.copy()
-        prepared.columns = [str(c).strip() for c in prepared.columns]
-        for column in prepared.columns:
-            prepared[column] = prepared[column].apply(lambda v: v.strip() if isinstance(v, str) else v)
-        if 'Direction' in prepared.columns:
-            prepared['Direction'] = prepared['Direction'].astype(str).str.upper()
-        for col in ('Freq_Band', 'Standard', 'BW', 'CH_Freq_MHz', 'DB'):
-            if col in prepared.columns:
-                prepared[col] = prepared[col].astype(str)
-        row_count = len(prepared)
-
-        def source_series(*names: str) -> pd.Series:
-            for name in names:
-                if name in prepared.columns:
-                    return prepared[name]
-            return pd.Series([''] * row_count, index=prepared.index, dtype=object)
-
-        standard_series = source_series('Standard')
-        prepared['__standard_display__'] = standard_series.apply(self._format_standard_display).replace('', 'Unknown')
-
-        bandwidth_series = source_series('BW', 'Bandwidth')
-        prepared['__bandwidth_display__'] = bandwidth_series.apply(self._format_bandwidth_display).replace('', 'Unknown')
-
-        freq_series = source_series('Freq_Band', 'Frequency Band', 'Band')
-        freq_display = freq_series.apply(self._format_freq_band_display)
-        if freq_display.eq('').all() and 'CH_Freq_MHz' in prepared.columns:
-            channel_freq = source_series('CH_Freq_MHz').apply(self._format_freq_band_display)
-            freq_display = freq_display.where(freq_display != '', channel_freq)
-        prepared['__freq_band_display__'] = freq_display.replace('', 'Unknown')
-
-        prepared['__direction_display__'] = source_series('Direction').apply(self._format_direction_display)
-
-        prepared['__channel_display__'] = source_series('CH_Freq_MHz', 'Channel').apply(self._format_channel_display)
-
-        prepared['__db_display__'] = source_series('DB', 'Total_Path_Loss', 'RxP', 'Attenuation', 'Path_Loss').apply(self._format_db_display)
-
-        prepared['__rssi_display__'] = source_series('RSSI', 'Data_RSSI', 'Data RSSI').apply(self._format_metric_display)
-
-        prepared['__test_type_display__'] = prepared.apply(self._detect_test_type_from_row, axis=1)
-
-        step_candidates = ('DB', 'Total_Path_Loss', 'RxP', 'Step', 'Attenuation')
-
-        def resolve_step(row: pd.Series) -> str | None:
-            for name in step_candidates:
-                if name in row:
-                    value = row.get(name)
-                    display = self._format_db_display(value)
-                    if display:
-                        return display
-                    normalized = self._normalize_step(value)
-                    if normalized:
-                        return normalized
-            return None
-
-        prepared['__step__'] = prepared.apply(resolve_step, axis=1)
-        fallback_steps = pd.Series([str(i + 1) for i in range(row_count)], index=prepared.index)
-        prepared['__step__'] = prepared['__step__'].fillna(fallback_steps)
-        empty_mask = prepared['__step__'] == ''
-        if empty_mask.any():
-            prepared.loc[empty_mask, '__step__'] = fallback_steps[empty_mask]
-
-        throughput_columns = self._resolve_throughput_columns(prepared.columns)
-        if throughput_columns:
-            prepared['__throughput_value__'] = prepared.apply(
-                lambda row: self._aggregate_throughput_row(row, throughput_columns),
-                axis=1,
-            )
-        else:
-            prepared['__throughput_value__'] = source_series('Throughput').apply(self._safe_float)
-
-        prepared['__throughput_value__'] = prepared['__throughput_value__'].apply(
-            lambda value: float(value) if isinstance(value, (int, float)) else value
-        )
-
-        return prepared.reset_index(drop=True)
-
-
-    def _resolve_throughput_columns(self, columns: pd.Index) -> list[str]:
-        if 'Throughput' not in columns:
-            return []
-        start = columns.get_loc('Throughput')
-        if 'Expect_Rate' in columns:
-            end = columns.get_loc('Expect_Rate')
-            if end <= start:
-                end = start + 1
-        else:
-            end = len(columns)
-        return list(columns[start:end])
-
-    def _aggregate_throughput_row(self, row: pd.Series, columns: list[str]) -> Optional[float]:
-        values: list[float] = []
-        for col in columns:
-            values.extend(self._parse_numeric_list(row.get(col)))
-        if not values:
-            return None
-        return sum(values) / len(values)
-
-    def _parse_numeric_list(self, value) -> list[float]:
-        if value is None:
-            return []
-        if isinstance(value, (int, float)):
-            return [float(value)]
-        s = str(value).strip()
-        if not s:
-            return []
-        parts = re.split(r'[\s,;/]+', s)
-        numbers: list[float] = []
-        for part in parts:
-            if not part:
-                continue
-            try:
-                numbers.append(float(part))
-            except ValueError:
-                continue
-        return numbers
-
-    def _detect_test_type_from_row(self, row: pd.Series) -> str:
-        for column in ('Test_Category', 'Sub_Category', 'Data_Rate', 'Protocol'):
-            value = row.get(column)
-            normalized = self._normalize_value(value)
-            if not normalized:
-                continue
-            if 'rvo' in normalized:
-                return 'RVO'
-            if 'rvr' in normalized:
-                return 'RVR'
-        for value in row.tolist():
-            normalized = self._normalize_value(value)
-            if not normalized:
-                continue
-            if 'rvo' in normalized:
-                return 'RVO'
-            if 'rvr' in normalized:
-                return 'RVR'
-        return 'RVR'
-
-    def _format_standard_display(self, value) -> str:
-        if value is None:
-            return ''
-        s = str(value).strip()
-        if not s or s.lower() in {'nan', 'null'}:
-            return ''
-        compact = s.replace(' ', '').replace('_', '')
-        lower = compact.lower()
-        if lower.startswith('11'):
-            return lower
-        return compact
-
-    def _format_bandwidth_display(self, value) -> str:
-        if value is None:
-            return ''
-        s = str(value).strip()
-        if not s or s.lower() in {'nan', 'null'}:
-            return ''
-        match = re.search(r'-?\d+(?:\.\d+)?', s)
-        if match:
-            num = match.group()
-            if num.endswith('.0'):
-                num = num[:-2]
-            return f'{num}MHz'
-        return s.replace(' ', '')
-
-    def _format_freq_band_display(self, value) -> str:
-        if value is None:
-            return ''
-        s = str(value).strip()
-        if not s:
-            return ''
-        lowered = s.lower()
-        if lowered in {'nan', 'null', 'none', 'n/a', 'na', '-'}:
-            return ''
-        compact = lowered.replace(' ', '')
-        if '2g4' in compact or '2.4g' in compact:
-            return '2.4G'
-        if '5g' in compact and '2.4g' not in compact:
-            return '5G'
-        if '6g' in compact or '6e' in compact:
-            return '6G'
-        match = re.search(r'-?\d+(?:\.\d+)?', compact)
-        if match:
-            try:
-                num = float(match.group())
-            except ValueError:
-                num = None
-            if num is not None:
-                if 'mhz' in compact and num >= 100:
-                    ghz = num / 1000.0
-                elif num >= 1000:
-                    ghz = num / 1000.0
-                else:
-                    ghz = num
-                if ghz < 3.5:
-                    return '2.4G'
-                if ghz < 6.0:
-                    return '5G'
-                if ghz < 8.0:
-                    return '6G'
-                if num <= 14:
-                    return '2.4G'
-                if 30 <= num < 200:
-                    return '5G'
-                if num >= 200:
-                    return '6G'
-        cleaned = s.upper().replace('GHZ', 'G').replace(' ', '')
-        return cleaned
-
-    def _format_direction_display(self, value) -> str:
-        if value is None:
-            return ''
-        s = str(value).strip().upper()
-        if not s or s in {'NAN', 'NULL'}:
-            return ''
-        if s in {'UL', 'UP', 'TX'}:
-            return 'TX'
-        if s in {'DL', 'DOWN', 'RX'}:
-            return 'RX'
-        return s
-
-    def _format_channel_display(self, value) -> str:
-        if value is None:
-            return ''
-        s = str(value).strip()
-        if not s or s.lower() in {'nan', 'null'}:
-            return ''
-        if s.endswith('.0'):
-            s = s[:-2]
-        return s
-
-    def _format_db_display(self, value) -> str:
-        if value is None:
-            return ''
-        s = str(value).strip()
-        if not s or s.lower() in {'nan', 'null'}:
-            return ''
-        match = re.search(r'-?\d+(?:\.\d+)?', s)
-        if match:
-            num = match.group()
-            if num.endswith('.0'):
-                num = num[:-2]
-            return num
-        return s
-
-    def _format_metric_display(self, value) -> str:
-        if value is None:
-            return ''
-        s = str(value).strip()
-        if not s or s.lower() in {'nan', 'null', 'n/a', 'false'}:
-            return ''
-        match = re.search(r'-?\d+(?:\.\d+)?', s)
-        if match:
-            num = match.group()
-            if num.endswith('.0'):
-                num = num[:-2]
-            return num
-        return s
-
-    def _parse_db_numeric(self, value) -> Optional[float]:
-        if value is None:
-            return None
-        if isinstance(value, (int, float)):
-            return float(value)
-        s = str(value).strip()
-        if not s:
-            return None
-        match = re.search(r'-?\d+(?:\.\d+)?', s)
-        if not match:
-            return None
-        try:
-            return float(match.group())
-        except ValueError:
-            return None
-
-    def _group_sort_key(self, key: tuple[str, str, str, str, str]):
-        standard, bandwidth, freq_band, test_type, direction = key
-        standard_idx = STANDARD_ORDER_MAP.get((standard or '').lower(), len(STANDARD_ORDER_MAP))
-        bandwidth_idx = BANDWIDTH_ORDER_MAP.get((bandwidth or '').lower(), len(BANDWIDTH_ORDER_MAP))
-        freq_idx = FREQ_BAND_ORDER_MAP.get((freq_band or '').lower(), len(FREQ_BAND_ORDER_MAP))
-        test_idx = TEST_TYPE_ORDER_MAP.get((test_type or '').upper(), len(TEST_TYPE_ORDER_MAP))
-        direction_idx = DIRECTION_ORDER_MAP.get((direction or '').upper(), len(DIRECTION_ORDER_MAP))
-        return (
-            standard_idx,
-            bandwidth_idx,
-            freq_idx,
-            test_idx,
-            direction_idx,
-            standard,
-            bandwidth,
-            freq_band,
-            test_type,
-            direction,
-        )
-
-    def _format_chart_title(
-        self,
-        standard: str,
-        bandwidth: str,
-        freq_band: str,
-        test_type: str,
-        direction: str,
-    ) -> str:
-        parts: list[str] = []
-        std = (standard or '').strip()
-        bw = (bandwidth or '').strip()
-        freq = (freq_band or '').strip()
-        tt = (test_type or '').strip().upper()
-        direction = (direction or '').strip().upper()
-        parts.append(std or 'Unknown')
-        if bw:
-            parts.append(bw)
-        if freq:
-            parts.append(freq)
-        label = f'{tt or "RVR"} Throughput'
-        parts.append(label)
-        if direction:
-            parts.append(direction)
-        return ' '.join(parts).strip()
-
     def _create_line_chart_widget(
         self,
         group: pd.DataFrame,
@@ -821,31 +483,6 @@ class ReportPage(CardWidget):
         save_path = charts_dir / f"{self._safe_chart_name(title)}.png"
         return self._figure_to_label(fig, ax, steps, save_path)
 
-    def _collect_step_labels(self, group: pd.DataFrame) -> list[str]:
-        steps: list[str] = []
-        for step in group['__step__']:
-            if step and step not in steps:
-                steps.append(step)
-        if not steps:
-            count = int(group['__throughput_value__'].notna().sum())
-            if count <= 0:
-                count = len(group.index)
-            if count <= 0:
-                return []
-            steps = [str(i + 1) for i in range(count)]
-        steps.sort(key=lambda item: (0, self._parse_db_numeric(item)) if self._parse_db_numeric(item) is not None else (1, item))
-        return steps
-
-    def _format_step_label(self, step: str) -> str:
-        if not step:
-            return ''
-        formatted = self._format_db_display(step)
-        return formatted or step
-
-    def _format_channel_series_label(self, channel: str) -> str:
-        channel = (channel or '').strip()
-        return f'CH{channel}' if channel else 'Unknown'
-
     def _create_pie_chart_widget(
         self,
         group: pd.DataFrame,
@@ -889,33 +526,6 @@ class ReportPage(CardWidget):
         fig.tight_layout(pad=0.6)
         save_path = charts_dir / f"{self._safe_chart_name(title)}.png"
         return self._figure_to_label(fig, ax, [], save_path)
-
-    def _format_pie_channel_label(self, channel: str, df: pd.DataFrame) -> str:
-        channel_name = (channel or '').strip()
-        if not channel_name:
-            channel_name = 'Unknown'
-        rssi_values = [
-            value for value in df['__rssi_display__'].tolist() if value and value not in {'-1', '0'}
-        ]
-        db_values = [value for value in df['__db_display__'].tolist() if value]
-        label_parts: list[str] = []
-        if rssi_values:
-            label_parts.append(f"rssi{rssi_values[0]}_ch{channel_name}")
-        if db_values:
-            label_parts.append(f"db{db_values[0]}_ch{channel_name}")
-        if not label_parts:
-            label_parts.append(f"ch{channel_name}")
-        return ' '.join(label_parts)
-
-    def _make_pie_autopct(self, values: tuple[float, ...]):
-        total = sum(values)
-
-        def _formatter(pct):
-            absolute = pct * total / 100.0
-            return f"{pct:.1f}%\n{absolute:.1f} Mbps"
-
-        return _formatter
-
 
     def _create_empty_chart_widget(self, title: str, charts_dir: Path, steps: Optional[list[str]] = None) -> Optional[InteractiveChartLabel]:
         fig, ax = plt.subplots(figsize=(7.5, 4.2), dpi=CHART_DPI)
@@ -1011,28 +621,6 @@ class ReportPage(CardWidget):
         return points
 
 
-    def _safe_float(self, value) -> Optional[float]:
-        if value is None:
-            return None
-        if isinstance(value, (int, float)):
-            return float(value)
-        s = str(value).strip()
-        if not s:
-            return None
-        lowered = s.lower()
-        if lowered in {'nan', 'null', 'n/a', 'false'}:
-            return None
-        normalized = s.replace('，', ',')
-        match = re.search(r'-?\d+(?:\.\d+)?', normalized)
-        if match:
-            try:
-                return float(match.group())
-            except ValueError:
-                return None
-        try:
-            return float(normalized)
-        except Exception:
-            return None
     def _build_point_tooltip(self, series: str, step: str, value: float, x_label: str, y_label: str) -> str:
 
         value_str = f"{value:.2f}".rstrip('0').rstrip('.')
@@ -1058,40 +646,6 @@ class ReportPage(CardWidget):
             '</div>'
 
         )
-
-    def _safe_chart_name(self, title: str) -> str:
-        safe = re.sub(r'[^0-9A-Za-z_-]+', '_', title).strip('_')
-        return safe or 'rvr_chart'
-
-    def _series_with_nan(self, values: list[Optional[float]]) -> list[float]:
-        series: list[float] = []
-        for value in values:
-            series.append(math.nan if value is None else float(value))
-        return series
-
-    def _normalize_value(self, value) -> str:
-        return str(value).strip().lower() if value is not None else ''
-
-    def _normalize_step(self, value) -> Optional[str]:
-        if value is None:
-            return None
-        s = str(value).strip()
-        if not s or s.lower() in {'nan', 'null'}:
-            return None
-        return s
-
-    def _extract_first_non_empty(self, row: pd.Series, columns: tuple[str, ...]):
-        for column in columns:
-            if column not in row:
-                continue
-            value = row.get(column)
-            if value is None:
-                continue
-            s = str(value).strip()
-            if not s or s.lower() in {'nan', 'null', 'none', 'n/a', 'na', '-'}:
-                continue
-            return value
-        return None
 
     def _start_tail(self, path: Path, *, force_view: bool = True):
         # stop previous
