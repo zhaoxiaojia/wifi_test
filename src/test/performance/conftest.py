@@ -32,6 +32,7 @@ def performance_sync_manager() -> Callable[[str, str], None]:
             "message": message or f"Stored rows for {normalized_type}",
         }
         if normalized_type in {"RVR", "RVO"}:
+            logging.info("Trigger auto chart generation for %s: %s", normalized_type, log_file)
             try:
                 generated = generate_rvr_charts(log_file)
             except Exception:
