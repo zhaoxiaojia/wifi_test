@@ -25,9 +25,9 @@ from PyQt5.QtWidgets import (
     QLabel,
     QStackedWidget,
     QTabWidget,
-    QScrollArea,
     QToolTip,
     QSizePolicy,
+    QWidget,
 )
 from qfluentwidgets import CardWidget, StrongBodyLabel
 
@@ -422,11 +422,13 @@ class ReportPage(RvrChartLogic, CardWidget):
             for title, chart_widget in charts:
                 if chart_widget is None:
                     continue
-                scroll = QScrollArea(self.chart_tabs)
-                scroll.setWidgetResizable(True)
-                chart_widget.setParent(scroll)
-                scroll.setWidget(chart_widget)
-                self.chart_tabs.addTab(scroll, title)
+                container = QWidget(self.chart_tabs)
+                container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+                layout = QVBoxLayout(container)
+                layout.setContentsMargins(0, 0, 0, 0)
+                layout.setSpacing(0)
+                layout.addWidget(chart_widget)
+                self.chart_tabs.addTab(container, title)
         finally:
             self.chart_tabs.blockSignals(False)
         if 0 <= current_index < self.chart_tabs.count():
