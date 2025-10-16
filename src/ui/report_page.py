@@ -25,8 +25,9 @@ from PyQt5.QtWidgets import (
     QLabel,
     QStackedWidget,
     QTabWidget,
-    QScrollArea,
     QToolTip,
+    QSizePolicy,
+    QWidget,
 )
 from qfluentwidgets import CardWidget, StrongBodyLabel
 
@@ -65,19 +66,22 @@ class InteractiveChartLabel(QLabel):
                     "border: 1px solid #7f7f7f; padding: 4px; }"
                 )
             InteractiveChartLabel._TOOLTIP_CONFIGURED = True
+        self.setAlignment(Qt.AlignCenter)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self._points: list[dict[str, object]] = []
         self._hit_radius = 12
         self._last_point: Optional[dict[str, object]] = None
+        self._base_points: list[dict[str, object]] = []
+        self._original_pixmap: Optional[QPixmap] = None
+        self._original_width: int = 0
+        self._original_height: int = 0
+        self._current_pixmap_width: int = 0
+        self._current_pixmap_height: int = 0
         self.setMouseTracking(True)
 
     def set_points(self, points: list[dict[str, object]]) -> None:
-        self._points = points or []
-        self._last_point = None
-        has_points = bool(self._points)
-        self.setMouseTracking(has_points)
-        self.setCursor(Qt.PointingHandCursor if has_points else Qt.ArrowCursor)
-        if not has_points:
-            QToolTip.hideText()
+        self._base_points = points or []
+        self._refresh_points()
 
     def mouseMoveEvent(self, event):
         if self._points:
@@ -100,6 +104,28 @@ class InteractiveChartLabel(QLabel):
         QToolTip.hideText()
         super().leaveEvent(event)
 
+    def setPixmap(self, pixmap: QPixmap) -> None:  # type: ignore[override]
+        if pixmap is None or pixmap.isNull():
+            self._original_pixmap = None
+            self._original_width = 0
+            self._original_height = 0
+            self._current_pixmap_width = 0
+            self._current_pixmap_height = 0
+            super().setPixmap(pixmap)
+            self._refresh_points()
+            return
+        self._original_pixmap = QPixmap(pixmap)
+        self._original_width = self._original_pixmap.width()
+        self._original_height = self._original_pixmap.height()
+        self._update_scaled_pixmap()
+        self._refresh_points()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if self._original_pixmap is not None:
+            self._update_scaled_pixmap()
+            self._refresh_points()
+
     def _find_point(self, pos):
         radius_sq = float(self._hit_radius * self._hit_radius)
         best_point = None
@@ -117,6 +143,59 @@ class InteractiveChartLabel(QLabel):
                 best_distance = dist_sq
                 best_point = point
         return best_point
+
+    def _refresh_points(self) -> None:
+        self._hit_radius = 12
+        if not self._base_points:
+            self._points = []
+        elif not self._original_width or not self._original_height:
+            self._points = [dict(point) for point in self._base_points]
+        elif not self._current_pixmap_width or not self._current_pixmap_height:
+            self._points = [dict(point) for point in self._base_points]
+        else:
+            scale_x = self._current_pixmap_width / float(self._original_width)
+            scale_y = self._current_pixmap_height / float(self._original_height)
+            offset_x = max(0.0, (self.width() - self._current_pixmap_width) / 2.0)
+            offset_y = max(0.0, (self.height() - self._current_pixmap_height) / 2.0)
+            scaled_points: list[dict[str, object]] = []
+            for point in self._base_points:
+                raw_pos = point.get('position', (None, None))
+                if not isinstance(raw_pos, (tuple, list)) or len(raw_pos) != 2:
+                    continue
+                px, py = raw_pos
+                if px is None or py is None:
+                    continue
+                new_point = dict(point)
+                new_point['position'] = (
+                    offset_x + float(px) * scale_x,
+                    offset_y + float(py) * scale_y,
+                )
+                scaled_points.append(new_point)
+            avg_scale = (scale_x + scale_y) / 2.0
+            self._hit_radius = max(6, int(round(12 * avg_scale)))
+            self._points = scaled_points
+        self._last_point = None
+        has_points = bool(self._points)
+        self.setMouseTracking(has_points)
+        self.setCursor(Qt.PointingHandCursor if has_points else Qt.ArrowCursor)
+        if not has_points:
+            QToolTip.hideText()
+
+    def _update_scaled_pixmap(self) -> None:
+        if self._original_pixmap is None:
+            return
+        if self.width() <= 1 or self.height() <= 1:
+            scaled = self._original_pixmap
+        else:
+            scaled = self._original_pixmap.scaled(
+                self.width(),
+                self.height(),
+                Qt.KeepAspectRatio,
+                Qt.SmoothTransformation,
+            )
+        self._current_pixmap_width = scaled.width()
+        self._current_pixmap_height = scaled.height()
+        super().setPixmap(scaled)
 
 class ReportPage(RvrChartLogic, CardWidget):
     """Simple report viewer page.
@@ -343,11 +422,13 @@ class ReportPage(RvrChartLogic, CardWidget):
             for title, chart_widget in charts:
                 if chart_widget is None:
                     continue
-                scroll = QScrollArea(self.chart_tabs)
-                scroll.setWidgetResizable(True)
-                chart_widget.setParent(scroll)
-                scroll.setWidget(chart_widget)
-                self.chart_tabs.addTab(scroll, title)
+                container = QWidget(self.chart_tabs)
+                container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+                layout = QVBoxLayout(container)
+                layout.setContentsMargins(0, 0, 0, 0)
+                layout.setSpacing(0)
+                layout.addWidget(chart_widget)
+                self.chart_tabs.addTab(container, title)
         finally:
             self.chart_tabs.blockSignals(False)
         if 0 <= current_index < self.chart_tabs.count():
@@ -444,13 +525,19 @@ class ReportPage(RvrChartLogic, CardWidget):
                     x_positions,
                     self._series_with_nan(values),
                     marker='o',
+                    markersize=5,
                     label=self._format_channel_series_label(channel_name),
                 )
         if not has_series:
             plt.close(fig)
             return self._create_empty_chart_widget(title, charts_dir, steps)
         ax.set_xticks(x_positions)
-        ax.set_xticklabels([self._format_step_label(step) for step in steps], rotation=30, ha='right')
+        ax.set_xticklabels(
+            [self._format_step_label(step) for step in steps],
+            rotation=30,
+            ha='right',
+            fontsize=9,
+        )
         ax.set_xlabel('attenuation (dB)')
         ax.set_ylabel('throughput (Mbps)')
         ax.set_title(title, loc='left', pad=4)
@@ -533,7 +620,7 @@ class ReportPage(RvrChartLogic, CardWidget):
         if steps:
             x_positions = list(range(len(steps)))
             ax.set_xticks(x_positions)
-            ax.set_xticklabels(steps, rotation=30, ha='right')
+            ax.set_xticklabels(steps, rotation=30, ha='right', fontsize=9)
         else:
             ax.set_xticks([])
         ax.set_xlabel('attenuation (dB)')
@@ -559,9 +646,7 @@ class ReportPage(RvrChartLogic, CardWidget):
             image = QImage(buffer, width, height, QImage.Format_RGBA8888).copy()
             pixmap = QPixmap.fromImage(image)
             label = InteractiveChartLabel()
-            label.setAlignment(Qt.AlignCenter)
             label.setPixmap(pixmap)
-            label.setFixedSize(pixmap.size())
             points = self._extract_chart_points(ax, steps, width, height)
             label.set_points(points)
             if save_path is not None:
