@@ -180,6 +180,7 @@ class AsusTelnetNvramControl(AsusBaseControl):
         cmd = {
             'auto': 'nvram set wl1_11ax=0;nvram set wl1_nmode_x=0;',
             '11a': 'nvram set wl1_11ax=0;nvram set wl1_nmode_x=7;',
+            '11n': 'nvram set wl1_11ax=0;nvram set wl1_nmode_x=1;',
             '11ac': 'nvram set wl1_11ax=0;nvram set wl1_nmode_x=3;',
             '11ax': 'nvram set wl1_11ax=1;nvram set wl1_nmode_x=0;',
             'Legacy': 'nvram set wl1_he_features=0;nvram set wl1_nmode_x=2;',
