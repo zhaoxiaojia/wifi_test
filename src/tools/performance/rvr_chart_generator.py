@@ -99,8 +99,7 @@ class PerformanceRvrChartGenerator(RvrChartLogic):
                     )
             if not has_series:
                 return self._create_empty_chart(charts_dir, title, steps)
-            ax.set_xticks(x_positions)
-            ax.set_xticklabels([self._format_step_label(step) for step in steps], rotation=30, ha="right")
+            self._configure_step_axis(ax, steps)
             ax.set_xlabel("attenuation (dB)")
             ax.set_ylabel("throughput (Mbps)")
             ax.set_title(title, loc="left", pad=4)
@@ -189,10 +188,7 @@ class PerformanceRvrChartGenerator(RvrChartLogic):
         fig, ax = plt.subplots(figsize=(7.5, 4.2), dpi=CHART_DPI)
         try:
             if steps:
-                x_positions = list(range(len(steps)))
-                ax.set_xticks(x_positions)
-                ax.set_xticklabels(steps, rotation=30, ha="right")
-                ax.set_xlim(-0.5, len(steps) - 0.5)
+                self._configure_step_axis(ax, steps)
             else:
                 ax.set_xticks([])
                 ax.set_xlim(0, 1)

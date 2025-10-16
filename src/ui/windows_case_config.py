@@ -600,6 +600,7 @@ class CaseConfigPage(CardWidget):
         self._enable_rvr_wifi: bool = False
         self._locked_fields: set[str] | None = None
         self._current_case_path: str = ""
+        self._last_editable_info: EditableInfo | None = None
         # -------------------- layout --------------------
         self.splitter = QSplitter(Qt.Horizontal, self)
         self.splitter.setChildrenCollapsible(False)
@@ -1268,11 +1269,10 @@ class CaseConfigPage(CardWidget):
 
     def _reset_second_page_inputs(self) -> None:
         if hasattr(self, "csv_combo"):
-            with QSignalBlocker(self.csv_combo):
-                self.csv_combo.setCurrentIndex(-1)
+            self._set_selected_csv(self.selected_csv_path, sync_combo=True)
             self.csv_combo.setEnabled(bool(self._enable_rvr_wifi))
-        self.selected_csv_path = None
-        self._update_rvr_nav_button()
+        else:
+            self._set_selected_csv(None, sync_combo=False)
 
     def _reset_wizard_after_run(self) -> None:
         self.stack.setCurrentIndex(0)
@@ -1544,8 +1544,49 @@ class CaseConfigPage(CardWidget):
                     self.csv_combo.addItem(csv_file.name)
                     idx = self.csv_combo.count() - 1
                     self.csv_combo.setItemData(idx, str(csv_file.resolve()))
-                self.csv_combo.setCurrentIndex(-1)
-        self.selected_csv_path = None
+        self._set_selected_csv(None, sync_combo=True)
+
+    def _normalize_csv_path(self, path: Any) -> str | None:
+        """Normalize CSV paths to absolute strings for reliable comparisons."""
+        if not path:
+            return None
+        try:
+            return str(Path(path).resolve())
+        except Exception:
+            return str(path)
+
+    def _find_csv_index(self, normalized_path: str) -> int:
+        """Return the combo index for a normalized CSV path."""
+        if not hasattr(self, "csv_combo"):
+            return -1
+        for idx in range(self.csv_combo.count()):
+            data = self.csv_combo.itemData(idx)
+            if not data:
+                continue
+            candidate = self._normalize_csv_path(data)
+            if candidate == normalized_path:
+                return idx
+        return -1
+
+    def _set_selected_csv(self, path: str | None, *, sync_combo: bool = True) -> bool:
+        """
+        Update the cached CSV selection and optionally sync the combo box.
+
+        Returns True when the selection actually changes.
+        """
+        normalized = self._normalize_csv_path(path)
+        target_index = -1
+        if sync_combo and normalized and hasattr(self, "csv_combo"):
+            target_index = self._find_csv_index(normalized)
+            if target_index == -1:
+                normalized = None
+        changed = normalized != self.selected_csv_path
+        self.selected_csv_path = normalized
+        if sync_combo and hasattr(self, "csv_combo"):
+            with QSignalBlocker(self.csv_combo):
+                self.csv_combo.setCurrentIndex(target_index)
+        self._update_rvr_nav_button()
+        return changed
 
     def _update_rvr_nav_button(self) -> None:
         """根据当前状态更新 RVR 导航按钮可用性"""
@@ -2285,6 +2326,33 @@ class CaseConfigPage(CardWidget):
         # 如果你需要所有字段都可编辑，直接 return EditableInfo(set(self.field_widgets.keys()), True, True)
         return info
 
+    def _apply_editable_info(self, info: EditableInfo | None) -> None:
+        if info is None:
+            fields: set[str] = set()
+            enable_csv = False
+            enable_rvr_wifi = False
+        else:
+            fields = set(info.fields)
+            enable_csv = info.enable_csv
+            enable_rvr_wifi = info.enable_rvr_wifi
+        snapshot = EditableInfo(fields=fields, enable_csv=enable_csv, enable_rvr_wifi=enable_rvr_wifi)
+        self._last_editable_info = snapshot
+        self.set_fields_editable(snapshot.fields)
+        self._enable_rvr_wifi = snapshot.enable_rvr_wifi
+        if hasattr(self, "csv_combo"):
+            if snapshot.enable_csv:
+                self.csv_combo.setEnabled(True)
+                self._set_selected_csv(self.selected_csv_path, sync_combo=True)
+            else:
+                self._set_selected_csv(None, sync_combo=True)
+                self.csv_combo.setEnabled(False)
+        else:
+            if not snapshot.enable_csv:
+                self._set_selected_csv(None, sync_combo=False)
+
+    def _restore_editable_state(self) -> None:
+        self._apply_editable_info(self._last_editable_info)
+
     def get_editable_fields(self, case_path) -> EditableInfo:
         """选中用例后控制字段可编辑性并返回相关信息"""
         logging.debug("get_editable_fields case_path=%s", case_path)
@@ -2304,7 +2372,7 @@ class CaseConfigPage(CardWidget):
             # 若 csv 下拉框尚未创建，则视为不支持 CSV 功能
             if info.enable_csv and not hasattr(self, "csv_combo"):
                 info.enable_csv = False
-            self.set_fields_editable(info.fields)
+            self._apply_editable_info(info)
         finally:
             # ---------- 刷新结束 ----------
             self.setUpdatesEnabled(True)
@@ -2316,19 +2384,8 @@ class CaseConfigPage(CardWidget):
             logging.debug("get_editable_fields: before switch to case_config_page")
             main_window.setCurrentIndex(main_window.case_config_page)
             logging.debug("get_editable_fields: after switch to case_config_page")
-        self._enable_rvr_wifi = info.enable_rvr_wifi
-        if hasattr(self, "csv_combo"):
-            if info.enable_csv:
-                self.csv_combo.setEnabled(True)
-            else:
-                with QSignalBlocker(self.csv_combo):
-                    self.csv_combo.setCurrentIndex(-1)
-                self.csv_combo.setEnabled(False)
-                self.selected_csv_path = None
-        else:
-            self.selected_csv_path = None
+        if not hasattr(self, "csv_combo"):
             logging.debug("csv_combo disabled")
-        self._update_rvr_nav_button()
         # 若用户在刷新过程中又点了别的用例，延迟 0 ms 处理它
         if self._pending_path:
             path = self._pending_path
@@ -2367,10 +2424,13 @@ class CaseConfigPage(CardWidget):
         self.case_tree.setEnabled(not locked)
         self._run_locked = locked
         self._sync_run_buttons_enabled()
-        for w in self.field_widgets.values():
-            w.setEnabled(not locked)
-        if hasattr(self, "csv_combo"):
-            self.csv_combo.setEnabled(not locked and self._enable_rvr_wifi)
+        if locked:
+            for w in self.field_widgets.values():
+                w.setEnabled(False)
+            if hasattr(self, "csv_combo"):
+                self.csv_combo.setEnabled(False)
+        else:
+            self._restore_editable_state()
         if not locked:
             self._update_navigation_state()
 
@@ -2384,18 +2444,16 @@ class CaseConfigPage(CardWidget):
         
         """Store the selected CSV path and emit a change signal."""
         if index < 0:
-            self.selected_csv_path = None
-            self._update_rvr_nav_button()
+            self._set_selected_csv(None, sync_combo=False)
             return
         # 明确使用 UserRole 获取数据，避免在不同 Qt 版本下默认角色不一致
         data = self.csv_combo.itemData(index)
         logging.debug("on_csv_changed index=%s data=%s", index, data)
-        new_path = str(Path(data).resolve()) if data else None
+        new_path = self._normalize_csv_path(data)
         if not force and new_path == self.selected_csv_path:
             return
-        self.selected_csv_path = new_path
+        self._set_selected_csv(new_path, sync_combo=False)
         logging.debug("selected_csv_path=%s", self.selected_csv_path)
-        self._update_rvr_nav_button()
         self.csvFileChanged.emit(self.selected_csv_path or "")
 
     def on_run(self):

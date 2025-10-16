@@ -301,6 +301,19 @@ class ReportPage(RvrChartLogic, CardWidget):
     # -------- public API ---------
     def set_report_dir(self, path: str | Path) -> None:
         p = Path(path).resolve()
+        previous = getattr(self, "_report_dir", None)
+        if previous is None or p != previous:
+            self._stop_tail()
+            self._current_file = None
+            self._rvr_last_mtime = None
+            if hasattr(self, "viewer"):
+                self.viewer.clear()
+            if hasattr(self, "chart_tabs"):
+                self.chart_tabs.clear()
+            if hasattr(self, "viewer_stack"):
+                self.viewer_stack.setCurrentWidget(self.viewer)
+            if hasattr(self, "file_list"):
+                self.file_list.clear()
         self._report_dir = p
         self.dir_label.setText(f"Report dir: {p.as_posix()}")
         # refresh now if visible
@@ -321,14 +334,27 @@ class ReportPage(RvrChartLogic, CardWidget):
         # preserve selection if possible
         current = self._current_file.as_posix() if self._current_file else None
         selected_row = -1
+        latest_row = -1
+        latest_mtime: float | None = None
         for i, f in enumerate(files):
             it = QListWidgetItem(f.name)
             it.setToolTip(f.as_posix())
             self.file_list.addItem(it)
             if current and f.as_posix() == current:
                 selected_row = i
+            try:
+                mtime = f.stat().st_mtime
+            except Exception:
+                mtime = None
+            if mtime is not None and (latest_mtime is None or mtime > latest_mtime):
+                latest_mtime = mtime
+                latest_row = i
         if selected_row >= 0:
             self.file_list.setCurrentRow(selected_row)
+        elif latest_row >= 0:
+            self.file_list.setCurrentRow(latest_row)
+        elif files:
+            self.file_list.setCurrentRow(len(files) - 1)
 
     # -------- events ---------
     def showEvent(self, event: QEvent):
@@ -531,13 +557,7 @@ class ReportPage(RvrChartLogic, CardWidget):
         if not has_series:
             plt.close(fig)
             return self._create_empty_chart_widget(title, charts_dir, steps)
-        ax.set_xticks(x_positions)
-        ax.set_xticklabels(
-            [self._format_step_label(step) for step in steps],
-            rotation=30,
-            ha='right',
-            fontsize=9,
-        )
+        self._configure_step_axis(ax, steps)
         ax.set_xlabel('attenuation (dB)')
         ax.set_ylabel('throughput (Mbps)')
         ax.set_title(title, loc='left', pad=4)
@@ -618,19 +638,14 @@ class ReportPage(RvrChartLogic, CardWidget):
         fig, ax = plt.subplots(figsize=(7.5, 4.2), dpi=CHART_DPI)
         steps = steps or []
         if steps:
-            x_positions = list(range(len(steps)))
-            ax.set_xticks(x_positions)
-            ax.set_xticklabels(steps, rotation=30, ha='right', fontsize=9)
+            self._configure_step_axis(ax, steps)
         else:
             ax.set_xticks([])
+            ax.set_xlim(0, 1)
         ax.set_xlabel('attenuation (dB)')
         ax.set_ylabel('throughput (Mbps)')
         ax.set_title(title, loc='left', pad=4)
         ax.grid(alpha=0.2, linestyle='--')
-        if steps:
-            ax.set_xlim(-0.5, len(steps) - 0.5)
-        else:
-            ax.set_xlim(0, 1)
         ax.set_ylim(0, 1)
         ax.text(0.5, 0.5, 'No data collected yet', transform=ax.transAxes, ha='center', va='center', color='#888888')
         fig.tight_layout(pad=0.6)
