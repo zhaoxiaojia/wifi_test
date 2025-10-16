@@ -397,6 +397,48 @@ class RvrChartLogic:
         formatted = self._format_db_display(step)
         return formatted or step
 
+    @staticmethod
+    def _compute_major_step_indices(count: int, max_labels: int = 18) -> list[int]:
+        if count <= 0:
+            return []
+        if count <= max_labels:
+            return list(range(count))
+        stride = max(1, math.ceil(count / max_labels))
+        indices = list(range(0, count, stride))
+        last_index = count - 1
+        if indices[-1] != last_index:
+            indices.append(last_index)
+        if indices[0] != 0:
+            indices.insert(0, 0)
+        # remove possible duplicates and keep order
+        seen: set[int] = set()
+        deduped: list[int] = []
+        for idx in indices:
+            if idx not in seen:
+                seen.add(idx)
+                deduped.append(idx)
+        return deduped
+
+    def _configure_step_axis(self, ax, steps: list[str], max_labels: int = 18) -> None:
+        if not steps:
+            ax.set_xticks([])
+            ax.set_xlim(0, 1)
+            return
+        count = len(steps)
+        positions = list(range(count))
+        ax.set_xticks(positions, minor=True)
+        max_index = max(1, count - 1)
+        padding = min(0.4, max_index * 0.05 if max_index else 0.4)
+        ax.set_xlim(-padding, max_index + padding)
+        major_indices = self._compute_major_step_indices(count, max_labels=max_labels)
+        major_positions = [positions[i] for i in major_indices]
+        major_labels = [self._format_step_label(steps[i]) for i in major_indices]
+        ax.set_xticks(major_positions)
+        ax.set_xticklabels(major_labels, rotation=0)
+        for label in ax.get_xticklabels():
+            label.set_horizontalalignment("center")
+            label.set_verticalalignment("top")
+
     def _format_channel_series_label(self, channel: str) -> str:
         channel = (channel or "").strip()
         return f"CH{channel}" if channel else "Unknown"

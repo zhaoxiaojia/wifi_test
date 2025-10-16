@@ -391,7 +391,7 @@ class dut():
         return dut_ip
 
     @step
-    def get_rx_rate(self, router_info, type='TCP', corner_tool=None, db_set=''):
+    def get_rx_rate(self, router_info, type='TCP', corner_tool=None, db_set='', debug=False):
         router_cfg = {
             router_info.band: {
                 'mode': router_info.wireless_mode,
@@ -427,10 +427,19 @@ class dut():
         self.rvr_result = None
         mcs_rx = None
 
-        if is_database_debug_enabled():
+        database_debug = is_database_debug_enabled()
+        debug_enabled = debug or database_debug
+        if debug_enabled:
+            sources = []
+            if debug:
+                sources.append("parameter")
+            if database_debug:
+                sources.append("database flag")
+            reason = " + ".join(sources) if sources else "unknown"
             simulated = round(random.uniform(100, 200), 2)
             logging.info(
-                "Database debug mode enabled, skip iperf RX test and return %.2f Mbps",
+                "Debug throughput mode enabled (%s), skip iperf RX test and return %.2f Mbps",
+                reason,
                 simulated,
             )
             rx_result_list.append(f"{simulated:.2f}")
@@ -509,7 +518,7 @@ class dut():
         return ','.join(map(str, rx_result_list)) if rx_result_list else 'N/A'
 
     @step
-    def get_tx_rate(self, router_info, type='TCP', corner_tool=None, db_set=''):
+    def get_tx_rate(self, router_info, type='TCP', corner_tool=None, db_set='', debug=False):
         router_cfg = {
             router_info.band: {
                 'mode': router_info.wireless_mode,
@@ -547,10 +556,19 @@ class dut():
         self.rvr_result = None
         mcs_tx = None
 
-        if is_database_debug_enabled():
+        database_debug = is_database_debug_enabled()
+        debug_enabled = debug or database_debug
+        if debug_enabled:
+            sources = []
+            if debug:
+                sources.append("parameter")
+            if database_debug:
+                sources.append("database flag")
+            reason = " + ".join(sources) if sources else "unknown"
             simulated = round(random.uniform(100, 200), 2)
             logging.info(
-                "Database debug mode enabled, skip iperf TX test and return %.2f Mbps",
+                "Debug throughput mode enabled (%s), skip iperf TX test and return %.2f Mbps",
+                reason,
                 simulated,
             )
             tx_result_list.append(f"{simulated:.2f}")
