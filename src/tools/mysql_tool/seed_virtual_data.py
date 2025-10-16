@@ -18,12 +18,20 @@ import logging
 import math
 import random
 import re
+import sys
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Dict, Iterable, Iterator, List, Mapping, Sequence
 
-from . import MySqlClient
-from .schema import ensure_report_tables, get_table_spec
+if __package__ is None or __package__ == "":  # 当作脚本直接运行时补充项目根路径
+    PROJECT_ROOT = Path(__file__).resolve().parents[2]
+    PROJECT_ROOT_STR = str(PROJECT_ROOT)
+    if PROJECT_ROOT_STR not in sys.path:
+        sys.path.insert(0, PROJECT_ROOT_STR)
+
+from src.tools.mysql_tool import MySqlClient
+from src.tools.mysql_tool.schema import ensure_report_tables, get_table_spec
 
 
 LOGGER = logging.getLogger("virtual_data_injector")
