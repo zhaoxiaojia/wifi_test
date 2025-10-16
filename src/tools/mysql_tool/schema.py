@@ -28,6 +28,7 @@ __all__ = [
     "ensure_table",
     "ensure_config_tables",
     "ensure_report_tables",
+    "get_table_spec",
     "PERFORMANCE_STATIC_COLUMNS",
 ]
 
@@ -309,6 +310,15 @@ def ensure_table(client, table_name: str, spec: TableSpec) -> None:
     if _table_exists(client, table_name):
         return
     _create_table(client, table_name, spec)
+
+
+def get_table_spec(table_name: str) -> TableSpec:
+    """Return the :class:`TableSpec` registered for *table_name*."""
+
+    try:
+        return _TABLE_SPECS[table_name]
+    except KeyError as exc:  # pragma: no cover - defensive guard
+        raise KeyError(f"Unknown table spec: {table_name}") from exc
 
 
 def ensure_config_tables(client) -> None:
