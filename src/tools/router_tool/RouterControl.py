@@ -84,7 +84,7 @@ class RouterTools(RouterControl):
     BANDWIDTH_2 = ['20/40 MHz', '20 MHz', '40 MHz']
     BANDWIDTH_5 = ['20/40/80 MHz', '20 MHz', '40 MHz', '80 MHz', '160 MHz']
     WIRELESS_2 = ['auto', '11b', '11g', '11n', '11ax']
-    WIRELESS_5: list[str] = ['auto', '11a', '11ac', '11ax']
+    WIRELESS_5: list[str] = ['auto', '11a', '11n', '11ac', '11ax']
 
     AUTHENTICATION_METHOD = ['Open System', 'WPA2-Personal', 'WPA3-Personal', 'WPA/WPA2-Personal', 'WPA2/WPA3-Personal',
                              'WPA2-Enterprise', 'WPA/WPA2-Enterprise']
