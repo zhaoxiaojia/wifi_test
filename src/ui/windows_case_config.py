@@ -1855,14 +1855,6 @@ class CaseConfigPage(CardWidget):
                 vbox.addWidget(QLabel("Step:"))
                 vbox.addWidget(self.rf_step_widget)
 
-                self.rf_step_hint = QLabel(
-                    "使用下方输入框依次填写起始、结束与步长，点击 Add 添加，"
-                    "选中后可 Del 删除。若列表为空，执行时会自动补上默认区间 0-75 (步长 3)。"
-                )
-                self.rf_step_hint.setWordWrap(True)
-                self.rf_step_hint.setObjectName("rfStepHintLabel")
-                vbox.addWidget(self.rf_step_hint)
-
                 # ---- 加入表单 & 初始化可见性 ----
                 self._register_group(key, group, self._is_dut_key(key))
                 self.on_rf_model_changed(self.rf_model_combo.currentText())
