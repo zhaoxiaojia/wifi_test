@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from pathlib import Path
 from typing import List, Optional
 
@@ -11,6 +12,7 @@ import matplotlib
 matplotlib.use("Agg", force=True)
 import matplotlib.pyplot as plt
 import pandas as pd
+from matplotlib.lines import Line2D
 
 from src.util.constants import CHART_DPI, TEXT_COLOR
 from src.util.rvr_chart_logic import RvrChartLogic
@@ -49,7 +51,8 @@ class PerformanceRvrChartGenerator(RvrChartLogic):
             title = self._format_chart_title(standard, bandwidth, freq_band, test_type, direction)
             if not title:
                 continue
-            if (test_type or "").strip().upper() == "RVO":
+            normalized_type = (test_type or "").strip().upper()
+            if normalized_type == "RVO":
                 image = self._save_pie_chart(group, title, charts_dir)
             else:
                 image = self._save_line_chart(group, title, charts_dir)
@@ -113,7 +116,14 @@ class PerformanceRvrChartGenerator(RvrChartLogic):
             else:
                 ax.set_ylim(bottom=0)
             handles, labels = ax.get_legend_handles_labels()
+            handles = list(handles)
+            labels = list(labels)
             if handles:
+                annotations = self._collect_user_annotations(group)
+                if annotations:
+                    dummy_handles = [Line2D([], [], linestyle="None", marker="", linewidth=0) for _ in annotations]
+                    handles.extend(dummy_handles)
+                    labels.extend(annotations)
                 column_count = max(1, min(len(handles), 4))
                 legend = ax.legend(
                     handles,
@@ -140,8 +150,13 @@ class PerformanceRvrChartGenerator(RvrChartLogic):
     def _save_pie_chart(self, group: pd.DataFrame, title: str, charts_dir: Path) -> Optional[Path]:
         channel_values: list[tuple[str, float]] = []
         for channel, channel_df in group.groupby("__channel_display__", dropna=False):
-            throughput_values = [v for v in channel_df["__throughput_value__"].tolist() if v is not None]
-            throughput_values = [float(v) for v in throughput_values if isinstance(v, (int, float)) and pd.notna(v)]
+            throughput_values = [
+                float(v)
+                for v in channel_df["__throughput_value__"].tolist()
+                if isinstance(v, (int, float))
+                and pd.notna(v)
+                and math.isfinite(float(v))
+            ]
             if not throughput_values:
                 continue
             avg_value = sum(throughput_values) / len(throughput_values)
@@ -162,9 +177,15 @@ class PerformanceRvrChartGenerator(RvrChartLogic):
             )
             ax.set_title(title, pad=6)
             ax.axis("equal")
+            legend_handles = list(wedges)
+            legend_labels = list(labels)
+            annotations = self._collect_user_annotations(group)
+            if annotations:
+                legend_handles.extend([Line2D([], [], linestyle="None", marker="", linewidth=0) for _ in annotations])
+                legend_labels.extend(annotations)
             legend = ax.legend(
-                wedges,
-                labels,
+                legend_handles,
+                legend_labels,
                 loc="center left",
                 bbox_to_anchor=(1.02, 0.5),
                 frameon=False,

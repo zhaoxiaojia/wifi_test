@@ -12,6 +12,7 @@ from html import escape
 
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_agg import FigureCanvasAgg
+from matplotlib.lines import Line2D
 
 import pandas as pd
 from PyQt5.QtCore import Qt, QTimer, QEvent
@@ -397,7 +398,8 @@ class ReportPage(RvrChartLogic, CardWidget):
         suffix = path.suffix.lower()
         if suffix not in {'.csv', '.xlsx', '.xls'}:
             return False
-        return 'rvr' in name
+        keywords = ('rvr', 'rvo', 'peak_throughput', 'peak-throughput', 'peakthroughput')
+        return any(keyword in name for keyword in keywords)
 
     def _display_rvr_summary(self, path: Path) -> None:
         self._stop_tail()
@@ -503,7 +505,8 @@ class ReportPage(RvrChartLogic, CardWidget):
             title = self._format_chart_title(standard, bandwidth, freq_band, test_type, direction)
             if not title:
                 continue
-            if test_type.upper() == 'RVO':
+            normalized_type = (test_type or "").strip().upper()
+            if normalized_type == 'RVO':
                 widget = self._create_pie_chart_widget(group, title, charts_dir)
             else:
                 widget = self._create_line_chart_widget(group, title, charts_dir)
@@ -571,8 +574,15 @@ class ReportPage(RvrChartLogic, CardWidget):
         else:
             ax.set_ylim(bottom=0)
         handles, labels = ax.get_legend_handles_labels()
+        handles = list(handles)
+        labels = list(labels)
         legend = None
         if handles:
+            annotations = self._collect_user_annotations(group)
+            if annotations:
+                dummy_handles = [Line2D([], [], linestyle='None', marker='', linewidth=0) for _ in annotations]
+                handles.extend(dummy_handles)
+                labels.extend(annotations)
             column_count = max(1, min(len(handles), 4))
             legend = ax.legend(
                 handles,
@@ -598,7 +608,13 @@ class ReportPage(RvrChartLogic, CardWidget):
     ) -> Optional[InteractiveChartLabel]:
         channel_values: list[tuple[str, float]] = []
         for channel, channel_df in group.groupby('__channel_display__', dropna=False):
-            throughput_values = [v for v in channel_df['__throughput_value__'].tolist() if v is not None]
+            throughput_values = [
+                float(v)
+                for v in channel_df['__throughput_value__'].tolist()
+                if isinstance(v, (int, float))
+                and pd.notna(v)
+                and math.isfinite(float(v))
+            ]
             if not throughput_values:
                 continue
             avg_value = sum(throughput_values) / len(throughput_values)
@@ -618,9 +634,15 @@ class ReportPage(RvrChartLogic, CardWidget):
         )
         ax.set_title(title, pad=6)
         ax.axis('equal')
+        legend_handles = list(wedges)
+        legend_labels = list(labels)
+        annotations = self._collect_user_annotations(group)
+        if annotations:
+            legend_handles.extend([Line2D([], [], linestyle='None', marker='', linewidth=0) for _ in annotations])
+            legend_labels.extend(annotations)
         legend = ax.legend(
-            wedges,
-            labels,
+            legend_handles,
+            legend_labels,
             loc='center left',
             bbox_to_anchor=(1.02, 0.5),
             frameon=False,
