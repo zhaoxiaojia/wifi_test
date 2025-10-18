@@ -55,97 +55,175 @@ def _get_current_attenuation() -> int:
 
 
 def _adjust_rssi_to_target(target_rssi: int, base_db: Optional[int]) -> Tuple[int, Optional[int]]:
-    tolerance = 1
-    max_iterations = 20
+    """Adapt attenuation until the measured RSSI matches ``target_rssi``.
+
+    The relationship between the RF attenuation value (in dB) and the received
+    signal strength is logarithmic. In a log scale an increment of ``x`` dB on
+    the attenuator translates to roughly ``x`` dBm of additional path loss.
+    Leveraging this property allows us to jump directly towards the expected
+    attenuation and then refine the value with a binary search, which keeps the
+    number of adjustments minimal while still converging exactly to the target
+    RSSI when possible.
+    """
+
+    def _clamp_db(value: int) -> int:
+        return max(0, min(110, int(value)))
+
+    def _apply_and_measure(db_value: int, attempt: int, last_rssi: int) -> Optional[int]:
+        logging.info(
+            'Adjust attenuation to %s dB (attempt %s) for RSSI %s dBm -> target %s dBm',
+            db_value,
+            attempt,
+            last_rssi,
+            target_rssi,
+        )
+        try:
+            rf_tool.execute_rf_cmd(db_value)
+        except Exception as exc:
+            logging.warning('Failed to execute rf command %s: %s', db_value, exc)
+            return None
+        time.sleep(3)
+        return pytest.dut.get_rssi()
+
+    max_iterations = 24
     applied_db = base_db if base_db is not None else _get_current_attenuation()
-    applied_db = max(0, min(110, applied_db))
-    step = 10
+    applied_db = _clamp_db(applied_db)
     logging.info(
         'Start adjusting attenuation to %s dB for target RSSI %s dBm',
         applied_db,
         target_rssi,
     )
+
     current_rssi = pytest.dut.get_rssi()
     if current_rssi == -1:
         return current_rssi, applied_db
 
-    def _get_diff_sign(value: int) -> int:
-        if value > 0:
-            return 1
-        if value < 0:
-            return -1
-        return 0
+    measurements: dict[int, int] = {applied_db: current_rssi}
+    visited: set[int] = {applied_db}
 
-    diff = current_rssi - target_rssi
-    previous_diff_sign = _get_diff_sign(diff)
+    low_db: Optional[int] = None
+    low_rssi: Optional[int] = None
+    high_db: Optional[int] = None
+    high_rssi: Optional[int] = None
 
-    for attempt in range(max_iterations):
+    def _record_bound(db_value: int, measured_rssi: int) -> None:
+        nonlocal low_db, low_rssi, high_db, high_rssi
+        if measured_rssi < target_rssi:
+            if low_db is None or db_value > low_db:
+                low_db = db_value
+                low_rssi = measured_rssi
+        elif measured_rssi > target_rssi:
+            if high_db is None or db_value < high_db:
+                high_db = db_value
+                high_rssi = measured_rssi
+
+    _record_bound(applied_db, current_rssi)
+
+    for attempt in range(1, max_iterations + 1):
         logging.info('current rssi %s target rssi %s', current_rssi, target_rssi)
-        if abs(diff) <= tolerance:
+        if current_rssi == target_rssi:
             break
 
-        current_diff_sign = previous_diff_sign
-        if diff < -tolerance:
-            direction = 1
-        elif diff > tolerance:
-            direction = -1
+        delta = target_rssi - current_rssi
+        next_db: Optional[int] = None
+
+        if low_db is not None and high_db is not None and low_db < high_db:
+            if high_db - low_db <= 1:
+                candidates = [
+                    (abs(low_rssi - target_rssi) if low_rssi is not None else float('inf'), low_db),
+                    (abs(high_rssi - target_rssi) if high_rssi is not None else float('inf'), high_db),
+                ]
+                candidates.sort()
+                for _, candidate_db in candidates:
+                    if candidate_db != applied_db and candidate_db not in visited:
+                        next_db = candidate_db
+                        break
+                if next_db is None:
+                    # All nearby candidates already inspected; nothing better to try.
+                    break
+            else:
+                midpoint = _clamp_db(round((low_db + high_db) / 2))
+                if midpoint != applied_db:
+                    next_db = midpoint
+                else:
+                    step = 1 if delta > 0 else -1
+                    candidate = _clamp_db(applied_db + step)
+                    if candidate != applied_db:
+                        next_db = candidate
         else:
-            break
-        next_db = applied_db + direction * step
-        next_db = max(0, min(110, next_db))
-        no_adjustment_possible = next_db == applied_db
-        overshoot_detected = no_adjustment_possible
+            estimated = _clamp_db(applied_db + delta)
+            if estimated != applied_db:
+                next_db = estimated
+            else:
+                step = 1 if delta > 0 else -1
+                candidate = _clamp_db(applied_db + step)
+                if candidate != applied_db:
+                    next_db = candidate
 
+        if next_db is None or next_db == applied_db:
+            break
+        if next_db in visited:
+            step = 1 if delta > 0 else -1
+            alternative = _clamp_db(next_db + step)
+            if alternative == next_db or alternative in visited:
+                break
+            next_db = alternative
+
+        new_rssi = _apply_and_measure(next_db, attempt, current_rssi)
+        if new_rssi is None:
+            break
         applied_db = next_db
-        logging.info(
-            'Adjust attenuation to %s dB (attempt %s) for RSSI %s dBm -> target %s dBm',
-            applied_db,
-            attempt + 1,
-            current_rssi,
-            target_rssi,
-        )
-        try:
-            rf_tool.execute_rf_cmd(applied_db)
-        except Exception as exc:
-            logging.warning('Failed to execute rf command %s: %s', applied_db, exc)
+        current_rssi = new_rssi
+        if current_rssi == -1:
             break
-        time.sleep(3)
-        current_rssi = pytest.dut.get_rssi()
-        diff = current_rssi - target_rssi
-        new_diff_sign = _get_diff_sign(diff)
-        if abs(diff) <= tolerance:
-            previous_diff_sign = new_diff_sign
-            break
-        if diff < -tolerance:
-            direction = 1
-        elif diff > tolerance:
-            direction = -1
+
+        measurements[applied_db] = current_rssi
+        visited.add(applied_db)
+        _record_bound(applied_db, current_rssi)
+
+    if current_rssi != target_rssi and current_rssi != -1:
+        fine_attempt = 0
+        while fine_attempt < 6 and current_rssi != target_rssi:
+            delta = target_rssi - current_rssi
+            if delta == 0:
+                break
+            step = 1 if delta > 0 else -1
+            candidate = _clamp_db(applied_db + step)
+            if candidate == applied_db:
+                break
+            new_rssi = _apply_and_measure(candidate, max_iterations + 1 + fine_attempt, current_rssi)
+            if new_rssi is None:
+                break
+            applied_db = candidate
+            current_rssi = new_rssi
+            if current_rssi == -1:
+                break
+            measurements[applied_db] = current_rssi
+            visited.add(applied_db)
+            _record_bound(applied_db, current_rssi)
+            fine_attempt += 1
+
+    if current_rssi != target_rssi and measurements:
+        exact_db_candidates = [db for db, rssi in measurements.items() if rssi == target_rssi]
+        if exact_db_candidates:
+            desired_db = min(exact_db_candidates, key=lambda db: abs(db - applied_db))
+            if desired_db != applied_db:
+                final_rssi = _apply_and_measure(desired_db, max_iterations + 7, current_rssi)
+                if final_rssi is not None and final_rssi != -1:
+                    applied_db = desired_db
+                    current_rssi = final_rssi
+                    measurements[applied_db] = current_rssi
         else:
-            break
-        if (
-            current_diff_sign != 0
-            and new_diff_sign != 0
-            and new_diff_sign != current_diff_sign
-        ):
-            overshoot_detected = True
-        previous_diff_sign = new_diff_sign
-
-        if applied_db == 0 and direction == -1 and no_adjustment_possible:
-            logging.info(
-                'Attenuation already at 0 dB but RSSI %s dBm above target %s dBm, continue test.',
-                current_rssi,
-                target_rssi,
+            best_db, best_rssi = min(
+                measurements.items(),
+                key=lambda item: (abs(item[1] - target_rssi), item[0]),
             )
-            break
-
-        if overshoot_detected:
-            new_step = step // 2 if step > 1 else 1
-            step = max(new_step, 1)
-            if step == 0:
-                break
-            if no_adjustment_possible and step == 1 and applied_db in (0, 110):
-                break
-            continue
+            if best_db != applied_db:
+                final_rssi = _apply_and_measure(best_db, max_iterations + 7, current_rssi)
+                if final_rssi is not None and final_rssi != -1:
+                    applied_db = best_db
+                    current_rssi = final_rssi
+                    measurements[applied_db] = current_rssi
 
     logging.info('Final RSSI %s dBm with attenuation %s dB', current_rssi, applied_db)
     return current_rssi, applied_db
