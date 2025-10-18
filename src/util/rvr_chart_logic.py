@@ -220,6 +220,11 @@ class RvrChartLogic:
     def _resolve_dataframe_test_type(self, df: pd.DataFrame, path: Optional[Path]) -> Optional[str]:
         if df is None or df.empty:
             return None
+        selection_override = self._infer_test_type_from_selection()
+        if selection_override:
+            normalized_selection = selection_override.strip().upper()
+            if normalized_selection:
+                return normalized_selection
 
         override = self._infer_test_type_from_path(path) if path is not None else None
         if override:
@@ -257,6 +262,40 @@ class RvrChartLogic:
             return "RVO"
         if "peak" in column_tokens and "throughput" in column_tokens:
             return "PEAK_THROUGHPUT"
+        return None
+
+    def _infer_test_type_from_selection(self) -> Optional[str]:
+        explicit = getattr(self, "_selected_test_type", None)
+        if isinstance(explicit, str):
+            normalized = explicit.strip().upper()
+            if normalized:
+                return normalized
+
+        case_path = getattr(self, "_active_case_path", None)
+        if case_path:
+            inferred = self._infer_test_type_from_case_path(case_path)
+            if inferred:
+                return inferred
+        return None
+
+    def _infer_test_type_from_case_path(self, case_path: str | Path) -> Optional[str]:
+        if case_path is None:
+            return None
+        try:
+            name = Path(case_path).name.lower()
+        except Exception:
+            try:
+                name = str(case_path).lower()
+            except Exception:
+                return None
+        if not name:
+            return None
+        if "peak" in name and "throughput" in name:
+            return "PEAK_THROUGHPUT"
+        if "rvo" in name:
+            return "RVO"
+        if any(token in name for token in ("rvr", "performance")):
+            return "RVR"
         return None
 
     def _dataframe_contains_corner_angles(self, df: pd.DataFrame) -> bool:
