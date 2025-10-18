@@ -220,7 +220,6 @@ class RvrChartLogic:
     def _resolve_dataframe_test_type(self, df: pd.DataFrame, path: Optional[Path]) -> Optional[str]:
         if df is None or df.empty:
             return None
-
         selection_override = self._infer_test_type_from_selection()
         if selection_override:
             normalized_selection = selection_override.strip().upper()
