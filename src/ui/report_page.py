@@ -217,6 +217,8 @@ class ReportPage(RvrChartLogic, CardWidget):
         self._fh = None  # type: ignore
         self._pos: int = 0
         self._partial: str = ""
+        self._active_case_path: Optional[Path] = None
+        self._selected_test_type: Optional[str] = None
 
         # timer for tailing
         self._timer = QTimer(self)
@@ -321,6 +323,20 @@ class ReportPage(RvrChartLogic, CardWidget):
         if self.isVisible():
             self.refresh_file_list()
 
+    def set_case_context(self, case_path: str | Path | None) -> None:
+        if isinstance(case_path, str) and not case_path.strip():
+            case_path = None
+        if case_path:
+            try:
+                resolved = Path(case_path).resolve()
+            except Exception:
+                resolved = Path(str(case_path))
+            self._active_case_path = resolved
+        else:
+            self._active_case_path = None
+        inferred = self._infer_test_type_from_case_path(self._active_case_path) if self._active_case_path else None
+        self._selected_test_type = inferred
+
     def refresh_file_list(self) -> None:
         self.file_list.clear()
         if not self._report_dir or not self._report_dir.exists():
@@ -398,7 +414,7 @@ class ReportPage(RvrChartLogic, CardWidget):
         suffix = path.suffix.lower()
         if suffix not in {'.csv', '.xlsx', '.xls'}:
             return False
-        keywords = ('rvr', 'rvo', 'peak_throughput', 'peak-throughput', 'peakthroughput')
+        keywords = ('rvr', 'rvo', 'performance', 'peak_throughput', 'peak-throughput', 'peakthroughput')
         return any(keyword in name for keyword in keywords)
 
     def _display_rvr_summary(self, path: Path) -> None:

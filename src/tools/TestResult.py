@@ -28,7 +28,7 @@ class TestResult():
         current_number : current index
         rvr_pdffile : rvr pdf file
         rvr_excelfile : rvr excel file
-        log_file : rvr result csv
+        log_file : performance result csv
         detail_file : rvr detail result (contain rssi value)
 
     '''
@@ -45,7 +45,7 @@ class TestResult():
         if not hasattr(self, 'logFile'):
             self.log_file = os.path.join(
                 self.logdir,
-                'Rvr' + time.asctime().replace(' ', '_').replace(':', '_') + '.csv',
+                'Performance' + time.asctime().replace(' ', '_').replace(':', '_') + '.csv',
             )
             with open(self.log_file, 'a', encoding='gb2312') as f:
                 title = (
