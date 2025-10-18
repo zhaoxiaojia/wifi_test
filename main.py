@@ -867,6 +867,8 @@ class MainWindow(FluentWindow):
         try:
             self.last_report_dir = str(Path(report_dir).resolve())
             if hasattr(self, "report_page") and self.report_page:
+                case_path = getattr(self.run_page, "case_path", "")
+                self.report_page.set_case_context(case_path or None)
                 self.report_page.set_report_dir(self.last_report_dir)
             if hasattr(self, "report_nav_button") and self.report_nav_button and not sip.isdeleted(self.report_nav_button):
                 self.report_nav_button.setEnabled(True)
