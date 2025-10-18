@@ -57,13 +57,13 @@ def _get_current_attenuation() -> int:
 def _adjust_rssi_to_target(target_rssi: int, base_db: Optional[int]) -> Tuple[int, Optional[int]]:
     max_iterations = 30
     applied_db = base_db if base_db is not None else _get_current_attenuation()
-    applied_db = max(0, min(110, applied_db))
-    step = 10
+    applied_db = _clamp_db(applied_db)
     logging.info(
         'Start adjusting attenuation to %s dB for target RSSI %s dBm',
         applied_db,
         target_rssi,
     )
+
     current_rssi = pytest.dut.get_rssi()
     if current_rssi == -1:
         return current_rssi, applied_db
