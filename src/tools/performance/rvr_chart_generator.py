@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from pathlib import Path
 from typing import List, Optional
 
@@ -149,8 +150,13 @@ class PerformanceRvrChartGenerator(RvrChartLogic):
     def _save_pie_chart(self, group: pd.DataFrame, title: str, charts_dir: Path) -> Optional[Path]:
         channel_values: list[tuple[str, float]] = []
         for channel, channel_df in group.groupby("__channel_display__", dropna=False):
-            throughput_values = [v for v in channel_df["__throughput_value__"].tolist() if v is not None]
-            throughput_values = [float(v) for v in throughput_values if isinstance(v, (int, float)) and pd.notna(v)]
+            throughput_values = [
+                float(v)
+                for v in channel_df["__throughput_value__"].tolist()
+                if isinstance(v, (int, float))
+                and pd.notna(v)
+                and math.isfinite(float(v))
+            ]
             if not throughput_values:
                 continue
             avg_value = sum(throughput_values) / len(throughput_values)
