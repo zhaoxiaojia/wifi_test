@@ -55,6 +55,8 @@ PERFORMANCE_STATIC_COLUMNS: Tuple[Tuple[str, str, str], ...] = (
     ("throughput_peak_mbps", "DECIMAL(10,3)", "Max_Rate"),
     ("throughput_avg_mbps", "DECIMAL(10,3)", "Throughput"),
     ("target_throughput_mbps", "DECIMAL(10,3)", "Expect_Rate"),
+    ("profile_mode", "VARCHAR(64)", "Profile_Mode"),
+    ("profile_value", "VARCHAR(64)", "Profile_Value"),
 )
 
 PERFORMANCE_COLUMN_RENAMES: Tuple[Tuple[str, str], ...] = (

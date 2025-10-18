@@ -99,6 +99,23 @@ class RvrChartLogic:
         prepared["__rssi_display__"] = source_series("RSSI", "Data_RSSI", "Data RSSI").apply(
             self._format_metric_display
         )
+
+        profile_mode_series = source_series("Profile_Mode", "Profile Mode", "RVO_Profile_Mode").apply(
+            self._normalize_profile_mode_value
+        )
+        profile_value_series = source_series("Profile_Value", "Profile Value", "RVO_Profile_Value").apply(
+            self._normalize_profile_value
+        )
+        prepared["__profile_mode__"] = profile_mode_series
+        prepared["__profile_value__"] = profile_value_series
+        prepared["__profile_key__"] = [
+            self._build_profile_key(mode, value) for mode, value in zip(profile_mode_series, profile_value_series)
+        ]
+        prepared["__profile_label__"] = [
+            self._format_profile_label(mode, value)
+            for mode, value in zip(profile_mode_series, profile_value_series)
+        ]
+
         angle_series = source_series(
             "Angel",
             "Angle",
@@ -565,7 +582,15 @@ class RvrChartLogic:
             return []
 
         series_data: list[tuple[str, list[Optional[float]]]] = []
-        for channel, channel_df in group.groupby("__channel_display__", dropna=False):
+        group_by_columns = ["__channel_display__"]
+        if "__profile_key__" in group.columns:
+            group_by_columns.append("__profile_key__")
+        grouped = group.groupby(group_by_columns, dropna=False)
+        for key, channel_df in grouped:
+            if isinstance(key, tuple):
+                channel = key[0]
+            else:
+                channel = key
             values: list[Optional[float]] = []
             for angle in angle_values:
                 subset = self._filter_dataframe_by_angle(channel_df, angle)
@@ -582,7 +607,7 @@ class RvrChartLogic:
                 else:
                     values.append(None)
             if any(v is not None for v in values):
-                label = self._format_pie_channel_label(channel, channel_df)
+                label = self._format_rvo_series_label(channel, channel_df)
                 series_data.append((label, values))
         return series_data
 
@@ -757,14 +782,106 @@ class RvrChartLogic:
         channel = (channel or "").strip()
         return f"CH{channel}" if channel else "Unknown"
 
-    def _format_pie_channel_label(self, channel: str, df: pd.DataFrame) -> str:
-        channel_name = (channel or "").strip()
-        if not channel_name:
-            channel_name = "Unknown"
-        db_values = [value for value in df["__db_display__"].tolist() if value]
-        if db_values:
-            return f"CH{channel_name} {db_values[0]}dB"
-        return f"CH{channel_name}"
+    def _normalize_profile_mode_value(self, value) -> str:
+        if value is None:
+            return ""
+        text = str(value).strip().lower()
+        if not text or text in {"nan", "none", "null"}:
+            return ""
+        if text in {"target", "target_rssi", "rvo_target"}:
+            return "TARGET_RSSI"
+        if text in {"static", "static_db", "rvo_static"}:
+            return "STATIC_DB"
+        if text in {"default", "normal"}:
+            return "DEFAULT"
+        return text.upper()
+
+    def _normalize_profile_value(self, value) -> str:
+        if value is None:
+            return ""
+        if isinstance(value, (list, tuple, set)):
+            items = [self._normalize_profile_value(item) for item in value]
+            items = [item for item in items if item]
+            return items[0] if items else ""
+        text = str(value).strip()
+        if not text:
+            return ""
+        try:
+            number = float(text)
+        except ValueError:
+            return text
+        if math.isfinite(number) and float(int(number)) == number:
+            return str(int(number))
+        if not math.isfinite(number):
+            return ""
+        return f"{number:.2f}".rstrip("0").rstrip(".")
+
+    def _build_profile_key(self, mode: str, value: str) -> str:
+        normalized_mode = (mode or "").strip().upper() or "DEFAULT"
+        normalized_value = (value or "").strip()
+        return f"{normalized_mode}::{normalized_value}"
+
+    def _format_profile_label(self, mode: str, value: str) -> str:
+        normalized_mode = (mode or "").strip().upper()
+        normalized_value = (value or "").strip()
+        if not normalized_mode and not normalized_value:
+            return ""
+        if normalized_mode == "TARGET_RSSI":
+            return f"Target RSSI {normalized_value}" if normalized_value else "Target RSSI"
+        if normalized_mode == "STATIC_DB":
+            suffix = "dB" if normalized_value and not normalized_value.lower().endswith("db") else ""
+            return f"Static dB {normalized_value}{suffix}"
+        if normalized_mode in {"DEFAULT", "CUSTOM"}:
+            return normalized_value
+        if normalized_value:
+            return f"{normalized_mode.replace('_', ' ')} {normalized_value}".strip()
+        return normalized_mode.replace('_', ' ')
+
+    def _extract_profile_label(self, df: pd.DataFrame) -> str:
+        if df is None or df.empty:
+            return ""
+        if "__profile_label__" in df.columns:
+            for value in df["__profile_label__"]:
+                if isinstance(value, str) and value.strip():
+                    return value.strip()
+        mode = ""
+        if "__profile_mode__" in df.columns:
+            for candidate in df["__profile_mode__"]:
+                if isinstance(candidate, str) and candidate.strip():
+                    mode = candidate.strip()
+                    break
+        value = ""
+        if "__profile_value__" in df.columns:
+            for candidate in df["__profile_value__"]:
+                if isinstance(candidate, str) and candidate.strip():
+                    value = candidate.strip()
+                    break
+        return self._format_profile_label(mode, value)
+
+    def _extract_db_label(self, df: pd.DataFrame) -> str:
+        if df is None or df.empty or "__db_display__" not in df:
+            return ""
+        for value in df["__db_display__"]:
+            if not value:
+                continue
+            text = str(value).strip()
+            if not text:
+                continue
+            lowered = text.lower()
+            if lowered.endswith("db"):
+                return text
+            return f"{text}dB"
+        return ""
+
+    def _format_rvo_series_label(self, channel: str, df: pd.DataFrame) -> str:
+        base_label = self._format_channel_series_label(channel)
+        profile_label = self._extract_profile_label(df)
+        if profile_label:
+            return f"{profile_label} {base_label}".strip()
+        db_label = self._extract_db_label(df)
+        if db_label:
+            return f"{base_label} {db_label}".strip()
+        return base_label
 
     def _series_with_nan(self, values: list[Optional[float]]) -> list[float]:
         series: list[float] = []
