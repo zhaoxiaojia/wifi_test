@@ -148,20 +148,7 @@ class PerformanceRvrChartGenerator(RvrChartLogic):
             plt.close(fig)
 
     def _save_pie_chart(self, group: pd.DataFrame, title: str, charts_dir: Path) -> Optional[Path]:
-        channel_values: list[tuple[str, float]] = []
-        for channel, channel_df in group.groupby("__channel_display__", dropna=False):
-            throughput_values = [
-                float(v)
-                for v in channel_df["__throughput_value__"].tolist()
-                if isinstance(v, (int, float))
-                and pd.notna(v)
-                and math.isfinite(float(v))
-            ]
-            if not throughput_values:
-                continue
-            avg_value = sum(throughput_values) / len(throughput_values)
-            label = self._format_pie_channel_label(channel, channel_df)
-            channel_values.append((label, avg_value))
+        channel_values = self._aggregate_channel_throughput(group)
         if not channel_values:
             return self._create_empty_chart(charts_dir, title, [])
         labels, values = zip(*channel_values)
