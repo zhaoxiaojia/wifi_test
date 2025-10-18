@@ -501,7 +501,9 @@ class ReportPage(RvrChartLogic, CardWidget):
         charts_dir.mkdir(exist_ok=True)
         if df.empty:
             title = path.stem or 'RVR Chart'
-            placeholder = self._create_empty_chart_widget(title, charts_dir)
+            override_type = self._infer_test_type_from_selection()
+            chart_kind = 'polar' if override_type and override_type.strip().upper() == 'RVO' else 'line'
+            placeholder = self._create_empty_chart_widget(title, charts_dir, chart_type=chart_kind)
             return [(title, placeholder)] if placeholder is not None else []
         results: list[tuple[str, InteractiveChartLabel]] = []
         grouped = df.groupby(
@@ -523,14 +525,16 @@ class ReportPage(RvrChartLogic, CardWidget):
                 continue
             normalized_type = (test_type or "").strip().upper()
             if normalized_type == 'RVO':
-                widget = self._create_pie_chart_widget(group, title, charts_dir)
+                widget = self._create_rvo_chart_widget(group, title, charts_dir)
             else:
                 widget = self._create_line_chart_widget(group, title, charts_dir)
             if widget is not None:
                 results.append((title, widget))
         if not results:
             title = path.stem or 'RVR Chart'
-            placeholder = self._create_empty_chart_widget(title, charts_dir)
+            override_type = self._infer_test_type_from_selection()
+            chart_kind = 'polar' if override_type and override_type.strip().upper() == 'RVO' else 'line'
+            placeholder = self._create_empty_chart_widget(title, charts_dir, chart_type=chart_kind)
             return [(title, placeholder)] if placeholder is not None else []
         return results
 
@@ -616,50 +620,92 @@ class ReportPage(RvrChartLogic, CardWidget):
         save_path = charts_dir / f"{self._safe_chart_name(title)}.png"
         return self._figure_to_label(fig, ax, steps, save_path)
 
-    def _create_pie_chart_widget(
+    def _create_rvo_chart_widget(
         self,
         group: pd.DataFrame,
         title: str,
         charts_dir: Path,
     ) -> Optional[InteractiveChartLabel]:
-        channel_values = self._aggregate_channel_throughput(group)
-        if not channel_values:
-            return self._create_empty_chart_widget(title, charts_dir)
-        labels, values = zip(*channel_values)
-        fig, ax = plt.subplots(figsize=(6.2, 6.2), dpi=CHART_DPI)
-        autopct = self._make_pie_autopct(values)
-        wedges, _, autotexts = ax.pie(
-            values,
-            startangle=120,
-            autopct=autopct,
-            pctdistance=0.7,
-            textprops={'color': TEXT_COLOR},
-        )
-        ax.set_title(title, pad=6)
-        ax.axis('equal')
-        legend_handles = list(wedges)
-        legend_labels = list(labels)
-        annotations = self._collect_user_annotations(group)
-        if annotations:
-            legend_handles.extend([Line2D([], [], linestyle='None', marker='', linewidth=0) for _ in annotations])
-            legend_labels.extend(annotations)
-        legend = ax.legend(
-            legend_handles,
-            legend_labels,
-            loc='center left',
-            bbox_to_anchor=(1.02, 0.5),
-            frameon=False,
-        )
-        if legend is not None:
-            for text_item in legend.get_texts():
-                text_item.set_ha('left')
-        for autotext in autotexts:
-            autotext.set_color(TEXT_COLOR)
-        fig.tight_layout(pad=0.6)
+        angle_positions = self._collect_angle_positions(group)
+        if not angle_positions:
+            return self._create_empty_chart_widget(title, charts_dir, chart_type='polar')
+        angle_values = [value for value, _ in angle_positions]
+        angle_labels = [label for _, label in angle_positions]
+        theta = [math.radians(value) for value in angle_values]
+        theta_cycle = theta + [theta[0]] if theta else []
+        fig, ax = plt.subplots(figsize=(6.6, 6.6), dpi=CHART_DPI, subplot_kw={'projection': 'polar'})
+        ax.set_theta_zero_location('N')
+        ax.set_theta_direction(-1)
+        ax.set_xticks(theta)
+        ax.set_xticklabels(angle_labels)
+        channel_series = self._collect_rvo_channel_series(group, angle_values)
+        if not channel_series:
+            plt.close(fig)
+            return self._create_empty_chart_widget(title, charts_dir, chart_type='polar')
+        all_values: list[float] = []
+        for series_label, values in channel_series:
+            cycle_values = list(values)
+            cycle_values.append(values[0] if values else None)
+            ax.plot(theta_cycle, self._series_with_nan(cycle_values), marker='o', label=series_label)
+            all_values.extend([v for v in values if v is not None])
+        if all_values:
+            max_value = max(all_values)
+            if max_value <= 0:
+                max_value = 1.0
+            extra = max(max_value * 0.15, 1.0)
+            ax.set_ylim(0, max_value + extra)
+        else:
+            ax.set_ylim(0, 1)
+        ax.set_rlabel_position(135)
+        ax.grid(alpha=0.3, linestyle='--')
+        ax.set_title(title, pad=8)
+        handles, labels = ax.get_legend_handles_labels()
+        handles = list(handles)
+        labels = list(labels)
+        if handles:
+            annotations = self._collect_user_annotations(group)
+            if annotations:
+                dummy_handles = [Line2D([], [], linestyle='None', marker='', linewidth=0) for _ in annotations]
+                handles.extend(dummy_handles)
+                labels.extend(annotations)
+            legend = ax.legend(
+                handles,
+                labels,
+                loc='lower center',
+                bbox_to_anchor=(0.5, -0.08),
+                ncol=max(1, min(len(handles), 3)),
+                frameon=False,
+            )
+            if legend is not None:
+                for text_item in legend.get_texts():
+                    text_item.set_ha('center')
+        fig.tight_layout(pad=0.7)
         save_path = charts_dir / f"{self._safe_chart_name(title)}.png"
         return self._figure_to_label(fig, ax, [], save_path)
 
-    def _create_empty_chart_widget(self, title: str, charts_dir: Path, steps: Optional[list[str]] = None) -> Optional[InteractiveChartLabel]:
+    def _create_empty_chart_widget(
+        self,
+        title: str,
+        charts_dir: Path,
+        steps: Optional[list[str]] = None,
+        chart_type: str = 'line',
+    ) -> Optional[InteractiveChartLabel]:
+        chart_type = (chart_type or 'line').lower()
+        if chart_type == 'polar':
+            fig = plt.figure(figsize=(6.6, 6.6), dpi=CHART_DPI)
+            ax = fig.add_subplot(111, projection='polar')
+            ax.set_theta_zero_location('N')
+            ax.set_theta_direction(-1)
+            ax.set_xticks([])
+            ax.set_yticks([])
+            ax.set_ylim(0, 1)
+            ax.grid(alpha=0.25, linestyle='--')
+            ax.set_title(title, pad=8)
+            ax.text(0.5, 0.5, 'No data collected yet', transform=ax.transAxes, ha='center', va='center', color='#888888')
+            fig.tight_layout(pad=0.6)
+            save_path = charts_dir / f"{self._safe_chart_name(title)}.png"
+            return self._figure_to_label(fig, ax, [], save_path)
+
         fig, ax = plt.subplots(figsize=(7.5, 4.2), dpi=CHART_DPI)
         steps = steps or []
         if steps:
