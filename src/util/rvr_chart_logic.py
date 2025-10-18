@@ -99,7 +99,17 @@ class RvrChartLogic:
         prepared["__rssi_display__"] = source_series("RSSI", "Data_RSSI", "Data RSSI").apply(
             self._format_metric_display
         )
-
+        angle_series = source_series(
+            "Angel",
+            "Angle",
+            "corner",
+            "Corner",
+            "corner_angle",
+            "Corner_Angle",
+            "CornerAngle",
+        )
+        prepared["__angle_value__"] = angle_series.apply(self._parse_angle_value)
+        prepared["__angle_display__"] = angle_series.apply(self._format_angle_display)
         step_candidates = ("DB", "Total_Path_Loss", "RxP", "Step", "Attenuation")
 
         def resolve_step(row: pd.Series) -> Optional[str]:
@@ -512,22 +522,95 @@ class RvrChartLogic:
             return "RVR"
         return None
 
-    def _aggregate_channel_throughput(self, group: pd.DataFrame) -> list[tuple[str, float]]:
-        channel_values: list[tuple[str, float]] = []
-        for channel, channel_df in group.groupby("__channel_display__", dropna=False):
-            throughput_values = [
-                float(v)
-                for v in channel_df["__throughput_value__"].tolist()
-                if isinstance(v, (int, float))
-                and pd.notna(v)
-                and math.isfinite(float(v))
-            ]
-            if not throughput_values:
+    def _collect_angle_positions(self, group: pd.DataFrame) -> list[tuple[float, str]]:
+        if (
+            group is None
+            or group.empty
+            or "__angle_value__" not in group
+            or "__angle_display__" not in group
+        ):
+            return []
+
+        angles: dict[float, tuple[float, str]] = {}
+        values = group["__angle_value__"].tolist()
+        displays = group["__angle_display__"].tolist()
+        for numeric, display in zip(values, displays):
+            if numeric is None:
                 continue
-            avg_value = sum(throughput_values) / len(throughput_values)
-            label = self._format_pie_channel_label(channel, channel_df)
-            channel_values.append((label, avg_value))
-        return channel_values
+            try:
+                numeric_value = float(numeric)
+            except (TypeError, ValueError):
+                continue
+            if not math.isfinite(numeric_value):
+                continue
+            normalized = self._normalize_angle_numeric(numeric_value)
+            if normalized is None:
+                continue
+            key = round(normalized, 4)
+            label = display if isinstance(display, str) and display else self._format_angle_label_from_numeric(normalized)
+            if key not in angles:
+                angles[key] = (normalized, label)
+        ordered_keys = sorted(angles.keys())
+        return [angles[key] for key in ordered_keys]
+
+    def _collect_rvo_channel_series(
+        self, group: pd.DataFrame, angle_values: list[float]
+    ) -> list[tuple[str, list[Optional[float]]]]:
+        if (
+            group is None
+            or group.empty
+            or "__angle_value__" not in group
+            or "__throughput_value__" not in group
+        ):
+            return []
+
+        series_data: list[tuple[str, list[Optional[float]]]] = []
+        for channel, channel_df in group.groupby("__channel_display__", dropna=False):
+            values: list[Optional[float]] = []
+            for angle in angle_values:
+                subset = self._filter_dataframe_by_angle(channel_df, angle)
+                raw_values = [v for v in subset["__throughput_value__"].tolist() if v is not None]
+                finite_values = [
+                    float(v)
+                    for v in raw_values
+                    if isinstance(v, (int, float))
+                    and pd.notna(v)
+                    and math.isfinite(float(v))
+                ]
+                if finite_values:
+                    values.append(sum(finite_values) / len(finite_values))
+                else:
+                    values.append(None)
+            if any(v is not None for v in values):
+                label = self._format_pie_channel_label(channel, channel_df)
+                series_data.append((label, values))
+        return series_data
+
+    def _filter_dataframe_by_angle(self, df: pd.DataFrame, angle: float) -> pd.DataFrame:
+        if "__angle_value__" not in df:
+            return df.iloc[0:0]
+        tolerance = 0.51
+        normalized_target = self._normalize_angle_numeric(angle)
+        if normalized_target is None:
+            return df.iloc[0:0]
+
+        def _matches(value) -> bool:
+            if value is None:
+                return False
+            try:
+                numeric_value = float(value)
+            except (TypeError, ValueError):
+                return False
+            if not math.isfinite(numeric_value):
+                return False
+            normalized_value = self._normalize_angle_numeric(numeric_value)
+            if normalized_value is None:
+                return False
+            diff = abs((normalized_value - normalized_target + 180.0) % 360.0 - 180.0)
+            return diff <= tolerance
+
+        mask = df["__angle_value__"].apply(_matches)
+        return df[mask]
 
     def _parse_db_numeric(self, value) -> Optional[float]:
         if value is None:
@@ -674,15 +757,6 @@ class RvrChartLogic:
         channel = (channel or "").strip()
         return f"CH{channel}" if channel else "Unknown"
 
-    def _make_pie_autopct(self, values: tuple[float, ...]):
-        total = sum(values)
-
-        def _formatter(pct):
-            absolute = pct * total / 100.0
-            return f"{pct:.1f}%\n{absolute:.1f} Mbps"
-
-        return _formatter
-
     def _format_pie_channel_label(self, channel: str, df: pd.DataFrame) -> str:
         channel_name = (channel or "").strip()
         if not channel_name:
@@ -708,6 +782,56 @@ class RvrChartLogic:
         if not s or s.lower() in {"nan", "null"}:
             return None
         return s
+
+    def _parse_angle_value(self, value) -> Optional[float]:
+        if value is None:
+            return None
+        if isinstance(value, (int, float)):
+            numeric = float(value)
+            if math.isfinite(numeric):
+                return numeric
+            return None
+        s = str(value).strip()
+        if not s:
+            return None
+        lowered = s.lower()
+        if lowered in {"nan", "null", "none", "n/a", "na", "-"}:
+            return None
+        match = re.search(r"-?\d+(?:\.\d+)?", s)
+        if not match:
+            return None
+        try:
+            numeric = float(match.group())
+        except ValueError:
+            return None
+        if not math.isfinite(numeric):
+            return None
+        return numeric
+
+    def _normalize_angle_numeric(self, value: float) -> Optional[float]:
+        if value is None or not math.isfinite(float(value)):
+            return None
+        normalized = float(value) % 360.0
+        if normalized < 0:
+            normalized += 360.0
+        return normalized
+
+    def _format_angle_label_from_numeric(self, value: float) -> str:
+        if value is None or not math.isfinite(float(value)):
+            return ""
+        rounded = round(value)
+        if abs(value - rounded) < 1e-6:
+            return f"{int(rounded)}°"
+        formatted = f"{value:.1f}°"
+        if formatted.endswith(".0°"):
+            formatted = formatted[:-3] + "°"
+        return formatted
+
+    def _format_angle_display(self, value) -> str:
+        numeric = self._parse_angle_value(value)
+        if numeric is None:
+            return str(value).strip() if value is not None else ""
+        return self._format_angle_label_from_numeric(self._normalize_angle_numeric(numeric) or numeric)
 
     def _extract_first_non_empty(self, row: pd.Series, columns: tuple[str, ...]):
         for column in columns:
