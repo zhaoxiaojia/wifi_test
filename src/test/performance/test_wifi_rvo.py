@@ -55,37 +55,7 @@ def _get_current_attenuation() -> int:
 
 
 def _adjust_rssi_to_target(target_rssi: int, base_db: Optional[int]) -> Tuple[int, Optional[int]]:
-    """Adapt attenuation until the measured RSSI matches ``target_rssi``.
-
-    The relationship between the RF attenuation value (in dB) and the received
-    signal strength is logarithmic. In a log scale an increment of ``x`` dB on
-    the attenuator translates to roughly ``x`` dBm of additional path loss.
-    Leveraging this property allows us to jump directly towards the expected
-    attenuation and then refine the value with a binary search, which keeps the
-    number of adjustments minimal while still converging exactly to the target
-    RSSI when possible.
-    """
-
-    def _clamp_db(value: int) -> int:
-        return max(0, min(110, int(value)))
-
-    def _apply_and_measure(db_value: int, attempt: int, last_rssi: int) -> Optional[int]:
-        logging.info(
-            'Adjust attenuation to %s dB (attempt %s) for RSSI %s dBm -> target %s dBm',
-            db_value,
-            attempt,
-            last_rssi,
-            target_rssi,
-        )
-        try:
-            rf_tool.execute_rf_cmd(db_value)
-        except Exception as exc:
-            logging.warning('Failed to execute rf command %s: %s', db_value, exc)
-            return None
-        time.sleep(3)
-        return pytest.dut.get_rssi()
-
-    max_iterations = 24
+    max_iterations = 30
     applied_db = base_db if base_db is not None else _get_current_attenuation()
     applied_db = _clamp_db(applied_db)
     logging.info(
@@ -98,132 +68,64 @@ def _adjust_rssi_to_target(target_rssi: int, base_db: Optional[int]) -> Tuple[in
     if current_rssi == -1:
         return current_rssi, applied_db
 
-    measurements: dict[int, int] = {applied_db: current_rssi}
-    visited: set[int] = {applied_db}
-
-    low_db: Optional[int] = None
-    low_rssi: Optional[int] = None
-    high_db: Optional[int] = None
-    high_rssi: Optional[int] = None
-
-    def _record_bound(db_value: int, measured_rssi: int) -> None:
-        nonlocal low_db, low_rssi, high_db, high_rssi
-        if measured_rssi < target_rssi:
-            if low_db is None or db_value > low_db:
-                low_db = db_value
-                low_rssi = measured_rssi
-        elif measured_rssi > target_rssi:
-            if high_db is None or db_value < high_db:
-                high_db = db_value
-                high_rssi = measured_rssi
-
-    _record_bound(applied_db, current_rssi)
-
-    for attempt in range(1, max_iterations + 1):
+    for attempt in range(max_iterations):
+        diff = current_rssi - target_rssi
         logging.info('current rssi %s target rssi %s', current_rssi, target_rssi)
-        if current_rssi == target_rssi:
+        if diff == 0:
             break
 
-        delta = target_rssi - current_rssi
-        next_db: Optional[int] = None
-
-        if low_db is not None and high_db is not None and low_db < high_db:
-            if high_db - low_db <= 1:
-                candidates = [
-                    (abs(low_rssi - target_rssi) if low_rssi is not None else float('inf'), low_db),
-                    (abs(high_rssi - target_rssi) if high_rssi is not None else float('inf'), high_db),
-                ]
-                candidates.sort()
-                for _, candidate_db in candidates:
-                    if candidate_db != applied_db and candidate_db not in visited:
-                        next_db = candidate_db
-                        break
-                if next_db is None:
-                    # All nearby candidates already inspected; nothing better to try.
-                    break
-            else:
-                midpoint = _clamp_db(round((low_db + high_db) / 2))
-                if midpoint != applied_db:
-                    next_db = midpoint
-                else:
-                    step = 1 if delta > 0 else -1
-                    candidate = _clamp_db(applied_db + step)
-                    if candidate != applied_db:
-                        next_db = candidate
-        else:
-            estimated = _clamp_db(applied_db + delta)
-            if estimated != applied_db:
-                next_db = estimated
-            else:
-                step = 1 if delta > 0 else -1
-                candidate = _clamp_db(applied_db + step)
-                if candidate != applied_db:
-                    next_db = candidate
-
-        if next_db is None or next_db == applied_db:
-            break
-        if next_db in visited:
-            step = 1 if delta > 0 else -1
-            alternative = _clamp_db(next_db + step)
-            if alternative == next_db or alternative in visited:
-                break
-            next_db = alternative
-
-        new_rssi = _apply_and_measure(next_db, attempt, current_rssi)
-        if new_rssi is None:
-            break
-        applied_db = next_db
-        current_rssi = new_rssi
-        if current_rssi == -1:
-            break
-
-        measurements[applied_db] = current_rssi
-        visited.add(applied_db)
-        _record_bound(applied_db, current_rssi)
-
-    if current_rssi != target_rssi and current_rssi != -1:
-        fine_attempt = 0
-        while fine_attempt < 6 and current_rssi != target_rssi:
-            delta = target_rssi - current_rssi
-            if delta == 0:
-                break
-            step = 1 if delta > 0 else -1
-            candidate = _clamp_db(applied_db + step)
-            if candidate == applied_db:
-                break
-            new_rssi = _apply_and_measure(candidate, max_iterations + 1 + fine_attempt, current_rssi)
-            if new_rssi is None:
-                break
-            applied_db = candidate
-            current_rssi = new_rssi
-            if current_rssi == -1:
-                break
-            measurements[applied_db] = current_rssi
-            visited.add(applied_db)
-            _record_bound(applied_db, current_rssi)
-            fine_attempt += 1
-
-    if current_rssi != target_rssi and measurements:
-        exact_db_candidates = [db for db, rssi in measurements.items() if rssi == target_rssi]
-        if exact_db_candidates:
-            desired_db = min(exact_db_candidates, key=lambda db: abs(db - applied_db))
-            if desired_db != applied_db:
-                final_rssi = _apply_and_measure(desired_db, max_iterations + 7, current_rssi)
-                if final_rssi is not None and final_rssi != -1:
-                    applied_db = desired_db
-                    current_rssi = final_rssi
-                    measurements[applied_db] = current_rssi
-        else:
-            best_db, best_rssi = min(
-                measurements.items(),
-                key=lambda item: (abs(item[1] - target_rssi), item[0]),
+        direction = 1 if diff > 0 else -1
+        next_db = applied_db + direction * step
+        next_db = max(0, min(110, next_db))
+        if next_db == applied_db:
+            if step > 1:
+                step = 1
+                continue
+            logging.info(
+                'Attenuation locked at %s dB while RSSI diff=%s dB; boundary reached.',
+                applied_db,
+                diff,
             )
-            if best_db != applied_db:
-                final_rssi = _apply_and_measure(best_db, max_iterations + 7, current_rssi)
-                if final_rssi is not None and final_rssi != -1:
-                    applied_db = best_db
-                    current_rssi = final_rssi
-                    measurements[applied_db] = current_rssi
+            break
+
+        logging.info(
+            'Adjust attenuation to %s dB (attempt %s) for RSSI %s dBm -> target %s dBm',
+            next_db,
+            attempt + 1,
+            current_rssi,
+            target_rssi,
+        )
+        try:
+            rf_tool.execute_rf_cmd(next_db)
+        except Exception as exc:
+            logging.warning('Failed to execute rf command %s: %s', next_db, exc)
+            break
+
+        time.sleep(3)
+        measured = pytest.dut.get_rssi()
+        if measured == -1:
+            current_rssi = measured
+            applied_db = next_db
+            break
+
+        new_diff = measured - target_rssi
+        logging.info(
+            'Measured RSSI %s dBm (diff %s dB) after attenuation %s dB',
+            measured,
+            new_diff,
+            next_db,
+        )
+
+        applied_db = next_db
+        current_rssi = measured
+
+        if new_diff == 0:
+            break
+
+        if abs(new_diff) >= abs(diff) and step > 1:
+            step = max(1, step // 2)
+        elif step > 1 and abs(new_diff) <= 1:
+            step = 1
 
     logging.info('Final RSSI %s dBm with attenuation %s dB', current_rssi, applied_db)
     return current_rssi, applied_db
@@ -356,22 +258,26 @@ def test_rvo(setup_rvo_case, performance_sync_manager):
     logging.info('corner angle set to %s', corner_angle)
     logging.info('start test iperf tx %s rx %s', router_info.tx, router_info.rx)
 
-    if int(router_info.tx):
-        logging.info('rssi : %s', rssi_num)
-        pytest.dut.get_tx_rate(
-            router_info,
-            'TCP',
-            corner_tool=corner_tool,
-            db_set='' if attenuation_db is None else attenuation_db,
-        )
-    if int(router_info.rx):
-        logging.info('rssi : %s', rssi_num)
-        pytest.dut.get_rx_rate(
-            router_info,
-            'TCP',
-            corner_tool=corner_tool,
-            db_set='' if attenuation_db is None else attenuation_db,
-        )
+    pytest.testResult.set_active_profile(profile.mode, profile.value)
+    try:
+        if int(router_info.tx):
+            logging.info('rssi : %s', rssi_num)
+            pytest.dut.get_tx_rate(
+                router_info,
+                'TCP',
+                corner_tool=corner_tool,
+                db_set='' if attenuation_db is None else attenuation_db,
+            )
+        if int(router_info.rx):
+            logging.info('rssi : %s', rssi_num)
+            pytest.dut.get_rx_rate(
+                router_info,
+                'TCP',
+                corner_tool=corner_tool,
+                db_set='' if attenuation_db is None else attenuation_db,
+            )
+    finally:
+        pytest.testResult.clear_active_profile()
 
     # performance_sync_manager(
     #     "RVO",

@@ -679,7 +679,7 @@ class ReportPage(RvrChartLogic, CardWidget):
             if legend is not None:
                 for text_item in legend.get_texts():
                     text_item.set_ha('center')
-        fig.tight_layout(pad=0.7)
+        fig.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.2)
         save_path = charts_dir / f"{self._safe_chart_name(title)}.png"
         return self._figure_to_label(fig, ax, [], save_path)
 
@@ -702,7 +702,7 @@ class ReportPage(RvrChartLogic, CardWidget):
             ax.grid(alpha=0.25, linestyle='--')
             ax.set_title(title, pad=8)
             ax.text(0.5, 0.5, 'No data collected yet', transform=ax.transAxes, ha='center', va='center', color='#888888')
-            fig.tight_layout(pad=0.6)
+            fig.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.2)
             save_path = charts_dir / f"{self._safe_chart_name(title)}.png"
             return self._figure_to_label(fig, ax, [], save_path)
 
