@@ -99,7 +99,6 @@ class RvrChartLogic:
         prepared["__rssi_display__"] = source_series("RSSI", "Data_RSSI", "Data RSSI").apply(
             self._format_metric_display
         )
-
         angle_series = source_series(
             "Angel",
             "Angle",
@@ -111,7 +110,6 @@ class RvrChartLogic:
         )
         prepared["__angle_value__"] = angle_series.apply(self._parse_angle_value)
         prepared["__angle_display__"] = angle_series.apply(self._format_angle_display)
-
         step_candidates = ("DB", "Total_Path_Loss", "RxP", "Step", "Attenuation")
 
         def resolve_step(row: pd.Series) -> Optional[str]:
@@ -232,7 +230,6 @@ class RvrChartLogic:
     def _resolve_dataframe_test_type(self, df: pd.DataFrame, path: Optional[Path]) -> Optional[str]:
         if df is None or df.empty:
             return None
-
         selection_override = self._infer_test_type_from_selection()
         if selection_override:
             normalized_selection = selection_override.strip().upper()
