@@ -44,7 +44,11 @@ class RvrChartLogic:
             return pd.DataFrame()
         if df is None or df.empty:
             return pd.DataFrame()
-        return self._prepare_rvr_dataframe(df)
+        prepared = self._prepare_rvr_dataframe(df)
+        override_type = self._infer_test_type_from_path(path)
+        if override_type:
+            prepared = self._apply_test_type_override(prepared, override_type)
+        return prepared
 
     def _prepare_rvr_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
         if df is None or df.empty:
@@ -367,6 +371,37 @@ class RvrChartLogic:
                 formatted_rssi.append(value if lower.endswith("dbm") else f"{value} dBm")
             annotations.append(f"Target RSSI: {', '.join(formatted_rssi)}")
         return annotations
+
+    def _infer_test_type_from_path(self, path: Path) -> Optional[str]:
+        if path is None:
+            return None
+        try:
+            raw = str(path).lower()
+        except Exception:
+            return None
+        if not raw:
+            return None
+        if "rvo" in raw:
+            return "RVO"
+        peak_keywords = {"peak_throughput", "peak-throughput", "peakthroughput"}
+        if any(keyword in raw for keyword in peak_keywords) or ("peak" in raw and "throughput" in raw):
+            return "PEAK_THROUGHPUT"
+        if "rvr" in raw:
+            return "RVR"
+        return None
+
+    def _apply_test_type_override(self, df: pd.DataFrame, override: str) -> pd.DataFrame:
+        if df is None or df.empty:
+            return pd.DataFrame() if df is None else df
+        normalized = (override or "").strip().upper()
+        if not normalized:
+            return df
+        valid_types = {"RVR", "RVO", "PEAK_THROUGHPUT"}
+        if normalized not in valid_types:
+            return df
+        updated = df.copy()
+        updated["__test_type_display__"] = normalized
+        return updated
 
     def _parse_db_numeric(self, value) -> Optional[float]:
         if value is None:

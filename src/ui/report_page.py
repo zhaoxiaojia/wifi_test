@@ -608,7 +608,13 @@ class ReportPage(RvrChartLogic, CardWidget):
     ) -> Optional[InteractiveChartLabel]:
         channel_values: list[tuple[str, float]] = []
         for channel, channel_df in group.groupby('__channel_display__', dropna=False):
-            throughput_values = [v for v in channel_df['__throughput_value__'].tolist() if v is not None]
+            throughput_values = [
+                float(v)
+                for v in channel_df['__throughput_value__'].tolist()
+                if isinstance(v, (int, float))
+                and pd.notna(v)
+                and math.isfinite(float(v))
+            ]
             if not throughput_values:
                 continue
             avg_value = sum(throughput_values) / len(throughput_values)
