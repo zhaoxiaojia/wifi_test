@@ -55,8 +55,7 @@ def _get_current_attenuation() -> int:
 
 
 def _adjust_rssi_to_target(target_rssi: int, base_db: Optional[int]) -> Tuple[int, Optional[int]]:
-    tolerance = 1
-    max_iterations = 20
+    max_iterations = 30
     applied_db = base_db if base_db is not None else _get_current_attenuation()
     applied_db = max(0, min(110, applied_db))
     step = 10
@@ -69,83 +68,64 @@ def _adjust_rssi_to_target(target_rssi: int, base_db: Optional[int]) -> Tuple[in
     if current_rssi == -1:
         return current_rssi, applied_db
 
-    def _get_diff_sign(value: int) -> int:
-        if value > 0:
-            return 1
-        if value < 0:
-            return -1
-        return 0
-
-    diff = current_rssi - target_rssi
-    previous_diff_sign = _get_diff_sign(diff)
-
     for attempt in range(max_iterations):
+        diff = current_rssi - target_rssi
         logging.info('current rssi %s target rssi %s', current_rssi, target_rssi)
-        if abs(diff) <= tolerance:
+        if diff == 0:
             break
 
-        current_diff_sign = previous_diff_sign
-        if diff < -tolerance:
-            direction = 1
-        elif diff > tolerance:
-            direction = -1
-        else:
-            break
+        direction = 1 if diff > 0 else -1
         next_db = applied_db + direction * step
         next_db = max(0, min(110, next_db))
-        no_adjustment_possible = next_db == applied_db
-        overshoot_detected = no_adjustment_possible
+        if next_db == applied_db:
+            if step > 1:
+                step = 1
+                continue
+            logging.info(
+                'Attenuation locked at %s dB while RSSI diff=%s dB; boundary reached.',
+                applied_db,
+                diff,
+            )
+            break
 
-        applied_db = next_db
         logging.info(
             'Adjust attenuation to %s dB (attempt %s) for RSSI %s dBm -> target %s dBm',
-            applied_db,
+            next_db,
             attempt + 1,
             current_rssi,
             target_rssi,
         )
         try:
-            rf_tool.execute_rf_cmd(applied_db)
+            rf_tool.execute_rf_cmd(next_db)
         except Exception as exc:
-            logging.warning('Failed to execute rf command %s: %s', applied_db, exc)
+            logging.warning('Failed to execute rf command %s: %s', next_db, exc)
             break
+
         time.sleep(3)
-        current_rssi = pytest.dut.get_rssi()
-        diff = current_rssi - target_rssi
-        new_diff_sign = _get_diff_sign(diff)
-        if abs(diff) <= tolerance:
-            previous_diff_sign = new_diff_sign
-            break
-        if diff < -tolerance:
-            direction = 1
-        elif diff > tolerance:
-            direction = -1
-        else:
-            break
-        if (
-            current_diff_sign != 0
-            and new_diff_sign != 0
-            and new_diff_sign != current_diff_sign
-        ):
-            overshoot_detected = True
-        previous_diff_sign = new_diff_sign
-
-        if applied_db == 0 and direction == -1 and no_adjustment_possible:
-            logging.info(
-                'Attenuation already at 0 dB but RSSI %s dBm above target %s dBm, continue test.',
-                current_rssi,
-                target_rssi,
-            )
+        measured = pytest.dut.get_rssi()
+        if measured == -1:
+            current_rssi = measured
+            applied_db = next_db
             break
 
-        if overshoot_detected:
-            new_step = step // 2 if step > 1 else 1
-            step = max(new_step, 1)
-            if step == 0:
-                break
-            if no_adjustment_possible and step == 1 and applied_db in (0, 110):
-                break
-            continue
+        new_diff = measured - target_rssi
+        logging.info(
+            'Measured RSSI %s dBm (diff %s dB) after attenuation %s dB',
+            measured,
+            new_diff,
+            next_db,
+        )
+
+        applied_db = next_db
+        current_rssi = measured
+
+        if new_diff == 0:
+            break
+
+        if abs(new_diff) >= abs(diff) and step > 1:
+            step = max(1, step // 2)
+        elif step > 1 and abs(new_diff) <= 1:
+            step = 1
 
     logging.info('Final RSSI %s dBm with attenuation %s dB', current_rssi, applied_db)
     return current_rssi, applied_db
@@ -278,22 +258,26 @@ def test_rvo(setup_rvo_case, performance_sync_manager):
     logging.info('corner angle set to %s', corner_angle)
     logging.info('start test iperf tx %s rx %s', router_info.tx, router_info.rx)
 
-    if int(router_info.tx):
-        logging.info('rssi : %s', rssi_num)
-        pytest.dut.get_tx_rate(
-            router_info,
-            'TCP',
-            corner_tool=corner_tool,
-            db_set='' if attenuation_db is None else attenuation_db,
-        )
-    if int(router_info.rx):
-        logging.info('rssi : %s', rssi_num)
-        pytest.dut.get_rx_rate(
-            router_info,
-            'TCP',
-            corner_tool=corner_tool,
-            db_set='' if attenuation_db is None else attenuation_db,
-        )
+    pytest.testResult.set_active_profile(profile.mode, profile.value)
+    try:
+        if int(router_info.tx):
+            logging.info('rssi : %s', rssi_num)
+            pytest.dut.get_tx_rate(
+                router_info,
+                'TCP',
+                corner_tool=corner_tool,
+                db_set='' if attenuation_db is None else attenuation_db,
+            )
+        if int(router_info.rx):
+            logging.info('rssi : %s', rssi_num)
+            pytest.dut.get_rx_rate(
+                router_info,
+                'TCP',
+                corner_tool=corner_tool,
+                db_set='' if attenuation_db is None else attenuation_db,
+            )
+    finally:
+        pytest.testResult.clear_active_profile()
 
     # performance_sync_manager(
     #     "RVO",
