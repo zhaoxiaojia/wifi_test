@@ -177,6 +177,8 @@ class RvrChartLogic:
             normalized = self._normalize_value(value)
             if not normalized:
                 continue
+            if "peak" in normalized and "throughput" in normalized:
+                return "PEAK_THROUGHPUT"
             if "rvo" in normalized:
                 return "RVO"
             if "rvr" in normalized:
@@ -185,6 +187,8 @@ class RvrChartLogic:
             normalized = self._normalize_value(value)
             if not normalized:
                 continue
+            if "peak" in normalized and "throughput" in normalized:
+                return "PEAK_THROUGHPUT"
             if "rvo" in normalized:
                 return "RVO"
             if "rvr" in normalized:
@@ -311,6 +315,59 @@ class RvrChartLogic:
             return num
         return s
 
+    def _collect_user_annotations(self, df: pd.DataFrame) -> list[str]:
+        if df is None or df.empty:
+            return []
+
+        def _extract_annotation_values(
+            keywords: tuple[str, ...],
+            formatter,
+        ) -> list[str]:
+            results: list[str] = []
+            seen: set[str] = set()
+            keyword_set = tuple(key.lower() for key in keywords)
+            for column in df.columns:
+                column_name = str(column)
+                column_lower = column_name.lower()
+                column_matches = all(key in column_lower for key in keyword_set)
+                series = df[column] if isinstance(df[column], pd.Series) else pd.Series(df[column])
+                for raw_value in series.tolist():
+                    if raw_value is None or (isinstance(raw_value, float) and pd.isna(raw_value)):
+                        continue
+                    formatted = ""
+                    if column_matches:
+                        formatted = formatter(raw_value)
+                    else:
+                        normalized_value = self._normalize_value(raw_value)
+                        if all(key in normalized_value for key in keyword_set):
+                            formatted = formatter(raw_value)
+                    if not formatted and isinstance(raw_value, str):
+                        normalized_raw = raw_value.strip()
+                        if normalized_raw:
+                            formatted = formatter(normalized_raw)
+                    if formatted:
+                        lowered = formatted.lower()
+                        if lowered in {"", "nan", "null", "none"}:
+                            continue
+                        if formatted not in seen:
+                            seen.add(formatted)
+                            results.append(formatted)
+            return results
+
+        static_values = _extract_annotation_values(("static", "db"), self._format_db_display)
+        target_values = _extract_annotation_values(("target", "rssi"), self._format_metric_display)
+
+        annotations: list[str] = []
+        if static_values:
+            annotations.append(f"Static dB: {', '.join(static_values)}")
+        if target_values:
+            formatted_rssi = []
+            for value in target_values:
+                lower = value.lower()
+                formatted_rssi.append(value if lower.endswith("dbm") else f"{value} dBm")
+            annotations.append(f"Target RSSI: {', '.join(formatted_rssi)}")
+        return annotations
+
     def _parse_db_numeric(self, value) -> Optional[float]:
         if value is None:
             return None
@@ -366,11 +423,24 @@ class RvrChartLogic:
             parts.append(bw)
         if freq:
             parts.append(freq)
-        label = f"{tt or 'RVR'} Throughput"
+        label = self._format_test_type_label(tt)
         parts.append(label)
         if direction:
             parts.append(direction)
         return " ".join(parts).strip()
+
+    def _format_test_type_label(self, test_type: str) -> str:
+        mapping = {
+            "RVR": "RVR Throughput",
+            "RVO": "RVO Throughput",
+            "PEAK_THROUGHPUT": "Peak Throughput",
+        }
+        normalized = (test_type or "").strip().upper()
+        if normalized in mapping:
+            return mapping[normalized]
+        if not normalized:
+            return "RVR Throughput"
+        return f"{normalized} Throughput"
 
     def _collect_step_labels(self, group: pd.DataFrame) -> list[str]:
         steps: list[str] = []
