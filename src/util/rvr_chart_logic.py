@@ -44,7 +44,14 @@ class RvrChartLogic:
             return pd.DataFrame()
         if df is None or df.empty:
             return pd.DataFrame()
-        return self._prepare_rvr_dataframe(df)
+        prepared = self._prepare_rvr_dataframe(df)
+        final_type = self._resolve_dataframe_test_type(prepared, path)
+        if final_type:
+            normalized_type = (final_type or "").strip().upper()
+            prepared["__test_type_display__"] = normalized_type or "RVR"
+        elif "__test_type_display__" not in prepared.columns:
+            prepared["__test_type_display__"] = "RVR"
+        return prepared
 
     def _prepare_rvr_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
         if df is None or df.empty:
@@ -92,8 +99,6 @@ class RvrChartLogic:
         prepared["__rssi_display__"] = source_series("RSSI", "Data_RSSI", "Data RSSI").apply(
             self._format_metric_display
         )
-
-        prepared["__test_type_display__"] = prepared.apply(self._detect_test_type_from_row, axis=1)
 
         step_candidates = ("DB", "Total_Path_Loss", "RxP", "Step", "Attenuation")
 
@@ -177,19 +182,145 @@ class RvrChartLogic:
             normalized = self._normalize_value(value)
             if not normalized:
                 continue
+            if "peak" in normalized and "throughput" in normalized:
+                return "PEAK_THROUGHPUT"
             if "rvo" in normalized:
                 return "RVO"
             if "rvr" in normalized:
                 return "RVR"
+
+        angle_value = self._extract_first_non_empty(
+            row,
+            (
+                "Angel",
+                "Angle",
+                "corner",
+                "Corner",
+                "corner_angle",
+                "Corner_Angle",
+            ),
+        )
+        if angle_value is not None:
+            normalized_angle = self._normalize_value(angle_value)
+            if normalized_angle and normalized_angle not in {"", "null", "none"}:
+                return "RVO"
+
         for value in row.tolist():
             normalized = self._normalize_value(value)
             if not normalized:
                 continue
+            if "peak" in normalized and "throughput" in normalized:
+                return "PEAK_THROUGHPUT"
             if "rvo" in normalized:
                 return "RVO"
             if "rvr" in normalized:
                 return "RVR"
         return "RVR"
+
+    def _resolve_dataframe_test_type(self, df: pd.DataFrame, path: Optional[Path]) -> Optional[str]:
+        if df is None or df.empty:
+            return None
+
+        selection_override = self._infer_test_type_from_selection()
+        if selection_override:
+            normalized_selection = selection_override.strip().upper()
+            if normalized_selection:
+                return normalized_selection
+
+        override = self._infer_test_type_from_path(path) if path is not None else None
+        if override:
+            normalized_override = override.strip().upper()
+            if normalized_override:
+                return normalized_override
+
+        detected = self._determine_dataframe_test_type(df)
+        if detected:
+            return detected
+        return "RVR"
+
+    def _determine_dataframe_test_type(self, df: pd.DataFrame) -> Optional[str]:
+        if df is None or df.empty:
+            return None
+
+        if self._dataframe_contains_corner_angles(df):
+            return "RVO"
+
+        sample = df.head(200)
+        detected: set[str] = set()
+        for _, row in sample.iterrows():
+            candidate = self._detect_test_type_from_row(row)
+            if candidate:
+                detected.add(candidate.upper())
+        if "RVO" in detected:
+            return "RVO"
+        if "PEAK_THROUGHPUT" in detected:
+            return "PEAK_THROUGHPUT"
+        if "RVR" in detected:
+            return "RVR"
+
+        column_tokens = " ".join(str(name).lower() for name in df.columns)
+        if "rvo" in column_tokens:
+            return "RVO"
+        if "peak" in column_tokens and "throughput" in column_tokens:
+            return "PEAK_THROUGHPUT"
+        return None
+
+    def _infer_test_type_from_selection(self) -> Optional[str]:
+        explicit = getattr(self, "_selected_test_type", None)
+        if isinstance(explicit, str):
+            normalized = explicit.strip().upper()
+            if normalized:
+                return normalized
+
+        case_path = getattr(self, "_active_case_path", None)
+        if case_path:
+            inferred = self._infer_test_type_from_case_path(case_path)
+            if inferred:
+                return inferred
+        return None
+
+    def _infer_test_type_from_case_path(self, case_path: str | Path) -> Optional[str]:
+        if case_path is None:
+            return None
+        try:
+            name = Path(case_path).name.lower()
+        except Exception:
+            try:
+                name = str(case_path).lower()
+            except Exception:
+                return None
+        if not name:
+            return None
+        if "peak" in name and "throughput" in name:
+            return "PEAK_THROUGHPUT"
+        if "rvo" in name:
+            return "RVO"
+        if any(token in name for token in ("rvr", "performance")):
+            return "RVR"
+        return None
+
+    def _dataframe_contains_corner_angles(self, df: pd.DataFrame) -> bool:
+        if df is None or df.empty:
+            return False
+
+        angle_columns = []
+        for column in df.columns:
+            name = str(column).strip().lower()
+            if name in {"angel", "angle", "corner", "corner_angle", "cornerangle"}:
+                angle_columns.append(column)
+        if not angle_columns:
+            return False
+
+        for column in angle_columns:
+            try:
+                series = df[column] if isinstance(df[column], pd.Series) else pd.Series(df[column])
+            except Exception:
+                continue
+            for value in series.tolist():
+                normalized = self._normalize_value(value)
+                if normalized and normalized not in {"", "null", "none"}:
+                    return True
+        return False
 
     def _format_standard_display(self, value) -> str:
         if value is None:
@@ -311,6 +442,94 @@ class RvrChartLogic:
             return num
         return s
 
+    def _collect_user_annotations(self, df: pd.DataFrame) -> list[str]:
+        if df is None or df.empty:
+            return []
+
+        def _extract_annotation_values(
+            keywords: tuple[str, ...],
+            formatter,
+        ) -> list[str]:
+            results: list[str] = []
+            seen: set[str] = set()
+            keyword_set = tuple(key.lower() for key in keywords)
+            for column in df.columns:
+                column_name = str(column)
+                column_lower = column_name.lower()
+                column_matches = all(key in column_lower for key in keyword_set)
+                series = df[column] if isinstance(df[column], pd.Series) else pd.Series(df[column])
+                for raw_value in series.tolist():
+                    if raw_value is None or (isinstance(raw_value, float) and pd.isna(raw_value)):
+                        continue
+                    formatted = ""
+                    if column_matches:
+                        formatted = formatter(raw_value)
+                    else:
+                        normalized_value = self._normalize_value(raw_value)
+                        if all(key in normalized_value for key in keyword_set):
+                            formatted = formatter(raw_value)
+                    if not formatted and isinstance(raw_value, str):
+                        normalized_raw = raw_value.strip()
+                        if normalized_raw:
+                            formatted = formatter(normalized_raw)
+                    if formatted:
+                        lowered = formatted.lower()
+                        if lowered in {"", "nan", "null", "none"}:
+                            continue
+                        if formatted not in seen:
+                            seen.add(formatted)
+                            results.append(formatted)
+            return results
+
+        static_values = _extract_annotation_values(("static", "db"), self._format_db_display)
+        target_values = _extract_annotation_values(("target", "rssi"), self._format_metric_display)
+
+        annotations: list[str] = []
+        if static_values:
+            annotations.append(f"Static dB: {', '.join(static_values)}")
+        if target_values:
+            formatted_rssi = []
+            for value in target_values:
+                lower = value.lower()
+                formatted_rssi.append(value if lower.endswith("dbm") else f"{value} dBm")
+            annotations.append(f"Target RSSI: {', '.join(formatted_rssi)}")
+        return annotations
+
+    def _infer_test_type_from_path(self, path: Path) -> Optional[str]:
+        if path is None:
+            return None
+        try:
+            raw = str(path).lower()
+        except Exception:
+            return None
+        if not raw:
+            return None
+        if "rvo" in raw:
+            return "RVO"
+        peak_keywords = {"peak_throughput", "peak-throughput", "peakthroughput"}
+        if any(keyword in raw for keyword in peak_keywords) or ("peak" in raw and "throughput" in raw):
+            return "PEAK_THROUGHPUT"
+        if "rvr" in raw:
+            return "RVR"
+        return None
+
+    def _aggregate_channel_throughput(self, group: pd.DataFrame) -> list[tuple[str, float]]:
+        channel_values: list[tuple[str, float]] = []
+        for channel, channel_df in group.groupby("__channel_display__", dropna=False):
+            throughput_values = [
+                float(v)
+                for v in channel_df["__throughput_value__"].tolist()
+                if isinstance(v, (int, float))
+                and pd.notna(v)
+                and math.isfinite(float(v))
+            ]
+            if not throughput_values:
+                continue
+            avg_value = sum(throughput_values) / len(throughput_values)
+            label = self._format_pie_channel_label(channel, channel_df)
+            channel_values.append((label, avg_value))
+        return channel_values
+
     def _parse_db_numeric(self, value) -> Optional[float]:
         if value is None:
             return None
@@ -366,11 +585,24 @@ class RvrChartLogic:
             parts.append(bw)
         if freq:
             parts.append(freq)
-        label = f"{tt or 'RVR'} Throughput"
+        label = self._format_test_type_label(tt)
         parts.append(label)
         if direction:
             parts.append(direction)
         return " ".join(parts).strip()
+
+    def _format_test_type_label(self, test_type: str) -> str:
+        mapping = {
+            "RVR": "RVR Throughput",
+            "RVO": "RVO Throughput",
+            "PEAK_THROUGHPUT": "Peak Throughput",
+        }
+        normalized = (test_type or "").strip().upper()
+        if normalized in mapping:
+            return mapping[normalized]
+        if not normalized:
+            return "RVR Throughput"
+        return f"{normalized} Throughput"
 
     def _collect_step_labels(self, group: pd.DataFrame) -> list[str]:
         steps: list[str] = []
@@ -456,18 +688,10 @@ class RvrChartLogic:
         channel_name = (channel or "").strip()
         if not channel_name:
             channel_name = "Unknown"
-        rssi_values = [
-            value for value in df["__rssi_display__"].tolist() if value and value not in {"-1", "0"}
-        ]
         db_values = [value for value in df["__db_display__"].tolist() if value]
-        label_parts: list[str] = []
-        if rssi_values:
-            label_parts.append(f"rssi{rssi_values[0]}_ch{channel_name}")
         if db_values:
-            label_parts.append(f"db{db_values[0]}_ch{channel_name}")
-        if not label_parts:
-            label_parts.append(f"ch{channel_name}")
-        return " ".join(label_parts)
+            return f"CH{channel_name} {db_values[0]}dB"
+        return f"CH{channel_name}"
 
     def _series_with_nan(self, values: list[Optional[float]]) -> list[float]:
         series: list[float] = []
