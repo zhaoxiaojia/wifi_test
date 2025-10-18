@@ -44,7 +44,14 @@ class RvrChartLogic:
             return pd.DataFrame()
         if df is None or df.empty:
             return pd.DataFrame()
-        return self._prepare_rvr_dataframe(df)
+        prepared = self._prepare_rvr_dataframe(df)
+        final_type = self._resolve_dataframe_test_type(prepared, path)
+        if final_type:
+            normalized_type = (final_type or "").strip().upper()
+            prepared["__test_type_display__"] = normalized_type or "RVR"
+        elif "__test_type_display__" not in prepared.columns:
+            prepared["__test_type_display__"] = "RVR"
+        return prepared
 
     def _prepare_rvr_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
         if df is None or df.empty:
@@ -93,7 +100,17 @@ class RvrChartLogic:
             self._format_metric_display
         )
 
-        prepared["__test_type_display__"] = prepared.apply(self._detect_test_type_from_row, axis=1)
+        angle_series = source_series(
+            "Angel",
+            "Angle",
+            "corner",
+            "Corner",
+            "corner_angle",
+            "Corner_Angle",
+            "CornerAngle",
+        )
+        prepared["__angle_value__"] = angle_series.apply(self._parse_angle_value)
+        prepared["__angle_display__"] = angle_series.apply(self._format_angle_display)
 
         step_candidates = ("DB", "Total_Path_Loss", "RxP", "Step", "Attenuation")
 
@@ -177,19 +194,145 @@ class RvrChartLogic:
             normalized = self._normalize_value(value)
             if not normalized:
                 continue
+            if "peak" in normalized and "throughput" in normalized:
+                return "PEAK_THROUGHPUT"
             if "rvo" in normalized:
                 return "RVO"
             if "rvr" in normalized:
                 return "RVR"
+
+        angle_value = self._extract_first_non_empty(
+            row,
+            (
+                "Angel",
+                "Angle",
+                "corner",
+                "Corner",
+                "corner_angle",
+                "Corner_Angle",
+            ),
+        )
+        if angle_value is not None:
+            normalized_angle = self._normalize_value(angle_value)
+            if normalized_angle and normalized_angle not in {"", "null", "none"}:
+                return "RVO"
+
         for value in row.tolist():
             normalized = self._normalize_value(value)
             if not normalized:
                 continue
+            if "peak" in normalized and "throughput" in normalized:
+                return "PEAK_THROUGHPUT"
             if "rvo" in normalized:
                 return "RVO"
             if "rvr" in normalized:
                 return "RVR"
         return "RVR"
+
+    def _resolve_dataframe_test_type(self, df: pd.DataFrame, path: Optional[Path]) -> Optional[str]:
+        if df is None or df.empty:
+            return None
+
+        selection_override = self._infer_test_type_from_selection()
+        if selection_override:
+            normalized_selection = selection_override.strip().upper()
+            if normalized_selection:
+                return normalized_selection
+
+        override = self._infer_test_type_from_path(path) if path is not None else None
+        if override:
+            normalized_override = override.strip().upper()
+            if normalized_override:
+                return normalized_override
+
+        detected = self._determine_dataframe_test_type(df)
+        if detected:
+            return detected
+        return "RVR"
+
+    def _determine_dataframe_test_type(self, df: pd.DataFrame) -> Optional[str]:
+        if df is None or df.empty:
+            return None
+
+        if self._dataframe_contains_corner_angles(df):
+            return "RVO"
+
+        sample = df.head(200)
+        detected: set[str] = set()
+        for _, row in sample.iterrows():
+            candidate = self._detect_test_type_from_row(row)
+            if candidate:
+                detected.add(candidate.upper())
+        if "RVO" in detected:
+            return "RVO"
+        if "PEAK_THROUGHPUT" in detected:
+            return "PEAK_THROUGHPUT"
+        if "RVR" in detected:
+            return "RVR"
+
+        column_tokens = " ".join(str(name).lower() for name in df.columns)
+        if "rvo" in column_tokens:
+            return "RVO"
+        if "peak" in column_tokens and "throughput" in column_tokens:
+            return "PEAK_THROUGHPUT"
+        return None
+
+    def _infer_test_type_from_selection(self) -> Optional[str]:
+        explicit = getattr(self, "_selected_test_type", None)
+        if isinstance(explicit, str):
+            normalized = explicit.strip().upper()
+            if normalized:
+                return normalized
+
+        case_path = getattr(self, "_active_case_path", None)
+        if case_path:
+            inferred = self._infer_test_type_from_case_path(case_path)
+            if inferred:
+                return inferred
+        return None
+
+    def _infer_test_type_from_case_path(self, case_path: str | Path) -> Optional[str]:
+        if case_path is None:
+            return None
+        try:
+            name = Path(case_path).name.lower()
+        except Exception:
+            try:
+                name = str(case_path).lower()
+            except Exception:
+                return None
+        if not name:
+            return None
+        if "peak" in name and "throughput" in name:
+            return "PEAK_THROUGHPUT"
+        if "rvo" in name:
+            return "RVO"
+        if any(token in name for token in ("rvr", "performance")):
+            return "RVR"
+        return None
+
+    def _dataframe_contains_corner_angles(self, df: pd.DataFrame) -> bool:
+        if df is None or df.empty:
+            return False
+
+        angle_columns = []
+        for column in df.columns:
+            name = str(column).strip().lower()
+            if name in {"angel", "angle", "corner", "corner_angle", "cornerangle"}:
+                angle_columns.append(column)
+        if not angle_columns:
+            return False
+
+        for column in angle_columns:
+            try:
+                series = df[column] if isinstance(df[column], pd.Series) else pd.Series(df[column])
+            except Exception:
+                continue
+            for value in series.tolist():
+                normalized = self._normalize_value(value)
+                if normalized and normalized not in {"", "null", "none"}:
+                    return True
+        return False
 
     def _format_standard_display(self, value) -> str:
         if value is None:
@@ -311,6 +454,167 @@ class RvrChartLogic:
             return num
         return s
 
+    def _collect_user_annotations(self, df: pd.DataFrame) -> list[str]:
+        if df is None or df.empty:
+            return []
+
+        def _extract_annotation_values(
+            keywords: tuple[str, ...],
+            formatter,
+        ) -> list[str]:
+            results: list[str] = []
+            seen: set[str] = set()
+            keyword_set = tuple(key.lower() for key in keywords)
+            for column in df.columns:
+                column_name = str(column)
+                column_lower = column_name.lower()
+                column_matches = all(key in column_lower for key in keyword_set)
+                series = df[column] if isinstance(df[column], pd.Series) else pd.Series(df[column])
+                for raw_value in series.tolist():
+                    if raw_value is None or (isinstance(raw_value, float) and pd.isna(raw_value)):
+                        continue
+                    formatted = ""
+                    if column_matches:
+                        formatted = formatter(raw_value)
+                    else:
+                        normalized_value = self._normalize_value(raw_value)
+                        if all(key in normalized_value for key in keyword_set):
+                            formatted = formatter(raw_value)
+                    if not formatted and isinstance(raw_value, str):
+                        normalized_raw = raw_value.strip()
+                        if normalized_raw:
+                            formatted = formatter(normalized_raw)
+                    if formatted:
+                        lowered = formatted.lower()
+                        if lowered in {"", "nan", "null", "none"}:
+                            continue
+                        if formatted not in seen:
+                            seen.add(formatted)
+                            results.append(formatted)
+            return results
+
+        static_values = _extract_annotation_values(("static", "db"), self._format_db_display)
+        target_values = _extract_annotation_values(("target", "rssi"), self._format_metric_display)
+
+        annotations: list[str] = []
+        if static_values:
+            annotations.append(f"Static dB: {', '.join(static_values)}")
+        if target_values:
+            formatted_rssi = []
+            for value in target_values:
+                lower = value.lower()
+                formatted_rssi.append(value if lower.endswith("dbm") else f"{value} dBm")
+            annotations.append(f"Target RSSI: {', '.join(formatted_rssi)}")
+        return annotations
+
+    def _infer_test_type_from_path(self, path: Path) -> Optional[str]:
+        if path is None:
+            return None
+        try:
+            raw = str(path).lower()
+        except Exception:
+            return None
+        if not raw:
+            return None
+        if "rvo" in raw:
+            return "RVO"
+        peak_keywords = {"peak_throughput", "peak-throughput", "peakthroughput"}
+        if any(keyword in raw for keyword in peak_keywords) or ("peak" in raw and "throughput" in raw):
+            return "PEAK_THROUGHPUT"
+        if "rvr" in raw:
+            return "RVR"
+        return None
+
+    def _collect_angle_positions(self, group: pd.DataFrame) -> list[tuple[float, str]]:
+        if (
+            group is None
+            or group.empty
+            or "__angle_value__" not in group
+            or "__angle_display__" not in group
+        ):
+            return []
+
+        angles: dict[float, tuple[float, str]] = {}
+        values = group["__angle_value__"].tolist()
+        displays = group["__angle_display__"].tolist()
+        for numeric, display in zip(values, displays):
+            if numeric is None:
+                continue
+            try:
+                numeric_value = float(numeric)
+            except (TypeError, ValueError):
+                continue
+            if not math.isfinite(numeric_value):
+                continue
+            normalized = self._normalize_angle_numeric(numeric_value)
+            if normalized is None:
+                continue
+            key = round(normalized, 4)
+            label = display if isinstance(display, str) and display else self._format_angle_label_from_numeric(normalized)
+            if key not in angles:
+                angles[key] = (normalized, label)
+        ordered_keys = sorted(angles.keys())
+        return [angles[key] for key in ordered_keys]
+
+    def _collect_rvo_channel_series(
+        self, group: pd.DataFrame, angle_values: list[float]
+    ) -> list[tuple[str, list[Optional[float]]]]:
+        if (
+            group is None
+            or group.empty
+            or "__angle_value__" not in group
+            or "__throughput_value__" not in group
+        ):
+            return []
+
+        series_data: list[tuple[str, list[Optional[float]]]] = []
+        for channel, channel_df in group.groupby("__channel_display__", dropna=False):
+            values: list[Optional[float]] = []
+            for angle in angle_values:
+                subset = self._filter_dataframe_by_angle(channel_df, angle)
+                raw_values = [v for v in subset["__throughput_value__"].tolist() if v is not None]
+                finite_values = [
+                    float(v)
+                    for v in raw_values
+                    if isinstance(v, (int, float))
+                    and pd.notna(v)
+                    and math.isfinite(float(v))
+                ]
+                if finite_values:
+                    values.append(sum(finite_values) / len(finite_values))
+                else:
+                    values.append(None)
+            if any(v is not None for v in values):
+                label = self._format_pie_channel_label(channel, channel_df)
+                series_data.append((label, values))
+        return series_data
+
+    def _filter_dataframe_by_angle(self, df: pd.DataFrame, angle: float) -> pd.DataFrame:
+        if "__angle_value__" not in df:
+            return df.iloc[0:0]
+        tolerance = 0.51
+        normalized_target = self._normalize_angle_numeric(angle)
+        if normalized_target is None:
+            return df.iloc[0:0]
+
+        def _matches(value) -> bool:
+            if value is None:
+                return False
+            try:
+                numeric_value = float(value)
+            except (TypeError, ValueError):
+                return False
+            if not math.isfinite(numeric_value):
+                return False
+            normalized_value = self._normalize_angle_numeric(numeric_value)
+            if normalized_value is None:
+                return False
+            diff = abs((normalized_value - normalized_target + 180.0) % 360.0 - 180.0)
+            return diff <= tolerance
+
+        mask = df["__angle_value__"].apply(_matches)
+        return df[mask]
+
     def _parse_db_numeric(self, value) -> Optional[float]:
         if value is None:
             return None
@@ -366,11 +670,24 @@ class RvrChartLogic:
             parts.append(bw)
         if freq:
             parts.append(freq)
-        label = f"{tt or 'RVR'} Throughput"
+        label = self._format_test_type_label(tt)
         parts.append(label)
         if direction:
             parts.append(direction)
         return " ".join(parts).strip()
+
+    def _format_test_type_label(self, test_type: str) -> str:
+        mapping = {
+            "RVR": "RVR Throughput",
+            "RVO": "RVO Throughput",
+            "PEAK_THROUGHPUT": "Peak Throughput",
+        }
+        normalized = (test_type or "").strip().upper()
+        if normalized in mapping:
+            return mapping[normalized]
+        if not normalized:
+            return "RVR Throughput"
+        return f"{normalized} Throughput"
 
     def _collect_step_labels(self, group: pd.DataFrame) -> list[str]:
         steps: list[str] = []
@@ -443,31 +760,14 @@ class RvrChartLogic:
         channel = (channel or "").strip()
         return f"CH{channel}" if channel else "Unknown"
 
-    def _make_pie_autopct(self, values: tuple[float, ...]):
-        total = sum(values)
-
-        def _formatter(pct):
-            absolute = pct * total / 100.0
-            return f"{pct:.1f}%\n{absolute:.1f} Mbps"
-
-        return _formatter
-
     def _format_pie_channel_label(self, channel: str, df: pd.DataFrame) -> str:
         channel_name = (channel or "").strip()
         if not channel_name:
             channel_name = "Unknown"
-        rssi_values = [
-            value for value in df["__rssi_display__"].tolist() if value and value not in {"-1", "0"}
-        ]
         db_values = [value for value in df["__db_display__"].tolist() if value]
-        label_parts: list[str] = []
-        if rssi_values:
-            label_parts.append(f"rssi{rssi_values[0]}_ch{channel_name}")
         if db_values:
-            label_parts.append(f"db{db_values[0]}_ch{channel_name}")
-        if not label_parts:
-            label_parts.append(f"ch{channel_name}")
-        return " ".join(label_parts)
+            return f"CH{channel_name} {db_values[0]}dB"
+        return f"CH{channel_name}"
 
     def _series_with_nan(self, values: list[Optional[float]]) -> list[float]:
         series: list[float] = []
@@ -485,6 +785,56 @@ class RvrChartLogic:
         if not s or s.lower() in {"nan", "null"}:
             return None
         return s
+
+    def _parse_angle_value(self, value) -> Optional[float]:
+        if value is None:
+            return None
+        if isinstance(value, (int, float)):
+            numeric = float(value)
+            if math.isfinite(numeric):
+                return numeric
+            return None
+        s = str(value).strip()
+        if not s:
+            return None
+        lowered = s.lower()
+        if lowered in {"nan", "null", "none", "n/a", "na", "-"}:
+            return None
+        match = re.search(r"-?\d+(?:\.\d+)?", s)
+        if not match:
+            return None
+        try:
+            numeric = float(match.group())
+        except ValueError:
+            return None
+        if not math.isfinite(numeric):
+            return None
+        return numeric
+
+    def _normalize_angle_numeric(self, value: float) -> Optional[float]:
+        if value is None or not math.isfinite(float(value)):
+            return None
+        normalized = float(value) % 360.0
+        if normalized < 0:
+            normalized += 360.0
+        return normalized
+
+    def _format_angle_label_from_numeric(self, value: float) -> str:
+        if value is None or not math.isfinite(float(value)):
+            return ""
+        rounded = round(value)
+        if abs(value - rounded) < 1e-6:
+            return f"{int(rounded)}°"
+        formatted = f"{value:.1f}°"
+        if formatted.endswith(".0°"):
+            formatted = formatted[:-3] + "°"
+        return formatted
+
+    def _format_angle_display(self, value) -> str:
+        numeric = self._parse_angle_value(value)
+        if numeric is None:
+            return str(value).strip() if value is not None else ""
+        return self._format_angle_label_from_numeric(self._normalize_angle_numeric(numeric) or numeric)
 
     def _extract_first_non_empty(self, row: pd.Series, columns: tuple[str, ...]):
         for column in columns:
