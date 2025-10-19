@@ -50,14 +50,18 @@ class Xiaomiax3600Control(XiaomiBaseControl):
                 logging.info('Need wait 75 seconds')
                 time.sleep(75)
         except Exception as e:
+            time.sleep(75)
             logging.warning("Fail to find hold on windows")
         time.sleep(3)
         # 修改wiremode
         if router.wireless_mode:
+            logging.info(f'coco {router.wireless_mode}')
             wifi6_switch = self.driver.find_element(By.XPATH,
                                                     '//*[@id="WIFI6switch"]')
             self.scroll_to(wifi6_switch)
-            if wifi6_switch.get_attribute("data-on") != '0' if router.wireless_mode == '11ax' else '1':
+            logging.info(wifi6_switch.get_attribute("data-on"))
+            if wifi6_switch.get_attribute("data-on") != ('0' if router.wireless_mode == '11ax' else '1'):
+                logging.info('click')
                 wifi6_switch.click()
                 time.sleep(35)
 
