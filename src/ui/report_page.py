@@ -664,16 +664,10 @@ class ReportPage(RvrChartLogic, CardWidget):
         handles = list(handles)
         labels = list(labels)
         print(f"[RVO][UI] legend handles={labels}")
-        annotations = []
         if handles:
             print(
                 f"[RVO][UI] creating legend -> handle_count={len(handles)}, label_count={len(labels)}"
             )
-            annotations = self._collect_user_annotations(group)
-            if annotations:
-                dummy_handles = [Line2D([], [], linestyle='None', marker='', linewidth=0) for _ in annotations]
-                handles.extend(dummy_handles)
-                labels.extend(annotations)
             legend = ax.legend(
                 handles,
                 labels,
@@ -691,10 +685,7 @@ class ReportPage(RvrChartLogic, CardWidget):
                     text_item.set_ha('center')
         else:
             print("[RVO][UI] legend skipped -> no handles detected")
-        bottom_padding = 0.24 if handles else 0.22
-        if annotations:
-            bottom_padding = max(bottom_padding, 0.3)
-            print(f"[RVO][UI] annotation text set -> lines={annotations}")
+        bottom_padding = 0.26 if handles else 0.22
         print(
             f"[RVO][UI] subplot padding -> bottom={bottom_padding}, legend_present={bool(ax.get_legend())}"
         )
