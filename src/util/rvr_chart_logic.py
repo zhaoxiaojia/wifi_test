@@ -826,15 +826,25 @@ class RvrChartLogic:
         normalized_value = (value or "").strip()
         if not normalized_mode and not normalized_value:
             return ""
-        if normalized_mode == "TARGET_RSSI":
-            return f"Target RSSI {normalized_value}" if normalized_value else "Target RSSI"
-        if normalized_mode == "STATIC_DB":
-            suffix = "dB" if normalized_value and not normalized_value.lower().endswith("db") else ""
-            return f"Static dB {normalized_value}{suffix}"
-        if normalized_mode in {"DEFAULT", "CUSTOM"}:
-            return normalized_value
+
+        display_value = ""
         if normalized_value:
-            return f"{normalized_mode.replace('_', ' ')} {normalized_value}".strip()
+            numeric_tokens = re.findall(r"-?\d+(?:\.\d+)?", normalized_value)
+            if len(numeric_tokens) == 1:
+                display_value = self._format_db_display(normalized_value)
+            else:
+                display_value = normalized_value
+
+        if normalized_mode == "TARGET_RSSI":
+            prefix = "Target RSSI"
+            return f"{prefix} {display_value}".strip()
+        if normalized_mode == "STATIC_DB":
+            prefix = "Static db"
+            return f"{prefix} {display_value}".strip()
+        if normalized_mode in {"DEFAULT", "CUSTOM"}:
+            return display_value
+        if display_value:
+            return f"{normalized_mode.replace('_', ' ')} {display_value}".strip()
         return normalized_mode.replace('_', ' ')
 
     def _extract_profile_label(self, df: pd.DataFrame) -> str:
