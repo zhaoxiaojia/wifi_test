@@ -102,7 +102,7 @@ def _adjust_rssi_to_target(target_rssi: int, base_db: Optional[int]) -> Tuple[in
         if diff == 0:
             break
 
-        direction = 1 if diff > 0 else -1
+        direction = -1 if diff > 0 else 1
         next_db = applied_db + direction * step
         next_db = max(0, min(110, next_db))
         if next_db == applied_db:
@@ -295,6 +295,7 @@ def test_rvo(setup_rvo_case, performance_sync_manager):
                 'TCP',
                 corner_tool=corner_tool,
                 db_set='' if attenuation_db is None else attenuation_db,
+                debug=True
             )
         if int(router_info.rx):
             logging.info('rssi : %s', rssi_num)
@@ -303,6 +304,7 @@ def test_rvo(setup_rvo_case, performance_sync_manager):
                 'TCP',
                 corner_tool=corner_tool,
                 db_set='' if attenuation_db is None else attenuation_db,
+                debug=True
             )
     finally:
         pytest.testResult.clear_active_profile()
