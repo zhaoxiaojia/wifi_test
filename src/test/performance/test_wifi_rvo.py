@@ -15,6 +15,7 @@ from src.test.pyqt_log import log_fixture_params, update_fixture_params
 from src.test.performance import (
     common_setup,
     get_corner_step_list,
+    get_rf_step_list,
     get_rvo_static_db_list,
     get_rvo_target_rssi_list,
     init_corner,
@@ -54,10 +55,37 @@ def _get_current_attenuation() -> int:
     return parsed if parsed is not None else 0
 
 
+def _clamp_db(value: Optional[int]) -> int:
+    parsed = _safe_int(value)
+    if parsed is None:
+        return 0
+    return max(0, min(110, parsed))
+
+
+def _initial_step_size() -> int:
+    try:
+        candidates = sorted(set(get_rf_step_list()))
+    except Exception as exc:
+        logging.warning('Failed to load RF step list: %s; fallback to step=1', exc)
+        return 1
+
+    max_gap = 0
+    previous = None
+    for value in candidates:
+        if previous is not None and value > previous:
+            gap = value - previous
+            if gap > max_gap:
+                max_gap = gap
+        previous = value
+
+    return max_gap or 1
+
+
 def _adjust_rssi_to_target(target_rssi: int, base_db: Optional[int]) -> Tuple[int, Optional[int]]:
     max_iterations = 30
     applied_db = base_db if base_db is not None else _get_current_attenuation()
     applied_db = _clamp_db(applied_db)
+    step = _initial_step_size()
     logging.info(
         'Start adjusting attenuation to %s dB for target RSSI %s dBm',
         applied_db,
