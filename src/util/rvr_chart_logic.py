@@ -519,6 +519,9 @@ class RvrChartLogic:
                 lower = value.lower()
                 formatted_rssi.append(value if lower.endswith("dbm") else f"{value} dBm")
             annotations.append(f"Target RSSI: {', '.join(formatted_rssi)}")
+
+        if annotations:
+            print(f"[RVO] annotations collected -> {annotations}")
         return annotations
 
     def _infer_test_type_from_path(self, path: Path) -> Optional[str]:
@@ -612,6 +615,10 @@ class RvrChartLogic:
                     f"[RVO] series collected -> channel={channel!r}, key={key!r}, label={label!r}, values={values}"
                 )
                 series_data.append((label, values))
+        if not series_data:
+            print("[RVO] no channel series were generated for polar plot")
+        else:
+            print(f"[RVO] total channel series -> {len(series_data)}")
         return series_data
 
     def _filter_dataframe_by_angle(self, df: pd.DataFrame, angle: float) -> pd.DataFrame:

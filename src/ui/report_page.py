@@ -666,6 +666,9 @@ class ReportPage(RvrChartLogic, CardWidget):
         print(f"[RVO][UI] legend handles={labels}")
         annotations = []
         if handles:
+            print(
+                f"[RVO][UI] creating legend -> handle_count={len(handles)}, label_count={len(labels)}"
+            )
             annotations = self._collect_user_annotations(group)
             if annotations:
                 dummy_handles = [Line2D([], [], linestyle='None', marker='', linewidth=0) for _ in annotations]
@@ -679,12 +682,22 @@ class ReportPage(RvrChartLogic, CardWidget):
                 ncol=max(1, min(len(handles), 3)),
                 frameon=False,
             )
+            legend_texts = [text.get_text() for text in legend.get_texts()] if legend else []
+            print(
+                f"[RVO][UI] legend created -> present={legend is not None}, texts={legend_texts}"
+            )
             if legend is not None:
                 for text_item in legend.get_texts():
                     text_item.set_ha('center')
+        else:
+            print("[RVO][UI] legend skipped -> no handles detected")
         bottom_padding = 0.24 if handles else 0.22
         if annotations:
             bottom_padding = max(bottom_padding, 0.3)
+            print(f"[RVO][UI] annotation text set -> lines={annotations}")
+        print(
+            f"[RVO][UI] subplot padding -> bottom={bottom_padding}, legend_present={bool(ax.get_legend())}"
+        )
         fig.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=bottom_padding)
         save_path = charts_dir / f"{self._safe_chart_name(title)}.png"
         return self._figure_to_label(fig, ax, [], save_path)
@@ -734,6 +747,10 @@ class ReportPage(RvrChartLogic, CardWidget):
             canvas = FigureCanvasAgg(fig)
             canvas.draw()
             width, height = canvas.get_width_height()
+            print(
+                "[RVO][UI] canvas drawn -> size="
+                f"{width}x{height}, legend_present={bool(ax.get_legend())}"
+            )
             buffer = canvas.buffer_rgba()
             image = QImage(buffer, width, height, QImage.Format_RGBA8888).copy()
             pixmap = QPixmap.fromImage(image)
