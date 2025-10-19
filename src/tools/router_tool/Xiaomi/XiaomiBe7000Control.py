@@ -44,6 +44,7 @@ class XiaomiBe7000Control(XiaomiBaseControl):
                 logging.info('Need wait 75 seconds')
                 time.sleep(75)
         except Exception:
+            time.sleep(75)
             logging.warning("Fail to find hold on windows")
         # 修改wiremode
         if router.wireless_mode:
