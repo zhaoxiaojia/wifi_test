@@ -608,6 +608,9 @@ class RvrChartLogic:
                     values.append(None)
             if any(v is not None for v in values):
                 label = self._format_rvo_series_label(channel, channel_df)
+                print(
+                    f"[RVO] series collected -> channel={channel!r}, key={key!r}, label={label!r}, values={values}"
+                )
                 series_data.append((label, values))
         return series_data
 
@@ -829,11 +832,21 @@ class RvrChartLogic:
 
         display_value = ""
         if normalized_value:
-            numeric_tokens = re.findall(r"-?\d+(?:\.\d+)?", normalized_value)
-            if len(numeric_tokens) == 1:
-                display_value = self._format_db_display(normalized_value)
+            trimmed = normalized_value.strip()
+            numeric_tokens = re.findall(r"-?\d+(?:\.\d+)?", trimmed)
+            if len(numeric_tokens) == 1 and re.fullmatch(r"[-+]?\d+(?:\.\d+)?", trimmed):
+                token = numeric_tokens[0]
+                try:
+                    numeric_value = float(token)
+                except ValueError:
+                    display_value = trimmed
+                else:
+                    if math.isfinite(numeric_value) and float(int(numeric_value)) == numeric_value:
+                        display_value = str(int(numeric_value))
+                    else:
+                        display_value = str(numeric_value).rstrip("0").rstrip(".")
             else:
-                display_value = normalized_value
+                display_value = trimmed
 
         if normalized_mode == "TARGET_RSSI":
             prefix = "Target RSSI"
@@ -887,10 +900,19 @@ class RvrChartLogic:
         base_label = self._format_channel_series_label(channel)
         profile_label = self._extract_profile_label(df)
         if profile_label:
-            return f"{profile_label} {base_label}".strip()
+            final_label = f"{profile_label} {base_label}".strip()
+            print(
+                f"[RVO] resolved profile label -> channel={channel!r}, profile={profile_label!r}, final={final_label!r}"
+            )
+            return final_label
         db_label = self._extract_db_label(df)
         if db_label:
-            return f"{base_label} {db_label}".strip()
+            final_label = f"{base_label} {db_label}".strip()
+            print(
+                f"[RVO] resolved db label -> channel={channel!r}, db={db_label!r}, final={final_label!r}"
+            )
+            return final_label
+        print(f"[RVO] using base label -> channel={channel!r}, final={base_label!r}")
         return base_label
 
     def _series_with_nan(self, values: list[Optional[float]]) -> list[float]:

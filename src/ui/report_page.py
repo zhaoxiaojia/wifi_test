@@ -597,6 +597,7 @@ class ReportPage(RvrChartLogic, CardWidget):
         handles = list(handles)
         labels = list(labels)
         legend = None
+        annotations = []
         if handles:
             annotations = self._collect_user_annotations(group)
             if annotations:
@@ -662,6 +663,8 @@ class ReportPage(RvrChartLogic, CardWidget):
         handles, labels = ax.get_legend_handles_labels()
         handles = list(handles)
         labels = list(labels)
+        print(f"[RVO][UI] legend handles={labels}")
+        annotations = []
         if handles:
             annotations = self._collect_user_annotations(group)
             if annotations:
@@ -679,7 +682,10 @@ class ReportPage(RvrChartLogic, CardWidget):
             if legend is not None:
                 for text_item in legend.get_texts():
                     text_item.set_ha('center')
-        fig.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.2)
+        bottom_padding = 0.24 if handles else 0.22
+        if annotations:
+            bottom_padding = max(bottom_padding, 0.3)
+        fig.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=bottom_padding)
         save_path = charts_dir / f"{self._safe_chart_name(title)}.png"
         return self._figure_to_label(fig, ax, [], save_path)
 
