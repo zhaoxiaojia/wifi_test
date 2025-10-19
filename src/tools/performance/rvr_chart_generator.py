@@ -204,6 +204,9 @@ class PerformanceRvrChartGenerator(RvrChartLogic):
             print(f"[RVO] legend handles={labels}")
             bottom_padding = 0.22
             if handles:
+                print(
+                    f"[RVO] attempting to create legend -> handle_count={len(handles)}, label_count={len(labels)}"
+                )
                 legend = ax.legend(
                     handles,
                     labels,
@@ -211,6 +214,10 @@ class PerformanceRvrChartGenerator(RvrChartLogic):
                     bbox_to_anchor=(0.5, -0.08),
                     ncol=max(1, min(len(handles), 3)),
                     frameon=False,
+                )
+                legend_texts = [text.get_text() for text in legend.get_texts()] if legend else []
+                print(
+                    f"[RVO] legend created -> present={legend is not None}, texts={legend_texts}"
                 )
                 if legend is not None:
                     for text_item in legend.get_texts():
@@ -221,6 +228,10 @@ class PerformanceRvrChartGenerator(RvrChartLogic):
                 annotation_text = "\n".join(annotations)
                 fig.text(0.5, 0.02, annotation_text, ha="center", va="center")
                 bottom_padding = max(bottom_padding, 0.3)
+                print(f"[RVO] annotation text set -> lines={annotations}")
+            print(
+                f"[RVO] subplot padding configuration -> bottom={bottom_padding}, legend_present={bool(ax.get_legend())}"
+            )
             fig.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=bottom_padding)
             save_path = charts_dir / f"{self._safe_chart_name(title)}.png"
             fig.savefig(save_path, dpi=fig.dpi)
