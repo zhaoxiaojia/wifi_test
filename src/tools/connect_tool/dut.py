@@ -197,6 +197,9 @@ class dut():
             return None
 
     def kill_iperf(self):
+        if is_database_debug_enabled():
+            logging.info("Database debug mode enabled, skip killing iperf processes")
+            return
         try:
             pytest.dut.subprocess_run(pytest.dut.IPERF_KILL.format(self.test_tool))
         except Exception:
@@ -720,6 +723,15 @@ class dut():
 
     @step
     def get_rssi(self):
+        if is_database_debug_enabled():
+            simulated_rssi = -random.randint(40, 80)
+            self.rssi_num = simulated_rssi
+            self.freq_num = 0
+            logging.info(
+                "Database debug mode enabled, skip real RSSI query and return simulated %s dBm",
+                simulated_rssi,
+            )
+            return self.rssi_num
         for i in range(3):
             time.sleep(3)
             rssi_info = pytest.dut.checkoutput(pytest.dut.IW_LINNK_COMMAND)
