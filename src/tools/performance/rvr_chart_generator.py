@@ -222,13 +222,9 @@ class PerformanceRvrChartGenerator(RvrChartLogic):
                 if legend is not None:
                     for text_item in legend.get_texts():
                         text_item.set_ha("center")
-                bottom_padding = max(bottom_padding, 0.24)
-            annotations = self._collect_user_annotations(group)
-            if annotations:
-                annotation_text = "\n".join(annotations)
-                fig.text(0.5, 0.02, annotation_text, ha="center", va="center")
-                bottom_padding = max(bottom_padding, 0.3)
-                print(f"[RVO] annotation text set -> lines={annotations}")
+                bottom_padding = max(bottom_padding, 0.26)
+            else:
+                print("[RVO] legend skipped -> no handles detected")
             print(
                 f"[RVO] subplot padding configuration -> bottom={bottom_padding}, legend_present={bool(ax.get_legend())}"
             )
