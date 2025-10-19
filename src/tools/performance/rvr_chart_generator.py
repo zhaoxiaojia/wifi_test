@@ -200,12 +200,9 @@ class PerformanceRvrChartGenerator(RvrChartLogic):
             handles, labels = ax.get_legend_handles_labels()
             handles = list(handles)
             labels = list(labels)
+            legend = None
+            bottom_padding = 0.18
             if handles:
-                annotations = self._collect_user_annotations(group)
-                if annotations:
-                    dummy_handles = [Line2D([], [], linestyle="None", marker="", linewidth=0) for _ in annotations]
-                    handles.extend(dummy_handles)
-                    labels.extend(annotations)
                 legend = ax.legend(
                     handles,
                     labels,
@@ -217,7 +214,12 @@ class PerformanceRvrChartGenerator(RvrChartLogic):
                 if legend is not None:
                     for text_item in legend.get_texts():
                         text_item.set_ha("center")
-            fig.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.2)
+            annotations = self._collect_user_annotations(group)
+            if annotations:
+                annotation_text = "\n".join(annotations)
+                fig.text(0.5, 0.02, annotation_text, ha="center", va="center")
+                bottom_padding = 0.25
+            fig.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=bottom_padding)
             save_path = charts_dir / f"{self._safe_chart_name(title)}.png"
             fig.savefig(save_path, dpi=fig.dpi)
             return save_path
