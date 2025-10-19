@@ -63,6 +63,24 @@ class _DebugCornerController:
         return self._angle
 
 
+class _DebugRouterController:
+    """Lightweight router placeholder used in database debug mode."""
+
+    name = "debug-router"
+    CHANNEL_2: tuple = ()
+    CHANNEL_5: tuple = ()
+    BANDWIDTH_2: tuple = ()
+    BANDWIDTH_5: tuple = ()
+    AUTHENTICATION_METHOD = ()
+    AUTHENTICATION_METHOD_LEGCY = ()
+
+    def __init__(self) -> None:
+        logging.info("Database debug mode enabled, skip router controller instantiation")
+
+    def __getattr__(self, item: str):
+        raise AttributeError(f"_DebugRouterController has no attribute {item!r}")
+
+
 @lru_cache(maxsize=1)
 def get_cfg() -> Any:
     """返回最新的配置"""
@@ -109,8 +127,10 @@ def init_corner():
     return corner_tool
 
 
-def init_router() -> Router:
+def init_router() -> Any:
     """根据配置返回路由实例"""
+    if is_database_debug_enabled():
+        return _DebugRouterController()
     cfg = get_cfg()
     router = get_router(cfg['router']['name'])
     return router
@@ -153,6 +173,12 @@ def common_setup(router: Router, router_info: Router) -> bool:
 
 def wait_connect(router_info: Router):
     third_party_cfg = get_cfg().get("connect_type", {}).get("third_party", {}).get("enabled", {})
+    if is_database_debug_enabled():
+        logging.info(
+            "Database debug mode enabled, skip Wi-Fi reconnection workflow (router=%s)",
+            getattr(router_info, "ssid", "<unknown>"),
+        )
+        return True
     if third_party_cfg == 'true':
         wait_seconds = _parse_optional_int(
             third_party_cfg.get("wait_seconds"),
