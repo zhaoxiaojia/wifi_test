@@ -6,8 +6,9 @@
 import logging
 import re
 import time
-from typing import Any, Optional
+from contextlib import contextmanager
 from functools import lru_cache
+from typing import Any, Optional
 
 import pytest
 
@@ -18,9 +19,66 @@ from src.tools.connect_tool.lab_device_controller import LabDeviceController
 from src.tools.rs_test import rs
 from src.util.constants import (
     DEFAULT_RF_STEP_SPEC,
+    IDENTIFIER_SANITIZE_PATTERN,
     RF_STEP_SPLIT_PATTERN,
     is_database_debug_enabled,
 )
+
+
+_SCENARIO_KEY_FIELDS = (
+    ("band", "band"),
+    ("ssid", "ssid"),
+    ("mode", "wireless_mode"),
+    ("channel", "channel"),
+    ("bandwidth", "bandwidth"),
+    ("security", "security_mode"),
+)
+
+
+def _normalize_scenario_token(value: Any) -> str:
+    if value is None:
+        return ""
+    text = str(value).strip()
+    if not text:
+        return ""
+    sanitized = IDENTIFIER_SANITIZE_PATTERN.sub("_", text)
+    sanitized = sanitized.strip("_")
+    if not sanitized:
+        return ""
+    return sanitized.upper()
+
+
+def build_scenario_group_key(router_info: Router) -> str:
+    """根据 ``rvr_wifi_setup`` 的行数据生成场景分组键。"""
+
+    parts: list[str] = []
+    for label, attr in _SCENARIO_KEY_FIELDS:
+        raw = getattr(router_info, attr, None)
+        normalized = _normalize_scenario_token(raw)
+        if normalized:
+            parts.append(f"{label.upper()}={normalized}")
+    for label in ("tx", "rx"):
+        normalized = _normalize_scenario_token(getattr(router_info, label, None))
+        if normalized:
+            parts.append(f"{label.upper()}={normalized}")
+    if not parts:
+        return "SCENARIO|UNKNOWN"
+    return "SCENARIO|" + "|".join(parts)
+
+
+@contextmanager
+def scenario_group(router_info: Router):
+    """在测试执行期间临时设置 ``scenario_group_key``。"""
+
+    key = build_scenario_group_key(router_info)
+    test_result = getattr(pytest, "testResult", None)
+    if test_result is not None:
+        test_result.set_scenario_group_key(key)
+    try:
+        yield key
+    finally:
+        if test_result is not None:
+            test_result.clear_scenario_group_key()
 
 
 class _DebugRFController:

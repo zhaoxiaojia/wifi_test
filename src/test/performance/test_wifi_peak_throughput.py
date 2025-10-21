@@ -16,7 +16,7 @@ import pytest
 from src.tools.router_tool.Router import router_str
 from src.util.constants import is_database_debug_enabled
 
-from src.test.performance import common_setup, init_router, wait_connect
+from src.test.performance import common_setup, init_router, scenario_group, wait_connect
 
 _test_data = get_testdata(init_router())
 router = init_router()
@@ -41,24 +41,25 @@ def setup_router(request):
 
 def test_rvr(setup_router, performance_sync_manager):
     connect_status, router_info = setup_router
-    if not connect_status:
-        logging.info("Can't connect wifi ,input 0")
-        return
+    with scenario_group(router_info):
+        if not connect_status:
+            logging.info("Can't connect wifi ,input 0")
+            return
 
-    logging.info(f'start test iperf tx {router_info.tx} rx {router_info.rx}')
-    debug_mode = is_database_debug_enabled()
-    rssi_num = pytest.dut.rssi_num
-    if debug_mode:
-        logging.info(
-            "Database debug mode enabled, skipping real iperf execution for router %s",
-            getattr(router_info, "ssid", "<unknown>"),
-        )
-    if int(router_info.tx):
-        logging.info(f'rssi : {rssi_num}')
-        pytest.dut.get_tx_rate(router_info, 'TCP', debug=debug_mode)
-    if int(router_info.rx):
-        logging.info(f'rssi : {rssi_num}')
-        pytest.dut.get_rx_rate(router_info, 'TCP', debug=debug_mode)
+        logging.info(f'start test iperf tx {router_info.tx} rx {router_info.rx}')
+        debug_mode = is_database_debug_enabled()
+        rssi_num = pytest.dut.rssi_num
+        if debug_mode:
+            logging.info(
+                "Database debug mode enabled, skipping real iperf execution for router %s",
+                getattr(router_info, "ssid", "<unknown>"),
+            )
+        if int(router_info.tx):
+            logging.info(f'rssi : {rssi_num}')
+            pytest.dut.get_tx_rate(router_info, 'TCP', debug=debug_mode)
+        if int(router_info.rx):
+            logging.info(f'rssi : {rssi_num}')
+            pytest.dut.get_rx_rate(router_info, 'TCP', debug=debug_mode)
 
     performance_sync_manager(
         "Peak",
