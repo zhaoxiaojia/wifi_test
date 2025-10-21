@@ -41,6 +41,7 @@ class TestResult():
         self.x_length = len(self.x_path)
         self._profile_mode: str = ""
         self._profile_value: str = ""
+        self._scenario_group_key: str = ""
         self.init_rvr_result()
 
     def init_rvr_result(self):
@@ -55,6 +56,7 @@ class TestResult():
                     'SerianNumber Test_Category Standard Freq_Band BW Data_Rate '
                     'CH_Freq_MHz Protocol Direction Total_Path_Loss DB RSSI Angel '
                     'MCS_Rate Throughput Expect_Rate Profile_Mode Profile_Value '
+                    'Scenario_Group_Key '
                 )
                 f.write(','.join(title.split()))
                 f.write('\n')
@@ -69,7 +71,8 @@ class TestResult():
         '''
         logging.info('Writing to csv')
         mode, value = self._get_active_profile_columns()
-        line = f"{result},{mode},{value}"
+        scenario_key = self._get_scenario_group_key()
+        line = f"{result},{mode},{value},{scenario_key}"
         with open(self.log_file, 'a') as f:
             f.write(line)
             f.write('\n')
@@ -88,9 +91,18 @@ class TestResult():
         self._profile_mode = ""
         self._profile_value = ""
 
+    def set_scenario_group_key(self, key: Optional[str]) -> None:
+        self._scenario_group_key = self._normalize_scenario_group_key(key)
+
+    def clear_scenario_group_key(self) -> None:
+        self._scenario_group_key = ""
+
     # internal helpers
     def _get_active_profile_columns(self) -> Tuple[str, str]:
         return self._profile_mode, self._profile_value
+
+    def _get_scenario_group_key(self) -> str:
+        return self._scenario_group_key
 
     @staticmethod
     def _normalize_profile_mode(mode: Optional[str]) -> str:
@@ -125,6 +137,17 @@ class TestResult():
         if number.is_integer():
             return str(int(number))
         return f"{number:.2f}".rstrip('0').rstrip('.')
+
+    @staticmethod
+    def _normalize_scenario_group_key(key: Optional[str]) -> str:
+        if key is None:
+            return ""
+        text = str(key).strip()
+        if not text:
+            return ""
+        sanitized = text.replace('\r', ' ').replace('\n', ' ')
+        sanitized = sanitized.replace(',', '_')
+        return sanitized.strip()
 
 
 # rvr = RvrResult('D:\windows RVR\wins_wifi',step=[i for i in range(0,40,2)])

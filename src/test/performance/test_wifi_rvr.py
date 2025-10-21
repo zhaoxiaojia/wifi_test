@@ -20,7 +20,9 @@ from src.test.performance import (
     get_cfg,
     get_rf_step_list,
     init_rf,
-    init_router, wait_connect,
+    init_router,
+    scenario_group,
+    wait_connect,
 )
 from src.tools.router_tool.Router import router_str
 
@@ -55,17 +57,18 @@ def setup_attenuation(request, setup_router):
 
 def test_rvr(setup_attenuation, performance_sync_manager):
     connect_status, router_info, db_set = setup_attenuation
-    if not connect_status:
-        logging.info("Cannot connect to Wi-Fi, skip remaining steps")
-    else:
-        logging.info("Start iperf test tx %s rx %s", router_info.tx, router_info.rx)
+    with scenario_group(router_info):
+        if not connect_status:
+            logging.info("Cannot connect to Wi-Fi, skip remaining steps")
+        else:
+            logging.info("Start iperf test tx %s rx %s", router_info.tx, router_info.rx)
 
-        if int(router_info.tx):
-            logging.info("RSSI during TX: %s", pytest.dut.rssi_num)
-            pytest.dut.get_tx_rate(router_info, "TCP", db_set=db_set)
-        if int(router_info.rx):
-            logging.info("RSSI during RX: %s", pytest.dut.rssi_num)
-            pytest.dut.get_rx_rate(router_info, "TCP", db_set=db_set)
+            if int(router_info.tx):
+                logging.info("RSSI during TX: %s", pytest.dut.rssi_num)
+                pytest.dut.get_tx_rate(router_info, "TCP", db_set=db_set)
+            if int(router_info.rx):
+                logging.info("RSSI during RX: %s", pytest.dut.rssi_num)
+                pytest.dut.get_rx_rate(router_info, "TCP", db_set=db_set)
 
     performance_sync_manager(
         "RVR",
