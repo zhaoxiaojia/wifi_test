@@ -21,6 +21,7 @@ from src.test.performance import common_setup, init_router, wait_connect
 _test_data = get_testdata(init_router())
 router = init_router()
 
+
 @pytest.fixture(scope='session', params=_test_data, ids=[router_str(i) for i in _test_data])
 @log_fixture_params()
 def setup_router(request):
@@ -38,7 +39,7 @@ def setup_router(request):
     pytest.dut.kill_iperf()
 
 
-def test_rvr(setup_router):
+def test_rvr(setup_router, performance_sync_manager):
     connect_status, router_info = setup_router
     if not connect_status:
         logging.info("Can't connect wifi ,input 0")
@@ -58,3 +59,9 @@ def test_rvr(setup_router):
     if int(router_info.rx):
         logging.info(f'rssi : {rssi_num}')
         pytest.dut.get_rx_rate(router_info, 'TCP', debug=debug_mode)
+
+    performance_sync_manager(
+        "Peak",
+        pytest.testResult.log_file,
+        message="Peak throught data rows stored in database",
+    )
