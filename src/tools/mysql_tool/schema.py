@@ -58,6 +58,8 @@ PERFORMANCE_STATIC_COLUMNS: Tuple[Tuple[str, str, str], ...] = (
     ("profile_mode", "VARCHAR(64)", "Profile_Mode"),
     ("profile_value", "VARCHAR(64)", "Profile_Value"),
     ("scenario_group_key", "VARCHAR(255)", "Scenario_Group_Key"),
+    ("latency_ms", "DECIMAL(10,3)", "Latency"),
+    ("packet_loss", "VARCHAR(64)", "Packet_Loss"),
 )
 
 PERFORMANCE_COLUMN_RENAMES: Tuple[Tuple[str, str], ...] = (
