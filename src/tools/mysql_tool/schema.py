@@ -55,6 +55,8 @@ PERFORMANCE_STATIC_COLUMNS: Tuple[Tuple[str, str, str], ...] = (
     ("throughput_peak_mbps", "DECIMAL(10,3)", "Max_Rate"),
     ("throughput_avg_mbps", "DECIMAL(10,3)", "Throughput"),
     ("target_throughput_mbps", "DECIMAL(10,3)", "Expect_Rate"),
+    ("latency_ms", "DECIMAL(10,3)", "Latency"),
+    ("packet_loss", "VARCHAR(64)", "Packet_Loss"),
     ("profile_mode", "VARCHAR(64)", "Profile_Mode"),
     ("profile_value", "VARCHAR(64)", "Profile_Value"),
     ("scenario_group_key", "VARCHAR(255)", "Scenario_Group_Key"),

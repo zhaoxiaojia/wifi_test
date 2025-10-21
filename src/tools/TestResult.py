@@ -31,6 +31,8 @@ class TestResult():
         rvr_excelfile : rvr excel file
         log_file : performance result csv
         detail_file : rvr detail result (contain rssi value)
+        Profile_Mode/Profile_Value : 仅在 RVO 场景下使用，用于记录目标 RSSI 或固定衰减等 profile 信息
+        Scenario_Group_Key : 用于聚合同一组路由器参数，始终放在结果行的最后一列
 
     '''
 
@@ -39,8 +41,10 @@ class TestResult():
         self.current_number = 0
         self.x_path = step
         self.x_length = len(self.x_path)
+        # RVO 案例会通过 profile 字段记录测试所使用的配置/目标信息
         self._profile_mode: str = ""
         self._profile_value: str = ""
+        # Scenario_Group_Key 永远追加在结果行末尾，便于后续聚合
         self._scenario_group_key: str = ""
         self.init_rvr_result()
 
@@ -55,8 +59,8 @@ class TestResult():
                 title = (
                     'SerianNumber Test_Category Standard Freq_Band BW Data_Rate '
                     'CH_Freq_MHz Protocol Direction Total_Path_Loss DB RSSI Angel '
-                    'MCS_Rate Throughput Expect_Rate Profile_Mode Profile_Value '
-                    'Scenario_Group_Key Latency Packet_Loss '
+                    'MCS_Rate Throughput Expect_Rate Latency Packet_Loss '
+                    'Profile_Mode Profile_Value Scenario_Group_Key '
                 )
                 f.write(','.join(title.split()))
                 f.write('\n')
