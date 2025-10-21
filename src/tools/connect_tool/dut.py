@@ -19,6 +19,8 @@ import asyncio
 import random
 import pytest
 import telnetlib
+from dataclasses import dataclass
+from typing import Optional
 from src.tools.ixchariot import ix
 from threading import Thread
 from src.tools.config_loader import load_config
@@ -26,6 +28,18 @@ from src.tools.router_tool.router_performance import handle_expectdata
 from src.util.constants import is_database_debug_enabled
 
 lock = threading.Lock()
+
+
+@dataclass
+class IperfMetrics:
+    throughput_mbps: Optional[float]
+    latency_ms: Optional[float] = None
+    packet_loss: Optional[str] = None
+
+    def formatted_throughput(self) -> Optional[str]:
+        if self.throughput_mbps is None:
+            return None
+        return f"{self.throughput_mbps:.1f}"
 
 
 class dut():
@@ -48,6 +62,44 @@ class dut():
         test_time = int(t_match.group(1)) if t_match else 30
         pair = int(p_match.group(1)) if p_match else 1
         return test_time, pair
+
+    @staticmethod
+    def _is_udp_command(cmd: str) -> bool:
+        return bool(re.search(r'(^|\s)-u(\s|$)', cmd))
+
+    @staticmethod
+    def _convert_bandwidth_to_mbps(value: float, unit: str) -> Optional[float]:
+        unit = unit.lower()
+        if 'bits/sec' not in unit:
+            return None
+        if unit.startswith('g'):
+            return value * 1000
+        if unit.startswith('m'):
+            return value
+        if unit.startswith('k'):
+            return value / 1000
+        if unit.startswith('bits'):
+            return value / 1_000_000
+        return None
+
+    @staticmethod
+    def _extract_udp_metrics(line: str) -> Optional[IperfMetrics]:
+        jitter_match = re.search(r'(\d+(?:\.\d+)?)\s*ms', line)
+        loss_match = re.search(r'(\d+/\d+\s*\(\s*\d+(?:\.\d+)?%?\))', line)
+        if not jitter_match or not loss_match:
+            return None
+        bandwidth_match = re.search(r'(\d+(?:\.\d+)?)\s*([KMG]?bits/sec)', line, re.IGNORECASE)
+        throughput = None
+        if bandwidth_match:
+            throughput = dut._convert_bandwidth_to_mbps(
+                float(bandwidth_match.group(1)), bandwidth_match.group(2)
+            )
+        packet_loss = re.sub(r'\s+', '', loss_match.group(1))
+        try:
+            jitter = float(jitter_match.group(1))
+        except ValueError:
+            jitter = None
+        return IperfMetrics(throughput, jitter, packet_loss)
 
     IW_LINNK_COMMAND = 'iw dev wlan0 link'
     IX_ENDPOINT_COMMAND = "monkey -p com.ixia.ixchariot 1"
@@ -116,10 +168,14 @@ class dut():
         self.skip_rx = False
         self.iperf_server_log_list: list[str] = []
         self.iperf_client_log_list: list[str] = []
+        self._current_udp_mode = False
         if self.rvr_tool == 'iperf':
             cmds = f"{self.iperf_server_cmd} {self.iperf_client_cmd}"
             self.test_tool = 'iperf3' if 'iperf3' in cmds else 'iperf'
             self.tool_path = iperf_cfg.get('path', '')
+            self._current_udp_mode = self._is_udp_command(self.iperf_client_cmd) or self._is_udp_command(
+                self.iperf_server_cmd
+            )
             logging.info(f'test_tool {self.test_tool}')
 
         if self.rvr_tool == 'ixchariot':
@@ -235,6 +291,7 @@ class dut():
     def run_iperf(self, command, adb):
         encoding = 'gbk' if pytest.win_flag else 'utf-8'
         use_adb = bool(adb)
+        self._current_udp_mode = self._is_udp_command(command)
 
         def _extend_logs(target_list: list[str], lines):
             if not lines:
@@ -345,24 +402,54 @@ class dut():
 
     def _parse_iperf_log(self, lines):
         """解析 iperf 日志并计算吞吐量."""
-        result_list = []
-        for line in lines:
-            if '[SUM]' not in line and self.pair != 1:
+        result_list: list[float] = []
+        udp_metrics: Optional[IperfMetrics] = None
+        interval_pattern = re.compile(r'\d+\.\d*\s*-\s*\d+\.\d*\s*sec', re.IGNORECASE)
+
+        for raw_line in lines:
+            line = raw_line.strip()
+            if not line:
                 continue
-            if line.strip():
-                logging.info(f'line : {line.strip()}')
-            data = re.findall(r'.*?\d+\.\d*-\s*\d+\.\d*.*?(\d+\.*\d*)\s+Mbits/sec.*?', line.strip(), re.S)
-            if data:
-                result_list.append(float(data[0]))
-            data = re.findall('\s0\.0+-\s*3\d+\.\d*.*?(\d+\.*\d*)\s+Mbits/sec.*?', line.strip(), re.S)
-            if data:
-                return float(data[0])
-        throughput = sum(result_list) / len(result_list) if result_list else 0.0
+            if '[SUM]' not in line and self.pair != 1:
+                metrics = self._extract_udp_metrics(line)
+                if metrics:
+                    udp_metrics = metrics
+                    self._current_udp_mode = True
+                continue
+            logging.info(f'line : {line}')
+            metrics = self._extract_udp_metrics(line)
+            if metrics:
+                udp_metrics = metrics
+                self._current_udp_mode = True
+            if not interval_pattern.search(line):
+                continue
+            bandwidth_match = re.search(r'(\d+(?:\.\d+)?)\s*([KMG]?bits/sec)', line, re.IGNORECASE)
+            if bandwidth_match:
+                throughput = self._convert_bandwidth_to_mbps(
+                    float(bandwidth_match.group(1)), bandwidth_match.group(2)
+                )
+                if throughput is not None:
+                    result_list.append(throughput)
+
+        if result_list:
+            throughput_value = sum(result_list) / len(result_list)
+        elif udp_metrics and udp_metrics.throughput_mbps is not None:
+            throughput_value = udp_metrics.throughput_mbps
+        else:
+            throughput_value = 0.0
+
         if self.rssi_num > -60:
-            return throughput if throughput else None
-        if len(lines) > 30:
-            return throughput
-        return None
+            throughput_result = throughput_value if throughput_value else None
+        elif len(lines) > 30:
+            throughput_result = throughput_value
+        else:
+            throughput_result = None
+
+        if udp_metrics:
+            udp_metrics.throughput_mbps = throughput_result
+            return udp_metrics
+
+        return IperfMetrics(throughput_result)
 
     def get_logcat(self):
         # pytest.dut.kill_iperf()
@@ -371,7 +458,13 @@ class dut():
         result = self._parse_iperf_log(lines)
         self.iperf_server_log_list.clear()
         self.iperf_client_log_list.clear()
-        return round(result, 1) if result is not None else None
+        if result is None:
+            return None
+        if result.throughput_mbps is not None:
+            result.throughput_mbps = round(result.throughput_mbps, 1)
+        if result.latency_ms is not None:
+            result.latency_ms = round(result.latency_ms, 3)
+        return result
 
     def get_pc_ip(self):
         if pytest.win_flag:
@@ -423,10 +516,11 @@ class dut():
                 0,
                 expect_rate,
             ]
+            values.extend(['', ''])
             pytest.testResult.save_result(self._format_result_row(values))
             return 'N/A'
 
-        rx_result_list = []
+        rx_metrics_list: list[IperfMetrics] = []
         self.rvr_result = None
         mcs_rx = None
 
@@ -445,7 +539,7 @@ class dut():
                 reason,
                 simulated,
             )
-            rx_result_list.append(f"{simulated:.2f}")
+            rx_metrics_list.append(IperfMetrics(simulated))
             mcs_rx = "DEBUG"
         else:
             for c in range(self.repest_times + 1):
@@ -482,23 +576,39 @@ class dut():
                     continue
 
                 time.sleep(3)
-                logging.info(f'rx result {rx_result}')
+                if isinstance(rx_result, IperfMetrics):
+                    metrics = rx_result
+                else:
+                    try:
+                        throughput = float(rx_result) if rx_result is not None else None
+                    except Exception:
+                        throughput = None
+                    metrics = IperfMetrics(throughput)
+                logging.info(f'rx result {metrics}')
                 mcs_rx = pytest.dut.get_mcs_rx()
-                logging.info(f'{rx_result}, {mcs_rx}')
-                rx_result_list.append(rx_result)
-                if len(rx_result_list) > self.repest_times:
+                logging.info(f'{metrics}, {mcs_rx}')
+                rx_metrics_list.append(metrics)
+                if len(rx_metrics_list) > self.repest_times:
                     break
 
-        if rx_result_list:
+        if rx_metrics_list:
             try:
-                rx_val = float(rx_result_list[0])
+                first = rx_metrics_list[0].throughput_mbps
+                rx_val = float(first) if first is not None else 0
             except Exception:
                 rx_val = 0
             if rx_val < self.throughput_threshold:
                 self.skip_rx = True
 
         corner = corner_tool.get_turntanle_current_angle() if corner_tool else ''
-        throughput_values = ','.join(map(str, rx_result_list))
+        throughput_entries = []
+        for metric in rx_metrics_list:
+            formatted = metric.formatted_throughput()
+            if formatted is not None:
+                throughput_entries.append(formatted)
+        throughput_values = ','.join(throughput_entries)
+        latency_value = rx_metrics_list[-1].latency_ms if rx_metrics_list else None
+        packet_loss_value = rx_metrics_list[-1].packet_loss if rx_metrics_list else None
         values = [
             self.serialnumber,
             'Throughput',
@@ -517,8 +627,9 @@ class dut():
             throughput_values,
             expect_rate,
         ]
+        values.extend([latency_value, packet_loss_value])
         pytest.testResult.save_result(self._format_result_row(values))
-        return ','.join(map(str, rx_result_list)) if rx_result_list else 'N/A'
+        return throughput_values if throughput_values else 'N/A'
 
     @step
     def get_tx_rate(self, router_info, type='TCP', corner_tool=None, db_set='', debug=False):
@@ -550,12 +661,13 @@ class dut():
                 0,
                 expect_rate,
             ]
+            values.extend(['', ''])
             formatted = self._format_result_row(values)
             logging.info(formatted)
             pytest.testResult.save_result(formatted)
             return 'N/A'
 
-        tx_result_list = []
+        tx_metrics_list: list[IperfMetrics] = []
         self.rvr_result = None
         mcs_tx = None
 
@@ -574,7 +686,7 @@ class dut():
                 reason,
                 simulated,
             )
-            tx_result_list.append(f"{simulated:.2f}")
+            tx_metrics_list.append(IperfMetrics(simulated))
             mcs_tx = "DEBUG"
         else:
             for c in range(self.repest_times + 1):
@@ -613,22 +725,38 @@ class dut():
                     continue
 
                 mcs_tx = pytest.dut.get_mcs_tx()
-                logging.info(f'{tx_result}, {mcs_tx}')
-                tx_result_list.append(tx_result)
-                if len(tx_result_list) > self.repest_times:
+                if isinstance(tx_result, IperfMetrics):
+                    metrics = tx_result
+                else:
+                    try:
+                        throughput = float(tx_result) if tx_result is not None else None
+                    except Exception:
+                        throughput = None
+                    metrics = IperfMetrics(throughput)
+                logging.info(f'tx result {metrics}')
+                logging.info(f'{metrics}, {mcs_tx}')
+                tx_metrics_list.append(metrics)
+                if len(tx_metrics_list) > self.repest_times:
                     break
 
-        if tx_result_list:
+        if tx_metrics_list:
             try:
-                tx_val = float(tx_result_list[0])
+                first = tx_metrics_list[0].throughput_mbps
+                tx_val = float(first) if first is not None else 0
             except Exception:
                 tx_val = 0
             if tx_val < self.throughput_threshold:
                 self.skip_tx = True
 
         corner = corner_tool.get_turntanle_current_angle() if corner_tool else ''
-
-        throughput_values = ','.join(map(str, tx_result_list))
+        throughput_entries = []
+        for metric in tx_metrics_list:
+            formatted = metric.formatted_throughput()
+            if formatted is not None:
+                throughput_entries.append(formatted)
+        throughput_values = ','.join(throughput_entries)
+        latency_value = tx_metrics_list[-1].latency_ms if tx_metrics_list else None
+        packet_loss_value = tx_metrics_list[-1].packet_loss if tx_metrics_list else None
         values = [
             self.serialnumber,
             'Throughput',
@@ -647,10 +775,11 @@ class dut():
             throughput_values,
             expect_rate,
         ]
+        values.extend([latency_value, packet_loss_value])
         formatted = self._format_result_row(values)
         logging.info(formatted)
         pytest.testResult.save_result(formatted)
-        return ','.join(map(str, tx_result_list)) if tx_result_list else 'N/A'
+        return throughput_values if throughput_values else 'N/A'
 
     def wait_for_wifi_address(self, cmd: str = '', target=''):
         if pytest.connect_type == 'telnet':
