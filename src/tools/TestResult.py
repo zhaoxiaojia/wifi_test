@@ -56,7 +56,7 @@ class TestResult():
                     'SerianNumber Test_Category Standard Freq_Band BW Data_Rate '
                     'CH_Freq_MHz Protocol Direction Total_Path_Loss DB RSSI Angel '
                     'MCS_Rate Throughput Expect_Rate Profile_Mode Profile_Value '
-                    'Scenario_Group_Key '
+                    'Scenario_Group_Key Latency Packet_Loss '
                 )
                 f.write(','.join(title.split()))
                 f.write('\n')
