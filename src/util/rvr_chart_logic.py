@@ -475,6 +475,8 @@ class RvrChartLogic:
         def _extract_annotation_values(
             keywords: tuple[str, ...],
             formatter,
+            *,
+            require_numeric: bool = False,
         ) -> list[str]:
             results: list[str] = []
             seen: set[str] = set()
@@ -488,27 +490,34 @@ class RvrChartLogic:
                     if raw_value is None or (isinstance(raw_value, float) and pd.isna(raw_value)):
                         continue
                     formatted = ""
-                    if column_matches:
+                    normalized_value = self._normalize_value(raw_value)
+                    if column_matches or all(key in normalized_value for key in keyword_set):
                         formatted = formatter(raw_value)
-                    else:
-                        normalized_value = self._normalize_value(raw_value)
-                        if all(key in normalized_value for key in keyword_set):
-                            formatted = formatter(raw_value)
-                    if not formatted and isinstance(raw_value, str):
-                        normalized_raw = raw_value.strip()
-                        if normalized_raw:
-                            formatted = formatter(normalized_raw)
-                    if formatted:
-                        lowered = formatted.lower()
-                        if lowered in {"", "nan", "null", "none"}:
-                            continue
-                        if formatted not in seen:
-                            seen.add(formatted)
-                            results.append(formatted)
+                    if not formatted:
+                        continue
+                    stripped = str(formatted).strip()
+                    if not stripped:
+                        continue
+                    if require_numeric and not re.search(r"\d", stripped):
+                        continue
+                    lowered = stripped.lower()
+                    if lowered in {"", "nan", "null", "none"}:
+                        continue
+                    if stripped not in seen:
+                        seen.add(stripped)
+                        results.append(stripped)
             return results
 
-        static_values = _extract_annotation_values(("static", "db"), self._format_db_display)
-        target_values = _extract_annotation_values(("target", "rssi"), self._format_metric_display)
+        static_values = _extract_annotation_values(
+            ("static", "db"),
+            self._format_db_display,
+            require_numeric=True,
+        )
+        target_values = _extract_annotation_values(
+            ("target", "rssi"),
+            self._format_metric_display,
+            require_numeric=True,
+        )
 
         annotations: list[str] = []
         if static_values:
