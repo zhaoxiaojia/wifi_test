@@ -83,12 +83,22 @@ class dut():
         return None
 
     @staticmethod
+    def _sanitize_iperf_line(text: str) -> str:
+        if not text:
+            return ""
+        # 去除控制字符与 ANSI 转义序列，避免影响正则匹配
+        without_ansi = re.sub(r'\x1b\[[0-9;]*[A-Za-z]', '', text)
+        cleaned = re.sub(r'[\x00-\x1f\x7f]', '', without_ansi)
+        return cleaned.strip()
+
+    @staticmethod
     def _extract_udp_metrics(line: str) -> Optional[IperfMetrics]:
-        jitter_match = re.search(r'(\d+(?:\.\d+)?)\s*ms', line)
-        loss_match = re.search(r'(\d+/\d+\s*\(\s*\d+(?:\.\d+)?%?\))', line)
+        sanitized = dut._sanitize_iperf_line(line)
+        jitter_match = re.search(r'(\d+(?:\.\d+)?)\s*ms', sanitized, re.IGNORECASE)
+        loss_match = re.search(r'(\d+\s*/\s*\d+\s*\(\s*\d+(?:\.\d+)?\s*%?\s*\))', sanitized)
         if not jitter_match or not loss_match:
             return None
-        bandwidth_match = re.search(r'(\d+(?:\.\d+)?)\s*([KMG]?bits/sec)', line, re.IGNORECASE)
+        bandwidth_match = re.search(r'(\d+(?:\.\d+)?)\s*([KMG]?bits/sec)', sanitized, re.IGNORECASE)
         throughput = None
         if bandwidth_match:
             throughput = dut._convert_bandwidth_to_mbps(
@@ -407,7 +417,7 @@ class dut():
         interval_pattern = re.compile(r'\d+\.\d*\s*-\s*\d+\.\d*\s*sec', re.IGNORECASE)
 
         for raw_line in lines:
-            line = raw_line.strip()
+            line = dut._sanitize_iperf_line(raw_line)
             if not line:
                 continue
             if '[SUM]' not in line and self.pair != 1:
@@ -454,7 +464,11 @@ class dut():
     def get_logcat(self):
         # pytest.dut.kill_iperf()
         # 分析 iperf 测试结果
-        lines = self.iperf_server_log_list if self.iperf_server_log_list else self.iperf_client_log_list
+        lines: list[str] = []
+        if self.iperf_server_log_list:
+            lines.extend(self.iperf_server_log_list)
+        if self.iperf_client_log_list:
+            lines.extend(self.iperf_client_log_list)
         result = self._parse_iperf_log(lines)
         self.iperf_server_log_list.clear()
         self.iperf_client_log_list.clear()
@@ -556,10 +570,11 @@ class dut():
                         time.sleep(5)
                     rx_result = self.get_logcat()
                     self.rvr_result = None
-                    try:
-                        terminal.terminate()
-                    except Exception as e:
-                        logging.warning(f'Fail to kill run_iperf terminal \n {e}')
+                    if terminal and hasattr(terminal, 'terminate'):
+                        try:
+                            terminal.terminate()
+                        except Exception as e:
+                            logging.warning(f'Fail to kill run_iperf terminal \n {e}')
                 elif self.rvr_tool == 'ixchariot':
                     ix.ep1 = self.pc_ip
                     ix.ep2 = self.dut_ip
@@ -705,10 +720,11 @@ class dut():
                     time.sleep(3)
                     tx_result = self.get_logcat()
                     self.rvr_result = None
-                    try:
-                        terminal.terminate()
-                    except Exception as e:
-                        logging.warning(f'Fail to kill run_iperf terminal \n {e}')
+                    if terminal and hasattr(terminal, 'terminate'):
+                        try:
+                            terminal.terminate()
+                        except Exception as e:
+                            logging.warning(f'Fail to kill run_iperf terminal \n {e}')
                 elif self.rvr_tool == 'ixchariot':
                     ix.ep1 = self.dut_ip
                     ix.ep2 = self.pc_ip
