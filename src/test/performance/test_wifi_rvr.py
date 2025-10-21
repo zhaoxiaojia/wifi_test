@@ -67,8 +67,8 @@ def test_rvr(setup_attenuation, performance_sync_manager):
             logging.info("RSSI during RX: %s", pytest.dut.rssi_num)
             pytest.dut.get_rx_rate(router_info, "TCP", db_set=db_set)
 
-    # performance_sync_manager(
-    #     "RVR",
-    #     pytest.testResult.log_file,
-    #     message="RVR data rows stored in database",
-    # )
+    performance_sync_manager(
+        "RVR",
+        pytest.testResult.log_file,
+        message="RVR data rows stored in database",
+    )

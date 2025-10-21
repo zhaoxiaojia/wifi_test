@@ -147,16 +147,16 @@ def common_setup(router: Router, router_info: Router) -> bool:
         logging.info("Database debug mode enabled, skip router setup steps")
         return True
 
-    # router.change_setting(router_info), "Can't set ap , pls check first"
-    # band = '5G' if '2' in router_info.band else '2.4G'
-    # ssid = router_info.ssid + "_bat"
-    # router.change_setting(Router(band=band, ssid=ssid))
-    # if pytest.connect_type == 'telnet':
-    #     if router_info.band == "2.4G":
-    #         router.change_country("欧洲")
-    #     else:
-    #         router.change_country("美国")
-    #     router.driver.quit()
+    router.change_setting(router_info), "Can't set ap , pls check first"
+    band = '5G' if '2' in router_info.band else '2.4G'
+    ssid = router_info.ssid + "_bat"
+    router.change_setting(Router(band=band, ssid=ssid))
+    if pytest.connect_type == 'telnet':
+        if router_info.band == "2.4G":
+            router.change_country("欧洲")
+        else:
+            router.change_country("美国")
+        router.driver.quit()
     logging.info('router set done')
     cfg = load_config(refresh=True)
     rvr_tool = cfg['rvr']['tool']

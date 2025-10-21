@@ -311,7 +311,6 @@ def test_rvo(setup_rvo_case, performance_sync_manager):
                 'TCP',
                 corner_tool=corner_tool,
                 db_set='' if attenuation_db is None else attenuation_db,
-                debug=True
             )
         if int(router_info.rx):
             logging.info('rssi : %s', rssi_num)
@@ -320,13 +319,12 @@ def test_rvo(setup_rvo_case, performance_sync_manager):
                 'TCP',
                 corner_tool=corner_tool,
                 db_set='' if attenuation_db is None else attenuation_db,
-                debug=True
             )
     finally:
         pytest.testResult.clear_active_profile()
 
-    # performance_sync_manager(
-    #     "RVO",
-    #     pytest.testResult.log_file,
-    #     message="RVO data rows stored in database",
-    # )
+    performance_sync_manager(
+        "RVO",
+        pytest.testResult.log_file,
+        message="RVO data rows stored in database",
+    )

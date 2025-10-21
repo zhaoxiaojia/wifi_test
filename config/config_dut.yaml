@@ -4,23 +4,23 @@ software_info:
 hardware_info:
   hardware_version: ''
 android_system:
-  version: ''
-  kernel_version: Kernel 5.10
+  version: Android 13
+  kernel_version: Kernel 5.15
 connect_type:
   adb:
-    device: coco5c6788c23f1804
+    device: coco5c6788c23f1122
   telnet:
     ip: 192.168.5.12
   third_party:
     enabled: false
     wait_seconds: 45
-  type: telnet
+  type: adb
 fpga:
   product_line: OTT
-  project: OB1
-  main_chip: 905X5M
-  wifi_module: W2
-  interface: USB
+  project: OB7
+  main_chip: S805X3
+  wifi_module: W1U
+  interface: SDIO
 serial_port:
   baud: '961200'
   port: COM5
