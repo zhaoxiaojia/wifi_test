@@ -110,6 +110,13 @@ def _generate_value(
     return f"{column.name}_{index:05d}"
 
 
+def _build_packet_loss_summary(rng: random.Random) -> str:
+    total = rng.randint(1000, 50000)
+    lost = rng.randint(0, max(1, total // 20))
+    loss_pct = (lost / total * 100.0) if total else 0.0
+    return f"{lost}/{total}({loss_pct:.2f}%)"
+
+
 def _prepare_insert_statement(table: str, columns: Sequence[ColumnSpec]) -> str:
     column_clause = ", ".join(f"`{col.name}`" for col in columns)
     placeholder_clause = ", ".join("%s" for _ in columns)
@@ -322,6 +329,8 @@ def _build_performance_row_generators(
             "throughput_peak_mbps": round(rng.uniform(100, 2000), 3),
             "throughput_avg_mbps": round(rng.uniform(80, 1500), 3),
             "target_throughput_mbps": round(rng.uniform(100, 1800), 3),
+            "latency_ms": round(rng.uniform(0.1, 20.0), 3),
+            "packet_loss": _build_packet_loss_summary(rng),
             "created_at": base_time + timedelta(seconds=index * 5),
         }
 
