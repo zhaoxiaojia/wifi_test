@@ -22,6 +22,7 @@ from src.test.performance import (
     init_corner,
     init_rf,
     init_router,
+    scenario_group,
     wait_connect,
 )
 
@@ -294,34 +295,35 @@ def setup_rvo_case(request, setup_router):
 
 def test_rvo(setup_rvo_case, performance_sync_manager):
     connect_status, router_info, corner_angle, attenuation_db, rssi_num, profile = setup_rvo_case
-    if not connect_status:
-        logging.info("Can't connect wifi ,input 0")
-        return
+    with scenario_group(router_info):
+        if not connect_status:
+            logging.info("Can't connect wifi ,input 0")
+            return
 
-    logging.info('RVO profile %s', _profile_id(profile))
-    logging.info('corner angle set to %s', corner_angle)
-    logging.info('start test iperf tx %s rx %s', router_info.tx, router_info.rx)
+        logging.info('RVO profile %s', _profile_id(profile))
+        logging.info('corner angle set to %s', corner_angle)
+        logging.info('start test iperf tx %s rx %s', router_info.tx, router_info.rx)
 
-    pytest.testResult.set_active_profile(profile.mode, profile.value)
-    try:
-        if int(router_info.tx):
-            logging.info('rssi : %s', rssi_num)
-            pytest.dut.get_tx_rate(
-                router_info,
-                'TCP',
-                corner_tool=corner_tool,
-                db_set='' if attenuation_db is None else attenuation_db,
-            )
-        if int(router_info.rx):
-            logging.info('rssi : %s', rssi_num)
-            pytest.dut.get_rx_rate(
-                router_info,
-                'TCP',
-                corner_tool=corner_tool,
-                db_set='' if attenuation_db is None else attenuation_db,
-            )
-    finally:
-        pytest.testResult.clear_active_profile()
+        pytest.testResult.set_active_profile(profile.mode, profile.value)
+        try:
+            if int(router_info.tx):
+                logging.info('rssi : %s', rssi_num)
+                pytest.dut.get_tx_rate(
+                    router_info,
+                    'TCP',
+                    corner_tool=corner_tool,
+                    db_set='' if attenuation_db is None else attenuation_db,
+                )
+            if int(router_info.rx):
+                logging.info('rssi : %s', rssi_num)
+                pytest.dut.get_rx_rate(
+                    router_info,
+                    'TCP',
+                    corner_tool=corner_tool,
+                    db_set='' if attenuation_db is None else attenuation_db,
+                )
+        finally:
+            pytest.testResult.clear_active_profile()
 
     performance_sync_manager(
         "RVO",
