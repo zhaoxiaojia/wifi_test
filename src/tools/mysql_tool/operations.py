@@ -450,28 +450,30 @@ def _guess_product_by_mapping(
     wifi_module: Optional[str],
     interface: Optional[str],
     main_chip: Optional[str],
-) -> tuple[Optional[str], Optional[str], Optional[dict[str, str]]]:
+) -> tuple[Optional[str], Optional[str], Optional[str], Optional[dict[str, str]]]:
     wifi_upper = _normalize_upper_token(wifi_module)
     interface_upper = _normalize_upper_token(interface)
     chip_upper = _normalize_upper_token(main_chip)
 
-    for product_line, projects in WIFI_PRODUCT_PROJECT_MAP.items():
-        for project_name, info in projects.items():
-            info_wifi = _normalize_upper_token(info.get("wifi_module"))
-            info_interface = _normalize_upper_token(info.get("interface"))
-            info_chip = _normalize_upper_token(info.get("main_chip"))
-            if wifi_upper and info_wifi and info_wifi != wifi_upper:
-                continue
-            if interface_upper and info_interface and info_interface != interface_upper:
-                continue
-            if chip_upper and info_chip and info_chip != chip_upper:
-                continue
-            return product_line, project_name, info
-    return None, None, None
+    for customer_name, product_lines in WIFI_PRODUCT_PROJECT_MAP.items():
+        for product_line, projects in product_lines.items():
+            for project_name, info in projects.items():
+                info_wifi = _normalize_upper_token(info.get("wifi_module"))
+                info_interface = _normalize_upper_token(info.get("interface"))
+                info_chip = _normalize_upper_token(info.get("main_chip"))
+                if wifi_upper and info_wifi and info_wifi != wifi_upper:
+                    continue
+                if interface_upper and info_interface and info_interface != interface_upper:
+                    continue
+                if chip_upper and info_chip and info_chip != chip_upper:
+                    continue
+                return customer_name, product_line, project_name, info
+    return None, None, None, None
 
 
 def _resolve_wifi_product_details(fpga_section: Any) -> Dict[str, Optional[str]]:
     details: Dict[str, Optional[str]] = {
+        "customer": None,
         "product_line": None,
         "project": None,
         "main_chip": None,
@@ -480,6 +482,7 @@ def _resolve_wifi_product_details(fpga_section: Any) -> Dict[str, Optional[str]]
     }
 
     if isinstance(fpga_section, Mapping):
+        details["customer"] = _normalize_upper_token(fpga_section.get("customer"))
         details["product_line"] = _normalize_upper_token(fpga_section.get("product_line"))
         details["project"] = _normalize_upper_token(fpga_section.get("project"))
         details["main_chip"] = _normalize_upper_token(fpga_section.get("main_chip"))
@@ -493,17 +496,32 @@ def _resolve_wifi_product_details(fpga_section: Any) -> Dict[str, Optional[str]]
         details["interface"] = interface
 
     info: Optional[dict[str, str]] = None
-    if details["product_line"] and details["project"]:
+    if details["customer"] and details["product_line"] and details["project"]:
         info = (
-            WIFI_PRODUCT_PROJECT_MAP.get(details["product_line"], {})
+            WIFI_PRODUCT_PROJECT_MAP.get(details["customer"], {})
+            .get(details["product_line"], {})
             .get(details["project"], {})
         )
-    else:
-        guessed_product, guessed_project, guessed_info = _guess_product_by_mapping(
+    elif details["product_line"] and details["project"]:
+        for customer_name, product_lines in WIFI_PRODUCT_PROJECT_MAP.items():
+            project_info = product_lines.get(details["product_line"], {}).get(details["project"])
+            if project_info:
+                details["customer"] = customer_name
+                info = project_info
+                break
+    if info is None:
+        (
+            guessed_customer,
+            guessed_product,
+            guessed_project,
+            guessed_info,
+        ) = _guess_product_by_mapping(
             details["wifi_module"],
             details["interface"],
             details["main_chip"],
         )
+        if guessed_customer:
+            details["customer"] = guessed_customer
         if guessed_product:
             details["product_line"] = guessed_product
         if guessed_project:
