@@ -12,6 +12,7 @@ import pandas as pd
 from openpyxl import load_workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
+from src.util.constants import BANDWIDTH_ORDER_MAP, FREQ_BAND_ORDER_MAP, STANDARD_ORDER_MAP
 from src.util.rvr_chart_logic import RvrChartLogic
 
 """Utilities to export Xiaomi Wi-Fi performance reports."""
@@ -169,6 +170,9 @@ class _RvrBlock:
     rx_rssi_columns: Dict[str, int] = field(default_factory=dict)
     tx_rssi_columns: Dict[str, int] = field(default_factory=dict)
     template_row: int = 0
+    start_row: int = 0
+    end_row: int = 0
+    identifier: str | None = None
 
 
 @dataclass
@@ -187,6 +191,257 @@ class _RvoBlock:
     sheet: Worksheet
     scenario: str
     directions: Dict[str, _RvoDirectionBlock] = field(default_factory=dict)
+    start_row: int = 0
+    end_row: int = 0
+    identifier: str | None = None
+
+
+@dataclass(frozen=True)
+class _ScenarioDefinition:
+    identifier: str
+    raw_key: str
+    freq_key: str
+    freq_display: str
+    standard_key: str
+    standard_display: str
+    bandwidth_key: str
+    bandwidth_display: str
+    interface: str
+    template_name: str
+
+    def title(self) -> str:
+        parts = [
+            part
+            for part in (
+                self.freq_display,
+                self.standard_display,
+                self.bandwidth_display,
+                self.interface,
+            )
+            if part
+        ]
+        return " ".join(parts)
+
+
+def _format_interface_label(value: str | None) -> str:
+    if not value:
+        return ""
+    text = str(value).strip()
+    if not text:
+        return ""
+    return text.replace("_", " ").strip()
+
+
+def _get_row_value(row: Mapping[str, object] | pd.Series | dict, key: str):
+    getter = getattr(row, "get", None)
+    if callable(getter):
+        try:
+            return getter(key)
+        except Exception:
+            pass
+    if isinstance(row, Mapping):
+        return row.get(key)
+    try:
+        return row[key]  # type: ignore[index]
+    except Exception:
+        return None
+
+
+def _parse_scenario_group_tokens(raw_key: str | None) -> dict[str, str]:
+    tokens: dict[str, str] = {}
+    if not raw_key:
+        return tokens
+    text = str(raw_key).strip()
+    if not text:
+        return tokens
+    for part in text.split("|"):
+        if not part or "=" not in part:
+            continue
+        label, value = part.split("=", 1)
+        label = label.strip().lower()
+        value = value.strip()
+        if label:
+            tokens[label] = value
+    return tokens
+
+
+def _extract_interface_value(row: Mapping[str, object], tokens: Mapping[str, str]) -> str:
+    preferred_keys = (
+        "interface",
+        "iface",
+        "client_interface",
+        "client",
+        "station",
+    )
+    for key in preferred_keys:
+        value = tokens.get(key)
+        if value:
+            return _format_interface_label(value)
+    column_candidates = (
+        "Interface",
+        "interface",
+        "Client_Interface",
+        "Client",
+        "Station",
+    )
+    for column in column_candidates:
+        value = _get_row_value(row, column)
+        if value not in (None, ""):
+            return _format_interface_label(value)
+    return ""
+
+
+def _build_scenario_identifier(row: Mapping[str, object]) -> tuple[str, str]:
+    raw_key = _get_row_value(row, "Scenario_Group_Key")
+    normalized_raw = _normalize_text(raw_key)
+    if normalized_raw:
+        return normalized_raw.upper(), normalized_raw
+    freq_key = _normalize_key(_get_row_value(row, "__freq_key__"))
+    standard_key = _normalize_key(_get_row_value(row, "__standard_key__"))
+    bandwidth_key = _normalize_key(_get_row_value(row, "__bandwidth_key__"))
+    interface = _normalize_key(_get_row_value(row, "Interface"))
+    if not any((freq_key, standard_key, bandwidth_key)):
+        return "", ""
+    parts = [part for part in (freq_key, standard_key, bandwidth_key, interface) if part]
+    identifier = "|".join(parts)
+    return identifier.upper(), identifier
+
+
+def _scenario_sort_key(definition: _ScenarioDefinition) -> tuple[int, int, int, str, str]:
+    return (
+        FREQ_BAND_ORDER_MAP.get(definition.freq_key, 999),
+        STANDARD_ORDER_MAP.get(definition.standard_key, 999),
+        BANDWIDTH_ORDER_MAP.get(definition.bandwidth_key, 999),
+        definition.interface.lower(),
+        definition.title().lower(),
+    )
+
+
+def _collect_scenario_definitions(
+    df: pd.DataFrame, mapping: Mapping[tuple[str, str, str], str]
+) -> dict[str, _ScenarioDefinition]:
+    definitions: dict[str, _ScenarioDefinition] = {}
+    if df is None or df.empty:
+        return definitions
+    for _, row in df.iterrows():
+        identifier, raw_key = _build_scenario_identifier(row)
+        if not identifier or identifier in definitions:
+            continue
+        freq_key = _normalize_key(_get_row_value(row, "__freq_key__"))
+        standard_key = _normalize_key(_get_row_value(row, "__standard_key__"))
+        bandwidth_key = _normalize_key(_get_row_value(row, "__bandwidth_key__"))
+        template_name = mapping.get((standard_key, freq_key, bandwidth_key))
+        if not template_name:
+            continue
+        tokens = _parse_scenario_group_tokens(raw_key)
+        interface = _extract_interface_value(row, tokens)
+        freq_display = _normalize_text(_get_row_value(row, "__freq_band_display__")) or tokens.get("band", "")
+        standard_display = _normalize_text(_get_row_value(row, "__standard_display__")) or tokens.get("mode", "")
+        bandwidth_display = _normalize_text(_get_row_value(row, "__bandwidth_display__")) or tokens.get("bandwidth", "")
+        definition = _ScenarioDefinition(
+            identifier=identifier,
+            raw_key=raw_key,
+            freq_key=freq_key,
+            freq_display=_format_interface_label(freq_display),
+            standard_key=standard_key,
+            standard_display=_format_interface_label(standard_display),
+            bandwidth_key=bandwidth_key,
+            bandwidth_display=_format_interface_label(bandwidth_display),
+            interface=interface,
+            template_name=template_name,
+        )
+        definitions[identifier] = definition
+    return definitions
+
+
+def _prepare_rvr_dynamic_blocks(
+    layout: _TemplateLayout, df: pd.DataFrame
+) -> dict[str, _RvrBlock]:
+    definitions = _collect_scenario_definitions(df, _RVR_SCENARIO_MAPPING)
+    if not definitions:
+        return {}
+    grouped: dict[tuple[str, str, str], list[_ScenarioDefinition]] = defaultdict(list)
+    for definition in definitions.values():
+        key = (definition.standard_key, definition.freq_key, definition.bandwidth_key)
+        grouped[key].append(definition)
+    scenario_blocks: dict[str, _RvrBlock] = {}
+    for combo, items in grouped.items():
+        template_name = _RVR_SCENARIO_MAPPING.get(combo)
+        if not template_name:
+            continue
+        base_key = template_name.upper()
+        template_block = layout.rvr_blocks.get(base_key)
+        if template_block is None:
+            _LOGGER.warning("Missing RVR template block for %s", template_name)
+            continue
+        sorted_items = sorted(items, key=_scenario_sort_key)
+        current_block = template_block
+        current_key = base_key
+        template_reference = template_block
+        for index, definition in enumerate(sorted_items):
+            title = definition.title() or template_block.scenario
+            block_key = title.upper() if title else current_key
+            if index == 0:
+                layout._set_rvr_block_title(current_block, title)
+                layout._rename_rvr_block_key(current_key, block_key, current_block)
+                current_block.identifier = definition.identifier
+                scenario_blocks[definition.identifier] = current_block
+                current_key = block_key
+            else:
+                new_block = layout.clone_rvr_block(template_reference, current_block)
+                layout._set_rvr_block_title(new_block, title)
+                new_key = title.upper() if title else f"{current_key}_{index}"
+                layout._register_rvr_block_after(new_key, new_block, current_key)
+                new_block.identifier = definition.identifier
+                scenario_blocks[definition.identifier] = new_block
+                current_block = new_block
+                current_key = new_key
+    return scenario_blocks
+
+
+def _prepare_rvo_dynamic_blocks(
+    layout: _TemplateLayout, df: pd.DataFrame
+) -> dict[str, _RvoBlock]:
+    definitions = _collect_scenario_definitions(df, _RVO_SCENARIO_MAPPING)
+    if not definitions:
+        return {}
+    grouped: dict[tuple[str, str, str], list[_ScenarioDefinition]] = defaultdict(list)
+    for definition in definitions.values():
+        key = (definition.standard_key, definition.freq_key, definition.bandwidth_key)
+        grouped[key].append(definition)
+    scenario_blocks: dict[str, _RvoBlock] = {}
+    for combo, items in grouped.items():
+        template_name = _RVO_SCENARIO_MAPPING.get(combo)
+        if not template_name:
+            continue
+        base_key = template_name.upper()
+        template_block = layout.rvo_blocks.get(base_key)
+        if template_block is None:
+            _LOGGER.warning("Missing RVO template block for %s", template_name)
+            continue
+        sorted_items = sorted(items, key=_scenario_sort_key)
+        current_block = template_block
+        current_key = base_key
+        template_reference = template_block
+        for index, definition in enumerate(sorted_items):
+            title = definition.title() or template_block.scenario
+            block_key = title.upper() if title else current_key
+            if index == 0:
+                layout._set_rvo_block_title(current_block, title)
+                layout._rename_rvo_block_key(current_key, block_key, current_block)
+                current_block.identifier = definition.identifier
+                scenario_blocks[definition.identifier] = current_block
+                current_key = block_key
+            else:
+                new_block = layout.clone_rvo_block(template_reference, current_block)
+                layout._set_rvo_block_title(new_block, title)
+                new_key = title.upper() if title else f"{current_key}_{index}"
+                layout._register_rvo_block_after(new_key, new_block, current_key)
+                new_block.identifier = definition.identifier
+                scenario_blocks[definition.identifier] = new_block
+                current_block = new_block
+                current_key = new_key
+    return scenario_blocks
 
 
 class _TemplateLayout:
@@ -196,6 +451,8 @@ class _TemplateLayout:
         self.workbook = workbook
         self.rvr_sheet = workbook["Coffey RVR"]
         self.rvo_sheet = workbook["Coffey RVO"]
+        self.rvr_block_order: list[str] = []
+        self.rvo_block_order: list[str] = []
         self.rvr_blocks = self._parse_rvr_blocks()
         self.rvo_blocks = self._parse_rvo_blocks()
 
@@ -217,7 +474,8 @@ class _TemplateLayout:
                 sheet, item_row, item_row + 1
             )
             template_row = min(rows_by_db.values()) if rows_by_db else item_row + 2
-            blocks[scenario.upper()] = _RvrBlock(
+            key = scenario.upper()
+            blocks[key] = _RvrBlock(
                 sheet=sheet,
                 scenario=scenario,
                 rows_by_db=rows_by_db,
@@ -226,7 +484,10 @@ class _TemplateLayout:
                 rx_rssi_columns=rx_rssi_columns,
                 tx_rssi_columns=tx_rssi_columns,
                 template_row=template_row,
+                start_row=item_row,
+                end_row=next_row - 1,
             )
+            self.rvr_block_order.append(key)
         return blocks
 
     @staticmethod
@@ -304,7 +565,15 @@ class _TemplateLayout:
                 continue
             next_row = item_rows[index + 1] if index + 1 < len(item_rows) else max_row + 1
             directions = self._extract_rvo_directions(sheet, item_row, next_row)
-            blocks[scenario.upper()] = _RvoBlock(sheet=sheet, scenario=scenario, directions=directions)
+            key = scenario.upper()
+            blocks[key] = _RvoBlock(
+                sheet=sheet,
+                scenario=scenario,
+                directions=directions,
+                start_row=item_row,
+                end_row=next_row - 1,
+            )
+            self.rvo_block_order.append(key)
         return blocks
 
     def _extract_rvo_directions(self, sheet: Worksheet, start_row: int, stop_row: int) -> Dict[str, _RvoDirectionBlock]:
@@ -396,11 +665,26 @@ class _TemplateLayout:
                 target._style = source._style
             target.value = _TemplateLayout._relocate_formula(source.value, source_row, target_row)
             target.number_format = source.number_format
-            target.protection = source.protection
-            target.alignment = source.alignment
-            target.font = source.font
-            target.fill = source.fill
-            target.border = source.border
+            try:
+                target.protection = source.protection
+            except TypeError:
+                pass
+            try:
+                target.alignment = source.alignment
+            except TypeError:
+                pass
+            try:
+                target.font = source.font
+            except TypeError:
+                pass
+            try:
+                target.fill = source.fill
+            except TypeError:
+                pass
+            try:
+                target.border = source.border
+            except TypeError:
+                pass
 
     @staticmethod
     def _copy_column_styles(
@@ -417,11 +701,135 @@ class _TemplateLayout:
                 target._style = source._style
             target.value = source.value
             target.number_format = source.number_format
-            target.protection = source.protection
-            target.alignment = source.alignment
-            target.font = source.font
-            target.fill = source.fill
-            target.border = source.border
+            try:
+                target.protection = source.protection
+            except TypeError:
+                pass
+            try:
+                target.alignment = source.alignment
+            except TypeError:
+                pass
+            try:
+                target.font = source.font
+            except TypeError:
+                pass
+            try:
+                target.fill = source.fill
+            except TypeError:
+                pass
+            try:
+                target.border = source.border
+            except TypeError:
+                pass
+
+    def _rename_rvr_block_key(self, old_key: str, new_key: str, block: _RvrBlock) -> None:
+        if old_key == new_key:
+            return
+        if old_key in self.rvr_blocks:
+            self.rvr_blocks.pop(old_key)
+        self.rvr_blocks[new_key] = block
+        for index, key in enumerate(self.rvr_block_order):
+            if key == old_key:
+                self.rvr_block_order[index] = new_key
+                break
+
+    def _register_rvr_block_after(self, new_key: str, block: _RvrBlock, after_key: str) -> None:
+        self.rvr_blocks[new_key] = block
+        if after_key in self.rvr_block_order:
+            index = self.rvr_block_order.index(after_key)
+            self.rvr_block_order.insert(index + 1, new_key)
+        else:
+            self.rvr_block_order.append(new_key)
+
+    def _set_rvr_block_title(self, block: _RvrBlock, title: str) -> None:
+        block.scenario = title
+        title_cell = block.sheet.cell(row=block.start_row + 2, column=1)
+        title_cell.value = title
+
+    def clone_rvr_block(self, template_block: _RvrBlock, anchor_block: _RvrBlock) -> _RvrBlock:
+        sheet = template_block.sheet
+        row_count = template_block.end_row - template_block.start_row + 1
+        insert_position = anchor_block.end_row + 1
+        sheet.insert_rows(insert_position, amount=row_count)
+        self._adjust_rvr_mappings(insert_position, row_count)
+        for offset in range(row_count):
+            source_row = template_block.start_row + offset
+            target_row = insert_position + offset
+            self._copy_row(sheet, source_row, target_row)
+        offset = insert_position - template_block.start_row
+        new_rows_by_db = {key: row + offset for key, row in template_block.rows_by_db.items()}
+        new_block = _RvrBlock(
+            sheet=sheet,
+            scenario=template_block.scenario,
+            rows_by_db=new_rows_by_db,
+            rx_columns=dict(template_block.rx_columns),
+            tx_columns=dict(template_block.tx_columns),
+            rx_rssi_columns=dict(template_block.rx_rssi_columns),
+            tx_rssi_columns=dict(template_block.tx_rssi_columns),
+            template_row=template_block.template_row + offset,
+            start_row=insert_position,
+            end_row=insert_position + row_count - 1,
+        )
+        return new_block
+
+    def _rename_rvo_block_key(self, old_key: str, new_key: str, block: _RvoBlock) -> None:
+        if old_key == new_key:
+            return
+        if old_key in self.rvo_blocks:
+            self.rvo_blocks.pop(old_key)
+        self.rvo_blocks[new_key] = block
+        for index, key in enumerate(self.rvo_block_order):
+            if key == old_key:
+                self.rvo_block_order[index] = new_key
+                break
+
+    def _register_rvo_block_after(self, new_key: str, block: _RvoBlock, after_key: str) -> None:
+        self.rvo_blocks[new_key] = block
+        if after_key in self.rvo_block_order:
+            index = self.rvo_block_order.index(after_key)
+            self.rvo_block_order.insert(index + 1, new_key)
+        else:
+            self.rvo_block_order.append(new_key)
+
+    def _set_rvo_block_title(self, block: _RvoBlock, title: str) -> None:
+        block.scenario = title
+        title_cell = block.sheet.cell(row=block.start_row + 2, column=1)
+        title_cell.value = title
+
+    def clone_rvo_block(self, template_block: _RvoBlock, anchor_block: _RvoBlock) -> _RvoBlock:
+        sheet = template_block.sheet
+        row_count = template_block.end_row - template_block.start_row + 1
+        insert_position = anchor_block.end_row + 1
+        sheet.insert_rows(insert_position, amount=row_count)
+        self._adjust_rvo_mappings(insert_position, row_count)
+        for offset in range(row_count):
+            source_row = template_block.start_row + offset
+            target_row = insert_position + offset
+            self._copy_row(sheet, source_row, target_row)
+        offset = insert_position - template_block.start_row
+        new_directions: Dict[str, _RvoDirectionBlock] = {}
+        for dir_name, dir_block in template_block.directions.items():
+            updated_rows_by_channel = {
+                channel: {db_key: row + offset for db_key, row in rows.items()}
+                for channel, rows in dir_block.rows_by_channel.items()
+            }
+            new_directions[dir_name] = _RvoDirectionBlock(
+                rows_by_channel=updated_rows_by_channel,
+                angle_columns=dict(dir_block.angle_columns),
+                header_row=dir_block.header_row + offset,
+                angle_row=dir_block.angle_row + offset,
+                data_start_row=dir_block.data_start_row + offset,
+                data_end_row=dir_block.data_end_row + offset,
+                summary_start_col=dir_block.summary_start_col,
+            )
+        new_block = _RvoBlock(
+            sheet=sheet,
+            scenario=template_block.scenario,
+            directions=new_directions,
+            start_row=insert_position,
+            end_row=insert_position + row_count - 1,
+        )
+        return new_block
 
     def _adjust_rvr_mappings(self, start_row: int, delta: int) -> None:
         for block in self.rvr_blocks.values():
@@ -430,6 +838,35 @@ class _TemplateLayout:
                     block.rows_by_db[key] = row + delta
             if block.template_row >= start_row:
                 block.template_row += delta
+            if block.start_row >= start_row:
+                block.start_row += delta
+                block.end_row += delta
+            elif block.end_row >= start_row:
+                block.end_row += delta
+
+    def _adjust_rvo_mappings(self, start_row: int, delta: int) -> None:
+        for block in self.rvo_blocks.values():
+            if block.start_row >= start_row:
+                block.start_row += delta
+                block.end_row += delta
+            elif block.end_row >= start_row:
+                block.end_row += delta
+            for dir_block in block.directions.values():
+                if dir_block.header_row >= start_row:
+                    dir_block.header_row += delta
+                if dir_block.angle_row >= start_row:
+                    dir_block.angle_row += delta
+                if dir_block.data_start_row >= start_row:
+                    dir_block.data_start_row += delta
+                if dir_block.data_end_row >= start_row:
+                    dir_block.data_end_row += delta
+                updated_channels: Dict[str, Dict[str, int]] = {}
+                for channel_id, rows in dir_block.rows_by_channel.items():
+                    updated_rows: Dict[str, int] = {}
+                    for db_key, row in rows.items():
+                        updated_rows[db_key] = row + delta if row >= start_row else row
+                    updated_channels[channel_id] = updated_rows
+                dir_block.rows_by_channel = updated_channels
 
     def _set_rvr_label(self, block: _RvrBlock, row_index: int, db_key: str) -> None:
         sheet = block.sheet
@@ -720,10 +1157,69 @@ class _DataLoader(RvrChartLogic):
         return df
 
 
-def _populate_rvr(layout: _TemplateLayout, df: pd.DataFrame) -> None:
-    if df.empty:
-        _LOGGER.info("Populate RVR skipped: dataframe empty")
-        return
+def _populate_rvr_dynamic(
+    layout: _TemplateLayout, df: pd.DataFrame, scenario_blocks: Mapping[str, _RvrBlock]
+) -> None:
+    sheet = layout.rvr_sheet
+    scenario_stats: dict[str, Counter] = defaultdict(Counter)
+    for identifier, block in scenario_blocks.items():
+        _LOGGER.debug(
+            "RVR dynamic block [%s]: title=%s rows=%s", identifier, block.scenario, len(block.rows_by_db)
+        )
+    for _, row_data in df.iterrows():
+        scenario_id, _ = _build_scenario_identifier(row_data)
+        if not scenario_id:
+            scenario_stats["_UNKNOWN"]["unknown_scenario"] += 1
+            continue
+        block = scenario_blocks.get(scenario_id)
+        if block is None:
+            scenario_stats[scenario_id]["missing_block"] += 1
+            continue
+        direction = row_data.get("__direction_key__", "")
+        stats = scenario_stats[block.scenario]
+        stats["total"] += 1
+        if direction not in {"RX", "TX"}:
+            stats["bad_direction"] += 1
+            continue
+        channel_id = row_data.get("__channel_key__", "")
+        db_key = row_data.get("__db_key__", "")
+        if not channel_id or not db_key:
+            stats["missing_channel_or_db"] += 1
+            continue
+        columns_map = block.rx_columns if direction == "RX" else block.tx_columns
+        column_index = columns_map.get(channel_id)
+        if not column_index:
+            stats["missing_channel_column"] += 1
+            continue
+        row_index = layout.ensure_rvr_row(block, db_key)
+        throughput = row_data.get("__throughput_value__", None)
+        if throughput is None:
+            stats["missing_throughput"] += 1
+            continue
+        stats["written"] += 1
+        _write_cell_if_higher(sheet, row_index, column_index, throughput)
+
+        rssi_value = row_data.get("RSSI")
+        if rssi_value is None or (isinstance(rssi_value, float) and pd.isna(rssi_value)):
+            rssi_value = row_data.get("__rssi_display__")
+        if rssi_value not in (None, ""):
+            try:
+                rssi_numeric = float(rssi_value)
+            except (TypeError, ValueError):
+                rssi_numeric = None
+            if rssi_numeric is not None:
+                rssi_map = block.rx_rssi_columns if direction == "RX" else block.tx_rssi_columns
+                rssi_col = rssi_map.get(channel_id)
+                if rssi_col:
+                    sheet.cell(row=row_index, column=rssi_col).value = rssi_numeric
+                    stats["written_rssi"] += 1
+                else:
+                    stats["missing_rssi_column"] += 1
+    for scenario_name, counts in scenario_stats.items():
+        _LOGGER.info("RVR populate summary [%s]: %s", scenario_name, dict(counts))
+
+
+def _populate_rvr_legacy(layout: _TemplateLayout, df: pd.DataFrame) -> None:
     sheet = layout.rvr_sheet
     scenario_stats: dict[str, Counter] = defaultdict(Counter)
     for name, block in layout.rvr_blocks.items():
@@ -794,10 +1290,63 @@ def _populate_rvr(layout: _TemplateLayout, df: pd.DataFrame) -> None:
         _LOGGER.info("RVR populate summary [%s]: %s", scenario_name, dict(counts))
 
 
-def _populate_rvo(layout: _TemplateLayout, df: pd.DataFrame) -> None:
+def _populate_rvr(layout: _TemplateLayout, df: pd.DataFrame) -> None:
     if df.empty:
-        _LOGGER.info("Populate RVO skipped: dataframe empty")
+        _LOGGER.info("Populate RVR skipped: dataframe empty")
         return
+    scenario_blocks = _prepare_rvr_dynamic_blocks(layout, df)
+    if scenario_blocks:
+        _populate_rvr_dynamic(layout, df, scenario_blocks)
+    else:
+        _populate_rvr_legacy(layout, df)
+
+
+def _populate_rvo_dynamic(
+    layout: _TemplateLayout, df: pd.DataFrame, scenario_blocks: Mapping[str, _RvoBlock]
+) -> None:
+    sheet = layout.rvo_sheet
+    scenario_stats: dict[str, Counter] = defaultdict(Counter)
+    for identifier, block in scenario_blocks.items():
+        _LOGGER.debug(
+            "RVO dynamic block [%s]: title=%s directions=%s",
+            identifier,
+            block.scenario,
+            list(block.directions.keys()),
+        )
+    for _, row_data in df.iterrows():
+        scenario_id, _ = _build_scenario_identifier(row_data)
+        if not scenario_id:
+            scenario_stats["_UNKNOWN"]["unknown_scenario"] += 1
+            continue
+        block = scenario_blocks.get(scenario_id)
+        if block is None:
+            scenario_stats[scenario_id]["missing_block"] += 1
+            continue
+        direction = row_data.get("__direction_key__", "")
+        dir_block = block.directions.get(direction)
+        stats = scenario_stats[block.scenario]
+        if dir_block is None:
+            stats["bad_direction"] += 1
+            continue
+        channel_id = row_data.get("__channel_key__", "")
+        db_key = row_data.get("__db_key__", "")
+        angle_key = row_data.get("__angle_key__", "")
+        if not channel_id or not db_key or not angle_key:
+            stats["missing_channel_or_db_or_angle"] += 1
+            continue
+        column_index = layout.ensure_rvo_angle(block, dir_block, angle_key)
+        row_index = layout.ensure_rvo_row(block, dir_block, channel_id, db_key)
+        throughput = row_data.get("__throughput_value__", None)
+        if throughput is None:
+            stats["missing_throughput"] += 1
+            continue
+        stats["written"] += 1
+        _write_cell_if_higher(sheet, row_index, column_index, throughput)
+    for scenario_name, counts in scenario_stats.items():
+        _LOGGER.info("RVO populate summary [%s]: %s", scenario_name, dict(counts))
+
+
+def _populate_rvo_legacy(layout: _TemplateLayout, df: pd.DataFrame) -> None:
     sheet = layout.rvo_sheet
     scenario_stats: dict[str, Counter] = defaultdict(Counter)
     for _, row_data in df.iterrows():
@@ -835,6 +1384,17 @@ def _populate_rvo(layout: _TemplateLayout, df: pd.DataFrame) -> None:
         _write_cell_if_higher(sheet, row_index, column_index, throughput)
     for scenario_name, counts in scenario_stats.items():
         _LOGGER.info("RVO populate summary [%s]: %s", scenario_name, dict(counts))
+
+
+def _populate_rvo(layout: _TemplateLayout, df: pd.DataFrame) -> None:
+    if df.empty:
+        _LOGGER.info("Populate RVO skipped: dataframe empty")
+        return
+    scenario_blocks = _prepare_rvo_dynamic_blocks(layout, df)
+    if scenario_blocks:
+        _populate_rvo_dynamic(layout, df, scenario_blocks)
+    else:
+        _populate_rvo_legacy(layout, df)
 
 
 def generate_xiaomi_report(
