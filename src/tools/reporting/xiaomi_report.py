@@ -332,6 +332,13 @@ def _collect_scenario_definitions(
         bandwidth_key = _normalize_key(_get_row_value(row, "__bandwidth_key__"))
         template_name = mapping.get((standard_key, freq_key, bandwidth_key))
         if not template_name:
+            _LOGGER.info(
+                "跳过动态场景定义：模板未覆盖组合 standard=%s freq=%s bandwidth=%s (raw_key=%s)",
+                standard_key or "<empty>",
+                freq_key or "<empty>",
+                bandwidth_key or "<empty>",
+                raw_key or "",
+            )
             continue
         tokens = _parse_scenario_group_tokens(raw_key)
         interface = _extract_interface_value(row, tokens)
@@ -351,6 +358,12 @@ def _collect_scenario_definitions(
             template_name=template_name,
         )
         definitions[identifier] = definition
+        _LOGGER.debug(
+            "收集到动态场景定义：identifier=%s title=%s 使用模板=%s",
+            identifier,
+            definition.title(),
+            template_name,
+        )
     return definitions
 
 
@@ -1298,6 +1311,7 @@ def _populate_rvr(layout: _TemplateLayout, df: pd.DataFrame) -> None:
     if scenario_blocks:
         _populate_rvr_dynamic(layout, df, scenario_blocks)
     else:
+        _LOGGER.info("RVR 动态模板未生成，回退至旧版写入逻辑")
         _populate_rvr_legacy(layout, df)
 
 
@@ -1394,6 +1408,7 @@ def _populate_rvo(layout: _TemplateLayout, df: pd.DataFrame) -> None:
     if scenario_blocks:
         _populate_rvo_dynamic(layout, df, scenario_blocks)
     else:
+        _LOGGER.info("RVO 动态模板未生成，回退至旧版写入逻辑")
         _populate_rvo_legacy(layout, df)
 
 
