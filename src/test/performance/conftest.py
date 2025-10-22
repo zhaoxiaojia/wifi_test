@@ -4,7 +4,8 @@ from typing import Callable, Dict, Optional
 
 import pytest
 
-from src.tools.mysql_tool.MySqlControl import sync_file_to_db
+from src.tools.mysql_tool.MySqlControl import MySqlClient, sync_file_to_db
+
 from src.tools.performance.rvr_chart_generator import generate_rvr_charts
 
 
@@ -13,6 +14,21 @@ def performance_sync_manager() -> Callable[[str, str], None]:
     """注册需要在会话结束时同步到数据库的 CSV。"""
 
     pending: Dict[str, Dict[str, str]] = {}
+    mysql_available: Optional[bool] = None
+
+    def _can_use_mysql() -> bool:
+        nonlocal mysql_available
+        if mysql_available is not None:
+            return mysql_available
+        try:
+            with MySqlClient():
+                pass
+        except Exception as exc:  # pragma: no cover - 环境依赖
+            logging.info("跳过性能数据同步：无法连接到 MySQL（%s）", exc)
+            mysql_available = False
+            return False
+        mysql_available = True
+        return True
 
     def register(
         data_type: str,
@@ -55,6 +71,12 @@ def performance_sync_manager() -> Callable[[str, str], None]:
 
     yield register
 
+    if not pending:
+        return
+
+    if not _can_use_mysql():
+        return
+
     for info in pending.values():
         log_file = info.get("log_file")
         data_type = info.get("data_type")
@@ -62,7 +84,16 @@ def performance_sync_manager() -> Callable[[str, str], None]:
         message = info.get("message")
         if not log_file or not data_type:
             continue
-        rows = sync_file_to_db(log_file, data_type, run_source=run_source)
+        try:
+            rows = sync_file_to_db(log_file, data_type, run_source=run_source)
+        except Exception as exc:
+            logging.info(
+                "跳过 %s 数据同步：MySQL 操作失败（%s）",
+                data_type,
+                exc,
+            )
+            mysql_available = False
+            break
         if rows:
             logging.info("%s: %s", message, rows)
         else:

@@ -60,8 +60,35 @@ PERFORMANCE_STATIC_COLUMNS: Tuple[Tuple[str, str, str], ...] = (
     ("profile_mode", "VARCHAR(64)", "Profile_Mode"),
     ("profile_value", "VARCHAR(64)", "Profile_Value"),
     ("scenario_group_key", "VARCHAR(255)", "Scenario_Group_Key"),
-    ("latency_ms", "DECIMAL(10,3)", "Latency"),
-    ("packet_loss", "VARCHAR(64)", "Packet_Loss"),
+)
+
+
+def _assert_unique_column_names(
+    columns: Sequence[Tuple[str, str, str]], *, context: str
+) -> None:
+    """确保 ``columns`` 中的字段名唯一。
+
+    如果定义了重复的字段名，MySQL ``CREATE TABLE`` 语句会抛出
+    ``OperationalError(1060)``。在导入阶段提前检测可以让错误更早、
+    更直观地暴露出来，也避免测试运行到同步数据库时才失败。
+    """
+
+    seen: set[str] = set()
+    duplicates = []
+    for name, _, _ in columns:
+        if name in seen:
+            duplicates.append(name)
+        else:
+            seen.add(name)
+    if duplicates:
+        duplicate_list = ", ".join(sorted(set(duplicates)))
+        raise ValueError(
+            f"Duplicate column name(s) found in {context}: {duplicate_list}"
+        )
+
+
+_assert_unique_column_names(
+    PERFORMANCE_STATIC_COLUMNS, context="performance static columns"
 )
 
 PERFORMANCE_COLUMN_RENAMES: Tuple[Tuple[str, str], ...] = (
