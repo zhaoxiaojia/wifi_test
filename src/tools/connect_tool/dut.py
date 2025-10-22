@@ -228,12 +228,55 @@ class dut():
 
     @staticmethod
     def _format_result_row(values):
-        def normalize(value):
+        def normalize(value: Optional[object]) -> str:
             if value is None:
                 return ''
-            return str(value)
+            text = str(value)
+            if not text:
+                return ''
+            if any(ch in text for ch in {',', '"', '\n', '\r'}):
+                escaped = text.replace('"', '""')
+                return f'"{escaped}"'
+            return text
 
-        return ' '.join(normalize(value) for value in values).replace(' ', ',')
+        return ','.join(normalize(value) for value in values)
+
+    def _build_throughput_result_values(
+        self,
+        router_info,
+        protocol: str,
+        direction: str,
+        db_set: str,
+        corner: str,
+        mcs_value: Optional[str],
+        throughput_value: Optional[str],
+        expect_rate,
+        latency_value,
+        packet_loss_value,
+    ):
+        def _first_token(text: str) -> str:
+            return text.split()[0] if text else text
+
+        return [
+            self.serialnumber,
+            'Throughput',
+            _first_token(router_info.wireless_mode),
+            _first_token(router_info.band),
+            _first_token(router_info.bandwidth),
+            'Rate_Adaptation',
+            router_info.channel,
+            protocol,
+            direction,
+            'NULL',
+            db_set,
+            self.rssi_num,
+            corner,
+            mcs_value if mcs_value else 'NULL',
+            throughput_value,
+            expect_rate,
+            latency_value,
+            packet_loss_value,
+        ]
 
     def step(func):
         def wrapper(*args, **kwargs):
@@ -512,25 +555,18 @@ class dut():
         expect_rate = handle_expectdata(router_cfg, router_info.band, 'DL', pytest.chip_info)
         if self.skip_rx:
             corner = corner_tool.get_turntanle_current_angle() if corner_tool else ''
-            values = [
-                self.serialnumber,
-                'Throughput',
-                router_info.wireless_mode.split()[0],
-                router_info.band.split()[0],
-                router_info.bandwidth.split()[0],
-                'Rate_Adaptation',
-                router_info.channel,
+            values = self._build_throughput_result_values(
+                router_info,
                 type,
                 'DL',
-                'NULL',
                 db_set,
-                self.rssi_num,
                 corner,
-                '"NULL"',
-                0,
+                None,
+                '0',
                 expect_rate,
-            ]
-            values.extend(['', ''])
+                None,
+                None,
+            )
             pytest.testResult.save_result(self._format_result_row(values))
             return 'N/A'
 
@@ -615,7 +651,6 @@ class dut():
             if rx_val < self.throughput_threshold:
                 self.skip_rx = True
 
-        corner = corner_tool.get_turntanle_current_angle() if corner_tool else ''
         throughput_entries = []
         for metric in rx_metrics_list:
             formatted = metric.formatted_throughput()
@@ -624,25 +659,19 @@ class dut():
         throughput_values = ','.join(throughput_entries)
         latency_value = rx_metrics_list[-1].latency_ms if rx_metrics_list else None
         packet_loss_value = rx_metrics_list[-1].packet_loss if rx_metrics_list else None
-        values = [
-            self.serialnumber,
-            'Throughput',
-            router_info.wireless_mode.split()[0],
-            router_info.band.split()[0],
-            router_info.bandwidth.split()[0],
-            'Rate_Adaptation',
-            router_info.channel,
+        corner = corner_tool.get_turntanle_current_angle() if corner_tool else ''
+        values = self._build_throughput_result_values(
+            router_info,
             type,
             'DL',
-            'NULL',
             db_set,
-            self.rssi_num,
             corner,
-            mcs_rx if mcs_rx else 'NULL',
+            mcs_rx,
             throughput_values,
             expect_rate,
-        ]
-        values.extend([latency_value, packet_loss_value])
+            latency_value,
+            packet_loss_value,
+        )
         pytest.testResult.save_result(self._format_result_row(values))
         return throughput_values if throughput_values else 'N/A'
 
@@ -658,25 +687,18 @@ class dut():
         expect_rate = handle_expectdata(router_cfg, router_info.band, 'UL', pytest.chip_info)
         if self.skip_tx:
             corner = corner_tool.get_turntanle_current_angle() if corner_tool else ''
-            values = [
-                self.serialnumber,
-                'Throughput',
-                router_info.wireless_mode.split()[0],
-                router_info.band.split()[0],
-                router_info.bandwidth.split()[0],
-                'Rate_Adaptation',
-                router_info.channel,
+            values = self._build_throughput_result_values(
+                router_info,
                 type,
                 'UL',
-                'NULL',
                 db_set,
-                self.rssi_num,
                 corner,
-                '"NULL"',
-                0,
+                None,
+                '0',
                 expect_rate,
-            ]
-            values.extend(['', ''])
+                None,
+                None,
+            )
             formatted = self._format_result_row(values)
             logging.info(formatted)
             pytest.testResult.save_result(formatted)
@@ -764,7 +786,6 @@ class dut():
             if tx_val < self.throughput_threshold:
                 self.skip_tx = True
 
-        corner = corner_tool.get_turntanle_current_angle() if corner_tool else ''
         throughput_entries = []
         for metric in tx_metrics_list:
             formatted = metric.formatted_throughput()
@@ -773,25 +794,19 @@ class dut():
         throughput_values = ','.join(throughput_entries)
         latency_value = tx_metrics_list[-1].latency_ms if tx_metrics_list else None
         packet_loss_value = tx_metrics_list[-1].packet_loss if tx_metrics_list else None
-        values = [
-            self.serialnumber,
-            'Throughput',
-            router_info.wireless_mode.split()[0],
-            router_info.band.split()[0],
-            router_info.bandwidth.split()[0],
-            'Rate_Adaptation',
-            router_info.channel,
+        corner = corner_tool.get_turntanle_current_angle() if corner_tool else ''
+        values = self._build_throughput_result_values(
+            router_info,
             type,
             'UL',
-            'NULL',
             db_set,
-            self.rssi_num,
             corner,
-            mcs_tx if mcs_tx else 'NULL',
+            mcs_tx,
             throughput_values,
             expect_rate,
-        ]
-        values.extend([latency_value, packet_loss_value])
+            latency_value,
+            packet_loss_value,
+        )
         formatted = self._format_result_row(values)
         logging.info(formatted)
         pytest.testResult.save_result(formatted)
