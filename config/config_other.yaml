@@ -16,7 +16,7 @@ rf_solution:
     ip_address: 192.168.5.200
     channels: '1'
   model: RC4DAT-8G-95
-  step: 0,10:5
+  step: ''
 rvr:
   iperf:
     path: ''
@@ -32,5 +32,5 @@ router:
   address: 192.168.5.1
 text_case: test/performance/test_wifi_rvr.py
 debug:
-  database_mode: false
+  database_mode: true
 csv_path: performance_test_csv/rvr_wifi_setup_demo.csv
