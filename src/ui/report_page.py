@@ -738,10 +738,6 @@ class ReportPage(RvrChartLogic, CardWidget):
             canvas = FigureCanvasAgg(fig)
             canvas.draw()
             width, height = canvas.get_width_height()
-            print(
-                "[RVO][UI] canvas drawn -> size="
-                f"{width}x{height}, legend_present={bool(ax.get_legend())}"
-            )
             buffer = canvas.buffer_rgba()
             image = QImage(buffer, width, height, QImage.Format_RGBA8888).copy()
             pixmap = QPixmap.fromImage(image)
