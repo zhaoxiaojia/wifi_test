@@ -1,11 +1,11 @@
-#!/usr/bin/env python 
+﻿#!/usr/bin/env python 
 # -*- coding: utf-8 -*-
 """
 # File       : demo_.py
-# Time       ：2023/6/29 13:36
-# Author     ：chao.li
-# version    ：python 3.9
-# Description：
+# Time       锛?023/6/29 13:36
+# Author     锛歝hao.li
+# version    锛歱ython 3.9
+# Description锛?
 """
 
 import os, sys
@@ -14,6 +14,9 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 import re
 import shutil
 import subprocess
+from datetime import datetime
+from pathlib import Path
+
 import pytest
 import csv
 from src.tools.connect_tool.adb import adb
@@ -23,6 +26,8 @@ from src.tools.TestResult import TestResult
 from src.tools.config_loader import load_config
 from src.dut_control.roku_ctrl import roku_ctrl
 from src.tools.router_tool.Router import Router
+from src.tools.reporting import generate_xiaomi_report
+from src.util.constants import Paths
 
 # pytest_plugins = "util.report_plugin"
 test_results = []
@@ -35,6 +40,62 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
     force=True
 )
+
+
+
+_FILENAME_SANITIZE_PATTERN = re.compile(r"[^0-9A-Za-z._-]+")
+
+
+def _sanitize_filename_component(value) -> str:
+    text = ""
+    if value is not None:
+        text = str(value).strip()
+    if not text:
+        return ""
+    sanitized = _FILENAME_SANITIZE_PATTERN.sub("_", text)
+    return sanitized.strip("_")
+
+
+def _maybe_generate_xiaomi_report() -> None:
+    config = getattr(pytest, "config", {}) or {}
+    fpga_cfg = config.get("fpga") or {}
+    customer = str(fpga_cfg.get("customer", "")).strip().upper()
+    if customer != "XIAOMI":
+        return
+    test_result = getattr(pytest, "testResult", None)
+    if test_result is None:
+        logging.warning("Skip Xiaomi report: missing testResult handle")
+        return
+    selected_types = getattr(pytest, "selected_test_types", set())
+    forced_type = None
+    if isinstance(selected_types, set) and selected_types:
+        if len(selected_types) == 1:
+            forced_type = next(iter(selected_types))
+            logging.info("Using selected Wi-Fi test type for Xiaomi report: %s", forced_type)
+        else:
+            logging.warning(
+                "Multiple Wi-Fi test types detected (%s); fallback to auto detection.",
+                ", ".join(sorted(selected_types)),
+            )
+    logdir = Path(getattr(test_result, "logdir", "") or ".").resolve()
+    result_file = Path(getattr(test_result, "log_file", "") or "")
+    template_path = Path(Paths.BASE_DIR) / "Xiaomi  WiFi Performance Test Report.xlsx"
+    if not template_path.exists():
+        logging.warning("Skip Xiaomi report: template not found at %s", template_path)
+        return
+    software_info = config.get("software_info") or {}
+    hardware_info = config.get("hardware_info") or {}
+    software = _sanitize_filename_component(software_info.get("software_version")) or "NA"
+    driver = _sanitize_filename_component(software_info.get("driver_version")) or "NA"
+    hardware = _sanitize_filename_component(hardware_info.get("hardware_version")) or "NA"
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"Xiaomi_WiFi_Report_{timestamp}_{software}-{driver}-{hardware}.xlsx"
+    output_path = logdir / filename
+    try:
+        generate_xiaomi_report(result_file, template_path, output_path, forced_test_type=forced_type)
+        logging.info("Generated Xiaomi Wi-Fi performance report: %s", output_path)
+    except Exception:
+        logging.exception("Failed to generate Xiaomi Wi-Fi performance report")
 
 
 def pytest_sessionstart(session):
@@ -87,9 +148,23 @@ def pytest_addoption(parser):
 
 
 def pytest_collection_finish(session):
-    # 收集完毕，记录总用例数
+    # 鏀堕泦瀹屾瘯锛岃褰曟€荤敤渚嬫暟
     session.total_test_count = len(session.items)
     # logging.info(f"[PYQT_TOTAL]{session.total_test_count}")
+    selected_types: set[str] = set()
+    for item in session.items:
+        path_text = str(getattr(item, "fspath", "")).replace("\\", "/").lower()
+        if not path_text:
+            continue
+        if "test_wifi_rvr" in path_text:
+            selected_types.add("RVR")
+        elif "test_wifi_rvo" in path_text:
+            selected_types.add("RVO")
+    if selected_types:
+        pytest.selected_test_types = selected_types
+        logging.info("Detected selected Wi-Fi test types: %s", ", ".join(sorted(selected_types)))
+    else:
+        pytest.selected_test_types = set()
 
 
 def pytest_runtest_setup(item):
@@ -109,27 +184,27 @@ def pytest_runtest_logreport(report):
 # @pytest.fixture(autouse=True)
 # def record_test_data(request):
 #     """
-#     自动收集测试用例的 fixture 参数 ids，并存储返回值
+#     鑷姩鏀堕泦娴嬭瘯鐢ㄤ緥鐨?fixture 鍙傛暟 ids锛屽苟瀛樺偍杩斿洖鍊?
 #     """
-#     test_name = request.node.originalname  # 获取测试名称
+#     test_name = request.node.originalname  # 鑾峰彇娴嬭瘯鍚嶇О
 #     logging.info(f'test_name {test_name}')
 #     fixture_values = {}
-#     # 遍历所有 fixture 并存储返回值
+#     # 閬嶅巻鎵€鏈?fixture 骞跺瓨鍌ㄨ繑鍥炲€?
 #     for fixture_name in request.node.fixturenames:
 #         if fixture_name in request.node.funcargs:
 #             fixture_values[fixture_name] = request.node.funcargs[fixture_name]
 #
-#     # 确保 request.node._store 存在
+#     # 纭繚 request.node._store 瀛樺湪
 #     request.node._store = getattr(request.node, "_store", {})
-#     request.node._store["return_value"] = None  # 初始化返回值
-#     request.node._store["fixture_values"] = fixture_values  # 记录 fixture 返回值
+#     request.node._store["return_value"] = None  # 鍒濆鍖栬繑鍥炲€?
+#     request.node._store["fixture_values"] = fixture_values  # 璁板綍 fixture 杩斿洖鍊?
 #
-#     yield  # 让测试执行
-#     # 获取测试结果
-#     test_result = request.node._store.get("test_result", "UNKNOWN")  # 这里改为从 _store 获取
-#     # 获取测试方法的返回值
+#     yield  # 璁╂祴璇曟墽琛?
+#     # 鑾峰彇娴嬭瘯缁撴灉
+#     test_result = request.node._store.get("test_result", "UNKNOWN")  # 杩欓噷鏀逛负浠?_store 鑾峰彇
+#     # 鑾峰彇娴嬭瘯鏂规硶鐨勮繑鍥炲€?
 #     test_return_value = request.node._store.get("return_value", "None")
-#     # 存储到全局字典
+#     # 瀛樺偍鍒板叏灞€瀛楀吀
 #     test_results.append({test_name: {
 #         "result": test_result,
 #         "return_value": test_return_value,
@@ -138,7 +213,7 @@ def pytest_runtest_logreport(report):
 
 
 def pytest_collection_modifyitems(config, items):
-    # item表示收集到的测试用例，对他进行重新编码处理
+    # item琛ㄧず鏀堕泦鍒扮殑娴嬭瘯鐢ㄤ緥锛屽浠栬繘琛岄噸鏂扮紪鐮佸鐞?
     new_items = []
     for item in items:
         item.name = item.name.encode("utf-8").decode("unicode-escape")
@@ -179,15 +254,15 @@ def pytest_runtest_teardown(item, nextitem):
 
 def pytest_sessionfinish(session, exitstatus):
     csv_file = "../test_results.csv"
-    # global test_results  # 确保test_results在函数中可用
+    # global test_results  # 纭繚test_results鍦ㄥ嚱鏁颁腑鍙敤
     #
-    # # 定义表头
+    # # 瀹氫箟琛ㄥご
     # title_data = ['PDU IP', 'PDU Port', 'AP Brand', 'Band', 'Ssid', 'WiFi Mode', 'Bandwidth', 'Security',
     #               'Scan', 'Connect', 'TX Result', 'Channel', 'RSSI', 'TX Criteria', 'TX  Throughtput(Mbps)',
     #               'RX  Result', 'Channel', 'RSSI',
     #               'RX Criteria', 'RX Throughtput(Mbps)']
     #
-    # # 写入表头
+    # # 鍐欏叆琛ㄥご
     # with open(csv_file, mode="w", newline="", encoding="utf-8") as file:
     #     writer = csv.writer(file, quotechar=' ')
     #     writer.writerow(title_data)
@@ -197,25 +272,25 @@ def pytest_sessionfinish(session, exitstatus):
     # row_data = []
     # temp_data = []
     #
-    # # 处理每个测试结果
+    # # 澶勭悊姣忎釜娴嬭瘯缁撴灉
     # for test_result in test_results:
     #     try:
-    #         # 获取测试名称
+    #         # 鑾峰彇娴嬭瘯鍚嶇О
     #         test_name = sorted(test_result.keys())[0]
     #
-    #         # 检查是否需要写入前一行数据
+    #         # 妫€鏌ユ槸鍚﹂渶瑕佸啓鍏ュ墠涓€琛屾暟鎹?
     #         if test_name in temp_data:
-    #             if row_data:  # 确保有数据可写
+    #             if row_data:  # 纭繚鏈夋暟鎹彲鍐?
     #                 with open(csv_file, mode="a", newline="", encoding="utf-8") as file:
     #                     writer = csv.writer(file, quotechar=' ')
     #                     writer.writerow(row_data)
     #             row_data.clear()
     #             temp_data.clear()
     #
-    #         # 获取测试数据
+    #         # 鑾峰彇娴嬭瘯鏁版嵁
     #         data = test_result[test_name]
     #
-    #         # 处理fixtures数据
+    #         # 澶勭悊fixtures鏁版嵁
     #         if 'fixtures' in data and data['fixtures']:
     #             keys = sorted(data['fixtures'].keys())
     #             if data['fixtures'][keys[0]][0] not in row_data:
@@ -236,11 +311,11 @@ def pytest_sessionfinish(session, exitstatus):
     #                                 row_data.append(router_str)
     #                     except KeyError as e:
     #                         logging.warning(f"KeyError in fixture processing: {e}")
-    #                         continue  # 继续处理下一个fixture
+    #                         continue  # 缁х画澶勭悊涓嬩竴涓猣ixture
     #
     #         temp_data.append(test_name)
     #
-    #         # 添加测试结果和返回值
+    #         # 娣诲姞娴嬭瘯缁撴灉鍜岃繑鍥炲€?
     #         if 'result' in data and data['result']:
     #             row_data.append(data['result'])
     #         if 'return_value' in data and data['return_value']:
@@ -248,9 +323,9 @@ def pytest_sessionfinish(session, exitstatus):
     #
     #     except (KeyError, IndexError) as e:
     #         logging.error(f"Error processing test result: {e}")
-    #         continue  # 继续处理下一个测试结果
+    #         continue  # 缁х画澶勭悊涓嬩竴涓祴璇曠粨鏋?
     #
-    # # 写入最后一行数据
+    # # 鍐欏叆鏈€鍚庝竴琛屾暟鎹?
     # if row_data:
     #     with open(csv_file, mode="a", newline="", encoding="utf-8") as file:
     #         writer = csv.writer(file, quotechar=' ')
@@ -258,5 +333,6 @@ def pytest_sessionfinish(session, exitstatus):
 
     shutil.copy("pytest.log", "debug.log")
     shutil.move("debug.log", pytest.testResult.logdir)
+    _maybe_generate_xiaomi_report()
     # shutil.copy("report.html", "report_bat.html")
     # shutil.move("report_bat.html", pytest.testResult.logdir)

@@ -8,7 +8,7 @@ android_system:
   kernel_version: Kernel 5.15
 connect_type:
   adb:
-    device: coco5c6788c23f1122
+    device: '69512800000000611'
   telnet:
     ip: 192.168.5.12
   third_party:
@@ -16,6 +16,7 @@ connect_type:
     wait_seconds: 45
   type: adb
 fpga:
+  customer: XIAOMI
   product_line: OTT
   project: OB7
   main_chip: S805X3

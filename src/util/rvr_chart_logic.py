@@ -344,7 +344,7 @@ class RvrChartLogic:
                 continue
             for value in series.tolist():
                 normalized = self._normalize_value(value)
-                if normalized and normalized not in {"", "null", "none"}:
+                if normalized and normalized not in {"", "null", "none", "nan"}:
                     return True
         return False
 
