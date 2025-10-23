@@ -1005,10 +1005,10 @@ class _TemplateLayout:
         for min_row, max_row, min_col, max_col in ranges:
             new_range = MergedCellRange(
                 sheet,
-                min_row=min_row + row_offset,
-                max_row=max_row + row_offset,
-                min_col=min_col + col_offset,
-                max_col=max_col + col_offset,
+                min_row + row_offset,
+                max_row + row_offset,
+                min_col + col_offset,
+                max_col + col_offset,
             )
             ref = str(new_range)
             if ref in existing:
