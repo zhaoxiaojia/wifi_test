@@ -505,6 +505,7 @@ def _prepare_rvr_dynamic_blocks(
             layout._register_rvr_block_after(temp_key, cloned_block, anchor_key)
             current_block = cloned_block
             current_key = temp_key
+        layout.clear_rvr_block_measurements(current_block)
         sorted_items = sorted(items, key=_scenario_sort_key)
         template_reference = template_block
         for index, definition in enumerate(sorted_items):
@@ -518,6 +519,7 @@ def _prepare_rvr_dynamic_blocks(
                 current_key = block_key
             else:
                 new_block = layout.clone_rvr_block(template_reference, current_block)
+                layout.clear_rvr_block_measurements(new_block)
                 layout._set_rvr_block_title(new_block, title)
                 new_key = title.upper() if title else f"{current_key}_{index}"
                 layout._register_rvr_block_after(new_key, new_block, current_key)
@@ -580,6 +582,7 @@ def _prepare_rvo_dynamic_blocks(
             layout._register_rvo_block_after(temp_key, cloned_block, anchor_key)
             current_block = cloned_block
             current_key = temp_key
+        layout.clear_rvo_block_measurements(current_block)
         sorted_items = sorted(items, key=_scenario_sort_key)
         template_reference = template_block
         for index, definition in enumerate(sorted_items):
@@ -593,6 +596,7 @@ def _prepare_rvo_dynamic_blocks(
                 current_key = block_key
             else:
                 new_block = layout.clone_rvo_block(template_reference, current_block)
+                layout.clear_rvo_block_measurements(new_block)
                 layout._set_rvo_block_title(new_block, title)
                 new_key = title.upper() if title else f"{current_key}_{index}"
                 layout._register_rvo_block_after(new_key, new_block, current_key)
@@ -1077,6 +1081,12 @@ class _TemplateLayout:
         for column in columns:
             block.sheet.cell(row=row_index, column=column).value = None
 
+    def clear_rvr_block_measurements(self, block: _RvrBlock) -> None:
+        if not block:
+            return
+        for row_index in set(block.rows_by_db.values()):
+            self._clear_rvr_measurements(block, row_index)
+
     def _insert_rvr_row(self, block: _RvrBlock, db_key: str) -> int:
         try:
             target_value = float(db_key)
@@ -1223,6 +1233,16 @@ class _TemplateLayout:
     def _clear_rvo_row(self, block: _RvoBlock, dir_block: _RvoDirectionBlock, row_index: int) -> None:
         for column in dir_block.angle_columns.values():
             block.sheet.cell(row=row_index, column=column).value = None
+
+    def clear_rvo_block_measurements(self, block: _RvoBlock) -> None:
+        if not block:
+            return
+        for dir_block in block.directions.values():
+            rows = {
+                row_index for channel_rows in dir_block.rows_by_channel.values() for row_index in channel_rows.values()
+            }
+            for row_index in rows:
+                self._clear_rvo_row(block, dir_block, row_index)
 
     def _insert_rvo_row(
         self,
