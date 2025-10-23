@@ -474,6 +474,16 @@ def _resolve_template_name(
     return (None, False)
 
 
+def _log_template_clone(
+    section: str, template_label: str, scenario_title: str, forced: bool
+) -> None:
+    message = (
+        "%s 模板 %s 因缺少模板映射被克隆用于场景：%s"
+        if forced
+        else "%s 模板 %s 克隆用于额外场景：%s"
+    )
+    _LOGGER.info(message, section, template_label, scenario_title)
+
 def _prepare_rvr_dynamic_blocks(
     layout: _TemplateLayout, df: pd.DataFrame
 ) -> dict[str, _RvrBlock]:
@@ -491,6 +501,7 @@ def _prepare_rvr_dynamic_blocks(
     template_usage: defaultdict[str, int] = defaultdict(int)
     template_last_key: dict[str, str] = {}
     for combo, items in grouped.items():
+        force_clone = False
         template_name, is_direct_match = _resolve_template_name(
             combo,
             _RVR_SCENARIO_MAPPING,
@@ -501,6 +512,7 @@ def _prepare_rvr_dynamic_blocks(
         )
         if not template_name:
             continue
+        force_clone = not is_direct_match
         base_key = template_name.upper()
         template_block = base_blocks.get(base_key)
         if template_block is None:
@@ -531,7 +543,6 @@ def _prepare_rvr_dynamic_blocks(
         current_block: _RvrBlock
         current_key: str
         template_label = original_titles.get(base_key, template_name)
-        force_clone = not is_direct_match
         reuse_original = not force_clone and usage_count == 0
         if reuse_original:
             current_block = template_block
@@ -545,15 +556,11 @@ def _prepare_rvr_dynamic_blocks(
             cloned_block = layout.clone_rvr_block(template_block, anchor_block)
             temp_key = f"{base_key}__DUP_{usage_count}"
             layout._register_rvr_block_after(temp_key, cloned_block, anchor_key)
-            message = (
-                "RVR 模板 %s 因缺少模板映射被克隆用于场景：%s"
-                if force_clone
-                else "RVR 模板 %s 克隆用于额外场景：%s"
-            )
-            _LOGGER.info(
-                message,
+            _log_template_clone(
+                "RVR",
                 template_label or template_name,
                 sorted_items[0].title() or template_name,
+                force_clone,
             )
             current_block = cloned_block
             current_key = temp_key
@@ -576,15 +583,11 @@ def _prepare_rvr_dynamic_blocks(
                 new_key = title.upper() if title else f"{current_key}_{index}"
                 layout._register_rvr_block_after(new_key, new_block, current_key)
                 template_label = original_titles.get(base_key, template_name)
-                message = (
-                    "RVR 模板 %s 因缺少模板映射被克隆用于场景：%s"
-                    if force_clone
-                    else "RVR 模板 %s 克隆用于额外场景：%s"
-                )
-                _LOGGER.info(
-                    message,
+                _log_template_clone(
+                    "RVR",
                     template_label or template_name,
                     title,
+                    force_clone,
                 )
                 new_block.identifier = definition.identifier
                 definition.assign_block("RVR", new_key, new_block)
@@ -614,6 +617,7 @@ def _prepare_rvo_dynamic_blocks(
     template_usage: defaultdict[str, int] = defaultdict(int)
     template_last_key: dict[str, str] = {}
     for combo, items in grouped.items():
+        force_clone = False
         template_name, is_direct_match = _resolve_template_name(
             combo,
             _RVO_SCENARIO_MAPPING,
@@ -624,6 +628,7 @@ def _prepare_rvo_dynamic_blocks(
         )
         if not template_name:
             continue
+        force_clone = not is_direct_match
         base_key = template_name.upper()
         template_block = base_blocks.get(base_key)
         if template_block is None:
@@ -654,7 +659,6 @@ def _prepare_rvo_dynamic_blocks(
         current_block: _RvoBlock
         current_key: str
         template_label = original_titles.get(base_key, template_name)
-        force_clone = not is_direct_match
         reuse_original = not force_clone and usage_count == 0
         if reuse_original:
             current_block = template_block
@@ -668,15 +672,11 @@ def _prepare_rvo_dynamic_blocks(
             cloned_block = layout.clone_rvo_block(template_block, anchor_block)
             temp_key = f"{base_key}__DUP_{usage_count}"
             layout._register_rvo_block_after(temp_key, cloned_block, anchor_key)
-            message = (
-                "RVO 模板 %s 因缺少模板映射被克隆用于场景：%s"
-                if force_clone
-                else "RVO 模板 %s 克隆用于额外场景：%s"
-            )
-            _LOGGER.info(
-                message,
+            _log_template_clone(
+                "RVO",
                 template_label or template_name,
                 sorted_items[0].title() or template_name,
+                force_clone,
             )
             current_block = cloned_block
             current_key = temp_key
@@ -698,15 +698,11 @@ def _prepare_rvo_dynamic_blocks(
                 layout._set_rvo_block_title(new_block, title)
                 new_key = title.upper() if title else f"{current_key}_{index}"
                 layout._register_rvo_block_after(new_key, new_block, current_key)
-                message = (
-                    "RVO 模板 %s 因缺少模板映射被克隆用于场景：%s"
-                    if force_clone
-                    else "RVO 模板 %s 克隆用于额外场景：%s"
-                )
-                _LOGGER.info(
-                    message,
+                _log_template_clone(
+                    "RVO",
                     template_label or template_name,
                     title,
+                    force_clone,
                 )
                 new_block.identifier = definition.identifier
                 definition.assign_block("RVO", new_key, new_block)
@@ -961,8 +957,20 @@ class _TemplateLayout:
             except TypeError:
                 pass
         source_dimension = sheet.row_dimensions.get(source_row)
-        if source_dimension and source_dimension.height is not None:
-            sheet.row_dimensions[target_row].height = source_dimension.height
+        if source_dimension:
+            target_dimension = sheet.row_dimensions[target_row]
+            if source_dimension.height is not None:
+                target_dimension.height = source_dimension.height
+                try:
+                    target_dimension.customHeight = True
+                except AttributeError:
+                    pass
+            hidden = getattr(source_dimension, "hidden", None)
+            if hidden is not None:
+                target_dimension.hidden = hidden
+            outline_level = getattr(source_dimension, "outlineLevel", None)
+            if outline_level not in (None, 0):
+                target_dimension.outlineLevel = outline_level
 
     @staticmethod
     def _capture_merged_ranges(
