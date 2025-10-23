@@ -531,7 +531,8 @@ def _prepare_rvr_dynamic_blocks(
         current_block: _RvrBlock
         current_key: str
         template_label = original_titles.get(base_key, template_name)
-        reuse_original = is_direct_match and usage_count == 0
+        force_clone = not is_direct_match
+        reuse_original = not force_clone and usage_count == 0
         if reuse_original:
             current_block = template_block
             current_key = base_key
@@ -544,8 +545,13 @@ def _prepare_rvr_dynamic_blocks(
             cloned_block = layout.clone_rvr_block(template_block, anchor_block)
             temp_key = f"{base_key}__DUP_{usage_count}"
             layout._register_rvr_block_after(temp_key, cloned_block, anchor_key)
+            message = (
+                "RVR 模板 %s 因缺少模板映射被克隆用于场景：%s"
+                if force_clone
+                else "RVR 模板 %s 克隆用于额外场景：%s"
+            )
             _LOGGER.info(
-                "RVR 模板 %s 克隆用于场景：%s",
+                message,
                 template_label or template_name,
                 sorted_items[0].title() or template_name,
             )
@@ -570,8 +576,13 @@ def _prepare_rvr_dynamic_blocks(
                 new_key = title.upper() if title else f"{current_key}_{index}"
                 layout._register_rvr_block_after(new_key, new_block, current_key)
                 template_label = original_titles.get(base_key, template_name)
+                message = (
+                    "RVR 模板 %s 因缺少模板映射被克隆用于场景：%s"
+                    if force_clone
+                    else "RVR 模板 %s 克隆用于额外场景：%s"
+                )
                 _LOGGER.info(
-                    "RVR 模板 %s 克隆用于场景：%s",
+                    message,
                     template_label or template_name,
                     title,
                 )
@@ -643,7 +654,8 @@ def _prepare_rvo_dynamic_blocks(
         current_block: _RvoBlock
         current_key: str
         template_label = original_titles.get(base_key, template_name)
-        reuse_original = is_direct_match and usage_count == 0
+        force_clone = not is_direct_match
+        reuse_original = not force_clone and usage_count == 0
         if reuse_original:
             current_block = template_block
             current_key = base_key
@@ -656,8 +668,13 @@ def _prepare_rvo_dynamic_blocks(
             cloned_block = layout.clone_rvo_block(template_block, anchor_block)
             temp_key = f"{base_key}__DUP_{usage_count}"
             layout._register_rvo_block_after(temp_key, cloned_block, anchor_key)
+            message = (
+                "RVO 模板 %s 因缺少模板映射被克隆用于场景：%s"
+                if force_clone
+                else "RVO 模板 %s 克隆用于额外场景：%s"
+            )
             _LOGGER.info(
-                "RVO 模板 %s 克隆用于场景：%s",
+                message,
                 template_label or template_name,
                 sorted_items[0].title() or template_name,
             )
@@ -681,8 +698,13 @@ def _prepare_rvo_dynamic_blocks(
                 layout._set_rvo_block_title(new_block, title)
                 new_key = title.upper() if title else f"{current_key}_{index}"
                 layout._register_rvo_block_after(new_key, new_block, current_key)
+                message = (
+                    "RVO 模板 %s 因缺少模板映射被克隆用于场景：%s"
+                    if force_clone
+                    else "RVO 模板 %s 克隆用于额外场景：%s"
+                )
                 _LOGGER.info(
-                    "RVO 模板 %s 克隆用于场景：%s",
+                    message,
                     template_label or template_name,
                     title,
                 )
