@@ -10,6 +10,7 @@ from typing import Any, Dict, Iterable, Mapping
 
 import pandas as pd
 from openpyxl import load_workbook
+from openpyxl.worksheet.merge import MergedCellRange
 from openpyxl.worksheet.worksheet import Worksheet
 
 from src.util.constants import BANDWIDTH_ORDER_MAP, FREQ_BAND_ORDER_MAP, STANDARD_ORDER_MAP
@@ -208,7 +209,6 @@ class _ScenarioDefinition:
     bandwidth_display: str
     interface: str
     template_name: str | None = None
-    assignments: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     def title(self) -> str:
         parts = [
@@ -399,7 +399,7 @@ def _resolve_template_name(
     if template_name:
         block_key = template_name.upper()
         if block_key in blocks:
-            return template_name, False
+            return template_name, True
     standard_key, freq_key, bandwidth_key = combo
     order_lookup = {key: index for index, key in enumerate(block_order)}
     best_name: str | None = None
@@ -449,7 +449,7 @@ def _resolve_template_name(
             best_source[1] or "<empty>",
             best_source[2] or "<empty>",
         )
-        return best_name, True
+        return best_name, False
     for key in block_order:
         if key not in blocks:
             continue
@@ -463,7 +463,7 @@ def _resolve_template_name(
                 bandwidth_key or "<empty>",
                 fallback_name,
             )
-            return fallback_name, True
+            return fallback_name, False
     _LOGGER.error(
         "%s 组合 standard=%s freq=%s bandwidth=%s 无可用模板，跳过写入",
         section,
@@ -471,7 +471,7 @@ def _resolve_template_name(
         freq_key or "<empty>",
         bandwidth_key or "<empty>",
     )
-    return None, False
+    return (None, False)
 
 
 def _prepare_rvr_dynamic_blocks(
@@ -491,7 +491,7 @@ def _prepare_rvr_dynamic_blocks(
     template_usage: defaultdict[str, int] = defaultdict(int)
     template_last_key: dict[str, str] = {}
     for combo, items in grouped.items():
-        template_name, force_clone = _resolve_template_name(
+        template_name, is_direct_match = _resolve_template_name(
             combo,
             _RVR_SCENARIO_MAPPING,
             base_blocks,
@@ -525,12 +525,33 @@ def _prepare_rvr_dynamic_blocks(
             current_key = base_key
         layout.clear_rvr_block_measurements(current_block)
         sorted_items = sorted(items, key=_scenario_sort_key)
-        if force_clone and sorted_items:
+        if not sorted_items:
+            continue
+        usage_count = template_usage.get(base_key, 0)
+        current_block: _RvrBlock
+        current_key: str
+        template_label = original_titles.get(base_key, template_name)
+        reuse_original = is_direct_match and usage_count == 0
+        if reuse_original:
+            current_block = template_block
+            current_key = base_key
+        else:
+            anchor_key = template_last_key.get(base_key)
+            anchor_block = layout.rvr_blocks.get(anchor_key) if anchor_key else None
+            if anchor_block is None:
+                anchor_block = template_block
+                anchor_key = anchor_block.scenario.upper()
+            cloned_block = layout.clone_rvr_block(template_block, anchor_block)
+            temp_key = f"{base_key}__DUP_{usage_count}"
+            layout._register_rvr_block_after(temp_key, cloned_block, anchor_key)
             _LOGGER.info(
                 "RVR 模板 %s 克隆用于场景：%s",
-                template_name,
-                ", ".join(defn.title() or template_block.scenario for defn in sorted_items),
+                template_label or template_name,
+                sorted_items[0].title() or template_name,
             )
+            current_block = cloned_block
+            current_key = temp_key
+        layout.clear_rvr_block_measurements(current_block)
         template_reference = template_block
         for index, definition in enumerate(sorted_items):
             title = definition.title() or template_block.scenario
@@ -548,6 +569,12 @@ def _prepare_rvr_dynamic_blocks(
                 layout._set_rvr_block_title(new_block, title)
                 new_key = title.upper() if title else f"{current_key}_{index}"
                 layout._register_rvr_block_after(new_key, new_block, current_key)
+                template_label = original_titles.get(base_key, template_name)
+                _LOGGER.info(
+                    "RVR 模板 %s 克隆用于场景：%s",
+                    template_label or template_name,
+                    title,
+                )
                 new_block.identifier = definition.identifier
                 definition.assign_block("RVR", new_key, new_block)
                 scenario_blocks[definition.identifier] = new_block
@@ -576,7 +603,7 @@ def _prepare_rvo_dynamic_blocks(
     template_usage: defaultdict[str, int] = defaultdict(int)
     template_last_key: dict[str, str] = {}
     for combo, items in grouped.items():
-        template_name, force_clone = _resolve_template_name(
+        template_name, is_direct_match = _resolve_template_name(
             combo,
             _RVO_SCENARIO_MAPPING,
             base_blocks,
@@ -610,12 +637,33 @@ def _prepare_rvo_dynamic_blocks(
             current_key = base_key
         layout.clear_rvo_block_measurements(current_block)
         sorted_items = sorted(items, key=_scenario_sort_key)
-        if force_clone and sorted_items:
+        if not sorted_items:
+            continue
+        usage_count = template_usage.get(base_key, 0)
+        current_block: _RvoBlock
+        current_key: str
+        template_label = original_titles.get(base_key, template_name)
+        reuse_original = is_direct_match and usage_count == 0
+        if reuse_original:
+            current_block = template_block
+            current_key = base_key
+        else:
+            anchor_key = template_last_key.get(base_key)
+            anchor_block = layout.rvo_blocks.get(anchor_key) if anchor_key else None
+            if anchor_block is None:
+                anchor_block = template_block
+                anchor_key = anchor_block.scenario.upper()
+            cloned_block = layout.clone_rvo_block(template_block, anchor_block)
+            temp_key = f"{base_key}__DUP_{usage_count}"
+            layout._register_rvo_block_after(temp_key, cloned_block, anchor_key)
             _LOGGER.info(
                 "RVO 模板 %s 克隆用于场景：%s",
-                template_name,
-                ", ".join(defn.title() or template_block.scenario for defn in sorted_items),
+                template_label or template_name,
+                sorted_items[0].title() or template_name,
             )
+            current_block = cloned_block
+            current_key = temp_key
+        layout.clear_rvo_block_measurements(current_block)
         template_reference = template_block
         for index, definition in enumerate(sorted_items):
             title = definition.title() or template_block.scenario
@@ -633,6 +681,11 @@ def _prepare_rvo_dynamic_blocks(
                 layout._set_rvo_block_title(new_block, title)
                 new_key = title.upper() if title else f"{current_key}_{index}"
                 layout._register_rvo_block_after(new_key, new_block, current_key)
+                _LOGGER.info(
+                    "RVO 模板 %s 克隆用于场景：%s",
+                    template_label or template_name,
+                    title,
+                )
                 new_block.identifier = definition.identifier
                 definition.assign_block("RVO", new_key, new_block)
                 scenario_blocks[definition.identifier] = new_block
@@ -885,6 +938,53 @@ class _TemplateLayout:
                 target.border = source.border
             except TypeError:
                 pass
+        source_dimension = sheet.row_dimensions.get(source_row)
+        if source_dimension and source_dimension.height is not None:
+            sheet.row_dimensions[target_row].height = source_dimension.height
+
+    @staticmethod
+    def _capture_merged_ranges(
+        sheet: Worksheet, start_row: int, end_row: int
+    ) -> list[tuple[int, int, int, int]]:
+        captured: list[tuple[int, int, int, int]] = []
+        for merged_range in sheet.merged_cells.ranges:
+            if (
+                merged_range.min_row >= start_row
+                and merged_range.max_row <= end_row
+            ):
+                captured.append(
+                    (
+                        merged_range.min_row,
+                        merged_range.max_row,
+                        merged_range.min_col,
+                        merged_range.max_col,
+                    )
+                )
+        return captured
+
+    @staticmethod
+    def _apply_merged_ranges(
+        sheet: Worksheet,
+        ranges: Iterable[tuple[int, int, int, int]],
+        row_offset: int,
+        col_offset: int = 0,
+    ) -> None:
+        if not ranges:
+            return
+        existing = {str(rng) for rng in sheet.merged_cells.ranges}
+        for min_row, max_row, min_col, max_col in ranges:
+            new_range = MergedCellRange(
+                sheet,
+                min_row=min_row + row_offset,
+                max_row=max_row + row_offset,
+                min_col=min_col + col_offset,
+                max_col=max_col + col_offset,
+            )
+            ref = str(new_range)
+            if ref in existing:
+                continue
+            sheet.merged_cells.add(new_range)
+            existing.add(ref)
 
     @staticmethod
     def _copy_column_styles(
@@ -950,6 +1050,9 @@ class _TemplateLayout:
         sheet = template_block.sheet
         row_count = template_block.end_row - template_block.start_row + 1
         insert_position = anchor_block.end_row + 1
+        merged_ranges = self._capture_merged_ranges(
+            sheet, template_block.start_row, template_block.end_row
+        )
         sheet.insert_rows(insert_position, amount=row_count)
         self._adjust_rvr_mappings(insert_position, row_count)
         for offset in range(row_count):
@@ -957,6 +1060,7 @@ class _TemplateLayout:
             target_row = insert_position + offset
             self._copy_row(sheet, source_row, target_row)
         offset = insert_position - template_block.start_row
+        self._apply_merged_ranges(sheet, merged_ranges, offset)
         new_rows_by_db = {key: row + offset for key, row in template_block.rows_by_db.items()}
         new_block = _RvrBlock(
             sheet=sheet,
@@ -1000,6 +1104,9 @@ class _TemplateLayout:
         sheet = template_block.sheet
         row_count = template_block.end_row - template_block.start_row + 1
         insert_position = anchor_block.end_row + 1
+        merged_ranges = self._capture_merged_ranges(
+            sheet, template_block.start_row, template_block.end_row
+        )
         sheet.insert_rows(insert_position, amount=row_count)
         self._adjust_rvo_mappings(insert_position, row_count)
         for offset in range(row_count):
@@ -1007,6 +1114,7 @@ class _TemplateLayout:
             target_row = insert_position + offset
             self._copy_row(sheet, source_row, target_row)
         offset = insert_position - template_block.start_row
+        self._apply_merged_ranges(sheet, merged_ranges, offset)
         new_directions: Dict[str, _RvoDirectionBlock] = {}
         for dir_name, dir_block in template_block.directions.items():
             updated_rows_by_channel = {
