@@ -87,6 +87,26 @@ def _build_rvr_dataframe() -> pd.DataFrame:
     )
 
 
+def _build_rvr_fallback_dataframe() -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {
+                "Scenario_Group_Key": "SCENARIO|BAND=5G|MODE=11AX|BANDWIDTH=160MHZ|INTERFACE=USB",
+                "__freq_key__": "5g",
+                "__freq_band_display__": "5G",
+                "__standard_key__": "11ax",
+                "__standard_display__": "11AX",
+                "__bandwidth_key__": "160mhz",
+                "__bandwidth_display__": "160MHz",
+                "__direction_key__": "RX",
+                "__channel_key__": "36",
+                "__db_key__": "0",
+                "__throughput_value__": 140.0,
+            }
+        ]
+    )
+
+
 def _build_rvo_dataframe() -> pd.DataFrame:
     return pd.DataFrame(
         [
@@ -124,6 +144,28 @@ def _build_rvo_dataframe() -> pd.DataFrame:
     )
 
 
+def _build_rvo_fallback_dataframe() -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {
+                "Scenario_Group_Key": "SCENARIO|BAND=5G|MODE=11AX|BANDWIDTH=160MHZ|INTERFACE=USB",
+                "__freq_key__": "5g",
+                "__freq_band_display__": "5G",
+                "__standard_key__": "11ax",
+                "__standard_display__": "11AX",
+                "__bandwidth_key__": "160mhz",
+                "__bandwidth_display__": "160MHz",
+                "__direction_key__": "RX",
+                "__channel_key__": "36",
+                "__db_key__": "0",
+                "__angle_key__": "0",
+                "__angle_display__": "0",
+                "__throughput_value__": 70.0,
+            }
+        ]
+    )
+
+
 def test_populate_rvr_dynamic_creates_additional_blocks_and_titles():
     wb = _build_minimal_workbook()
     layout = _TemplateLayout(wb)
@@ -146,6 +188,31 @@ def test_populate_rvr_dynamic_creates_additional_blocks_and_titles():
     sheet = layout.rvr_sheet
     assert sheet.cell(row=usb_row, column=usb_column).value == 120.5
     assert sheet.cell(row=pcie_row, column=pcie_column).value == 98.2
+
+
+def test_populate_rvr_dynamic_clones_template_for_unmapped_bandwidth():
+    wb = _build_minimal_workbook()
+    layout = _TemplateLayout(wb)
+    df = _build_rvr_fallback_dataframe()
+
+    _populate_rvr(layout, df)
+
+    blocks = {block.scenario: block for block in layout.rvr_blocks.values()}
+    assert "11AX HE80" in blocks
+    assert "5G 11AX 160MHz USB" in blocks
+
+    template_block = blocks["11AX HE80"]
+    cloned_block = blocks["5G 11AX 160MHz USB"]
+
+    assert template_block is not cloned_block
+    assert cloned_block.identifier == "SCENARIO|BAND=5G|MODE=11AX|BANDWIDTH=160MHZ|INTERFACE=USB"
+
+    usb_row = cloned_block.rows_by_db["0"]
+    usb_column = cloned_block.rx_columns["36"]
+
+    sheet = layout.rvr_sheet
+    assert sheet.cell(row=usb_row, column=usb_column).value == 140.0
+    assert template_block.scenario == "11AX HE80"
 
 
 def test_populate_rvo_dynamic_creates_additional_blocks_and_titles():
@@ -173,3 +240,29 @@ def test_populate_rvo_dynamic_creates_additional_blocks_and_titles():
     sheet = layout.rvo_sheet
     assert sheet.cell(row=usb_row, column=usb_column).value == 50.0
     assert sheet.cell(row=pcie_row, column=pcie_column).value == 80.0
+
+
+def test_populate_rvo_dynamic_clones_template_for_unmapped_bandwidth():
+    wb = _build_minimal_workbook()
+    layout = _TemplateLayout(wb)
+    df = _build_rvo_fallback_dataframe()
+
+    _populate_rvo(layout, df)
+
+    blocks = {block.scenario: block for block in layout.rvo_blocks.values()}
+    assert "11AX HE80" in blocks
+    assert "5G 11AX 160MHz USB" in blocks
+
+    template_block = blocks["11AX HE80"]
+    cloned_block = blocks["5G 11AX 160MHz USB"]
+
+    assert template_block is not cloned_block
+    assert cloned_block.identifier == "SCENARIO|BAND=5G|MODE=11AX|BANDWIDTH=160MHZ|INTERFACE=USB"
+
+    rx_block = cloned_block.directions["RX"]
+    usb_row = rx_block.rows_by_channel["36"]["0"]
+    usb_column = layout.ensure_rvo_angle(cloned_block, rx_block, "0")
+
+    sheet = layout.rvo_sheet
+    assert sheet.cell(row=usb_row, column=usb_column).value == 70.0
+    assert template_block.scenario == "11AX HE80"

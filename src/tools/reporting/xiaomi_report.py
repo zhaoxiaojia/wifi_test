@@ -6,7 +6,7 @@ import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Iterable, Mapping
+from typing import Any, Dict, Iterable, Mapping
 
 import pandas as pd
 from openpyxl import load_workbook
@@ -222,6 +222,23 @@ class _ScenarioDefinition:
             if part
         ]
         return " ".join(parts)
+
+    def assign_block(
+        self,
+        section: str,
+        block_key: str,
+        block: _RvrBlock | _RvoBlock | None,
+    ) -> None:
+        if not block:
+            return
+        sheet_name = getattr(getattr(block, "sheet", None), "title", "")
+        self.assignments[section.upper()] = {
+            "block_key": block_key,
+            "sheet_name": sheet_name,
+            "start_row": getattr(block, "start_row", None),
+            "end_row": getattr(block, "end_row", None),
+            "block": block,
+        }
 
 
 def _format_interface_label(value: str | None) -> str:
@@ -489,6 +506,24 @@ def _prepare_rvr_dynamic_blocks(
         if template_block is None:
             _LOGGER.warning("Missing RVR template block for %s", template_name)
             continue
+        usage_count = template_usage.get(base_key, 0)
+        current_block: _RvrBlock
+        current_key: str
+        if force_clone or usage_count > 0:
+            anchor_key = template_last_key.get(base_key)
+            anchor_block = layout.rvr_blocks.get(anchor_key) if anchor_key else None
+            if anchor_block is None:
+                anchor_block = template_block
+                anchor_key = anchor_block.scenario.upper()
+            cloned_block = layout.clone_rvr_block(template_block, anchor_block)
+            temp_key = f"{base_key}__DUP_{usage_count}"
+            layout._register_rvr_block_after(temp_key, cloned_block, anchor_key)
+            current_block = cloned_block
+            current_key = temp_key
+        else:
+            current_block = template_block
+            current_key = base_key
+        layout.clear_rvr_block_measurements(current_block)
         sorted_items = sorted(items, key=_scenario_sort_key)
         if not sorted_items:
             continue
@@ -525,6 +560,7 @@ def _prepare_rvr_dynamic_blocks(
                 layout._set_rvr_block_title(current_block, title)
                 layout._rename_rvr_block_key(current_key, block_key, current_block)
                 current_block.identifier = definition.identifier
+                definition.assign_block("RVR", block_key, current_block)
                 scenario_blocks[definition.identifier] = current_block
                 current_key = block_key
             else:
@@ -540,6 +576,7 @@ def _prepare_rvr_dynamic_blocks(
                     title,
                 )
                 new_block.identifier = definition.identifier
+                definition.assign_block("RVR", new_key, new_block)
                 scenario_blocks[definition.identifier] = new_block
                 current_block = new_block
                 current_key = new_key
@@ -581,6 +618,24 @@ def _prepare_rvo_dynamic_blocks(
         if template_block is None:
             _LOGGER.warning("Missing RVO template block for %s", template_name)
             continue
+        usage_count = template_usage.get(base_key, 0)
+        current_block: _RvoBlock
+        current_key: str
+        if force_clone or usage_count > 0:
+            anchor_key = template_last_key.get(base_key)
+            anchor_block = layout.rvo_blocks.get(anchor_key) if anchor_key else None
+            if anchor_block is None:
+                anchor_block = template_block
+                anchor_key = anchor_block.scenario.upper()
+            cloned_block = layout.clone_rvo_block(template_block, anchor_block)
+            temp_key = f"{base_key}__DUP_{usage_count}"
+            layout._register_rvo_block_after(temp_key, cloned_block, anchor_key)
+            current_block = cloned_block
+            current_key = temp_key
+        else:
+            current_block = template_block
+            current_key = base_key
+        layout.clear_rvo_block_measurements(current_block)
         sorted_items = sorted(items, key=_scenario_sort_key)
         if not sorted_items:
             continue
@@ -617,6 +672,7 @@ def _prepare_rvo_dynamic_blocks(
                 layout._set_rvo_block_title(current_block, title)
                 layout._rename_rvo_block_key(current_key, block_key, current_block)
                 current_block.identifier = definition.identifier
+                definition.assign_block("RVO", block_key, current_block)
                 scenario_blocks[definition.identifier] = current_block
                 current_key = block_key
             else:
@@ -631,6 +687,7 @@ def _prepare_rvo_dynamic_blocks(
                     title,
                 )
                 new_block.identifier = definition.identifier
+                definition.assign_block("RVO", new_key, new_block)
                 scenario_blocks[definition.identifier] = new_block
                 current_block = new_block
                 current_key = new_key
