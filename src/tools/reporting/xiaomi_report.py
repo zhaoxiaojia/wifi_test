@@ -6,7 +6,7 @@ import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Iterable, Mapping
+from typing import Any, Dict, Iterable, Mapping
 
 import pandas as pd
 from openpyxl import load_workbook
@@ -208,6 +208,7 @@ class _ScenarioDefinition:
     bandwidth_display: str
     interface: str
     template_name: str | None = None
+    assignments: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     def title(self) -> str:
         parts = [
@@ -221,6 +222,23 @@ class _ScenarioDefinition:
             if part
         ]
         return " ".join(parts)
+
+    def assign_block(
+        self,
+        section: str,
+        block_key: str,
+        block: _RvrBlock | _RvoBlock | None,
+    ) -> None:
+        if not block:
+            return
+        sheet_name = getattr(getattr(block, "sheet", None), "title", "")
+        self.assignments[section.upper()] = {
+            "block_key": block_key,
+            "sheet_name": sheet_name,
+            "start_row": getattr(block, "start_row", None),
+            "end_row": getattr(block, "end_row", None),
+            "block": block,
+        }
 
 
 def _format_interface_label(value: str | None) -> str:
@@ -376,12 +394,12 @@ def _resolve_template_name(
     block_order: Iterable[str],
     original_titles: Mapping[str, str],
     section: str,
-) -> str | None:
+) -> tuple[str | None, bool]:
     template_name = mapping.get(combo)
     if template_name:
         block_key = template_name.upper()
         if block_key in blocks:
-            return template_name
+            return template_name, False
     standard_key, freq_key, bandwidth_key = combo
     order_lookup = {key: index for index, key in enumerate(block_order)}
     best_name: str | None = None
@@ -431,7 +449,7 @@ def _resolve_template_name(
             best_source[1] or "<empty>",
             best_source[2] or "<empty>",
         )
-        return best_name
+        return best_name, True
     for key in block_order:
         if key not in blocks:
             continue
@@ -445,7 +463,7 @@ def _resolve_template_name(
                 bandwidth_key or "<empty>",
                 fallback_name,
             )
-            return fallback_name
+            return fallback_name, True
     _LOGGER.error(
         "%s 组合 standard=%s freq=%s bandwidth=%s 无可用模板，跳过写入",
         section,
@@ -453,7 +471,7 @@ def _resolve_template_name(
         freq_key or "<empty>",
         bandwidth_key or "<empty>",
     )
-    return None
+    return None, False
 
 
 def _prepare_rvr_dynamic_blocks(
@@ -473,7 +491,7 @@ def _prepare_rvr_dynamic_blocks(
     template_usage: defaultdict[str, int] = defaultdict(int)
     template_last_key: dict[str, str] = {}
     for combo, items in grouped.items():
-        template_name = _resolve_template_name(
+        template_name, force_clone = _resolve_template_name(
             combo,
             _RVR_SCENARIO_MAPPING,
             base_blocks,
@@ -491,10 +509,7 @@ def _prepare_rvr_dynamic_blocks(
         usage_count = template_usage.get(base_key, 0)
         current_block: _RvrBlock
         current_key: str
-        if usage_count == 0:
-            current_block = template_block
-            current_key = base_key
-        else:
+        if force_clone or usage_count > 0:
             anchor_key = template_last_key.get(base_key)
             anchor_block = layout.rvr_blocks.get(anchor_key) if anchor_key else None
             if anchor_block is None:
@@ -505,8 +520,17 @@ def _prepare_rvr_dynamic_blocks(
             layout._register_rvr_block_after(temp_key, cloned_block, anchor_key)
             current_block = cloned_block
             current_key = temp_key
+        else:
+            current_block = template_block
+            current_key = base_key
         layout.clear_rvr_block_measurements(current_block)
         sorted_items = sorted(items, key=_scenario_sort_key)
+        if force_clone and sorted_items:
+            _LOGGER.info(
+                "RVR 模板 %s 克隆用于场景：%s",
+                template_name,
+                ", ".join(defn.title() or template_block.scenario for defn in sorted_items),
+            )
         template_reference = template_block
         for index, definition in enumerate(sorted_items):
             title = definition.title() or template_block.scenario
@@ -515,6 +539,7 @@ def _prepare_rvr_dynamic_blocks(
                 layout._set_rvr_block_title(current_block, title)
                 layout._rename_rvr_block_key(current_key, block_key, current_block)
                 current_block.identifier = definition.identifier
+                definition.assign_block("RVR", block_key, current_block)
                 scenario_blocks[definition.identifier] = current_block
                 current_key = block_key
             else:
@@ -524,6 +549,7 @@ def _prepare_rvr_dynamic_blocks(
                 new_key = title.upper() if title else f"{current_key}_{index}"
                 layout._register_rvr_block_after(new_key, new_block, current_key)
                 new_block.identifier = definition.identifier
+                definition.assign_block("RVR", new_key, new_block)
                 scenario_blocks[definition.identifier] = new_block
                 current_block = new_block
                 current_key = new_key
@@ -550,7 +576,7 @@ def _prepare_rvo_dynamic_blocks(
     template_usage: defaultdict[str, int] = defaultdict(int)
     template_last_key: dict[str, str] = {}
     for combo, items in grouped.items():
-        template_name = _resolve_template_name(
+        template_name, force_clone = _resolve_template_name(
             combo,
             _RVO_SCENARIO_MAPPING,
             base_blocks,
@@ -568,10 +594,7 @@ def _prepare_rvo_dynamic_blocks(
         usage_count = template_usage.get(base_key, 0)
         current_block: _RvoBlock
         current_key: str
-        if usage_count == 0:
-            current_block = template_block
-            current_key = base_key
-        else:
+        if force_clone or usage_count > 0:
             anchor_key = template_last_key.get(base_key)
             anchor_block = layout.rvo_blocks.get(anchor_key) if anchor_key else None
             if anchor_block is None:
@@ -582,8 +605,17 @@ def _prepare_rvo_dynamic_blocks(
             layout._register_rvo_block_after(temp_key, cloned_block, anchor_key)
             current_block = cloned_block
             current_key = temp_key
+        else:
+            current_block = template_block
+            current_key = base_key
         layout.clear_rvo_block_measurements(current_block)
         sorted_items = sorted(items, key=_scenario_sort_key)
+        if force_clone and sorted_items:
+            _LOGGER.info(
+                "RVO 模板 %s 克隆用于场景：%s",
+                template_name,
+                ", ".join(defn.title() or template_block.scenario for defn in sorted_items),
+            )
         template_reference = template_block
         for index, definition in enumerate(sorted_items):
             title = definition.title() or template_block.scenario
@@ -592,6 +624,7 @@ def _prepare_rvo_dynamic_blocks(
                 layout._set_rvo_block_title(current_block, title)
                 layout._rename_rvo_block_key(current_key, block_key, current_block)
                 current_block.identifier = definition.identifier
+                definition.assign_block("RVO", block_key, current_block)
                 scenario_blocks[definition.identifier] = current_block
                 current_key = block_key
             else:
@@ -601,6 +634,7 @@ def _prepare_rvo_dynamic_blocks(
                 new_key = title.upper() if title else f"{current_key}_{index}"
                 layout._register_rvo_block_after(new_key, new_block, current_key)
                 new_block.identifier = definition.identifier
+                definition.assign_block("RVO", new_key, new_block)
                 scenario_blocks[definition.identifier] = new_block
                 current_block = new_block
                 current_key = new_key
