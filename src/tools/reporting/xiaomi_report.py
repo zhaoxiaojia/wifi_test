@@ -10,7 +10,7 @@ from typing import Any, Dict, Iterable, Mapping
 
 import pandas as pd
 from openpyxl import load_workbook
-from openpyxl.worksheet.merge import MergedCellRange
+from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
 
 from src.util.constants import BANDWIDTH_ORDER_MAP, FREQ_BAND_ORDER_MAP, STANDARD_ORDER_MAP
@@ -1003,17 +1003,22 @@ class _TemplateLayout:
             return
         existing = {str(rng) for rng in sheet.merged_cells.ranges}
         for min_row, max_row, min_col, max_col in ranges:
-            new_range = MergedCellRange(
-                sheet,
-                min_row + row_offset,
-                max_row + row_offset,
-                min_col + col_offset,
-                max_col + col_offset,
+            start_row = min_row + row_offset
+            end_row = max_row + row_offset
+            start_col = min_col + col_offset
+            end_col = max_col + col_offset
+            ref = (
+                f"{get_column_letter(start_col)}{start_row}:"
+                f"{get_column_letter(end_col)}{end_row}"
             )
-            ref = str(new_range)
             if ref in existing:
                 continue
-            sheet.merged_cells.add(new_range)
+            sheet.merge_cells(
+                start_row=start_row,
+                end_row=end_row,
+                start_column=start_col,
+                end_column=end_col,
+            )
             existing.add(ref)
 
     @staticmethod
