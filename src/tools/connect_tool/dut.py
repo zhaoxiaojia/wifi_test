@@ -68,6 +68,14 @@ class dut():
         return bool(re.search(r'(^|\s)-u(\s|$)', cmd))
 
     @staticmethod
+    def _calculate_iperf_wait_time(test_time: int) -> int:
+        """根据 iperf 预计运行时长计算合理的等待时间缓冲。"""
+
+        safe_time = max(test_time, 1)
+        buffer = max(15, min(120, safe_time // 2))
+        return safe_time + buffer
+
+    @staticmethod
     def _convert_bandwidth_to_mbps(value: float, unit: str) -> Optional[float]:
         unit = unit.lower()
         if 'bits/sec' not in unit:
@@ -168,7 +176,7 @@ class dut():
         self.iperf_server_cmd = iperf_cfg.get('server_cmd', 'iperf -s -w 2m -i 1')
         self.iperf_client_cmd = iperf_cfg.get('client_cmd', 'iperf -c {ip} -w 2m -i 1 -t 30 -P 5')
         self.iperf_test_time, self.pair = self._parse_iperf_params(self.iperf_client_cmd)
-        self.iperf_wait_time = self.iperf_test_time + 5
+        self.iperf_wait_time = self._calculate_iperf_wait_time(self.iperf_test_time)
         self.repest_times = int(rvr_cfg.get('repeat', 0))
         self._dut_ip = ''
         self._pc_ip = ''
@@ -241,17 +249,17 @@ class dut():
         return ','.join(normalize(value) for value in values)
 
     def _build_throughput_result_values(
-        self,
-        router_info,
-        protocol: str,
-        direction: str,
-        db_set: str,
-        corner: str,
-        mcs_value: Optional[str],
-        throughput_values: Sequence[Optional[str]],
-        expect_rate,
-        latency_value,
-        packet_loss_value,
+            self,
+            router_info,
+            protocol: str,
+            direction: str,
+            db_set: str,
+            corner: str,
+            mcs_value: Optional[str],
+            throughput_values: Sequence[Optional[str]],
+            expect_rate,
+            latency_value,
+            packet_loss_value,
     ):
         def _first_token(text: str) -> str:
             return text.split()[0] if text else text

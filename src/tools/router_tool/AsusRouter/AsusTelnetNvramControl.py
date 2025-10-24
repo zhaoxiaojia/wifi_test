@@ -207,7 +207,7 @@ class AsusTelnetNvramControl(AsusBaseControl):
 
     def set_2g_wireless(self, mode: str) -> None:
         cmd = {
-            'auto': 'nvram set wl0_11ax=0;nvram set wl0_nmode_x=0;',
+            'auto': 'nvram set wl0_11ax=1;nvram set wl0_nmode_x=0;',
             '11n': 'nvram set wl0_11ax=0;nvram set wl0_nmode_x=1;',
             '11g': 'nvram set wl0_11ax=0;nvram set wl0_nmode_x=5;',
             '11b': 'nvram set wl0_11ax=0;nvram set wl0_nmode_x=6;',
@@ -220,7 +220,7 @@ class AsusTelnetNvramControl(AsusBaseControl):
 
     def set_5g_wireless(self, mode: str) -> None:
         cmd = {
-            'auto': 'nvram set wl1_11ax=0;nvram set wl1_nmode_x=0;',
+            'auto': 'nvram set wl1_11ax=1;nvram set wl1_nmode_x=0;',
             '11a': 'nvram set wl1_11ax=0;nvram set wl1_nmode_x=7;',
             '11n': 'nvram set wl1_11ax=0;nvram set wl1_nmode_x=1;',
             '11ac': 'nvram set wl1_11ax=0;nvram set wl1_nmode_x=3;',
