@@ -400,20 +400,26 @@ class dut():
                 encoding=encoding,
                 errors='ignore',
             )
+
+            def _collect_output(stdout_text: str | None, stderr_text: str | None) -> None:
+                if stderr_text:
+                    logging.warning(stderr_text.strip())
+                if stdout_text:
+                    logging.debug(stdout_text.strip())
+                    _extend_logs(self.iperf_client_log_list, stdout_text.splitlines())
+
             try:
                 stdout, stderr = process.communicate(timeout=self.iperf_wait_time)
-                if stderr:
-                    logging.warning(stderr.strip())
-                if stdout:
-                    logging.debug(stdout.strip())
-                    _extend_logs(self.iperf_client_log_list, stdout.splitlines())
+                _collect_output(stdout, stderr)
             except subprocess.TimeoutExpired:
                 logging.warning(f'{desc} timeout after {self.iperf_wait_time}s')
                 process.kill()
                 try:
-                    process.communicate(timeout=2)
+                    stdout, stderr = process.communicate(timeout=5)
                 except Exception:
-                    ...
+                    logging.debug('Failed to collect iperf output after timeout', exc_info=True)
+                else:
+                    _collect_output(stdout, stderr)
 
         def _build_cmd_list():
             if use_adb and pytest.connect_type != 'telnet':
@@ -464,66 +470,90 @@ class dut():
             else:
                 _run_blocking(_build_cmd_list(), 'client pc command:')
 
-    def _parse_iperf_log(self, lines):
+    def _parse_iperf_log(self, server_lines: list[str], client_lines: list[str]):
         """解析 iperf 日志并计算吞吐量."""
-        result_list: list[float] = []
-        udp_metrics: Optional[IperfMetrics] = None
-        interval_pattern = re.compile(r'\d+\.\d*\s*-\s*\d+\.\d*\s*sec', re.IGNORECASE)
 
-        for raw_line in lines:
-            line = dut._sanitize_iperf_line(raw_line)
-            if not line:
-                continue
-            if '[SUM]' not in line and self.pair != 1:
+        def _analyse_lines(lines: list[str]) -> tuple[Optional[float], Optional[IperfMetrics], int]:
+            interval_pattern = re.compile(r'\d+\.\d*\s*-\s*\d+\.\d*\s*sec', re.IGNORECASE)
+            values: list[float] = []
+            udp_metrics_local: Optional[IperfMetrics] = None
+            summary_value: Optional[float] = None
+
+            for raw_line in lines:
+                line = dut._sanitize_iperf_line(raw_line)
+                if not line:
+                    continue
+                if '[SUM]' not in line and self.pair != 1:
+                    metrics = self._extract_udp_metrics(line)
+                    if metrics:
+                        udp_metrics_local = metrics
+                        self._current_udp_mode = True
+                    continue
+                logging.info(f'line : {line}')
                 metrics = self._extract_udp_metrics(line)
                 if metrics:
-                    udp_metrics = metrics
+                    udp_metrics_local = metrics
                     self._current_udp_mode = True
-                continue
-            logging.info(f'line : {line}')
-            metrics = self._extract_udp_metrics(line)
-            if metrics:
-                udp_metrics = metrics
-                self._current_udp_mode = True
-            if not interval_pattern.search(line):
-                continue
-            bandwidth_match = re.search(r'(\d+(?:\.\d+)?)\s*([KMG]?bits/sec)', line, re.IGNORECASE)
-            if bandwidth_match:
+                if not interval_pattern.search(line):
+                    continue
+                bandwidth_match = re.search(r'(\d+(?:\.\d+)?)\s*([KMG]?bits/sec)', line, re.IGNORECASE)
+                if not bandwidth_match:
+                    continue
                 throughput = self._convert_bandwidth_to_mbps(
                     float(bandwidth_match.group(1)), bandwidth_match.group(2)
                 )
-                if throughput is not None:
-                    result_list.append(throughput)
+                if throughput is None:
+                    continue
+                values.append(throughput)
+                summary_match = re.search(r'0\.0\s*-\s*(\d+(?:\.\d+)?)\s*sec', line)
+                if summary_match:
+                    try:
+                        duration = float(summary_match.group(1))
+                    except ValueError:
+                        duration = 0.0
+                    if duration > 1.5:
+                        summary_value = throughput
 
-        if result_list:
-            throughput_value = sum(result_list) / len(result_list)
-        elif udp_metrics and udp_metrics.throughput_mbps is not None:
-            throughput_value = udp_metrics.throughput_mbps
-        else:
-            throughput_value = 0.0
+            if summary_value is not None:
+                throughput_value = summary_value
+            elif values:
+                throughput_value = sum(values) / len(values)
+            elif udp_metrics_local and udp_metrics_local.throughput_mbps is not None:
+                throughput_value = udp_metrics_local.throughput_mbps
+            else:
+                throughput_value = None
 
+            return throughput_value, udp_metrics_local, len(values)
+
+        client_value, client_udp_metrics, client_count = _analyse_lines(client_lines)
+        server_value, server_udp_metrics, server_count = _analyse_lines(server_lines)
+
+        preferred_value = client_value if client_value is not None else server_value
+        preferred_udp = client_udp_metrics or server_udp_metrics
+
+        if preferred_value is None:
+            preferred_value = 0.0
+
+        line_count = client_count + server_count
         if self.rssi_num > -60:
-            throughput_result = throughput_value if throughput_value else None
-        elif len(lines) > 30:
-            throughput_result = throughput_value
+            throughput_result = preferred_value if preferred_value else None
+        elif line_count > 30:
+            throughput_result = preferred_value
         else:
             throughput_result = None
 
-        if udp_metrics:
-            udp_metrics.throughput_mbps = throughput_result
-            return udp_metrics
+        if preferred_udp:
+            preferred_udp.throughput_mbps = throughput_result
+            return preferred_udp
 
         return IperfMetrics(throughput_result)
 
     def get_logcat(self):
         # pytest.dut.kill_iperf()
         # 分析 iperf 测试结果
-        lines: list[str] = []
-        if self.iperf_server_log_list:
-            lines.extend(self.iperf_server_log_list)
-        if self.iperf_client_log_list:
-            lines.extend(self.iperf_client_log_list)
-        result = self._parse_iperf_log(lines)
+        server_lines = list(self.iperf_server_log_list)
+        client_lines = list(self.iperf_client_log_list)
+        result = self._parse_iperf_log(server_lines, client_lines)
         self.iperf_server_log_list.clear()
         self.iperf_client_log_list.clear()
         if result is None:
