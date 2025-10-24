@@ -274,6 +274,55 @@ class PerformanceTableManager:
         return updated
 
     @staticmethod
+    def _collect_throughput_headers(headers: Sequence[str]) -> List[str]:
+        aliases: List[str] = []
+        for header in headers:
+            if header is None:
+                continue
+            text = str(header).strip()
+            if not text:
+                continue
+            if text.lower().startswith("throughput"):
+                aliases.append(text)
+        return aliases
+
+    @staticmethod
+    def _parse_throughput_value(value: Any) -> List[float]:
+        if value is None:
+            return []
+        if isinstance(value, (int, float, Decimal)):
+            return [float(value)]
+        if isinstance(value, str):
+            text = value.strip()
+            if not text:
+                return []
+            numbers: List[float] = []
+            tokens = re.split(r"[,\s]+", text)
+            for token in tokens:
+                if not token:
+                    continue
+                try:
+                    numbers.append(float(token))
+                except Exception:
+                    continue
+            if numbers:
+                return numbers
+            try:
+                return [float(text)]
+            except Exception:
+                return []
+        return []
+
+    @classmethod
+    def _compute_throughput_average(cls, values: Sequence[Any]) -> Optional[float]:
+        samples: List[float] = []
+        for value in values:
+            samples.extend(cls._parse_throughput_value(value))
+        if not samples:
+            return None
+        return sum(samples) / len(samples)
+
+    @staticmethod
     def _format_column_definition(column: _StaticColumn) -> str:
         comment = column.original.replace("'", "''")
         return f"{column.sql_type} NULL DEFAULT NULL COMMENT '{comment}'"
@@ -369,6 +418,7 @@ class PerformanceTableManager:
         placeholders = ", ".join(["%s"] * len(insert_columns))
         insert_sql = f"INSERT INTO `{self.TABLE_NAME}` ({column_clause}) VALUES ({placeholders})"
 
+        throughput_aliases = self._collect_throughput_headers(headers)
         values: List[List[Any]] = []
         for row in rows:
             row_values: List[Any] = [
@@ -377,7 +427,20 @@ class PerformanceTableManager:
                 data_type,
             ]
             for column in self._STATIC_COLUMNS:
-                raw_value = row.get(column.original)
+                if column.original == "Throughput":
+                    samples: List[Any] = []
+                    if throughput_aliases:
+                        for alias in throughput_aliases:
+                            value = row.get(alias)
+                            if value is not None:
+                                samples.append(value)
+                    else:
+                        value = row.get(column.original)
+                        if value is not None:
+                            samples.append(value)
+                    raw_value = self._compute_throughput_average(samples)
+                else:
+                    raw_value = row.get(column.original)
                 if column.normalizer is not None:
                     try:
                         raw_value = column.normalizer(raw_value)

@@ -2,6 +2,7 @@
 
 import logging
 import re
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Sequence, Tuple
@@ -11,20 +12,43 @@ import yaml
 from pymysql.cursors import DictCursor
 
 from src.tools.mysql_tool.schema import ensure_report_tables
-BASE_DIR = Path(__file__).resolve().parents[2]
-CONFIG_PATH = BASE_DIR / "config" / "tool_config.yaml"
+
+
+def _config_path_candidates() -> list[Path]:
+    candidates: list[Path] = []
+    if getattr(sys, "frozen", False):
+        exe_dir = Path(sys.executable).resolve().parent
+        candidates.append(exe_dir / "config" / "tool_config.yaml")
+        mei_dir = getattr(sys, "_MEIPASS", None)
+        if mei_dir:
+            candidates.append(Path(mei_dir) / "config" / "tool_config.yaml")
+    repo_root = Path(__file__).resolve().parents[2]
+    candidates.append(repo_root / "config" / "tool_config.yaml")
+    candidates.append(Path.cwd() / "config" / "tool_config.yaml")
+
+    unique_candidates: list[Path] = []
+    seen: set[str] = set()
+    for path in candidates:
+        key = str(path)
+        if key not in seen:
+            unique_candidates.append(path)
+            seen.add(key)
+    return unique_candidates
 
 
 def load_mysql_settings() -> Dict[str, Any]:
+    candidates = _config_path_candidates()
+    config_path = next((path for path in candidates if path.is_file()), None)
+    if not config_path:
+        logging.error("MySQL config file not found. searched=%s", " | ".join(str(path) for path in candidates))
+        return {}
     try:
-        with CONFIG_PATH.open(encoding="utf-8") as fh:
+        with config_path.open(encoding="utf-8") as fh:
             payload = yaml.safe_load(fh) or {}
-    except FileNotFoundError:
-        logging.error("MySQL config file not found: %s", CONFIG_PATH)
-        return {}
     except Exception as exc:
-        logging.error("Failed to read %s: %s", CONFIG_PATH, exc)
+        logging.error("Failed to read %s: %s", config_path, exc)
         return {}
+    logging.debug("Loaded MySQL settings from %s", config_path)
     mysql_cfg = payload.get("mysql") or {}
     settings = {
         "host": mysql_cfg.get("host"),

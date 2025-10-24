@@ -9,7 +9,7 @@
 import logging
 import os
 import time
-from typing import Any, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -20,33 +20,63 @@ plt.rcParams['font.family'] = ['SimHei']
 
 
 class TestResult():
-    '''
-    Singleton class,should not be inherited
-    handle rvr text result
+    """Collect and persist Wi-Fi performance results for each RVR execution."""
 
-    Attributes:
-        logdir : log path
-        current_number : current index
-        rvr_pdffile : rvr pdf file
-        rvr_excelfile : rvr excel file
-        log_file : performance result csv
-        detail_file : rvr detail result (contain rssi value)
-        Profile_Mode/Profile_Value : 仅在 RVO 场景下使用，用于记录目标 RSSI 或固定衰减等 profile 信息
-        Scenario_Group_Key : 用于聚合同一组路由器参数，始终放在结果行的最后一列
+    _BASE_HEADERS: Tuple[str, ...] = (
+        'SerianNumber',
+        'Test_Category',
+        'Standard',
+        'Freq_Band',
+        'BW',
+        'Data_Rate',
+        'CH_Freq_MHz',
+        'Protocol',
+        'Direction',
+        'Total_Path_Loss',
+        'DB',
+        'RSSI',
+        'Angel',
+        'MCS_Rate',
+        'Throughput',
+        'Expect_Rate',
+        'Latency',
+        'Packet_Loss',
+        'Profile_Mode',
+        'Profile_Value',
+        'Scenario_Group_Key',
+    )
 
-    '''
-
-    def __init__(self, logdir, step):
+    def __init__(self, logdir, step, repeat_times: int = 0):
         self.logdir = logdir
         self.current_number = 0
         self.x_path = step
         self.x_length = len(self.x_path)
-        # RVO 案例会通过 profile 字段记录测试所使用的配置/目标信息
         self._profile_mode: str = ""
         self._profile_value: str = ""
-        # Scenario_Group_Key 永远追加在结果行末尾，便于后续聚合
         self._scenario_group_key: str = ""
+        try:
+            repeat = int(repeat_times)
+        except Exception:
+            repeat = 0
+        self._repeat_times = max(0, repeat)
+        self._throughput_header: List[str] = self._build_throughput_header()
+        self._headers: List[str] = self._build_header_row()
         self.init_rvr_result()
+
+    def _build_throughput_header(self) -> List[str]:
+        total_runs = self._repeat_times + 1
+        if total_runs <= 1:
+            return ['Throughput']
+        return [f'Throughput {index}' for index in range(1, total_runs + 1)]
+
+    def _build_header_row(self) -> List[str]:
+        headers: List[str] = []
+        for name in self._BASE_HEADERS:
+            if name == 'Throughput':
+                headers.extend(self._throughput_header)
+            else:
+                headers.append(name)
+        return headers
 
     def init_rvr_result(self):
         self.rvr_excelfile = os.path.join(self.logdir, 'RvrCheckExcel.xlsx')
@@ -56,15 +86,8 @@ class TestResult():
                 'Performance' + time.asctime().replace(' ', '_').replace(':', '_') + '.csv',
             )
             with open(self.log_file, 'a', encoding='gb2312') as f:
-                title = (
-                    'SerianNumber Test_Category Standard Freq_Band BW Data_Rate '
-                    'CH_Freq_MHz Protocol Direction Total_Path_Loss DB RSSI Angel '
-                    'MCS_Rate Throughput Expect_Rate Latency Packet_Loss '
-                    'Profile_Mode Profile_Value Scenario_Group_Key '
-                )
-                f.write(','.join(title.split()))
-                f.write('\n')
-
+                f.write(','.join(self._headers))
+                f.write("\n")
 
     def save_result(self, result):
         '''

@@ -155,7 +155,11 @@ class RvrChartLogic:
                 axis=1,
             )
         else:
-            prepared["__throughput_value__"] = source_series("Throughput").apply(self._safe_float)
+            throughput_alias = self._select_throughput_alias(prepared.columns)
+            if throughput_alias:
+                prepared["__throughput_value__"] = source_series(throughput_alias, "Throughput").apply(self._safe_float)
+            else:
+                prepared["__throughput_value__"] = source_series("Throughput").apply(self._safe_float)
 
         prepared["__throughput_value__"] = prepared["__throughput_value__"].apply(
             lambda value: float(value) if isinstance(value, (int, float)) else value
@@ -164,17 +168,32 @@ class RvrChartLogic:
         return prepared.reset_index(drop=True)
 
     def _resolve_throughput_columns(self, columns: Iterable[str]) -> list[str]:
-        columns = list(columns)
-        if "Throughput" not in columns:
+        column_list = [str(col) for col in columns]
+        start_index = None
+        for index, name in enumerate(column_list):
+            if name.strip().lower().startswith("throughput"):
+                start_index = index
+                break
+        if start_index is None:
             return []
-        start = columns.index("Throughput")
-        if "Expect_Rate" in columns:
-            end = columns.index("Expect_Rate")
-            if end <= start:
-                end = start + 1
-        else:
-            end = len(columns)
-        return list(columns[start:end])
+        end_index = len(column_list)
+        if "Expect_Rate" in column_list[start_index:]:
+            expect_index = column_list.index("Expect_Rate", start_index)
+            if expect_index > start_index:
+                end_index = expect_index
+        return column_list[start_index:end_index]
+
+    @staticmethod
+    def _select_throughput_alias(columns: Iterable[str]) -> Optional[str]:
+        for name in columns:
+            if name is None:
+                continue
+            text = str(name).strip()
+            if not text:
+                continue
+            if text.lower().startswith("throughput"):
+                return text
+        return None
 
     def _aggregate_throughput_row(self, row: pd.Series, columns: list[str]) -> Optional[float]:
         values: list[float] = []

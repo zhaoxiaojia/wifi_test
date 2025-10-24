@@ -118,6 +118,11 @@ def pytest_sessionstart(session):
     connect_cfg = pytest.config.get('connect_type') or {}
     pytest.connect_type = connect_cfg.get('type', 'adb')
     pytest.third_party_cfg = connect_cfg.get('third_party', {})
+    rvr_cfg = pytest.config.get('rvr') or {}
+    try:
+        repeat_times = int(rvr_cfg.get('repeat', 0) or 0)
+    except Exception:
+        repeat_times = 0
     if pytest.connect_type == 'adb':
         # Create adb obj
         adb_cfg = connect_cfg.get('adb') or {}
@@ -138,7 +143,7 @@ def pytest_sessionstart(session):
         pytest.dut.roku = roku_ctrl(telnet_ip)
     else:
         raise EnvironmentError("Not support connect type %s" % pytest.connect_type)
-    pytest.testResult = TestResult(session.config.getoption("--resultpath"), [])
+    pytest.testResult = TestResult(session.config.getoption("--resultpath"), [], repeat_times)
     if os.path.exists('temp.txt'):
         os.remove('temp.txt')
 

@@ -209,6 +209,7 @@ class _ScenarioDefinition:
     bandwidth_display: str
     interface: str
     template_name: str | None = None
+    assignments: Dict[str, Dict[str, Any]] = field(default_factory=dict)
 
     def title(self) -> str:
         parts = [

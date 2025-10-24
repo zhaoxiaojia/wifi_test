@@ -20,7 +20,7 @@ import random
 import pytest
 import telnetlib
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Sequence
 from src.tools.ixchariot import ix
 from threading import Thread
 from src.tools.config_loader import load_config
@@ -249,7 +249,7 @@ class dut():
         db_set: str,
         corner: str,
         mcs_value: Optional[str],
-        throughput_value: Optional[str],
+        throughput_values: Sequence[Optional[str]],
         expect_rate,
         latency_value,
         packet_loss_value,
@@ -257,7 +257,7 @@ class dut():
         def _first_token(text: str) -> str:
             return text.split()[0] if text else text
 
-        return [
+        values = [
             self.serialnumber,
             'Throughput',
             _first_token(router_info.wireless_mode),
@@ -272,11 +272,22 @@ class dut():
             self.rssi_num,
             corner,
             mcs_value if mcs_value else 'NULL',
-            throughput_value,
+        ]
+        for entry in throughput_values:
+            values.append('' if entry is None else entry)
+        values.extend([
             expect_rate,
             latency_value,
             packet_loss_value,
-        ]
+        ])
+        return values
+
+    def _normalize_throughput_cells(self, entries: list[str]) -> list[str]:
+        total_runs = max(1, self.repest_times + 1)
+        sanitized = entries[:total_runs]
+        while len(sanitized) < total_runs:
+            sanitized.append('')
+        return [entry if entry is not None else '' for entry in sanitized]
 
     def step(func):
         def wrapper(*args, **kwargs):
@@ -555,6 +566,7 @@ class dut():
         expect_rate = handle_expectdata(router_cfg, router_info.band, 'DL', pytest.chip_info)
         if self.skip_rx:
             corner = corner_tool.get_turntanle_current_angle() if corner_tool else ''
+            throughput_cells = self._normalize_throughput_cells(['0'])
             values = self._build_throughput_result_values(
                 router_info,
                 type,
@@ -562,7 +574,7 @@ class dut():
                 db_set,
                 corner,
                 None,
-                '0',
+                throughput_cells,
                 expect_rate,
                 None,
                 None,
@@ -651,12 +663,12 @@ class dut():
             if rx_val < self.throughput_threshold:
                 self.skip_rx = True
 
-        throughput_entries = []
+        throughput_entries: list[str] = []
         for metric in rx_metrics_list:
             formatted = metric.formatted_throughput()
             if formatted is not None:
                 throughput_entries.append(formatted)
-        throughput_values = ','.join(throughput_entries)
+        throughput_cells = self._normalize_throughput_cells(throughput_entries)
         latency_value = rx_metrics_list[-1].latency_ms if rx_metrics_list else None
         packet_loss_value = rx_metrics_list[-1].packet_loss if rx_metrics_list else None
         corner = corner_tool.get_turntanle_current_angle() if corner_tool else ''
@@ -667,13 +679,13 @@ class dut():
             db_set,
             corner,
             mcs_rx,
-            throughput_values,
+            throughput_cells,
             expect_rate,
             latency_value,
             packet_loss_value,
         )
         pytest.testResult.save_result(self._format_result_row(values))
-        return throughput_values if throughput_values else 'N/A'
+        return ','.join([cell for cell in throughput_cells if cell]) or 'N/A'
 
     @step
     def get_tx_rate(self, router_info, type='TCP', corner_tool=None, db_set='', debug=False):
@@ -687,6 +699,7 @@ class dut():
         expect_rate = handle_expectdata(router_cfg, router_info.band, 'UL', pytest.chip_info)
         if self.skip_tx:
             corner = corner_tool.get_turntanle_current_angle() if corner_tool else ''
+            throughput_cells = self._normalize_throughput_cells(['0'])
             values = self._build_throughput_result_values(
                 router_info,
                 type,
@@ -694,7 +707,7 @@ class dut():
                 db_set,
                 corner,
                 None,
-                '0',
+                throughput_cells,
                 expect_rate,
                 None,
                 None,
@@ -791,7 +804,7 @@ class dut():
             formatted = metric.formatted_throughput()
             if formatted is not None:
                 throughput_entries.append(formatted)
-        throughput_values = ','.join(throughput_entries)
+        throughput_cells = self._normalize_throughput_cells(throughput_entries)
         latency_value = tx_metrics_list[-1].latency_ms if tx_metrics_list else None
         packet_loss_value = tx_metrics_list[-1].packet_loss if tx_metrics_list else None
         corner = corner_tool.get_turntanle_current_angle() if corner_tool else ''
@@ -802,7 +815,7 @@ class dut():
             db_set,
             corner,
             mcs_tx,
-            throughput_values,
+            throughput_cells,
             expect_rate,
             latency_value,
             packet_loss_value,
@@ -810,7 +823,7 @@ class dut():
         formatted = self._format_result_row(values)
         logging.info(formatted)
         pytest.testResult.save_result(formatted)
-        return throughput_values if throughput_values else 'N/A'
+        return ','.join([cell for cell in throughput_cells if cell]) or 'N/A'
 
     def wait_for_wifi_address(self, cmd: str = '', target=''):
         if pytest.connect_type == 'telnet':
