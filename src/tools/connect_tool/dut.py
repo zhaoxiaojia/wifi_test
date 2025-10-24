@@ -177,7 +177,6 @@ class dut():
         self.skip_tx = False
         self.skip_rx = False
         self.iperf_server_log_list: list[str] = []
-        self.iperf_client_log_list: list[str] = []
         self._current_udp_mode = False
         if self.rvr_tool == 'iperf':
             cmds = f"{self.iperf_server_cmd} {self.iperf_client_cmd}"
@@ -406,7 +405,6 @@ class dut():
                     logging.warning(stderr_text.strip())
                 if stdout_text:
                     logging.debug(stdout_text.strip())
-                    _extend_logs(self.iperf_client_log_list, stdout_text.splitlines())
 
             try:
                 stdout, stderr = process.communicate(timeout=self.iperf_wait_time)
@@ -428,7 +426,6 @@ class dut():
 
         if '-s' in command:
             self.iperf_server_log_list = []
-            self.iperf_client_log_list = []
             if use_adb:
                 if pytest.connect_type == 'telnet':
                     def telnet_iperf():
@@ -458,8 +455,7 @@ class dut():
                     logging.info(f'client telnet command: {command}')
 
                     async def _run_telnet_client():
-                        output = await asyncio.wait_for(self.telnet_client(command), timeout=self.iperf_wait_time)
-                        _extend_logs(self.iperf_client_log_list, output)
+                        await asyncio.wait_for(self.telnet_client(command), timeout=self.iperf_wait_time)
 
                     try:
                         asyncio.run(_run_telnet_client())
@@ -470,7 +466,7 @@ class dut():
             else:
                 _run_blocking(_build_cmd_list(), 'client pc command:')
 
-    def _parse_iperf_log(self, server_lines: list[str], client_lines: list[str]):
+    def _parse_iperf_log(self, server_lines: list[str]):
         """解析 iperf 日志并计算吞吐量."""
 
         def _analyse_lines(lines: list[str]) -> tuple[Optional[float], Optional[IperfMetrics], int]:
@@ -525,16 +521,15 @@ class dut():
 
             return throughput_value, udp_metrics_local, len(values)
 
-        client_value, client_udp_metrics, client_count = _analyse_lines(client_lines)
         server_value, server_udp_metrics, server_count = _analyse_lines(server_lines)
 
-        preferred_value = client_value if client_value is not None else server_value
-        preferred_udp = client_udp_metrics or server_udp_metrics
+        preferred_value = server_value
+        preferred_udp = server_udp_metrics
 
         if preferred_value is None:
             preferred_value = 0.0
 
-        line_count = client_count + server_count
+        line_count = server_count
         if self.rssi_num > -60:
             throughput_result = preferred_value if preferred_value else None
         elif line_count > 30:
@@ -552,10 +547,8 @@ class dut():
         # pytest.dut.kill_iperf()
         # 分析 iperf 测试结果
         server_lines = list(self.iperf_server_log_list)
-        client_lines = list(self.iperf_client_log_list)
-        result = self._parse_iperf_log(server_lines, client_lines)
+        result = self._parse_iperf_log(server_lines)
         self.iperf_server_log_list.clear()
-        self.iperf_client_log_list.clear()
         if result is None:
             return None
         if result.throughput_mbps is not None:
