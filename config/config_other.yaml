@@ -24,13 +24,13 @@ rvr:
     client_cmd: iperf -c {ip} -i 1 -t 5 -P 1
   ixchariot:
     path: D:/Program Files (x86)/Ixia/IxChariot
-  repeat: '0'
+  repeat: '2'
   throughput_threshold: '0'
   tool: iperf
 router:
   name: asusax88u
   address: 192.168.5.1
-text_case: test/performance/test_wifi_rvr.py
+text_case: test/performance/test_wifi_peak_throughput.py
 debug:
-  database_mode: true
+  database_mode: false
 csv_path: performance_test_csv/rvr_wifi_setup_demo.csv

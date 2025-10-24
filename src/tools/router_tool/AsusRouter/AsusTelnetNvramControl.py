@@ -65,9 +65,22 @@ class AsusTelnetNvramControl(AsusBaseControl):
         self.prompt = prompt
         self.telnet: telnetlib.Telnet | None = None
         self._is_logged_in = False
+        self._wl0_channel: str = 'auto'
+        self._wl0_bandwidth: str | None = None
+        self._last_wl0_chanspec: str | None = None
         self._wl1_channel: str | None = 'auto'
         self._wl1_chanspec_suffix: str | None = '80'
         self._last_wl1_chanspec: str | None = None
+        self._wl1_bandwidth_map = dict(self.WL1_BANDWIDTH_MAP)
+        if self.router_info in {'asus_88u', 'asus_88u_pro'}:
+            self._wl1_bandwidth_map.update({
+                '20MHZ': ('1', '20'),
+                '40MHZ': ('2', '40'),
+                '80MHZ': ('3', '80'),
+                '160MHZ': ('5', '160'),
+                '20/40/80MHZ': ('0', '80'),
+                '20/40/80/160MHZ': ('0', '160'),
+            })
 
     # ------------------------------------------------------------------
     # Telnet helpers
@@ -127,13 +140,42 @@ class AsusTelnetNvramControl(AsusBaseControl):
     def _normalize_bandwidth(width: str) -> str:
         return width.replace(' ', '').upper()
 
+    def _get_wl0_chanspec(self) -> str:
+        """Return chanspec based on current 2.4G channel/bandwidth."""
+        channel = self._wl0_channel or 'auto'
+        if channel not in self.CHANNEL_2:
+            raise ConfigError('channel element error')
+        if self._wl0_bandwidth == '40MHZ':
+            return self.CHANNEL_2_CHANSPEC_MAP[channel]
+        return '0' if channel == 'auto' else channel
+
+    def _update_wl0_chanspec(self, *, force: bool = False) -> None:
+        chanspec = self._get_wl0_chanspec()
+        if not force and chanspec == self._last_wl0_chanspec:
+            return
+        self.telnet_write(f'nvram set wl0_chanspec={chanspec};')
+        self._last_wl0_chanspec = chanspec
+
+    def _get_wl1_40mhz_chanspec(self, channel: str) -> str:
+        if channel == 'auto':
+            return '0'
+        try:
+            index = self.CHANNEL_5.index(channel)
+        except ValueError as exc:
+            raise ConfigError('channel element error') from exc
+        suffix = 'l' if (index - 1) % 2 == 0 else 'u'
+        return f'{channel}{suffix}'
+
     def _update_wl1_chanspec(self, *, force: bool = False) -> None:
         suffix = self._wl1_chanspec_suffix
         if not suffix:
             return
         channel = self._wl1_channel or 'auto'
-        channel_value = '0' if channel == 'auto' else channel
-        chanspec = f'{channel_value}/{suffix}'
+        if suffix == '40':
+            chanspec = self._get_wl1_40mhz_chanspec(channel)
+        else:
+            channel_value = '0' if channel == 'auto' else channel
+            chanspec = f'{channel_value}/{suffix}'
         if not force and chanspec == self._last_wl1_chanspec:
             return
         self.telnet_write(f'nvram set wl1_chanspec={chanspec};')
@@ -217,12 +259,16 @@ class AsusTelnetNvramControl(AsusBaseControl):
         channel = str(channel)
         if channel not in self.CHANNEL_2:
             raise ConfigError('channel element error')
-        chanspec = self.CHANNEL_2_CHANSPEC_MAP[channel]
-        self.telnet_write(f'nvram set wl0_chanspec={chanspec};')
+        self._wl0_channel = channel
+        self._update_wl0_chanspec(force=True)
 
     def set_2g_bandwidth(self, width: str) -> None:
         if width not in self.BANDWIDTH_2:
             raise ConfigError('bandwidth element error')
+        normalized_width = self._normalize_bandwidth(width)
+        if normalized_width != self._wl0_bandwidth:
+            self._wl0_bandwidth = normalized_width
+            self._update_wl0_chanspec(force=True)
         self.telnet_write(f'nvram set wl0_bw={self.BANDWIDTH_2.index(width)};')
 
     def set_5g_channel_bandwidth(
@@ -242,7 +288,7 @@ class AsusTelnetNvramControl(AsusBaseControl):
                 needs_update = True
         if bandwidth is not None:
             normalized_width = self._normalize_bandwidth(bandwidth)
-            mapping = self.WL1_BANDWIDTH_MAP.get(normalized_width)
+            mapping = self._wl1_bandwidth_map.get(normalized_width)
             if mapping is None:
                 raise ConfigError('bandwidth element error')
             bw_value, suffix = mapping
