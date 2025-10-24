@@ -9,12 +9,13 @@ from typing import Optional, Tuple
 
 import pytest
 from src.tools.router_tool.Router import router_str
-from src.util.constants import is_database_debug_enabled
+from src.util.constants import get_debug_flags
 
 from src.test import get_testdata
 from src.test.pyqt_log import log_fixture_params, update_fixture_params
 from src.test.performance import (
     common_setup,
+    describe_debug_reason,
     get_corner_step_list,
     get_rf_step_list,
     get_rvo_static_db_list,
@@ -94,10 +95,13 @@ def _adjust_rssi_to_target(target_rssi: int, base_db: Optional[int]) -> Tuple[in
         target_rssi,
     )
 
-    if is_database_debug_enabled():
+    flags = get_debug_flags()
+    if flags.skip_corner_rf:
         simulated_rssi = pytest.dut.get_rssi()
+        reason = describe_debug_reason("skip_corner_rf", database_mode=flags.database_mode)
         logging.info(
-            "Database debug mode enabled, skip RSSI adjustment and return simulated RSSI %s dBm",
+            "Debug flag (%s) enabled, skip RSSI adjustment and return simulated RSSI %s dBm",
+            reason,
             simulated_rssi,
         )
         return simulated_rssi, applied_db
@@ -224,9 +228,12 @@ def _apply_static_attenuation(static_db: Optional[int]) -> Tuple[int, Optional[i
         measured = pytest.dut.get_rssi()
         return measured, None
     logging.info('Set static attenuation to %s dB before RVO test.', static_db)
-    if is_database_debug_enabled():
+    flags = get_debug_flags()
+    if flags.skip_corner_rf:
+        reason = describe_debug_reason("skip_corner_rf", database_mode=flags.database_mode)
         logging.info(
-            'Database debug mode enabled, skip applying static attenuation %s dB.',
+            'Debug flag (%s) enabled, skip applying static attenuation %s dB.',
+            reason,
             static_db,
         )
         measured = pytest.dut.get_rssi()
