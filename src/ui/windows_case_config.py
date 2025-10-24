@@ -1732,13 +1732,17 @@ class CaseConfigPage(CardWidget):
             if isinstance(value, str):
                 return value.strip().lower() in {"1", "true", "yes", "on"}
             return bool(value)
-        debug_cfg_raw = self.config.get("debug")
-        if isinstance(debug_cfg_raw, dict):
-            debug_cfg = dict(debug_cfg_raw)
-        else:
-            debug_cfg = {"database_mode": _coerce_debug_flag(debug_cfg_raw)}
-        debug_cfg.setdefault("database_mode", False)
-        self.config["debug"] = debug_cfg
+
+        def _normalize_debug_section(raw_value) -> dict[str, bool]:
+            if isinstance(raw_value, dict):
+                normalized = dict(raw_value)
+            else:
+                normalized = {"database_mode": raw_value}
+            for option in ("database_mode", "skip_router", "skip_corner_rf"):
+                normalized[option] = _coerce_debug_flag(normalized.get(option))
+            return normalized
+
+        self.config["debug"] = _normalize_debug_section(self.config.get("debug"))
         self.config["connect_type"] = self._normalize_connect_type_section(self.config.get("connect_type"))
         telnet_cfg = self.config["connect_type"].get("telnet")
         if isinstance(telnet_cfg, dict) and "kernel_version" in telnet_cfg:
@@ -2032,21 +2036,44 @@ class CaseConfigPage(CardWidget):
                 self.field_widgets["rf_solution.step"] = self.rf_step_widget
                 continue  # 跳过后面的通用字段处理
             if key == "debug":
-                data = value if isinstance(value, dict) else {}
+                data = self.config.get("debug", {}) if isinstance(self.config, dict) else {}
                 group = QGroupBox("Debug Options")
                 vbox = QVBoxLayout(group)
-                self.database_debug_checkbox = QCheckBox("Enable database debug mode", self)
-                self.database_debug_checkbox.setChecked(bool(data.get("database_mode")))
-                vbox.addWidget(self.database_debug_checkbox)
-                debug_hint = QLabel(
-                    "When enabled, performance tests skip router/RF/corner setup and "
-                    "simulate iperf results for database debugging."
-                )
-                debug_hint.setWordWrap(True)
-                debug_hint.setObjectName("debugHintLabel")
-                vbox.addWidget(debug_hint)
+
+                debug_options = [
+                    (
+                        "database_mode",
+                        "Enable database debug mode",
+                        "When enabled, performance tests skip router/RF/corner setup and "
+                        "simulate iperf results for database debugging.",
+                    ),
+                    (
+                        "skip_router",
+                        "Skip router workflow",
+                        "Skip router instantiation, configuration, and Wi-Fi reconnection steps "
+                        "during performance tests.",
+                    ),
+                    (
+                        "skip_corner_rf",
+                        "Skip corner && RF workflow",
+                        "Skip corner turntable and RF attenuator initialization and adjustments.",
+                    ),
+                ]
+
+                for index, (option_key, label, hint_text) in enumerate(debug_options):
+                    checkbox = QCheckBox(label, self)
+                    checkbox.setChecked(bool(data.get(option_key)))
+                    vbox.addWidget(checkbox)
+                    self.field_widgets[f"debug.{option_key}"] = checkbox
+                    if index == 0:
+                        self.database_debug_checkbox = checkbox
+                    if hint_text:
+                        hint_label = QLabel(hint_text)
+                        hint_label.setWordWrap(True)
+                        hint_label.setObjectName("debugHintLabel")
+                        vbox.addWidget(hint_label)
+
                 self._register_group(key, group, self._is_dut_key(key))
-                self.field_widgets["debug.database_mode"] = self.database_debug_checkbox
                 continue
             if key == "rvr":
                 group = QGroupBox("RvR Config")  # 外层分组

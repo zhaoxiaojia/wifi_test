@@ -11,6 +11,7 @@ import signal
 import tempfile
 import subprocess
 import atexit
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Final, Mapping
@@ -278,24 +279,50 @@ def _coerce_truthy(value: Any) -> bool:
     return bool(value)
 
 
-def is_database_debug_enabled(
+@dataclass(frozen=True)
+class DebugFlags:
+    """Aggregated debug switches parsed from configuration."""
+
+    database_mode: bool = False
+    skip_router: bool = False
+    skip_corner_rf: bool = False
+
+
+def get_debug_flags(
     *, config: Mapping[str, Any] | None = None, refresh: bool = False
-) -> bool:
-    """Return whether database debug mode is enabled in the configuration."""
+) -> DebugFlags:
+    """Return the consolidated debug switches from the configuration."""
 
     try:
         data = config if config is not None else load_config(refresh=refresh)
     except Exception:
         logging.debug("Failed to load config for debug flag", exc_info=True)
-        return False
+        return DebugFlags()
     if not isinstance(data, Mapping):
-        return False
+        return DebugFlags()
+
     debug_section = data.get("debug")
     if isinstance(debug_section, Mapping):
-        candidate = debug_section.get("database_mode")
+        debug_cfg = dict(debug_section)
     else:
-        candidate = debug_section
-    return _coerce_truthy(candidate)
+        debug_cfg = {"database_mode": debug_section}
+
+    database_mode = _coerce_truthy(debug_cfg.get("database_mode"))
+    skip_router = database_mode or _coerce_truthy(debug_cfg.get("skip_router"))
+    skip_corner_rf = database_mode or _coerce_truthy(debug_cfg.get("skip_corner_rf"))
+    return DebugFlags(
+        database_mode=database_mode,
+        skip_router=skip_router,
+        skip_corner_rf=skip_corner_rf,
+    )
+
+
+def is_database_debug_enabled(
+    *, config: Mapping[str, Any] | None = None, refresh: bool = False
+) -> bool:
+    """Return whether database debug mode is enabled in the configuration."""
+
+    return get_debug_flags(config=config, refresh=refresh).database_mode
 
 
 def save_config_sections(
