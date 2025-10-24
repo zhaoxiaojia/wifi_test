@@ -16,15 +16,15 @@ rf_solution:
     ip_address: 192.168.5.200
     channels: '1'
   model: RC4DAT-8G-95
-  step: ''
+  step: 0,75:3
 rvr:
   iperf:
     path: ''
     server_cmd: iperf -s -i 1
-    client_cmd: iperf -c {ip} -i 1 -t 5 -P 1
+    client_cmd: iperf -c {ip} -i 1 -t 30 -P 1
   ixchariot:
     path: D:/Program Files (x86)/Ixia/IxChariot
-  repeat: '2'
+  repeat: '0'
   throughput_threshold: '0'
   tool: iperf
 router:
