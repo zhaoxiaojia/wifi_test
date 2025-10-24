@@ -14,7 +14,7 @@ from src.test import get_testdata
 from src.test.pyqt_log import log_fixture_params
 import pytest
 from src.tools.router_tool.Router import router_str
-from src.util.constants import is_database_debug_enabled
+from src.util.constants import get_debug_flags
 
 from src.test.performance import common_setup, init_router, scenario_group, wait_connect
 
@@ -28,8 +28,8 @@ def setup_router(request):
     router_info = request.param
     common_setup(router, router_info)
     connect_status = wait_connect(router_info)
-    debug_mode = is_database_debug_enabled()
-    if debug_mode:
+    debug_flags = get_debug_flags()
+    if debug_flags.database_mode:
         logging.info(
             "Database debug mode enabled, use simulated throughput results for router %s",
             getattr(router_info, "ssid", "<unknown>"),
@@ -47,19 +47,19 @@ def test_rvr(setup_router, performance_sync_manager):
             return
 
         logging.info(f'start test iperf tx {router_info.tx} rx {router_info.rx}')
-        debug_mode = is_database_debug_enabled()
+        debug_flags = get_debug_flags()
         rssi_num = pytest.dut.rssi_num
-        if debug_mode:
+        if debug_flags.database_mode:
             logging.info(
                 "Database debug mode enabled, skipping real iperf execution for router %s",
                 getattr(router_info, "ssid", "<unknown>"),
             )
         if int(router_info.tx):
             logging.info(f'rssi : {rssi_num}')
-            pytest.dut.get_tx_rate(router_info, 'TCP', debug=debug_mode)
+            pytest.dut.get_tx_rate(router_info, 'TCP', debug=debug_flags.database_mode)
         if int(router_info.rx):
             logging.info(f'rssi : {rssi_num}')
-            pytest.dut.get_rx_rate(router_info, 'TCP', debug=debug_mode)
+            pytest.dut.get_rx_rate(router_info, 'TCP', debug=debug_flags.database_mode)
 
     performance_sync_manager(
         "Peak",

@@ -21,7 +21,7 @@ from src.util.constants import (
     DEFAULT_RF_STEP_SPEC,
     IDENTIFIER_SANITIZE_PATTERN,
     RF_STEP_SPLIT_PATTERN,
-    is_database_debug_enabled,
+    get_debug_flags,
 )
 
 
@@ -82,7 +82,7 @@ def scenario_group(router_info: Router):
 
 
 class _DebugRFController:
-    """No-op RF controller used when database debug mode is enabled."""
+    """No-op RF controller used when RF operations are skipped."""
 
     def __init__(self) -> None:
         self._current_value = 0
@@ -99,7 +99,7 @@ class _DebugRFController:
 
 
 class _DebugCornerController:
-    """No-op corner controller used when database debug mode is enabled."""
+    """No-op corner controller used when corner operations are skipped."""
 
     def __init__(self) -> None:
         self._angle = 0
@@ -122,7 +122,7 @@ class _DebugCornerController:
 
 
 class _DebugRouterController:
-    """Lightweight router placeholder used in database debug mode."""
+    """Lightweight router placeholder used when router operations are skipped."""
 
     name = "debug-router"
     CHANNEL_2: tuple = ()
@@ -132,8 +132,11 @@ class _DebugRouterController:
     AUTHENTICATION_METHOD = ()
     AUTHENTICATION_METHOD_LEGCY = ()
 
-    def __init__(self) -> None:
-        logging.info("Database debug mode enabled, skip router controller instantiation")
+    def __init__(self, reason: str) -> None:
+        logging.info(
+            "Debug flag (%s) enabled, skip router controller instantiation",
+            reason,
+        )
 
     def __getattr__(self, item: str):
         raise AttributeError(f"_DebugRouterController has no attribute {item!r}")
@@ -145,10 +148,16 @@ def get_cfg() -> Any:
     return load_config(refresh=True)
 
 
+def describe_debug_reason(option_key: str, *, database_mode: bool) -> str:
+    return "database debug mode" if database_mode else f"debug option '{option_key}'"
+
+
 def init_rf():
     """根据配置初始化射频衰减器"""
-    if is_database_debug_enabled():
-        logging.info("Database debug mode enabled, skip RF attenuator initialization")
+    flags = get_debug_flags()
+    if flags.skip_corner_rf:
+        reason = describe_debug_reason("skip_corner_rf", database_mode=flags.database_mode)
+        logging.info("Debug flag (%s) enabled, skip RF attenuator initialization", reason)
         return _DebugRFController()
     cfg = get_cfg()
     rf_solution = cfg['rf_solution']
@@ -169,8 +178,10 @@ def init_rf():
 
 def init_corner():
     """根据配置初始化转台"""
-    if is_database_debug_enabled():
-        logging.info("Database debug mode enabled, skip corner initialization")
+    flags = get_debug_flags()
+    if flags.skip_corner_rf:
+        reason = describe_debug_reason("skip_corner_rf", database_mode=flags.database_mode)
+        logging.info("Debug flag (%s) enabled, skip corner initialization", reason)
         controller = _DebugCornerController()
         controller.set_turntable_zero()
         return controller
@@ -187,8 +198,10 @@ def init_corner():
 
 def init_router() -> Any:
     """根据配置返回路由实例"""
-    if is_database_debug_enabled():
-        return _DebugRouterController()
+    flags = get_debug_flags()
+    if flags.skip_router:
+        reason = describe_debug_reason("skip_router", database_mode=flags.database_mode)
+        return _DebugRouterController(reason)
     cfg = get_cfg()
     router = get_router(cfg['router']['name'])
     return router
@@ -201,8 +214,10 @@ def common_setup(router: Router, router_info: Router) -> bool:
     pytest.dut.skip_tx = False
     pytest.dut.skip_rx = False
 
-    if is_database_debug_enabled():
-        logging.info("Database debug mode enabled, skip router setup steps")
+    flags = get_debug_flags()
+    if flags.skip_router:
+        reason = describe_debug_reason("skip_router", database_mode=flags.database_mode)
+        logging.info("Debug flag (%s) enabled, skip router setup steps", reason)
         return True
 
     router.change_setting(router_info), "Can't set ap , pls check first"
@@ -230,10 +245,13 @@ def common_setup(router: Router, router_info: Router) -> bool:
 
 
 def wait_connect(router_info: Router):
-    third_party_cfg = get_cfg().get("connect_type", {}).get("third_party", {}).get("enabled", {})
-    if is_database_debug_enabled():
+    third_party_cfg = get_cfg().get("connect_type", {}).get("third_party", {})
+    flags = get_debug_flags()
+    if flags.skip_router:
+        reason = describe_debug_reason("skip_router", database_mode=flags.database_mode)
         logging.info(
-            "Database debug mode enabled, skip Wi-Fi reconnection workflow (router=%s)",
+            "Debug flag (%s) enabled, skip Wi-Fi reconnection workflow (router=%s)",
+            reason,
             getattr(router_info, "ssid", "<unknown>"),
         )
         return True
