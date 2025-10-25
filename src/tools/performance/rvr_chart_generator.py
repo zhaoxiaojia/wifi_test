@@ -211,7 +211,7 @@ class PerformanceRvrChartGenerator(RvrChartLogic):
                     handles,
                     labels,
                     loc="lower center",
-                    bbox_to_anchor=(0.5, -0.08),
+                    bbox_to_anchor=(0.5, -0.24),
                     ncol=max(1, min(len(handles), 3)),
                     frameon=False,
                 )
@@ -222,7 +222,7 @@ class PerformanceRvrChartGenerator(RvrChartLogic):
                 if legend is not None:
                     for text_item in legend.get_texts():
                         text_item.set_ha("center")
-                bottom_padding = max(bottom_padding, 0.26)
+                bottom_padding = max(bottom_padding, 0.38)
             else:
                 ...
                 # print("[RVO] legend skipped -> no handles detected")
