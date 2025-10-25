@@ -936,18 +936,18 @@ class RvrChartLogic:
         profile_label = self._extract_profile_label(df)
         if profile_label:
             final_label = f"{profile_label} {base_label}".strip()
-            print(
-                f"[RVO] resolved profile label -> channel={channel!r}, profile={profile_label!r}, final={final_label!r}"
-            )
+            # print(
+            #     f"[RVO] resolved profile label -> channel={channel!r}, profile={profile_label!r}, final={final_label!r}"
+            # )
             return final_label
         db_label = self._extract_db_label(df)
         if db_label:
             final_label = f"{base_label} {db_label}".strip()
-            print(
-                f"[RVO] resolved db label -> channel={channel!r}, db={db_label!r}, final={final_label!r}"
-            )
+            # print(
+            #     f"[RVO] resolved db label -> channel={channel!r}, db={db_label!r}, final={final_label!r}"
+            # )
             return final_label
-        print(f"[RVO] using base label -> channel={channel!r}, final={base_label!r}")
+        # print(f"[RVO] using base label -> channel={channel!r}, final={base_label!r}")
         return base_label
 
     def _series_with_nan(self, values: list[Optional[float]]) -> list[float]:

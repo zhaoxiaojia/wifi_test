@@ -269,7 +269,7 @@ def setup_router(request):
     connect_status = wait_connect(router_info)
     yield connect_status, router_info
     pytest.dut.kill_iperf()
-
+    corner_tool.set_turntable_zero()
 
 @pytest.fixture(scope='function', params=RVO_CASES, ids=RVO_CASE_IDS)
 @log_fixture_params()
