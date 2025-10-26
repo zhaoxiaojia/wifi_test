@@ -672,7 +672,7 @@ class ReportPage(RvrChartLogic, CardWidget):
                 handles,
                 labels,
                 loc='lower center',
-                bbox_to_anchor=(0.5, -0.08),
+                bbox_to_anchor=(0.5, -0.16),
                 ncol=max(1, min(len(handles), 3)),
                 frameon=False,
             )
