@@ -116,10 +116,28 @@ def _normalize_standard_token(value: Any) -> Optional[str]:
     return None
 
 
+def _normalize_angle_token(value: Any) -> Optional[float]:
+    if value is None:
+        return None
+    if isinstance(value, (int, float, Decimal)):
+        return float(value)
+    text = str(value).strip()
+    if not text:
+        return None
+    match = re.search(r"-?\d+(?:\.\d+)?", text)
+    if not match:
+        return None
+    try:
+        return float(match.group(0))
+    except ValueError:
+        return None
+
+
 _COLUMN_NORMALIZERS: Dict[str, ColumnNormalizer] = {
     "band": _normalize_band_token,
     "direction": _normalize_direction_token,
     "standard": _normalize_standard_token,
+    "angle_deg": _normalize_angle_token,
 }
 
 

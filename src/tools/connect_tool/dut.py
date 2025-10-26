@@ -948,7 +948,7 @@ class dut():
         if 'Not connected' in rssi_info:
             assert False, "Wifi is not connected"
         try:
-            self.rssi_num = int(re.findall(r'signal:\s+-?(\d+)\s+dBm', rssi_info, re.S)[0])
+            self.rssi_num = int(re.findall(r'signal:\s*(-?\d+)\s+dBm', rssi_info, re.S)[0])
             self.freq_num = int(re.findall(r'freq:\s+(\d+)\s+', rssi_info, re.S)[0])
         except IndexError as e:
             self.rssi_num = -1
