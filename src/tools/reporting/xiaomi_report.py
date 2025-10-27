@@ -10,6 +10,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 
 from openpyxl import Workbook
 from openpyxl.chart import LineChart, Reference
+from openpyxl.chart.axis import ChartLines
 from openpyxl.chart.marker import Marker
 from openpyxl.drawing.image import Image
 from openpyxl.formatting.rule import FormulaRule
@@ -499,10 +500,10 @@ def _write_data(ws: Worksheet, scenario: RvrScenario, start_row: int = 7) -> int
 
 
 def _style_chart(chart: LineChart) -> None:
-    chart.width = 15
-    chart.height = 7
+    chart.width = 16
+    chart.height = 7.5
     chart.legend.position = "b"
-    chart.y_axis.majorGridlines = None
+    chart.y_axis.majorGridlines = ChartLines()
     chart.x_axis.majorGridlines = None
     chart.y_axis.title = "Throughput (Mbps)"
     chart.x_axis.title = "Attenuation (dB)"
@@ -512,6 +513,10 @@ def _style_chart(chart: LineChart) -> None:
     chart.y_axis.tickLblPos = "nextTo"
     chart.y_axis.crosses = "min"
     chart.y_axis.scaling.min = 0
+    chart.x_axis.number_format = "0"
+    chart.x_axis.tickLblSkip = 1
+    chart.x_axis.tickMarkSkip = 1
+    chart.x_axis.crossBetween = "midCat"
     for series in chart.series:
         if hasattr(series, "graphicalProperties") and hasattr(series.graphicalProperties, "line"):
             series.graphicalProperties.line.width = 20000  # 2pt
@@ -530,7 +535,8 @@ def _add_charts(ws: Worksheet, scenario: RvrScenario, start_row: int, end_row: i
     rx_chart.add_data(rx_range, titles_from_data=True)
     rx_chart.set_categories(categories)
     _style_chart(rx_chart)
-    rx_chart.anchor = "M6"
+    first_anchor_row = max(start_row - 6, 6)
+    rx_chart.anchor = f"M{first_anchor_row}"
     ws.add_chart(rx_chart)
 
     tx_range = Reference(ws, min_col=5, min_row=start_row - 1, max_row=end_row)
@@ -539,8 +545,16 @@ def _add_charts(ws: Worksheet, scenario: RvrScenario, start_row: int, end_row: i
     tx_chart.add_data(tx_range, titles_from_data=True)
     tx_chart.set_categories(categories)
     _style_chart(tx_chart)
-    tx_chart.anchor = "M24"
+    tx_chart.anchor = f"M{first_anchor_row + 18}"
     ws.add_chart(tx_chart)
+
+    if scenario.attenuation_steps:
+        min_step = min(scenario.attenuation_steps)
+        max_step = max(scenario.attenuation_steps)
+        for chart in (rx_chart, tx_chart):
+            chart.x_axis.scaling.min = min_step
+            chart.x_axis.scaling.max = max_step
+            chart.x_axis.majorUnit = 3
 
 
 # ---------------------------------------------------------------------------
