@@ -11,6 +11,8 @@ from typing import Dict, List, Optional, Sequence, Tuple
 from openpyxl import Workbook
 from openpyxl.chart import Reference, Series, ScatterChart
 from openpyxl.chart.axis import ChartLines
+from openpyxl.chart.layout import Layout, ManualLayout
+from openpyxl.chart.legend import Legend
 from openpyxl.chart.marker import Marker
 from openpyxl.drawing.image import Image
 from openpyxl.formatting.rule import FormulaRule
@@ -501,11 +503,37 @@ def _write_data(ws: Worksheet, scenario: RvrScenario, start_row: int = 7) -> int
 def _style_chart(chart: ScatterChart) -> None:
     chart.width = 16
     chart.height = 7.5
+
+    if chart.legend is None:
+        chart.legend = Legend()
     chart.legend.position = "b"
+
+    chart.layout = Layout(
+        manualLayout=ManualLayout(
+            xMode="factor",
+            yMode="factor",
+            x=0.05,
+            y=0.05,
+            w=0.9,
+            h=0.9,
+        )
+    )
+    chart.plot_area.layout = Layout(
+        manualLayout=ManualLayout(
+            layoutTarget="inner",
+            xMode="factor",
+            yMode="factor",
+            x=0.1,
+            y=0.1,
+            w=0.8,
+            h=0.8,
+        )
+    )
+
     chart.y_axis.majorGridlines = ChartLines()
-    chart.x_axis.majorGridlines = None
-    chart.y_axis.title = "Throughput (Mbps)"
-    chart.x_axis.title = "Attenuation (dB)"
+    chart.x_axis.majorGridlines = ChartLines()
+    chart.y_axis.title = None
+    chart.x_axis.title = None
     chart.x_axis.majorTickMark = "out"
     chart.y_axis.majorTickMark = "out"
     chart.x_axis.tickLblPos = "nextTo"
@@ -518,6 +546,13 @@ def _style_chart(chart: ScatterChart) -> None:
             series.graphicalProperties.line.width = 20000  # 2pt
             series.graphicalProperties.line.solidFill = COLOR_BRAND_BLUE
         series.marker = Marker(symbol="none")
+
+    LOGGER.debug(
+        "Styled chart | legend=%s | layout=%s | plot_layout=%s",
+        chart.legend.position if chart.legend else None,
+        getattr(chart.layout, "manualLayout", None),
+        getattr(chart.plot_area.layout, "manualLayout", None),
+    )
 
 
 def _add_charts(ws: Worksheet, scenario: RvrScenario, start_row: int, end_row: int) -> None:
@@ -533,7 +568,7 @@ def _add_charts(ws: Worksheet, scenario: RvrScenario, start_row: int, end_row: i
     rx_series = Series(
         rx_values,
         xvalues=categories,
-        title=ws.cell(row=6, column=4).value or scenario.channel,
+        title=scenario.channel,
     )
     rx_chart.series.append(rx_series)
     _style_chart(rx_chart)
@@ -559,7 +594,7 @@ def _add_charts(ws: Worksheet, scenario: RvrScenario, start_row: int, end_row: i
     tx_series = Series(
         tx_values,
         xvalues=categories,
-        title=ws.cell(row=6, column=5).value or scenario.channel,
+        title=scenario.channel,
     )
     tx_chart.series.append(tx_series)
     _style_chart(tx_chart)
