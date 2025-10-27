@@ -9,7 +9,8 @@ from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
 from openpyxl import Workbook
-from openpyxl.chart import LineChart, Reference
+from openpyxl.chart import LineChart, Reference, Series
+from openpyxl.chart.axis import ChartLines
 from openpyxl.chart.marker import Marker
 from openpyxl.drawing.image import Image
 from openpyxl.formatting.rule import FormulaRule
@@ -50,7 +51,6 @@ COLUMN_WIDTHS: Dict[str, float] = {
 }
 
 ROW_HEIGHT_TITLE = 42.95
-ROW_HEIGHT_DEFAULT = 20.1
 
 COLOR_BRAND_BLUE = "2D529F"
 COLOR_SUBHEADER = "B4C6E7"
@@ -222,8 +222,10 @@ def _configure_sheet(ws: Worksheet) -> None:
     for column, width in COLUMN_WIDTHS.items():
         ws.column_dimensions[column].width = width
     ws.row_dimensions[1].height = ROW_HEIGHT_TITLE
+    # Allow the remaining rows to auto-size based on their wrapped content so
+    # long descriptions do not overlap neighbouring cells.
     for row in range(2, 100):
-        ws.row_dimensions[row].height = ROW_HEIGHT_DEFAULT
+        ws.row_dimensions[row].height = None
 
 
 def _merge(ws: Worksheet, range_string: str) -> None:
@@ -384,15 +386,15 @@ def _write_title(ws: Worksheet, scenario: RvrScenario) -> None:
     _merge(ws, "A4:W4")
 
     _set_cell(ws, 1, 1, "RVR Test Report", font=FONT_TITLE, alignment=ALIGN_CENTER, fill=COLOR_BRAND_BLUE, border=True)
-    _set_cell(ws, 2, 1, "1銆?Throughput:2.4G", font=FONT_SECTION, alignment=ALIGN_CENTER, border=True)
-    _set_cell(ws, 3, 1, "2銆?Throughput:5G", font=FONT_SECTION, alignment=ALIGN_CENTER, border=True)
+    _set_cell(ws, 2, 1, "1. Throughput: 2.4G", font=FONT_SECTION, alignment=ALIGN_CENTER, border=True)
+    _set_cell(ws, 3, 1, "2. Throughput: 5G", font=FONT_SECTION, alignment=ALIGN_CENTER, border=True)
     subtitle = f"{scenario.freq} {scenario.standard.upper()} {scenario.bandwidth}"
     _set_cell(ws, 4, 1, subtitle, font=FONT_SECTION, alignment=ALIGN_CENTER, border=True)
 
     logo_bytes = base64.b64decode(LOGO_PNG_BASE64)
     image = Image(BytesIO(logo_bytes))
-    image.width = 364
-    image.height = 104
+    image.width = 240
+    image.height = 70
     image.anchor = "A1"
     ws.add_image(image)
 
@@ -459,8 +461,8 @@ def _write_data(ws: Worksheet, scenario: RvrScenario, start_row: int = 7) -> int
 
     _merge(ws, f"A{start_row}:A{end_row}")
     _merge(ws, f"S{start_row}:S{end_row}")
-    _set_cell(ws, start_row, 1, scenario.subtitle, font=FONT_BODY, alignment=ALIGN_CENTER, border=True)
-    _set_cell(ws, start_row, 19, f"{scenario.standard.upper()} {scenario.bandwidth}", font=FONT_BODY, alignment=ALIGN_CENTER, border=True)
+    _set_cell(ws, start_row, 1, scenario.subtitle, font=FONT_BODY, alignment=ALIGN_CENTER_WRAP, border=True)
+    _set_cell(ws, start_row, 19, f"{scenario.standard.upper()} {scenario.bandwidth}", font=FONT_BODY, alignment=ALIGN_CENTER_WRAP, border=True)
 
     for r in range(start_row + 1, end_row + 1):
         for c in (1, 19):
@@ -497,17 +499,28 @@ def _write_data(ws: Worksheet, scenario: RvrScenario, start_row: int = 7) -> int
     return end_row
 
 
-def _style_chart(chart: LineChart) -> None:
-    chart.width = 15
+def _style_chart(chart: LineChart | ScatterChart) -> None:
+    chart.width = 16
     chart.height = 7.5
     chart.legend.position = "b"
-    chart.y_axis.majorGridlines = None
+    chart.y_axis.majorGridlines = ChartLines()
     chart.x_axis.majorGridlines = None
-    chart.y_axis.title = "Mbps"
-    chart.x_axis.title = None
+    chart.y_axis.title = "Throughput (Mbps)"
+    chart.x_axis.title = "Attenuation (dB)"
+    chart.x_axis.majorTickMark = "out"
+    chart.y_axis.majorTickMark = "out"
+    chart.x_axis.tickLblPos = "nextTo"
+    chart.y_axis.tickLblPos = "nextTo"
+    chart.y_axis.crosses = "min"
+    chart.y_axis.scaling.min = 0
+    chart.x_axis.number_format = "0"
+    chart.x_axis.tickLblSkip = 1
+    chart.x_axis.tickMarkSkip = 1
+    chart.x_axis.crossBetween = "midCat"
     for series in chart.series:
         if hasattr(series, "graphicalProperties") and hasattr(series.graphicalProperties, "line"):
             series.graphicalProperties.line.width = 20000  # 2pt
+            series.graphicalProperties.line.solidFill = COLOR_BRAND_BLUE
         series.marker = Marker(symbol="none")
 
 
@@ -516,23 +529,81 @@ def _add_charts(ws: Worksheet, scenario: RvrScenario, start_row: int, end_row: i
         return
     categories = Reference(ws, min_col=2, min_row=start_row, max_row=end_row)
 
-    rx_range = Reference(ws, min_col=4, min_row=start_row - 1, max_row=end_row)
+    rx_values = Reference(ws, min_col=4, min_row=start_row, max_row=end_row)
+    rx_title = f"{scenario.title} RVR Throughput_RX"
     rx_chart = LineChart()
-    rx_chart.title = f"{scenario.title} RVR Throughput_RX"
-    rx_chart.add_data(rx_range, titles_from_data=True)
+    rx_chart.title = rx_title
+    rx_series = Series(rx_values, title=ws.cell(row=6, column=4).value or scenario.channel)
+    rx_chart.series.append(rx_series)
     rx_chart.set_categories(categories)
     _style_chart(rx_chart)
-    rx_chart.anchor = "M6"
+    rx_point_count = end_row - start_row + 1
+    first_anchor_row = max(start_row - 1, 6)
+    rx_bottom_row = first_anchor_row + 13
+    left_anchor_col, right_anchor_col = "N", "V"
+    rx_anchor = f"{left_anchor_col}{first_anchor_row}:{right_anchor_col}{rx_bottom_row}"
+    rx_chart.anchor = rx_anchor
     ws.add_chart(rx_chart)
+    LOGGER.info(
+        "RX chart anchor=%s points=%d x_range=(%s,%s)",
+        rx_anchor,
+        rx_point_count,
+        ws.cell(row=start_row, column=2).value,
+        ws.cell(row=end_row, column=2).value,
+    )
 
-    tx_range = Reference(ws, min_col=5, min_row=start_row - 1, max_row=end_row)
+    tx_values = Reference(ws, min_col=5, min_row=start_row, max_row=end_row)
+    tx_title = f"{scenario.title} RVR Throughput_TX"
     tx_chart = LineChart()
-    tx_chart.title = f"{scenario.title} RVR Throughput_TX"
-    tx_chart.add_data(tx_range, titles_from_data=True)
+    tx_chart.title = tx_title
+    tx_series = Series(tx_values, title=ws.cell(row=6, column=5).value or scenario.channel)
+    tx_chart.series.append(tx_series)
     tx_chart.set_categories(categories)
     _style_chart(tx_chart)
-    tx_chart.anchor = "M18"
+    tx_top_row = rx_bottom_row + 2
+    tx_bottom_row = tx_top_row + 13
+    tx_anchor = f"{left_anchor_col}{tx_top_row}:{right_anchor_col}{tx_bottom_row}"
+    tx_chart.anchor = tx_anchor
     ws.add_chart(tx_chart)
+    LOGGER.info(
+        "TX chart anchor=%s points=%d x_range=(%s,%s)",
+        tx_anchor,
+        rx_point_count,
+        ws.cell(row=start_row, column=2).value,
+        ws.cell(row=end_row, column=2).value,
+    )
+
+    LOGGER.info(
+        "RX throughput points: %s",
+        [
+            (att, scenario.rx_values.get(att))
+            for att in sorted(scenario.attenuation_steps)
+            if scenario.rx_values.get(att) is not None
+        ],
+    )
+    LOGGER.info(
+        "TX throughput points: %s",
+        [
+            (att, scenario.tx_values.get(att))
+            for att in sorted(scenario.attenuation_steps)
+            if scenario.tx_values.get(att) is not None
+        ],
+    )
+
+    if scenario.attenuation_steps:
+        min_step = min(scenario.attenuation_steps)
+        max_step = max(scenario.attenuation_steps)
+        for title, chart in ((rx_title, rx_chart), (tx_title, tx_chart)):
+            chart.x_axis.scaling.min = min_step
+            chart.x_axis.scaling.max = max_step
+            chart.x_axis.majorUnit = 3
+            LOGGER.info(
+                "Configured axis for %s: min=%s max=%s majorUnit=%s",
+                title,
+                chart.x_axis.scaling.min,
+                chart.x_axis.scaling.max,
+                chart.x_axis.majorUnit,
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -594,11 +665,9 @@ def _load_scenario(result_file: Path | str) -> RvrScenario:
 
 def generate_xiaomi_report(
     result_file: Path | str,
-    template_path: Path | str,
     output_path: Path | str,
     forced_test_type: str | None = None,
 ) -> Path:
-    del template_path
     if forced_test_type and forced_test_type.upper() != "RVR":
         LOGGER.info("Forced test type %s ignored (only RVR supported).", forced_test_type)
 
