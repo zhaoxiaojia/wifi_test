@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
 from openpyxl import Workbook
-from openpyxl.chart import LineChart, Reference
+from openpyxl.chart import LineChart, Reference, ScatterChart, Series
 from openpyxl.chart.axis import ChartLines
 from openpyxl.chart.marker import Marker
 from openpyxl.drawing.image import Image
@@ -498,8 +498,7 @@ def _write_data(ws: Worksheet, scenario: RvrScenario, start_row: int = 7) -> int
     _apply_result_formatting(ws, start_row, end_row)
     return end_row
 
-
-def _style_chart(chart: LineChart) -> None:
+def _style_chart(chart: LineChart | ScatterChart) -> None:
     chart.width = 16
     chart.height = 7.5
     chart.legend.position = "b"
@@ -529,24 +528,74 @@ def _add_charts(ws: Worksheet, scenario: RvrScenario, start_row: int, end_row: i
         return
     categories = Reference(ws, min_col=2, min_row=start_row, max_row=end_row)
 
-    rx_range = Reference(ws, min_col=4, min_row=start_row - 1, max_row=end_row)
-    rx_chart = LineChart()
+    rx_values = Reference(ws, min_col=4, min_row=start_row, max_row=end_row)
+    rx_chart = ScatterChart(scatterStyle="line")
     rx_chart.title = f"{scenario.title} RVR Throughput_RX"
-    rx_chart.add_data(rx_range, titles_from_data=True)
-    rx_chart.set_categories(categories)
+    rx_series = Series(rx_values, title=ws.cell(row=6, column=4).value or scenario.channel)
+    rx_series.xvalues = categories
+    rx_chart.series.append(rx_series)
     _style_chart(rx_chart)
-    first_anchor_row = max(start_row - 6, 6)
-    rx_chart.anchor = f"M{first_anchor_row}"
+    first_anchor_row = max(start_row - 2, 6)
+    rx_chart.anchor = f"N{first_anchor_row}"
     ws.add_chart(rx_chart)
+    rx_point_count = end_row - start_row + 1
+    LOGGER.info(
+        "RX chart anchor=%s points=%d x_range=(%s,%s)",
+        rx_chart.anchor,
+        rx_point_count,
+        ws.cell(row=start_row, column=2).value,
+        ws.cell(row=end_row, column=2).value,
+    )
 
-    tx_range = Reference(ws, min_col=5, min_row=start_row - 1, max_row=end_row)
-    tx_chart = LineChart()
+    tx_values = Reference(ws, min_col=5, min_row=start_row, max_row=end_row)
+    tx_chart = ScatterChart(scatterStyle="line")
     tx_chart.title = f"{scenario.title} RVR Throughput_TX"
-    tx_chart.add_data(tx_range, titles_from_data=True)
-    tx_chart.set_categories(categories)
+    tx_series = Series(tx_values, title=ws.cell(row=6, column=5).value or scenario.channel)
+    tx_series.xvalues = categories
+    tx_chart.series.append(tx_series)
     _style_chart(tx_chart)
-    tx_chart.anchor = f"M{first_anchor_row + 18}"
+    row_spacing = max(22, int(rx_chart.height * 3))
+    tx_chart.anchor = f"N{first_anchor_row + row_spacing}"
     ws.add_chart(tx_chart)
+    LOGGER.info(
+        "TX chart anchor=%s points=%d x_range=(%s,%s)",
+        tx_chart.anchor,
+        rx_point_count,
+        ws.cell(row=start_row, column=2).value,
+        ws.cell(row=end_row, column=2).value,
+    )
+
+    LOGGER.info(
+        "RX throughput points: %s",
+        [
+            (att, scenario.rx_values.get(att))
+            for att in sorted(scenario.attenuation_steps)
+            if scenario.rx_values.get(att) is not None
+        ],
+    )
+    LOGGER.info(
+        "TX throughput points: %s",
+        [
+            (att, scenario.tx_values.get(att))
+            for att in sorted(scenario.attenuation_steps)
+            if scenario.tx_values.get(att) is not None
+        ],
+    )
+
+    if scenario.attenuation_steps:
+        min_step = min(scenario.attenuation_steps)
+        max_step = max(scenario.attenuation_steps)
+        for chart in (rx_chart, tx_chart):
+            chart.x_axis.scaling.min = min_step
+            chart.x_axis.scaling.max = max_step
+            chart.x_axis.majorUnit = 3
+            LOGGER.info(
+                "Configured %s axis: min=%s max=%s majorUnit=%s",
+                chart.title,
+                chart.x_axis.scaling.min,
+                chart.x_axis.scaling.max,
+                chart.x_axis.majorUnit,
+            )
 
     if scenario.attenuation_steps:
         min_step = min(scenario.attenuation_steps)
