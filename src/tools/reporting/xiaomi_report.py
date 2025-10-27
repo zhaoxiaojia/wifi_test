@@ -1,1762 +1,595 @@
 ﻿from __future__ import annotations
 
+import base64
+import csv
 import logging
-import math
-import re
-from collections import Counter, defaultdict
 from dataclasses import dataclass, field
+from io import BytesIO
 from pathlib import Path
-from typing import Any, Dict, Iterable, Mapping
+from typing import Dict, List, Optional, Sequence, Tuple
 
-import pandas as pd
-from openpyxl import load_workbook
+from openpyxl import Workbook
+from openpyxl.chart import LineChart, Reference
+from openpyxl.chart.marker import Marker
+from openpyxl.drawing.image import Image
+from openpyxl.formatting.rule import FormulaRule
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
 
-from src.util.constants import BANDWIDTH_ORDER_MAP, FREQ_BAND_ORDER_MAP, STANDARD_ORDER_MAP
-from src.util.rvr_chart_logic import RvrChartLogic
+LOGGER = logging.getLogger(__name__)
 
-"""Utilities to export Xiaomi Wi-Fi performance reports."""
-_LOGGER = logging.getLogger(__name__)
+# ---------------------------------------------------------------------------
+# Style constants derived from Demo.xlsx
+# ---------------------------------------------------------------------------
 
-_RVR_SCENARIO_MAPPING: Mapping[tuple[str, str, str], str] = {
-    ("11n", "2.4g", "20mhz"): "11N HT20",
-    ("11n", "2.4g", "40mhz"): "11N HT40",
-    ("11ax", "2.4g", "20mhz"): "11AX HE20",
-    ("11ax", "2.4g", "40mhz"): "11AX HE40",
-    ("11ax", "5g", "80mhz"): "11AX HE80",
-    ("11ac", "5g", "80mhz"): "11AC VHT80",
+COLUMN_WIDTHS: Dict[str, float] = {
+    "A": 13.75,
+    "B": 12.625,
+    "C": 11.5,
+    "D": 15.0,
+    "E": 14.875,
+    "F": 15.125,
+    "G": 18.375,
+    "H": 16.125,
+    "I": 14.375,
+    "J": 15.0,
+    "K": 12.25,
+    "L": 13.5,
+    "M": 12.5,
+    "N": 14.0,
+    "O": 12.25,
+    "P": 11.75,
+    "Q": 12.0,
+    "R": 13.375,
+    "S": 12.75,
+    "T": 13.375,
+    "U": 13.0,
+    "V": 13.0,
+    "W": 9.0,
 }
 
-_RVO_SCENARIO_MAPPING: Mapping[tuple[str, str, str], str] = {
-    ("11n", "2.4g", "20mhz"): "11N HT20",
-    ("11n", "2.4g", "40mhz"): "11N HT40",
-    ("11ax", "2.4g", "20mhz"): "11AX HE20",
-    ("11ax", "2.4g", "40mhz"): "11AX HE40",
-    ("11ax", "5g", "80mhz"): "11AX HE80",
-}
+ROW_HEIGHT_TITLE = 42.95
+ROW_HEIGHT_DEFAULT = 20.1
+
+COLOR_BRAND_BLUE = "2D529F"
+COLOR_SUBHEADER = "B4C6E7"
+COLOR_RATE_PRIMARY = "FFF2CC"
+COLOR_RATE_SECONDARY = "D9E1F2"
+COLOR_RSSI_RX = "CFE2F3"
+COLOR_RSSI_TX = "E2F0D9"
+
+FONT_TITLE = Font(name="Arial", color="FFFFFF", bold=True, size=20)
+FONT_SECTION = Font(name="Arial", color="1F4E78", bold=True, size=16)
+FONT_HEADER = Font(name="Arial", color="FFFFFF", bold=True, size=11)
+FONT_SUBHEADER = Font(name="Arial", color="1F4E78", bold=True, size=11)
+FONT_BODY = Font(name="Arial", color="333333", size=11)
+FONT_STANDARD = Font(name="Arial", color="333333", size=11)
+
+ALIGN_CENTER_WRAP = Alignment(horizontal="center", vertical="center", wrap_text=True)
+ALIGN_CENTER = Alignment(horizontal="center", vertical="center")
+ALIGN_LEFT_WRAP = Alignment(horizontal="left", vertical="center", wrap_text=True)
+
+BORDER_THIN = Border(
+    left=Side(style="thin", color="8A8A8A"),
+    right=Side(style="thin", color="8A8A8A"),
+    top=Side(style="thin", color="8A8A8A"),
+    bottom=Side(style="thin", color="8A8A8A"),
+)
+
+LOGO_PNG_BASE64 = (
+    "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"
+)
 
 
-def _normalize_text(value) -> str:
-    if value is None:
-        return ""
-    return str(value).strip()
+# ---------------------------------------------------------------------------
+# Scenario model
+# ---------------------------------------------------------------------------
 
 
-def _normalize_key(value) -> str:
-    return _normalize_text(value).lower()
-
-
-def _normalize_header_label(value) -> str:
-    text = _normalize_text(value)
-    if not text:
-        return ""
-    sanitized = re.sub(r"\s+", "", text).upper()
-    if sanitized.startswith("RX"):
-        return "RX"
-    if sanitized.startswith("TX"):
-        return "TX"
-    return ""
-
-
-_CHANNEL_PATTERN = re.compile(r"(?:CH)?\s*(-?\d+(?:\.\d+)?)", re.IGNORECASE)
-_NUMERIC_PATTERN = re.compile(r"-?\d+(?:\.\d+)?")
-
-
-def _sanitize_channel(value) -> str:
-    text = _normalize_text(value)
-    if not text:
-        return ""
-    match = _CHANNEL_PATTERN.search(text)
-    if not match:
-        return ""
-    number = match.group(1)
-    return number.strip()
-
-
-def _normalize_db(value) -> str:
-    if value is None:
-        return ""
-    if isinstance(value, (int, float)):
-        if math.isnan(value):
-            return ""
-        if float(value).is_integer():
-            return str(int(value))
-        return f"{float(value):.2f}".rstrip("0").rstrip(".")
-    text = _normalize_text(value)
-    if not text:
-        return ""
-    match = _NUMERIC_PATTERN.search(text)
-    if not match:
-        return ""
-    number = match.group(0)
-    if number.endswith(".0"):
-        number = number[:-2]
-    return number
-
-
-def _normalize_angle(value) -> str:
-    if value is None:
-        return ""
-    if isinstance(value, (int, float)):
-        if math.isnan(value):
-            return ""
-        return str(int(value)) if float(value).is_integer() else f"{float(value):.2f}".rstrip("0").rstrip(".")
-    text = _normalize_text(value)
-    if not text:
-        return ""
-    match = _NUMERIC_PATTERN.search(text)
-    if not match:
-        return ""
-    number = match.group(0)
-    if number.endswith(".0"):
-        number = number[:-2]
-    return number
-
-
-def _is_finite_number(value) -> bool:
-    try:
-        numeric = float(value)
-    except (TypeError, ValueError):
-        return False
-    return math.isfinite(numeric)
-
-
-def _write_cell_if_higher(ws: Worksheet, row: int, column: int, value: float) -> None:
-    if not _is_finite_number(value):
-        return
-    numeric = float(value)
-    cell = ws.cell(row=row, column=column)
-    existing = cell.value
-    if existing is None:
-        cell.value = round(numeric, 2)
-        return
-    if _is_finite_number(existing):
-        if numeric > float(existing):
-            cell.value = round(numeric, 2)
-
-
-def _select_closest_label(value: str, candidates: Iterable[str]) -> tuple[str | None, bool]:
-    """Return the closest candidate label for *value* and whether an adjustment was required."""
-    candidate_list = [c for c in candidates if c is not None and str(c).strip() != ""]
-    if not value:
-        return (None, False)
-    if value in candidate_list:
-        return (value, False)
-    try:
-        target = float(value)
-    except (TypeError, ValueError):
-        return (None, False)
-    best_label: str | None = None
-    best_diff: float | None = None
-    for candidate in candidate_list:
-        try:
-            candidate_value = float(candidate)
-        except (TypeError, ValueError):
-            continue
-        diff = abs(candidate_value - target)
-        if best_diff is None or diff < best_diff or (math.isclose(diff, best_diff) and candidate_value < float(best_label or candidate_value)):
-            best_diff = diff
-            best_label = str(int(candidate_value)) if float(candidate_value).is_integer() else str(candidate_value)
-    return (best_label, best_label is not None and best_label != value)
+DEFAULT_ATTENUATIONS = list(range(0, 78, 3))
 
 
 @dataclass
-class _RvrBlock:
-    sheet: Worksheet
-    scenario: str
-    rows_by_db: Dict[str, int] = field(default_factory=dict)
-    rx_columns: Dict[str, int] = field(default_factory=dict)
-    tx_columns: Dict[str, int] = field(default_factory=dict)
-    rx_rssi_columns: Dict[str, int] = field(default_factory=dict)
-    tx_rssi_columns: Dict[str, int] = field(default_factory=dict)
-    template_row: int = 0
-    start_row: int = 0
-    end_row: int = 0
-    identifier: str | None = None
+class RvrScenario:
+    freq: str = "5G"
+    standard: str = "Auto"
+    bandwidth: str = "20/40/80 MHz"
+    channel_label: str = "CH36"
+    angle_label: str = "0°"
+    attenuation_steps: List[float] = field(default_factory=lambda: DEFAULT_ATTENUATIONS.copy())
+    rx_values: Dict[float, float] = field(default_factory=dict)
+    tx_values: Dict[float, float] = field(default_factory=dict)
+    rssi_rx: Dict[float, float] = field(default_factory=dict)
+    rssi_tx: Dict[float, float] = field(default_factory=dict)
 
-
-@dataclass
-class _RvoDirectionBlock:
-    rows_by_channel: Dict[str, Dict[str, int]] = field(default_factory=dict)
-    angle_columns: Dict[str, int] = field(default_factory=dict)
-    header_row: int = 0
-    angle_row: int = 0
-    data_start_row: int = 0
-    data_end_row: int = 0
-    summary_start_col: int = 0
-
-
-@dataclass
-class _RvoBlock:
-    sheet: Worksheet
-    scenario: str
-    directions: Dict[str, _RvoDirectionBlock] = field(default_factory=dict)
-    start_row: int = 0
-    end_row: int = 0
-    identifier: str | None = None
-
-
-@dataclass
-class _ScenarioDefinition:
-    identifier: str
-    raw_key: str
-    freq_key: str
-    freq_display: str
-    standard_key: str
-    standard_display: str
-    bandwidth_key: str
-    bandwidth_display: str
-    interface: str
-    template_name: str | None = None
-    assignments: Dict[str, Dict[str, Any]] = field(default_factory=dict)
-
+    @property
     def title(self) -> str:
-        parts = [
-            part
-            for part in (
-                self.freq_display,
-                self.standard_display,
-                self.bandwidth_display,
-                self.interface,
-            )
-            if part
-        ]
-        return " ".join(parts)
+        return f"{self.freq.upper()} {self.standard.upper()} {self.bandwidth.upper()}"
 
-    def assign_block(
-        self,
-        section: str,
-        block_key: str,
-        block: _RvrBlock | _RvoBlock | None,
-    ) -> None:
-        if not block:
-            return
-        sheet_name = getattr(getattr(block, "sheet", None), "title", "")
-        self.assignments[section.upper()] = {
-            "block_key": block_key,
-            "sheet_name": sheet_name,
-            "start_row": getattr(block, "start_row", None),
-            "end_row": getattr(block, "end_row", None),
-            "block": block,
-        }
+    @property
+    def subtitle(self) -> str:
+        return f"{self.freq} {self.standard.upper()} {self.bandwidth}"
 
+    @property
+    def channel(self) -> str:
+        return self.channel_label
 
-def _format_interface_label(value: str | None) -> str:
-    if not value:
-        return ""
-    text = str(value).strip()
-    if not text:
-        return ""
-    return text.replace("_", " ").strip()
-
-
-def _get_row_value(row: Mapping[str, object] | pd.Series | dict, key: str):
-    getter = getattr(row, "get", None)
-    if callable(getter):
-        try:
-            return getter(key)
-        except Exception:
-            pass
-    if isinstance(row, Mapping):
-        return row.get(key)
+def _sanitize_number(value: Optional[str]) -> Optional[float]:
+    if value in (None, "", "NULL"):
+        return None
     try:
-        return row[key]  # type: ignore[index]
-    except Exception:
+        return float(value)
+    except (TypeError, ValueError):
         return None
 
 
-def _parse_scenario_group_tokens(raw_key: str | None) -> dict[str, str]:
-    tokens: dict[str, str] = {}
-    if not raw_key:
-        return tokens
-    text = str(raw_key).strip()
+def _format_angle(value: Optional[str]) -> str:
+    text = str(value or "").strip()
     if not text:
-        return tokens
-    for part in text.split("|"):
-        if not part or "=" not in part:
-            continue
-        label, value = part.split("=", 1)
-        label = label.strip().lower()
-        value = value.strip()
-        if label:
-            tokens[label] = value
-    return tokens
+        return "0?"
+    return text if text.endswith("?") else f"{text}?"
 
 
-def _extract_interface_value(row: Mapping[str, object], tokens: Mapping[str, str]) -> str:
-    preferred_keys = (
-        "interface",
-        "iface",
-        "client_interface",
-        "client",
-        "station",
-    )
-    for key in preferred_keys:
-        value = tokens.get(key)
-        if value:
-            return _format_interface_label(value)
-    column_candidates = (
-        "Interface",
-        "interface",
-        "Client_Interface",
-        "Client",
-        "Station",
-    )
-    for column in column_candidates:
-        value = _get_row_value(row, column)
-        if value not in (None, ""):
-            return _format_interface_label(value)
-    return ""
+def _format_bandwidth(value: Optional[str]) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return "20/40/80 MHz"
+    normalized = text.replace("_", " ").replace("MHz", "").strip()
+    if normalized.lower().endswith("mhz"):
+        return normalized
+    return f"{normalized} MHz"
 
 
-def _build_scenario_identifier(row: Mapping[str, object]) -> tuple[str, str]:
-    raw_key = _get_row_value(row, "Scenario_Group_Key")
-    normalized_raw = _normalize_text(raw_key)
-    if normalized_raw:
-        return normalized_raw.upper(), normalized_raw
-    freq_key = _normalize_key(_get_row_value(row, "__freq_key__"))
-    standard_key = _normalize_key(_get_row_value(row, "__standard_key__"))
-    bandwidth_key = _normalize_key(_get_row_value(row, "__bandwidth_key__"))
-    interface = _normalize_key(_get_row_value(row, "Interface"))
-    if not any((freq_key, standard_key, bandwidth_key)):
-        return "", ""
-    parts = [part for part in (freq_key, standard_key, bandwidth_key, interface) if part]
-    identifier = "|".join(parts)
-    return identifier.upper(), identifier
+def _format_channel(value: Optional[str]) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return "CH36"
+    upper = text.upper()
+    if upper.startswith("CH"):
+        return text.title()
+    if upper.replace(".", "").isdigit():
+        return f"CH{upper}"
+    return f"CH {text.title()}"
 
 
-def _scenario_sort_key(definition: _ScenarioDefinition) -> tuple[int, int, int, str, str]:
-    return (
-        FREQ_BAND_ORDER_MAP.get(definition.freq_key, 999),
-        STANDARD_ORDER_MAP.get(definition.standard_key, 999),
-        BANDWIDTH_ORDER_MAP.get(definition.bandwidth_key, 999),
-        definition.interface.lower(),
-        definition.title().lower(),
-    )
+
+# ---------------------------------------------------------------------------
+# Utility functions
+# ---------------------------------------------------------------------------
 
 
-def _collect_scenario_definitions(
-    df: pd.DataFrame, mapping: Mapping[tuple[str, str, str], str]
-) -> dict[str, _ScenarioDefinition]:
-    definitions: dict[str, _ScenarioDefinition] = {}
-    missing_templates: set[tuple[str, str, str]] = set()
-    if df is None or df.empty:
-        return definitions
-    for _, row in df.iterrows():
-        identifier, raw_key = _build_scenario_identifier(row)
-        if not identifier or identifier in definitions:
-            continue
-        freq_key = _normalize_key(_get_row_value(row, "__freq_key__"))
-        standard_key = _normalize_key(_get_row_value(row, "__standard_key__"))
-        bandwidth_key = _normalize_key(_get_row_value(row, "__bandwidth_key__"))
-        combo_key = (standard_key, freq_key, bandwidth_key)
-        template_name = mapping.get(combo_key)
-        if not template_name and combo_key not in missing_templates:
-            missing_templates.add(combo_key)
-            _LOGGER.info(
-                "动态场景缺少模板映射：standard=%s freq=%s bandwidth=%s (raw_key=%s)",
-                standard_key or "<empty>",
-                freq_key or "<empty>",
-                bandwidth_key or "<empty>",
-                raw_key or "",
-            )
-        tokens = _parse_scenario_group_tokens(raw_key)
-        interface = _extract_interface_value(row, tokens)
-        freq_display = _normalize_text(_get_row_value(row, "__freq_band_display__")) or tokens.get("band", "")
-        standard_display = _normalize_text(_get_row_value(row, "__standard_display__")) or tokens.get("mode", "")
-        bandwidth_display = _normalize_text(_get_row_value(row, "__bandwidth_display__")) or tokens.get("bandwidth", "")
-        definition = _ScenarioDefinition(
-            identifier=identifier,
-            raw_key=raw_key,
-            freq_key=freq_key,
-            freq_display=_format_interface_label(freq_display),
-            standard_key=standard_key,
-            standard_display=_format_interface_label(standard_display),
-            bandwidth_key=bandwidth_key,
-            bandwidth_display=_format_interface_label(bandwidth_display),
-            interface=interface,
-            template_name=template_name,
-        )
-        definitions[identifier] = definition
-        _LOGGER.debug(
-            "收集到动态场景定义：identifier=%s title=%s 使用模板=%s",
-            identifier,
-            definition.title(),
-            template_name,
-        )
-    return definitions
+def _configure_sheet(ws: Worksheet) -> None:
+    for column, width in COLUMN_WIDTHS.items():
+        ws.column_dimensions[column].width = width
+    ws.row_dimensions[1].height = ROW_HEIGHT_TITLE
+    for row in range(2, 100):
+        ws.row_dimensions[row].height = ROW_HEIGHT_DEFAULT
 
 
-def _resolve_template_name(
-    combo: tuple[str, str, str],
-    mapping: Mapping[tuple[str, str, str], str],
-    blocks: Mapping[str, object],
-    block_order: Iterable[str],
-    original_titles: Mapping[str, str],
-    section: str,
-) -> tuple[str | None, bool]:
-    template_name = mapping.get(combo)
-    if template_name:
-        block_key = template_name.upper()
-        if block_key in blocks:
-            return template_name, True
-    standard_key, freq_key, bandwidth_key = combo
-    order_lookup = {key: index for index, key in enumerate(block_order)}
-    best_name: str | None = None
-    best_source: tuple[str, str, str] | None = None
-    best_score = -1
-    best_order = len(order_lookup) + 1
-    target_bw_index = BANDWIDTH_ORDER_MAP.get(bandwidth_key, None)
-    for source_combo, candidate_name in mapping.items():
-        candidate_key = candidate_name.upper()
-        if candidate_key not in blocks:
-            continue
-        score = 0
-        if freq_key:
-            if source_combo[1] != freq_key:
-                continue
-            score += 100
-        else:
-            score += 10
-        if standard_key and source_combo[0] == standard_key:
-            score += 10
-        if bandwidth_key:
-            if source_combo[2] == bandwidth_key:
-                score += 6
-            else:
-                candidate_bw_index = BANDWIDTH_ORDER_MAP.get(source_combo[2], None)
-                if (
-                    target_bw_index is not None
-                    and candidate_bw_index is not None
-                ):
-                    distance = abs(target_bw_index - candidate_bw_index)
-                    score += max(0, 4 - distance)
-        order_index = order_lookup.get(candidate_key, len(order_lookup))
-        if score > best_score or (score == best_score and order_index < best_order):
-            best_score = score
-            best_name = candidate_name
-            best_source = source_combo
-            best_order = order_index
-    if best_name and best_source:
-        _LOGGER.info(
-            "%s 组合 standard=%s freq=%s bandwidth=%s 缺少模板映射，复用模板 %s (参考 standard=%s freq=%s bandwidth=%s)",
-            section,
-            standard_key or "<empty>",
-            freq_key or "<empty>",
-            bandwidth_key or "<empty>",
-            best_name,
-            best_source[0] or "<empty>",
-            best_source[1] or "<empty>",
-            best_source[2] or "<empty>",
-        )
-        return best_name, False
-    for key in block_order:
-        if key not in blocks:
-            continue
-        fallback_name = original_titles.get(key) or getattr(blocks[key], "scenario", "")
-        if fallback_name:
-            _LOGGER.warning(
-                "%s 组合 standard=%s freq=%s bandwidth=%s 无模板映射，默认使用模板 %s",
-                section,
-                standard_key or "<empty>",
-                freq_key or "<empty>",
-                bandwidth_key or "<empty>",
-                fallback_name,
-            )
-            return fallback_name, False
-    _LOGGER.error(
-        "%s 组合 standard=%s freq=%s bandwidth=%s 无可用模板，跳过写入",
-        section,
-        standard_key or "<empty>",
-        freq_key or "<empty>",
-        bandwidth_key or "<empty>",
-    )
-    return (None, False)
+def _merge(ws: Worksheet, range_string: str) -> None:
+    ws.merge_cells(range_string)
 
 
-def _log_template_clone(
-    section: str, template_label: str, scenario_title: str, forced: bool
+def _set_cell(
+    ws: Worksheet,
+    row: int,
+    column: int,
+    value,
+    font: Optional[Font] = None,
+    alignment: Optional[Alignment] = None,
+    fill: Optional[str] = None,
+    border: bool = False,
 ) -> None:
-    message = (
-        "%s 模板 %s 因缺少模板映射被克隆用于场景：%s"
-        if forced
-        else "%s 模板 %s 克隆用于额外场景：%s"
-    )
-    _LOGGER.info(message, section, template_label, scenario_title)
+    cell = ws.cell(row=row, column=column, value=value)
+    if font:
+        cell.font = font
+    if alignment:
+        cell.alignment = alignment
+    if fill:
+        cell.fill = PatternFill("solid", fgColor=fill)
+    if border:
+        cell.border = BORDER_THIN
 
-def _prepare_rvr_dynamic_blocks(
-    layout: _TemplateLayout, df: pd.DataFrame
-) -> dict[str, _RvrBlock]:
-    definitions = _collect_scenario_definitions(df, _RVR_SCENARIO_MAPPING)
-    if not definitions:
-        return {}
-    grouped: dict[tuple[str, str, str], list[_ScenarioDefinition]] = defaultdict(list)
-    for definition in definitions.values():
-        key = (definition.standard_key, definition.freq_key, definition.bandwidth_key)
-        grouped[key].append(definition)
-    scenario_blocks: dict[str, _RvrBlock] = {}
-    base_blocks: dict[str, _RvrBlock] = dict(layout.rvr_blocks)
-    original_titles = {key: block.scenario for key, block in layout.rvr_blocks.items()}
-    original_order = list(layout.rvr_block_order)
-    template_usage: defaultdict[str, int] = defaultdict(int)
-    template_last_key: dict[str, str] = {}
-    for combo, items in grouped.items():
-        force_clone = False
-        template_name, is_direct_match = _resolve_template_name(
-            combo,
-            _RVR_SCENARIO_MAPPING,
-            base_blocks,
-            original_order,
-            original_titles,
-            "RVR",
-        )
-        if not template_name:
+
+# ---------------------------------------------------------------------------
+# Standard text helpers
+# ---------------------------------------------------------------------------
+
+
+def _wm_standard_text(att: float) -> Optional[str]:
+    if att <= 15:
+        return "RX Tput>=499\nTX Tput>=499"
+    if att == 39:
+        return ">0"
+    if att >= 42:
+        return "N/A"
+    return None
+
+
+def _sdmc_standard_text(att: float) -> Optional[str]:
+    if att <= 15:
+        return "RX Tput>=400\nTX Tput>=300"
+    if att <= 27:
+        return "RX Tput>=320\nTX Tput>=200"
+    if att >= 48:
+        return "N/A"
+    return None
+
+
+def _aml_standard_text(att: float) -> Optional[str]:
+    if att <= 15:
+        return "RX Tput>=503.5\nTX Tput>=475"
+    if att <= 21:
+        return "RX Tput>=320\nTX Tput>=300"
+    if 30 <= att <= 45:
+        return "RX Tput>100\nTX Tput>95"
+    if att >= 48:
+        return "N/A"
+    return None
+
+
+def _wm_threshold(att: float) -> Optional[Tuple[int, int]]:
+    if att <= 15:
+        return 499, 499
+    if att == 39:
+        return 0, 0
+    return None
+
+
+def _sdmc_threshold(att: float) -> Optional[Tuple[int, int]]:
+    if att <= 15:
+        return 400, 300
+    if att <= 27:
+        return 320, 200
+    if att <= 45:
+        return 100, 80
+    return None
+
+
+def _aml_threshold(att: float) -> Optional[Tuple[int, int]]:
+    if att <= 12:
+        return 400, 300
+    if att <= 21:
+        return 320, 200
+    if att <= 45:
+        return 100, 80
+    return None
+
+
+def _group_runs(values: Sequence[float], formatter) -> List[Tuple[int, int, Optional[str]]]:
+    if not values:
+        return []
+    groups: List[Tuple[int, int, Optional[str]]] = []
+    start = 0
+    current = formatter(values[0])
+    for idx in range(1, len(values)):
+        text = formatter(values[idx])
+        if text != current:
+            groups.append((start, idx - 1, current))
+            start = idx
+            current = text
+    groups.append((start, len(values) - 1, current))
+    return groups
+
+
+def _apply_grouped_texts(ws: Worksheet, column: int, start_row: int, values: Sequence[float], formatter) -> None:
+    for start_idx, end_idx, text in _group_runs(values, formatter):
+        if not text:
             continue
-        force_clone = not is_direct_match
-        base_key = template_name.upper()
-        template_block = base_blocks.get(base_key)
-        if template_block is None:
-            _LOGGER.warning("Missing RVR template block for %s", template_name)
-            continue
-        usage_count = template_usage.get(base_key, 0)
-        current_block: _RvrBlock
-        current_key: str
-        if force_clone or usage_count > 0:
-            anchor_key = template_last_key.get(base_key)
-            anchor_block = layout.rvr_blocks.get(anchor_key) if anchor_key else None
-            if anchor_block is None:
-                anchor_block = template_block
-                anchor_key = anchor_block.scenario.upper()
-            cloned_block = layout.clone_rvr_block(template_block, anchor_block)
-            temp_key = f"{base_key}__DUP_{usage_count}"
-            layout._register_rvr_block_after(temp_key, cloned_block, anchor_key)
-            current_block = cloned_block
-            current_key = temp_key
-        else:
-            current_block = template_block
-            current_key = base_key
-        layout.clear_rvr_block_measurements(current_block)
-        sorted_items = sorted(items, key=_scenario_sort_key)
-        if not sorted_items:
-            continue
-        usage_count = template_usage.get(base_key, 0)
-        current_block: _RvrBlock
-        current_key: str
-        template_label = original_titles.get(base_key, template_name)
-        reuse_original = not force_clone and usage_count == 0
-        if reuse_original:
-            current_block = template_block
-            current_key = base_key
-        else:
-            anchor_key = template_last_key.get(base_key)
-            anchor_block = layout.rvr_blocks.get(anchor_key) if anchor_key else None
-            if anchor_block is None:
-                anchor_block = template_block
-                anchor_key = anchor_block.scenario.upper()
-            cloned_block = layout.clone_rvr_block(template_block, anchor_block)
-            temp_key = f"{base_key}__DUP_{usage_count}"
-            layout._register_rvr_block_after(temp_key, cloned_block, anchor_key)
-            _log_template_clone(
-                "RVR",
-                template_label or template_name,
-                sorted_items[0].title() or template_name,
-                force_clone,
-            )
-            current_block = cloned_block
-            current_key = temp_key
-        layout.clear_rvr_block_measurements(current_block)
-        template_reference = template_block
-        for index, definition in enumerate(sorted_items):
-            title = definition.title() or template_block.scenario
-            block_key = title.upper() if title else current_key
-            if index == 0:
-                layout._set_rvr_block_title(current_block, title)
-                layout._rename_rvr_block_key(current_key, block_key, current_block)
-                current_block.identifier = definition.identifier
-                definition.assign_block("RVR", block_key, current_block)
-                scenario_blocks[definition.identifier] = current_block
-                current_key = block_key
-            else:
-                new_block = layout.clone_rvr_block(template_reference, current_block)
-                layout.clear_rvr_block_measurements(new_block)
-                layout._set_rvr_block_title(new_block, title)
-                new_key = title.upper() if title else f"{current_key}_{index}"
-                layout._register_rvr_block_after(new_key, new_block, current_key)
-                template_label = original_titles.get(base_key, template_name)
-                _log_template_clone(
-                    "RVR",
-                    template_label or template_name,
-                    title,
-                    force_clone,
-                )
-                new_block.identifier = definition.identifier
-                definition.assign_block("RVR", new_key, new_block)
-                scenario_blocks[definition.identifier] = new_block
-                current_block = new_block
-                current_key = new_key
-            definition.template_name = template_name
-        template_usage[base_key] = usage_count + 1
-        template_last_key[base_key] = current_key
-    return scenario_blocks
+        top = start_row + start_idx
+        bottom = start_row + end_idx
+        if top != bottom:
+            _merge(ws, f"{get_column_letter(column)}{top}:{get_column_letter(column)}{bottom}")
+        _set_cell(ws, top, column, text, font=FONT_STANDARD, alignment=ALIGN_LEFT_WRAP, border=True)
+        for r in range(top + 1, bottom + 1):
+            cell = ws.cell(row=r, column=column)
+            cell.border = BORDER_THIN
+            cell.alignment = ALIGN_LEFT_WRAP
 
 
-def _prepare_rvo_dynamic_blocks(
-    layout: _TemplateLayout, df: pd.DataFrame
-) -> dict[str, _RvoBlock]:
-    definitions = _collect_scenario_definitions(df, _RVO_SCENARIO_MAPPING)
-    if not definitions:
-        return {}
-    grouped: dict[tuple[str, str, str], list[_ScenarioDefinition]] = defaultdict(list)
-    for definition in definitions.values():
-        key = (definition.standard_key, definition.freq_key, definition.bandwidth_key)
-        grouped[key].append(definition)
-    scenario_blocks: dict[str, _RvoBlock] = {}
-    base_blocks: dict[str, _RvoBlock] = dict(layout.rvo_blocks)
-    original_titles = {key: block.scenario for key, block in layout.rvo_blocks.items()}
-    original_order = list(layout.rvo_block_order)
-    template_usage: defaultdict[str, int] = defaultdict(int)
-    template_last_key: dict[str, str] = {}
-    for combo, items in grouped.items():
-        force_clone = False
-        template_name, is_direct_match = _resolve_template_name(
-            combo,
-            _RVO_SCENARIO_MAPPING,
-            base_blocks,
-            original_order,
-            original_titles,
-            "RVO",
-        )
-        if not template_name:
-            continue
-        force_clone = not is_direct_match
-        base_key = template_name.upper()
-        template_block = base_blocks.get(base_key)
-        if template_block is None:
-            _LOGGER.warning("Missing RVO template block for %s", template_name)
-            continue
-        usage_count = template_usage.get(base_key, 0)
-        current_block: _RvoBlock
-        current_key: str
-        if force_clone or usage_count > 0:
-            anchor_key = template_last_key.get(base_key)
-            anchor_block = layout.rvo_blocks.get(anchor_key) if anchor_key else None
-            if anchor_block is None:
-                anchor_block = template_block
-                anchor_key = anchor_block.scenario.upper()
-            cloned_block = layout.clone_rvo_block(template_block, anchor_block)
-            temp_key = f"{base_key}__DUP_{usage_count}"
-            layout._register_rvo_block_after(temp_key, cloned_block, anchor_key)
-            current_block = cloned_block
-            current_key = temp_key
-        else:
-            current_block = template_block
-            current_key = base_key
-        layout.clear_rvo_block_measurements(current_block)
-        sorted_items = sorted(items, key=_scenario_sort_key)
-        if not sorted_items:
-            continue
-        usage_count = template_usage.get(base_key, 0)
-        current_block: _RvoBlock
-        current_key: str
-        template_label = original_titles.get(base_key, template_name)
-        reuse_original = not force_clone and usage_count == 0
-        if reuse_original:
-            current_block = template_block
-            current_key = base_key
-        else:
-            anchor_key = template_last_key.get(base_key)
-            anchor_block = layout.rvo_blocks.get(anchor_key) if anchor_key else None
-            if anchor_block is None:
-                anchor_block = template_block
-                anchor_key = anchor_block.scenario.upper()
-            cloned_block = layout.clone_rvo_block(template_block, anchor_block)
-            temp_key = f"{base_key}__DUP_{usage_count}"
-            layout._register_rvo_block_after(temp_key, cloned_block, anchor_key)
-            _log_template_clone(
-                "RVO",
-                template_label or template_name,
-                sorted_items[0].title() or template_name,
-                force_clone,
-            )
-            current_block = cloned_block
-            current_key = temp_key
-        layout.clear_rvo_block_measurements(current_block)
-        template_reference = template_block
-        for index, definition in enumerate(sorted_items):
-            title = definition.title() or template_block.scenario
-            block_key = title.upper() if title else current_key
-            if index == 0:
-                layout._set_rvo_block_title(current_block, title)
-                layout._rename_rvo_block_key(current_key, block_key, current_block)
-                current_block.identifier = definition.identifier
-                definition.assign_block("RVO", block_key, current_block)
-                scenario_blocks[definition.identifier] = current_block
-                current_key = block_key
-            else:
-                new_block = layout.clone_rvo_block(template_reference, current_block)
-                layout.clear_rvo_block_measurements(new_block)
-                layout._set_rvo_block_title(new_block, title)
-                new_key = title.upper() if title else f"{current_key}_{index}"
-                layout._register_rvo_block_after(new_key, new_block, current_key)
-                _log_template_clone(
-                    "RVO",
-                    template_label or template_name,
-                    title,
-                    force_clone,
-                )
-                new_block.identifier = definition.identifier
-                definition.assign_block("RVO", new_key, new_block)
-                scenario_blocks[definition.identifier] = new_block
-                current_block = new_block
-                current_key = new_key
-            definition.template_name = template_name
-        template_usage[base_key] = usage_count + 1
-        template_last_key[base_key] = current_key
-    return scenario_blocks
-
-
-class _TemplateLayout:
-    """Parse Xiaomi template structure for RVR/RVO sections."""
-
-    def __init__(self, workbook):
-        self.workbook = workbook
-        self.rvr_sheet = workbook["Coffey RVR"]
-        self.rvo_sheet = workbook["Coffey RVO"]
-        self.rvr_block_order: list[str] = []
-        self.rvo_block_order: list[str] = []
-        self.rvr_blocks = self._parse_rvr_blocks()
-        self.rvo_blocks = self._parse_rvo_blocks()
-
-    def _parse_rvr_blocks(self) -> Dict[str, _RvrBlock]:
-        sheet = self.rvr_sheet
-        item_rows = [
-            cell.row for cell in sheet["A"] if _normalize_text(cell.value) == "Item"
-        ]
-        max_row = sheet.max_row
-        blocks: Dict[str, _RvrBlock] = {}
-        for index, item_row in enumerate(item_rows):
-            scenario_value = sheet.cell(row=item_row + 2, column=1).value
-            scenario = _normalize_text(scenario_value)
-            if not scenario:
-                continue
-            next_row = item_rows[index + 1] if index + 1 < len(item_rows) else max_row + 1
-            rows_by_db = self._collect_rvr_rows(sheet, item_row + 2, next_row - 1)
-            rx_columns, tx_columns, rx_rssi_columns, tx_rssi_columns = self._extract_rvr_channel_columns(
-                sheet, item_row, item_row + 1
-            )
-            template_row = min(rows_by_db.values()) if rows_by_db else item_row + 2
-            key = scenario.upper()
-            blocks[key] = _RvrBlock(
-                sheet=sheet,
-                scenario=scenario,
-                rows_by_db=rows_by_db,
-                rx_columns=rx_columns,
-                tx_columns=tx_columns,
-                rx_rssi_columns=rx_rssi_columns,
-                tx_rssi_columns=tx_rssi_columns,
-                template_row=template_row,
-                start_row=item_row,
-                end_row=next_row - 1,
-            )
-            self.rvr_block_order.append(key)
-        return blocks
-
-    @staticmethod
-    def _collect_rvr_rows(sheet: Worksheet, start_row: int, end_row: int) -> Dict[str, int]:
-        mapping: Dict[str, int] = {}
-        for row in range(start_row, end_row + 1):
-            db_value = sheet.cell(row=row, column=2).value
-            normalized = _normalize_db(db_value)
-            if normalized:
-                mapping[normalized] = row
-        return mapping
-
-    @staticmethod
-    def _extract_rvr_channel_columns(
-        sheet: Worksheet, header_row: int, channel_row: int
-    ) -> tuple[Dict[str, int], Dict[str, int], Dict[str, int], Dict[str, int]]:
-        rx_columns: Dict[str, int] = {}
-        tx_columns: Dict[str, int] = {}
-        rx_rssi_columns: Dict[str, int] = {}
-        tx_rssi_columns: Dict[str, int] = {}
-        max_col = sheet.max_column
-        last_section: str | None = None
-        for column in range(1, max_col + 1):
-            header_val = sheet.cell(row=header_row, column=column).value
-            header_text = _normalize_text(header_val).upper()
-            if header_text and "ITEM" in header_text and column > 1:
-                last_section = None
-                continue
-
-            section: str | None = None
-            if "RSSI" in header_text:
-                if "RX" in header_text:
-                    section = "RX_RSSI"
-                elif "TX" in header_text:
-                    section = "TX_RSSI"
-            elif "RX" in header_text and "MBPS" in header_text:
-                section = "RX_TPUT"
-            elif "TX" in header_text and "MBPS" in header_text:
-                section = "TX_TPUT"
-
-            if section is None:
-                # inherit previous section unless header explicitly resets
-                section = last_section
-            else:
-                last_section = section
-
-            if section not in {"RX_TPUT", "TX_TPUT", "RX_RSSI", "TX_RSSI"}:
-                continue
-
-            channel_value = sheet.cell(row=channel_row, column=column).value
-            channel_id = _sanitize_channel(channel_value)
-            if not channel_id:
-                continue
-            if section == "RX_TPUT":
-                rx_columns[channel_id] = column
-            elif section == "TX_TPUT":
-                tx_columns[channel_id] = column
-            elif section == "RX_RSSI":
-                rx_rssi_columns[channel_id] = column
-            elif section == "TX_RSSI":
-                tx_rssi_columns[channel_id] = column
-        return rx_columns, tx_columns, rx_rssi_columns, tx_rssi_columns
-
-    def _parse_rvo_blocks(self) -> Dict[str, _RvoBlock]:
-        sheet = self.rvo_sheet
-        item_rows = [
-            cell.row for cell in sheet["A"] if _normalize_text(cell.value) == "Item"
-        ]
-        max_row = sheet.max_row
-        blocks: Dict[str, _RvoBlock] = {}
-        for index, item_row in enumerate(item_rows):
-            scenario_value = sheet.cell(row=item_row + 2, column=1).value
-            scenario = _normalize_text(scenario_value)
-            if not scenario:
-                continue
-            next_row = item_rows[index + 1] if index + 1 < len(item_rows) else max_row + 1
-            directions = self._extract_rvo_directions(sheet, item_row, next_row)
-            key = scenario.upper()
-            blocks[key] = _RvoBlock(
-                sheet=sheet,
-                scenario=scenario,
-                directions=directions,
-                start_row=item_row,
-                end_row=next_row - 1,
-            )
-            self.rvo_block_order.append(key)
-        return blocks
-
-    def _extract_rvo_directions(self, sheet: Worksheet, start_row: int, stop_row: int) -> Dict[str, _RvoDirectionBlock]:
-        directions: Dict[str, _RvoDirectionBlock] = {}
-        row = start_row
-        while row < stop_row:
-            header_label = _normalize_header_label(sheet.cell(row=row, column=4).value)
-            if header_label not in {"RX", "TX"}:
-                row += 1
-                continue
-            header_row = row
-            angle_row = row + 1
-            angle_columns = self._extract_angle_columns(sheet, angle_row)
-            rows_by_channel: Dict[str, Dict[str, int]] = {}
-            current_channel = ""
-            data_row = angle_row + 1
-            data_start_row = data_row
-            last_data_row = angle_row
-            while data_row < stop_row:
-                next_header = _normalize_header_label(sheet.cell(row=data_row, column=4).value)
-                if next_header in {"RX", "TX"}:
-                    break
-                att_value = sheet.cell(row=data_row, column=3).value
-                if not _normalize_text(att_value):
-                    data_row += 1
-                    continue
-                channel_cell = sheet.cell(row=data_row, column=2).value
-                channel_id = _sanitize_channel(channel_cell) or current_channel
-                if not channel_id:
-                    data_row += 1
-                    continue
-                current_channel = channel_id
-                db_key = _normalize_db(att_value)
-                if not db_key:
-                    data_row += 1
-                    continue
-                rows_by_channel.setdefault(channel_id, {})[db_key] = data_row
-                last_data_row = data_row
-                data_row += 1
-            summary_start_col = (max(angle_columns.values()) + 1) if angle_columns else 0
-            directions[header_label] = _RvoDirectionBlock(
-                rows_by_channel=rows_by_channel,
-                angle_columns=angle_columns,
-                header_row=header_row,
-                angle_row=angle_row,
-                data_start_row=data_start_row,
-                data_end_row=last_data_row if last_data_row >= data_start_row else data_start_row - 1,
-                summary_start_col=summary_start_col,
-            )
-            row = data_row
-        return directions
-
-    @staticmethod
-    def _extract_angle_columns(sheet: Worksheet, angle_row: int) -> Dict[str, int]:
-        mapping: Dict[str, int] = {}
-        max_col = sheet.max_column
-        for column in range(1, max_col + 1):
-            angle_value = sheet.cell(row=angle_row, column=column).value
-            normalized = _normalize_angle(angle_value)
-            if normalized:
-                mapping[normalized] = column
-        return mapping
-
-    @staticmethod
-    def _relocate_formula(value, source_row: int, target_row: int):
-        if not isinstance(value, str) or not value.startswith("="):
-            return value
-
-        def repl(match: re.Match[str]) -> str:
-            col = match.group(1)
-            row_str = match.group(2)
-            try:
-                row_val = int(row_str)
-            except ValueError:
-                return match.group(0)
-            if row_val == source_row:
-                return f"{col}{target_row}"
-            return match.group(0)
-
-        return re.sub(r"(\$?[A-Z]{1,3})\$?(\d+)", repl, value)
-
-    @staticmethod
-    def _copy_row(sheet: Worksheet, source_row: int, target_row: int) -> None:
-        max_col = sheet.max_column
-        for column in range(1, max_col + 1):
-            source = sheet.cell(row=source_row, column=column)
-            target = sheet.cell(row=target_row, column=column)
-            if source.has_style:
-                target._style = source._style
-            target.value = _TemplateLayout._relocate_formula(source.value, source_row, target_row)
-            target.number_format = source.number_format
-            try:
-                target.protection = source.protection
-            except TypeError:
-                pass
-            try:
-                target.alignment = source.alignment
-            except TypeError:
-                pass
-            try:
-                target.font = source.font
-            except TypeError:
-                pass
-            try:
-                target.fill = source.fill
-            except TypeError:
-                pass
-            try:
-                target.border = source.border
-            except TypeError:
-                pass
-        source_dimension = sheet.row_dimensions.get(source_row)
-        if source_dimension:
-            target_dimension = sheet.row_dimensions[target_row]
-            if source_dimension.height is not None:
-                target_dimension.height = source_dimension.height
-                try:
-                    target_dimension.customHeight = True
-                except AttributeError:
-                    pass
-            hidden = getattr(source_dimension, "hidden", None)
-            if hidden is not None:
-                target_dimension.hidden = hidden
-            outline_level = getattr(source_dimension, "outlineLevel", None)
-            if outline_level not in (None, 0):
-                target_dimension.outlineLevel = outline_level
-
-    @staticmethod
-    def _capture_merged_ranges(
-        sheet: Worksheet, start_row: int, end_row: int
-    ) -> list[tuple[int, int, int, int]]:
-        captured: list[tuple[int, int, int, int]] = []
-        for merged_range in sheet.merged_cells.ranges:
-            if (
-                merged_range.min_row >= start_row
-                and merged_range.max_row <= end_row
-            ):
-                captured.append(
-                    (
-                        merged_range.min_row,
-                        merged_range.max_row,
-                        merged_range.min_col,
-                        merged_range.max_col,
-                    )
-                )
-        return captured
-
-    @staticmethod
-    def _apply_merged_ranges(
-        sheet: Worksheet,
-        ranges: Iterable[tuple[int, int, int, int]],
-        row_offset: int,
-        col_offset: int = 0,
-    ) -> None:
-        if not ranges:
-            return
-        existing = {str(rng) for rng in sheet.merged_cells.ranges}
-        for min_row, max_row, min_col, max_col in ranges:
-            start_row = min_row + row_offset
-            end_row = max_row + row_offset
-            start_col = min_col + col_offset
-            end_col = max_col + col_offset
-            ref = (
-                f"{get_column_letter(start_col)}{start_row}:"
-                f"{get_column_letter(end_col)}{end_row}"
-            )
-            if ref in existing:
-                continue
-            sheet.merge_cells(
-                start_row=start_row,
-                end_row=end_row,
-                start_column=start_col,
-                end_column=end_col,
-            )
-            existing.add(ref)
-
-    @staticmethod
-    def _copy_column_styles(
-        sheet: Worksheet,
-        source_col: int,
-        target_col: int,
-        start_row: int,
-        end_row: int,
-    ) -> None:
-        for row in range(start_row, end_row + 1):
-            source = sheet.cell(row=row, column=source_col)
-            target = sheet.cell(row=row, column=target_col)
-            if source.has_style:
-                target._style = source._style
-            target.value = source.value
-            target.number_format = source.number_format
-            try:
-                target.protection = source.protection
-            except TypeError:
-                pass
-            try:
-                target.alignment = source.alignment
-            except TypeError:
-                pass
-            try:
-                target.font = source.font
-            except TypeError:
-                pass
-            try:
-                target.fill = source.fill
-            except TypeError:
-                pass
-            try:
-                target.border = source.border
-            except TypeError:
-                pass
-
-    def _rename_rvr_block_key(self, old_key: str, new_key: str, block: _RvrBlock) -> None:
-        if old_key == new_key:
-            return
-        if old_key in self.rvr_blocks:
-            self.rvr_blocks.pop(old_key)
-        self.rvr_blocks[new_key] = block
-        for index, key in enumerate(self.rvr_block_order):
-            if key == old_key:
-                self.rvr_block_order[index] = new_key
-                break
-
-    def _register_rvr_block_after(self, new_key: str, block: _RvrBlock, after_key: str) -> None:
-        self.rvr_blocks[new_key] = block
-        if after_key in self.rvr_block_order:
-            index = self.rvr_block_order.index(after_key)
-            self.rvr_block_order.insert(index + 1, new_key)
-        else:
-            self.rvr_block_order.append(new_key)
-
-    def _set_rvr_block_title(self, block: _RvrBlock, title: str) -> None:
-        block.scenario = title
-        title_cell = block.sheet.cell(row=block.start_row + 2, column=1)
-        title_cell.value = title
-
-    def clone_rvr_block(self, template_block: _RvrBlock, anchor_block: _RvrBlock) -> _RvrBlock:
-        sheet = template_block.sheet
-        row_count = template_block.end_row - template_block.start_row + 1
-        insert_position = anchor_block.end_row + 1
-        merged_ranges = self._capture_merged_ranges(
-            sheet, template_block.start_row, template_block.end_row
-        )
-        sheet.insert_rows(insert_position, amount=row_count)
-        self._adjust_rvr_mappings(insert_position, row_count)
-        for offset in range(row_count):
-            source_row = template_block.start_row + offset
-            target_row = insert_position + offset
-            self._copy_row(sheet, source_row, target_row)
-        offset = insert_position - template_block.start_row
-        self._apply_merged_ranges(sheet, merged_ranges, offset)
-        new_rows_by_db = {key: row + offset for key, row in template_block.rows_by_db.items()}
-        new_block = _RvrBlock(
-            sheet=sheet,
-            scenario=template_block.scenario,
-            rows_by_db=new_rows_by_db,
-            rx_columns=dict(template_block.rx_columns),
-            tx_columns=dict(template_block.tx_columns),
-            rx_rssi_columns=dict(template_block.rx_rssi_columns),
-            tx_rssi_columns=dict(template_block.tx_rssi_columns),
-            template_row=template_block.template_row + offset,
-            start_row=insert_position,
-            end_row=insert_position + row_count - 1,
-        )
-        return new_block
-
-    def _rename_rvo_block_key(self, old_key: str, new_key: str, block: _RvoBlock) -> None:
-        if old_key == new_key:
-            return
-        if old_key in self.rvo_blocks:
-            self.rvo_blocks.pop(old_key)
-        self.rvo_blocks[new_key] = block
-        for index, key in enumerate(self.rvo_block_order):
-            if key == old_key:
-                self.rvo_block_order[index] = new_key
-                break
-
-    def _register_rvo_block_after(self, new_key: str, block: _RvoBlock, after_key: str) -> None:
-        self.rvo_blocks[new_key] = block
-        if after_key in self.rvo_block_order:
-            index = self.rvo_block_order.index(after_key)
-            self.rvo_block_order.insert(index + 1, new_key)
-        else:
-            self.rvo_block_order.append(new_key)
-
-    def _set_rvo_block_title(self, block: _RvoBlock, title: str) -> None:
-        block.scenario = title
-        title_cell = block.sheet.cell(row=block.start_row + 2, column=1)
-        title_cell.value = title
-
-    def clone_rvo_block(self, template_block: _RvoBlock, anchor_block: _RvoBlock) -> _RvoBlock:
-        sheet = template_block.sheet
-        row_count = template_block.end_row - template_block.start_row + 1
-        insert_position = anchor_block.end_row + 1
-        merged_ranges = self._capture_merged_ranges(
-            sheet, template_block.start_row, template_block.end_row
-        )
-        sheet.insert_rows(insert_position, amount=row_count)
-        self._adjust_rvo_mappings(insert_position, row_count)
-        for offset in range(row_count):
-            source_row = template_block.start_row + offset
-            target_row = insert_position + offset
-            self._copy_row(sheet, source_row, target_row)
-        offset = insert_position - template_block.start_row
-        self._apply_merged_ranges(sheet, merged_ranges, offset)
-        new_directions: Dict[str, _RvoDirectionBlock] = {}
-        for dir_name, dir_block in template_block.directions.items():
-            updated_rows_by_channel = {
-                channel: {db_key: row + offset for db_key, row in rows.items()}
-                for channel, rows in dir_block.rows_by_channel.items()
-            }
-            new_directions[dir_name] = _RvoDirectionBlock(
-                rows_by_channel=updated_rows_by_channel,
-                angle_columns=dict(dir_block.angle_columns),
-                header_row=dir_block.header_row + offset,
-                angle_row=dir_block.angle_row + offset,
-                data_start_row=dir_block.data_start_row + offset,
-                data_end_row=dir_block.data_end_row + offset,
-                summary_start_col=dir_block.summary_start_col,
-            )
-        new_block = _RvoBlock(
-            sheet=sheet,
-            scenario=template_block.scenario,
-            directions=new_directions,
-            start_row=insert_position,
-            end_row=insert_position + row_count - 1,
-        )
-        return new_block
-
-    def _adjust_rvr_mappings(self, start_row: int, delta: int) -> None:
-        for block in self.rvr_blocks.values():
-            for key, row in list(block.rows_by_db.items()):
-                if row >= start_row:
-                    block.rows_by_db[key] = row + delta
-            if block.template_row >= start_row:
-                block.template_row += delta
-            if block.start_row >= start_row:
-                block.start_row += delta
-                block.end_row += delta
-            elif block.end_row >= start_row:
-                block.end_row += delta
-
-    def _adjust_rvo_mappings(self, start_row: int, delta: int) -> None:
-        for block in self.rvo_blocks.values():
-            if block.start_row >= start_row:
-                block.start_row += delta
-                block.end_row += delta
-            elif block.end_row >= start_row:
-                block.end_row += delta
-            for dir_block in block.directions.values():
-                if dir_block.header_row >= start_row:
-                    dir_block.header_row += delta
-                if dir_block.angle_row >= start_row:
-                    dir_block.angle_row += delta
-                if dir_block.data_start_row >= start_row:
-                    dir_block.data_start_row += delta
-                if dir_block.data_end_row >= start_row:
-                    dir_block.data_end_row += delta
-                updated_channels: Dict[str, Dict[str, int]] = {}
-                for channel_id, rows in dir_block.rows_by_channel.items():
-                    updated_rows: Dict[str, int] = {}
-                    for db_key, row in rows.items():
-                        updated_rows[db_key] = row + delta if row >= start_row else row
-                    updated_channels[channel_id] = updated_rows
-                dir_block.rows_by_channel = updated_channels
-
-    def _set_rvr_label(self, block: _RvrBlock, row_index: int, db_key: str) -> None:
-        sheet = block.sheet
-        primary = sheet.cell(row=row_index, column=2)
-        secondary = sheet.cell(row=row_index, column=24)
-        try:
-            numeric = float(db_key)
-        except (TypeError, ValueError):
-            primary.value = db_key
-            secondary.value = db_key
-            return
-        if math.isfinite(numeric) and numeric.is_integer():
-            value = int(numeric)
-        else:
-            value = numeric
-        primary.value = value
-        secondary.value = value
-
-    @staticmethod
-    def _format_db_label(db_key: str) -> str:
-        try:
-            numeric = float(db_key)
-        except (TypeError, ValueError):
-            return str(db_key)
-        if math.isfinite(numeric) and numeric.is_integer():
-            return f"{int(numeric)}"
-        return f"{numeric:.2f}".rstrip("0").rstrip(".")
-
-    @staticmethod
-    def _format_angle_label(angle_key: str) -> str:
-        try:
-            numeric = float(angle_key)
-        except (TypeError, ValueError):
-            return str(angle_key)
-        if math.isfinite(numeric) and numeric.is_integer():
-            return f"{int(numeric)}"
-        return f"{numeric:.2f}".rstrip("0").rstrip(".")
-
-    def _clear_rvr_measurements(self, block: _RvrBlock, row_index: int) -> None:
-        columns = (
-            set(block.rx_columns.values())
-            | set(block.tx_columns.values())
-            | set(block.rx_rssi_columns.values())
-            | set(block.tx_rssi_columns.values())
-        )
-        for column in columns:
-            block.sheet.cell(row=row_index, column=column).value = None
-
-    def clear_rvr_block_measurements(self, block: _RvrBlock) -> None:
-        if not block:
-            return
-        for row_index in set(block.rows_by_db.values()):
-            self._clear_rvr_measurements(block, row_index)
-
-    def _insert_rvr_row(self, block: _RvrBlock, db_key: str) -> int:
-        try:
-            target_value = float(db_key)
-        except (TypeError, ValueError):
-            target_value = math.inf
-        sorted_rows = sorted(
-            ((float(k), row) for k, row in block.rows_by_db.items() if k not in ("", None)),
-            key=lambda item: item[0],
-        )
-        insert_position = None
-        for value, row in sorted_rows:
-            if target_value < value:
-                insert_position = row
-                break
-        if insert_position is None:
-            insert_position = max(block.rows_by_db.values(), default=block.template_row) + 1
-        block.sheet.insert_rows(insert_position)
-        self._adjust_rvr_mappings(insert_position, 1)
-        self._copy_row(block.sheet, block.template_row, insert_position)
-        self._clear_rvr_measurements(block, insert_position)
-        self._set_rvr_label(block, insert_position, db_key)
-        block.rows_by_db[db_key] = insert_position
-        _LOGGER.info(
-            "Inserted RVR row for scenario %s at attenuation %s dB (row %s)",
-            block.scenario,
-            db_key,
-            insert_position,
-        )
-        return insert_position
-
-    def ensure_rvr_row(self, block: _RvrBlock, db_key: str) -> int:
-        if db_key in block.rows_by_db:
-            row_index = block.rows_by_db[db_key]
-            self._set_rvr_label(block, row_index, db_key)
-            return row_index
-        resolved_key, _ = _select_closest_label(db_key, block.rows_by_db.keys())
-        if resolved_key:
-            row_index = block.rows_by_db.pop(resolved_key)
-            block.rows_by_db[db_key] = row_index
-            self._set_rvr_label(block, row_index, db_key)
-            self._clear_rvr_measurements(block, row_index)
-            return row_index
-        return self._insert_rvr_row(block, db_key)
-
-    def _adjust_rvo_column_mappings(self, insert_col: int, delta: int) -> None:
-        for block in self.rvo_blocks.values():
-            for dir_block in block.directions.values():
-                for key, col in list(dir_block.angle_columns.items()):
-                    if col >= insert_col:
-                        dir_block.angle_columns[key] = col + delta
-                if dir_block.summary_start_col and dir_block.summary_start_col >= insert_col:
-                    dir_block.summary_start_col += delta
-
-    def _set_rvo_angle_label(self, block: _RvoBlock, dir_block: _RvoDirectionBlock, column: int, angle_key: str) -> None:
-        label = self._format_angle_label(angle_key)
-        block.sheet.cell(row=dir_block.angle_row, column=column).value = f"{label}锟斤拷"
-
-    def _clear_rvo_column(self, block: _RvoBlock, dir_block: _RvoDirectionBlock, column: int) -> None:
-        for row_index in range(dir_block.data_start_row, dir_block.data_end_row + 1):
-            block.sheet.cell(row=row_index, column=column).value = None
-
-    def _insert_rvo_angle(self, block: _RvoBlock, dir_block: _RvoDirectionBlock, angle_key: str) -> int:
-        try:
-            target_value = float(angle_key)
-        except (TypeError, ValueError):
-            target_value = math.inf
-        sorted_cols = sorted(
-            ((float(k), col) for k, col in dir_block.angle_columns.items() if k not in ("", None)),
-            key=lambda item: item[0],
-        )
-        insert_col = dir_block.summary_start_col if dir_block.summary_start_col else (sorted_cols[0][1] if sorted_cols else 4)
-        for value, col in sorted_cols:
-            if target_value < value:
-                insert_col = col
-                break
-        block.sheet.insert_cols(insert_col)
-        self._adjust_rvo_column_mappings(insert_col, 1)
-        existing_columns = [col for col in dir_block.angle_columns.values()]
-        reference_col = min(existing_columns) if existing_columns else insert_col + 1
-        reference_col = max(reference_col, 1)
-        self._copy_column_styles(
-            block.sheet,
-            reference_col,
-            insert_col,
-            dir_block.header_row,
-            dir_block.data_end_row if dir_block.data_end_row >= dir_block.data_start_row else dir_block.header_row,
-        )
-        if dir_block.summary_start_col == 0:
-            dir_block.summary_start_col = insert_col + 1
-        dir_block.angle_columns[angle_key] = insert_col
-        self._set_rvo_angle_label(block, dir_block, insert_col, angle_key)
-        self._clear_rvo_column(block, dir_block, insert_col)
-        _LOGGER.info(
-            "Inserted RVO angle column for scenario %s (%s) at %s° (column %s)",
-            block.scenario,
-            dir_block,
-            angle_key,
-            insert_col,
-        )
-        return insert_col
-
-    def ensure_rvo_angle(self, block: _RvoBlock, dir_block: _RvoDirectionBlock, angle_key: str) -> int:
-        angle_key = angle_key or ""
-        if angle_key in dir_block.angle_columns:
-            column = dir_block.angle_columns[angle_key]
-            self._set_rvo_angle_label(block, dir_block, column, angle_key)
-            return column
-        resolved_key, _ = _select_closest_label(angle_key, dir_block.angle_columns.keys())
-        if resolved_key:
-            column = dir_block.angle_columns.pop(resolved_key)
-            dir_block.angle_columns[angle_key] = column
-            self._set_rvo_angle_label(block, dir_block, column, angle_key)
-            self._clear_rvo_column(block, dir_block, column)
-            return column
-        return self._insert_rvo_angle(block, dir_block, angle_key)
-
-    def _adjust_rvo_row_mappings(self, insert_row: int, delta: int) -> None:
-        for block in self.rvo_blocks.values():
-            for dir_block in block.directions.values():
-                for channel, mappings in dir_block.rows_by_channel.items():
-                    for key, row in list(mappings.items()):
-                        if row >= insert_row:
-                            mappings[key] = row + delta
-                if dir_block.header_row >= insert_row:
-                    dir_block.header_row += delta
-                    dir_block.angle_row += delta
-                    dir_block.data_start_row += delta
-                    dir_block.data_end_row += delta
-                elif dir_block.data_end_row >= insert_row:
-                    dir_block.data_end_row += delta
-
-    def _set_rvo_row_label(
-        self,
-        block: _RvoBlock,
-        dir_block: _RvoDirectionBlock,
-        channel_id: str,
-        row_index: int,
-        db_key: str,
-    ) -> None:
-        sheet = block.sheet
-        sheet.cell(row=row_index, column=2).value = f"CH{channel_id}"
-        sheet.cell(row=row_index, column=3).value = f"{self._format_db_label(db_key)}dB"
-
-    def _clear_rvo_row(self, block: _RvoBlock, dir_block: _RvoDirectionBlock, row_index: int) -> None:
-        for column in dir_block.angle_columns.values():
-            block.sheet.cell(row=row_index, column=column).value = None
-
-    def clear_rvo_block_measurements(self, block: _RvoBlock) -> None:
-        if not block:
-            return
-        for dir_block in block.directions.values():
-            rows = {
-                row_index for channel_rows in dir_block.rows_by_channel.values() for row_index in channel_rows.values()
-            }
-            for row_index in rows:
-                self._clear_rvo_row(block, dir_block, row_index)
-
-    def _insert_rvo_row(
-        self,
-        block: _RvoBlock,
-        dir_block: _RvoDirectionBlock,
-        channel_id: str,
-        db_key: str,
-    ) -> int:
-        channel_rows = dir_block.rows_by_channel.setdefault(channel_id, {})
-        try:
-            target_value = float(db_key)
-        except (TypeError, ValueError):
-            target_value = math.inf
-        sorted_rows = sorted(
-            ((float(k), row, k) for k, row in channel_rows.items() if k not in ("", None)),
-            key=lambda item: item[0],
-        )
-        insert_position: int
-        for value, row_index, _ in sorted_rows:
-            if target_value < value:
-                insert_position = row_index
-                break
-        else:
-            existing_rows = [row for _, row, _ in sorted_rows]
-            max_current_row = max(existing_rows) if existing_rows else dir_block.data_start_row - 1
-            subsequent_rows = [
-                row
-                for other_channel, mappings in dir_block.rows_by_channel.items()
-                if other_channel != channel_id
-                for row in mappings.values()
-                if row > max_current_row
-            ]
-            insert_position = min(subsequent_rows) if subsequent_rows else dir_block.data_end_row + 1
-        block.sheet.insert_rows(insert_position)
-        self._adjust_rvo_row_mappings(insert_position, 1)
-        reference_row = sorted_rows[0][1] if sorted_rows else dir_block.data_start_row
-        self._copy_row(block.sheet, reference_row, insert_position)
-        self._clear_rvo_row(block, dir_block, insert_position)
-        self._set_rvo_row_label(block, dir_block, channel_id, insert_position, db_key)
-        channel_rows[db_key] = insert_position
-        _LOGGER.info(
-            "Inserted RVO attenuation row for scenario %s channel %s at %s dB (row %s)",
-            block.scenario,
-            channel_id,
-            db_key,
-            insert_position,
-        )
-        return insert_position
-
-    def ensure_rvo_row(
-        self,
-        block: _RvoBlock,
-        dir_block: _RvoDirectionBlock,
-        channel_id: str,
-        db_key: str,
-    ) -> int:
-        channel_rows = dir_block.rows_by_channel.setdefault(channel_id, {})
-        if db_key in channel_rows:
-            row_index = channel_rows[db_key]
-            self._set_rvo_row_label(block, dir_block, channel_id, row_index, db_key)
-            return row_index
-        resolved_key, _ = _select_closest_label(db_key, channel_rows.keys())
-        if resolved_key:
-            row_index = channel_rows.pop(resolved_key)
-            channel_rows[db_key] = row_index
-            self._set_rvo_row_label(block, dir_block, channel_id, row_index, db_key)
-            self._clear_rvo_row(block, dir_block, row_index)
-            return row_index
-        return self._insert_rvo_row(block, dir_block, channel_id, db_key)
-
-
-class _DataLoader(RvrChartLogic):
-    """Load and prepare CSV data."""
-
-    def __init__(self, forced_type: str | None = None) -> None:
-        super().__init__()
-        self._forced_type = forced_type.upper() if forced_type else None
-        if self._forced_type:
-            self._selected_test_type = self._forced_type
-
-    def load(self, path: Path) -> pd.DataFrame:
-        df = self._load_rvr_dataframe(path)
-        if df is None or df.empty:
-            return pd.DataFrame()
-        if self._forced_type:
-            df["__test_type_display__"] = self._forced_type
-        df["__standard_key__"] = df["__standard_display__"].astype(str).str.lower()
-        df["__bandwidth_key__"] = df["__bandwidth_display__"].astype(str).str.lower()
-        df["__freq_key__"] = df["__freq_band_display__"].astype(str).str.lower()
-        df["__direction_key__"] = df["__direction_display__"].astype(str).str.upper()
-        df["__channel_key__"] = df["__channel_display__"].apply(_sanitize_channel)
-        df["__db_key__"] = df["__step__"].apply(_normalize_db)
-        df["__angle_key__"] = df["__angle_display__"].apply(_normalize_angle)
-        return df
-
-
-def _populate_rvr_dynamic(
-    layout: _TemplateLayout, df: pd.DataFrame, scenario_blocks: Mapping[str, _RvrBlock]
-) -> None:
-    sheet = layout.rvr_sheet
-    scenario_stats: dict[str, Counter] = defaultdict(Counter)
-    for identifier, block in scenario_blocks.items():
-        _LOGGER.debug(
-            "RVR dynamic block [%s]: title=%s rows=%s", identifier, block.scenario, len(block.rows_by_db)
-        )
-    for _, row_data in df.iterrows():
-        scenario_id, _ = _build_scenario_identifier(row_data)
-        if not scenario_id:
-            scenario_stats["_UNKNOWN"]["unknown_scenario"] += 1
-            continue
-        block = scenario_blocks.get(scenario_id)
-        if block is None:
-            scenario_stats[scenario_id]["missing_block"] += 1
-            continue
-        direction = row_data.get("__direction_key__", "")
-        stats = scenario_stats[block.scenario]
-        stats["total"] += 1
-        if direction not in {"RX", "TX"}:
-            stats["bad_direction"] += 1
-            continue
-        channel_id = row_data.get("__channel_key__", "")
-        db_key = row_data.get("__db_key__", "")
-        if not channel_id or not db_key:
-            stats["missing_channel_or_db"] += 1
-            continue
-        columns_map = block.rx_columns if direction == "RX" else block.tx_columns
-        column_index = columns_map.get(channel_id)
-        if not column_index:
-            stats["missing_channel_column"] += 1
-            continue
-        row_index = layout.ensure_rvr_row(block, db_key)
-        throughput = row_data.get("__throughput_value__", None)
-        if throughput is None:
-            stats["missing_throughput"] += 1
-            continue
-        stats["written"] += 1
-        _write_cell_if_higher(sheet, row_index, column_index, throughput)
-
-        rssi_value = row_data.get("RSSI")
-        if rssi_value is None or (isinstance(rssi_value, float) and pd.isna(rssi_value)):
-            rssi_value = row_data.get("__rssi_display__")
-        if rssi_value not in (None, ""):
-            try:
-                rssi_numeric = float(rssi_value)
-            except (TypeError, ValueError):
-                rssi_numeric = None
-            if rssi_numeric is not None:
-                rssi_map = block.rx_rssi_columns if direction == "RX" else block.tx_rssi_columns
-                rssi_col = rssi_map.get(channel_id)
-                if rssi_col:
-                    sheet.cell(row=row_index, column=rssi_col).value = rssi_numeric
-                    stats["written_rssi"] += 1
-                else:
-                    stats["missing_rssi_column"] += 1
-    for scenario_name, counts in scenario_stats.items():
-        _LOGGER.info("RVR populate summary [%s]: %s", scenario_name, dict(counts))
-
-
-def _populate_rvr_legacy(layout: _TemplateLayout, df: pd.DataFrame) -> None:
-    sheet = layout.rvr_sheet
-    scenario_stats: dict[str, Counter] = defaultdict(Counter)
-    for name, block in layout.rvr_blocks.items():
-        _LOGGER.debug(
-            "RVR block mapping [%s]: rows=%s rx=%s tx=%s rx_rssi=%s tx_rssi=%s",
-            name,
-            len(block.rows_by_db),
-            block.rx_columns,
-            block.tx_columns,
-            block.rx_rssi_columns,
-            block.tx_rssi_columns,
-        )
-    for _, row_data in df.iterrows():
-        scenario_key = (
-            row_data.get("__standard_key__", ""),
-            row_data.get("__freq_key__", ""),
-            row_data.get("__bandwidth_key__", ""),
-        )
-        scenario_name = _RVR_SCENARIO_MAPPING.get(scenario_key)
-        if not scenario_name:
-            scenario_stats["_UNKNOWN"]["unknown_scenario"] += 1
-            continue
-        block = layout.rvr_blocks.get(scenario_name.upper())
-        if block is None:
-            scenario_stats[scenario_name]["missing_block"] += 1
-            continue
-        direction = row_data.get("__direction_key__", "")
-        stats = scenario_stats[scenario_name]
-        stats["total"] += 1
-        if direction not in {"RX", "TX"}:
-            stats["bad_direction"] += 1
-            continue
-        channel_id = row_data.get("__channel_key__", "")
-        db_key = row_data.get("__db_key__", "")
-        if not channel_id or not db_key:
-            stats["missing_channel_or_db"] += 1
-            continue
-        columns_map = block.rx_columns if direction == "RX" else block.tx_columns
-        column_index = columns_map.get(channel_id)
-        if not column_index:
-            stats["missing_channel_column"] += 1
-            continue
-        row_index = layout.ensure_rvr_row(block, db_key)
-        throughput = row_data.get("__throughput_value__", None)
-        if throughput is None:
-            stats["missing_throughput"] += 1
-            continue
-        stats["written"] += 1
-        _write_cell_if_higher(sheet, row_index, column_index, throughput)
-
-        rssi_value = row_data.get("RSSI")
-        if rssi_value is None or (isinstance(rssi_value, float) and pd.isna(rssi_value)):
-            rssi_value = row_data.get("__rssi_display__")
-        if rssi_value not in (None, ""):
-            try:
-                rssi_numeric = float(rssi_value)
-            except (TypeError, ValueError):
-                rssi_numeric = None
-            if rssi_numeric is not None:
-                rssi_map = block.rx_rssi_columns if direction == "RX" else block.tx_rssi_columns
-                rssi_col = rssi_map.get(channel_id)
-                if rssi_col:
-                    sheet.cell(row=row_index, column=rssi_col).value = rssi_numeric
-                    stats["written_rssi"] += 1
-                else:
-                    stats["missing_rssi_column"] += 1
-    for scenario_name, counts in scenario_stats.items():
-        _LOGGER.info("RVR populate summary [%s]: %s", scenario_name, dict(counts))
-
-
-def _populate_rvr(layout: _TemplateLayout, df: pd.DataFrame) -> None:
-    if df.empty:
-        _LOGGER.info("Populate RVR skipped: dataframe empty")
-        return
-    scenario_blocks = _prepare_rvr_dynamic_blocks(layout, df)
-    if scenario_blocks:
-        _populate_rvr_dynamic(layout, df, scenario_blocks)
+def _set_result_cell(ws: Worksheet, row: int, column: int, threshold: Optional[Tuple[int, int]]) -> None:
+    if threshold is None:
+        value = "Pass"
     else:
-        _LOGGER.info("RVR 动态模板未生成，回退至旧版写入逻辑")
-        _populate_rvr_legacy(layout, df)
+        rx, tx = threshold
+        value = f'=IF(AND(D{row}>{rx},E{row}>{tx}),"Pass","Fail")'
+    _set_cell(ws, row, column, value, font=FONT_BODY, alignment=ALIGN_CENTER, border=True)
 
 
-def _populate_rvo_dynamic(
-    layout: _TemplateLayout, df: pd.DataFrame, scenario_blocks: Mapping[str, _RvoBlock]
-) -> None:
-    sheet = layout.rvo_sheet
-    scenario_stats: dict[str, Counter] = defaultdict(Counter)
-    for identifier, block in scenario_blocks.items():
-        _LOGGER.debug(
-            "RVO dynamic block [%s]: title=%s directions=%s",
-            identifier,
-            block.scenario,
-            list(block.directions.keys()),
-        )
-    for _, row_data in df.iterrows():
-        scenario_id, _ = _build_scenario_identifier(row_data)
-        if not scenario_id:
-            scenario_stats["_UNKNOWN"]["unknown_scenario"] += 1
-            continue
-        block = scenario_blocks.get(scenario_id)
-        if block is None:
-            scenario_stats[scenario_id]["missing_block"] += 1
-            continue
-        direction = row_data.get("__direction_key__", "")
-        dir_block = block.directions.get(direction)
-        stats = scenario_stats[block.scenario]
-        if dir_block is None:
-            stats["bad_direction"] += 1
-            continue
-        channel_id = row_data.get("__channel_key__", "")
-        db_key = row_data.get("__db_key__", "")
-        angle_key = row_data.get("__angle_key__", "")
-        if not channel_id or not db_key or not angle_key:
-            stats["missing_channel_or_db_or_angle"] += 1
-            continue
-        column_index = layout.ensure_rvo_angle(block, dir_block, angle_key)
-        row_index = layout.ensure_rvo_row(block, dir_block, channel_id, db_key)
-        throughput = row_data.get("__throughput_value__", None)
-        if throughput is None:
-            stats["missing_throughput"] += 1
-            continue
-        stats["written"] += 1
-        _write_cell_if_higher(sheet, row_index, column_index, throughput)
-    for scenario_name, counts in scenario_stats.items():
-        _LOGGER.info("RVO populate summary [%s]: %s", scenario_name, dict(counts))
-
-
-def _populate_rvo_legacy(layout: _TemplateLayout, df: pd.DataFrame) -> None:
-    sheet = layout.rvo_sheet
-    scenario_stats: dict[str, Counter] = defaultdict(Counter)
-    for _, row_data in df.iterrows():
-        scenario_key = (
-            row_data.get("__standard_key__", ""),
-            row_data.get("__freq_key__", ""),
-            row_data.get("__bandwidth_key__", ""),
-        )
-        scenario_name = _RVO_SCENARIO_MAPPING.get(scenario_key)
-        if not scenario_name:
-            scenario_stats["_UNKNOWN"]["unknown_scenario"] += 1
-            continue
-        block = layout.rvo_blocks.get(scenario_name.upper())
-        if block is None:
-            scenario_stats[scenario_name]["missing_block"] += 1
-            continue
-        direction = row_data.get("__direction_key__", "")
-        dir_block = block.directions.get(direction)
-        if dir_block is None:
-            scenario_stats[scenario_name]["bad_direction"] += 1
-            continue
-        channel_id = row_data.get("__channel_key__", "")
-        db_key = row_data.get("__db_key__", "")
-        angle_key = row_data.get("__angle_key__", "")
-        if not channel_id or not db_key or not angle_key:
-            scenario_stats[scenario_name]["missing_channel_or_db_or_angle"] += 1
-            continue
-        column_index = layout.ensure_rvo_angle(block, dir_block, angle_key)
-        row_index = layout.ensure_rvo_row(block, dir_block, channel_id, db_key)
-        throughput = row_data.get("__throughput_value__", None)
-        if throughput is None:
-            scenario_stats[scenario_name]["missing_throughput"] += 1
-            continue
-        scenario_stats[scenario_name]["written"] += 1
-        _write_cell_if_higher(sheet, row_index, column_index, throughput)
-    for scenario_name, counts in scenario_stats.items():
-        _LOGGER.info("RVO populate summary [%s]: %s", scenario_name, dict(counts))
-
-
-def _populate_rvo(layout: _TemplateLayout, df: pd.DataFrame) -> None:
-    if df.empty:
-        _LOGGER.info("Populate RVO skipped: dataframe empty")
+def _apply_result_formatting(ws: Worksheet, start_row: int, end_row: int) -> None:
+    if start_row > end_row:
         return
-    scenario_blocks = _prepare_rvo_dynamic_blocks(layout, df)
-    if scenario_blocks:
-        _populate_rvo_dynamic(layout, df, scenario_blocks)
-    else:
-        _LOGGER.info("RVO 动态模板未生成，回退至旧版写入逻辑")
-        _populate_rvo_legacy(layout, df)
+    for column in ("I", "J", "K"):
+        fail_rule = FormulaRule(
+            formula=[f"={column}{start_row}=\"Fail\""],
+            font=Font(name="Arial", color="FF0000", bold=True),
+        )
+        pass_rule = FormulaRule(
+            formula=[f"={column}{start_row}=\"Pass\""],
+            font=Font(name="Arial", color="008000", bold=True),
+        )
+        ws.conditional_formatting.add(f"{column}{start_row}:{column}{end_row}", fail_rule)
+        ws.conditional_formatting.add(f"{column}{start_row}:{column}{end_row}", pass_rule)
+
+
+# ---------------------------------------------------------------------------
+# Layout writer
+# ---------------------------------------------------------------------------
+
+
+def _write_title(ws: Worksheet, scenario: RvrScenario) -> None:
+    _merge(ws, "A1:W1")
+    _merge(ws, "A2:W2")
+    _merge(ws, "A3:W3")
+    _merge(ws, "A4:W4")
+
+    _set_cell(ws, 1, 1, "RVR Test Report", font=FONT_TITLE, alignment=ALIGN_CENTER, fill=COLOR_BRAND_BLUE, border=True)
+    _set_cell(ws, 2, 1, "1銆?Throughput:2.4G", font=FONT_SECTION, alignment=ALIGN_CENTER, border=True)
+    _set_cell(ws, 3, 1, "2銆?Throughput:5G", font=FONT_SECTION, alignment=ALIGN_CENTER, border=True)
+    subtitle = f"{scenario.freq} {scenario.standard.upper()} {scenario.bandwidth}"
+    _set_cell(ws, 4, 1, subtitle, font=FONT_SECTION, alignment=ALIGN_CENTER, border=True)
+
+    logo_bytes = base64.b64decode(LOGO_PNG_BASE64)
+    image = Image(BytesIO(logo_bytes))
+    image.width = 364
+    image.height = 104
+    image.anchor = "A1"
+    ws.add_image(image)
+
+
+def _write_headers(ws: Worksheet, scenario: RvrScenario) -> None:
+    merges = [
+        "A5:A6",
+        "B5:B6",
+        "C5:C6",
+        "F5:F6",
+        "G5:F6".replace("F", "H"),  # placeholder replaced below
+    ]
+    # rewrite merges to avoid subtle error above
+    merges = [
+        "A5:A6",
+        "B5:B6",
+        "C5:C6",
+        "F5:F6",
+        "G5:G6",
+        "H5:H6",
+        "I5:I6",
+        "J5:J6",
+        "K5:K6",
+        "S5:S6",
+    ]
+    for rng in merges:
+        _merge(ws, rng)
+
+    headers = [
+        (5, 1, "Item"),
+        (5, 2, "ATT\n(Unit:dB)"),
+        (5, 3, "Angle"),
+        (5, 4, "RX(Unit:Mbps)"),
+        (5, 5, "TX(Unit:Mbps)"),
+        (5, 6, "WM_Standard"),
+        (5, 7, "SDMC_Standard"),
+        (5, 8, "AML_Standard"),
+        (5, 9, "WM_Result"),
+        (5, 10, "SDMC_Result"),
+        (5, 11, "AML_Result"),
+        (5, 19, "Item"),
+        (5, 20, "ATT\n(Unit:dB)"),
+        (5, 21, "Angle"),
+        (5, 22, "RX_RSSI (Unit:dBm)"),
+        (5, 23, "TX_RSSI (Unit:dBm)"),
+    ]
+    for row, col, text in headers:
+        _set_cell(ws, row, col, text, font=FONT_HEADER, alignment=ALIGN_CENTER_WRAP, fill=COLOR_BRAND_BLUE, border=True)
+
+    _set_cell(ws, 6, 4, scenario.channel, font=FONT_SUBHEADER, alignment=ALIGN_CENTER, fill=COLOR_SUBHEADER, border=True)
+    _set_cell(ws, 6, 5, scenario.channel, font=FONT_SUBHEADER, alignment=ALIGN_CENTER, fill=COLOR_SUBHEADER, border=True)
+    for column in (1, 2, 3, 6, 7, 8, 9, 10, 11):
+        _set_cell(ws, 6, column, None, font=FONT_SUBHEADER, alignment=ALIGN_CENTER, fill=COLOR_SUBHEADER, border=True)
+
+    _set_cell(ws, 6, 22, scenario.channel, font=FONT_SUBHEADER, alignment=ALIGN_CENTER, fill=COLOR_SUBHEADER, border=True)
+    _set_cell(ws, 6, 23, scenario.channel, font=FONT_SUBHEADER, alignment=ALIGN_CENTER, fill=COLOR_SUBHEADER, border=True)
+    for column in (19, 20, 21):
+        _set_cell(ws, 6, column, None, font=FONT_SUBHEADER, alignment=ALIGN_CENTER, fill=COLOR_SUBHEADER, border=True)
+
+
+def _write_data(ws: Worksheet, scenario: RvrScenario, start_row: int = 7) -> int:
+    attenuations = sorted(scenario.attenuation_steps) or DEFAULT_ATTENUATIONS
+    end_row = start_row + len(attenuations) - 1
+
+    _merge(ws, f"A{start_row}:A{end_row}")
+    _merge(ws, f"S{start_row}:S{end_row}")
+    _set_cell(ws, start_row, 1, scenario.subtitle, font=FONT_BODY, alignment=ALIGN_CENTER, border=True)
+    _set_cell(ws, start_row, 19, f"{scenario.standard.upper()} {scenario.bandwidth}", font=FONT_BODY, alignment=ALIGN_CENTER, border=True)
+
+    for r in range(start_row + 1, end_row + 1):
+        for c in (1, 19):
+            cell = ws.cell(row=r, column=c)
+            cell.border = BORDER_THIN
+            cell.alignment = ALIGN_CENTER
+
+    for index, attenuation in enumerate(attenuations):
+        row = start_row + index
+        highlight = COLOR_RATE_PRIMARY if index < 6 else COLOR_RATE_SECONDARY
+
+        _set_cell(ws, row, 2, attenuation, font=FONT_BODY, alignment=ALIGN_CENTER, border=True)
+        _set_cell(ws, row, 3, scenario.angle_label, font=FONT_BODY, alignment=ALIGN_CENTER, border=True)
+
+        _set_cell(ws, row, 4, scenario.rx_values.get(attenuation), font=FONT_BODY, alignment=ALIGN_CENTER, fill=highlight, border=True)
+        _set_cell(ws, row, 5, scenario.tx_values.get(attenuation), font=FONT_BODY, alignment=ALIGN_CENTER, fill=highlight, border=True)
+
+        _set_result_cell(ws, row, 9, _wm_threshold(attenuation))
+        _set_result_cell(ws, row, 10, _sdmc_threshold(attenuation))
+        _set_result_cell(ws, row, 11, _aml_threshold(attenuation))
+
+        for column in (6, 7, 8):
+            _set_cell(ws, row, column, None, font=FONT_STANDARD, alignment=ALIGN_LEFT_WRAP, border=True)
+
+        _set_cell(ws, row, 20, attenuation, font=FONT_BODY, alignment=ALIGN_CENTER, border=True)
+        _set_cell(ws, row, 21, scenario.angle_label, font=FONT_BODY, alignment=ALIGN_CENTER, border=True)
+        _set_cell(ws, row, 22, scenario.rssi_rx.get(attenuation), font=FONT_BODY, alignment=ALIGN_CENTER, fill=COLOR_RSSI_RX, border=True)
+        _set_cell(ws, row, 23, scenario.rssi_tx.get(attenuation), font=FONT_BODY, alignment=ALIGN_CENTER, fill=COLOR_RSSI_TX, border=True)
+
+    _apply_grouped_texts(ws, 6, start_row, attenuations, _wm_standard_text)
+    _apply_grouped_texts(ws, 7, start_row, attenuations, _sdmc_standard_text)
+    _apply_grouped_texts(ws, 8, start_row, attenuations, _aml_standard_text)
+    _apply_result_formatting(ws, start_row, end_row)
+    return end_row
+
+
+def _style_chart(chart: LineChart) -> None:
+    chart.width = 15
+    chart.height = 7.5
+    chart.legend.position = "b"
+    chart.y_axis.majorGridlines = None
+    chart.x_axis.majorGridlines = None
+    chart.y_axis.title = "Mbps"
+    chart.x_axis.title = None
+    for series in chart.series:
+        if hasattr(series, "graphicalProperties") and hasattr(series.graphicalProperties, "line"):
+            series.graphicalProperties.line.width = 20000  # 2pt
+        series.marker = Marker(symbol="none")
+
+
+def _add_charts(ws: Worksheet, scenario: RvrScenario, start_row: int, end_row: int) -> None:
+    if start_row > end_row:
+        return
+    categories = Reference(ws, min_col=2, min_row=start_row, max_row=end_row)
+
+    rx_range = Reference(ws, min_col=4, min_row=start_row - 1, max_row=end_row)
+    rx_chart = LineChart()
+    rx_chart.title = f"{scenario.title} RVR Throughput_RX"
+    rx_chart.add_data(rx_range, titles_from_data=True)
+    rx_chart.set_categories(categories)
+    _style_chart(rx_chart)
+    rx_chart.anchor = "M6"
+    ws.add_chart(rx_chart)
+
+    tx_range = Reference(ws, min_col=5, min_row=start_row - 1, max_row=end_row)
+    tx_chart = LineChart()
+    tx_chart.title = f"{scenario.title} RVR Throughput_TX"
+    tx_chart.add_data(tx_range, titles_from_data=True)
+    tx_chart.set_categories(categories)
+    _style_chart(tx_chart)
+    tx_chart.anchor = "M18"
+    ws.add_chart(tx_chart)
+
+
+# ---------------------------------------------------------------------------
+# Data extraction
+# ---------------------------------------------------------------------------
+
+
+def _load_scenario(result_file: Path | str) -> RvrScenario:
+    scenario = RvrScenario()
+    path = Path(result_file)
+    if not path.exists():
+        LOGGER.warning("Result CSV not found for RVR report: %s", path)
+        return scenario
+
+    attenuation_values: set[float] = set()
+    try:
+        with path.open("r", encoding="utf-8-sig", newline="") as handle:
+            reader = csv.DictReader(handle)
+            for row in reader:
+                if not row:
+                    continue
+                scenario.freq = row.get("Freq_Band") or scenario.freq
+                scenario.standard = row.get("Standard") or scenario.standard
+                scenario.bandwidth = _format_bandwidth(row.get("BW") or scenario.bandwidth)
+                scenario.channel_label = _format_channel(row.get("CH_Freq_MHz") or row.get("Channel") or scenario.channel_label)
+                scenario.angle_label = _format_angle(row.get("Angel") or row.get("Angle") or scenario.angle_label)
+
+                attenuation = _sanitize_number(row.get("DB") or row.get("Total_Path_Loss"))
+                if attenuation is None:
+                    continue
+                attenuation_values.add(attenuation)
+
+                throughput = _sanitize_number(row.get("Throughput"))
+                direction = str(row.get("Direction") or "").upper()
+                if throughput is not None:
+                    if direction in {"DL", "RX"}:
+                        scenario.rx_values[attenuation] = throughput
+                    elif direction in {"UL", "TX"}:
+                        scenario.tx_values[attenuation] = throughput
+
+                rssi = _sanitize_number(row.get("RSSI"))
+                if rssi is not None:
+                    if direction in {"DL", "RX"}:
+                        scenario.rssi_rx[attenuation] = rssi
+                    elif direction in {"UL", "TX"}:
+                        scenario.rssi_tx[attenuation] = rssi
+    except Exception:
+        LOGGER.exception("Failed to parse RVR CSV: %s", path)
+
+    if attenuation_values:
+        scenario.attenuation_steps = sorted(attenuation_values)
+    return scenario
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
 
 
 def generate_xiaomi_report(
@@ -1765,82 +598,35 @@ def generate_xiaomi_report(
     output_path: Path | str,
     forced_test_type: str | None = None,
 ) -> Path:
-    """Populate Xiaomi Wi-Fi report template with available performance data.
+    del template_path
+    if forced_test_type and forced_test_type.upper() != "RVR":
+        LOGGER.info("Forced test type %s ignored (only RVR supported).", forced_test_type)
 
-    Parameters
-    ----------
-    result_file:
-        Path to the aggregated CSV file produced by the performance runner.
-    template_path:
-        Baseline Excel template path.
-    output_path:
-        Destination path for the generated workbook.
-    forced_test_type:
-        Optional explicit test type selected by the user (`"RVR"` or `"RVO"`). When
-        provided, the data loader skips heuristic detection and treats all rows as
-        belonging to the specified type.
+    scenario = _load_scenario(result_file)
+    LOGGER.info(
+        "Building Xiaomi-style RVR report | freq=%s | standard=%s | bandwidth=%s | channel=%s",
+        scenario.freq,
+        scenario.standard,
+        scenario.bandwidth,
+        scenario.channel_label,
+    )
 
-    Returns
-    -------
-    Path
-        The absolute path to the saved report.
-    """
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Coffey RVR"
 
-    template = Path(template_path)
+    _configure_sheet(sheet)
+    _write_title(sheet, scenario)
+    _write_headers(sheet, scenario)
+    end_row = _write_data(sheet, scenario, start_row=7)
+    _add_charts(sheet, scenario, start_row=7, end_row=end_row)
+
     output = Path(output_path)
-    result_path = Path(result_file)
-
-    if forced_test_type:
-        _LOGGER.info("Forced test type received: %s", forced_test_type)
-
-    if not template.exists():
-        raise FileNotFoundError(f"Template file not found: {template}")
-
-    workbook = load_workbook(template, data_only=False)
-    layout = _TemplateLayout(workbook)
-
-    if result_path.exists():
-        loader = _DataLoader(forced_type=forced_test_type)
-        df = loader.load(result_path)
-        if not df.empty:
-            type_series = df.get("__test_type_display__")
-            if type_series is not None:
-                type_counts = (
-                    type_series.fillna("UNKNOWN")
-                    .astype(str)
-                    .str.upper()
-                    .value_counts()
-                    .to_dict()
-                )
-            else:
-                type_counts = {}
-            _LOGGER.info(
-                "Loaded %s rows from %s (test types=%s)",
-                len(df),
-                result_path,
-                ", ".join(f"{k}:{v}" for k, v in type_counts.items()) or "NONE",
-            )
-            if type_counts:
-                df["_type_key"] = df["__test_type_display__"].astype(str).str.upper()
-                rvr_df = df[df["_type_key"] == "RVR"]
-                rvo_df = df[df["_type_key"] == "RVO"]
-                _LOGGER.info("RVR rows detected: %s | RVO rows detected: %s", len(rvr_df), len(rvo_df))
-                if not rvr_df.empty:
-                    _populate_rvr(layout, rvr_df)
-                if not rvo_df.empty:
-                    _populate_rvo(layout, rvo_df)
-            else:
-                _LOGGER.info("Test type column missing; default to RVR population.")
-                _populate_rvr(layout, df)
-        else:
-            _LOGGER.warning("Result CSV %s contains no rows after parsing.", result_path)
-            _populate_rvr(layout, df)
-    else:
-        _LOGGER.warning("Result CSV not found for Xiaomi report: %s", result_path)
-
     output.parent.mkdir(parents=True, exist_ok=True)
     workbook.save(output)
+    LOGGER.info("RVR report saved to %s", output)
     return output.resolve()
 
 
-__all__ = ["generate_xiaomi_report"]
+__all__ = ["generate_xiaomi_report", "RvrScenario"]
+
