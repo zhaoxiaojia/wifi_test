@@ -27,7 +27,6 @@ from src.tools.config_loader import load_config
 from src.dut_control.roku_ctrl import roku_ctrl
 from src.tools.router_tool.Router import Router
 from src.tools.reporting import generate_xiaomi_report
-from src.util.constants import Paths
 
 # pytest_plugins = "util.report_plugin"
 test_results = []
@@ -79,10 +78,6 @@ def _maybe_generate_xiaomi_report() -> None:
             )
     logdir = Path(getattr(test_result, "logdir", "") or ".").resolve()
     result_file = Path(getattr(test_result, "log_file", "") or "")
-    template_path = Path(Paths.BASE_DIR) / "Xiaomi  WiFi Performance Test Report.xlsx"
-    if not template_path.exists():
-        logging.warning("Skip Xiaomi report: template not found at %s", template_path)
-        return
     software_info = config.get("software_info") or {}
     hardware_info = config.get("hardware_info") or {}
     software = _sanitize_filename_component(software_info.get("software_version")) or "NA"
@@ -92,7 +87,7 @@ def _maybe_generate_xiaomi_report() -> None:
     filename = f"Xiaomi_WiFi_Report_{timestamp}_{software}-{driver}-{hardware}.xlsx"
     output_path = logdir / filename
     try:
-        generate_xiaomi_report(result_file, template_path, output_path, forced_test_type=forced_type)
+        generate_xiaomi_report(result_file, output_path, forced_test_type=forced_type)
         logging.info("Generated Xiaomi Wi-Fi performance report: %s", output_path)
     except Exception:
         logging.exception("Failed to generate Xiaomi Wi-Fi performance report")
