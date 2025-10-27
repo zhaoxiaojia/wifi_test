@@ -498,7 +498,6 @@ def _write_data(ws: Worksheet, scenario: RvrScenario, start_row: int = 7) -> int
     _apply_result_formatting(ws, start_row, end_row)
     return end_row
 
-
 def _style_chart(chart: LineChart | ScatterChart) -> None:
     chart.width = 16
     chart.height = 7.5
