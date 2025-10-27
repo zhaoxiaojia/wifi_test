@@ -599,11 +599,9 @@ def _load_scenario(result_file: Path | str) -> RvrScenario:
 
 def generate_xiaomi_report(
     result_file: Path | str,
-    template_path: Path | str,
     output_path: Path | str,
     forced_test_type: str | None = None,
 ) -> Path:
-    del template_path
     if forced_test_type and forced_test_type.upper() != "RVR":
         LOGGER.info("Forced test type %s ignored (only RVR supported).", forced_test_type)
 
