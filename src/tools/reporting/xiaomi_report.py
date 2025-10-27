@@ -498,7 +498,6 @@ def _write_data(ws: Worksheet, scenario: RvrScenario, start_row: int = 7) -> int
     _apply_result_formatting(ws, start_row, end_row)
     return end_row
 
-
 def _style_chart(chart: LineChart | ScatterChart) -> None:
     chart.width = 16
     chart.height = 7.5
@@ -597,6 +596,14 @@ def _add_charts(ws: Worksheet, scenario: RvrScenario, start_row: int, end_row: i
                 chart.x_axis.scaling.max,
                 chart.x_axis.majorUnit,
             )
+
+    if scenario.attenuation_steps:
+        min_step = min(scenario.attenuation_steps)
+        max_step = max(scenario.attenuation_steps)
+        for chart in (rx_chart, tx_chart):
+            chart.x_axis.scaling.min = min_step
+            chart.x_axis.scaling.max = max_step
+            chart.x_axis.majorUnit = 3
 
 
 # ---------------------------------------------------------------------------
