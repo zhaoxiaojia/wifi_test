@@ -385,8 +385,8 @@ def _write_title(ws: Worksheet, scenario: RvrScenario) -> None:
     _merge(ws, "A4:W4")
 
     _set_cell(ws, 1, 1, "RVR Test Report", font=FONT_TITLE, alignment=ALIGN_CENTER, fill=COLOR_BRAND_BLUE, border=True)
-    _set_cell(ws, 2, 1, "1、Throughput:2.4G", font=FONT_SECTION, alignment=ALIGN_CENTER, border=True)
-    _set_cell(ws, 3, 1, "2、Throughput:5G", font=FONT_SECTION, alignment=ALIGN_CENTER, border=True)
+    _set_cell(ws, 2, 1, "1. Throughput: 2.4G", font=FONT_SECTION, alignment=ALIGN_CENTER, border=True)
+    _set_cell(ws, 3, 1, "2. Throughput: 5G", font=FONT_SECTION, alignment=ALIGN_CENTER, border=True)
     subtitle = f"{scenario.freq} {scenario.standard.upper()} {scenario.bandwidth}"
     _set_cell(ws, 4, 1, subtitle, font=FONT_SECTION, alignment=ALIGN_CENTER, border=True)
 
@@ -500,7 +500,7 @@ def _write_data(ws: Worksheet, scenario: RvrScenario, start_row: int = 7) -> int
 
 def _style_chart(chart: LineChart) -> None:
     chart.width = 15
-    chart.height = 7.5
+    chart.height = 7
     chart.legend.position = "b"
     chart.y_axis.majorGridlines = None
     chart.x_axis.majorGridlines = None
@@ -508,7 +508,10 @@ def _style_chart(chart: LineChart) -> None:
     chart.x_axis.title = "Attenuation (dB)"
     chart.x_axis.majorTickMark = "out"
     chart.y_axis.majorTickMark = "out"
-    chart.x_axis.tickLblPos = "low"
+    chart.x_axis.tickLblPos = "nextTo"
+    chart.y_axis.tickLblPos = "nextTo"
+    chart.y_axis.crosses = "min"
+    chart.y_axis.scaling.min = 0
     for series in chart.series:
         if hasattr(series, "graphicalProperties") and hasattr(series.graphicalProperties, "line"):
             series.graphicalProperties.line.width = 20000  # 2pt
@@ -536,7 +539,7 @@ def _add_charts(ws: Worksheet, scenario: RvrScenario, start_row: int, end_row: i
     tx_chart.add_data(tx_range, titles_from_data=True)
     tx_chart.set_categories(categories)
     _style_chart(tx_chart)
-    tx_chart.anchor = "M18"
+    tx_chart.anchor = "M24"
     ws.add_chart(tx_chart)
 
 
