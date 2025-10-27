@@ -3,6 +3,7 @@
 import base64
 import csv
 import logging
+import math
 from dataclasses import dataclass, field
 from io import BytesIO
 from pathlib import Path
@@ -11,6 +12,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 from openpyxl import Workbook
 from openpyxl.chart import Reference, Series, ScatterChart
 from openpyxl.chart.axis import ChartLines
+from openpyxl.chart.legend import Legend
 from openpyxl.chart.marker import Marker
 from openpyxl.drawing.image import Image
 from openpyxl.formatting.rule import FormulaRule
@@ -499,13 +501,17 @@ def _write_data(ws: Worksheet, scenario: RvrScenario, start_row: int = 7) -> int
     return end_row
 
 def _style_chart(chart: ScatterChart) -> None:
-    chart.width = 16
+    chart.width = 15
     chart.height = 7.5
+
+    if chart.legend is None:
+        chart.legend = Legend()
     chart.legend.position = "b"
+
     chart.y_axis.majorGridlines = ChartLines()
-    chart.x_axis.majorGridlines = None
-    chart.y_axis.title = "Throughput (Mbps)"
-    chart.x_axis.title = "Attenuation (dB)"
+    chart.x_axis.majorGridlines = ChartLines()
+    chart.y_axis.title = None
+    chart.x_axis.title = None
     chart.x_axis.majorTickMark = "out"
     chart.y_axis.majorTickMark = "out"
     chart.x_axis.tickLblPos = "nextTo"
@@ -513,11 +519,60 @@ def _style_chart(chart: ScatterChart) -> None:
     chart.y_axis.crosses = "min"
     chart.y_axis.scaling.min = 0
     chart.x_axis.number_format = "0"
+    chart.y_axis.number_format = "0"
     for series in chart.series:
         if hasattr(series, "graphicalProperties") and hasattr(series.graphicalProperties, "line"):
             series.graphicalProperties.line.width = 20000  # 2pt
             series.graphicalProperties.line.solidFill = COLOR_BRAND_BLUE
         series.marker = Marker(symbol="none")
+
+    LOGGER.debug(
+        "Styled chart | legend=%s | layout=%s | plot_layout=%s",
+        chart.legend.position if chart.legend else None,
+        getattr(chart.layout, "manualLayout", None),
+        getattr(chart.plot_area.layout, "manualLayout", None),
+    )
+
+
+def _nice_number(value: float, *, round_up: bool = True) -> float:
+    if value == 0:
+        return 0.0
+    sign = 1 if value > 0 else -1
+    value = abs(value)
+    exponent = math.floor(math.log10(value)) if value else 0
+    fraction = value / (10 ** exponent)
+    candidates = (1, 2, 2.5, 5, 10)
+    if round_up:
+        for candidate in candidates:
+            if fraction <= candidate:
+                fraction = candidate
+                break
+        else:
+            fraction = candidates[-1]
+    else:
+        for candidate in reversed(candidates):
+            if fraction >= candidate:
+                fraction = candidate
+                break
+        else:
+            fraction = candidates[0]
+    return sign * fraction * (10 ** exponent)
+
+
+def _resolve_throughput_axis(values: Sequence[float]) -> Tuple[float, float]:
+    if not values:
+        return 10.0, 2.0
+    max_value = max(values)
+    padded = max_value * 1.05
+    upper = _nice_number(padded, round_up=True)
+    if upper <= 0:
+        upper = 10.0
+    major = upper / 5.0
+    if major <= 0:
+        major = 1.0
+    tick_count = max(1, math.ceil(upper / major))
+    upper = major * tick_count
+    return upper, major
 
 
 def _add_charts(ws: Worksheet, scenario: RvrScenario, start_row: int, end_row: int) -> None:
@@ -533,13 +588,13 @@ def _add_charts(ws: Worksheet, scenario: RvrScenario, start_row: int, end_row: i
     rx_series = Series(
         rx_values,
         xvalues=categories,
-        title=ws.cell(row=6, column=4).value or scenario.channel,
+        title=scenario.channel,
     )
     rx_chart.series.append(rx_series)
     _style_chart(rx_chart)
     rx_point_count = end_row - start_row + 1
     first_anchor_row = max(start_row - 1, 6)
-    left_anchor_col = "N"
+    left_anchor_col = "L"
     rx_anchor = f"{left_anchor_col}{first_anchor_row}"
     rx_chart.anchor = rx_anchor
     ws.add_chart(rx_chart)
@@ -559,12 +614,11 @@ def _add_charts(ws: Worksheet, scenario: RvrScenario, start_row: int, end_row: i
     tx_series = Series(
         tx_values,
         xvalues=categories,
-        title=ws.cell(row=6, column=5).value or scenario.channel,
+        title=scenario.channel,
     )
     tx_chart.series.append(tx_series)
     _style_chart(tx_chart)
-    chart_row_span = 14
-    tx_top_row = first_anchor_row + chart_row_span + 2
+    tx_top_row = first_anchor_row + 13
     tx_anchor = f"{left_anchor_col}{tx_top_row}"
     tx_chart.anchor = tx_anchor
     ws.add_chart(tx_chart)
@@ -593,21 +647,44 @@ def _add_charts(ws: Worksheet, scenario: RvrScenario, start_row: int, end_row: i
         ],
     )
 
-    axis_min = DEFAULT_ATTENUATIONS[0]
-    axis_max = DEFAULT_ATTENUATIONS[-1]
-    if scenario.attenuation_steps:
-        axis_min = min(axis_min, *scenario.attenuation_steps)
-        axis_max = max(axis_max, *scenario.attenuation_steps)
-    for title, chart in ((rx_title, rx_chart), (tx_title, tx_chart)):
+    attenuations = scenario.attenuation_steps or DEFAULT_ATTENUATIONS
+    attenuations = sorted(attenuations)
+    axis_min = attenuations[0]
+    axis_max = attenuations[-1]
+    if axis_min == axis_max:
+        axis_max = axis_min + 3
+    axis_min = 3 * math.floor(axis_min / 3)
+    axis_max = 3 * math.ceil(axis_max / 3)
+    rx_values_list = [
+        scenario.rx_values.get(att)
+        for att in attenuations
+        if scenario.rx_values.get(att) is not None
+    ]
+    tx_values_list = [
+        scenario.tx_values.get(att)
+        for att in attenuations
+        if scenario.tx_values.get(att) is not None
+    ]
+    rx_y_max, rx_major = _resolve_throughput_axis(rx_values_list)
+    tx_y_max, tx_major = _resolve_throughput_axis(tx_values_list)
+    for title, chart, y_max, major in (
+        (rx_title, rx_chart, rx_y_max, rx_major),
+        (tx_title, tx_chart, tx_y_max, tx_major),
+    ):
         chart.x_axis.scaling.min = axis_min
         chart.x_axis.scaling.max = axis_max
         chart.x_axis.majorUnit = 3
+        chart.y_axis.scaling.min = 0
+        chart.y_axis.scaling.max = y_max
+        chart.y_axis.majorUnit = major
         LOGGER.info(
-            "Configured axis for %s: min=%s max=%s majorUnit=%s",
+            "Configured axis for %s: x_min=%s x_max=%s majorUnit=%s y_max=%s y_major=%s",
             title,
             chart.x_axis.scaling.min,
             chart.x_axis.scaling.max,
             chart.x_axis.majorUnit,
+            chart.y_axis.scaling.max,
+            chart.y_axis.majorUnit,
         )
 
 
