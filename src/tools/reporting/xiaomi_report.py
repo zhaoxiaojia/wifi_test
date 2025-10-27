@@ -533,7 +533,6 @@ def _style_chart(chart: ScatterChart) -> None:
         getattr(chart.plot_area.layout, "manualLayout", None),
     )
 
-
 def _nice_number(value: float, *, round_up: bool = True) -> float:
     if value == 0:
         return 0.0
