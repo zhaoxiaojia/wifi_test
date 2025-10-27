@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
 from openpyxl import Workbook
-from openpyxl.chart import LineChart, Reference, ScatterChart, Series
+from openpyxl.chart import LineChart, Reference, Series
 from openpyxl.chart.axis import ChartLines
 from openpyxl.chart.marker import Marker
 from openpyxl.drawing.image import Image
@@ -529,37 +529,44 @@ def _add_charts(ws: Worksheet, scenario: RvrScenario, start_row: int, end_row: i
     categories = Reference(ws, min_col=2, min_row=start_row, max_row=end_row)
 
     rx_values = Reference(ws, min_col=4, min_row=start_row, max_row=end_row)
-    rx_chart = ScatterChart(scatterStyle="line")
-    rx_chart.title = f"{scenario.title} RVR Throughput_RX"
+    rx_title = f"{scenario.title} RVR Throughput_RX"
+    rx_chart = LineChart()
+    rx_chart.title = rx_title
     rx_series = Series(rx_values, title=ws.cell(row=6, column=4).value or scenario.channel)
-    rx_series.xvalues = categories
     rx_chart.series.append(rx_series)
+    rx_chart.set_categories(categories)
     _style_chart(rx_chart)
-    first_anchor_row = max(start_row - 2, 6)
-    rx_chart.anchor = f"N{first_anchor_row}"
-    ws.add_chart(rx_chart)
     rx_point_count = end_row - start_row + 1
+    first_anchor_row = max(start_row - 1, 6)
+    rx_bottom_row = first_anchor_row + 13
+    left_anchor_col, right_anchor_col = "N", "V"
+    rx_anchor = f"{left_anchor_col}{first_anchor_row}:{right_anchor_col}{rx_bottom_row}"
+    rx_chart.anchor = rx_anchor
+    ws.add_chart(rx_chart)
     LOGGER.info(
         "RX chart anchor=%s points=%d x_range=(%s,%s)",
-        rx_chart.anchor,
+        rx_anchor,
         rx_point_count,
         ws.cell(row=start_row, column=2).value,
         ws.cell(row=end_row, column=2).value,
     )
 
     tx_values = Reference(ws, min_col=5, min_row=start_row, max_row=end_row)
-    tx_chart = ScatterChart(scatterStyle="line")
-    tx_chart.title = f"{scenario.title} RVR Throughput_TX"
+    tx_title = f"{scenario.title} RVR Throughput_TX"
+    tx_chart = LineChart()
+    tx_chart.title = tx_title
     tx_series = Series(tx_values, title=ws.cell(row=6, column=5).value or scenario.channel)
-    tx_series.xvalues = categories
     tx_chart.series.append(tx_series)
+    tx_chart.set_categories(categories)
     _style_chart(tx_chart)
-    row_spacing = max(22, int(rx_chart.height * 3))
-    tx_chart.anchor = f"N{first_anchor_row + row_spacing}"
+    tx_top_row = rx_bottom_row + 2
+    tx_bottom_row = tx_top_row + 13
+    tx_anchor = f"{left_anchor_col}{tx_top_row}:{right_anchor_col}{tx_bottom_row}"
+    tx_chart.anchor = tx_anchor
     ws.add_chart(tx_chart)
     LOGGER.info(
         "TX chart anchor=%s points=%d x_range=(%s,%s)",
-        tx_chart.anchor,
+        tx_anchor,
         rx_point_count,
         ws.cell(row=start_row, column=2).value,
         ws.cell(row=end_row, column=2).value,
@@ -585,25 +592,17 @@ def _add_charts(ws: Worksheet, scenario: RvrScenario, start_row: int, end_row: i
     if scenario.attenuation_steps:
         min_step = min(scenario.attenuation_steps)
         max_step = max(scenario.attenuation_steps)
-        for chart in (rx_chart, tx_chart):
+        for title, chart in ((rx_title, rx_chart), (tx_title, tx_chart)):
             chart.x_axis.scaling.min = min_step
             chart.x_axis.scaling.max = max_step
             chart.x_axis.majorUnit = 3
             LOGGER.info(
-                "Configured %s axis: min=%s max=%s majorUnit=%s",
-                chart.title,
+                "Configured axis for %s: min=%s max=%s majorUnit=%s",
+                title,
                 chart.x_axis.scaling.min,
                 chart.x_axis.scaling.max,
                 chart.x_axis.majorUnit,
             )
-
-    if scenario.attenuation_steps:
-        min_step = min(scenario.attenuation_steps)
-        max_step = max(scenario.attenuation_steps)
-        for chart in (rx_chart, tx_chart):
-            chart.x_axis.scaling.min = min_step
-            chart.x_axis.scaling.max = max_step
-            chart.x_axis.majorUnit = 3
 
 
 # ---------------------------------------------------------------------------
