@@ -3,19 +3,25 @@
 import base64
 import csv
 import logging
+import math
 from dataclasses import dataclass, field
 from io import BytesIO
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
 from openpyxl import Workbook
+from openpyxl.chart import Reference, ScatterChart, Series
+from openpyxl.chart.axis import ChartLines
+from openpyxl.chart.layout import Layout, ManualLayout
+from openpyxl.chart.legend import Legend, LegendEntry
+from openpyxl.chart.marker import Marker
 from openpyxl.drawing.image import Image
+from openpyxl.chart.shapes import GraphicalProperties
+from openpyxl.drawing.line import LineProperties
 from openpyxl.formatting.rule import FormulaRule
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
-
-from src.tools.performance import generate_rvr_charts
 
 LOGGER = logging.getLogger(__name__)
 
@@ -39,17 +45,21 @@ COLUMN_WIDTHS: Dict[str, float] = {
     "M": 12.5,
     "N": 14.0,
     "O": 12.25,
-    "P": 11.75,
-    "Q": 12.0,
-    "R": 13.375,
-    "S": 12.75,
-    "T": 13.375,
-    "U": 13.0,
-    "V": 13.0,
-    "W": 9.0,
 }
 
 ROW_HEIGHT_TITLE = 42.95
+
+COL_AML_STANDARD = 6
+COL_AML_RESULT = 7
+COL_RIGHT_TABLE_ITEM = 13  # Column M
+COL_RIGHT_ATT = COL_RIGHT_TABLE_ITEM + 1
+COL_RIGHT_ANGLE = COL_RIGHT_TABLE_ITEM + 2
+COL_RIGHT_RX_RSSI = COL_RIGHT_TABLE_ITEM + 3
+COL_RIGHT_TX_RSSI = COL_RIGHT_TABLE_ITEM + 4
+CHART_COLUMN_GAP = 1
+CHART_TITLE_ROW = 4
+CHART_MIN_TOP_ROW = 6
+CHART_VERTICAL_HEIGHT_ROWS = 18
 
 COLOR_BRAND_BLUE = "2D529F"
 COLOR_SUBHEADER = "B4C6E7"
@@ -57,6 +67,7 @@ COLOR_RATE_PRIMARY = "FFF2CC"
 COLOR_RATE_SECONDARY = "D9E1F2"
 COLOR_RSSI_RX = "CFE2F3"
 COLOR_RSSI_TX = "E2F0D9"
+COLOR_GRIDLINE = "BFBFBF"
 
 FONT_TITLE = Font(name="Arial", color="FFFFFF", bold=True, size=20)
 FONT_SECTION = Font(name="Arial", color="1F4E78", bold=True, size=16)
@@ -257,26 +268,6 @@ def _set_cell(
 # ---------------------------------------------------------------------------
 
 
-def _wm_standard_text(att: float) -> Optional[str]:
-    if att <= 15:
-        return "RX Tput>=499\nTX Tput>=499"
-    if att == 39:
-        return ">0"
-    if att >= 42:
-        return "N/A"
-    return None
-
-
-def _sdmc_standard_text(att: float) -> Optional[str]:
-    if att <= 15:
-        return "RX Tput>=400\nTX Tput>=300"
-    if att <= 27:
-        return "RX Tput>=320\nTX Tput>=200"
-    if att >= 48:
-        return "N/A"
-    return None
-
-
 def _aml_standard_text(att: float) -> Optional[str]:
     if att <= 15:
         return "RX Tput>=503.5\nTX Tput>=475"
@@ -286,27 +277,6 @@ def _aml_standard_text(att: float) -> Optional[str]:
         return "RX Tput>100\nTX Tput>95"
     if att >= 48:
         return "N/A"
-    return None
-
-
-def _wm_threshold(att: float) -> Optional[Tuple[int, int]]:
-    if att <= 15:
-        return 499, 499
-    if att == 39:
-        return 0, 0
-    return None
-
-
-def _sdmc_threshold(att: float) -> Optional[Tuple[int, int]]:
-    if att <= 15:
-        return 400, 300
-    if att <= 27:
-        return 320, 200
-    if att <= 45:
-        return 100, 80
-    return None
-
-
 def _aml_threshold(att: float) -> Optional[Tuple[int, int]]:
     if att <= 12:
         return 400, 300
@@ -360,17 +330,17 @@ def _set_result_cell(ws: Worksheet, row: int, column: int, threshold: Optional[T
 def _apply_result_formatting(ws: Worksheet, start_row: int, end_row: int) -> None:
     if start_row > end_row:
         return
-    for column in ("I", "J", "K"):
-        fail_rule = FormulaRule(
-            formula=[f"={column}{start_row}=\"Fail\""],
-            font=Font(name="Arial", color="FF0000", bold=True),
-        )
-        pass_rule = FormulaRule(
-            formula=[f"={column}{start_row}=\"Pass\""],
-            font=Font(name="Arial", color="008000", bold=True),
-        )
-        ws.conditional_formatting.add(f"{column}{start_row}:{column}{end_row}", fail_rule)
-        ws.conditional_formatting.add(f"{column}{start_row}:{column}{end_row}", pass_rule)
+    column_letter = get_column_letter(COL_AML_RESULT)
+    fail_rule = FormulaRule(
+        formula=[f"={column_letter}{start_row}=\"Fail\""],
+        font=Font(name="Arial", color="FF0000", bold=True),
+    )
+    pass_rule = FormulaRule(
+        formula=[f"={column_letter}{start_row}=\"Pass\""],
+        font=Font(name="Arial", color="008000", bold=True),
+    )
+    ws.conditional_formatting.add(f"{column_letter}{start_row}:{column_letter}{end_row}", fail_rule)
+    ws.conditional_formatting.add(f"{column_letter}{start_row}:{column_letter}{end_row}", pass_rule)
 
 
 # ---------------------------------------------------------------------------
@@ -404,21 +374,10 @@ def _write_headers(ws: Worksheet, scenario: RvrScenario) -> None:
         "B5:B6",
         "C5:C6",
         "F5:F6",
-        "G5:F6".replace("F", "H"),  # placeholder replaced below
-    ]
-    # rewrite merges to avoid subtle error above
-    merges = [
-        "A5:A6",
-        "B5:B6",
-        "C5:C6",
-        "F5:F6",
         "G5:G6",
-        "H5:H6",
-        "I5:I6",
-        "J5:J6",
-        "K5:K6",
-        "S5:S6",
     ]
+    right_item_letter = get_column_letter(COL_RIGHT_TABLE_ITEM)
+    merges.append(f"{right_item_letter}5:{right_item_letter}6")
     for rng in merges:
         _merge(ws, rng)
 
@@ -428,29 +387,25 @@ def _write_headers(ws: Worksheet, scenario: RvrScenario) -> None:
         (5, 3, "Angle"),
         (5, 4, "RX(Unit:Mbps)"),
         (5, 5, "TX(Unit:Mbps)"),
-        (5, 6, "WM_Standard"),
-        (5, 7, "SDMC_Standard"),
-        (5, 8, "AML_Standard"),
-        (5, 9, "WM_Result"),
-        (5, 10, "SDMC_Result"),
-        (5, 11, "AML_Result"),
-        (5, 19, "Item"),
-        (5, 20, "ATT\n(Unit:dB)"),
-        (5, 21, "Angle"),
-        (5, 22, "RX_RSSI (Unit:dBm)"),
-        (5, 23, "TX_RSSI (Unit:dBm)"),
+        (5, COL_AML_STANDARD, "AML_Standard"),
+        (5, COL_AML_RESULT, "AML_Result"),
+        (5, COL_RIGHT_TABLE_ITEM, "Item"),
+        (5, COL_RIGHT_ATT, "ATT\n(Unit:dB)"),
+        (5, COL_RIGHT_ANGLE, "Angle"),
+        (5, COL_RIGHT_RX_RSSI, "RX_RSSI (Unit:dBm)"),
+        (5, COL_RIGHT_TX_RSSI, "TX_RSSI (Unit:dBm)"),
     ]
     for row, col, text in headers:
         _set_cell(ws, row, col, text, font=FONT_HEADER, alignment=ALIGN_CENTER_WRAP, fill=COLOR_BRAND_BLUE, border=True)
 
     _set_cell(ws, 6, 4, scenario.channel, font=FONT_SUBHEADER, alignment=ALIGN_CENTER, fill=COLOR_SUBHEADER, border=True)
     _set_cell(ws, 6, 5, scenario.channel, font=FONT_SUBHEADER, alignment=ALIGN_CENTER, fill=COLOR_SUBHEADER, border=True)
-    for column in (1, 2, 3, 6, 7, 8, 9, 10, 11):
+    for column in (1, 2, 3, COL_AML_STANDARD, COL_AML_RESULT):
         _set_cell(ws, 6, column, None, font=FONT_SUBHEADER, alignment=ALIGN_CENTER, fill=COLOR_SUBHEADER, border=True)
 
-    _set_cell(ws, 6, 22, scenario.channel, font=FONT_SUBHEADER, alignment=ALIGN_CENTER, fill=COLOR_SUBHEADER, border=True)
-    _set_cell(ws, 6, 23, scenario.channel, font=FONT_SUBHEADER, alignment=ALIGN_CENTER, fill=COLOR_SUBHEADER, border=True)
-    for column in (19, 20, 21):
+    _set_cell(ws, 6, COL_RIGHT_RX_RSSI, scenario.channel, font=FONT_SUBHEADER, alignment=ALIGN_CENTER, fill=COLOR_SUBHEADER, border=True)
+    _set_cell(ws, 6, COL_RIGHT_TX_RSSI, scenario.channel, font=FONT_SUBHEADER, alignment=ALIGN_CENTER, fill=COLOR_SUBHEADER, border=True)
+    for column in (COL_RIGHT_TABLE_ITEM, COL_RIGHT_ATT, COL_RIGHT_ANGLE):
         _set_cell(ws, 6, column, None, font=FONT_SUBHEADER, alignment=ALIGN_CENTER, fill=COLOR_SUBHEADER, border=True)
 
 
@@ -459,12 +414,13 @@ def _write_data(ws: Worksheet, scenario: RvrScenario, start_row: int = 7) -> int
     end_row = start_row + len(attenuations) - 1
 
     _merge(ws, f"A{start_row}:A{end_row}")
-    _merge(ws, f"S{start_row}:S{end_row}")
+    right_item_letter = get_column_letter(COL_RIGHT_TABLE_ITEM)
+    _merge(ws, f"{right_item_letter}{start_row}:{right_item_letter}{end_row}")
     _set_cell(ws, start_row, 1, scenario.subtitle, font=FONT_BODY, alignment=ALIGN_CENTER_WRAP, border=True)
-    _set_cell(ws, start_row, 19, f"{scenario.standard.upper()} {scenario.bandwidth}", font=FONT_BODY, alignment=ALIGN_CENTER_WRAP, border=True)
+    _set_cell(ws, start_row, COL_RIGHT_TABLE_ITEM, f"{scenario.standard.upper()} {scenario.bandwidth}", font=FONT_BODY, alignment=ALIGN_CENTER_WRAP, border=True)
 
     for r in range(start_row + 1, end_row + 1):
-        for c in (1, 19):
+        for c in (1, COL_RIGHT_TABLE_ITEM):
             cell = ws.cell(row=r, column=c)
             cell.border = BORDER_THIN
             cell.alignment = ALIGN_CENTER
@@ -479,30 +435,24 @@ def _write_data(ws: Worksheet, scenario: RvrScenario, start_row: int = 7) -> int
         _set_cell(ws, row, 4, scenario.rx_values.get(attenuation), font=FONT_BODY, alignment=ALIGN_CENTER, fill=highlight, border=True)
         _set_cell(ws, row, 5, scenario.tx_values.get(attenuation), font=FONT_BODY, alignment=ALIGN_CENTER, fill=highlight, border=True)
 
-        _set_result_cell(ws, row, 9, _wm_threshold(attenuation))
-        _set_result_cell(ws, row, 10, _sdmc_threshold(attenuation))
-        _set_result_cell(ws, row, 11, _aml_threshold(attenuation))
-
-        for column in (6, 7, 8):
+        for column in (COL_AML_STANDARD,):
             _set_cell(ws, row, column, None, font=FONT_STANDARD, alignment=ALIGN_LEFT_WRAP, border=True)
 
-        _set_cell(ws, row, 20, attenuation, font=FONT_BODY, alignment=ALIGN_CENTER, border=True)
-        _set_cell(ws, row, 21, scenario.angle_label, font=FONT_BODY, alignment=ALIGN_CENTER, border=True)
-        _set_cell(ws, row, 22, scenario.rssi_rx.get(attenuation), font=FONT_BODY, alignment=ALIGN_CENTER, fill=COLOR_RSSI_RX, border=True)
-        _set_cell(ws, row, 23, scenario.rssi_tx.get(attenuation), font=FONT_BODY, alignment=ALIGN_CENTER, fill=COLOR_RSSI_TX, border=True)
+        _set_result_cell(ws, row, COL_AML_RESULT, _aml_threshold(attenuation))
 
-    _apply_grouped_texts(ws, 6, start_row, attenuations, _wm_standard_text)
-    _apply_grouped_texts(ws, 7, start_row, attenuations, _sdmc_standard_text)
-    _apply_grouped_texts(ws, 8, start_row, attenuations, _aml_standard_text)
+        _set_cell(ws, row, COL_RIGHT_ATT, attenuation, font=FONT_BODY, alignment=ALIGN_CENTER, border=True)
+        _set_cell(ws, row, COL_RIGHT_ANGLE, scenario.angle_label, font=FONT_BODY, alignment=ALIGN_CENTER, border=True)
+        _set_cell(ws, row, COL_RIGHT_RX_RSSI, scenario.rssi_rx.get(attenuation), font=FONT_BODY, alignment=ALIGN_CENTER, fill=COLOR_RSSI_RX, border=True)
+        _set_cell(ws, row, COL_RIGHT_TX_RSSI, scenario.rssi_tx.get(attenuation), font=FONT_BODY, alignment=ALIGN_CENTER, fill=COLOR_RSSI_TX, border=True)
+
+    _apply_grouped_texts(ws, COL_AML_STANDARD, start_row, attenuations, _aml_standard_text)
     _apply_result_formatting(ws, start_row, end_row)
     return end_row
 
 def _nice_number(value: float, *, round_up: bool = True) -> float:
-    if value == 0:
+    if value <= 0:
         return 0.0
-    sign = 1 if value > 0 else -1
-    value = abs(value)
-    exponent = math.floor(math.log10(value)) if value else 0
+    exponent = math.floor(math.log10(value))
     fraction = value / (10 ** exponent)
     candidates = (1, 2, 2.5, 5, 10)
     if round_up:
@@ -519,62 +469,158 @@ def _nice_number(value: float, *, round_up: bool = True) -> float:
                 break
         else:
             fraction = candidates[0]
-    return sign * fraction * (10 ** exponent)
+    return fraction * (10 ** exponent)
 
-    try:
-        chart_paths = generate_rvr_charts(path)
-    except Exception:
-        LOGGER.exception("Failed to generate RVR charts for report: %s", path)
-        return
-      
-def _resolve_throughput_axis(values: Sequence[float]) -> Tuple[float, float]:
-    if not values:
+
+def _resolve_throughput_axis(values: Sequence[Optional[float]]) -> Tuple[float, float]:
+    numeric_values: list[float] = []
+    for value in values:
+        if value is None:
+            continue
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError):
+            continue
+        if not math.isfinite(numeric):
+            continue
+        numeric_values.append(numeric)
+    if not numeric_values:
         return 10.0, 2.0
-    max_value = max(values)
-    padded = max_value * 1.05
+    max_value = max(numeric_values)
+    if max_value <= 0:
+        return 10.0, 2.0
+    padded = max_value * 1.1
     upper = _nice_number(padded, round_up=True)
     if upper <= 0:
         upper = 10.0
-    major = upper / 5.0
+    major = _nice_number(upper / 5.0, round_up=True)
     if major <= 0:
-        major = 1.0
-    tick_count = max(1, math.ceil(upper / major))
-    upper = major * tick_count
+        major = upper
+    LOGGER.info(
+        "Resolved throughput axis | max=%.2f padded=%.2f upper=%.2f major=%.2f",
+        max_value,
+        padded,
+        upper,
+        major,
+    )
     return upper, major
 
 
-def _style_chart(chart: ScatterChart) -> None:
-    chart.width = 15
+def _style_chart(
+    chart: ScatterChart,
+    *,
+    data_points: Sequence[Optional[float]],
+    show_markers: bool,
+    step_values: Sequence[float],
+) -> None:
+    chart.width = 13.8
     chart.height = 7.5
+    chart.varyColors = False
+    LOGGER.info("Configured scatter chart | vary_colors=%s", chart.varyColors)
 
     if chart.legend is None:
         chart.legend = Legend()
     chart.legend.position = "b"
+    chart.legend.overlay = False
+    legend_entries = [LegendEntry(idx=0, delete=False)]
+    if data_points:
+        for idx in range(1, len(data_points)):
+            legend_entries.append(LegendEntry(idx=idx, delete=True))
+    chart.legend.legendEntry = legend_entries
+    legend_summary = [(entry.idx, entry.delete) for entry in legend_entries]
+    LOGGER.info(
+        "Chart legend configured | position=%s overlay=%s kept_entries=%d removed_entries=%d entries=%s",
+        chart.legend.position,
+        chart.legend.overlay,
+        1,
+        max(len(legend_entries) - 1, 0),
+        legend_summary,
+    )
 
+    chart.x_axis.majorGridlines = None
     chart.y_axis.majorGridlines = ChartLines()
-    chart.x_axis.majorGridlines = ChartLines()
-    chart.y_axis.title = None
+    chart.y_axis.majorGridlines.spPr = GraphicalProperties(
+        ln=LineProperties(solidFill=COLOR_GRIDLINE, w=12000)
+    )
+    chart.x_axis.delete = False
+    chart.y_axis.delete = False
     chart.x_axis.title = None
-    chart.x_axis.majorTickMark = "out"
+    chart.y_axis.title = None
+    chart.x_axis.majorTickMark = "cross"
     chart.y_axis.majorTickMark = "out"
-    chart.x_axis.tickLblPos = "nextTo"
+    chart.x_axis.tickLblPos = "low"
     chart.y_axis.tickLblPos = "nextTo"
+    chart.x_axis.crosses = "min"
     chart.y_axis.crosses = "min"
-    chart.y_axis.scaling.min = 0
     chart.x_axis.number_format = "0"
     chart.y_axis.number_format = "0"
+    chart.x_axis.tickLblSkip = 1
+    chart.x_axis.tickMarkSkip = 1
+    if step_values:
+        x_min = float(step_values[0])
+        x_max = float(step_values[-1])
+        if len(step_values) > 1:
+            raw_step = float(step_values[1] - step_values[0])
+            major_step = raw_step if raw_step > 0 else 1.0
+        else:
+            major_step = 1.0
+    else:
+        x_min = 0.0
+        x_max = float(max(len(data_points) - 1, 0))
+        major_step = 1.0 if x_max == 0 else x_max / max(len(data_points) - 1, 1)
+        if major_step <= 0:
+            major_step = 1.0
+
+    chart.x_axis.scaling.min = x_min
+    chart.x_axis.scaling.max = x_max
+    chart.x_axis.majorUnit = max(major_step, 1.0)
+
+    upper, major = _resolve_throughput_axis(data_points)
+    chart.y_axis.scaling.min = 0
+    chart.y_axis.scaling.max = upper
+    chart.y_axis.majorUnit = major
+    chart.y_axis.minorTickMark = "none"
+    chart.x_axis.minorTickMark = "none"
+
+    chart.plot_area.layout = Layout(
+        manualLayout=ManualLayout(x=0.06, y=0.12, w=0.8, h=0.7)
+    )
+    LOGGER.info(
+        "Chart layout + axis | width=%.1f height=%.1f y_max=%.2f major=%.2f x_min=%.2f x_max=%.2f x_step=%.2f layout=(x=%.2f y=%.2f w=%.2f h=%.2f)",
+        chart.width,
+        chart.height,
+        upper,
+        major,
+        x_min,
+        x_max,
+        chart.x_axis.majorUnit,
+        chart.plot_area.layout.manualLayout.x,
+        chart.plot_area.layout.manualLayout.y,
+        chart.plot_area.layout.manualLayout.w,
+        chart.plot_area.layout.manualLayout.h,
+    )
+
     for series in chart.series:
         if hasattr(series, "graphicalProperties") and hasattr(series.graphicalProperties, "line"):
             series.graphicalProperties.line.width = 20000  # 2pt
             series.graphicalProperties.line.solidFill = COLOR_BRAND_BLUE
-        series.marker = Marker(symbol="none")
+        series.smooth = False
+        if show_markers:
+            marker = Marker(symbol="circle")
+            marker.graphicalProperties = GraphicalProperties(solidFill=COLOR_BRAND_BLUE)
+            marker.size = 6
+        else:
+            marker = Marker(symbol="none")
+        series.marker = marker
+        LOGGER.info(
+            "Styled chart series | title=%s line_width=%s marker_symbol=%s marker_size=%s smooth=%s",
+            getattr(series, "title", None),
+            getattr(series.graphicalProperties.line, "width", None) if hasattr(series, "graphicalProperties") else None,
+            marker.symbol,
+            getattr(marker, "size", None),
+            series.smooth,
+        )
 
-    LOGGER.debug(
-        "Styled chart | legend=%s | layout=%s | plot_layout=%s",
-        chart.legend.position if chart.legend else None,
-        getattr(chart.layout, "manualLayout", None),
-        getattr(chart.plot_area.layout, "manualLayout", None),
-    )
 
 def _build_throughput_chart(
     *,
@@ -582,24 +628,50 @@ def _build_throughput_chart(
     series_title: str,
     categories: Reference,
     values: Reference,
+    data_points: Sequence[Optional[float]],
+    show_markers: bool,
+    step_values: Sequence[float],
 ) -> ScatterChart:
     chart = ScatterChart()
     chart.scatterStyle = "line"
+    chart.varyColors = False
     chart.title = title
-    chart.series.append(
-        Series(
-            values,
-            xvalues=categories,
-            title=series_title,
-        )
+    series = Series(
+        values,
+        xvalues=categories,
+        title=series_title,
     )
-    _style_chart(chart)
+    series.smooth = False
+    chart.series.append(series)
+    _style_chart(
+        chart,
+        data_points=data_points,
+        show_markers=show_markers,
+        step_values=step_values,
+    )
+    LOGGER.info(
+        "Built throughput chart | title=%s series=%s point_count=%d markers=%s",
+        title,
+        series_title,
+        len(data_points),
+        show_markers,
+    )
     return chart
 
 
 def _add_charts(ws: Worksheet, scenario: RvrScenario, start_row: int, end_row: int) -> None:
     if start_row > end_row:
         return
+
+    attenuations = sorted(scenario.attenuation_steps) or DEFAULT_ATTENUATIONS
+    rx_series = [scenario.rx_values.get(att) for att in attenuations]
+    tx_series = [scenario.tx_values.get(att) for att in attenuations]
+    LOGGER.info(
+        "Preparing chart data | attenuations=%s rx_sample=%s tx_sample=%s",
+        attenuations[:10],
+        rx_series[:10],
+        tx_series[:10],
+    )
 
     categories = Reference(ws, min_col=2, min_row=start_row, max_row=end_row)
     rx_values = Reference(ws, min_col=4, min_row=start_row, max_row=end_row)
@@ -613,46 +685,54 @@ def _add_charts(ws: Worksheet, scenario: RvrScenario, start_row: int, end_row: i
         series_title=scenario.channel,
         categories=categories,
         values=rx_values,
+        data_points=rx_series,
+        show_markers=False,
+        step_values=attenuations,
     )
     tx_chart = _build_throughput_chart(
         title=tx_title,
         series_title=scenario.channel,
         categories=categories,
         values=tx_values,
+        data_points=tx_series,
+        show_markers=False,
+        step_values=attenuations,
     )
 
     point_count = end_row - start_row + 1
-    first_anchor_row = max(start_row - 1, 6)
-    left_anchor_col = "L"
+    first_anchor_row = max(CHART_TITLE_ROW + 2, CHART_MIN_TOP_ROW)
+    chart_spacing = 2
+
+    chart_start_col_index = COL_AML_RESULT + CHART_COLUMN_GAP
+    left_anchor_col = get_column_letter(chart_start_col_index)
+    LOGGER.info(
+        "Chart anchor resolved | start_col_index=%d (%s) gap=%d first_row=%d spacing=%d",
+        chart_start_col_index,
+        left_anchor_col,
+        CHART_COLUMN_GAP,
+        first_anchor_row,
+        chart_spacing,
+    )
 
     rx_anchor = f"{left_anchor_col}{first_anchor_row}"
     rx_chart.anchor = rx_anchor
     ws.add_chart(rx_chart)
 
-    tx_top_row = first_anchor_row + 13
+    # position the second chart directly beneath the first with configurable spacing
+    bottom_spacing = max(chart_spacing, 2)
+    tx_top_row = first_anchor_row + CHART_VERTICAL_HEIGHT_ROWS + bottom_spacing
     tx_anchor = f"{left_anchor_col}{tx_top_row}"
     tx_chart.anchor = tx_anchor
     ws.add_chart(tx_chart)
 
     LOGGER.info(
-        "Placed throughput charts | rx_anchor=%s tx_anchor=%s points=%d",
+        "Placed throughput charts | rx_anchor=%s tx_anchor=%s spacing=%d points=%d chart_col=%s",
         rx_anchor,
         tx_anchor,
+        chart_spacing,
         point_count,
+        left_anchor_col,
     )
-
-    for index, chart_path in enumerate(chart_paths):
-        try:
-            image = Image(str(chart_path))
-        except FileNotFoundError:
-            LOGGER.warning("Chart image missing at %s", chart_path)
-            continue
-
-        anchor_row = first_anchor_row + index * 18
-        image.anchor = f"{left_anchor_col}{anchor_row}"
-        image.width = 560
-        ws.add_image(image)
-        LOGGER.info("Inserted RVR chart %s at %s", chart_path, image.anchor)
 
 
 # ---------------------------------------------------------------------------
