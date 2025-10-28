@@ -1,5 +1,5 @@
-#!/usr/bin/env python 
-# -*- coding: utf-8 -*- 
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 
 
 """
@@ -509,7 +509,7 @@ class dut():
                 if throughput is None:
                     continue
                 values.append(throughput)
-                summary_match = re.search(r'0\.0\s*-\s*(\d+(?:\.\d+)?)\s*sec', line)
+                summary_match = re.search(r'0\.\d+\s*-\s*(\d+(?:\.\d+)?)\s*sec', line)
                 if summary_match:
                     try:
                         duration = float(summary_match.group(1))

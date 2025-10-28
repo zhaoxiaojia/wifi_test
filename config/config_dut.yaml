@@ -10,7 +10,7 @@ connect_type:
   adb:
     device: '69512800000000611'
   telnet:
-    ip: 192.168.5.12
+    ip: 192.168.56.12
   third_party:
     enabled: false
     wait_seconds: 45
