@@ -720,7 +720,7 @@ def _add_charts(ws: Worksheet, scenario: RvrScenario, start_row: int, end_row: i
 
     # position the second chart directly beneath the first with configurable spacing
     bottom_spacing = chart_spacing
-    tx_top_row = first_anchor_row + CHART_VERTICAL_HEIGHT_ROWS + bottom_spacing
+    tx_top_row = first_anchor_row + CHART_VERTICAL_HEIGHT_ROWS  - 5 + bottom_spacing
     tx_anchor = f"{left_anchor_col}{tx_top_row}"
     tx_chart.anchor = tx_anchor
     ws.add_chart(tx_chart)
