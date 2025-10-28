@@ -500,39 +500,6 @@ def _write_data(ws: Worksheet, scenario: RvrScenario, start_row: int = 7) -> int
     _apply_result_formatting(ws, start_row, end_row)
     return end_row
 
-def _style_chart(chart: ScatterChart) -> None:
-    chart.width = 15
-    chart.height = 7.5
-
-    if chart.legend is None:
-        chart.legend = Legend()
-    chart.legend.position = "b"
-
-    chart.y_axis.majorGridlines = ChartLines()
-    chart.x_axis.majorGridlines = ChartLines()
-    chart.y_axis.title = None
-    chart.x_axis.title = None
-    chart.x_axis.majorTickMark = "out"
-    chart.y_axis.majorTickMark = "out"
-    chart.x_axis.tickLblPos = "nextTo"
-    chart.y_axis.tickLblPos = "nextTo"
-    chart.y_axis.crosses = "min"
-    chart.y_axis.scaling.min = 0
-    chart.x_axis.number_format = "0"
-    chart.y_axis.number_format = "0"
-    for series in chart.series:
-        if hasattr(series, "graphicalProperties") and hasattr(series.graphicalProperties, "line"):
-            series.graphicalProperties.line.width = 20000  # 2pt
-            series.graphicalProperties.line.solidFill = COLOR_BRAND_BLUE
-        series.marker = Marker(symbol="none")
-
-    LOGGER.debug(
-        "Styled chart | legend=%s | layout=%s | plot_layout=%s",
-        chart.legend.position if chart.legend else None,
-        getattr(chart.layout, "manualLayout", None),
-        getattr(chart.plot_area.layout, "manualLayout", None),
-    )
-
 def _nice_number(value: float, *, round_up: bool = True) -> float:
     if value == 0:
         return 0.0
@@ -574,59 +541,103 @@ def _resolve_throughput_axis(values: Sequence[float]) -> Tuple[float, float]:
     return upper, major
 
 
+def _style_chart(chart: ScatterChart) -> None:
+    chart.width = 15
+    chart.height = 7.5
+
+    if chart.legend is None:
+        chart.legend = Legend()
+    chart.legend.position = "b"
+
+    chart.y_axis.majorGridlines = ChartLines()
+    chart.x_axis.majorGridlines = ChartLines()
+    chart.y_axis.title = None
+    chart.x_axis.title = None
+    chart.x_axis.majorTickMark = "out"
+    chart.y_axis.majorTickMark = "out"
+    chart.x_axis.tickLblPos = "nextTo"
+    chart.y_axis.tickLblPos = "nextTo"
+    chart.y_axis.crosses = "min"
+    chart.y_axis.scaling.min = 0
+    chart.x_axis.number_format = "0"
+    chart.y_axis.number_format = "0"
+    for series in chart.series:
+        if hasattr(series, "graphicalProperties") and hasattr(series.graphicalProperties, "line"):
+            series.graphicalProperties.line.width = 20000  # 2pt
+            series.graphicalProperties.line.solidFill = COLOR_BRAND_BLUE
+        series.marker = Marker(symbol="none")
+
+    LOGGER.debug(
+        "Styled chart | legend=%s | layout=%s | plot_layout=%s",
+        chart.legend.position if chart.legend else None,
+        getattr(chart.layout, "manualLayout", None),
+        getattr(chart.plot_area.layout, "manualLayout", None),
+    )
+
+
+def _build_throughput_chart(
+    *,
+    title: str,
+    series_title: str,
+    categories: Reference,
+    values: Reference,
+) -> ScatterChart:
+    chart = ScatterChart()
+    chart.scatterStyle = "line"
+    chart.title = title
+    chart.series.append(
+        Series(
+            values,
+            xvalues=categories,
+            title=series_title,
+        )
+    )
+    _style_chart(chart)
+    return chart
+
+
 def _add_charts(ws: Worksheet, scenario: RvrScenario, start_row: int, end_row: int) -> None:
     if start_row > end_row:
         return
-    categories = Reference(ws, min_col=2, min_row=start_row, max_row=end_row)
 
+    categories = Reference(ws, min_col=2, min_row=start_row, max_row=end_row)
     rx_values = Reference(ws, min_col=4, min_row=start_row, max_row=end_row)
+    tx_values = Reference(ws, min_col=5, min_row=start_row, max_row=end_row)
+
     rx_title = f"{scenario.title} RVR Throughput_RX"
-    rx_chart = ScatterChart()
-    rx_chart.scatterStyle = "line"
-    rx_chart.title = rx_title
-    rx_series = Series(
-        rx_values,
-        xvalues=categories,
-        title=scenario.channel,
+    tx_title = f"{scenario.title} RVR Throughput_TX"
+
+    rx_chart = _build_throughput_chart(
+        title=rx_title,
+        series_title=scenario.channel,
+        categories=categories,
+        values=rx_values,
     )
-    rx_chart.series.append(rx_series)
-    _style_chart(rx_chart)
-    rx_point_count = end_row - start_row + 1
+    tx_chart = _build_throughput_chart(
+        title=tx_title,
+        series_title=scenario.channel,
+        categories=categories,
+        values=tx_values,
+    )
+
+    point_count = end_row - start_row + 1
     first_anchor_row = max(start_row - 1, 6)
     left_anchor_col = "L"
+
     rx_anchor = f"{left_anchor_col}{first_anchor_row}"
     rx_chart.anchor = rx_anchor
     ws.add_chart(rx_chart)
-    LOGGER.info(
-        "RX chart anchor=%s points=%d x_range=(%s,%s)",
-        rx_anchor,
-        rx_point_count,
-        ws.cell(row=start_row, column=2).value,
-        ws.cell(row=end_row, column=2).value,
-    )
 
-    tx_values = Reference(ws, min_col=5, min_row=start_row, max_row=end_row)
-    tx_title = f"{scenario.title} RVR Throughput_TX"
-    tx_chart = ScatterChart()
-    tx_chart.scatterStyle = "line"
-    tx_chart.title = tx_title
-    tx_series = Series(
-        tx_values,
-        xvalues=categories,
-        title=scenario.channel,
-    )
-    tx_chart.series.append(tx_series)
-    _style_chart(tx_chart)
     tx_top_row = first_anchor_row + 13
     tx_anchor = f"{left_anchor_col}{tx_top_row}"
     tx_chart.anchor = tx_anchor
     ws.add_chart(tx_chart)
+
     LOGGER.info(
-        "TX chart anchor=%s points=%d x_range=(%s,%s)",
+        "Placed throughput charts | rx_anchor=%s tx_anchor=%s points=%d",
+        rx_anchor,
         tx_anchor,
-        rx_point_count,
-        ws.cell(row=start_row, column=2).value,
-        ws.cell(row=end_row, column=2).value,
+        point_count,
     )
 
     LOGGER.info(
@@ -768,8 +779,9 @@ def generate_xiaomi_report(
     _configure_sheet(sheet)
     _write_title(sheet, scenario)
     _write_headers(sheet, scenario)
-    end_row = _write_data(sheet, scenario, start_row=7)
-    _add_charts(sheet, scenario, start_row=7, end_row=end_row)
+    start_row = 7
+    end_row = _write_data(sheet, scenario, start_row=start_row)
+    _add_charts(sheet, scenario, start_row=start_row, end_row=end_row)
 
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
