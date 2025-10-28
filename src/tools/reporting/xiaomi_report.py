@@ -497,20 +497,88 @@ def _write_data(ws: Worksheet, scenario: RvrScenario, start_row: int = 7) -> int
     _apply_result_formatting(ws, start_row, end_row)
     return end_row
 
-def _add_charts(ws: Worksheet, result_file: Path | str) -> None:
-    path = Path(result_file)
-    if not path.exists():
-        LOGGER.warning("Result CSV not found for chart generation: %s", path)
-        return
+def _nice_number(value: float, *, round_up: bool = True) -> float:
+    if value == 0:
+        return 0.0
+    sign = 1 if value > 0 else -1
+    value = abs(value)
+    exponent = math.floor(math.log10(value)) if value else 0
+    fraction = value / (10 ** exponent)
+    candidates = (1, 2, 2.5, 5, 10)
+    if round_up:
+        for candidate in candidates:
+            if fraction <= candidate:
+                fraction = candidate
+                break
+        else:
+            fraction = candidates[-1]
+    else:
+        for candidate in reversed(candidates):
+            if fraction >= candidate:
+                fraction = candidate
+                break
+        else:
+            fraction = candidates[0]
+    return sign * fraction * (10 ** exponent)
 
     try:
         chart_paths = generate_rvr_charts(path)
     except Exception:
         LOGGER.exception("Failed to generate RVR charts for report: %s", path)
         return
+      
+def _resolve_throughput_axis(values: Sequence[float]) -> Tuple[float, float]:
+    if not values:
+        return 10.0, 2.0
+    max_value = max(values)
+    padded = max_value * 1.05
+    upper = _nice_number(padded, round_up=True)
+    if upper <= 0:
+        upper = 10.0
+    major = upper / 5.0
+    if major <= 0:
+        major = 1.0
+    tick_count = max(1, math.ceil(upper / major))
+    upper = major * tick_count
+    return upper, major
 
-    if not chart_paths:
-        LOGGER.info("No RVR charts generated for %s", path)
+
+def _style_chart(chart: ScatterChart) -> None:
+    chart.width = 15
+    chart.height = 7.5
+
+    if chart.legend is None:
+        chart.legend = Legend()
+    chart.legend.position = "b"
+
+    chart.y_axis.majorGridlines = ChartLines()
+    chart.x_axis.majorGridlines = ChartLines()
+    chart.y_axis.title = None
+    chart.x_axis.title = None
+    chart.x_axis.majorTickMark = "out"
+    chart.y_axis.majorTickMark = "out"
+    chart.x_axis.tickLblPos = "nextTo"
+    chart.y_axis.tickLblPos = "nextTo"
+    chart.y_axis.crosses = "min"
+    chart.y_axis.scaling.min = 0
+    chart.x_axis.number_format = "0"
+    chart.y_axis.number_format = "0"
+    for series in chart.series:
+        if hasattr(series, "graphicalProperties") and hasattr(series.graphicalProperties, "line"):
+            series.graphicalProperties.line.width = 20000  # 2pt
+            series.graphicalProperties.line.solidFill = COLOR_BRAND_BLUE
+        series.marker = Marker(symbol="none")
+
+    LOGGER.debug(
+        "Styled chart | legend=%s | layout=%s | plot_layout=%s",
+        chart.legend.position if chart.legend else None,
+        getattr(chart.layout, "manualLayout", None),
+        getattr(chart.plot_area.layout, "manualLayout", None),
+    )
+
+
+def _add_charts(ws: Worksheet, scenario: RvrScenario, start_row: int, end_row: int) -> None:
+    if start_row > end_row:
         return
 
     first_anchor_row = 6
@@ -611,8 +679,9 @@ def generate_xiaomi_report(
     _configure_sheet(sheet)
     _write_title(sheet, scenario)
     _write_headers(sheet, scenario)
-    end_row = _write_data(sheet, scenario, start_row=7)
-    _add_charts(sheet, result_file)
+    start_row = 7
+    end_row = _write_data(sheet, scenario, start_row=start_row)
+    _add_charts(sheet, scenario, start_row=start_row, end_row=end_row)
 
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
