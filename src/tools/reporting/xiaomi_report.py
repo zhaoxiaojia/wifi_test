@@ -500,39 +500,6 @@ def _write_data(ws: Worksheet, scenario: RvrScenario, start_row: int = 7) -> int
     _apply_result_formatting(ws, start_row, end_row)
     return end_row
 
-def _style_chart(chart: ScatterChart) -> None:
-    chart.width = 15
-    chart.height = 7.5
-
-    if chart.legend is None:
-        chart.legend = Legend()
-    chart.legend.position = "b"
-
-    chart.y_axis.majorGridlines = ChartLines()
-    chart.x_axis.majorGridlines = ChartLines()
-    chart.y_axis.title = None
-    chart.x_axis.title = None
-    chart.x_axis.majorTickMark = "out"
-    chart.y_axis.majorTickMark = "out"
-    chart.x_axis.tickLblPos = "nextTo"
-    chart.y_axis.tickLblPos = "nextTo"
-    chart.y_axis.crosses = "min"
-    chart.y_axis.scaling.min = 0
-    chart.x_axis.number_format = "0"
-    chart.y_axis.number_format = "0"
-    for series in chart.series:
-        if hasattr(series, "graphicalProperties") and hasattr(series.graphicalProperties, "line"):
-            series.graphicalProperties.line.width = 20000  # 2pt
-            series.graphicalProperties.line.solidFill = COLOR_BRAND_BLUE
-        series.marker = Marker(symbol="none")
-
-    LOGGER.debug(
-        "Styled chart | legend=%s | layout=%s | plot_layout=%s",
-        chart.legend.position if chart.legend else None,
-        getattr(chart.layout, "manualLayout", None),
-        getattr(chart.plot_area.layout, "manualLayout", None),
-    )
-
 def _nice_number(value: float, *, round_up: bool = True) -> float:
     if value == 0:
         return 0.0
@@ -572,6 +539,40 @@ def _resolve_throughput_axis(values: Sequence[float]) -> Tuple[float, float]:
     tick_count = max(1, math.ceil(upper / major))
     upper = major * tick_count
     return upper, major
+
+
+def _style_chart(chart: ScatterChart) -> None:
+    chart.width = 15
+    chart.height = 7.5
+
+    if chart.legend is None:
+        chart.legend = Legend()
+    chart.legend.position = "b"
+
+    chart.y_axis.majorGridlines = ChartLines()
+    chart.x_axis.majorGridlines = ChartLines()
+    chart.y_axis.title = None
+    chart.x_axis.title = None
+    chart.x_axis.majorTickMark = "out"
+    chart.y_axis.majorTickMark = "out"
+    chart.x_axis.tickLblPos = "nextTo"
+    chart.y_axis.tickLblPos = "nextTo"
+    chart.y_axis.crosses = "min"
+    chart.y_axis.scaling.min = 0
+    chart.x_axis.number_format = "0"
+    chart.y_axis.number_format = "0"
+    for series in chart.series:
+        if hasattr(series, "graphicalProperties") and hasattr(series.graphicalProperties, "line"):
+            series.graphicalProperties.line.width = 20000  # 2pt
+            series.graphicalProperties.line.solidFill = COLOR_BRAND_BLUE
+        series.marker = Marker(symbol="none")
+
+    LOGGER.debug(
+        "Styled chart | legend=%s | layout=%s | plot_layout=%s",
+        chart.legend.position if chart.legend else None,
+        getattr(chart.layout, "manualLayout", None),
+        getattr(chart.plot_area.layout, "manualLayout", None),
+    )
 
 
 def _add_charts(ws: Worksheet, scenario: RvrScenario, start_row: int, end_row: int) -> None:
@@ -768,8 +769,9 @@ def generate_xiaomi_report(
     _configure_sheet(sheet)
     _write_title(sheet, scenario)
     _write_headers(sheet, scenario)
-    end_row = _write_data(sheet, scenario, start_row=7)
-    _add_charts(sheet, scenario, start_row=7, end_row=end_row)
+    start_row = 7
+    end_row = _write_data(sheet, scenario, start_row=start_row)
+    _add_charts(sheet, scenario, start_row=start_row, end_row=end_row)
 
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
