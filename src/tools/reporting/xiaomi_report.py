@@ -3,22 +3,19 @@
 import base64
 import csv
 import logging
-import math
 from dataclasses import dataclass, field
 from io import BytesIO
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
 from openpyxl import Workbook
-from openpyxl.chart import Reference, Series, ScatterChart
-from openpyxl.chart.axis import ChartLines
-from openpyxl.chart.legend import Legend
-from openpyxl.chart.marker import Marker
 from openpyxl.drawing.image import Image
 from openpyxl.formatting.rule import FormulaRule
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
+
+from src.tools.performance import generate_rvr_charts
 
 LOGGER = logging.getLogger(__name__)
 
@@ -524,7 +521,12 @@ def _nice_number(value: float, *, round_up: bool = True) -> float:
             fraction = candidates[0]
     return sign * fraction * (10 ** exponent)
 
-
+    try:
+        chart_paths = generate_rvr_charts(path)
+    except Exception:
+        LOGGER.exception("Failed to generate RVR charts for report: %s", path)
+        return
+      
 def _resolve_throughput_axis(values: Sequence[float]) -> Tuple[float, float]:
     if not values:
         return 10.0, 2.0
@@ -573,7 +575,6 @@ def _style_chart(chart: ScatterChart) -> None:
         getattr(chart.layout, "manualLayout", None),
         getattr(chart.plot_area.layout, "manualLayout", None),
     )
-
 
 def _build_throughput_chart(
     *,
@@ -640,62 +641,18 @@ def _add_charts(ws: Worksheet, scenario: RvrScenario, start_row: int, end_row: i
         point_count,
     )
 
-    LOGGER.info(
-        "RX throughput points: %s",
-        [
-            (att, scenario.rx_values.get(att))
-            for att in sorted(scenario.attenuation_steps)
-            if scenario.rx_values.get(att) is not None
-        ],
-    )
-    LOGGER.info(
-        "TX throughput points: %s",
-        [
-            (att, scenario.tx_values.get(att))
-            for att in sorted(scenario.attenuation_steps)
-            if scenario.tx_values.get(att) is not None
-        ],
-    )
+    for index, chart_path in enumerate(chart_paths):
+        try:
+            image = Image(str(chart_path))
+        except FileNotFoundError:
+            LOGGER.warning("Chart image missing at %s", chart_path)
+            continue
 
-    attenuations = scenario.attenuation_steps or DEFAULT_ATTENUATIONS
-    attenuations = sorted(attenuations)
-    axis_min = attenuations[0]
-    axis_max = attenuations[-1]
-    if axis_min == axis_max:
-        axis_max = axis_min + 3
-    axis_min = 3 * math.floor(axis_min / 3)
-    axis_max = 3 * math.ceil(axis_max / 3)
-    rx_values_list = [
-        scenario.rx_values.get(att)
-        for att in attenuations
-        if scenario.rx_values.get(att) is not None
-    ]
-    tx_values_list = [
-        scenario.tx_values.get(att)
-        for att in attenuations
-        if scenario.tx_values.get(att) is not None
-    ]
-    rx_y_max, rx_major = _resolve_throughput_axis(rx_values_list)
-    tx_y_max, tx_major = _resolve_throughput_axis(tx_values_list)
-    for title, chart, y_max, major in (
-        (rx_title, rx_chart, rx_y_max, rx_major),
-        (tx_title, tx_chart, tx_y_max, tx_major),
-    ):
-        chart.x_axis.scaling.min = axis_min
-        chart.x_axis.scaling.max = axis_max
-        chart.x_axis.majorUnit = 3
-        chart.y_axis.scaling.min = 0
-        chart.y_axis.scaling.max = y_max
-        chart.y_axis.majorUnit = major
-        LOGGER.info(
-            "Configured axis for %s: x_min=%s x_max=%s majorUnit=%s y_max=%s y_major=%s",
-            title,
-            chart.x_axis.scaling.min,
-            chart.x_axis.scaling.max,
-            chart.x_axis.majorUnit,
-            chart.y_axis.scaling.max,
-            chart.y_axis.majorUnit,
-        )
+        anchor_row = first_anchor_row + index * 18
+        image.anchor = f"{left_anchor_col}{anchor_row}"
+        image.width = 560
+        ws.add_image(image)
+        LOGGER.info("Inserted RVR chart %s at %s", chart_path, image.anchor)
 
 
 # ---------------------------------------------------------------------------
