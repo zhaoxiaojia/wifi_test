@@ -58,7 +58,7 @@ COL_RIGHT_RX_RSSI = COL_RIGHT_TABLE_ITEM + 3
 COL_RIGHT_TX_RSSI = COL_RIGHT_TABLE_ITEM + 4
 CHART_COLUMN_GAP = 1
 CHART_TITLE_ROW = 4
-CHART_MIN_TOP_ROW = 6
+CHART_MIN_TOP_ROW = 5
 CHART_VERTICAL_HEIGHT_ROWS = 18
 
 COLOR_BRAND_BLUE = "2D529F"
@@ -700,8 +700,8 @@ def _add_charts(ws: Worksheet, scenario: RvrScenario, start_row: int, end_row: i
     )
 
     point_count = end_row - start_row + 1
-    first_anchor_row = max(CHART_TITLE_ROW + 2, CHART_MIN_TOP_ROW)
-    chart_spacing = 2
+    first_anchor_row = max(CHART_TITLE_ROW + 1, CHART_MIN_TOP_ROW)
+    chart_spacing = 0
 
     chart_start_col_index = COL_AML_RESULT + CHART_COLUMN_GAP
     left_anchor_col = get_column_letter(chart_start_col_index)
@@ -719,7 +719,7 @@ def _add_charts(ws: Worksheet, scenario: RvrScenario, start_row: int, end_row: i
     ws.add_chart(rx_chart)
 
     # position the second chart directly beneath the first with configurable spacing
-    bottom_spacing = max(chart_spacing, 2)
+    bottom_spacing = chart_spacing
     tx_top_row = first_anchor_row + CHART_VERTICAL_HEIGHT_ROWS + bottom_spacing
     tx_anchor = f"{left_anchor_col}{tx_top_row}"
     tx_chart.anchor = tx_anchor
