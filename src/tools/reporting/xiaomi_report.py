@@ -576,13 +576,70 @@ def _style_chart(chart: ScatterChart) -> None:
         getattr(chart.plot_area.layout, "manualLayout", None),
     )
 
+def _build_throughput_chart(
+    *,
+    title: str,
+    series_title: str,
+    categories: Reference,
+    values: Reference,
+) -> ScatterChart:
+    chart = ScatterChart()
+    chart.scatterStyle = "line"
+    chart.title = title
+    chart.series.append(
+        Series(
+            values,
+            xvalues=categories,
+            title=series_title,
+        )
+    )
+    _style_chart(chart)
+    return chart
+
 
 def _add_charts(ws: Worksheet, scenario: RvrScenario, start_row: int, end_row: int) -> None:
     if start_row > end_row:
         return
 
-    first_anchor_row = 6
+    categories = Reference(ws, min_col=2, min_row=start_row, max_row=end_row)
+    rx_values = Reference(ws, min_col=4, min_row=start_row, max_row=end_row)
+    tx_values = Reference(ws, min_col=5, min_row=start_row, max_row=end_row)
+
+    rx_title = f"{scenario.title} RVR Throughput_RX"
+    tx_title = f"{scenario.title} RVR Throughput_TX"
+
+    rx_chart = _build_throughput_chart(
+        title=rx_title,
+        series_title=scenario.channel,
+        categories=categories,
+        values=rx_values,
+    )
+    tx_chart = _build_throughput_chart(
+        title=tx_title,
+        series_title=scenario.channel,
+        categories=categories,
+        values=tx_values,
+    )
+
+    point_count = end_row - start_row + 1
+    first_anchor_row = max(start_row - 1, 6)
     left_anchor_col = "L"
+
+    rx_anchor = f"{left_anchor_col}{first_anchor_row}"
+    rx_chart.anchor = rx_anchor
+    ws.add_chart(rx_chart)
+
+    tx_top_row = first_anchor_row + 13
+    tx_anchor = f"{left_anchor_col}{tx_top_row}"
+    tx_chart.anchor = tx_anchor
+    ws.add_chart(tx_chart)
+
+    LOGGER.info(
+        "Placed throughput charts | rx_anchor=%s tx_anchor=%s points=%d",
+        rx_anchor,
+        tx_anchor,
+        point_count,
+    )
 
     for index, chart_path in enumerate(chart_paths):
         try:
