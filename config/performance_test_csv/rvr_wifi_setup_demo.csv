@@ -1,2 +1,6 @@
 band,ssid,wireless_mode,channel,bandwidth,security_mode,password,tx,rx
 5G,coco_5g,11ax,36,40 MHz,Open System,,1,1
+5G,coco_5g,11ax,40,40 MHz,Open System,,1,1
+5G,coco_5g,11ax,44,40 MHz,Open System,,1,1
+2.4G,coco_5g,11n,1,20 MHz,Open System,,1,1
+2.4G,coco_5g,11n,11,20 MHz,Open System,,1,1

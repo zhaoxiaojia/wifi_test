@@ -16,7 +16,7 @@ rf_solution:
     ip_address: 192.168.5.200
     channels: '1'
   model: RC4DAT-8G-95
-  step: 0,75:3
+  step: 0,90:5
 rvr:
   iperf:
     path: ''

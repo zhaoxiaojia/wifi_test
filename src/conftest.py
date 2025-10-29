@@ -26,7 +26,7 @@ from src.tools.TestResult import TestResult
 from src.tools.config_loader import load_config
 from src.dut_control.roku_ctrl import roku_ctrl
 from src.tools.router_tool.Router import Router
-from src.tools.reporting import generate_xiaomi_report
+from src.tools.reporting import generate_project_report
 
 # pytest_plugins = "util.report_plugin"
 test_results = []
@@ -55,7 +55,7 @@ def _sanitize_filename_component(value) -> str:
     return sanitized.strip("_")
 
 
-def _maybe_generate_xiaomi_report() -> None:
+def _maybe_generate_project_report() -> None:
     config = getattr(pytest, "config", {}) or {}
     fpga_cfg = config.get("fpga") or {}
     customer = str(fpga_cfg.get("customer", "")).strip().upper()
@@ -63,14 +63,14 @@ def _maybe_generate_xiaomi_report() -> None:
         return
     test_result = getattr(pytest, "testResult", None)
     if test_result is None:
-        logging.warning("Skip Xiaomi report: missing testResult handle")
+        logging.warning("Skip project report: missing testResult handle")
         return
     selected_types = getattr(pytest, "selected_test_types", set())
     forced_type = None
     if isinstance(selected_types, set) and selected_types:
         if len(selected_types) == 1:
             forced_type = next(iter(selected_types))
-            logging.info("Using selected Wi-Fi test type for Xiaomi report: %s", forced_type)
+            logging.info("Using selected Wi-Fi test type for project report: %s", forced_type)
         else:
             logging.warning(
                 "Multiple Wi-Fi test types detected (%s); fallback to auto detection.",
@@ -84,13 +84,13 @@ def _maybe_generate_xiaomi_report() -> None:
     driver = _sanitize_filename_component(software_info.get("driver_version")) or "NA"
     hardware = _sanitize_filename_component(hardware_info.get("hardware_version")) or "NA"
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"Xiaomi_WiFi_Report_{timestamp}_{software}-{driver}-{hardware}.xlsx"
+    filename = f"Project_WiFi_Report_{timestamp}_{software}-{driver}-{hardware}.xlsx"
     output_path = logdir / filename
     try:
-        generate_xiaomi_report(result_file, output_path, forced_test_type=forced_type)
-        logging.info("Generated Xiaomi Wi-Fi performance report: %s", output_path)
+        generate_project_report(result_file, output_path, forced_test_type=forced_type)
+        logging.info("Generated project Wi-Fi performance report: %s", output_path)
     except Exception:
-        logging.exception("Failed to generate Xiaomi Wi-Fi performance report")
+        logging.exception("Failed to generate project Wi-Fi performance report")
 
 
 def pytest_sessionstart(session):
@@ -333,6 +333,6 @@ def pytest_sessionfinish(session, exitstatus):
 
     shutil.copy("pytest.log", "debug.log")
     shutil.move("debug.log", pytest.testResult.logdir)
-    _maybe_generate_xiaomi_report()
+    _maybe_generate_project_report()
     # shutil.copy("report.html", "report_bat.html")
     # shutil.move("report_bat.html", pytest.testResult.logdir)
