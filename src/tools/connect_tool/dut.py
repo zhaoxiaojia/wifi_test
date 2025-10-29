@@ -477,11 +477,12 @@ class dut():
     def _parse_iperf_log(self, server_lines: list[str]):
         """解析 iperf 日志并计算吞吐量."""
 
-        def _analyse_lines(lines: list[str]) -> tuple[Optional[float], Optional[IperfMetrics], int]:
+        def _analyse_lines(lines: list[str]) -> tuple[Optional[float], Optional[IperfMetrics], int, bool]:
             interval_pattern = re.compile(r'\d+\.\d*\s*-\s*\d+\.\d*\s*sec', re.IGNORECASE)
             values: list[float] = []
             udp_metrics_local: Optional[IperfMetrics] = None
             summary_value: Optional[float] = None
+            has_summary_line = False
 
             for raw_line in lines:
                 line = dut._sanitize_iperf_line(raw_line)
@@ -517,6 +518,7 @@ class dut():
                         duration = 0.0
                     if duration > 1.5:
                         summary_value = throughput
+                        has_summary_line = True
 
             if summary_value is not None:
                 throughput_value = summary_value
@@ -527,21 +529,32 @@ class dut():
             else:
                 throughput_value = None
 
-            return throughput_value, udp_metrics_local, len(values)
+            return throughput_value, udp_metrics_local, len(values), has_summary_line
 
-        server_value, server_udp_metrics, server_count = _analyse_lines(server_lines)
+        server_value, server_udp_metrics, server_count, server_has_summary = _analyse_lines(server_lines)
 
         preferred_value = server_value
         preferred_udp = server_udp_metrics
 
-        if preferred_value is None:
-            preferred_value = 0.0
-
         line_count = server_count
-        if self.rssi_num > -60:
+        expected_intervals = getattr(self, "iperf_test_time", 0) or 0
+        expected_intervals = max(1, int(expected_intervals))
+        has_enough_samples = line_count >= expected_intervals
+        if not server_has_summary and line_count:
+            if has_enough_samples:
+                logging.info(
+                    "iperf summary line missing; using average throughput over %d intervals",
+                    line_count,
+                )
+            else:
+                logging.warning(
+                    "iperf output only produced %d intervals (expected %d)",
+                    line_count,
+                    expected_intervals,
+                )
+        valid_samples = server_has_summary or has_enough_samples
+        if valid_samples:
             throughput_result = preferred_value if preferred_value else None
-        elif line_count > 30:
-            throughput_result = preferred_value
         else:
             throughput_result = None
 

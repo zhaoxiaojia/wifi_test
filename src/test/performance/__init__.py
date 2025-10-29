@@ -559,6 +559,13 @@ def get_rvo_target_rssi_list():
             field_name='corner_angle.target_rssi',
         )
         if parsed is not None:
-            parsed_values.append(parsed)
+            normalized = parsed if parsed <= 0 else -abs(parsed)
+            if normalized != parsed:
+                logging.debug(
+                    "corner_angle.target_rssi %s converted to %s dBm to match RSSI sign convention",
+                    parsed,
+                    normalized,
+                )
+            parsed_values.append(normalized)
 
     return parsed_values if parsed_values else [None]
