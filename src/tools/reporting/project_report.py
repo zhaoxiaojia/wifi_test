@@ -693,13 +693,47 @@ def _build_frequency_summary(
     summary = " / ".join(segments)
     return f"{label}: {summary}" if label else summary
 
+def _build_throughput_title_summary(groups: Sequence[ScenarioGroup]) -> str:
+    if not groups:
+        return "1、Throughput:None"
+
+    frequency_order: list[str] = []
+    frequency_details: dict[str, dict[str, int]] = {}
+
+    for group in groups:
+        freq = (group.freq or "").strip()
+        freq_label = freq.upper() if freq else "UNKNOWN"
+        if freq_label not in frequency_details:
+            frequency_details[freq_label] = {}
+            frequency_order.append(freq_label)
+
+        detail_map = frequency_details[freq_label]
+        summary_label = group.summary_label or freq_label
+        scenario_count = len(group.channels) or 1
+        detail_map[summary_label] = detail_map.get(summary_label, 0) + scenario_count
+
+    summary_lines: list[str] = []
+    for index, freq_label in enumerate(frequency_order, start=1):
+        summary_lines.append(f"{index}、Throughput:{freq_label}")
+        detail_map = frequency_details[freq_label]
+        if detail_map:
+            detail_segments: list[str] = []
+            for label, count in detail_map.items():
+                if count == 1:
+                    detail_segments.append(label)
+                else:
+                    detail_segments.append(f"{label} x{count}")
+            summary_lines.append(" / ".join(detail_segments))
+
+    return "\n".join(summary_lines)
+
 
 def _build_rvo_title_summary(groups: Sequence[ScenarioGroup]) -> str:
-    return _build_frequency_summary(groups)
+    return _build_throughput_title_summary(groups)
 
 
 def _build_rvr_title_summary(groups: Sequence[ScenarioGroup]) -> str:
-    return _build_frequency_summary(groups)
+    return _build_throughput_title_summary(groups)
 
 
 _TITLE_SUMMARY_BUILDERS: Dict[str, TitleSummaryBuilder] = {
@@ -745,14 +779,15 @@ def _write_report_title(
 
     remark_row = top_row + 1
     _merge(ws, f"A{remark_row}:W{remark_row}")
-    remark_text = "Remarks:" if remarks is None else remarks
+    default_remark = "Remarks:Ovality=Min Tup/AVG Tup*100%"
+    remark_text = default_remark if remarks is None else remarks
     _set_cell(
         ws,
         remark_row,
         1,
         remark_text,
         font=FONT_SUBHEADER,
-        alignment=ALIGN_LEFT_WRAP,
+        alignment=ALIGN_CENTER_WRAP,
         border=True,
     )
 
@@ -765,7 +800,7 @@ def _write_report_title(
         1,
         summary_text,
         font=FONT_BODY,
-        alignment=ALIGN_LEFT_WRAP,
+        alignment=ALIGN_CENTER_WRAP,
         border=True,
     )
 
