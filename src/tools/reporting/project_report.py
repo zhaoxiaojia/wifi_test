@@ -8,7 +8,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from io import BytesIO
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from openpyxl import Workbook
 from openpyxl.chart import Reference, ScatterChart, Series
@@ -16,14 +16,16 @@ from openpyxl.chart.axis import ChartLines
 from openpyxl.chart.layout import Layout, ManualLayout
 from openpyxl.chart.legend import Legend
 from openpyxl.chart.marker import Marker
-from openpyxl.drawing.image import Image
 from openpyxl.chart.shapes import GraphicalProperties
 from openpyxl.drawing.line import LineProperties
+from openpyxl.drawing.image import Image
 from openpyxl.formatting.rule import FormulaRule
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
 
+from src.test.performance import get_rvo_static_db_list, get_rvo_target_rssi_list
+from src.tools.performance.rvr_chart_generator import PerformanceRvrChartGenerator
 LOGGER = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -201,6 +203,8 @@ class ScenarioGroup:
     attenuation_steps: List[float] = field(default_factory=list)
     step_summary: str = ""
     channels: List[ProjectScenario] = field(default_factory=list)
+    raw_keys: set[str] = field(default_factory=set)
+    test_type: str = "RVR"
 
     @property
     def title(self) -> str:
@@ -240,6 +244,43 @@ def _group_base_key(raw_key: Optional[str]) -> str:
     if not filtered:
         return normalized
     return "|".join(filtered)
+
+
+def _normalize_test_type(value: Optional[str]) -> str:
+    """Normalize the provided test type string.
+
+    Empty inputs intentionally return an empty string so the caller can decide
+    whether to fall back to a default (usually "RVR").
+    """
+
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    return text.upper()
+
+
+def _detect_row_test_type(row: dict[str, object]) -> str:
+    candidates = (
+        row.get("__test_type_display__"),
+        row.get("Test_Type"),
+        row.get("Test Type"),
+        row.get("TestType"),
+        row.get("Test"),
+    )
+    for candidate in candidates:
+        text = str(candidate or "").strip()
+        if not text:
+            continue
+        normalized = _normalize_test_type(text)
+        if normalized:
+            return normalized
+    has_profile = any(
+        str(row.get(name) or "").strip()
+        for name in ("Profile_Mode", "Profile Mode", "RVO_Profile_Mode")
+    )
+    if has_profile:
+        return "RVO"
+    return "RVR"
 
 
 def _build_group_layout(channel_count: int) -> GroupLayout:
@@ -322,6 +363,42 @@ def _summarize_attenuation_steps(values: Sequence[float]) -> str:
         step_label = _format_numeric_label(step_value)
         return f"{start_label} - {end_label} (step {step_label} dB)"
     return f"{start_label} - {end_label}"
+
+
+def _resolve_rvo_att_steps() -> List[Tuple[Optional[float], str, str]]:
+    """Return RVO attenuation display entries as (value, item_label, att_label)."""
+
+    def _safe_values(loader) -> list[Optional[int]]:
+        try:
+            return [value for value in loader() if value is not None]
+        except Exception:
+            LOGGER.exception("Failed to load RVO configuration values from %s", loader)
+            return []
+
+    static_values = _safe_values(get_rvo_static_db_list)
+    target_values = _safe_values(get_rvo_target_rssi_list)
+
+    if static_values and target_values:
+        LOGGER.warning(
+            "Both static_db and target_rssi configured; prefer target_rssi for ATT rows."
+        )
+        static_values = []
+
+    entries: List[Tuple[Optional[float], str, str]] = []
+    if target_values:
+        for value in target_values:
+            numeric = float(value) if value is not None else None
+            label = f"Target RSSI {value} dBm" if value is not None else "Target RSSI"
+            att_text = f"{value} dBm" if value is not None else ""
+            entries.append((numeric, label, att_text))
+    elif static_values:
+        for value in static_values:
+            numeric = float(value) if value is not None else None
+            label = f"Static {value} dB" if value is not None else "Static"
+            att_text = f"{value} dB" if value is not None else ""
+            entries.append((numeric, label, att_text))
+
+    return entries
 
 
 
@@ -676,11 +753,30 @@ def _write_headers(
     return sub_row
 
 
-def _write_data(ws: Worksheet, group: ScenarioGroup, channels: Sequence[ProjectScenario], layout: GroupLayout, start_row: int = 7) -> int:
-    attenuations = group.attenuation_steps or DEFAULT_ATTENUATIONS
-    end_row = start_row + len(attenuations) - 1
+def _write_data(
+    ws: Worksheet,
+    group: ScenarioGroup,
+    channels: Sequence[ProjectScenario],
+    layout: GroupLayout,
+    start_row: int = 7,
+    *,
+    override_steps: Optional[Sequence[Optional[float]]] = None,
+    att_labels: Optional[Sequence[str]] = None,
+    item_labels: Optional[Sequence[str]] = None,
+) -> int:
+    base_steps = list(group.attenuation_steps or DEFAULT_ATTENUATIONS)
+    if override_steps is not None:
+        override = [step for step in override_steps if step is not None]
+        steps = list(override) if override else base_steps
+    else:
+        steps = base_steps
 
-    if end_row >= start_row:
+    if not steps:
+        steps = DEFAULT_ATTENUATIONS.copy()
+
+    end_row = start_row + len(steps) - 1
+
+    if steps and not item_labels:
         _merge(ws, f"A{start_row}:A{end_row}")
         _set_cell(
             ws,
@@ -692,20 +788,27 @@ def _write_data(ws: Worksheet, group: ScenarioGroup, channels: Sequence[ProjectS
             border=True,
         )
 
-    for index, attenuation in enumerate(attenuations):
+    for index, attenuation in enumerate(steps):
         row = start_row + index
         highlight = COLOR_RATE_PRIMARY if index < 6 else COLOR_RATE_SECONDARY
 
-        _set_cell(ws, row, 2, attenuation, font=FONT_BODY, alignment=ALIGN_CENTER, border=True)
+        if item_labels:
+            label = item_labels[index] if index < len(item_labels) else ""
+            _set_cell(ws, row, 1, label, font=FONT_BODY, alignment=ALIGN_CENTER_WRAP, border=True)
+
+        att_value = att_labels[index] if att_labels and index < len(att_labels) else attenuation
+        _set_cell(ws, row, 2, att_value, font=FONT_BODY, alignment=ALIGN_CENTER, border=True)
 
         for channel_idx, scenario in enumerate(channels):
             rx_col = layout.rx_cols[channel_idx]
             tx_col = layout.tx_cols[channel_idx]
+            rx_value = scenario.rx_values.get(attenuation)
+            tx_value = scenario.tx_values.get(attenuation)
             _set_cell(
                 ws,
                 row,
                 rx_col,
-                scenario.rx_values.get(attenuation),
+                rx_value,
                 font=FONT_BODY,
                 alignment=ALIGN_CENTER,
                 fill=highlight,
@@ -715,7 +818,7 @@ def _write_data(ws: Worksheet, group: ScenarioGroup, channels: Sequence[ProjectS
                 ws,
                 row,
                 tx_col,
-                scenario.tx_values.get(attenuation),
+                tx_value,
                 font=FONT_BODY,
                 alignment=ALIGN_CENTER,
                 fill=highlight,
@@ -751,7 +854,8 @@ def _write_data(ws: Worksheet, group: ScenarioGroup, channels: Sequence[ProjectS
                 border=True,
             )
 
-    _apply_grouped_texts(ws, layout.aml_standard_col, start_row, attenuations, _aml_standard_text)
+    if override_steps is None:
+        _apply_grouped_texts(ws, layout.aml_standard_col, start_row, steps, _aml_standard_text)
     _apply_result_formatting(ws, start_row, end_row, layout.aml_result_col)
     LOGGER.info(
         'Data rows populated | group=%s start_row=%d end_row=%d points=%d channels=%d',
@@ -1037,19 +1141,132 @@ def _add_group_charts(
     )
     return bottom_row
 
+
+def _prepare_rvo_chart_context(result_file: Path | str) -> dict[str, Any]:
+    chart_dir = Path(result_file).resolve().parent / "rvo_charts"
+    chart_dir.mkdir(parents=True, exist_ok=True)
+    generator = PerformanceRvrChartGenerator()
+    try:
+        dataframe = generator._load_rvr_dataframe(Path(result_file))  # type: ignore[attr-defined]
+    except Exception:
+        LOGGER.exception('Failed to load RVO dataframe for charts: %s', result_file)
+        dataframe = None
+    return {"generator": generator, "dataframe": dataframe, "directory": chart_dir}
+
+
+def _add_rvo_polar_chart(
+    ws: Worksheet,
+    group: ScenarioGroup,
+    layout: GroupLayout,
+    sections: Sequence[dict[str, object]],
+    *,
+    anchor_row: int,
+    context: dict[str, Any],
+) -> int:
+    data_last_row = max((section['data_end'] for section in sections), default=anchor_row)
+    generator: Optional[PerformanceRvrChartGenerator] = context.get("generator")
+    dataframe = context.get("dataframe")
+    chart_dir: Optional[Path] = context.get("directory")
+
+    if generator is None or chart_dir is None:
+        LOGGER.warning('Invalid RVO chart context; skip chart for %s', group.key)
+        return data_last_row
+
+    if dataframe is None or getattr(dataframe, "empty", True):
+        LOGGER.warning('RVO dataframe empty; polar chart unavailable for %s', group.key)
+        placeholder_col = layout.right_tx_cols[-1] + 2 if layout.right_tx_cols else layout.tx_cols[-1] + 2
+        _set_cell(
+            ws,
+            anchor_row,
+            placeholder_col,
+            "Polar chart unavailable",
+            font=FONT_BODY,
+            alignment=ALIGN_CENTER,
+            border=True,
+        )
+        return max(data_last_row, anchor_row)
+
+    try:
+        df = dataframe
+        if "Scenario_Group_Key" in df.columns:
+            df = df[df["Scenario_Group_Key"].isin(group.raw_keys)]
+        if "__test_type_display__" in df.columns:
+            df = df[df["__test_type_display__"].astype(str).str.upper() == "RVO"]
+        if df.empty:
+            raise ValueError("No RVO rows matched group keys")
+
+        direction_column = "__direction_display__" if "__direction_display__" in df.columns else "Direction"
+        if direction_column in df.columns:
+            directions = [
+                str(direction).strip()
+                for direction in df[direction_column].unique()
+                if str(direction).strip()
+            ]
+        else:
+            directions = ["RX"]
+        preferred = [d for d in directions if d.upper() in {"RX", "DL"}] + [d for d in directions if d.upper() not in {"RX", "DL"}]
+        image_path: Optional[Path] = None
+        used_direction = None
+        for direction in preferred or ["RX"]:
+            subset = df[df[direction_column] == direction] if direction_column in df.columns else df
+            if subset.empty:
+                continue
+            title = generator._format_chart_title(
+                group.standard,
+                group.bandwidth,
+                group.freq,
+                group.test_type,
+                direction,
+            )
+            image_path = generator._save_rvo_chart(subset, title, chart_dir)
+            if image_path is not None:
+                used_direction = direction
+                break
+
+        if image_path is None:
+            raise ValueError("Failed to generate polar chart")
+
+        anchor_base = layout.right_tx_cols[-1] if layout.right_tx_cols else layout.tx_cols[-1]
+        anchor_col_index = anchor_base + CHART_COLUMN_GAP + 1
+        anchor_letter = get_column_letter(anchor_col_index)
+        image = Image(str(image_path))
+        image.anchor = f"{anchor_letter}{anchor_row}"
+        ws.add_image(image)
+        LOGGER.info('Inserted RVO polar chart | group=%s direction=%s path=%s', group.key, used_direction, image_path)
+    except Exception:
+        LOGGER.exception('Failed to insert RVO polar chart for group %s', group.key)
+        fallback_col = layout.right_tx_cols[-1] + 2 if layout.right_tx_cols else layout.tx_cols[-1] + 2
+        _set_cell(
+            ws,
+            anchor_row,
+            fallback_col,
+            "Polar chart unavailable",
+            font=FONT_BODY,
+            alignment=ALIGN_CENTER,
+            border=True,
+        )
+
+    chart_bottom = anchor_row + CHART_VERTICAL_HEIGHT_ROWS
+    bottom_row = max(data_last_row, chart_bottom)
+    return bottom_row
+
 # ---------------------------------------------------------------------------
 # Data extraction
 # ---------------------------------------------------------------------------
 
 
-def _load_scenario_groups(result_file: Path | str) -> List[ScenarioGroup]:
+def _load_scenario_groups(result_file: Path | str, *, test_type: str | None = None) -> List[ScenarioGroup]:
     path = Path(result_file)
     if not path.exists():
         LOGGER.warning('Result CSV not found for project report: %s', path)
         return []
 
+    normalized_filter = _normalize_test_type(test_type) if test_type else None
     buckets: dict[str, dict[str, object]] = {}
     total_rows = 0
+    filtered_rows = 0
+    matched_rows = 0
+    type_counts: Counter[str] = Counter()
     try:
         with path.open('r', encoding='utf-8-sig', newline='') as handle:
             reader = csv.DictReader(handle)
@@ -1057,6 +1274,12 @@ def _load_scenario_groups(result_file: Path | str) -> List[ScenarioGroup]:
                 if not row:
                     continue
                 total_rows += 1
+                row_type = _detect_row_test_type(row)
+                type_counts[row_type] += 1
+                if normalized_filter and row_type != normalized_filter:
+                    filtered_rows += 1
+                    continue
+                matched_rows += 1
                 raw_key = row.get('Scenario_Group_Key')
                 base_key = _group_base_key(raw_key)
                 bucket = buckets.setdefault(
@@ -1070,10 +1293,12 @@ def _load_scenario_groups(result_file: Path | str) -> List[ScenarioGroup]:
                         'attenuations': set(),
                         'channels': {},
                         'channel_order': [],
+                        'test_type': Counter(),
                     },
                 )
 
                 bucket['raw_keys'].add(_normalize_scenario_key(raw_key))
+                bucket['test_type'][row_type] += 1
 
                 freq = str(row.get('Freq_Band') or '').strip()
                 if freq:
@@ -1142,6 +1367,11 @@ def _load_scenario_groups(result_file: Path | str) -> List[ScenarioGroup]:
             attenuation_steps=group_attenuations,
         )
         group.step_summary = _summarize_attenuation_steps(group_attenuations)
+        group.raw_keys = set(bucket['raw_keys'])
+        group.test_type = _most_common(
+            bucket['test_type'],
+            default=_normalize_test_type(normalized_filter or 'RVR'),
+        )
 
         channel_scenarios: List[ProjectScenario] = []
         for channel_label in bucket['channel_order']:
@@ -1192,11 +1422,23 @@ def _load_scenario_groups(result_file: Path | str) -> List[ScenarioGroup]:
             grp.key,
         ),
     )
+    distribution = ', '.join(
+        f"{name}={count}" for name, count in sorted(type_counts.items())
+    ) or 'none'
     LOGGER.info(
-        'Loaded project scenario groups | count=%d total_rows=%d source=%s',
+        'Scenario test type summary | total_rows=%d matched=%d filtered=%d filter=%s distribution=%s',
+        total_rows,
+        matched_rows,
+        filtered_rows,
+        normalized_filter or 'ALL',
+        distribution,
+    )
+    LOGGER.info(
+        'Loaded project scenario groups | count=%d total_rows=%d source=%s filter=%s',
         len(groups),
         total_rows,
         path,
+        normalized_filter or 'ALL',
     )
     return groups
 
@@ -1210,14 +1452,25 @@ def generate_project_report(
     output_path: Path | str,
     forced_test_type: str | None = None,
 ) -> Path:
-    groups = _load_scenario_groups(result_file)
-    LOGGER.info("Preparing project RVR report | groups=%d source=%s", len(groups), result_file)
+    normalized_type = _normalize_test_type(forced_test_type) if forced_test_type else None
+    groups = _load_scenario_groups(result_file, test_type=normalized_type)
+    actual_type = normalized_type or (groups[0].test_type if groups else "RVR")
+    LOGGER.info(
+        "Preparing project %s report | groups=%d source=%s",
+        actual_type,
+        len(groups),
+        result_file,
+    )
 
     workbook = Workbook()
     sheet = workbook.active
-    sheet_name = (forced_test_type or "RVR").strip().lower() or "rvr"
+    sheet_name = actual_type.lower()
     sheet.title = sheet_name[:31]
     _configure_sheet(sheet)
+
+    chart_context: Optional[dict[str, Any]] = None
+    if actual_type == "RVO":
+        chart_context = _prepare_rvo_chart_context(result_file)
 
     if not groups:
         title_row = _write_report_title(sheet, start_row=1)
@@ -1236,6 +1489,7 @@ def generate_project_report(
     else:
         title_row = _write_report_title(sheet, start_row=1)
         current_row = title_row + 2
+        rvo_att_entries = _resolve_rvo_att_steps() if actual_type == "RVO" else []
         for group_index, group in enumerate(groups):
             if group_index > 0:
                 current_row += 1
@@ -1251,17 +1505,53 @@ def generate_project_report(
                 header_row=header_row,
             )
             data_start = sub_header_row + 1
-            data_end = _write_data(sheet, group, group.channels, group_layout, start_row=data_start)
+            override_steps = [entry[0] for entry in rvo_att_entries if entry[0] is not None]
+            att_labels = [entry[2] for entry in rvo_att_entries]
+            item_labels = [entry[1] for entry in rvo_att_entries]
+            att_labels_to_use = att_labels if override_steps else None
+            item_labels_to_use = item_labels if override_steps else None
+            used_channels = group.channels
+            if actual_type == "RVO" and override_steps:
+                data_end = _write_data(
+                    sheet,
+                    group,
+                    used_channels,
+                    group_layout,
+                    start_row=data_start,
+                    override_steps=override_steps,
+                    att_labels=att_labels_to_use,
+                    item_labels=item_labels_to_use,
+                )
+            else:
+                data_end = _write_data(
+                    sheet,
+                    group,
+                    used_channels,
+                    group_layout,
+                    start_row=data_start,
+                    att_labels=att_labels_to_use if actual_type == "RVO" else None,
+                    item_labels=item_labels_to_use if actual_type == "RVO" else None,
+                )
             current_row = data_end + 1
 
             sections = [
                 {"scenario": scenario, "header_row": header_row, "data_start": data_start, "data_end": data_end}
-                for scenario in group.channels
+                for scenario in used_channels
             ]
 
             if sections:
                 anchor_row = header_row
-                last_row = _add_group_charts(sheet, group, group_layout, sections, anchor_row=anchor_row)
+                if actual_type == "RVO" and chart_context is not None:
+                    last_row = _add_rvo_polar_chart(
+                        sheet,
+                        group,
+                        group_layout,
+                        sections,
+                        anchor_row=anchor_row,
+                        context=chart_context,
+                    )
+                else:
+                    last_row = _add_group_charts(sheet, group, group_layout, sections, anchor_row=anchor_row)
                 current_row = max(current_row, last_row + 2)
             else:
                 LOGGER.warning("Group %s has no channel sections to chart.", group.key)
