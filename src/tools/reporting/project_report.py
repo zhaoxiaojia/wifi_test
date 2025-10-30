@@ -178,6 +178,9 @@ class ProjectScenario:
     tx_values: Dict[float, float] = field(default_factory=dict)
     rssi_rx: Dict[float, float] = field(default_factory=dict)
     rssi_tx: Dict[float, float] = field(default_factory=dict)
+    angle_order: List[str] = field(default_factory=list)
+    angle_rx_matrix: Dict[float, Dict[str, float]] = field(default_factory=dict)
+    angle_tx_matrix: Dict[float, Dict[str, float]] = field(default_factory=dict)
 
     @property
     def title(self) -> str:
@@ -205,6 +208,7 @@ class ScenarioGroup:
     channels: List[ProjectScenario] = field(default_factory=list)
     raw_keys: set[str] = field(default_factory=set)
     test_type: str = "RVR"
+    angle_order: List[str] = field(default_factory=list)
 
     @property
     def title(self) -> str:
@@ -400,7 +404,81 @@ def _resolve_rvo_att_steps() -> List[Tuple[Optional[float], str, str]]:
 
     return entries
 
+def _sorted_unique_angles(angles: Sequence[str]) -> List[str]:
+    """Return unique angles sorted numerically when possible."""
 
+    def _angle_key(text: str) -> Tuple[int, float, str]:
+        normalized = str(text or "").strip().lower().replace("°", "").replace("deg", "")
+        try:
+            numeric = float(normalized)
+            return (0, numeric, text)
+        except (TypeError, ValueError):
+            return (1, 0.0, text)
+
+    seen = set()
+    ordered: List[str] = []
+    for angle in angles:
+        if angle not in seen:
+            ordered.append(angle)
+            seen.add(angle)
+    return sorted(ordered, key=_angle_key)
+
+
+def _prepare_rvo_table_entries(
+    group: ScenarioGroup,
+    override_steps: Sequence[Optional[float]],
+    att_labels: Sequence[str],
+    item_labels: Sequence[str],
+) -> tuple[List[str], List[dict[str, object]]]:
+    """Build the axis definition for an RVO matrix table."""
+
+    # Aggregate candidate angles from group and channel scopes.
+    angle_candidates: List[str] = []
+    if group.angle_order:
+        angle_candidates.extend(group.angle_order)
+    for scenario in group.channels:
+        angle_candidates.extend(scenario.angle_order)
+    angles = _sorted_unique_angles(angle_candidates)
+
+    # Determine attenuation steps (vertical axis) in preferred order.
+    if override_steps:
+        steps: List[Optional[float]] = list(override_steps)
+    else:
+        collected: List[float] = []
+        for scenario in group.channels:
+            collected.extend(scenario.attenuation_steps)
+        unique = sorted({float(step) for step in collected}) if collected else []
+        steps = [float(step) for step in unique]
+
+    entries: List[dict[str, object]] = []
+    for scenario in group.channels:
+        for index, step in enumerate(steps):
+            numeric = float(step) if isinstance(step, (int, float)) else None
+            label_idx = index if override_steps else index
+            att_display = ""
+            item_display = ""
+            if override_steps:
+                if label_idx < len(att_labels):
+                    att_display = att_labels[label_idx]
+                if label_idx < len(item_labels):
+                    item_display = item_labels[label_idx]
+                if not att_display and numeric is not None:
+                    att_display = f"{_format_numeric_label(numeric)} dB"
+                if not item_display and att_display:
+                    item_display = att_display
+            else:
+                att_display = f"{_format_numeric_label(numeric)} dB" if numeric is not None else ""
+                item_display = att_display
+            entries.append(
+                {
+                    "scenario": scenario,
+                    "attenuation": numeric,
+                    "att_display": att_display,
+                    "item_display": item_display,
+                }
+            )
+
+    return angles, entries
 
 def _sanitize_number(value: Optional[str]) -> Optional[float]:
     if value in (None, "", "NULL"):
@@ -868,6 +946,108 @@ def _write_data(
     )
     return end_row
 
+def _write_rvo_table(
+    ws: Worksheet,
+    group: ScenarioGroup,
+    *,
+    start_row: int,
+    angles: Sequence[str],
+    entries: Sequence[dict[str, object]],
+) -> tuple[int, int]:
+    """Render an RVO matrix with channel/ATT rows and angle columns."""
+
+    header_row = start_row
+    data_row = header_row + 1
+    first_angle_col = 3
+
+    headers = [
+        (header_row, 1, "Channel"),
+        (header_row, 2, "ATT(Unit:dB)"),
+    ]
+    for idx, angle in enumerate(angles):
+        headers.append((header_row, first_angle_col + idx, angle))
+
+    for row, col, text in headers:
+        _set_cell(
+            ws,
+            row,
+            col,
+            text,
+            font=FONT_HEADER,
+            alignment=ALIGN_CENTER_WRAP,
+            fill=COLOR_BRAND_BLUE,
+            border=True,
+        )
+
+    rows_by_scenario: Dict[ProjectScenario, List[dict[str, object]]] = {}
+    for entry in entries:
+        scenario = entry.get("scenario")
+        if isinstance(scenario, ProjectScenario):
+            rows_by_scenario.setdefault(scenario, []).append(entry)
+
+    current_row = data_row
+    last_col = first_angle_col + max(len(angles) - 1, 0)
+    for scenario in group.channels:
+        scenario_rows = rows_by_scenario.get(scenario, [])
+        if not scenario_rows:
+            continue
+        start = current_row
+        for row_entry in scenario_rows:
+            att_display = row_entry.get("att_display", "")
+            _set_cell(
+                ws,
+                current_row,
+                2,
+                att_display,
+                font=FONT_BODY,
+                alignment=ALIGN_CENTER,
+                border=True,
+            )
+            attenuation = row_entry.get("attenuation")
+            lookup_key = float(attenuation) if isinstance(attenuation, (int, float)) else None
+            angle_map = scenario.angle_rx_matrix.get(lookup_key, {}) if lookup_key is not None else {}
+            for idx, angle in enumerate(angles):
+                col = first_angle_col + idx
+                value = angle_map.get(angle)
+                _set_cell(
+                    ws,
+                    current_row,
+                    col,
+                    value,
+                    font=FONT_BODY,
+                    alignment=ALIGN_CENTER,
+                    border=True,
+                )
+            current_row += 1
+        end = current_row - 1
+        if start <= end:
+            if start != end:
+                _merge(ws, f"A{start}:A{end}")
+            _set_cell(
+                ws,
+                start,
+                1,
+                scenario.channel,
+                font=FONT_BODY,
+                alignment=ALIGN_CENTER,
+                border=True,
+            )
+            for row_index in range(start + 1, end + 1):
+                cell = ws.cell(row=row_index, column=1)
+                cell.border = BORDER_THIN
+                cell.alignment = ALIGN_CENTER
+
+    data_end_row = max(current_row - 1, header_row)
+    LOGGER.info(
+        'RVO matrix written | group=%s rows=%d angles=%d',
+        group.key,
+        max(current_row - data_row, 0),
+        len(angles),
+    )
+    last_col = last_col if angles else 2
+    return data_end_row, last_col
+
+
 def _nice_number(value: float, *, round_up: bool = True) -> float:
     if value <= 0:
         return 0.0
@@ -1158,13 +1338,18 @@ def _prepare_rvo_chart_context(result_file: Path | str) -> dict[str, Any]:
 def _add_rvo_polar_chart(
     ws: Worksheet,
     group: ScenarioGroup,
-    layout: GroupLayout,
+    layout: Optional[GroupLayout],
     sections: Sequence[dict[str, object]],
     *,
     anchor_row: int,
     context: dict[str, Any],
+    data_end_row: Optional[int] = None,
+    data_end_col: Optional[int] = None,
 ) -> int:
-    data_last_row = max((section['data_end'] for section in sections), default=anchor_row)
+    data_last_row = data_end_row if data_end_row is not None else max(
+        (section['data_end'] for section in sections),
+        default=anchor_row,
+    )
     generator: Optional[PerformanceRvrChartGenerator] = context.get("generator")
     dataframe = context.get("dataframe")
     chart_dir: Optional[Path] = context.get("directory")
@@ -1175,7 +1360,10 @@ def _add_rvo_polar_chart(
 
     if dataframe is None or getattr(dataframe, "empty", True):
         LOGGER.warning('RVO dataframe empty; polar chart unavailable for %s', group.key)
-        placeholder_col = layout.right_tx_cols[-1] + 2 if layout.right_tx_cols else layout.tx_cols[-1] + 2
+        base_col = data_end_col if data_end_col is not None else None
+        if base_col is None and layout is not None:
+            base_col = layout.right_tx_cols[-1] if layout.right_tx_cols else layout.tx_cols[-1]
+        placeholder_col = (base_col or 2) + CHART_COLUMN_GAP + 1
         _set_cell(
             ws,
             anchor_row,
@@ -1227,7 +1415,12 @@ def _add_rvo_polar_chart(
         if image_path is None:
             raise ValueError("Failed to generate polar chart")
 
-        anchor_base = layout.right_tx_cols[-1] if layout.right_tx_cols else layout.tx_cols[-1]
+        if data_end_col is not None:
+            anchor_base = data_end_col
+        elif layout is not None:
+            anchor_base = layout.right_tx_cols[-1] if layout.right_tx_cols else layout.tx_cols[-1]
+        else:
+            anchor_base = 2
         anchor_col_index = anchor_base + CHART_COLUMN_GAP + 1
         anchor_letter = get_column_letter(anchor_col_index)
         image = Image(str(image_path))
@@ -1236,7 +1429,13 @@ def _add_rvo_polar_chart(
         LOGGER.info('Inserted RVO polar chart | group=%s direction=%s path=%s', group.key, used_direction, image_path)
     except Exception:
         LOGGER.exception('Failed to insert RVO polar chart for group %s', group.key)
-        fallback_col = layout.right_tx_cols[-1] + 2 if layout.right_tx_cols else layout.tx_cols[-1] + 2
+        if data_end_col is not None:
+            fallback_base = data_end_col
+        elif layout is not None:
+            fallback_base = layout.right_tx_cols[-1] if layout.right_tx_cols else layout.tx_cols[-1]
+        else:
+            fallback_base = 2
+        fallback_col = fallback_base + CHART_COLUMN_GAP + 1
         _set_cell(
             ws,
             anchor_row,
@@ -1291,6 +1490,7 @@ def _load_scenario_groups(result_file: Path | str, *, test_type: str | None = No
                         'standard': Counter(),
                         'bandwidth': Counter(),
                         'angle': Counter(),
+                        'angle_order': [],
                         'attenuations': set(),
                         'channels': {},
                         'channel_order': [],
@@ -1326,6 +1526,9 @@ def _load_scenario_groups(result_file: Path | str, *, test_type: str | None = No
                         'rssi_rx': {},
                         'rssi_tx': {},
                         'attenuations': set(),
+                        'angle_order': [],
+                        'rvo_rx': {},
+                        'rvo_tx': {},
                     },
                 )
                 if channel_label not in bucket['channel_order']:
@@ -1340,6 +1543,21 @@ def _load_scenario_groups(result_file: Path | str, *, test_type: str | None = No
                 direction = str(row.get('Direction') or '').upper()
                 throughput = _sanitize_number(row.get('Throughput'))
                 if throughput is not None:
+                    if row_type == 'RVO':
+                        angle_label = angle or '0deg'
+                        angle_order = bucket['angle_order']
+                        if angle_label not in angle_order:
+                            angle_order.append(angle_label)
+                        channel_angle_order = channel_bucket['angle_order']
+                        if angle_label not in channel_angle_order:
+                            channel_angle_order.append(angle_label)
+                        if direction in {'DL', 'RX'}:
+                            angle_map = channel_bucket['rvo_rx'].setdefault(float(attenuation), {})
+                            angle_map[angle_label] = throughput
+                        elif direction in {'UL', 'TX'}:
+                            angle_map = channel_bucket['rvo_tx'].setdefault(float(attenuation), {})
+                            angle_map[angle_label] = throughput
+
                     if direction in {'DL', 'RX'}:
                         channel_bucket['rx'][attenuation] = throughput
                     elif direction in {'UL', 'TX'}:
@@ -1373,11 +1591,31 @@ def _load_scenario_groups(result_file: Path | str, *, test_type: str | None = No
             bucket['test_type'],
             default=_normalize_test_type(normalized_filter or 'RVR'),
         )
+        group.angle_order = _sorted_unique_angles(bucket.get('angle_order', []))
 
         channel_scenarios: List[ProjectScenario] = []
         for channel_label in bucket['channel_order']:
             channel_bucket = bucket['channels'].get(channel_label) or {}
             channel_atts = sorted(channel_bucket.get('attenuations', set()))
+            scenario_angle_order = _sorted_unique_angles(
+                channel_bucket.get('angle_order', []) or group.angle_order
+            )
+
+            def _ordered_angle_map(raw_map: Dict[float, Dict[str, float]]) -> Dict[float, Dict[str, float]]:
+                ordered: Dict[float, Dict[str, float]] = {}
+                for att_key, angle_map in raw_map.items():
+                    if not isinstance(att_key, (int, float)):
+                        continue
+                    att_float = float(att_key)
+                    ordered_angles: Dict[str, float] = {}
+                    for angle_name in scenario_angle_order:
+                        if angle_name in angle_map:
+                            ordered_angles[angle_name] = angle_map[angle_name]
+                    if not ordered_angles and angle_map:
+                        ordered_angles = dict(sorted(angle_map.items()))
+                    ordered[att_float] = ordered_angles
+                return ordered
+
             scenario = ProjectScenario(
                 key=channel_bucket.get('scenario_key') or base_key,
                 freq=group.freq,
@@ -1391,6 +1629,9 @@ def _load_scenario_groups(result_file: Path | str, *, test_type: str | None = No
                 tx_values=dict(sorted(channel_bucket.get('tx', {}).items())),
                 rssi_rx=dict(sorted(channel_bucket.get('rssi_rx', {}).items())),
                 rssi_tx=dict(sorted(channel_bucket.get('rssi_tx', {}).items())),
+                angle_order=scenario_angle_order,
+                angle_rx_matrix=_ordered_angle_map(channel_bucket.get('rvo_rx', {})),
+                angle_tx_matrix=_ordered_angle_map(channel_bucket.get('rvo_tx', {})),
             )
             LOGGER.info(
                 'Channel aggregated | base_key=%s channel=%s attenuations=%d rx_points=%d tx_points=%d',
@@ -1494,10 +1735,45 @@ def generate_project_report(
         for group_index, group in enumerate(groups):
             if group_index > 0:
                 current_row += 1
-            group_layout = _build_group_layout(len(group.channels))
             group_header_row = _write_group_header(sheet, group, start_row=current_row)
             header_row = group_header_row + 1
 
+            if actual_type == "RVO":
+                override_steps = [entry[0] for entry in rvo_att_entries]
+                att_labels = [entry[2] for entry in rvo_att_entries]
+                item_labels = [entry[1] for entry in rvo_att_entries]
+                angles, entries = _prepare_rvo_table_entries(
+                    group,
+                    override_steps,
+                    att_labels,
+                    item_labels,
+                )
+                matrix_angles = angles if angles else group.angle_order
+                if not matrix_angles:
+                    LOGGER.warning('Group %s missing RVO angle definitions', group.key)
+                data_end, last_col = _write_rvo_table(
+                    sheet,
+                    group,
+                    start_row=header_row,
+                    angles=matrix_angles,
+                    entries=entries,
+                )
+                current_row = data_end + 1
+                if chart_context is not None:
+                    last_row = _add_rvo_polar_chart(
+                        sheet,
+                        group,
+                        None,
+                        [],
+                        anchor_row=header_row,
+                        context=chart_context,
+                        data_end_row=data_end,
+                        data_end_col=last_col,
+                    )
+                    current_row = max(current_row, last_row + 2)
+                continue
+
+            group_layout = _build_group_layout(len(group.channels))
             sub_header_row = _write_headers(
                 sheet,
                 group,
@@ -1506,33 +1782,13 @@ def generate_project_report(
                 header_row=header_row,
             )
             data_start = sub_header_row + 1
-            override_steps = [entry[0] for entry in rvo_att_entries if entry[0] is not None]
-            att_labels = [entry[2] for entry in rvo_att_entries]
-            item_labels = [entry[1] for entry in rvo_att_entries]
-            att_labels_to_use = att_labels if override_steps else None
-            item_labels_to_use = item_labels if override_steps else None
-            used_channels = group.channels
-            if actual_type == "RVO" and override_steps:
-                data_end = _write_data(
-                    sheet,
-                    group,
-                    used_channels,
-                    group_layout,
-                    start_row=data_start,
-                    override_steps=override_steps,
-                    att_labels=att_labels_to_use,
-                    item_labels=item_labels_to_use,
-                )
-            else:
-                data_end = _write_data(
-                    sheet,
-                    group,
-                    used_channels,
-                    group_layout,
-                    start_row=data_start,
-                    att_labels=att_labels_to_use if actual_type == "RVO" else None,
-                    item_labels=item_labels_to_use if actual_type == "RVO" else None,
-                )
+            data_end = _write_data(
+                sheet,
+                group,
+                group.channels,
+                group_layout,
+                start_row=data_start,
+            )
             current_row = data_end + 1
 
             sections = [
