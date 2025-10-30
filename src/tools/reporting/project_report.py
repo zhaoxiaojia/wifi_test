@@ -48,7 +48,20 @@ COLUMN_WIDTHS: Dict[str, float] = {
     "M": 12.5,
     "N": 14.0,
     "O": 12.25,
+    "P": 12.25,
+    "Q": 13.5,
+    "R": 11.5,
+    "S": 12.0,
+    "T": 12.0,
+    "U": 12.0,
+    "V": 12.0,
+    "W": 12.0,
+    "X": 12.0,
+    "Y": 12.0,
+    "Z": 12.0,
 }
+
+REPORT_LAST_COLUMN = "Z"
 
 ROW_HEIGHT_TITLE = 42.95
 
@@ -181,6 +194,8 @@ class ProjectScenario:
     angle_order: List[str] = field(default_factory=list)
     angle_rx_matrix: Dict[float, Dict[str, float]] = field(default_factory=dict)
     angle_tx_matrix: Dict[float, Dict[str, float]] = field(default_factory=dict)
+    angle_rssi_rx_matrix: Dict[float, Dict[str, float]] = field(default_factory=dict)
+    angle_rssi_tx_matrix: Dict[float, Dict[str, float]] = field(default_factory=dict)
 
     @property
     def title(self) -> str:
@@ -756,7 +771,7 @@ def _write_report_title(
     remarks: Optional[str] = None,
 ) -> int:
     top_row = start_row
-    _merge(ws, f"A{top_row}:W{top_row}")
+    _merge(ws, f"A{top_row}:{REPORT_LAST_COLUMN}{top_row}")
     ws.row_dimensions[top_row].height = ROW_HEIGHT_TITLE
     title_text = f"WiFi {test_type.upper()} Test Report"
     _set_cell(
@@ -778,7 +793,7 @@ def _write_report_title(
     ws.add_image(image)
 
     remark_row = top_row + 1
-    _merge(ws, f"A{remark_row}:W{remark_row}")
+    _merge(ws, f"A{remark_row}:{REPORT_LAST_COLUMN}{remark_row}")
     default_remark = "Remarks:Ovality=Min Tup/AVG Tup*100%"
     remark_text = default_remark if remarks is None else remarks
     _set_cell(
@@ -792,7 +807,7 @@ def _write_report_title(
     )
 
     summary_row = remark_row + 1
-    _merge(ws, f"A{summary_row}:W{summary_row}")
+    _merge(ws, f"A{summary_row}:{REPORT_LAST_COLUMN}{summary_row}")
     summary_text = _resolve_title_summary(groups, test_type)
     _set_cell(
         ws,
@@ -811,7 +826,7 @@ def _write_report_title(
 
 
 def _write_group_header(ws: Worksheet, group: ScenarioGroup, start_row: int) -> int:
-    _merge(ws, f"A{start_row}:W{start_row}")
+    _merge(ws, f"A{start_row}:{REPORT_LAST_COLUMN}{start_row}")
     _set_cell(
         ws,
         start_row,
@@ -1094,23 +1109,67 @@ def _write_rvo_table(
     angles: Sequence[str],
     entries: Sequence[dict[str, object]],
 ) -> tuple[int, int]:
-    """Render an RVO matrix with channel/ATT rows and angle columns."""
+    """Render an RVO summary table with angle throughput and RSSI blocks."""
+
+    def _display_angle(value: str) -> str:
+        text = str(value or "").strip()
+        if text.lower().endswith("deg"):
+            return text[:-3] + "°"
+        return text
 
     header_row = start_row
-    data_row = header_row + 1
-    first_angle_col = 3
+    sub_header_row = header_row + 1
+    raw_angle_count = len(angles)
+    angle_headers = list(angles) if angles else [group.angle_label or "0deg"]
+    angle_count = len(angle_headers)
 
-    headers = [
-        (header_row, 1, "Channel"),
-        (header_row, 2, "ATT(Unit:dB)"),
+    item_col = 1
+    channel_col = 2
+    left_att_col = 3
+    throughput_start_col = 4
+    throughput_end_col = throughput_start_col + angle_count - 1 if angle_count else throughput_start_col - 1
+    average_col = throughput_end_col + 1
+    ovality_col = average_col + 1
+    wm_standard_col = ovality_col + 1
+    sdmc_standard_col = wm_standard_col + 1
+    aml_standard_col = sdmc_standard_col + 1
+    aml_result_col = aml_standard_col + 1
+    right_att_col = aml_result_col + 1
+    rssi_start_col = right_att_col + 1
+    rssi_end_col = rssi_start_col + angle_count - 1 if angle_count else rssi_start_col - 1
+
+    merged_columns = [
+        item_col,
+        channel_col,
+        left_att_col,
+        average_col,
+        ovality_col,
+        wm_standard_col,
+        sdmc_standard_col,
+        aml_standard_col,
+        aml_result_col,
+        right_att_col,
     ]
-    for idx, angle in enumerate(angles):
-        headers.append((header_row, first_angle_col + idx, angle))
+    for col in merged_columns:
+        letter = get_column_letter(col)
+        _merge(ws, f"{letter}{header_row}:{letter}{sub_header_row}")
 
-    for row, col, text in headers:
+    header_cells = [
+        (item_col, "Item"),
+        (channel_col, "CH"),
+        (left_att_col, "Angle\n\nATT"),
+        (average_col, "Average\n(Unit:Mb)"),
+        (ovality_col, "Ovality(％)"),
+        (wm_standard_col, "WM_Standard"),
+        (sdmc_standard_col, "SDMC_Standard"),
+        (aml_standard_col, "AML_Standard"),
+        (aml_result_col, "AML_Result"),
+        (right_att_col, "Angle\n\nATT"),
+    ]
+    for col, text in header_cells:
         _set_cell(
             ws,
-            row,
+            header_row,
             col,
             text,
             font=FONT_HEADER,
@@ -1118,36 +1177,102 @@ def _write_rvo_table(
             fill=COLOR_BRAND_BLUE,
             border=True,
         )
+
+    throughput_start_letter = get_column_letter(throughput_start_col)
+    throughput_end_letter = get_column_letter(throughput_end_col)
+    _merge(ws, f"{throughput_start_letter}{header_row}:{throughput_end_letter}{header_row}")
+    _set_cell(
+        ws,
+        header_row,
+        throughput_start_col,
+        "RX (Unit:Mbps)",
+        font=FONT_HEADER,
+        alignment=ALIGN_CENTER_WRAP,
+        fill=COLOR_BRAND_BLUE,
+        border=True,
+    )
+    for idx, angle in enumerate(angle_headers):
+        _set_cell(
+            ws,
+            sub_header_row,
+            throughput_start_col + idx,
+            _display_angle(angle),
+            font=FONT_HEADER,
+            alignment=ALIGN_CENTER,
+            fill=COLOR_BRAND_BLUE,
+            border=True,
+        )
+
+    rssi_start_letter = get_column_letter(rssi_start_col)
+    rssi_end_letter = get_column_letter(rssi_end_col)
+    _merge(ws, f"{rssi_start_letter}{header_row}:{rssi_end_letter}{header_row}")
+    _set_cell(
+        ws,
+        header_row,
+        rssi_start_col,
+        "RX_RSSI (Unit:dBm)",
+        font=FONT_HEADER,
+        alignment=ALIGN_CENTER_WRAP,
+        fill=COLOR_BRAND_BLUE,
+        border=True,
+    )
+    for idx, angle in enumerate(angle_headers):
+        _set_cell(
+            ws,
+            sub_header_row,
+            rssi_start_col + idx,
+            _display_angle(angle),
+            font=FONT_HEADER,
+            alignment=ALIGN_CENTER,
+            fill=COLOR_BRAND_BLUE,
+            border=True,
+        )
+
     rows_by_scenario: Dict[str, List[dict[str, object]]] = {}
     for entry in entries:
         scenario_key = entry.get("scenario_key")
         if isinstance(scenario_key, str) and scenario_key:
             rows_by_scenario.setdefault(scenario_key, []).append(entry)
 
-    current_row = data_row
-    last_col = first_angle_col + max(len(angles) - 1, 0)
+    current_row = sub_header_row + 1
     for scenario in group.channels:
         scenario_key = getattr(scenario, "key", "")
         scenario_rows = rows_by_scenario.get(scenario_key, []) if scenario_key else []
         if not scenario_rows:
             continue
-        start = current_row
+        scenario_start = current_row
         for row_entry in scenario_rows:
+            item_display = row_entry.get("item_display") or row_entry.get("att_display") or scenario.channel
             att_display = row_entry.get("att_display", "")
+            attenuation = row_entry.get("attenuation")
+            lookup_key = float(attenuation) if isinstance(attenuation, (int, float)) else None
+            angle_map = scenario.angle_rx_matrix.get(lookup_key, {}) if lookup_key is not None else {}
+            rssi_map = (
+                scenario.angle_rssi_rx_matrix.get(lookup_key, {}) if lookup_key is not None else {}
+            )
+
             _set_cell(
                 ws,
                 current_row,
-                2,
+                item_col,
+                item_display,
+                font=FONT_BODY,
+                alignment=ALIGN_CENTER_WRAP,
+                border=True,
+            )
+            _set_cell(
+                ws,
+                current_row,
+                left_att_col,
                 att_display,
                 font=FONT_BODY,
                 alignment=ALIGN_CENTER,
                 border=True,
             )
-            attenuation = row_entry.get("attenuation")
-            lookup_key = float(attenuation) if isinstance(attenuation, (int, float)) else None
-            angle_map = scenario.angle_rx_matrix.get(lookup_key, {}) if lookup_key is not None else {}
-            for idx, angle in enumerate(angles):
-                col = first_angle_col + idx
+
+            numeric_values: list[float] = []
+            for idx, angle in enumerate(angle_headers):
+                col = throughput_start_col + idx
                 value = angle_map.get(angle)
                 _set_cell(
                     ws,
@@ -1158,34 +1283,150 @@ def _write_rvo_table(
                     alignment=ALIGN_CENTER,
                     border=True,
                 )
-            current_row += 1
-        end = current_row - 1
-        if start <= end:
-            if start != end:
-                _merge(ws, f"A{start}:A{end}")
+                try:
+                    numeric = float(value)
+                except (TypeError, ValueError):
+                    continue
+                if math.isfinite(numeric):
+                    numeric_values.append(numeric)
+
+            average_value = None
+            if numeric_values:
+                average_value = sum(numeric_values) / len(numeric_values)
+                _set_cell(
+                    ws,
+                    current_row,
+                    average_col,
+                    round(average_value, 2),
+                    font=FONT_BODY,
+                    alignment=ALIGN_CENTER,
+                    border=True,
+                )
+                min_value = min(numeric_values)
+                ovality = (min_value / average_value * 100) if average_value else None
+                if ovality is not None:
+                    _set_cell(
+                        ws,
+                        current_row,
+                        ovality_col,
+                        round(ovality, 2),
+                        font=FONT_BODY,
+                        alignment=ALIGN_CENTER,
+                        border=True,
+                    )
+            if average_value is None:
+                _set_cell(
+                    ws,
+                    current_row,
+                    average_col,
+                    None,
+                    font=FONT_BODY,
+                    alignment=ALIGN_CENTER,
+                    border=True,
+                )
+                _set_cell(
+                    ws,
+                    current_row,
+                    ovality_col,
+                    None,
+                    font=FONT_BODY,
+                    alignment=ALIGN_CENTER,
+                    border=True,
+                )
+
+            if isinstance(lookup_key, float):
+                standard_text = _aml_standard_text(lookup_key)
+            else:
+                standard_text = None
             _set_cell(
                 ws,
-                start,
-                1,
+                current_row,
+                aml_standard_col,
+                standard_text,
+                font=FONT_STANDARD,
+                alignment=ALIGN_LEFT_WRAP,
+                border=True,
+            )
+            _set_cell(
+                ws,
+                current_row,
+                aml_result_col,
+                None,
+                font=FONT_BODY,
+                alignment=ALIGN_CENTER,
+                border=True,
+            )
+            _set_cell(
+                ws,
+                current_row,
+                wm_standard_col,
+                None,
+                font=FONT_STANDARD,
+                alignment=ALIGN_LEFT_WRAP,
+                border=True,
+            )
+            _set_cell(
+                ws,
+                current_row,
+                sdmc_standard_col,
+                None,
+                font=FONT_STANDARD,
+                alignment=ALIGN_LEFT_WRAP,
+                border=True,
+            )
+
+            _set_cell(
+                ws,
+                current_row,
+                right_att_col,
+                att_display,
+                font=FONT_BODY,
+                alignment=ALIGN_CENTER,
+                border=True,
+            )
+
+            for idx, angle in enumerate(angle_headers):
+                col = rssi_start_col + idx
+                value = rssi_map.get(angle)
+                _set_cell(
+                    ws,
+                    current_row,
+                    col,
+                    value,
+                    font=FONT_BODY,
+                    alignment=ALIGN_CENTER,
+                    border=True,
+                )
+
+            current_row += 1
+
+        scenario_end = current_row - 1
+        if scenario_start <= scenario_end:
+            if scenario_end > scenario_start:
+                _merge(ws, f"B{scenario_start}:B{scenario_end}")
+            _set_cell(
+                ws,
+                scenario_start,
+                channel_col,
                 scenario.channel,
                 font=FONT_BODY,
                 alignment=ALIGN_CENTER,
                 border=True,
             )
-            for row_index in range(start + 1, end + 1):
-                cell = ws.cell(row=row_index, column=1)
+            for row_index in range(scenario_start + 1, scenario_end + 1):
+                cell = ws.cell(row=row_index, column=channel_col)
                 cell.border = BORDER_THIN
                 cell.alignment = ALIGN_CENTER
 
     data_end_row = max(current_row - 1, header_row)
+    used_last_col = rssi_end_col if angle_count else aml_result_col
     LOGGER.info(
         'RVO matrix written | group=%s rows=%d angles=%d',
         group.key,
-        max(current_row - data_row, 0),
-        len(angles),
+        max(current_row - (sub_header_row + 1), 0),
+        raw_angle_count,
     )
-    last_col = last_col if angles else 2
-    return data_end_row, last_col
+    return data_end_row, used_last_col
 
 
 def _nice_number(value: float, *, round_up: bool = True) -> float:
@@ -1669,6 +1910,8 @@ def _load_scenario_groups(result_file: Path | str, *, test_type: str | None = No
                         'angle_order': [],
                         'rvo_rx': {},
                         'rvo_tx': {},
+                        'rvo_rssi_rx': {},
+                        'rvo_rssi_tx': {},
                     },
                 )
                 if channel_label not in bucket['channel_order']:
@@ -1707,8 +1950,16 @@ def _load_scenario_groups(result_file: Path | str, *, test_type: str | None = No
                 if rssi is not None:
                     if direction in {'DL', 'RX'}:
                         channel_bucket['rssi_rx'][attenuation] = rssi
+                        if row_type == 'RVO':
+                            angle_label = angle or '0deg'
+                            angle_map = channel_bucket['rvo_rssi_rx'].setdefault(float(attenuation), {})
+                            angle_map[angle_label] = rssi
                     elif direction in {'UL', 'TX'}:
                         channel_bucket['rssi_tx'][attenuation] = rssi
+                        if row_type == 'RVO':
+                            angle_label = angle or '0deg'
+                            angle_map = channel_bucket['rvo_rssi_tx'].setdefault(float(attenuation), {})
+                            angle_map[angle_label] = rssi
     except Exception:
         LOGGER.exception('Failed to parse project CSV: %s', path)
         return []
@@ -1772,6 +2023,8 @@ def _load_scenario_groups(result_file: Path | str, *, test_type: str | None = No
                 angle_order=scenario_angle_order,
                 angle_rx_matrix=_ordered_angle_map(channel_bucket.get('rvo_rx', {})),
                 angle_tx_matrix=_ordered_angle_map(channel_bucket.get('rvo_tx', {})),
+                angle_rssi_rx_matrix=_ordered_angle_map(channel_bucket.get('rvo_rssi_rx', {})),
+                angle_rssi_tx_matrix=_ordered_angle_map(channel_bucket.get('rvo_rssi_tx', {})),
             )
             LOGGER.info(
                 'Channel aggregated | base_key=%s channel=%s attenuations=%d rx_points=%d tx_points=%d',
@@ -1857,7 +2110,7 @@ def generate_project_report(
     if not groups:
         title_end_row = _write_report_title(sheet, groups=[], test_type=actual_type, start_row=1)
         placeholder_row = title_end_row + 2
-        _merge(sheet, f"A{placeholder_row}:W{placeholder_row}")
+        _merge(sheet, f"A{placeholder_row}:{REPORT_LAST_COLUMN}{placeholder_row}")
         _set_cell(
             sheet,
             placeholder_row,
