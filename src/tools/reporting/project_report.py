@@ -247,9 +247,15 @@ def _group_base_key(raw_key: Optional[str]) -> str:
 
 
 def _normalize_test_type(value: Optional[str]) -> str:
+    """Normalize the provided test type string.
+
+    Empty inputs intentionally return an empty string so the caller can decide
+    whether to fall back to a default (usually "RVR").
+    """
+
     text = str(value or "").strip()
     if not text:
-        return "RVR"
+        return ""
     return text.upper()
 
 
@@ -262,7 +268,10 @@ def _detect_row_test_type(row: dict[str, object]) -> str:
         row.get("Test"),
     )
     for candidate in candidates:
-        normalized = _normalize_test_type(candidate)
+        text = str(candidate or "").strip()
+        if not text:
+            continue
+        normalized = _normalize_test_type(text)
         if normalized:
             return normalized
     has_profile = any(
@@ -1255,6 +1264,9 @@ def _load_scenario_groups(result_file: Path | str, *, test_type: str | None = No
     normalized_filter = _normalize_test_type(test_type) if test_type else None
     buckets: dict[str, dict[str, object]] = {}
     total_rows = 0
+    filtered_rows = 0
+    matched_rows = 0
+    type_counts: Counter[str] = Counter()
     try:
         with path.open('r', encoding='utf-8-sig', newline='') as handle:
             reader = csv.DictReader(handle)
@@ -1263,8 +1275,11 @@ def _load_scenario_groups(result_file: Path | str, *, test_type: str | None = No
                     continue
                 total_rows += 1
                 row_type = _detect_row_test_type(row)
+                type_counts[row_type] += 1
                 if normalized_filter and row_type != normalized_filter:
+                    filtered_rows += 1
                     continue
+                matched_rows += 1
                 raw_key = row.get('Scenario_Group_Key')
                 base_key = _group_base_key(raw_key)
                 bucket = buckets.setdefault(
@@ -1406,6 +1421,17 @@ def _load_scenario_groups(result_file: Path | str, *, test_type: str | None = No
             grp.bandwidth.upper(),
             grp.key,
         ),
+    )
+    distribution = ', '.join(
+        f"{name}={count}" for name, count in sorted(type_counts.items())
+    ) or 'none'
+    LOGGER.info(
+        'Scenario test type summary | total_rows=%d matched=%d filtered=%d filter=%s distribution=%s',
+        total_rows,
+        matched_rows,
+        filtered_rows,
+        normalized_filter or 'ALL',
+        distribution,
     )
     LOGGER.info(
         'Loaded project scenario groups | count=%d total_rows=%d source=%s filter=%s',
