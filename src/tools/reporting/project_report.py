@@ -693,7 +693,6 @@ def _build_frequency_summary(
     summary = " / ".join(segments)
     return f"{label}: {summary}" if label else summary
 
-
 def _build_throughput_title_summary(groups: Sequence[ScenarioGroup]) -> str:
     if not groups:
         return "1、Throughput:None"
