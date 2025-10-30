@@ -452,6 +452,13 @@ def _prepare_rvo_table_entries(
 
     entries: List[dict[str, object]] = []
     for scenario in group.channels:
+        scenario_key = getattr(scenario, "key", "")
+        if not scenario_key:
+            LOGGER.warning(
+                "Skipped RVO entry due to missing scenario key | group=%s", group.key
+            )
+            continue
+
         for index, step in enumerate(steps):
             numeric = float(step) if isinstance(step, (int, float)) else None
             label_idx = index if override_steps else index
@@ -471,7 +478,7 @@ def _prepare_rvo_table_entries(
                 item_display = att_display
             entries.append(
                 {
-                    "scenario": scenario,
+                    "scenario_key": scenario_key,
                     "attenuation": numeric,
                     "att_display": att_display,
                     "item_display": item_display,
@@ -978,17 +985,17 @@ def _write_rvo_table(
             fill=COLOR_BRAND_BLUE,
             border=True,
         )
-
-    rows_by_scenario: Dict[ProjectScenario, List[dict[str, object]]] = {}
+    rows_by_scenario: Dict[str, List[dict[str, object]]] = {}
     for entry in entries:
-        scenario = entry.get("scenario")
-        if isinstance(scenario, ProjectScenario):
-            rows_by_scenario.setdefault(scenario, []).append(entry)
+        scenario_key = entry.get("scenario_key")
+        if isinstance(scenario_key, str) and scenario_key:
+            rows_by_scenario.setdefault(scenario_key, []).append(entry)
 
     current_row = data_row
     last_col = first_angle_col + max(len(angles) - 1, 0)
     for scenario in group.channels:
-        scenario_rows = rows_by_scenario.get(scenario, [])
+        scenario_key = getattr(scenario, "key", "")
+        scenario_rows = rows_by_scenario.get(scenario_key, []) if scenario_key else []
         if not scenario_rows:
             continue
         start = current_row
