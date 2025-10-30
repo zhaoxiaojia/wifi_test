@@ -88,6 +88,7 @@ COLOR_BRAND_BLUE = "2D529F"
 COLOR_SUBHEADER = "B4C6E7"
 COLOR_RATE_PRIMARY = "FFF2CC"
 COLOR_RATE_SECONDARY = "D9E1F2"
+COLOR_HEADER_GENERAL = "E7E6E6"
 COLOR_RSSI_RX = "CFE2F3"
 COLOR_RSSI_TX = "E2F0D9"
 COLOR_GRIDLINE = "BFBFBF"
@@ -105,6 +106,7 @@ FONT_TITLE = Font(name="Arial", color="FFFFFF", bold=True, size=20)
 FONT_SECTION = Font(name="Arial", color="1F4E78", bold=True, size=16)
 FONT_HEADER = Font(name="Arial", color="FFFFFF", bold=True, size=11)
 FONT_SUBHEADER = Font(name="Arial", color="1F4E78", bold=True, size=11)
+FONT_HEADER_DARK = Font(name="Arial", color="333333", bold=True, size=11)
 FONT_BODY = Font(name="Arial", color="333333", size=11)
 FONT_STANDARD = Font(name="Arial", color="333333", size=11)
 
@@ -1183,8 +1185,8 @@ def _write_rvo_table(
         (item_col, "Item"),
         (channel_col, "CH"),
         (left_att_col, "Angle\n\nATT"),
-        (rx_average_col, "RX Average\n(Unit:Mb)"),
-        (rx_ovality_col, "RX Ovality(％)"),
+        (rx_average_col, "Average\n(Unit:Mb)"),
+        (rx_ovality_col, "Ovality(％)"),
         (aml_standard_col, "AML_Standard"),
         (aml_result_col, "AML_Result"),
         (right_att_col, "Angle\n\nATT"),
@@ -1195,17 +1197,17 @@ def _write_rvo_table(
             header_row_rx,
             col,
             text,
-            font=FONT_HEADER,
+            font=FONT_HEADER_DARK,
             alignment=ALIGN_CENTER_WRAP,
-            fill=COLOR_BRAND_BLUE,
+            fill=COLOR_HEADER_GENERAL,
             border=True,
         )
 
     header_cells_tx = [
         (channel_col, "CH"),
         (left_att_col, "Angle\n\nATT"),
-        (tx_average_col, "TX Average\n(Unit:Mb)"),
-        (tx_ovality_col, "TX Ovality(％)"),
+        (tx_average_col, "Average\n(Unit:Mb)"),
+        (tx_ovality_col, "Ovality(％)"),
         (aml_standard_col, "AML_Standard"),
         (aml_result_col, "AML_Result"),
         (right_att_col, "Angle\n\nATT"),
@@ -1216,9 +1218,9 @@ def _write_rvo_table(
             header_row_tx,
             col,
             text,
-            font=FONT_HEADER,
+            font=FONT_HEADER_DARK,
             alignment=ALIGN_CENTER_WRAP,
-            fill=COLOR_BRAND_BLUE,
+            fill=COLOR_HEADER_GENERAL,
             border=True,
         )
 
@@ -1241,9 +1243,9 @@ def _write_rvo_table(
             sub_header_row_rx,
             rx_start_col + idx,
             _display_angle(angle),
-            font=FONT_HEADER,
+            font=FONT_SUBHEADER,
             alignment=ALIGN_CENTER,
-            fill=COLOR_BRAND_BLUE,
+            fill=COLOR_RATE_PRIMARY,
             border=True,
         )
 
@@ -1254,7 +1256,7 @@ def _write_rvo_table(
         ws,
         header_row_tx,
         tx_start_col,
-        "TX (Unit:Mbps)",
+        "TX (Unit:Mb)",
         font=FONT_HEADER,
         alignment=ALIGN_CENTER_WRAP,
         fill=COLOR_BRAND_BLUE,
@@ -1266,9 +1268,9 @@ def _write_rvo_table(
             sub_header_row_tx,
             tx_start_col + idx,
             _display_angle(angle),
-            font=FONT_HEADER,
+            font=FONT_SUBHEADER,
             alignment=ALIGN_CENTER,
-            fill=COLOR_BRAND_BLUE,
+            fill=COLOR_RATE_PRIMARY,
             border=True,
         )
 
@@ -1291,9 +1293,9 @@ def _write_rvo_table(
             sub_header_row_rx,
             rx_rssi_start_col + idx,
             _display_angle(angle),
-            font=FONT_HEADER,
+            font=FONT_SUBHEADER,
             alignment=ALIGN_CENTER,
-            fill=COLOR_BRAND_BLUE,
+            fill=COLOR_RATE_SECONDARY,
             border=True,
         )
 
@@ -1316,9 +1318,9 @@ def _write_rvo_table(
             sub_header_row_tx,
             tx_rssi_start_col + idx,
             _display_angle(angle),
-            font=FONT_HEADER,
+            font=FONT_SUBHEADER,
             alignment=ALIGN_CENTER,
-            fill=COLOR_BRAND_BLUE,
+            fill=COLOR_RATE_SECONDARY,
             border=True,
         )
 
@@ -1352,6 +1354,7 @@ def _write_rvo_table(
             rssi_tx_map = (
                 scenario.angle_rssi_tx_matrix.get(lookup_key, {}) if lookup_key is not None else {}
             )
+
             rx_row = current_row
             tx_row = current_row + 1
             _set_cell(
@@ -1401,7 +1404,7 @@ def _write_rvo_table(
                     value,
                     font=FONT_BODY,
                     alignment=ALIGN_CENTER,
-                    fill=COLOR_RSSI_RX,
+                    fill=COLOR_RATE_PRIMARY,
                     border=True,
                 )
                 try:
@@ -1466,6 +1469,7 @@ def _write_rvo_table(
                     value,
                     font=FONT_BODY,
                     alignment=ALIGN_CENTER,
+                    fill=COLOR_RATE_PRIMARY,
                     border=True,
                 )
                 try:
