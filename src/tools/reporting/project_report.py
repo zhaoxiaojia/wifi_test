@@ -59,9 +59,23 @@ COLUMN_WIDTHS: Dict[str, float] = {
     "X": 12.0,
     "Y": 12.0,
     "Z": 12.0,
+    "AA": 12.0,
+    "AB": 12.0,
+    "AC": 12.0,
+    "AD": 12.0,
+    "AE": 12.0,
+    "AF": 12.0,
+    "AG": 12.0,
+    "AH": 12.0,
+    "AI": 12.0,
+    "AJ": 12.0,
+    "AK": 12.0,
+    "AL": 12.0,
+    "AM": 12.0,
+    "AN": 12.0,
 }
 
-REPORT_LAST_COLUMN = "Z"
+REPORT_LAST_COLUMN = "AN"
 
 ROW_HEIGHT_TITLE = 42.95
 
@@ -1126,26 +1140,34 @@ def _write_rvo_table(
     item_col = 1
     channel_col = 2
     left_att_col = 3
-    throughput_start_col = 4
-    throughput_end_col = throughput_start_col + angle_count - 1 if angle_count else throughput_start_col - 1
-    average_col = throughput_end_col + 1
-    ovality_col = average_col + 1
-    wm_standard_col = ovality_col + 1
-    sdmc_standard_col = wm_standard_col + 1
-    aml_standard_col = sdmc_standard_col + 1
+    rx_start_col = 4
+    rx_end_col = rx_start_col + angle_count - 1 if angle_count else rx_start_col - 1
+    rx_average_col = rx_end_col + 1
+    rx_ovality_col = rx_average_col + 1
+    tx_start_col = rx_ovality_col + 1
+    tx_end_col = tx_start_col + angle_count - 1 if angle_count else tx_start_col - 1
+    tx_average_col = tx_end_col + 1
+    tx_ovality_col = tx_average_col + 1
+    aml_standard_col = tx_ovality_col + 1
     aml_result_col = aml_standard_col + 1
     right_att_col = aml_result_col + 1
-    rssi_start_col = right_att_col + 1
-    rssi_end_col = rssi_start_col + angle_count - 1 if angle_count else rssi_start_col - 1
+    rx_rssi_start_col = right_att_col + 1
+    rx_rssi_end_col = (
+        rx_rssi_start_col + angle_count - 1 if angle_count else rx_rssi_start_col - 1
+    )
+    tx_rssi_start_col = rx_rssi_end_col + 1
+    tx_rssi_end_col = (
+        tx_rssi_start_col + angle_count - 1 if angle_count else tx_rssi_start_col - 1
+    )
 
     merged_columns = [
         item_col,
         channel_col,
         left_att_col,
-        average_col,
-        ovality_col,
-        wm_standard_col,
-        sdmc_standard_col,
+        rx_average_col,
+        rx_ovality_col,
+        tx_average_col,
+        tx_ovality_col,
         aml_standard_col,
         aml_result_col,
         right_att_col,
@@ -1158,10 +1180,10 @@ def _write_rvo_table(
         (item_col, "Item"),
         (channel_col, "CH"),
         (left_att_col, "Angle\n\nATT"),
-        (average_col, "Average\n(Unit:Mb)"),
-        (ovality_col, "Ovality(％)"),
-        (wm_standard_col, "WM_Standard"),
-        (sdmc_standard_col, "SDMC_Standard"),
+        (rx_average_col, "RX Average\n(Unit:Mb)"),
+        (rx_ovality_col, "RX Ovality(％)"),
+        (tx_average_col, "TX Average\n(Unit:Mb)"),
+        (tx_ovality_col, "TX Ovality(％)"),
         (aml_standard_col, "AML_Standard"),
         (aml_result_col, "AML_Result"),
         (right_att_col, "Angle\n\nATT"),
@@ -1178,13 +1200,13 @@ def _write_rvo_table(
             border=True,
         )
 
-    throughput_start_letter = get_column_letter(throughput_start_col)
-    throughput_end_letter = get_column_letter(throughput_end_col)
-    _merge(ws, f"{throughput_start_letter}{header_row}:{throughput_end_letter}{header_row}")
+    rx_start_letter = get_column_letter(rx_start_col)
+    rx_end_letter = get_column_letter(rx_end_col)
+    _merge(ws, f"{rx_start_letter}{header_row}:{rx_end_letter}{header_row}")
     _set_cell(
         ws,
         header_row,
-        throughput_start_col,
+        rx_start_col,
         "RX (Unit:Mbps)",
         font=FONT_HEADER,
         alignment=ALIGN_CENTER_WRAP,
@@ -1195,7 +1217,7 @@ def _write_rvo_table(
         _set_cell(
             ws,
             sub_header_row,
-            throughput_start_col + idx,
+            rx_start_col + idx,
             _display_angle(angle),
             font=FONT_HEADER,
             alignment=ALIGN_CENTER,
@@ -1203,13 +1225,38 @@ def _write_rvo_table(
             border=True,
         )
 
-    rssi_start_letter = get_column_letter(rssi_start_col)
-    rssi_end_letter = get_column_letter(rssi_end_col)
-    _merge(ws, f"{rssi_start_letter}{header_row}:{rssi_end_letter}{header_row}")
+    tx_start_letter = get_column_letter(tx_start_col)
+    tx_end_letter = get_column_letter(tx_end_col)
+    _merge(ws, f"{tx_start_letter}{header_row}:{tx_end_letter}{header_row}")
     _set_cell(
         ws,
         header_row,
-        rssi_start_col,
+        tx_start_col,
+        "TX (Unit:Mbps)",
+        font=FONT_HEADER,
+        alignment=ALIGN_CENTER_WRAP,
+        fill=COLOR_BRAND_BLUE,
+        border=True,
+    )
+    for idx, angle in enumerate(angle_headers):
+        _set_cell(
+            ws,
+            sub_header_row,
+            tx_start_col + idx,
+            _display_angle(angle),
+            font=FONT_HEADER,
+            alignment=ALIGN_CENTER,
+            fill=COLOR_BRAND_BLUE,
+            border=True,
+        )
+
+    rx_rssi_start_letter = get_column_letter(rx_rssi_start_col)
+    rx_rssi_end_letter = get_column_letter(rx_rssi_end_col)
+    _merge(ws, f"{rx_rssi_start_letter}{header_row}:{rx_rssi_end_letter}{header_row}")
+    _set_cell(
+        ws,
+        header_row,
+        rx_rssi_start_col,
         "RX_RSSI (Unit:dBm)",
         font=FONT_HEADER,
         alignment=ALIGN_CENTER_WRAP,
@@ -1220,7 +1267,32 @@ def _write_rvo_table(
         _set_cell(
             ws,
             sub_header_row,
-            rssi_start_col + idx,
+            rx_rssi_start_col + idx,
+            _display_angle(angle),
+            font=FONT_HEADER,
+            alignment=ALIGN_CENTER,
+            fill=COLOR_BRAND_BLUE,
+            border=True,
+        )
+
+    tx_rssi_start_letter = get_column_letter(tx_rssi_start_col)
+    tx_rssi_end_letter = get_column_letter(tx_rssi_end_col)
+    _merge(ws, f"{tx_rssi_start_letter}{header_row}:{tx_rssi_end_letter}{header_row}")
+    _set_cell(
+        ws,
+        header_row,
+        tx_rssi_start_col,
+        "TX_RSSI (Unit:dBm)",
+        font=FONT_HEADER,
+        alignment=ALIGN_CENTER_WRAP,
+        fill=COLOR_BRAND_BLUE,
+        border=True,
+    )
+    for idx, angle in enumerate(angle_headers):
+        _set_cell(
+            ws,
+            sub_header_row,
+            tx_rssi_start_col + idx,
             _display_angle(angle),
             font=FONT_HEADER,
             alignment=ALIGN_CENTER,
@@ -1246,9 +1318,17 @@ def _write_rvo_table(
             att_display = row_entry.get("att_display", "")
             attenuation = row_entry.get("attenuation")
             lookup_key = float(attenuation) if isinstance(attenuation, (int, float)) else None
-            angle_map = scenario.angle_rx_matrix.get(lookup_key, {}) if lookup_key is not None else {}
-            rssi_map = (
+            rx_angle_map = (
+                scenario.angle_rx_matrix.get(lookup_key, {}) if lookup_key is not None else {}
+            )
+            tx_angle_map = (
+                scenario.angle_tx_matrix.get(lookup_key, {}) if lookup_key is not None else {}
+            )
+            rssi_rx_map = (
                 scenario.angle_rssi_rx_matrix.get(lookup_key, {}) if lookup_key is not None else {}
+            )
+            rssi_tx_map = (
+                scenario.angle_rssi_tx_matrix.get(lookup_key, {}) if lookup_key is not None else {}
             )
 
             _set_cell(
@@ -1270,10 +1350,10 @@ def _write_rvo_table(
                 border=True,
             )
 
-            numeric_values: list[float] = []
+            rx_numeric_values: list[float] = []
             for idx, angle in enumerate(angle_headers):
-                col = throughput_start_col + idx
-                value = angle_map.get(angle)
+                col = rx_start_col + idx
+                value = rx_angle_map.get(angle)
                 _set_cell(
                     ws,
                     current_row,
@@ -1288,37 +1368,37 @@ def _write_rvo_table(
                 except (TypeError, ValueError):
                     continue
                 if math.isfinite(numeric):
-                    numeric_values.append(numeric)
+                    rx_numeric_values.append(numeric)
 
-            average_value = None
-            if numeric_values:
-                average_value = sum(numeric_values) / len(numeric_values)
+            rx_average_value = None
+            if rx_numeric_values:
+                rx_average_value = sum(rx_numeric_values) / len(rx_numeric_values)
                 _set_cell(
                     ws,
                     current_row,
-                    average_col,
-                    round(average_value, 2),
+                    rx_average_col,
+                    round(rx_average_value, 2),
                     font=FONT_BODY,
                     alignment=ALIGN_CENTER,
                     border=True,
                 )
-                min_value = min(numeric_values)
-                ovality = (min_value / average_value * 100) if average_value else None
-                if ovality is not None:
+                rx_min_value = min(rx_numeric_values)
+                rx_ovality = (rx_min_value / rx_average_value * 100) if rx_average_value else None
+                if rx_ovality is not None:
                     _set_cell(
                         ws,
                         current_row,
-                        ovality_col,
-                        round(ovality, 2),
+                        rx_ovality_col,
+                        round(rx_ovality, 2),
                         font=FONT_BODY,
                         alignment=ALIGN_CENTER,
                         border=True,
                     )
-            if average_value is None:
+            if rx_average_value is None:
                 _set_cell(
                     ws,
                     current_row,
-                    average_col,
+                    rx_average_col,
                     None,
                     font=FONT_BODY,
                     alignment=ALIGN_CENTER,
@@ -1327,7 +1407,71 @@ def _write_rvo_table(
                 _set_cell(
                     ws,
                     current_row,
-                    ovality_col,
+                    rx_ovality_col,
+                    None,
+                    font=FONT_BODY,
+                    alignment=ALIGN_CENTER,
+                    border=True,
+                )
+
+            tx_numeric_values: list[float] = []
+            for idx, angle in enumerate(angle_headers):
+                col = tx_start_col + idx
+                value = tx_angle_map.get(angle)
+                _set_cell(
+                    ws,
+                    current_row,
+                    col,
+                    value,
+                    font=FONT_BODY,
+                    alignment=ALIGN_CENTER,
+                    border=True,
+                )
+                try:
+                    numeric = float(value)
+                except (TypeError, ValueError):
+                    continue
+                if math.isfinite(numeric):
+                    tx_numeric_values.append(numeric)
+
+            tx_average_value = None
+            if tx_numeric_values:
+                tx_average_value = sum(tx_numeric_values) / len(tx_numeric_values)
+                _set_cell(
+                    ws,
+                    current_row,
+                    tx_average_col,
+                    round(tx_average_value, 2),
+                    font=FONT_BODY,
+                    alignment=ALIGN_CENTER,
+                    border=True,
+                )
+                tx_min_value = min(tx_numeric_values)
+                tx_ovality = (tx_min_value / tx_average_value * 100) if tx_average_value else None
+                if tx_ovality is not None:
+                    _set_cell(
+                        ws,
+                        current_row,
+                        tx_ovality_col,
+                        round(tx_ovality, 2),
+                        font=FONT_BODY,
+                        alignment=ALIGN_CENTER,
+                        border=True,
+                    )
+            if tx_average_value is None:
+                _set_cell(
+                    ws,
+                    current_row,
+                    tx_average_col,
+                    None,
+                    font=FONT_BODY,
+                    alignment=ALIGN_CENTER,
+                    border=True,
+                )
+                _set_cell(
+                    ws,
+                    current_row,
+                    tx_ovality_col,
                     None,
                     font=FONT_BODY,
                     alignment=ALIGN_CENTER,
@@ -1359,25 +1503,6 @@ def _write_rvo_table(
             _set_cell(
                 ws,
                 current_row,
-                wm_standard_col,
-                None,
-                font=FONT_STANDARD,
-                alignment=ALIGN_LEFT_WRAP,
-                border=True,
-            )
-            _set_cell(
-                ws,
-                current_row,
-                sdmc_standard_col,
-                None,
-                font=FONT_STANDARD,
-                alignment=ALIGN_LEFT_WRAP,
-                border=True,
-            )
-
-            _set_cell(
-                ws,
-                current_row,
                 right_att_col,
                 att_display,
                 font=FONT_BODY,
@@ -1386,8 +1511,8 @@ def _write_rvo_table(
             )
 
             for idx, angle in enumerate(angle_headers):
-                col = rssi_start_col + idx
-                value = rssi_map.get(angle)
+                col = rx_rssi_start_col + idx
+                value = rssi_rx_map.get(angle)
                 _set_cell(
                     ws,
                     current_row,
@@ -1395,6 +1520,21 @@ def _write_rvo_table(
                     value,
                     font=FONT_BODY,
                     alignment=ALIGN_CENTER,
+                    fill=COLOR_RSSI_RX,
+                    border=True,
+                )
+
+            for idx, angle in enumerate(angle_headers):
+                col = tx_rssi_start_col + idx
+                value = rssi_tx_map.get(angle)
+                _set_cell(
+                    ws,
+                    current_row,
+                    col,
+                    value,
+                    font=FONT_BODY,
+                    alignment=ALIGN_CENTER,
+                    fill=COLOR_RSSI_TX,
                     border=True,
                 )
 
@@ -1419,7 +1559,7 @@ def _write_rvo_table(
                 cell.alignment = ALIGN_CENTER
 
     data_end_row = max(current_row - 1, header_row)
-    used_last_col = rssi_end_col if angle_count else aml_result_col
+    used_last_col = tx_rssi_end_col if angle_count else tx_ovality_col
     LOGGER.info(
         'RVO matrix written | group=%s rows=%d angles=%d',
         group.key,
