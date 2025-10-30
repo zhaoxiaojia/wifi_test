@@ -8,7 +8,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 from openpyxl import Workbook
 from openpyxl.chart import Reference, ScatterChart, Series
@@ -652,15 +652,119 @@ def _apply_result_formatting(ws: Worksheet, start_row: int, end_row: int, result
 # ---------------------------------------------------------------------------
 
 
-def _write_report_title(ws: Worksheet, start_row: int = 1) -> int:
+TitleSummaryBuilder = Callable[[Sequence[ScenarioGroup]], str]
+
+
+def _build_frequency_summary(
+    groups: Sequence[ScenarioGroup], *, label: Optional[str] = None
+) -> str:
+    if not groups:
+        return f"{label or 'Frequency Summary'}: None"
+
+    frequency_order: list[str] = []
+    frequency_map: dict[str, Counter[str]] = {}
+
+    for group in groups:
+        freq = (group.freq or "").strip().upper() or "UNKNOWN"
+        if freq not in frequency_map:
+            frequency_map[freq] = Counter()
+            frequency_order.append(freq)
+
+        detail_parts: list[str] = []
+        if group.standard:
+            detail_parts.append(group.standard.upper())
+        if group.bandwidth:
+            detail_parts.append(group.bandwidth)
+        detail_label = " ".join(part for part in detail_parts if part) or "UNKNOWN"
+
+        frequency_map[freq][detail_label] += len(group.channels)
+
+    segments: list[str] = []
+    for freq in frequency_order:
+        detail_counter = frequency_map[freq]
+        total = sum(detail_counter.values())
+        if not detail_counter:
+            segments.append(f"{freq}: {total} scenarios")
+            continue
+
+        detail_texts = [f"{detail_label} x{count}" for detail_label, count in sorted(detail_counter.items())]
+        segments.append(f"{freq}: {total} scenarios ({'; '.join(detail_texts)})")
+
+    summary = " / ".join(segments)
+    return f"{label}: {summary}" if label else summary
+
+
+def _build_throughput_title_summary(groups: Sequence[ScenarioGroup]) -> str:
+    if not groups:
+        return "1、Throughput:None"
+
+    frequency_order: list[str] = []
+    frequency_details: dict[str, dict[str, int]] = {}
+
+    for group in groups:
+        freq = (group.freq or "").strip()
+        freq_label = freq.upper() if freq else "UNKNOWN"
+        if freq_label not in frequency_details:
+            frequency_details[freq_label] = {}
+            frequency_order.append(freq_label)
+
+        detail_map = frequency_details[freq_label]
+        summary_label = group.summary_label or freq_label
+        scenario_count = len(group.channels) or 1
+        detail_map[summary_label] = detail_map.get(summary_label, 0) + scenario_count
+
+    summary_lines: list[str] = []
+    for index, freq_label in enumerate(frequency_order, start=1):
+        summary_lines.append(f"{index}、Throughput:{freq_label}")
+        detail_map = frequency_details[freq_label]
+        if detail_map:
+            detail_segments: list[str] = []
+            for label, count in detail_map.items():
+                if count == 1:
+                    detail_segments.append(label)
+                else:
+                    detail_segments.append(f"{label} x{count}")
+            summary_lines.append(" / ".join(detail_segments))
+
+    return "\n".join(summary_lines)
+
+
+def _build_rvo_title_summary(groups: Sequence[ScenarioGroup]) -> str:
+    return _build_throughput_title_summary(groups)
+
+
+def _build_rvr_title_summary(groups: Sequence[ScenarioGroup]) -> str:
+    return _build_throughput_title_summary(groups)
+
+
+_TITLE_SUMMARY_BUILDERS: Dict[str, TitleSummaryBuilder] = {
+    "RVO": _build_rvo_title_summary,
+    "RVR": _build_rvr_title_summary,
+}
+
+
+def _resolve_title_summary(groups: Sequence[ScenarioGroup], test_type: str) -> str:
+    builder = _TITLE_SUMMARY_BUILDERS.get(test_type.upper(), _build_frequency_summary)
+    return builder(groups)
+
+
+def _write_report_title(
+    ws: Worksheet,
+    *,
+    groups: Sequence[ScenarioGroup],
+    test_type: str,
+    start_row: int = 1,
+    remarks: Optional[str] = None,
+) -> int:
     top_row = start_row
     _merge(ws, f"A{top_row}:W{top_row}")
     ws.row_dimensions[top_row].height = ROW_HEIGHT_TITLE
+    title_text = f"WiFi {test_type.upper()} Test Report"
     _set_cell(
         ws,
         top_row,
         1,
-        "Project Wi-Fi Test Report",
+        title_text,
         font=FONT_TITLE,
         alignment=ALIGN_CENTER,
         fill=COLOR_BRAND_BLUE,
@@ -673,8 +777,38 @@ def _write_report_title(ws: Worksheet, start_row: int = 1) -> int:
     image.height = 70
     image.anchor = f"A{top_row}"
     ws.add_image(image)
-    LOGGER.info("Report title written at row %d", top_row)
-    return top_row
+
+    remark_row = top_row + 1
+    _merge(ws, f"A{remark_row}:W{remark_row}")
+    default_remark = "Remarks:Ovality=Min Tup/AVG Tup*100%"
+    remark_text = default_remark if remarks is None else remarks
+    _set_cell(
+        ws,
+        remark_row,
+        1,
+        remark_text,
+        font=FONT_SUBHEADER,
+        alignment=ALIGN_CENTER_WRAP,
+        border=True,
+    )
+
+    summary_row = remark_row + 1
+    _merge(ws, f"A{summary_row}:W{summary_row}")
+    summary_text = _resolve_title_summary(groups, test_type)
+    _set_cell(
+        ws,
+        summary_row,
+        1,
+        summary_text,
+        font=FONT_BODY,
+        alignment=ALIGN_CENTER_WRAP,
+        border=True,
+    )
+
+    LOGGER.info(
+        "Report title written | top_row=%d remark_row=%d summary_row=%d", top_row, remark_row, summary_row
+    )
+    return summary_row
 
 
 def _write_group_header(ws: Worksheet, group: ScenarioGroup, start_row: int) -> int:
@@ -1722,8 +1856,8 @@ def generate_project_report(
         chart_context = _prepare_rvo_chart_context(result_file)
 
     if not groups:
-        title_row = _write_report_title(sheet, start_row=1)
-        placeholder_row = title_row + 2
+        title_end_row = _write_report_title(sheet, groups=[], test_type=actual_type, start_row=1)
+        placeholder_row = title_end_row + 2
         _merge(sheet, f"A{placeholder_row}:W{placeholder_row}")
         _set_cell(
             sheet,
@@ -1736,8 +1870,13 @@ def generate_project_report(
         )
         LOGGER.warning("No scenarios found; generated placeholder sheet named %s.", sheet.title)
     else:
-        title_row = _write_report_title(sheet, start_row=1)
-        current_row = title_row + 2
+        title_end_row = _write_report_title(
+            sheet,
+            groups=groups,
+            test_type=actual_type,
+            start_row=1,
+        )
+        current_row = title_end_row + 2
         rvo_att_entries = _resolve_rvo_att_steps() if actual_type == "RVO" else []
         for group_index, group in enumerate(groups):
             if group_index > 0:
