@@ -724,7 +724,6 @@ def _build_frequency_summary(
     summary = " / ".join(segments)
     return f"{label}: {summary}" if label else summary
 
-
 def _build_throughput_title_summary(groups: Sequence[ScenarioGroup]) -> str:
     if not groups:
         return "1、Throughput:None"
@@ -1394,7 +1393,6 @@ def _write_rvo_table(
                 alignment=ALIGN_CENTER,
                 border=True,
             )
-
             rx_numeric_values: list[float] = []
             for idx, angle in enumerate(angle_headers):
                 col = rx_start_col + idx
@@ -1611,7 +1609,6 @@ def _write_rvo_table(
                     fill=COLOR_RSSI_TX,
                     border=True,
                 )
-
             current_row += 2
 
         scenario_end = current_row - 1
