@@ -774,7 +774,8 @@ def _write_data(
     if not steps:
         steps = DEFAULT_ATTENUATIONS.copy()
 
-    end_row = start_row + len(steps) - 1
+    step_count = len(steps)
+    end_row = start_row + step_count - 1
 
     if steps and not item_labels:
         _merge(ws, f"A{start_row}:A{end_row}")
@@ -862,7 +863,7 @@ def _write_data(
         group.key,
         start_row,
         end_row,
-        len(attenuations),
+        step_count,
         len(channels),
     )
     return end_row
