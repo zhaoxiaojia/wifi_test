@@ -404,8 +404,6 @@ def _resolve_rvo_att_steps() -> List[Tuple[Optional[float], str, str]]:
 
     return entries
 
-
-
 def _sorted_unique_angles(angles: Sequence[str]) -> List[str]:
     """Return unique angles sorted numerically when possible."""
 
@@ -460,6 +458,7 @@ def _prepare_rvo_table_entries(
                 "Skipped RVO entry due to missing scenario key | group=%s", group.key
             )
             continue
+
         for index, step in enumerate(steps):
             numeric = float(step) if isinstance(step, (int, float)) else None
             label_idx = index if override_steps else index
@@ -487,8 +486,6 @@ def _prepare_rvo_table_entries(
             )
 
     return angles, entries
-
-
 
 def _sanitize_number(value: Optional[str]) -> Optional[float]:
     if value in (None, "", "NULL"):
@@ -988,7 +985,6 @@ def _write_rvo_table(
             fill=COLOR_BRAND_BLUE,
             border=True,
         )
-
     rows_by_scenario: Dict[str, List[dict[str, object]]] = {}
     for entry in entries:
         scenario_key = entry.get("scenario_key")
@@ -1804,12 +1800,22 @@ def generate_project_report(
 
             sections = [
                 {"scenario": scenario, "header_row": header_row, "data_start": data_start, "data_end": data_end}
-                for scenario in group.channels
+                for scenario in used_channels
             ]
 
             if sections:
                 anchor_row = header_row
-                last_row = _add_group_charts(sheet, group, group_layout, sections, anchor_row=anchor_row)
+                if actual_type == "RVO" and chart_context is not None:
+                    last_row = _add_rvo_polar_chart(
+                        sheet,
+                        group,
+                        group_layout,
+                        sections,
+                        anchor_row=anchor_row,
+                        context=chart_context,
+                    )
+                else:
+                    last_row = _add_group_charts(sheet, group, group_layout, sections, anchor_row=anchor_row)
                 current_row = max(current_row, last_row + 2)
             else:
                 LOGGER.warning("Group %s has no channel sections to chart.", group.key)
