@@ -46,14 +46,12 @@ class QaTerminalReporter(TerminalReporter):
             pass
 
     def write_line(self, line, **markup):
-        logging.info(line)
         return super().write_line(line, **markup)
 
     def pytest_runtest_logstart(self, nodeid, location):
         # ensure that the path is printed before the
         # 1st test of a module starts running
-        logging.info('{title:{char}^{length}}'.format(title=' runtest start ', length=70, char='='))
-        # logging.info(nodeid)
+        # 保持终端输出，但避免冗余写入日志文件
         if self.showlongtestinfo:
             line = self._locationline(nodeid, *location)
             self.write_ensure_prefix(line, "\n")
@@ -62,21 +60,19 @@ class QaTerminalReporter(TerminalReporter):
             self.write_fspath_result(fsid, "\n")
 
     def pytest_sessionstart(self, session):
-        logging.info('{title:{char}^{length}}'.format(title=' live log sessionstart ', length=110, char='-'))
-        # super(QaTerminalReporter, self).pytest_sessionstart(session)
+        pass
 
     def pytest_runtest_setup(self):
-        logging.info('{title:{char}^{length}}'.format(title=' live log setup ', length=110, char='-'))
+        pass
 
     def pytest_runtest_teardown(self):
-        logging.info('{title:{char}^{length}}'.format(title=' live log teardown ', length=110, char='-'))
+        pass
 
     def pytest_sessionfinish(self, exitstatus):
-        logging.info('{title:{char}^{length}}'.format(title=' live log sessionfinish ', length=110, char='-'))
-        # super(AATSTerminalReporter, self).pytest_sessionfinish(exitstatus)
+        pass
 
     def pytest_runtest_call(self):
-        logging.info('{title:{char}^{length}}'.format(title=' live log call ', length=110, char='-'))
+        pass
 
     def pytest_collectreport(self, report):
         # Show errors occurred during the collection instantly.

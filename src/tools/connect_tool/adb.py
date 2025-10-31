@@ -69,67 +69,39 @@ class adb(dut):
             self.remount()
 
     def set_status_on(self):
-        '''
-        set DUT survival condition to True
-        @return: None
-        '''
-        if not self.live:
-            self.lock.acquire()
+        with self.lock:
+            if self.live:
+                return
             self.live = True
-            logging.debug(f'Adb status is on')
-            self.lock.release()
+            logging.debug('Adb status is on')
 
     def set_status_off(self):
-        '''
-        set DUT survival condition to True
-        @return:
-        '''
-        if self.live:
-            self.lock.acquire()
+        with self.lock:
+            if not self.live:
+                return
             self.live = False
-            logging.debug(f'Adb status is Off')
-            self.lock.release()
+            logging.debug('Adb status is Off')
 
     # @property
     def u(self, type="u2"):
-        '''
-        uiautomater obj
-        @return: instance
-        '''
         self._u = UiautomatorTool(self.serialnumber, type)
         return self._u
 
     def get_uuid(self):
-        '''
-        get u-disk uuid
-        @return: uuid : str
-        '''
         self.root()
         return self.checkoutput("ls /storage/ |awk '{print $1}' |head -n 1")
 
     def get_uuids(self):
-        '''
-        get u-disk uuid list
-        @return: uuid : list [str]
-        '''
         self.root()
         return self.checkoutput("ls /storage/ |awk '{print $1}'")[1].split("\n")
 
     def get_uuid_size(self):
-        '''
-        get u-disk size
-        @return: size : [int]
-        '''
         uuid = self.get_uuid()
         logging.info(f'uuid {uuid}')
         size = self.checkoutput(f"df -h |grep {uuid}|cut -f 3 -d ' '").strip()[:-1]
         return int(float(size))
 
     def get_uuid_avail_size(self):
-        '''
-        get u-disk avail size
-        @return: size %  : [int]
-        '''
         uuid = self.get_uuid()
         size = self.checkoutput(f"df -h |grep {uuid}|cut -f 7 -d ' '").strip()[:-1]
         unit = re.findall(r'[A-Za-z]', self.checkoutput(f"df -h |grep {uuid}|cut -f 7 -d ' '"))
@@ -146,11 +118,6 @@ class adb(dut):
         return int(float(size))
 
     def keyevent(self, keycode):
-        '''
-        input keyevent keycode
-        @param keycode: keyevent
-        @return: None
-        '''
         if isinstance(keycode, int):
             keycode = str(keycode)
         self.checkoutput_term(self.ADB_S + self.serialnumber +
@@ -158,12 +125,6 @@ class adb(dut):
         time.sleep(0.5)
 
     def send_event(self, key, hold=3):
-        '''
-        sendevent
-        :param key: key number
-        :param hold: long press duration
-        :return:
-        '''
         # /dev/input/event5: 0004 0004 000c0045
         self.checkoutput(
             f'sendevent /dev/input/event5 4 4 786501;sendevent /dev/input/event5 1 {key} 1;sendevent  /dev/input/event5 0 0 0;')
@@ -172,89 +133,40 @@ class adb(dut):
             f'sendevent /dev/input/event5 4 4 786501;sendevent /dev/input/event5 1 {key} 0;sendevent  /dev/input/event5 0 0 0;')
 
     def home(self):
-        '''
-        set DUT back to home over keyevent
-        @return: None
-        '''
         self.keyevent("KEYCODE_HOME")
 
     def enter(self):
-        '''
-        confirm button
-        @return: None
-        '''
         self.keyevent("KEYCODE_ENTER")
 
     def root(self):
-        '''
-        set adb root
-        @return: None
-        '''
         subprocess.run('adb root', shell=True)
 
     def remount(self):
-        '''
-        set adb remount
-        @return: None
-        '''
         subprocess.run('adb remount', shell=True)
 
     def reboot(self):
-        '''
-        set adb reboot
-        @return:
-        '''
         self.checkoutput_shell('reboot')
         self.wait_devices()
 
     def back(self):
-        '''
-        set DUT cancel button over keyevent
-        @return:
-        '''
         self.keyevent("KEYCODE_BACK")
 
     def app_switch(self):
-        '''
-        ui app switch button
-        @return:
-        '''
         self.keyevent("KEYCODE_APP_SWITCH")
 
     def app_stop(self, app_name):
-        '''
-        am force stop app
-        if timer is setup cancel it
-        @param app_name:
-        @return:
-        '''
         logging.info("Stop app(%s)" % app_name)
         self.checkoutput("am force-stop %s" % app_name)
         # self.kill_logcat_pid()
 
     def clear_app_data(self, app_name):
-        '''
-        clear app data
-        :param app_name: package name. Such as com.google.xxx
-        :return:
-        '''
         self.checkoutput(f"pm clear {app_name}")
 
     def expand_logcat_capacity(self):
-        '''
-        Set the logcat cache space
-        Adjust the logcat priority
-        :return:
-        '''
         self.checkoutput("logcat -G 40m")
         self.checkoutput("renice -n -50 `pidof logd`")
 
     def delete(self, times=1):
-        '''
-        ui del button
-        @param times: click del times
-        @return: None
-        '''
         remain = times
         batch = 64
         while remain > 0:
@@ -263,51 +175,21 @@ class adb(dut):
             remain -= batch
 
     def tap(self, x, y):
-        '''
-        simulate screen tap
-        @param x: x index
-        @param y: y index
-        @return: None
-        '''
         self.checkoutput_term(self.ADB_S + self.serialnumber + " shell input tap " + str(x) + " " + str(y))
 
     def swipe(self, x_start, y_start, x_end, y_end, duration):
-        '''
-        simulate swipe screen
-        @param x_start: x start index
-        @param y_start: y start index
-        @param x_end: x end index
-        @param y_end: y end index
-        @param duration: action time duration
-        @return: None
-        '''
         self.checkoutput_term(self.ADB_S + self.serialnumber + " shell input swipe " + str(x_start) +
                               " " + str(y_start) + " " + str(x_end) + " " + str(y_end) + " " + str(duration))
 
     def text(self, text):
-        '''
-        edittext input text
-        @param text: text
-        @return: None
-        '''
         if isinstance(text, int):
             text = str(text)
         self.checkoutput_term(self.ADB_S + self.serialnumber + " shell input text " + text)
 
     def clear_logcat(self):
-        '''
-        clear logcat
-        @return: None
-        '''
         self.checkoutput_term(self.ADB_S + self.serialnumber + " logcat -b all -c")
 
     def save_logcat(self, filepath, tag=''):
-        '''
-        save logcat
-        @param filepath: file path for logcat
-        @param tag: tag for -s
-        @return: log : subprocess.Popen , logcat_file : _io.TextIOWrapper
-        '''
         filepath = self.logdir + '/' + filepath
         logcat_file = open(filepath, 'w')
         if tag and ("grep -E" not in tag) and ("all" not in tag):
@@ -320,12 +202,6 @@ class adb(dut):
         return log, logcat_file
 
     def stop_save_logcat(self, log, filepath):
-        '''
-        stop logcat ternimal , close logcat file
-        @param log: logcat popen
-        @param filepath: logcat file
-        @return: None
-        '''
         if not isinstance(log, subprocess.Popen):
             logging.warning('pls pass in the popen object')
             return 'pls pass in the popen object'
@@ -355,13 +231,6 @@ class adb(dut):
         return output
 
     def start_activity(self, packageName, activityName, intentname=""):
-        '''
-        start activity over am start
-        @param packageName: apk package name
-        @param activityName: activity name
-        @param intentname: intent name
-        @return: None
-        '''
         try:
             self.app_stop(packageName)
         except Exception as e:
@@ -372,33 +241,16 @@ class adb(dut):
                               " shell am start -a " + intentname + " -n " + packageName + "/" + activityName)
 
     def pull(self, filepath, destination):
-        '''
-        pull file from DUT to pc
-        @param filepath: file path
-        @param destination: target path
-        @return: None
-        '''
         self.checkoutput_term(self.ADB_S + self.serialnumber +
                               " pull " + filepath + " " + destination)
 
     def push(self, filepath, destination):
-        '''
-        push file from pc to DUT
-        @param filepath: file path
-        @param destination: target path
-        @return: None
-        '''
         logging.info(self.ADB_S + self.serialnumber +
                      " push " + filepath + " " + destination)
         self.checkoutput_term(self.ADB_S + self.serialnumber +
                               " push " + filepath + " " + destination)
 
     def shell(self, cmd):
-        '''
-        run adb -s xxx shell
-        @param cmd: command
-        @return: None
-        '''
         self.checkoutput_term(self.ADB_S + self.serialnumber + " shell " + cmd)
 
     def ping(self, interface=None, hostname="www.baidu.com",
@@ -476,30 +328,15 @@ class adb(dut):
             return False
 
     def check_apk_exist(self, package_name):
-        '''
-        check is apk exists or not
-        :param package_name: package name. Such as com.google.xxx
-        :return:
-        '''
         return True if package_name in self.checkoutput('pm list packages') else False
 
     def install_apk(self, apk_path):
-        '''
-        install apk from pc
-        @param apk_path: apk path
-        @return: install status : boolean
-        '''
         apk_path = os.path.join(os.getcwd(), 'res\\' + apk_path)
         cmd = f'install -r -t {apk_path}'
         logging.info(cmd)
         return self.checkoutput_shell(cmd)
 
     def uninstall_apk(self, apk_name):
-        '''
-        uninstall apk
-        @param apk_name: apk name
-        @return: uninstall status : boolean
-        '''
         cmd = f'uninstall {apk_name}'
         logging.info(cmd)
         output = self.checkoutput_shell(cmd)
@@ -513,11 +350,6 @@ class adb(dut):
             return False
 
     def get_time(self, time=None):
-        '''
-        get time information from the logcat
-        :param time: logcat info
-        :return:
-        '''
         if (":" not in time[6:8]) and (":" not in time[9:11]) and (":" not in time[12:14]) and (
                 ":" not in time[15:18]) and ("." not in time[15:18]):
             th = int(time[6:8])
@@ -536,28 +368,12 @@ class adb(dut):
         #     return 0
 
     def getprop(self, key):
-        '''
-        Get property from device
-        @param key: prop key
-        @return: feedback output
-        '''
         return self.checkoutput('getprop %s' % key, )
 
     def rm(self, flags, path):
-        '''
-        rm file
-        @param flags: flags such as -r
-        @param path: file path
-        @return: None
-        '''
         self.checkoutput_term(self.ADB_S + self.serialnumber + " shell rm " + flags + " " + path)
 
     def uiautomator_dump(self, filepath='', uiautomator_type='u2'):
-        '''
-        dump ui xml over uiautomator
-        @param filepath: file path
-        @return: None
-        '''
         if not filepath:
             filepath = self.logdir
         logging.debug('doing uiautomator dump')
@@ -574,10 +390,6 @@ class adb(dut):
         logging.debug('uiautomator dump done')
 
     def get_dump_info(self):
-        '''
-        get ui dump info
-        @return: dumo info : str
-        '''
         path = self.logdir + self.DUMP_FILE if os.path.exists(
             self.logdir + self.DUMP_FILE) else self.logdir + '/view.xml'
         with open(path, 'r', encoding='utf-8') as f:
@@ -585,23 +397,9 @@ class adb(dut):
         return temp
 
     def expand_notifications(self):
-        '''
-        expand android notification bar
-        @return: None
-        '''
         self.checkoutput_term(self.ADB_S + self.serialnumber + " shell cmd statusbar expand-notifications")
 
     def _screencap(self, filepath, layer="osd", app_level=28):
-        '''
-        screencap cmd get png style picture
-        screencatch -m cmd get bmp style picture
-        pngtest cmd get jpeg style picture layer default osd
-        can set video or osd+video type
-        @param filepath: file path
-        @param layer: layer
-        @param app_level: sdk version
-        @return: None
-        '''
 
         if layer == "osd":
             self.checkoutput_term(self.ADB_S + self.serialnumber + " shell screencap -p " + filepath)
@@ -619,13 +417,6 @@ class adb(dut):
                 logging.info("please check the set screen layer arg")
 
     def screenshot(self, destination, layer="osd", app_level=28):
-        '''
-        pull screen catch file to logdir
-        @param destination: target path
-        @param layer: screen layer type
-        @param app_level: sdk version
-        @return: None
-        '''
         if layer == "osd":
             devicePath = "/sdcard/screen.png"
             destination = self.logdir + "/" + "screencap_" + destination + ".png"
@@ -647,14 +438,6 @@ class adb(dut):
             self.rm("-r", dirs)
 
     def continuous_screenshot(self, destination, layer="osd+video", app_level=30, screenshot_counter=3):
-        '''
-        continuous screenshot just for Android Q/R, set counter >1
-        @param destination: target path
-        @param layer: screen layer type
-        @param app_level: sdk version
-        @param screenshot_counter: screen shot times
-        @return: None
-        '''
         dirs = self.mkdir_temp()
         if app_level > 28 and screenshot_counter > 1 and (layer == "video" or layer == self.OSD_VIDEO_LAYER):
             self.screencatch(layer, screenshot_counter)
@@ -671,18 +454,6 @@ class adb(dut):
         self.rm("-r", dirs)
 
     def screencatch(self, layer="osd+video", counter=1):
-        '''
-        screencatch [-p/-j/-m/-b] [-c <counter>] [-t <type>] [left  top  right  bottom  outWidth  outHeight]
-            Args:
-               -m  :  save as bmp file(android R not support png/jpeg)
-               -c <counter> : continually save file with counter, default as 1
-               -t <type> : set capture type:
-                  0 -- video only
-                  1 -- video+osd (default)
-        @param layer: screen layer type
-        @param counter: screen shot times
-        @return: None
-        '''
 
         if layer == self.OSD_VIDEO_LAYER:
             capture_type = "1"
@@ -722,10 +493,6 @@ class adb(dut):
         self.rm("-r", dirs)
 
     def mkdir_temp(self):
-        '''
-        mkdir temp folder , chmod 777
-        @return: folder path
-        '''
         self.root()
         dirs = '/data/temp'
         temp = self.checkoutput("ls /data")
@@ -735,11 +502,6 @@ class adb(dut):
         return dirs
 
     def check_adb_status(self, waitTime=100):
-        '''
-        check adb status
-        @param waitTime: the time of detection
-        @return: adb status : boolean
-        '''
         i = 0
         waitCnt = waitTime / 5
         while i < waitCnt:
@@ -757,12 +519,6 @@ class adb(dut):
         return False
 
     def wait_and_tap(self, searchKey, attribute, times=5):
-        '''
-        wait for android widget then tap it , wait 5 seconds
-        @param searchKey: widget key
-        @param attribute: widget attr
-        @return:
-        '''
         for _ in range(times):
             if self.find_element(searchKey, attribute):
                 self.find_and_tap(searchKey, attribute)
@@ -770,25 +526,12 @@ class adb(dut):
             time.sleep(1)
 
     def wait_element(self, searchKey, attribute):
-        '''
-        wait for android widget , wait 5 seconds
-        @param searchKey: widget key
-        @param attribute: widget attr
-        @return:
-        '''
         for _ in range(5):
             if self.find_element(searchKey, attribute):
                 return 1
             time.sleep(1)
 
     def find_element(self, searchKey, attribute, extractKey=None):
-        '''
-        find element in the ui dump info
-        @param searchKey: element key
-        @param attribute: element attr
-        @param extractKey:
-        @return:
-        '''
         logging.info(f'find {searchKey}')
         filepath = os.path.join(self.logdir, self.DUMP_FILE)
         self.uiautomator_dump(filepath)
@@ -803,12 +546,6 @@ class adb(dut):
         return None
 
     def find_pos(self, searchKey, attribute):
-        '''
-        find widget position
-        @param searchKey: widget key
-        @param attribute: widget attr
-        @return: position x , position y : tuple
-        '''
         logging.info('find_pos')
         filepath = self.logdir + self.DUMP_FILE
         self.uiautomator_dump(filepath)
@@ -833,12 +570,6 @@ class adb(dut):
         return (x_midpoint, y_midpoint)
 
     def find_and_tap(self, searchKey, attribute):
-        '''
-        find widget and tap
-        @param searchKey: widget key
-        @param attribute: widget attr
-        @return: position x , position y : tuple
-        '''
         logging.info(f'find_and_tap {searchKey}')
         x_midpoint, y_midpoint = self.find_pos(searchKey, attribute)
         if (x_midpoint, y_midpoint) != (-1, -1):
@@ -847,14 +578,6 @@ class adb(dut):
         return x_midpoint, y_midpoint
 
     def text_entry(self, text, searchKey, attribute, delete=64):
-        '''
-        find edittext and input text
-        @param text: input text
-        @param searchKey: edittext key
-        @param attribute: edittext attr
-        @param delete: del 退格
-        @return: position x , position y : tuple
-        '''
         filepath = self.logdir + self.DUMP_FILE
         self.uiautomator_dump(filepath)
         xml_file = minidom.parse(filepath)
@@ -899,10 +622,6 @@ class adb(dut):
             assert False, "Can't find any device"
 
     def wait_devices(self):
-        '''
-        check adb exists if not wait for one minute
-        @return: None
-        '''
         count = 0
 
         while subprocess.run(f'adb -s {self.serialnumber} shell getprop sys.boot_completed'.split(),
@@ -926,19 +645,10 @@ class adb(dut):
         self.set_status_on()
 
     def kill_logcat_pid(self):
-        '''
-        kill all logcat in pc
-        @return: None
-        '''
         self.subprocess_run("killall logcat")
 
     # @connect_again
     def popen(self, command):
-        '''
-        run adb command over popen
-        @param command: command
-        @return: subprocess.Popen
-        '''
         logging.debug(f"command:{self.ADB_S + self.serialnumber + ' ' + command}")
         cmd = self.ADB_S + self.serialnumber + ' ' + command
         return self.popen_term(cmd)
@@ -948,12 +658,6 @@ class adb(dut):
         # preexec_fn=os.setsid)
 
     def checkoutput(self, command):
-        '''
-        run adb command over check_output
-        raise error if not success
-        @param command: command
-        @return: feedback
-        '''
         command = 'shell ' + f'"{command}"'
         return self.checkoutput_shell(command)
 
@@ -964,40 +668,23 @@ class adb(dut):
 
     @connect_again
     def subprocess_run(self, command):
-        '''
-        run adb command over subporcess.run
-        @param command: command
-        @return: subprocess.CompletedProcess
-        '''
         if not isinstance(command, list):
             command = (self.ADB_S + self.serialnumber + ' shell ' + command).split()
         return subprocess.run(command, stdout=subprocess.PIPE, encoding='utf-8').stdout
 
     def open_omx_info(self):
-        '''
-        open omx logcat
-        @return: None
-        '''
         self.checkoutput("setprop media.omx.log_levels 255")
         self.checkoutput("setprop vendor.media.omx.log_levels 255")
         self.checkoutput("setprop debug.stagefright.omx-debug 5")
         self.checkoutput("setprop vendor.mediahal.loglevels 255")
 
     def close_omx_info(self):
-        '''
-        close omx logcat
-        @return: None
-        '''
         self.checkoutput("setprop media.omx.log_levels 0")
         self.checkoutput("setprop vendor.media.omx.log_levels 0")
         self.checkoutput("setprop debug.stagefright.omx-debug 0")
         self.checkoutput("setprop vendor.mediahal.loglevels 0")
 
     def factory_reset_bootloader(self):
-        '''
-        factory reset over adb
-        @return:
-        '''
         self.checkoutput_term('adb reboot bootloader')
         self.set_status_off()
         for i in range(10):
@@ -1017,28 +704,16 @@ class adb(dut):
         time.sleep(120)
 
     def apk_enable(self, packageName):
-        '''
-        apk enable
-        @param packageName: apk package name
-        @return: None
-        '''
         output = self.checkoutput(f'pm enable {packageName}')
         return output
 
     def check_cmd_wifi(self):
-        '''
-        check cmd wifi command is available
-        @return: True or False
-        '''
         try:
             return 'connect-network' in self.checkoutput("cmd wifi -h")
         except Exception:
             return False
 
     def set_wifi_enabled(self):
-        '''
-        Open wifi over cmd wifi
-        '''
         output = self.checkoutput("ifconfig")
         if "wlan0" not in output:
             self.checkoutput("cmd wifi set-wifi-enabled enabled")
@@ -1046,26 +721,16 @@ class adb(dut):
             logging.debug("wifi has opened,no need to open wifi")
 
     def set_wifi_disabled(self):
-        '''
-        Close wifi over cmd wifi
-        '''
         output = self.checkoutput("cmd wifi set-wifi-enabled disabled")
         if "wlan0" not in output:
             logging.debug("wifi has closed")
 
     def connect_wifi(self, ssid, pwd, security):
-        '''
-        Connect wifi over cmd wifi
-        '''
         cmd = f"cmd wifi connect-network {ssid} {security} {pwd}"
         logging.info(f"Connect wifi command: {cmd}")
         return self.checkoutput(cmd)
 
     def check_wifi_driver(self):
-        '''
-        Check vlsicomm.ko exists or not
-        :return:
-        '''
         self.clear_logcat()
         file_list = self.checkoutput("ls /vendor/lib/modules")
         if 'vlsicomm.ko' in file_list:
@@ -1076,10 +741,6 @@ class adb(dut):
             return False
 
     def get_mcs_rx(self):
-        '''
-        get mcs rx info
-        :return:
-        '''
         try:
             self.checkoutput(self.MCS_RX_GET_COMMAND)
             mcs_info = self.checkoutput(self.DMESG_COMMAND)
@@ -1100,10 +761,6 @@ class adb(dut):
             return 'mcs_rx'
 
     def get_mcs_tx(self):
-        '''
-        get mcs tx info
-        :return:
-        '''
         try:
             mcs_info = self.checkoutput(self.DMESG_COMMAND)
             # logging.debug(mcs_info)
@@ -1123,10 +780,6 @@ class adb(dut):
             return 'mcs_tx'
 
     def get_tx_bitrate(self):
-        '''
-        return tx bitrate
-        @return: rate (str)
-        '''
         try:
             self.root()
             result = self.checkoutput(self.IW_LINNK_COMMAND)
@@ -1150,10 +803,6 @@ class adb(dut):
                 raise EnvironmentError('Lost device')
 
     def wait_for_launcher(self) -> None:
-        '''
-        # Wait for home launcher is available
-        :return:
-        '''
         log = self.popen('logcat')
         while True:
             try:
@@ -1168,10 +817,6 @@ class adb(dut):
         log.send_signal(signal.SIGINT)
 
     def enter_wifi_activity(self) -> None:
-        '''
-        Enter in Wi-Fi activity over ui settings
-        :return:
-        '''
         self.app_stop(self.SETTING_ACTIVITY_TUPLE[0])
         logging.info('Enter wifi activity')
         self.start_activity(*self.SETTING_ACTIVITY_TUPLE)
@@ -1183,10 +828,6 @@ class adb(dut):
         self.wait_element('Wi-Fi', 'text')
 
     def enter_hotspot(self) -> None:
-        '''
-        Enter in hotspot avtivity over ui settings
-        :return:
-        '''
         self.start_activity(*self.SETTING_ACTIVITY_TUPLE)
         self.wait_element('Network & Internet', 'text')
         self.wait_and_tap('Network & Internet', 'text')
@@ -1195,10 +836,6 @@ class adb(dut):
         self.wait_and_tap('HotSpot', 'text')
 
     def open_hotspot(self) -> None:
-        '''
-        Open hotspot over ui settings
-        :return:
-        '''
         self.enter_hotspot()
         self.wait_element('Portable HotSpot Enabled', 'text')
         self.uiautomator_dump()
@@ -1214,10 +851,6 @@ class adb(dut):
                 raise EnvironmentError("Can't open hotspot")
 
     def close_hotspot(self) -> None:
-        '''
-        Close hostspot over ui settings
-        :return:
-        '''
         self.kill_setting()
         self.enter_hotspot()
         self.wait_element('Portable HotSpot Enabled', 'text')
@@ -1242,11 +875,6 @@ class adb(dut):
         self.kill_setting()
 
     def find_ssid(self, ssid) -> bool:
-        '''
-        Faciliates list finding SSID
-        :param ssid: SSID
-        :return:
-        '''
         self.enter_wifi_activity()
         logging.info('enter activity done')
         time.sleep(1)
@@ -1280,10 +908,6 @@ class adb(dut):
         return result
 
     def wait_keyboard(self):
-        '''
-        Wait for android keybard
-        :return:
-        '''
         for i in range(5):
             self.uiautomator_dump()
             if 'keyboard_area' in self.get_dump_info():  # or \
@@ -1294,13 +918,6 @@ class adb(dut):
                 time.sleep(2)
 
     def connect_ssid_via_ui(self, ssid, passwd='', target="192.168.50") -> bool:
-        '''
-        Connect ssid over ui setting
-        :param ssid: SSID (target)
-        :param passwd: password if needed
-        :param target: target ip address
-        :return:
-        '''
         self.find_ssid(ssid)
         self.uiautomator_dump()
         if 'IP address' in self.get_dump_info():
@@ -1329,34 +946,18 @@ class adb(dut):
         return True
 
     def connect_save_ssid(self, ssid, target=''):
-        '''
-        Connect ssid which is saved over ui settings
-        :param ssid:
-        :param target:
-        :return:
-        '''
         self.find_ssid(ssid)
         self.wait_and_tap('Connect', 'text')
         self.wait_for_wifi_address(target=target)
         return True
 
     def forget_ssid(self, ssid):
-        '''
-        Forget ssid over ui settings
-        :param ssid:
-        :return:
-        '''
         self.find_ssid(ssid)
         self.wait_and_tap('Forget network', 'text')
         self.wait_and_tap('OK', 'text')
         time.sleep(1)
 
     def wait_ssid_cmd(self, ssid: str) -> None:
-        '''
-        Wait for SSID to appear in the Wi-Fi list
-        :param ssid: SSID
-        :return:
-        '''
         self.checkoutput('cmd wifi start-scan')
         scan_list = self.subprocess_run(f'cmd wifi list-scan-results |grep "{ssid}"')
         step = 0
@@ -1371,21 +972,12 @@ class adb(dut):
                 assert False, "hotspot can't be found"
 
     def wait_ssid_disapper_cmd(self, ssid: str) -> None:
-        '''
-        Wait for SSID to appear in the Wi-Fi list
-        :param ssid: SSID
-        :return:
-        '''
         try:
             self.wait_ssid_cmd(ssid)
         except AssertionError as e:
             assert "hotspot can't be found" in e, "hotspot still can be found"
 
     def change_keyboard_language(self) -> None:
-        '''
-        Set chinese type keyboard
-        @return:
-        '''
         self.install_apk('ADBKeyboard.apk')
         self.start_activity(*self.SETTING_ACTIVITY_TUPLE)
         for i in range(5):
@@ -1401,20 +993,9 @@ class adb(dut):
             self.keyevent(4)
 
     def reset_keyboard_language(self) -> None:
-        '''
-        reset keyboard
-        @return:
-        '''
         self.uninstall_apk('com.android.adbkeyboard')
 
     def add_network(self, ssid, type, passwd='') -> None:
-        '''
-        Add wifi network over ui settings
-        :param ssid: SSID (target)
-        :param type: wifi type
-        :param passwd: password if needed
-        :return:
-        '''
         self.enter_wifi_activity()
         time.sleep(2)
         self.wait_and_tap('Add new network', 'text')
@@ -1436,10 +1017,6 @@ class adb(dut):
         return True
 
     def open_wifi(self) -> None:
-        '''
-        Open Wi-Fi over ui settings
-        :return:
-        '''
         self.enter_wifi_activity()
         self.wait_element('Wi-Fi', 'text')
         self.uiautomator_dump()
@@ -1449,10 +1026,6 @@ class adb(dut):
         self.kill_setting()
 
     def close_wifi(self) -> None:
-        '''
-        Close Wi-Fi over ui settings
-        :return:
-        '''
         self.enter_wifi_activity()
         self.wait_element('Wi-Fi', 'text')
         self.uiautomator_dump()
@@ -1463,10 +1036,6 @@ class adb(dut):
         self.kill_setting()
 
     def get_wifi_hw_addr(self) -> str:
-        '''
-        Get Wi-Fi hardware address
-        :return:
-        '''
         hw_addr = self.checkoutput('ifconfig wlan0')
         hw_addr = re.findall(r'HWaddr (.*?)  Driver', hw_addr, re.S)
         if hw_addr[0]:
@@ -1475,10 +1044,6 @@ class adb(dut):
             raise Exception("Can't get hw addr")
 
     def wait_router(self):
-        '''
-        wait for router power no
-        @return:
-        '''
         ipaddress = self.checkoutput_term('ifconfig')
         count = 0
         while '192.168.50' not in ipaddress:
@@ -1490,13 +1055,6 @@ class adb(dut):
         logging.info('Router is power on')
 
     def playback_youtube(self, sleep_time=60, seek=False, seek_time=3):
-        '''
-        Playback youtube
-        :param sleep_time: playing time
-        :param seek: whether need to seek
-        :param seek_time:
-        :return:
-        '''
         try:
             self.checkoutput(self.PLAYERACTIVITY_REGU.format(self.VIDEO_TAG_LIST[0]['link']))
             time.sleep(10)
@@ -1519,14 +1077,6 @@ class adb(dut):
             ...
 
     def set_hotspot(self, ssid='', passwd='', type='', encrypt=''):
-        '''
-        Setup hotspot
-        :param ssid: hotspot ssid
-        :param passwd: hotspot passwd
-        :param type:  hotspot type
-        :param encrypt: hotspot encrypt
-        :return:
-        '''
         if ssid:
             self.wait_and_tap("Hotspot name", "text")
             self.wait_element("android:id/edit", "resource-id")
@@ -1558,17 +1108,9 @@ class adb(dut):
             self.wait_element('AP Band', 'text')
 
     def get_hotspot_config(self):
-        '''
-        Get hotspot configuration
-        :return:
-        '''
         return self.checkoutput('cat /data/vendor/wifi/hostapd/hostapd_*.conf')
 
     def factory_reset_ui(self):
-        '''
-        Set factory reset over ui settings
-        :return:
-        '''
         self.start_activity(*self.SETTING_ACTIVITY_TUPLE)
         self.wait_and_tap('Device Preferences', 'text')
         self.wait_and_tap('About', 'text')

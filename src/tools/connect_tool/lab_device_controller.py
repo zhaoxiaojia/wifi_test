@@ -54,10 +54,7 @@ class LabDeviceController:
             logging.info(f'Try to connect {ip}')
             self.tn = telnetlib.Telnet()
             self.tn.open(self.ip, port=23)
-            logging.info('*' * 80)
-            logging.info(f'* ip   : {ip}')
-            logging.info(f'* port: 23')
-            logging.info('*' * 80)
+            logging.info('Telnet connection established to %s:23', ip)
             # print('telnet init done')
 
         except Exception as f:
@@ -68,7 +65,7 @@ class LabDeviceController:
         # self.tn.write('gcp'.encode('ascii') + b'\r\n')
         # current_angle = int(self.tn.read_some().decode('utf-8'))
         self.angle = 0
-        logging.info('current_angle', self.angle)
+        logging.info('Current angle: %s', self.angle)
 
     def execute_rf_cmd(self, value):
         if isinstance(value, int):

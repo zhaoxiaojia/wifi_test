@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import base64
 import csv
 import logging
 import math
@@ -27,6 +26,14 @@ from openpyxl.worksheet.worksheet import Worksheet
 from src.test.performance import get_rvo_static_db_list, get_rvo_target_rssi_list
 from src.tools.performance.rvr_chart_generator import PerformanceRvrChartGenerator
 LOGGER = logging.getLogger(__name__)
+
+# Path to embedded report logo placed alongside this module.
+REPORT_LOGO_PATH = Path(__file__).with_name("report_logo.png")
+try:
+    REPORT_LOGO_BYTES = REPORT_LOGO_PATH.read_bytes()
+except FileNotFoundError:
+    REPORT_LOGO_BYTES = None
+    LOGGER.warning("Report logo not found at %s; skipping logo embedding.", REPORT_LOGO_PATH)
 
 # ---------------------------------------------------------------------------
 # Style constants derived from Demo.xlsx
@@ -141,69 +148,6 @@ BORDER_THIN_DIAGONAL_UP = Border(
     bottom=Side(style="thin", color="8A8A8A"),
     diagonal=Side(style="thin", color="8A8A8A"),
     diagonalUp=True,
-)
-
-LOGO_PNG_BASE64 = (
-    "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"
 )
 
 
@@ -899,12 +843,12 @@ def _write_report_title(
         border=True,
     )
 
-    logo_bytes = base64.b64decode(LOGO_PNG_BASE64)
-    image = Image(BytesIO(logo_bytes))
-    image.width = 240
-    image.height = 70
-    image.anchor = f"A{top_row}"
-    ws.add_image(image)
+    if REPORT_LOGO_BYTES:
+        image = Image(BytesIO(REPORT_LOGO_BYTES))
+        image.width = 240
+        image.height = 70
+        image.anchor = f"A{top_row}"
+        ws.add_image(image)
 
     remark_row = top_row + 1
     _merge(ws, f"A{remark_row}:{last_col}{remark_row}")

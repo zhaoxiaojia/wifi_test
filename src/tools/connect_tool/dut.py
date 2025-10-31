@@ -1,14 +1,3 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
-
-"""
-# File       : dut.py
-# Time       ：2023/7/4 15:51
-# Author     ：chao.li
-# version    ：python 3.9
-# Description：
-"""
 import logging
 import os
 import re
@@ -69,8 +58,6 @@ class dut():
 
     @staticmethod
     def _calculate_iperf_wait_time(test_time: int) -> int:
-        """根据 iperf 预计运行时长计算合理的等待时间缓冲。"""
-
         safe_time = max(test_time, 1)
         buffer = max(15, min(120, safe_time // 2))
         return safe_time + buffer
@@ -475,8 +462,6 @@ class dut():
                 _run_blocking(_build_cmd_list(), 'client pc command:')
 
     def _parse_iperf_log(self, server_lines: list[str]):
-        """解析 iperf 日志并计算吞吐量."""
-
         def _analyse_lines(lines: list[str]) -> tuple[Optional[float], Optional[IperfMetrics], int, bool]:
             interval_pattern = re.compile(r'\d+\.\d*\s*-\s*\d+\.\d*\s*sec', re.IGNORECASE)
             values: list[float] = []

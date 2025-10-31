@@ -161,14 +161,12 @@ class RouterTools(RouterControl):
             'zte': '192.168.2.1'
         }.get(self.router_type, '192.168.1.1')
         self.address = address or default_address
-        logging.info(self.address)
+        logging.info("Router gateway address: %s", self.address)
         self.ping_address = self.address
+        logging.info("Preparing router session for %s", self.router_info)
 
         # 鍏ㄥ眬绛夊緟3绉?锛堝綋driver 鍘绘煡璇?鎺т欢鏃剁敓鏁堬級
 
-        logging.info('*' * 80)
-        logging.info(f'* Router {self.router_info}')
-        logging.info('*' * 80)
 
     def scroll_to(self, target):
         self.driver.execute_script(self.SCROL_JS, target)
