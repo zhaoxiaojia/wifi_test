@@ -171,7 +171,7 @@ class PerformanceRvrChartGenerator(RvrChartLogic):
         angle_labels = [label for _, label in angle_positions]
         theta = [math.radians(value) for value in angle_values]
         theta_cycle = theta + [theta[0]] if theta else []
-        fig, ax = plt.subplots(figsize=(6.6, 6.6), dpi=CHART_DPI, subplot_kw={"projection": "polar"})
+        fig, ax = plt.subplots(figsize=(8.0, 6.2), dpi=CHART_DPI, subplot_kw={"projection": "polar"})
         try:
             ax.set_theta_zero_location("N")
             ax.set_theta_direction(-1)
@@ -200,38 +200,21 @@ class PerformanceRvrChartGenerator(RvrChartLogic):
             handles, labels = ax.get_legend_handles_labels()
             handles = list(handles)
             labels = list(labels)
-            legend = None
-            # print(f"[RVO] legend handles={labels}")
-            bottom_padding = 0.22
             if handles:
-                # print(
-                #     f"[RVO] attempting to create legend -> handle_count={len(handles)}, label_count={len(labels)}"
-                # )
                 legend = ax.legend(
                     handles,
                     labels,
-                    loc="lower center",
-                    bbox_to_anchor=(0.5, -0.24),
-                    ncol=max(1, min(len(handles), 3)),
+                    loc="upper right",
+                    bbox_to_anchor=(1.18, 1.05),
+                    ncol=max(1, min(len(handles), 2)),
                     frameon=False,
                 )
-                legend_texts = [text.get_text() for text in legend.get_texts()] if legend else []
-                # print(
-                #     f"[RVO] legend created -> present={legend is not None}, texts={legend_texts}"
-                # )
                 if legend is not None:
                     for text_item in legend.get_texts():
-                        text_item.set_ha("center")
-                bottom_padding = max(bottom_padding, 0.38)
-            else:
-                ...
-                # print("[RVO] legend skipped -> no handles detected")
-            # print(
-            #     f"[RVO] subplot padding configuration -> bottom={bottom_padding}, legend_present={bool(ax.get_legend())}"
-            # )
-            fig.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=bottom_padding)
+                        text_item.set_ha("left")
+            fig.tight_layout(pad=0.4)
             save_path = charts_dir / f"{self._safe_chart_name(title)}.png"
-            fig.savefig(save_path, dpi=fig.dpi)
+            fig.savefig(save_path, dpi=fig.dpi, bbox_inches="tight", pad_inches=0.15)
             return save_path
         except Exception:
             logging.exception("Failed to save RVO chart: %s", title)
@@ -244,7 +227,7 @@ class PerformanceRvrChartGenerator(RvrChartLogic):
     ) -> Optional[Path]:
         chart_type = (chart_type or "line").lower()
         if chart_type == "polar":
-            fig = plt.figure(figsize=(6.6, 6.6), dpi=CHART_DPI)
+            fig = plt.figure(figsize=(8.0, 6.2), dpi=CHART_DPI)
             try:
                 ax = fig.add_subplot(111, projection="polar")
                 ax.set_theta_zero_location("N")
@@ -255,9 +238,9 @@ class PerformanceRvrChartGenerator(RvrChartLogic):
                 ax.grid(alpha=0.25, linestyle="--")
                 ax.set_title(title, pad=8)
                 ax.text(0.5, 0.5, "No data collected yet", transform=ax.transAxes, ha="center", va="center", color="#888888")
-                fig.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.2)
+                fig.tight_layout(pad=0.4)
                 save_path = charts_dir / f"{self._safe_chart_name(title)}.png"
-                fig.savefig(save_path, dpi=fig.dpi)
+                fig.savefig(save_path, dpi=fig.dpi, bbox_inches="tight", pad_inches=0.15)
                 return save_path
             except Exception:
                 logging.exception("Failed to save polar placeholder chart: %s", title)

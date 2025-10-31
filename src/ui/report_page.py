@@ -663,11 +663,7 @@ class ReportPage(RvrChartLogic, CardWidget):
         handles, labels = ax.get_legend_handles_labels()
         handles = list(handles)
         labels = list(labels)
-        print(f"[RVO][UI] legend handles={labels}")
         if handles:
-            print(
-                f"[RVO][UI] creating legend -> handle_count={len(handles)}, label_count={len(labels)}"
-            )
             legend = ax.legend(
                 handles,
                 labels,
@@ -676,19 +672,10 @@ class ReportPage(RvrChartLogic, CardWidget):
                 ncol=max(1, min(len(handles), 3)),
                 frameon=False,
             )
-            legend_texts = [text.get_text() for text in legend.get_texts()] if legend else []
-            print(
-                f"[RVO][UI] legend created -> present={legend is not None}, texts={legend_texts}"
-            )
             if legend is not None:
                 for text_item in legend.get_texts():
                     text_item.set_ha('center')
-        else:
-            print("[RVO][UI] legend skipped -> no handles detected")
         bottom_padding = 0.26 if handles else 0.22
-        print(
-            f"[RVO][UI] subplot padding -> bottom={bottom_padding}, legend_present={bool(ax.get_legend())}"
-        )
         fig.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=bottom_padding)
         save_path = charts_dir / f"{self._safe_chart_name(title)}.png"
         return self._figure_to_label(fig, ax, [], save_path)
