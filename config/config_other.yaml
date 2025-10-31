@@ -30,7 +30,7 @@ rvr:
 router:
   name: asusax88u
   address: 192.168.5.1
-text_case: test/performance/test_wifi_rvr.py
+text_case: test/performance/test_wifi_rvo.py
 debug:
   database_mode: true
   skip_router: false

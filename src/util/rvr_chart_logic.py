@@ -548,8 +548,6 @@ class RvrChartLogic:
                 formatted_rssi.append(value if lower.endswith("dbm") else f"{value} dBm")
             annotations.append(f"Target RSSI: {', '.join(formatted_rssi)}")
 
-        if annotations:
-            print(f"[RVO] annotations collected -> {annotations}")
         return annotations
 
     def _infer_test_type_from_path(self, path: Path) -> Optional[str]:
@@ -639,14 +637,7 @@ class RvrChartLogic:
                     values.append(None)
             if any(v is not None for v in values):
                 label = self._format_rvo_series_label(channel, channel_df)
-                print(
-                    f"[RVO] series collected -> channel={channel!r}, key={key!r}, label={label!r}, values={values}"
-                )
                 series_data.append((label, values))
-        if not series_data:
-            print("[RVO] no channel series were generated for polar plot")
-        else:
-            print(f"[RVO] total channel series -> {len(series_data)}")
         return series_data
 
     def _filter_dataframe_by_angle(self, df: pd.DataFrame, angle: float) -> pd.DataFrame:
@@ -936,18 +927,11 @@ class RvrChartLogic:
         profile_label = self._extract_profile_label(df)
         if profile_label:
             final_label = f"{profile_label} {base_label}".strip()
-            # print(
-            #     f"[RVO] resolved profile label -> channel={channel!r}, profile={profile_label!r}, final={final_label!r}"
-            # )
             return final_label
         db_label = self._extract_db_label(df)
         if db_label:
             final_label = f"{base_label} {db_label}".strip()
-            # print(
-            #     f"[RVO] resolved db label -> channel={channel!r}, db={db_label!r}, final={final_label!r}"
-            # )
             return final_label
-        # print(f"[RVO] using base label -> channel={channel!r}, final={base_label!r}")
         return base_label
 
     def _series_with_nan(self, values: list[Optional[float]]) -> list[float]:
