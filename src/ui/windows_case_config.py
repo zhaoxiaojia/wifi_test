@@ -1,13 +1,3 @@
-#!/usr/bin/env python 
-# encoding: utf-8 
-'''
-@author: chao.li
-@contact: chao.li@amlogic.com
-@software: pycharm
-@file: windows_case_config.py
-@time: 2025/7/22 21:49
-@desc:
-'''
 from __future__ import annotations
 
 import os
@@ -15,7 +5,7 @@ import re
 from pathlib import Path
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Mapping, Optional
+from typing import Any, Mapping, Optional, Sequence
 from src.tools.router_tool.router_factory import router_list, get_router
 from src.util.constants import (
     ANDROID_KERNEL_MAP,
@@ -43,6 +33,8 @@ from PyQt5.QtCore import (
     QRect,
     QRegularExpression,
     pyqtSignal,
+    QEvent,
+    QObject,
 )
 from PyQt5.QtGui import QIntValidator, QRegularExpressionValidator
 
@@ -117,54 +109,41 @@ class TestFileFilterModel(QSortFilterProxyModel):
         return True
 
 
-class _ClickableLabel(QLabel):
-    clicked = pyqtSignal(int)
-
-    def __init__(self, index: int, text: str, parent: QWidget | None = None) -> None:
-        super().__init__(text, parent)
-        self._index = index
-        self.setCursor(Qt.PointingHandCursor)
-
-    def mouseReleaseEvent(self, event):  # type: ignore[override]
-        if event.button() == Qt.LeftButton:
-            self.clicked.emit(self._index)
-        super().mouseReleaseEvent(event)
-
-
-class _FallbackStepView(QWidget):
-    
-    """Fallback step indicator used when StepView is unavailable."""
+class _StepSwitcher(QWidget):
+    """Lightweight fallback step indicator when StepView is unavailable."""
 
     stepActivated = pyqtSignal(int)
 
-    def __init__(self, steps: list[str], parent: QWidget | None = None) -> None:
+    def __init__(self, steps: Sequence[str], parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self._steps: list[str] = []
-        self._labels: list[_ClickableLabel] = []
-        self._layout = QHBoxLayout(self)
-        self._layout.setContentsMargins(0, 0, 0, 0)
-        self._layout.setSpacing(16)
-        self.set_steps(steps)
-
-    def set_steps(self, steps: list[str]) -> None:
-        self._steps = list(steps)
-        while self._layout.count():
-            item = self._layout.takeAt(0)
-            widget = item.widget()
-            if widget is not None:
-                widget.deleteLater()
-        self._labels.clear()
-        for idx, text in enumerate(self._steps):
-            label = _ClickableLabel(idx, text, self)
+        self._labels: list[QLabel] = []
+        self._current = -1
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(12)
+        for index, text in enumerate(steps):
+            label = QLabel(text, self)
             label.setObjectName("wizardStepLabel")
-            label.setStyleSheet("color: #6c6c6c;")
-            label.clicked.connect(self.stepActivated.emit)
-            self._layout.addWidget(label)
+            label.setCursor(Qt.PointingHandCursor)
+            label.installEventFilter(self)
             self._labels.append(label)
-        self._layout.addStretch(1)
+            layout.addWidget(label)
+        layout.addStretch(1)
         self.set_current_index(0)
 
+    def eventFilter(self, obj: QObject, event: QEvent) -> bool:  # type: ignore[override]
+        if event.type() == QEvent.MouseButtonRelease and obj in self._labels:
+            if getattr(event, "button", lambda: Qt.LeftButton)() == Qt.LeftButton:
+                self.stepActivated.emit(self._labels.index(obj))  # type: ignore[arg-type]
+                return True
+        return super().eventFilter(obj, event)
+
     def set_current_index(self, index: int) -> None:
+        if not (0 <= index < len(self._labels)):
+            return
+        if self._current == index:
+            return
+        self._current = index
         for i, label in enumerate(self._labels):
             if i == index:
                 label.setStyleSheet("color: #0078d4; font-weight: 600;")
@@ -625,7 +604,6 @@ class CaseConfigPage(CardWidget):
         self._android_versions = list(DEFAULT_ANDROID_VERSION_CHOICES)
         self._kernel_versions = list(DEFAULT_KERNEL_VERSION_CHOICES)
         self._step_labels = ["DUT Settings", "Execution Settings"]
-        self._fallback_step_view: _FallbackStepView | None = None
         self.step_view_widget = self._create_step_view()
         right.addWidget(self.step_view_widget)
 
@@ -732,20 +710,15 @@ class CaseConfigPage(CardWidget):
                             getattr(step_view, attr)(True)
                         except Exception as exc:
                             logging.debug("StepView.%s failed: %s", attr, exc)
-                self._fallback_step_view = None
                 self._attach_step_navigation(step_view)
                 return step_view
             except Exception as exc:  # pragma: no cover - 动态环境差异
                 logging.debug("Failed to initialize StepView: %s", exc)
-        fallback = _FallbackStepView(labels, self)
+        fallback = _StepSwitcher(labels, self)
         fallback.stepActivated.connect(self._on_step_activated)
-        self._fallback_step_view = fallback
         return fallback
 
     def _update_step_indicator(self, index: int) -> None:
-        if self._fallback_step_view is not None:
-            self._fallback_step_view.set_current_index(index)
-            return
         view = getattr(self, "step_view_widget", None)
         if view is None:
             return
@@ -756,9 +729,14 @@ class CaseConfigPage(CardWidget):
                     return
                 except Exception as exc:
                     logging.debug("StepView %s failed: %s", attr, exc)
+        if hasattr(view, "set_current_index"):
+            try:
+                view.set_current_index(index)
+            except Exception as exc:
+                logging.debug("Fallback step indicator failed: %s", exc)
 
     def _attach_step_navigation(self, view: QWidget) -> None:
-        if isinstance(view, _FallbackStepView):
+        if isinstance(view, _StepSwitcher):
             view.stepActivated.connect(self._on_step_activated)
             return
         handler_connected = False

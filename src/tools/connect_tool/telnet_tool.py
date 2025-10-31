@@ -119,9 +119,7 @@ class telnet_tool(dut):
             self._connect_minwait,
             self._connect_maxwait,
         )
-        logging.info('*' * 80)
-        logging.info(f'* Telnet {self.dut_ip}')
-        logging.info('*' * 80)
+        logging.info('Telnet target: %s:%s', self.dut_ip, self.port)
 
     async def wait_reconnect(self, timeout: int = 30, interval: float = 1.0) -> bool:
         """等待 Telnet 连接恢复。

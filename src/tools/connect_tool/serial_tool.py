@@ -48,9 +48,7 @@ class serial_tool:
                                      rtscts=False,
                                      dsrdtr=False,
                                      timeout=1)
-            logging.info('*' * 80)
-            logging.info(f'* Serial  {self.serial_port}-{self.baud} is opened  ')
-            logging.info('*' * 80)
+            logging.info('Serial port %s-%s opened', self.serial_port, self.baud)
             # self.ser.write(chr(0x03))
             # self.write('setprop persist.sys.usb.debugging y')
             # self.write('setprop service.adb.tcp.port 5555')
@@ -58,7 +56,7 @@ class serial_tool:
             logging.info(f'not found serial:{e}')
 
         self.status = self.ser.isOpen() if isinstance(self.ser, serial.Serial) else False
-        logging.info('the status of serial port is {}'.format(self.status))
+        logging.info('Serial port open status: %s', self.status)
 
         # 日志文件和线程设置
         self.log_file = log_file

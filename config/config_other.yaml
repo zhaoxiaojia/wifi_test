@@ -16,7 +16,7 @@ rf_solution:
     ip_address: 192.168.5.200
     channels: '1'
   model: RC4DAT-8G-95
-  step: 0,90:5
+  step: 0,10:3
 rvr:
   iperf:
     path: ''
@@ -30,9 +30,9 @@ rvr:
 router:
   name: asusax88u
   address: 192.168.5.1
-text_case: test/performance/test_wifi_rvo.py
+text_case: test/performance/test_wifi_rvr.py
 debug:
-  database_mode: true
-  skip_router: false
+  database_mode: false
+  skip_router: true
   skip_corner_rf: false
-csv_path: performance_test_csv/rvr_wifi_setup_demo.csv
+csv_path: performance_test_csv/rvr_wifi_setup_single.csv

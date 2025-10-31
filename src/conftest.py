@@ -27,6 +27,7 @@ from src.tools.config_loader import load_config
 from src.dut_control.roku_ctrl import roku_ctrl
 from src.tools.router_tool.Router import Router
 from src.tools.reporting import generate_project_report
+from src.test.pyqt_log import emit_pyqt_message
 
 # pytest_plugins = "util.report_plugin"
 test_results = []
@@ -168,7 +169,7 @@ def pytest_collection_finish(session):
 
 
 def pytest_runtest_setup(item):
-    print(f"[PYQT_CASE]{item.originalname}", flush=True)
+    emit_pyqt_message("CASE", item.originalname)
 
 
 def pytest_runtest_logreport(report):
@@ -176,9 +177,7 @@ def pytest_runtest_logreport(report):
         test_nodeid = report.nodeid
         if "[" in test_nodeid:
             params = test_nodeid.split("[", 1)[-1].rstrip("]")
-            logging.info('*' * 80)
-            logging.info(f"* Test params: {params}")
-            logging.info('*' * 80)
+            logging.info("Test params: %s", params)
 
 
 # @pytest.fixture(autouse=True)
@@ -248,7 +247,7 @@ def pytest_runtest_teardown(item, nextitem):
     session.pyqt_finished += 1
     total = getattr(session, 'total_test_count', None)
     if total:
-        print(f"[PYQT_PROGRESS] {session.pyqt_finished}/{total}", flush=True)
+        emit_pyqt_message("PROGRESS", f" {session.pyqt_finished}/{total}")
     item._pyqt_progress_recorded = True
 
 

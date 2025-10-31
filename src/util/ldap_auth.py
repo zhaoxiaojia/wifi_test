@@ -26,11 +26,10 @@ def ldap_authenticate(username: str, password: str) -> str | None:
     else:
         domain_user = f"{LDAP_DOMAIN}\\{clean_username}"
 
-    logging.info("ldap_authenticate: ldap server=%s", LDAP_SERVER)
-    logging.info("ldap_authenticate: domain user=%s", domain_user)
-    print(
-        f"[ldap_authenticate] LDAP server={LDAP_SERVER}, user={domain_user}",
-        flush=True,
+    logging.info(
+        "ldap_authenticate: ldap server=%s, domain user=%s",
+        LDAP_SERVER,
+        domain_user,
     )
 
     server = Server(LDAP_SERVER, get_info="ALL")
