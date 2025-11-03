@@ -1129,7 +1129,10 @@ class CaseConfigPage(CardWidget):
                 if value:
                     index = widget.findData(value)
                     if index < 0:
-                        index = widget.findText(value, Qt.MatchExactly)
+                        index = next(
+                            (i for i in range(widget.count()) if widget.itemText(i) == value),
+                            -1,
+                        )
                     if index < 0:
                         widget.addItem(value, value)
                         index = widget.findData(value)
