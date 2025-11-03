@@ -58,6 +58,8 @@ def setup_attenuation(request, setup_router):
 def test_rvr(setup_attenuation, performance_sync_manager):
     connect_status, router_info, db_set = setup_attenuation
     with scenario_group(router_info):
+        if hasattr(pytest.testResult, "ensure_log_file_prefix"):
+            pytest.testResult.ensure_log_file_prefix("RVR")
         if not connect_status:
             logging.info("Cannot connect to Wi-Fi, skip remaining steps")
         else:

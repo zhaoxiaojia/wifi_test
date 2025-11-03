@@ -286,27 +286,20 @@ def _detect_row_test_type(row: dict[str, object]) -> str:
 
 def _build_group_layout(channel_count: int) -> GroupLayout:
     base_col = 3  # Column C
-    rx_cols: list[int] = []
-    tx_cols: list[int] = []
-
-    for index in range(channel_count):
-        rx_col = base_col + index * 2
-        tx_col = rx_col + 1
-        rx_cols.append(rx_col)
-        tx_cols.append(tx_col)
+    rx_cols: list[int] = [base_col + index for index in range(channel_count)]
+    tx_cols: list[int] = [base_col + channel_count + index for index in range(channel_count)]
 
     aml_standard_col = base_col + channel_count * 2
     aml_result_col = aml_standard_col + 1
 
     rssi_start_col = aml_result_col + 1
 
-    right_rx_cols: list[int] = []
-    right_tx_cols: list[int] = []
-    for index in range(channel_count):
-        rx_col = rssi_start_col + index * 2
-        tx_col = rx_col + 1
-        right_rx_cols.append(rx_col)
-        right_tx_cols.append(tx_col)
+    right_rx_cols: list[int] = [
+        rssi_start_col + index for index in range(channel_count)
+    ]
+    right_tx_cols: list[int] = [
+        rssi_start_col + channel_count + index for index in range(channel_count)
+    ]
 
     return GroupLayout(
         rx_cols=rx_cols,
@@ -389,14 +382,22 @@ def _resolve_rvo_att_steps() -> List[Tuple[Optional[float], str, str]]:
     if target_values:
         for value in target_values:
             numeric = float(value) if value is not None else None
-            label = f"Target RSSI {value} dBm" if value is not None else "Target RSSI"
-            att_text = f"{value} dBm" if value is not None else ""
+            if value is not None:
+                label = f"target rssi : RSSI {value} dBm"
+                att_text = f"RSSI {value} dBm"
+            else:
+                label = "target rssi"
+                att_text = "RSSI"
             entries.append((numeric, label, att_text))
     elif static_values:
         for value in static_values:
             numeric = float(value) if value is not None else None
-            label = f"Static {value} dB" if value is not None else "Static"
-            att_text = f"{value} dB" if value is not None else ""
+            if value is not None:
+                label = f"static db : ATT {value} dB"
+                att_text = f"ATT {value} dB"
+            else:
+                label = "static db"
+                att_text = "ATT"
             entries.append((numeric, label, att_text))
 
     return entries
@@ -907,23 +908,15 @@ def _write_headers(
     *,
     header_row: int,
 ) -> int:
-    headers: list[tuple[int, int, str]] = [
+    sub_row = header_row + 1
+    step_text = group.step_summary or ""
+    base_headers: list[tuple[int, int, str]] = [
         (header_row, 1, "Item"),
         (header_row, 2, "ATT\n(Unit:dB)"),
+        (header_row, layout.aml_standard_col, "AML_Standard"),
+        (header_row, layout.aml_result_col, "AML_Result"),
     ]
-    for rx_col in layout.rx_cols:
-        headers.append((header_row, rx_col, "RX(Unit:Mbps)"))
-    for tx_col in layout.tx_cols:
-        headers.append((header_row, tx_col, "TX(Unit:Mbps)"))
-
-    headers.extend(
-        [
-            (header_row, layout.aml_standard_col, "AML_Standard"),
-            (header_row, layout.aml_result_col, "AML_Result"),
-        ]
-    )
-
-    for row, col, text in headers:
+    for row, col, text in base_headers:
         _set_cell(
             ws,
             row,
@@ -935,30 +928,54 @@ def _write_headers(
             border=True,
         )
 
-    sub_row = header_row + 1
-    step_text = group.step_summary or ""
-    _set_cell(ws, sub_row, 1, step_text, font=FONT_SUBHEADER, alignment=ALIGN_CENTER, fill=COLOR_SUBHEADER, border=True)
+    def _write_header_block(columns: Sequence[int], label: str) -> None:
+        if not columns:
+            return
+        start = columns[0]
+        end = columns[-1]
+        if end > start:
+            start_letter = get_column_letter(start)
+            end_letter = get_column_letter(end)
+            _merge(ws, f"{start_letter}{header_row}:{end_letter}{header_row}")
+        _set_cell(
+            ws,
+            header_row,
+            start,
+            label,
+            font=FONT_HEADER,
+            alignment=ALIGN_CENTER_WRAP,
+            fill=COLOR_BRAND_BLUE,
+            border=True,
+        )
 
-    if layout.right_rx_cols:
-        rssi_start = layout.rssi_start_col
-        rssi_end = layout.right_tx_cols[-1]
-        start_letter = get_column_letter(rssi_start)
-        end_letter = get_column_letter(rssi_end)
-        _merge(ws, f"{start_letter}{header_row}:{end_letter}{header_row}")
+    _write_header_block(layout.rx_cols, "RX(Unit:Mbps)")
+    _write_header_block(layout.tx_cols, "TX(Unit:Mbps)")
+
+    rssi_columns = layout.right_rx_cols + layout.right_tx_cols
+    if rssi_columns:
+        _write_header_block(rssi_columns, "RSSI")
     else:
-        start_letter = end_letter = get_column_letter(layout.aml_result_col + 1)
+        _set_cell(
+            ws,
+            header_row,
+            layout.rssi_start_col,
+            "RSSI",
+            font=FONT_HEADER,
+            alignment=ALIGN_CENTER_WRAP,
+            fill=COLOR_BRAND_BLUE,
+            border=True,
+        )
 
     _set_cell(
         ws,
-        header_row,
-        layout.rssi_start_col,
-        "RSSI",
-        font=FONT_HEADER,
-        alignment=ALIGN_CENTER_WRAP,
-        fill=COLOR_BRAND_BLUE,
+        sub_row,
+        1,
+        step_text,
+        font=FONT_SUBHEADER,
+        alignment=ALIGN_CENTER,
+        fill=COLOR_SUBHEADER,
         border=True,
     )
-
     _set_cell(
         ws,
         sub_row,
@@ -970,72 +987,58 @@ def _write_headers(
         border=True,
     )
 
-    rssi_start = layout.rssi_start_col if layout.right_rx_cols else layout.aml_result_col + 1
-    if layout.right_rx_cols:
-        rssi_end = layout.right_tx_cols[-1]
-        start_letter = get_column_letter(rssi_start)
-        end_letter = get_column_letter(rssi_end)
-        _merge(ws, f"{start_letter}{header_row}:{end_letter}{header_row}")
-        _set_cell(
-            ws,
-            header_row,
-            rssi_start,
-            "RSSI",
-            font=FONT_HEADER,
-            alignment=ALIGN_CENTER_WRAP,
-            fill=COLOR_BRAND_BLUE,
-            border=True,
-        )
     for idx, scenario in enumerate(channels):
         channel_text = scenario.channel
-        _set_cell(
-            ws,
-            sub_row,
-            layout.rx_cols[idx],
-            channel_text,
-            font=FONT_SUBHEADER,
-            alignment=ALIGN_CENTER,
-            fill=COLOR_SUBHEADER,
-            border=True,
-        )
-        _set_cell(
-            ws,
-            sub_row,
-            layout.tx_cols[idx],
-            channel_text,
-            font=FONT_SUBHEADER,
-            alignment=ALIGN_CENTER,
-            fill=COLOR_SUBHEADER,
-            border=True,
-        )
+        if idx < len(layout.rx_cols):
+            _set_cell(
+                ws,
+                sub_row,
+                layout.rx_cols[idx],
+                channel_text,
+                font=FONT_SUBHEADER,
+                alignment=ALIGN_CENTER,
+                fill=COLOR_SUBHEADER,
+                border=True,
+            )
+        if idx < len(layout.tx_cols):
+            _set_cell(
+                ws,
+                sub_row,
+                layout.tx_cols[idx],
+                channel_text,
+                font=FONT_SUBHEADER,
+                alignment=ALIGN_CENTER,
+                fill=COLOR_SUBHEADER,
+                border=True,
+            )
 
     _set_cell(ws, sub_row, layout.aml_standard_col, None, font=FONT_SUBHEADER, alignment=ALIGN_CENTER, fill=COLOR_SUBHEADER, border=True)
     _set_cell(ws, sub_row, layout.aml_result_col, None, font=FONT_SUBHEADER, alignment=ALIGN_CENTER, fill=COLOR_SUBHEADER, border=True)
 
     for idx, scenario in enumerate(channels):
         channel_text = scenario.channel
-        rx_header_col = layout.right_rx_cols[idx]
-        tx_header_col = layout.right_tx_cols[idx]
-        _set_cell(
-            ws,
-            sub_row,
-            rx_header_col,
-            channel_text,
-            font=FONT_SUBHEADER,
-            alignment=ALIGN_CENTER,
-            fill=COLOR_SUBHEADER,
-            border=True,
-        )
-        _set_cell(
-            ws,
-            sub_row,
-            tx_header_col,
-            channel_text,
-            font=FONT_SUBHEADER,
-            alignment=ALIGN_CENTER,
-            fill=COLOR_SUBHEADER,
-            border=True,
-        )
+        if idx < len(layout.right_rx_cols):
+            _set_cell(
+                ws,
+                sub_row,
+                layout.right_rx_cols[idx],
+                channel_text,
+                font=FONT_SUBHEADER,
+                alignment=ALIGN_CENTER,
+                fill=COLOR_SUBHEADER,
+                border=True,
+            )
+        if idx < len(layout.right_tx_cols):
+            _set_cell(
+                ws,
+                sub_row,
+                layout.right_tx_cols[idx],
+                channel_text,
+                font=FONT_SUBHEADER,
+                alignment=ALIGN_CENTER,
+                fill=COLOR_SUBHEADER,
+                border=True,
+            )
     LOGGER.info(
         "Header row configured | start_row=%d channel_count=%d step_summary=%s",
         header_row,

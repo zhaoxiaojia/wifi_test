@@ -463,7 +463,7 @@ class dut():
 
     def _parse_iperf_log(self, server_lines: list[str]):
         def _analyse_lines(lines: list[str]) -> tuple[Optional[float], Optional[IperfMetrics], int, bool]:
-            interval_pattern = re.compile(r'\d+\.\d*\s*-\s*\d+\.\d*\s*sec', re.IGNORECASE)
+            interval_pattern = re.compile(r'(\d+(?:\.\d*)?)\s*-\s*(\d+(?:\.\d*)?)\s*sec', re.IGNORECASE)
             values: list[float] = []
             udp_metrics_local: Optional[IperfMetrics] = None
             summary_value: Optional[float] = None
@@ -484,7 +484,8 @@ class dut():
                 if metrics:
                     udp_metrics_local = metrics
                     self._current_udp_mode = True
-                if not interval_pattern.search(line):
+                interval_match = interval_pattern.search(line)
+                if not interval_match:
                     continue
                 bandwidth_match = re.search(r'(\d+(?:\.\d+)?)\s*([KMG]?bits/sec)', line, re.IGNORECASE)
                 if not bandwidth_match:
@@ -494,20 +495,23 @@ class dut():
                 )
                 if throughput is None:
                     continue
+                logging.info(f'[coco] second value {throughput}')
                 values.append(throughput)
-                summary_match = re.search(r'0\.\d+\s*-\s*(\d+(?:\.\d+)?)\s*sec', line)
-                if summary_match:
-                    try:
-                        duration = float(summary_match.group(1))
-                    except ValueError:
-                        duration = 0.0
-                    if duration > 1.5:
-                        summary_value = throughput
-                        has_summary_line = True
+                try:
+                    start_time = float(interval_match.group(1))
+                    end_time = float(interval_match.group(2))
+                except (TypeError, ValueError):
+                    start_time = end_time = 0.0
+                duration = end_time - start_time
+                if start_time < 0.5 and duration > 1.5:
+                    summary_value = throughput
+                    has_summary_line = True
 
             if summary_value is not None:
                 throughput_value = summary_value
             elif values:
+                logging.info(f'[coco] {values}')
+                logging.info(f'[coco] {len(values)}')
                 throughput_value = sum(values) / len(values)
             elif udp_metrics_local and udp_metrics_local.throughput_mbps is not None:
                 throughput_value = udp_metrics_local.throughput_mbps

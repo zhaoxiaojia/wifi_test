@@ -41,6 +41,13 @@ def performance_sync_manager() -> Callable[[str, str], None]:
             logging.warning("Skip registering database sync for %s: missing log file path", data_type)
             return
         normalized_type = (data_type or "").strip().upper() or "UNKNOWN"
+        test_result = getattr(pytest, "testResult", None)
+        if normalized_type in {"RVR", "RVO"} and test_result is not None and hasattr(test_result, "ensure_log_file_prefix"):
+            try:
+                test_result.ensure_log_file_prefix(normalized_type)
+                log_file = getattr(test_result, "log_file", log_file)
+            except Exception:
+                logging.exception("Failed to align log file prefix for %s", normalized_type)
         pending[normalized_type] = {
             "log_file": log_file,
             "data_type": normalized_type,
@@ -49,8 +56,9 @@ def performance_sync_manager() -> Callable[[str, str], None]:
         }
         if normalized_type in {"RVR", "RVO"}:
             logging.info("Trigger auto chart generation for %s: %s", normalized_type, log_file)
+            charts_subdir = "rvo_charts" if normalized_type == "RVO" else "rvr_charts"
             try:
-                generated = generate_rvr_charts(log_file)
+                generated = generate_rvr_charts(log_file, charts_subdir=charts_subdir)
             except Exception:
                 logging.exception("Failed to generate %s charts for %s", normalized_type, log_file)
             else:

@@ -9,6 +9,7 @@
 import logging
 import os
 import time
+from pathlib import Path
 from typing import Any, List, Optional, Tuple
 
 import matplotlib.pyplot as plt
@@ -62,6 +63,31 @@ class TestResult():
         self._throughput_header: List[str] = self._build_throughput_header()
         self._headers: List[str] = self._build_header_row()
         self.init_rvr_result()
+
+    def ensure_log_file_prefix(self, test_type: str) -> None:
+        prefix = (test_type or "").strip().upper()
+        if not prefix:
+            return
+        log_file = getattr(self, "log_file", None)
+        if not log_file:
+            return
+        current_path = Path(log_file)
+        current_name_upper = current_path.name.upper()
+        if current_name_upper.startswith(prefix):
+            return
+        if current_path.name.startswith("Performance"):
+            new_name = prefix + current_path.name[len("Performance") :]
+        else:
+            new_name = f"{prefix}_{current_path.name}"
+        new_path = current_path.with_name(new_name)
+        try:
+            os.replace(current_path, new_path)
+        except FileNotFoundError:
+            return
+        except OSError as exc:
+            logging.warning("Failed to rename performance log %s -> %s: %s", current_path, new_path, exc)
+            return
+        self.log_file = str(new_path)
 
     def _build_throughput_header(self) -> List[str]:
         total_runs = self._repeat_times + 1

@@ -81,11 +81,17 @@ def _maybe_generate_project_report() -> None:
     result_file = Path(getattr(test_result, "log_file", "") or "")
     software_info = config.get("software_info") or {}
     hardware_info = config.get("hardware_info") or {}
-    software = _sanitize_filename_component(software_info.get("software_version")) or "NA"
-    driver = _sanitize_filename_component(software_info.get("driver_version")) or "NA"
-    hardware = _sanitize_filename_component(hardware_info.get("hardware_version")) or "NA"
+    project_raw = (
+        hardware_info.get("project_name")
+        or software_info.get("project_name")
+        or fpga_cfg.get("project_name")
+        or fpga_cfg.get("customer")
+        or "Project"
+    )
+    project_label = _sanitize_filename_component(project_raw) or "Project"
+    project_label = "_".join(part.capitalize() for part in project_label.split("_") if part) or "Project"
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"Project_WiFi_Report_{timestamp}_{software}-{driver}-{hardware}.xlsx"
+    filename = f"{project_label}_WiFi_{timestamp}.xlsx"
     output_path = logdir / filename
     try:
         generate_project_report(result_file, output_path, forced_test_type=forced_type)
