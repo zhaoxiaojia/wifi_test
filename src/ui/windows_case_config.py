@@ -1225,16 +1225,30 @@ class CaseConfigPage(CardWidget):
             combo.refresh_ports = _refresh_ports  # type: ignore[attr-defined]
             _refresh_ports(preserve_current=False)
 
-            original_show_popup = combo.showPopup
+            original_show_popup = getattr(combo, "showPopup", None)
+            if callable(original_show_popup):
 
-            def _show_popup() -> None:
-                """Refresh port list whenever the dropdown is opened."""
-                try:
-                    _refresh_ports()
-                finally:
-                    original_show_popup()
+                def _show_popup() -> None:
+                    """Refresh port list whenever the dropdown is opened."""
+                    try:
+                        _refresh_ports()
+                    finally:
+                        original_show_popup()
 
-            combo.showPopup = _show_popup  # type: ignore[method-assign]
+                combo.showPopup = _show_popup  # type: ignore[method-assign]
+            else:
+
+                class _PortPopupEventFilter(QObject):
+                    """Event filter ensuring USB ports refresh before combo opens."""
+
+                    def eventFilter(self, obj: QObject, event: QEvent) -> bool:  # type: ignore[override]
+                        if event.type() == QEvent.MouseButtonPress:
+                            _refresh_ports()
+                        return False
+
+                popup_filter = _PortPopupEventFilter(combo)
+                combo._port_popup_filter = popup_filter  # type: ignore[attr-defined]
+                combo.installEventFilter(popup_filter)
             return combo
 
         def _set_port_default(combo: ComboBox, value: str) -> None:
