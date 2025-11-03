@@ -1129,7 +1129,10 @@ class CaseConfigPage(CardWidget):
                 if value:
                     index = widget.findData(value)
                     if index < 0:
-                        index = widget.findText(value, Qt.MatchExactly)
+                        index = next(
+                            (i for i in range(widget.count()) if widget.itemText(i) == value),
+                            -1,
+                        )
                     if index < 0:
                         widget.addItem(value, value)
                         index = widget.findData(value)
@@ -1187,20 +1190,72 @@ class CaseConfigPage(CardWidget):
         intro.setWordWrap(True)
         layout.addWidget(intro)
 
-        available_ports = self._list_serial_ports()
-
         widgets: dict[str, QWidget] = {}
         section_controls: dict[str, tuple[QCheckBox, Sequence[QWidget]]] = {}
 
         def _build_port_combo(parent: QWidget) -> ComboBox:
             combo = ComboBox(parent)
+            combo.setMinimumWidth(220)
             combo.addItem("Select port", "")
-            for device, label in available_ports:
-                combo.addItem(label, device)
+
+            def _refresh_ports(preserve_current: bool = True) -> None:
+                """Reload available serial ports while optionally preserving selection."""
+                current_value = ""
+                if preserve_current:
+                    data = combo.currentData()
+                    if isinstance(data, str):
+                        current_value = data
+                combo.blockSignals(True)
+                try:
+                    combo.clear()
+                    combo.addItem("Select port", "")
+                    for device, label in self._list_serial_ports():
+                        combo.addItem(label, device)
+                    if current_value:
+                        index = combo.findData(current_value)
+                        if index < 0:
+                            combo.addItem(current_value, current_value)
+                            index = combo.findData(current_value)
+                        combo.setCurrentIndex(index if index >= 0 else 0)
+                    else:
+                        combo.setCurrentIndex(0)
+                finally:
+                    combo.blockSignals(False)
+
+            combo.refresh_ports = _refresh_ports  # type: ignore[attr-defined]
+            _refresh_ports(preserve_current=False)
+
+            original_show_popup = getattr(combo, "showPopup", None)
+            if callable(original_show_popup):
+
+                def _show_popup() -> None:
+                    """Refresh port list whenever the dropdown is opened."""
+                    try:
+                        _refresh_ports()
+                    finally:
+                        original_show_popup()
+
+                combo.showPopup = _show_popup  # type: ignore[method-assign]
+            else:
+
+                class _PortPopupEventFilter(QObject):
+                    """Event filter ensuring USB ports refresh before combo opens."""
+
+                    def eventFilter(self, obj: QObject, event: QEvent) -> bool:  # type: ignore[override]
+                        if event.type() == QEvent.MouseButtonPress:
+                            _refresh_ports()
+                        return False
+
+                popup_filter = _PortPopupEventFilter(combo)
+                combo._port_popup_filter = popup_filter  # type: ignore[attr-defined]
+                combo.installEventFilter(popup_filter)
             return combo
 
         def _set_port_default(combo: ComboBox, value: str) -> None:
             value = (value or "").strip()
+            refresh_ports = getattr(combo, "refresh_ports", None)
+            if callable(refresh_ports):
+                refresh_ports(preserve_current=False)
             if not value:
                 combo.setCurrentIndex(0 if combo.count() else -1)
                 return
@@ -1212,10 +1267,18 @@ class CaseConfigPage(CardWidget):
 
         def _set_mode_default(combo: ComboBox, value: str) -> None:
             target = (value or "NO").strip().upper() or "NO"
-            index = combo.findText(target, Qt.MatchExactly)
+            # ComboBoxBase.findText only supports the text argument, so we perform
+            # an explicit case-insensitive match to keep the previous behavior.
+            index = next(
+                (i for i in range(combo.count()) if combo.itemText(i).strip().upper() == target),
+                -1,
+            )
             if index < 0:
                 combo.addItem(target)
-                index = combo.findText(target, Qt.MatchExactly)
+                index = next(
+                    (i for i in range(combo.count()) if combo.itemText(i).strip().upper() == target),
+                    -1,
+                )
             combo.setCurrentIndex(index if index >= 0 else 0)
 
         ac_checkbox = QCheckBox("Enable AC cycle", group)
@@ -1241,6 +1304,7 @@ class CaseConfigPage(CardWidget):
 
         ac_mode_label = QLabel("Wiring mode", group)
         ac_mode_combo = ComboBox(group)
+        ac_mode_combo.setMinimumWidth(160)
         ac_mode_combo.addItems(["NO", "NC"])
 
         ac_ping_checkbox = QCheckBox("Ping after AC cycle", group)
@@ -1288,6 +1352,7 @@ class CaseConfigPage(CardWidget):
 
         str_mode_label = QLabel("Wiring mode", group)
         str_mode_combo = ComboBox(group)
+        str_mode_combo.setMinimumWidth(160)
         str_mode_combo.addItems(["NO", "NC"])
 
         str_ping_checkbox = QCheckBox("Ping after STR cycle", group)
