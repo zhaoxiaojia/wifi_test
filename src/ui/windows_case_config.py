@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Mapping, Optional, Sequence
+from typing import Any, Callable, Mapping, Optional, Sequence
 from src.tools.router_tool.router_factory import router_list, get_router
 from src.util.constants import (
     ANDROID_KERNEL_MAP,
@@ -52,6 +52,7 @@ from PyQt5.QtWidgets import (
     QStackedWidget,
     QListWidget,
     QListWidgetItem,
+    QSpinBox,
 )
 
 from qfluentwidgets import (
@@ -80,6 +81,18 @@ class EditableInfo:
     fields: set[str] = field(default_factory=set)
     enable_csv: bool = False
     enable_rvr_wifi: bool = False
+
+
+@dataclass
+class ScriptConfigEntry:
+    """Container for script-specific configuration widgets."""
+
+    group: QGroupBox
+    widgets: dict[str, QWidget]
+    field_keys: set[str]
+    section_controls: dict[str, tuple[QCheckBox, Sequence[QWidget]]]
+    case_key: str
+    case_path: str
 
 
 class TestFileFilterModel(QSortFilterProxyModel):
@@ -603,23 +616,33 @@ class CaseConfigPage(CardWidget):
         right.setSpacing(10)
         self._android_versions = list(DEFAULT_ANDROID_VERSION_CHOICES)
         self._kernel_versions = list(DEFAULT_KERNEL_VERSION_CHOICES)
-        self._step_labels = ["DUT Settings", "Execution Settings"]
-        self.step_view_widget = self._create_step_view()
+        self._right_layout = right
+        self._page_label_map: dict[str, str] = {
+            "dut": "DUT Settings",
+            "execution": "Execution Settings",
+            "stability": "Stability Settings",
+        }
+        self.step_view_widget = self._create_step_view([self._page_label_map["dut"]])
+        self.step_view_widget.setVisible(False)
         right.addWidget(self.step_view_widget)
 
         self.stack = QStackedWidget(self)
         right.addWidget(self.stack, 1)
 
-        self._dut_panel = ConfigGroupPanel(self)
-        self._other_panel = ConfigGroupPanel(self)
-        self._config_panels: tuple[ConfigGroupPanel, ConfigGroupPanel] = (
-            self._dut_panel,
-            self._other_panel,
-        )
+        self._page_panels: dict[str, ConfigGroupPanel] = {
+            "dut": ConfigGroupPanel(self),
+            "execution": ConfigGroupPanel(self),
+            "stability": ConfigGroupPanel(self),
+        }
+        self._dut_panel = self._page_panels["dut"]
+        self._execution_panel = self._page_panels["execution"]
+        self._stability_panel = self._page_panels["stability"]
+        self._page_widgets: dict[str, QWidget] = {}
         self._wizard_pages: list[QWidget] = []
         self._run_buttons: list[PushButton] = []
         self._run_locked = False
-        for panel in self._config_panels:
+        for key in ("dut", "execution", "stability"):
+            panel = self._page_panels[key]
             page = QWidget()
             page_layout = QVBoxLayout(page)
             page_layout.setContentsMargins(0, 0, 0, 0)
@@ -628,8 +651,15 @@ class CaseConfigPage(CardWidget):
             page_layout.addStretch(1)
             run_btn = self._create_run_button(page)
             page_layout.addWidget(run_btn)
-            self.stack.addWidget(page)
+            self._page_widgets[key] = page
             self._wizard_pages.append(page)
+        self._current_page_keys: list[str] = []
+        self._script_config_factories: dict[str, Callable[[str, str, Mapping[str, Any]], ScriptConfigEntry]] = {
+            "test/stability/test_str.py": self._create_test_str_config_entry,
+        }
+        self._script_groups: dict[str, ScriptConfigEntry] = {}
+        self._active_script_case: str | None = None
+        self._config_panels = tuple(self._page_panels[key] for key in ("dut", "execution", "stability"))
         self._sync_run_buttons_enabled()
         scroll_area.setWidget(container)
         self.splitter.addWidget(scroll_area)
@@ -644,7 +674,10 @@ class CaseConfigPage(CardWidget):
         self._dut_groups: dict[str, QWidget] = {}
         self._other_groups: dict[str, QWidget] = {}
         self.render_all_fields()
+        self._initialize_script_config_groups()
         self._build_wizard_pages()
+        self._set_available_pages(["dut"])
+        self._refresh_script_section_states()
         self.stack.currentChanged.connect(self._on_page_changed)
         self._request_rebalance_for_panels()
         self._on_page_changed(self.stack.currentIndex())
@@ -671,8 +704,10 @@ class CaseConfigPage(CardWidget):
         self._run_buttons.append(button)
         return button
 
-    def _create_step_view(self) -> QWidget:
-        labels = list(self._step_labels)
+    def _create_step_view(self, labels: Sequence[str]) -> QWidget:
+        labels = list(labels)
+        if not labels:
+            labels = [self._page_label_map["dut"]]
         if StepView is not None:
             try:
                 step_view = StepView(self)
@@ -878,7 +913,463 @@ class CaseConfigPage(CardWidget):
 
     def _build_wizard_pages(self) -> None:
         self._dut_panel.set_groups(list(self._dut_groups.values()))
-        self._other_panel.set_groups(list(self._other_groups.values()))
+        self._execution_panel.set_groups(self._compose_other_groups())
+
+    def _compose_other_groups(self) -> list[QWidget]:
+        return list(self._other_groups.values())
+
+    def _list_serial_ports(self) -> list[tuple[str, str]]:
+        ports: list[tuple[str, str]] = []
+        try:
+            from serial.tools import list_ports  # type: ignore
+        except Exception:
+            logging.debug("serial.tools.list_ports unavailable", exc_info=True)
+            return ports
+        try:
+            for info in list_ports.comports():
+                label = info.device
+                description = getattr(info, "description", "") or ""
+                if description and description != info.device:
+                    label = f"{info.device} ({description})"
+                ports.append((info.device, label))
+        except Exception as exc:
+            logging.debug("Failed to enumerate serial ports: %s", exc)
+            return []
+        return ports
+
+
+    def _refresh_step_view(self, page_keys: Sequence[str]) -> None:
+        labels = [self._page_label_map.get(key, key.title()) for key in page_keys]
+        if not labels:
+            labels = [self._page_label_map["dut"]]
+        new_view = self._create_step_view(labels)
+        old_view = getattr(self, "step_view_widget", None)
+        layout = getattr(self, "_right_layout", None)
+        if layout is not None:
+            if old_view is not None:
+                index = layout.indexOf(old_view)
+                if index < 0:
+                    index = 0
+                layout.insertWidget(index, new_view)
+                layout.removeWidget(old_view)
+                old_view.setParent(None)
+            else:
+                layout.insertWidget(0, new_view)
+        self.step_view_widget = new_view
+        self.step_view_widget.setVisible(len(page_keys) > 1)
+
+    def _set_available_pages(self, page_keys: Sequence[str]) -> None:
+        normalized: list[str] = []
+        for key in page_keys:
+            if key not in self._page_widgets:
+                continue
+            if key not in normalized:
+                normalized.append(key)
+        if "dut" not in normalized:
+            normalized.insert(0, "dut")
+        if normalized == getattr(self, "_current_page_keys", []):
+            return
+        current_widget = self.stack.currentWidget() if self.stack.count() else None
+        current_key: str | None = None
+        if current_widget is not None:
+            for key, widget in self._page_widgets.items():
+                if widget is current_widget:
+                    current_key = key
+                    break
+        while self.stack.count():
+            widget = self.stack.widget(0)
+            self.stack.removeWidget(widget)
+        for key in normalized:
+            self.stack.addWidget(self._page_widgets[key])
+        self._current_page_keys = normalized
+        self._refresh_step_view(normalized)
+        target_index = 0
+        if current_key in normalized:
+            target_index = normalized.index(current_key)
+        self.stack.setCurrentIndex(target_index)
+        self._update_step_indicator(target_index)
+        if hasattr(self, "step_view_widget") and self.step_view_widget is not None:
+            self.step_view_widget.setVisible(len(self._current_page_keys) > 1)
+        self._update_navigation_state()
+
+    def _determine_pages_for_case(self, case_path: str, info: EditableInfo) -> list[str]:
+
+        if not case_path:
+            return ["dut"]
+        keys = ["dut"]
+        if self._is_performance_case(case_path) or info.enable_csv:
+            if "execution" not in keys:
+                keys.append("execution")
+        else:
+            case_key = self._script_case_key(case_path)
+            if case_key in self._script_groups:
+                keys.append("stability")
+        return keys
+
+    def _script_case_key(self, case_path: str | Path) -> str:
+        if not case_path:
+            return ""
+        path_obj = case_path if isinstance(case_path, Path) else Path(case_path)
+        if path_obj.is_absolute():
+            try:
+                path_obj = path_obj.resolve().relative_to(self._get_application_base())
+            except ValueError:
+                path_obj = path_obj.resolve()
+        normalized = path_obj.as_posix()
+        if not normalized.startswith("test/"):
+            normalized = self._display_to_case_path(normalized)
+        return normalized.replace('/', '__').replace('.', '_').lower()
+
+    def _script_field_key(self, case_key: str, *parts: str) -> str:
+        suffix = ".".join(parts)
+        return f"script_params.{case_key}.{suffix}"
+
+    def _initialize_script_config_groups(self) -> None:
+        script_section = self.config.get("script_params")
+        if not isinstance(script_section, dict):
+            script_section = {}
+            self.config["script_params"] = script_section
+        self._script_groups.clear()
+        for case_path, factory in self._script_config_factories.items():
+            case_key = self._script_case_key(case_path)
+            entry_config = self._ensure_script_case_defaults(case_key, case_path)
+            entry = factory(case_key, case_path, entry_config)
+            entry.group.setVisible(False)
+            self._script_groups[case_key] = entry
+            self.field_widgets.update(entry.widgets)
+        self._stability_panel.set_groups([])
+
+    def _ensure_script_case_defaults(self, case_key: str, case_path: str) -> dict[str, Any]:
+        script_section = self.config.setdefault("script_params", {})
+        entry = script_section.get(case_key)
+        if not isinstance(entry, dict):
+            entry = {}
+        entry["case_path"] = self._display_to_case_path(case_path)
+
+        def _ensure_branch(name: str) -> None:
+            branch = entry.get(name)
+            if not isinstance(branch, dict):
+                branch = {}
+            branch.setdefault("enabled", False)
+            branch.setdefault("on_duration", 0)
+            branch.setdefault("off_duration", 0)
+            branch.setdefault("port", "")
+            branch.setdefault("mode", "NO")
+            branch.setdefault("ping", False)
+            entry[name] = branch
+
+        _ensure_branch("ac")
+        _ensure_branch("str")
+        script_section[case_key] = entry
+        return entry
+
+    def _update_script_config_ui(self, case_path: str | Path) -> None:
+        case_key = self._script_case_key(case_path)
+        changed = False
+        active_entry: ScriptConfigEntry | None = None
+        if case_key not in self._script_groups:
+            if self._active_script_case is not None:
+                self._active_script_case = None
+                for entry in self._script_groups.values():
+                    if entry.group.isVisible():
+                        entry.group.setVisible(False)
+                self._stability_panel.set_groups([])
+                self._request_rebalance_for_panels(self._stability_panel)
+            self._refresh_script_section_states()
+            return
+        if self._active_script_case != case_key:
+            self._active_script_case = case_key
+            changed = True
+        for key, entry in self._script_groups.items():
+            visible = key == case_key
+            if entry.group.isVisible() != visible:
+                entry.group.setVisible(visible)
+                changed = True
+            if visible:
+                data = self._ensure_script_case_defaults(key, entry.case_path)
+                self._load_script_config_into_widgets(entry, data)
+                active_entry = entry
+        if active_entry is not None:
+            self._stability_panel.set_groups([active_entry.group])
+        else:
+            self._stability_panel.set_groups([])
+        self._request_rebalance_for_panels(self._stability_panel)
+        self._refresh_script_section_states()
+
+    def _load_script_config_into_widgets(
+        self,
+        entry: ScriptConfigEntry,
+        data: Mapping[str, Any] | None,
+    ) -> None:
+        data = data or {}
+        ac_cfg = data.get("ac", {})
+        str_cfg = data.get("str", {})
+
+        def _set_spin(key: str, raw_value: Any) -> None:
+            widget = entry.widgets.get(key)
+            if isinstance(widget, QSpinBox):
+                try:
+                    value = int(raw_value)
+                except (TypeError, ValueError):
+                    value = 0
+                with QSignalBlocker(widget):
+                    widget.setValue(max(0, value))
+
+        def _set_checkbox(key: str, raw_value: Any) -> None:
+            widget = entry.widgets.get(key)
+            if isinstance(widget, QCheckBox):
+                widget.setChecked(bool(raw_value))
+
+        def _set_combo(key: str, raw_value: Any) -> None:
+            widget = entry.widgets.get(key)
+            if not isinstance(widget, ComboBox):
+                return
+            value = str(raw_value or "").strip()
+            with QSignalBlocker(widget):
+                if value:
+                    index = widget.findData(value)
+                    if index < 0:
+                        index = widget.findText(value, Qt.MatchExactly)
+                    if index < 0:
+                        widget.addItem(value, value)
+                        index = widget.findData(value)
+                    widget.setCurrentIndex(index if index >= 0 else max(widget.count() - 1, 0))
+                else:
+                    widget.setCurrentIndex(0 if widget.count() else -1)
+        case_key = entry.case_key
+        _set_checkbox(self._script_field_key(case_key, "ac", "enabled"), ac_cfg.get("enabled"))
+        _set_spin(self._script_field_key(case_key, "ac", "on_duration"), ac_cfg.get("on_duration"))
+        _set_spin(self._script_field_key(case_key, "ac", "off_duration"), ac_cfg.get("off_duration"))
+        _set_combo(self._script_field_key(case_key, "ac", "port"), ac_cfg.get("port"))
+        _set_combo(self._script_field_key(case_key, "ac", "mode"), ac_cfg.get("mode"))
+        _set_checkbox(self._script_field_key(case_key, "ac", "ping"), ac_cfg.get("ping"))
+
+        _set_checkbox(self._script_field_key(case_key, "str", "enabled"), str_cfg.get("enabled"))
+        _set_spin(self._script_field_key(case_key, "str", "on_duration"), str_cfg.get("on_duration"))
+        _set_spin(self._script_field_key(case_key, "str", "off_duration"), str_cfg.get("off_duration"))
+        _set_combo(self._script_field_key(case_key, "str", "port"), str_cfg.get("port"))
+        _set_combo(self._script_field_key(case_key, "str", "mode"), str_cfg.get("mode"))
+        _set_checkbox(self._script_field_key(case_key, "str", "ping"), str_cfg.get("ping"))
+
+        for checkbox, controls in entry.section_controls.values():
+            self._set_section_controls_state(controls, checkbox.isChecked())
+    @staticmethod
+    def _set_section_controls_state(controls: Sequence[QWidget], enabled: bool) -> None:
+        for widget in controls:
+            widget.setEnabled(enabled)
+
+    def _refresh_script_section_states(self) -> None:
+        for entry in self._script_groups.values():
+            for checkbox, controls in entry.section_controls.values():
+                self._set_section_controls_state(controls, checkbox.isEnabled() and checkbox.isChecked())
+
+    def _bind_script_section(self, checkbox: QCheckBox, controls: Sequence[QWidget]) -> None:
+        def _apply(checked: bool) -> None:
+            self._set_section_controls_state(controls, checked)
+
+        checkbox.toggled.connect(_apply)
+        _apply(checkbox.isChecked())
+
+    def _create_test_str_config_entry(
+        self,
+        case_key: str,
+        case_path: str,
+        data: Mapping[str, Any],
+    ) -> ScriptConfigEntry:
+        group = QGroupBox("test_str.py Stability", self)
+        apply_theme(group)
+        apply_groupbox_style(group)
+        layout = QVBoxLayout(group)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(8)
+
+        intro = QLabel("Configure AC/STR cycling parameters for test_str.py.", group)
+        intro.setWordWrap(True)
+        layout.addWidget(intro)
+
+        available_ports = self._list_serial_ports()
+
+        widgets: dict[str, QWidget] = {}
+        section_controls: dict[str, tuple[QCheckBox, Sequence[QWidget]]] = {}
+
+        def _build_port_combo(parent: QWidget) -> ComboBox:
+            combo = ComboBox(parent)
+            combo.addItem("Select port", "")
+            for device, label in available_ports:
+                combo.addItem(label, device)
+            return combo
+
+        def _set_port_default(combo: ComboBox, value: str) -> None:
+            value = (value or "").strip()
+            if not value:
+                combo.setCurrentIndex(0 if combo.count() else -1)
+                return
+            index = combo.findData(value)
+            if index < 0:
+                combo.addItem(value, value)
+                index = combo.findData(value)
+            combo.setCurrentIndex(index if index >= 0 else 0)
+
+        def _set_mode_default(combo: ComboBox, value: str) -> None:
+            target = (value or "NO").strip().upper() or "NO"
+            index = combo.findText(target, Qt.MatchExactly)
+            if index < 0:
+                combo.addItem(target)
+                index = combo.findText(target, Qt.MatchExactly)
+            combo.setCurrentIndex(index if index >= 0 else 0)
+
+        ac_checkbox = QCheckBox("Enable AC cycle", group)
+        layout.addWidget(ac_checkbox)
+
+        ac_grid = QGridLayout()
+        ac_grid.setContentsMargins(24, 0, 0, 0)
+        ac_grid.setHorizontalSpacing(12)
+        ac_grid.setVerticalSpacing(6)
+
+        ac_on_label = QLabel("AC on duration (s)", group)
+        ac_on_spin = QSpinBox(group)
+        ac_on_spin.setRange(0, 24 * 60 * 60)
+        ac_on_spin.setSuffix(" s")
+
+        ac_off_label = QLabel("AC off duration (s)", group)
+        ac_off_spin = QSpinBox(group)
+        ac_off_spin.setRange(0, 24 * 60 * 60)
+        ac_off_spin.setSuffix(" s")
+
+        ac_port_label = QLabel("USB relay port", group)
+        ac_port_combo = _build_port_combo(group)
+
+        ac_mode_label = QLabel("Wiring mode", group)
+        ac_mode_combo = ComboBox(group)
+        ac_mode_combo.addItems(["NO", "NC"])
+
+        ac_ping_checkbox = QCheckBox("Ping after AC cycle", group)
+
+        ac_grid.addWidget(ac_on_label, 0, 0)
+        ac_grid.addWidget(ac_on_spin, 0, 1)
+        ac_grid.addWidget(ac_off_label, 1, 0)
+        ac_grid.addWidget(ac_off_spin, 1, 1)
+        ac_grid.addWidget(ac_port_label, 2, 0)
+        ac_grid.addWidget(ac_port_combo, 2, 1)
+        ac_grid.addWidget(ac_mode_label, 3, 0)
+        ac_grid.addWidget(ac_mode_combo, 3, 1)
+        ac_grid.addWidget(ac_ping_checkbox, 4, 0, 1, 2)
+        layout.addLayout(ac_grid)
+
+        self._bind_script_section(
+            ac_checkbox,
+            (ac_on_spin, ac_off_spin, ac_port_combo, ac_mode_combo, ac_ping_checkbox),
+        )
+        section_controls["ac"] = (
+            ac_checkbox,
+            (ac_on_spin, ac_off_spin, ac_port_combo, ac_mode_combo, ac_ping_checkbox),
+        )
+
+        str_checkbox = QCheckBox("Enable STR cycle", group)
+        layout.addWidget(str_checkbox)
+
+        str_grid = QGridLayout()
+        str_grid.setContentsMargins(24, 0, 0, 0)
+        str_grid.setHorizontalSpacing(12)
+        str_grid.setVerticalSpacing(6)
+
+        str_on_label = QLabel("STR on duration (s)", group)
+        str_on_spin = QSpinBox(group)
+        str_on_spin.setRange(0, 24 * 60 * 60)
+        str_on_spin.setSuffix(" s")
+
+        str_off_label = QLabel("STR off duration (s)", group)
+        str_off_spin = QSpinBox(group)
+        str_off_spin.setRange(0, 24 * 60 * 60)
+        str_off_spin.setSuffix(" s")
+
+        str_port_label = QLabel("USB relay port", group)
+        str_port_combo = _build_port_combo(group)
+
+        str_mode_label = QLabel("Wiring mode", group)
+        str_mode_combo = ComboBox(group)
+        str_mode_combo.addItems(["NO", "NC"])
+
+        str_ping_checkbox = QCheckBox("Ping after STR cycle", group)
+
+        str_grid.addWidget(str_on_label, 0, 0)
+        str_grid.addWidget(str_on_spin, 0, 1)
+        str_grid.addWidget(str_off_label, 1, 0)
+        str_grid.addWidget(str_off_spin, 1, 1)
+        str_grid.addWidget(str_port_label, 2, 0)
+        str_grid.addWidget(str_port_combo, 2, 1)
+        str_grid.addWidget(str_mode_label, 3, 0)
+        str_grid.addWidget(str_mode_combo, 3, 1)
+        str_grid.addWidget(str_ping_checkbox, 4, 0, 1, 2)
+        layout.addLayout(str_grid)
+
+        self._bind_script_section(
+            str_checkbox,
+            (str_on_spin, str_off_spin, str_port_combo, str_mode_combo, str_ping_checkbox),
+        )
+        section_controls["str"] = (
+            str_checkbox,
+            (str_on_spin, str_off_spin, str_port_combo, str_mode_combo, str_ping_checkbox),
+        )
+
+        layout.addStretch(1)
+
+        ac_cfg = data.get("ac", {})
+        str_cfg = data.get("str", {})
+
+        ac_checkbox.setChecked(bool(ac_cfg.get("enabled")))
+        ac_on_spin.setValue(int(ac_cfg.get("on_duration") or 0))
+        ac_off_spin.setValue(int(ac_cfg.get("off_duration") or 0))
+        ac_ping_checkbox.setChecked(bool(ac_cfg.get("ping")))
+        ac_port = str(ac_cfg.get("port", "") or "").strip()
+        ac_mode = str(ac_cfg.get("mode", "") or "").strip().upper() or "NO"
+        _set_port_default(ac_port_combo, ac_port)
+        _set_mode_default(ac_mode_combo, ac_mode)
+
+        str_checkbox.setChecked(bool(str_cfg.get("enabled")))
+        str_on_spin.setValue(int(str_cfg.get("on_duration") or 0))
+        str_off_spin.setValue(int(str_cfg.get("off_duration") or 0))
+        str_ping_checkbox.setChecked(bool(str_cfg.get("ping")))
+        str_port = str(str_cfg.get("port", "") or "").strip()
+        str_mode = str(str_cfg.get("mode", "") or "").strip().upper() or "NO"
+        _set_port_default(str_port_combo, str_port)
+        _set_mode_default(str_mode_combo, str_mode)
+
+        widgets[self._script_field_key(case_key, "ac", "enabled")] = ac_checkbox
+        widgets[self._script_field_key(case_key, "ac", "on_duration")] = ac_on_spin
+        widgets[self._script_field_key(case_key, "ac", "off_duration")] = ac_off_spin
+        widgets[self._script_field_key(case_key, "ac", "port")] = ac_port_combo
+        widgets[self._script_field_key(case_key, "ac", "mode")] = ac_mode_combo
+        widgets[self._script_field_key(case_key, "ac", "ping")] = ac_ping_checkbox
+
+        widgets[self._script_field_key(case_key, "str", "enabled")] = str_checkbox
+        widgets[self._script_field_key(case_key, "str", "on_duration")] = str_on_spin
+        widgets[self._script_field_key(case_key, "str", "off_duration")] = str_off_spin
+        widgets[self._script_field_key(case_key, "str", "port")] = str_port_combo
+        widgets[self._script_field_key(case_key, "str", "mode")] = str_mode_combo
+        widgets[self._script_field_key(case_key, "str", "ping")] = str_ping_checkbox
+
+        field_keys = set(widgets.keys())
+
+        return ScriptConfigEntry(
+            group=group,
+            widgets=widgets,
+            field_keys=field_keys,
+            section_controls=section_controls,
+            case_key=case_key,
+            case_path=case_path,
+        )
+
+        if not case_path:
+            return ["dut"]
+        keys = ["dut"]
+        if self._is_performance_case(case_path) or info.enable_csv:
+            keys.append("execution")
+        else:
+            case_key = self._script_case_key(case_path)
+            if case_key in self._script_groups:
+                keys.append("stability")
+        return keys
 
     def _register_group(self, key: str, group: QWidget, is_dut: bool) -> None:
         if is_dut:
@@ -1231,8 +1722,16 @@ class CaseConfigPage(CardWidget):
             elif isinstance(widget, RfStepSegmentsWidget):
                 ref[leaf] = widget.serialize()
             elif isinstance(widget, ComboBox):
-                text = widget.currentText()
-                ref[leaf] = True if text == 'True' else False if text == 'False' else text
+                data = widget.currentData()
+                if data not in (None, "", widget.currentText()):
+                    ref[leaf] = data
+                else:
+                    text = widget.currentText().strip()
+                    if text.lower() == 'select port':
+                        text = ''
+                    ref[leaf] = True if text == 'True' else False if text == 'False' else text
+            elif isinstance(widget, QSpinBox):
+                ref[leaf] = widget.value()
             elif isinstance(widget, QCheckBox):
                 ref[leaf] = widget.isChecked()
         if hasattr(self, "_fpga_details"):
@@ -1571,14 +2070,14 @@ class CaseConfigPage(CardWidget):
             self.rack_group.setVisible(model_str == "RADIORACK-4-220")
         if hasattr(self, "lda_group"):
             self.lda_group.setVisible(model_str == "LDA-908V-8")
-        self._request_rebalance_for_panels(self._other_panel)
+        self._request_rebalance_for_panels(self._execution_panel)
 
     # 添加到类里：响应 Tool 下拉，切换子参数可见性
     def on_rvr_tool_changed(self, tool: str):
         """选择 iperf / ixchariot 时，动态显示对应子参数"""
         self.rvr_iperf_group.setVisible(tool == "iperf")
         self.rvr_ix_group.setVisible(tool == "ixchariot")
-        self._request_rebalance_for_panels(self._other_panel)
+        self._request_rebalance_for_panels(self._execution_panel)
 
     def on_serial_enabled_changed(self, text: str):
         self.serial_cfg_group.setVisible(text == "True")
@@ -1727,6 +2226,8 @@ class CaseConfigPage(CardWidget):
             self.config.setdefault("android_system", {})["kernel_version"] = telnet_cfg.pop("kernel_version")
         self.config["fpga"] = self._normalize_fpga_section(self.config.get("fpga"))
         for i, (key, value) in enumerate(self.config.items()):
+            if key == "script_params":
+                continue
             if key == "software_info":
                 data = value if isinstance(value, dict) else {}
                 group = QGroupBox("Software Info")
@@ -2449,6 +2950,10 @@ class CaseConfigPage(CardWidget):
                 "rf_solution.LDA-908V-8.ip_address",
                 "rf_solution.LDA-908V-8.channels",
             }
+        case_key = self._script_case_key(case_path)
+        entry = self._script_groups.get(case_key)
+        if entry is not None:
+            info.fields |= entry.field_keys
         # 如果你需要所有字段都可编辑，直接 return EditableInfo(set(self.field_widgets.keys()), True, True)
         return info
 
@@ -2493,12 +2998,14 @@ class CaseConfigPage(CardWidget):
         self.setUpdatesEnabled(False)  # 暂停全局重绘
 
         try:
+            self._update_script_config_ui(case_path)
             info = self._compute_editable_info(case_path)
             logging.debug("get_editable_fields enable_csv=%s", info.enable_csv)
-            # 若 csv 下拉框尚未创建，则视为不支持 CSV 功能
             if info.enable_csv and not hasattr(self, "csv_combo"):
                 info.enable_csv = False
             self._apply_editable_info(info)
+            page_keys = self._determine_pages_for_case(case_path, info)
+            self._set_available_pages(page_keys)
         finally:
             # ---------- 刷新结束 ----------
             self.setUpdatesEnabled(True)
@@ -2540,6 +3047,7 @@ class CaseConfigPage(CardWidget):
                     and "connect_type.third_party.wait_seconds" in editable_fields
                 )
                 self.on_third_party_toggled(self.third_party_checkbox.isChecked(), allow_wait)
+            self._refresh_script_section_states()
         finally:
             self.setUpdatesEnabled(True)
             self.update()

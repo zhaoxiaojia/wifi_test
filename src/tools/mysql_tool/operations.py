@@ -14,7 +14,7 @@ from .schema import (
     ensure_report_tables,
     read_csv_rows,
 )
-from src.util.constants import WIFI_PRODUCT_PROJECT_MAP
+from src.util.constants import WIFI_PRODUCT_PROJECT_MAP, get_debug_flags
 
 __all__ = [
     "PerformanceTableManager",
@@ -114,6 +114,18 @@ def _normalize_standard_token(value: Any) -> Optional[str]:
         if candidate in _ALLOWED_STANDARDS:
             return candidate
     return None
+
+
+def _normalize_str_token(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _normalize_lower_token(value: Any) -> Optional[str]:
+    text = _normalize_str_token(value)
+    return text.lower() if text else None
 
 
 def _normalize_angle_token(value: Any) -> Optional[float]:
@@ -624,8 +636,26 @@ def _build_dut_payload(config: Mapping[str, Any]) -> Dict[str, Any]:
     software = _extract_first(config, "software_info") or _extract_first(config, "software")
     hardware = _extract_first(config, "hardware_info") or _extract_first(config, "hardware")
     android = _extract_first(config, "android_system") or _extract_first(config, "android")
-    connect = _extract_first(config, "connect_type") or {}
+    connect_section = _extract_first(config, "connect_type")
+    connect = connect_section if isinstance(connect_section, Mapping) else {}
     wifi_details = _resolve_wifi_product_details(config.get("fpga"))
+    connect_type_value = _normalize_str_token(connect.get("type"))
+    normalized_connect_type = _normalize_lower_token(connect_type_value)
+
+    adb_device: Optional[str] = None
+    telnet_ip: Optional[str] = None
+
+    if normalized_connect_type == "adb":
+        adb_device = _normalize_str_token(_extract_first(connect, "adb", "device"))
+    elif normalized_connect_type == "telnet":
+        telnet_ip = _normalize_str_token(_extract_first(connect, "telnet", "ip"))
+    else:
+        adb_candidate = _normalize_str_token(_extract_first(connect, "adb", "device"))
+        telnet_candidate = _normalize_str_token(_extract_first(connect, "telnet", "ip"))
+        if adb_candidate and not telnet_candidate:
+            adb_device = adb_candidate
+        elif telnet_candidate and not adb_candidate:
+            telnet_ip = telnet_candidate
 
     return {
         "software_version": _extract_first(software, "software_version"),
@@ -633,9 +663,9 @@ def _build_dut_payload(config: Mapping[str, Any]) -> Dict[str, Any]:
         "hardware_version": _extract_first(hardware, "hardware_version"),
         "android_version": _extract_first(android, "version"),
         "kernel_version": _extract_first(android, "kernel_version"),
-        "connect_type": connect.get("type") if isinstance(connect, Mapping) else None,
-        "adb_device": _extract_first(connect, "adb", "device"),
-        "telnet_ip": _extract_first(connect, "telnet", "ip"),
+        "connect_type": connect_type_value,
+        "adb_device": adb_device,
+        "telnet_ip": telnet_ip,
         "product_line": wifi_details.get("product_line"),
         "project": wifi_details.get("project"),
         "main_chip": wifi_details.get("main_chip"),
@@ -645,43 +675,54 @@ def _build_dut_payload(config: Mapping[str, Any]) -> Dict[str, Any]:
 
 
 def _build_execution_payload(config: Mapping[str, Any]) -> Dict[str, Any]:
-    router = _extract_first(config, "router") or {}
+    router_section = _extract_first(config, "router")
+    router = router_section if isinstance(router_section, Mapping) else {}
     rf_solution = config.get("rf_solution") if isinstance(config, Mapping) else {}
     corner_cfg = config.get("corner_angle") if isinstance(config, Mapping) else {}
     lab_info = config.get("lab") if isinstance(config, Mapping) else {}
-    case_path = (
+    case_path = _normalize_str_token(
         config.get("case_path")
         or config.get("test_case")
         or config.get("text_case")
         or config.get("testcase")
     )
-    if isinstance(rf_solution, Mapping):
-        rf_model = str(rf_solution.get("model") or "").strip() or None
+    flags = get_debug_flags(config=config) if isinstance(config, Mapping) else None
+    skip_router = bool(getattr(flags, "skip_router", False))
+    skip_corner_rf = bool(getattr(flags, "skip_corner_rf", False))
+
+    if isinstance(rf_solution, Mapping) and not skip_corner_rf:
+        rf_model = _normalize_str_token(rf_solution.get("model"))
     else:
         rf_model = None
-    if isinstance(corner_cfg, Mapping):
-        corner_model = str(corner_cfg.get("model") or "").strip() or None
+    if isinstance(corner_cfg, Mapping) and not skip_corner_rf:
+        corner_model = _normalize_str_token(corner_cfg.get("model"))
     else:
         corner_model = None
+    if skip_router:
+        router_name = None
+        router_address = None
+    else:
+        router_name = _normalize_str_token(router.get("name"))
+        router_address = _normalize_str_token(router.get("address"))
     lab_name = None
     if isinstance(config, Mapping):
         lab_name = config.get("lab_name")
     if lab_name is None and isinstance(lab_info, Mapping):
         lab_name_value = lab_info.get("name")
         if isinstance(lab_name_value, str):
-            lab_name = lab_name_value.strip() or None
+            lab_name = _normalize_str_token(lab_name_value)
         else:
             lab_name = None
     elif isinstance(lab_name, str):
-        lab_name = lab_name.strip() or None
+        lab_name = _normalize_str_token(lab_name)
     else:
         lab_name = None
 
     return {
         "case_path": case_path,
         "case_root": None,  # derive later inside sync_config
-        "router_name": router.get("name"),
-        "router_address": router.get("address"),
+        "router_name": router_name,
+        "router_address": router_address,
         "rf_model": rf_model,
         "corner_model": corner_model,
         "lab_name": lab_name,
@@ -786,7 +827,8 @@ def sync_test_result_to_db(
             )
         else:
             try:
-                generated = generate_rvr_charts(file_path)
+                charts_subdir = 'rvo_charts' if normalized_data_type == 'RVO' else 'rvr_charts'
+                generated = generate_rvr_charts(file_path, charts_subdir=charts_subdir)
             except Exception:
                 logging.exception(
                     "sync_test_result_to_db: failed to auto-generate %s charts for %s",

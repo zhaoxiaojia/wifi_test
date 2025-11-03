@@ -303,6 +303,8 @@ def setup_rvo_case(request, setup_router):
 def test_rvo(setup_rvo_case, performance_sync_manager):
     connect_status, router_info, corner_angle, attenuation_db, rssi_num, profile = setup_rvo_case
     with scenario_group(router_info):
+        if hasattr(pytest.testResult, "ensure_log_file_prefix"):
+            pytest.testResult.ensure_log_file_prefix("RVO")
         if not connect_status:
             logging.info("Can't connect wifi ,input 0")
             return

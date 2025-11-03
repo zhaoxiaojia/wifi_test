@@ -23,6 +23,10 @@ from src.util.rvr_chart_logic import RvrChartLogic
 class PerformanceRvrChartGenerator(RvrChartLogic):
     """Generate RVR/RVO summary charts for performance test results."""
 
+    def __init__(self, charts_subdir: str | None = None) -> None:
+        super().__init__()
+        self._charts_subdir = charts_subdir or "rvr_charts"
+
     def generate(self, path: Path) -> List[Path]:
         """Build charts for *path* and return the saved image paths."""
         path = path.resolve()
@@ -30,7 +34,7 @@ class PerformanceRvrChartGenerator(RvrChartLogic):
             logging.warning("RVR result file not found: %s", path)
             return []
         df = self._load_rvr_dataframe(path)
-        charts_dir = path.parent / "rvr_charts"
+        charts_dir = path.parent / self._charts_subdir
         charts_dir.mkdir(exist_ok=True)
         if df.empty:
             inferred = self._infer_test_type_from_path(path)
@@ -272,7 +276,7 @@ class PerformanceRvrChartGenerator(RvrChartLogic):
             plt.close(fig)
 
 
-def generate_rvr_charts(result_file: Path | str) -> List[Path]:
+def generate_rvr_charts(result_file: Path | str, *, charts_subdir: str | None = None) -> List[Path]:
     """Convenience wrapper to build charts for *result_file*."""
-    generator = PerformanceRvrChartGenerator()
+    generator = PerformanceRvrChartGenerator(charts_subdir=charts_subdir)
     return generator.generate(Path(result_file))
