@@ -1129,7 +1129,10 @@ class CaseConfigPage(CardWidget):
                 if value:
                     index = widget.findData(value)
                     if index < 0:
-                        index = widget.findText(value, Qt.MatchExactly)
+                        index = next(
+                            (i for i in range(widget.count()) if widget.itemText(i) == value),
+                            -1,
+                        )
                     if index < 0:
                         widget.addItem(value, value)
                         index = widget.findData(value)
@@ -1212,10 +1215,18 @@ class CaseConfigPage(CardWidget):
 
         def _set_mode_default(combo: ComboBox, value: str) -> None:
             target = (value or "NO").strip().upper() or "NO"
-            index = combo.findText(target, Qt.MatchExactly)
+            # ComboBoxBase.findText only supports the text argument, so we perform
+            # an explicit case-insensitive match to keep the previous behavior.
+            index = next(
+                (i for i in range(combo.count()) if combo.itemText(i).strip().upper() == target),
+                -1,
+            )
             if index < 0:
                 combo.addItem(target)
-                index = combo.findText(target, Qt.MatchExactly)
+                index = next(
+                    (i for i in range(combo.count()) if combo.itemText(i).strip().upper() == target),
+                    -1,
+                )
             combo.setCurrentIndex(index if index >= 0 else 0)
 
         ac_checkbox = QCheckBox("Enable AC cycle", group)
