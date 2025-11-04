@@ -631,6 +631,7 @@ class CaseConfigPage(CardWidget):
         self._refreshing = False
         self._pending_path: str | None = None
         self.field_widgets: dict[str, QWidget] = {}
+        self._stability_conditions_group: QGroupBox | None = None
         self.router_obj = None
         self.selected_csv_path: str | None = None
         self._enable_rvr_wifi: bool = False
@@ -1087,7 +1088,7 @@ class CaseConfigPage(CardWidget):
             entry.group.setVisible(False)
             self._script_groups[case_key] = entry
             self.field_widgets.update(entry.widgets)
-        self._stability_panel.set_groups([])
+        self._stability_panel.set_groups(self._compose_stability_groups(None))
 
     def _ensure_script_case_defaults(self, case_key: str, case_path: str) -> dict[str, Any]:
         script_section = self.config.setdefault("script_params", {})
@@ -1140,7 +1141,7 @@ class CaseConfigPage(CardWidget):
                 self._load_script_config_into_widgets(entry, data)
                 active_entry = entry
         if active_entry is not None:
-            self._stability_panel.set_groups([active_entry.group])
+            self._stability_panel.set_groups(self._compose_stability_groups(active_entry))
         else:
             self._stability_panel.set_groups([])
         self._request_rebalance_for_panels(self._stability_panel)
@@ -1699,6 +1700,47 @@ class CaseConfigPage(CardWidget):
 
         return normalized
 
+    def _normalize_stability_conditions(self, raw_value: Any) -> dict[str, int | str]:
+        """Normalize global stability stress settings from the persisted config.
+
+        Args:
+            raw_value: Raw mapping loaded from the configuration file.
+
+        Returns:
+            A dictionary with sanitized ``mode``, ``loops`` and ``duration_minutes``.
+        """
+
+        defaults = {"mode": "loops", "loops": 1, "duration_minutes": 5}
+        if isinstance(raw_value, Mapping):
+            normalized = dict(raw_value)
+        else:
+            normalized = {}
+
+        mode_text = str(normalized.get("mode", defaults["mode"]))
+        mode_text = mode_text.strip().lower()
+        if mode_text not in {"loops", "duration"}:
+            mode_text = "loops"
+
+        def _coerce_positive_int(value: Any, fallback: int, upper_bound: int) -> int:
+            """Convert ``value`` to a bounded positive integer or ``fallback``."""
+
+            try:
+                number = int(value)
+            except (TypeError, ValueError):
+                number = fallback
+            if number <= 0:
+                number = fallback
+            return min(number, upper_bound)
+
+        loops = _coerce_positive_int(normalized.get("loops"), defaults["loops"], 999_999)
+        duration = _coerce_positive_int(
+            normalized.get("duration_minutes"),
+            defaults["duration_minutes"],
+            24 * 60,
+        )
+
+        return {"mode": mode_text, "loops": loops, "duration_minutes": duration}
+
     def _refresh_fpga_product_lines(
         self,
         customer: str,
@@ -2020,6 +2062,30 @@ class CaseConfigPage(CardWidget):
         except Exception as e:
             logging.error("_is_performance_case exception: %s", e)
             return False
+
+    def _is_stability_case(self, case_path: str | Path) -> bool:
+        """Return True when the case resides under ``test/stability``."""
+
+        if not case_path:
+            return False
+        try:
+            path_obj = case_path if isinstance(case_path, Path) else Path(case_path)
+        except (TypeError, ValueError):
+            return False
+        try:
+            resolved = path_obj.resolve()
+        except OSError:
+            resolved = path_obj
+        candidates = [path_obj, resolved]
+        for candidate in candidates:
+            normalized = candidate.as_posix().replace("\\", "/")
+            segments = [seg.lower() for seg in normalized.split("/") if seg]
+            for idx in range(len(segments) - 1):
+                if segments[idx] == "test" and segments[idx + 1] == "stability":
+                    return True
+            if normalized.lower().startswith("test/stability/"):
+                return True
+        return False
 
     def _init_case_tree(self, root_dir: Path) -> None:
         self.fs_model = QFileSystemModel(self.case_tree)
@@ -2391,8 +2457,13 @@ class CaseConfigPage(CardWidget):
         if isinstance(linux_cfg, dict) and "kernel_version" in linux_cfg:
             self.config.setdefault("android_system", {})["kernel_version"] = linux_cfg.pop("kernel_version")
         self.config["fpga"] = self._normalize_fpga_section(self.config.get("fpga"))
+        self.config["stability_conditions"] = self._normalize_stability_conditions(
+            self.config.get("stability_conditions")
+        )
         for i, (key, value) in enumerate(self.config.items()):
             if key == "script_params":
+                continue
+            if key == "stability_conditions":
                 continue
             if key == "software_info":
                 data = value if isinstance(value, dict) else {}
@@ -2935,6 +3006,10 @@ class CaseConfigPage(CardWidget):
             self._register_group(key, group, self._is_dut_key(key))
             self.field_widgets[key] = edit
 
+        self._stability_conditions_group = self._build_stability_conditions_group(
+            self.config["stability_conditions"]
+        )
+
     def _ensure_corner_inputs_exclusive(self, source: str | None) -> None:
         if not hasattr(self, "corner_static_db_edit") or not hasattr(self, "corner_target_rssi_edit"):
             return
@@ -2955,6 +3030,117 @@ class CaseConfigPage(CardWidget):
 
         with QSignalBlocker(cleared):
             cleared.clear()
+
+    def _build_stability_conditions_group(
+        self, data: Mapping[str, Any] | None
+    ) -> QGroupBox:
+        """Construct the shared stability stress configuration group.
+
+        Args:
+            data: Normalized stability settings produced by
+                :meth:`_normalize_stability_conditions`.
+
+        Returns:
+            The group widget containing mode and limit controls.
+        """
+
+        normalized = data or {}
+        group = QGroupBox("Stability Stress Settings", self)
+        apply_theme(group)
+        apply_groupbox_style(group)
+        layout = QVBoxLayout(group)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(8)
+
+        intro = QLabel(
+            "Select whether stability cases repeat by loop count or elapsed minutes.",
+            group,
+        )
+        intro.setWordWrap(True)
+        layout.addWidget(intro)
+
+        grid = QGridLayout()
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setHorizontalSpacing(12)
+        grid.setVerticalSpacing(6)
+        layout.addLayout(grid)
+
+        mode_label = QLabel("Execution mode", group)
+        mode_combo = ComboBox(group)
+        mode_combo.addItem("Loop count", "loops")
+        mode_combo.addItem("Duration (minutes)", "duration")
+
+        loops_label = QLabel("Loop count", group)
+        loops_spin = QSpinBox(group)
+        loops_spin.setRange(1, 999_999)
+        loops_spin.setToolTip("Total number of executions when mode is set to loops.")
+
+        duration_label = QLabel("Duration (minutes)", group)
+        duration_spin = QSpinBox(group)
+        duration_spin.setRange(1, 24 * 60)
+        duration_spin.setSuffix(" min")
+        duration_spin.setToolTip("Run until the configured number of minutes elapses.")
+
+        grid.addWidget(mode_label, 0, 0)
+        grid.addWidget(mode_combo, 0, 1)
+        grid.addWidget(loops_label, 1, 0)
+        grid.addWidget(loops_spin, 1, 1)
+        grid.addWidget(duration_label, 2, 0)
+        grid.addWidget(duration_spin, 2, 1)
+
+        layout.addStretch(1)
+
+        mode_value = str(normalized.get("mode", "loops")).strip().lower()
+        loops_value = normalized.get("loops", 1)
+        duration_value = normalized.get("duration_minutes", 5)
+
+        with QSignalBlocker(mode_combo):
+            index = mode_combo.findData(mode_value if mode_value in {"loops", "duration"} else "loops")
+            mode_combo.setCurrentIndex(index if index >= 0 else 0)
+        with QSignalBlocker(loops_spin):
+            try:
+                loops_spin.setValue(max(1, int(loops_value)))
+            except (TypeError, ValueError):
+                loops_spin.setValue(1)
+        with QSignalBlocker(duration_spin):
+            try:
+                duration_spin.setValue(max(1, int(duration_value)))
+            except (TypeError, ValueError):
+                duration_spin.setValue(5)
+
+        def _apply_mode(mode_key: str) -> None:
+            """Toggle available inputs when the execution mode changes."""
+
+            normalized_mode = "duration" if mode_key == "duration" else "loops"
+            loops_spin.setEnabled(normalized_mode == "loops")
+            duration_spin.setEnabled(normalized_mode == "duration")
+
+        current_mode = mode_combo.currentData()
+        _apply_mode(current_mode if isinstance(current_mode, str) else "loops")
+
+        def _on_mode_changed() -> None:
+            selected = mode_combo.currentData()
+            _apply_mode(selected if isinstance(selected, str) else "loops")
+
+        mode_combo.currentIndexChanged.connect(lambda _index: _on_mode_changed())
+
+        self.field_widgets["stability_conditions.mode"] = mode_combo
+        self.field_widgets["stability_conditions.loops"] = loops_spin
+        self.field_widgets["stability_conditions.duration_minutes"] = duration_spin
+
+        return group
+
+    def _compose_stability_groups(
+        self, active_entry: ScriptConfigEntry | None
+    ) -> list[QWidget]:
+        """Combine public stability controls with the active script group."""
+
+        groups: list[QWidget] = []
+        if self._stability_conditions_group is not None:
+            groups.append(self._stability_conditions_group)
+        if active_entry is not None:
+            groups.append(active_entry.group)
+        return groups
 
         self._show_corner_conflict_warning(focus_widget)
 
@@ -3116,6 +3302,12 @@ class CaseConfigPage(CardWidget):
                 "rf_solution.RADIORACK-4-220.ip_address",
                 "rf_solution.LDA-908V-8.ip_address",
                 "rf_solution.LDA-908V-8.channels",
+            }
+        if self._is_stability_case(case_path):
+            info.fields |= {
+                "stability_conditions.mode",
+                "stability_conditions.loops",
+                "stability_conditions.duration_minutes",
             }
         case_key = self._script_case_key(case_path)
         entry = self._script_groups.get(case_key)

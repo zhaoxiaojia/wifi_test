@@ -13,6 +13,7 @@ import multiprocessing
 import queue
 import os
 import sip
+from typing import Any
 # ui/run.py
 
 from PyQt5.QtWidgets import QVBoxLayout, QTextEdit, QLabel, QFrame, QHBoxLayout, QApplication
@@ -52,6 +53,12 @@ import json
 from contextlib import suppress
 from src.util.constants import Paths, get_src_base
 from src.util.pytest_redact import install_redactor_for_current_process
+from src.test.stability import (
+    is_stability_case_path,
+    load_stability_plan,
+    prepare_stability_environment,
+    run_stability_plan,
+)
 from .theme import (
     ACCENT_COLOR,
     CONTROL_HEIGHT,
@@ -99,6 +106,7 @@ class LiveLogWriter:
 
 def _pytest_worker(case_path: str, q: multiprocessing.Queue):
     """子进程执行pytest，将日志和进度写入队列"""
+
     pid = os.getpid()
     start_ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     try:
@@ -106,7 +114,6 @@ def _pytest_worker(case_path: str, q: multiprocessing.Queue):
         timestamp = f"{timestamp}_{random.randint(1000, 9999)}"
         report_dir = (Path.cwd() / "report" / timestamp).resolve()
         report_dir.mkdir(parents=True, exist_ok=True)
-        # notify parent process that report dir is ready
         with suppress(Exception):
             q.put(("report_dir", str(report_dir)))
         plugin = install_redactor_for_current_process()
@@ -119,22 +126,16 @@ def _pytest_worker(case_path: str, q: multiprocessing.Queue):
             f"--resultpath={report_dir}",
             case_path,
         ]
-        from src.tools.config_loader import load_config
+        is_stability_case = is_stability_case_path(case_path)
+        plan = load_stability_plan() if is_stability_case else None
 
-        load_config(refresh=True)
-        for m in list(sys.modules):
-            if m.startswith("src.test"):
-                sys.modules.pop(m, None)
-        sys.modules.pop("src.tools.config_loader", None)
-        sys.modules.pop("src.conftest", None)
-
-        def emit_log(line: str):
+        def emit_log(line: str) -> None:
             q.put(("log", line))
             match = re.search(r"\[PYQT_PROGRESS\]\s+(\d+)/(\d+)", line)
             if match:
                 finished = int(match.group(1))
                 total = int(match.group(2))
-                percent = int(finished / total * 100)
+                percent = int(finished / total * 100) if total else 0
                 q.put(("progress", percent))
 
         writer = LiveLogWriter(emit_log)
@@ -144,8 +145,8 @@ def _pytest_worker(case_path: str, q: multiprocessing.Queue):
         root_logger = logging.getLogger()
         old_handlers = root_logger.handlers[:]
         old_level = root_logger.level
-        for h in old_handlers:
-            root_logger.removeHandler(h)
+        for handler in old_handlers:
+            root_logger.removeHandler(handler)
         stream_handler = logging.StreamHandler(writer)
         formatter = logging.Formatter(
             "%(asctime)s | %(levelname)s | %(filename)s:%(funcName)s(line:%(lineno)d) |  %(message)s",
@@ -155,26 +156,118 @@ def _pytest_worker(case_path: str, q: multiprocessing.Queue):
         root_logger.addHandler(stream_handler)
         root_logger.setLevel(logging.INFO)
         try:
-            q.put(
-                ("log", f"<b style='{STYLE_BASE} color:#a6e3ff;'>Run pytest</b>")
-            )
-            pytest.main(pytest_args, plugins=[plugin])
-            q.put(
-                ("log", f"<b style='{STYLE_BASE} color:#a6e3ff;'>Test completed ！</b>")
-            )
+            q.put(("log", f"<b style='{STYLE_BASE} color:#a6e3ff;'>Run pytest</b>"))
+            last_exit_code = 0
+
+            def emit_stability_event(kind: str, payload: dict[str, Any]) -> None:
+                if kind == "plan_started":
+                    plan_info = payload["plan"]
+                    target_desc = (
+                        f"{plan_info.loops} loops"
+                        if plan_info.mode == "loops"
+                        else f"{plan_info.duration_minutes} minutes"
+                    )
+                    q.put(
+                        (
+                            "log",
+                            f"<span style='{STYLE_BASE} color:{TEXT_COLOR};'>[Stability] Mode: {plan_info.mode}, target: {target_desc}.</span>",
+                        )
+                    )
+                elif kind == "iteration_started":
+                    plan_info = payload["plan"]
+                    iteration = payload["iteration"]
+                    if plan_info.mode == "loops":
+                        phase_desc = f"loop {iteration}/{plan_info.loops}"
+                    else:
+                        remaining = payload.get("remaining_seconds") or 0
+                        remaining_min = max(remaining // 60, 0)
+                        phase_desc = (
+                            f"target {plan_info.duration_minutes} min ({remaining_min}m left)"
+                        )
+                    q.put(
+                        (
+                            "log",
+                            f"<span style='{STYLE_BASE} color:{TEXT_COLOR};'>[Stability] Iteration {iteration} started ({phase_desc}).</span>",
+                        )
+                    )
+                elif kind == "iteration_succeeded":
+                    iteration = payload["iteration"]
+                    q.put(
+                        (
+                            "log",
+                            f"<span style='{STYLE_BASE} color:{TEXT_COLOR};'>[Stability] Iteration {iteration} finished successfully.</span>",
+                        )
+                    )
+                elif kind == "iteration_failed":
+                    iteration = payload["iteration"]
+                    exit_code = payload["exit_code"]
+                    q.put(
+                        (
+                            "log",
+                            f"<b style='{STYLE_BASE} color:red;'>[Stability] Iteration {iteration} failed with exit code {exit_code}; aborting remaining runs.</b>",
+                        )
+                    )
+                elif kind == "summary":
+                    total_runs = payload["total_runs"]
+                    passed_runs = payload["passed_runs"]
+                    stop_reason = payload["stop_reason"]
+                    elapsed_seconds = payload["elapsed_seconds"]
+                    summary_color = (
+                        "#a6e3ff" if passed_runs == total_runs else "red"
+                    )
+                    summary = (
+                        f"[Stability] Summary: {passed_runs}/{total_runs} runs finished, {stop_reason}. "
+                        f"Elapsed {elapsed_seconds / 60:.1f} min."
+                    )
+                    q.put(
+                        (
+                            "log",
+                            f"<b style='{STYLE_BASE} color:{summary_color};'>{summary}</b>",
+                        )
+                    )
+
+            def emit_stability_progress(percent: int) -> None:
+                q.put(("progress", percent))
+
+            if is_stability_case and plan is not None:
+                result = run_stability_plan(
+                    plan,
+                    run_pytest=lambda: pytest.main(pytest_args, plugins=[plugin]),
+                    prepare_env=prepare_stability_environment,
+                    emit_event=emit_stability_event,
+                    progress_cb=emit_stability_progress,
+                )
+                last_exit_code = result["exit_code"]
+            else:
+                exit_code = pytest.main(pytest_args, plugins=[plugin])
+                last_exit_code = exit_code
+                if exit_code != 0:
+                    failure_msg = (
+                        f"<b style='{STYLE_BASE} color:red;'>Pytest failed with exit code {exit_code}.</b>"
+                    )
+                    q.put(("log", failure_msg))
+
+            if last_exit_code == 0:
+                q.put(("log", f"<b style='{STYLE_BASE} color:#a6e3ff;'>Test completed ！</b>"))
+            elif not is_stability_case:
+                q.put(
+                    (
+                        "log",
+                        f"<b style='{STYLE_BASE} color:red;'>Pytest exited with code {last_exit_code}.</b>",
+                    )
+                )
         finally:
-            end_ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            for h in root_logger.handlers[:]:
-                root_logger.removeHandler(h)
-            for h in old_handlers:
-                root_logger.addHandler(h)
+            for handler in root_logger.handlers[:]:
+                root_logger.removeHandler(handler)
+            for handler in old_handlers:
+                root_logger.addHandler(handler)
             root_logger.setLevel(old_level)
             sys.stdout = old_stdout
             sys.stderr = old_stderr
             writer.flush()
-    except Exception as e:
+    except Exception as exc:
         tb = traceback.format_exc()
-        q.put(("log", f"<b style='{STYLE_BASE} color:red;'>Execution failed：{str(e)}</b>"))
+        q.put(("log", f"<b style='{STYLE_BASE} color:red;'>Execution failed：{exc}</b>"))
         q.put(("log", f"<pre style='{STYLE_BASE} color:{TEXT_COLOR};'>{tb}</pre>"))
 
 
