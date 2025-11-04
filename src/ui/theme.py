@@ -1,12 +1,12 @@
-#!/usr/bin/env python 
-# encoding: utf-8 
+#!/usr/bin/env python
+# encoding: utf-8
 '''
 @author: chao.li
 @contact: chao.li@amlogic.com
 @software: pycharm
-@file: theme.py 
-@time: 8/17/2025 2:27 PM 
-@desc: 
+@file: theme.py
+@time: 8/17/2025 2:27 PM
+@desc:
 '''
 
 from PyQt5.QtGui import QFont
@@ -17,6 +17,10 @@ TEXT_COLOR = "#fafafa"
 BACKGROUND_COLOR = "#2b2b2b"
 STYLE_BASE = f"font-size:{FONT_SIZE}px; font-family:{FONT_FAMILY};"
 HTML_STYLE = f"{STYLE_BASE} color:{TEXT_COLOR};"
+# Wizard/step label font size in pixels (applied to tabs like “DUT Settings”).
+STEP_LABEL_FONT_PIXEL_SIZE = 30
+# Left-pane tree font size (px); default tree font is FONT_SIZE px, we add 2.
+CASE_TREE_FONT_SIZE_PX = FONT_SIZE + 4
 # Shared accent colours and sizing tokens used across UI screens
 ACCENT_COLOR = "#0067c0"
 CONTROL_HEIGHT = 32
