@@ -35,6 +35,10 @@ debug:
   database_mode: false
   skip_router: true
   skip_corner_rf: false
+stability_conditions:
+  mode: loops
+  loops: 1
+  duration_minutes: 5
 script_params:
   test__stability__test_str_py:
     ac:
