@@ -71,11 +71,10 @@ try:
 except Exception:  # pragma: no cover - 运行环境缺失时退化为自定义指示器
     StepView = None
 from .animated_tree_view import AnimatedTreeView
-from .theme import apply_theme, apply_font_and_selection, apply_groupbox_style
+from .theme import apply_theme, apply_font_and_selection, apply_groupbox_style, CASE_TREE_FONT_SIZE_PX, STEP_LABEL_FONT_PIXEL_SIZE
 
-STEP_LABEL_FONT_DELTA = 2
-STEP_LABEL_MIN_POINT = 14
 STEP_LABEL_SPACING = 16
+USE_QFLUENT_STEP_VIEW = False
 GROUP_COLUMN_SPACING = 16
 GROUP_ROW_SPACING = 12
 PAGE_CONTENT_MARGIN = 8
@@ -83,7 +82,7 @@ PAGE_CONTENT_MARGIN = 8
 
 @dataclass
 class EditableInfo:
-    
+
     """Metadata describing which fields are editable for a test case."""
     fields: set[str] = field(default_factory=set)
     enable_csv: bool = False
@@ -119,7 +118,7 @@ class TestFileFilterModel(QSortFilterProxyModel):
         return True
 
     def hasChildren(self, parent: QModelIndex) -> bool:
-        
+
         """Ensure directories remain expandable even when children are filtered."""
         src_parent = self.mapToSource(parent)
         # 原始模型中的节点是否是目录
@@ -180,11 +179,10 @@ class _StepSwitcher(QWidget):
     @staticmethod
     def _create_step_font(base_font: QFont) -> QFont:
         font = QFont(base_font)
-        size = font.pointSize()
-        if size <= 0:
-            size = 12
-        size = max(size + STEP_LABEL_FONT_DELTA, STEP_LABEL_MIN_POINT)
-        font.setPointSize(size)
+        if STEP_LABEL_FONT_PIXEL_SIZE > 0:
+            font.setPixelSize(STEP_LABEL_FONT_PIXEL_SIZE)
+        else:
+            font.setPointSize(font.pointSize() or 12)
         font.setWeight(QFont.DemiBold)
         return font
 
@@ -475,7 +473,7 @@ class RfStepSegmentsWidget(QWidget):
         return start, stop, step
 
 class ConfigGroupPanel(QWidget):
-    
+
     """Container that arranges groups into three columns with animations."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
@@ -612,7 +610,7 @@ class ConfigGroupPanel(QWidget):
         animation.start()
 
 class CaseConfigPage(CardWidget):
-    
+
     """Main page widget for configuring test cases."""
 
     routerInfoChanged = pyqtSignal()
@@ -641,7 +639,7 @@ class CaseConfigPage(CardWidget):
         # ----- left: case tree -----
         self.case_tree = AnimatedTreeView(self)
         apply_theme(self.case_tree)
-        apply_font_and_selection(self.case_tree)
+        apply_font_and_selection(self.case_tree, size_px=CASE_TREE_FONT_SIZE_PX)
         logging.debug("TreeView font: %s", self.case_tree.font().family())
         logging.debug("TreeView stylesheet: %s", self.case_tree.styleSheet())
         self._init_case_tree(Path(self._get_application_base()) / "test")
@@ -755,7 +753,7 @@ class CaseConfigPage(CardWidget):
         labels = list(labels)
         if not labels:
             labels = [self._page_label_map["dut"]]
-        if StepView is not None:
+        if StepView is not None and USE_QFLUENT_STEP_VIEW:
             try:
                 step_view = StepView(self)
                 configured = False
@@ -3166,7 +3164,7 @@ class CaseConfigPage(CardWidget):
             self.update()
 
     def lock_for_running(self, locked: bool) -> None:
-        
+
         """Enable or disable widgets while a test run is active."""
         self.case_tree.setEnabled(not locked)
         self._run_locked = locked
@@ -3182,13 +3180,13 @@ class CaseConfigPage(CardWidget):
             self._update_navigation_state()
 
     def on_csv_activated(self, index: int) -> None:
-        
+
         """Reload CSV data even if the same entry is activated again."""
         logging.debug("on_csv_activated index=%s", index)
         self.on_csv_changed(index, force=True)
 
     def on_csv_changed(self, index: int, force: bool = False) -> None:
-        
+
         """Store the selected CSV path and emit a change signal."""
         if index < 0:
             self._set_selected_csv(None, sync_combo=False)
