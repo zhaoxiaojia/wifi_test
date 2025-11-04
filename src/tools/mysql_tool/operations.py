@@ -641,17 +641,33 @@ def _build_dut_payload(config: Mapping[str, Any]) -> Dict[str, Any]:
     wifi_details = _resolve_wifi_product_details(config.get("fpga"))
     connect_type_value = _normalize_str_token(connect.get("type"))
     normalized_connect_type = _normalize_lower_token(connect_type_value)
+    if normalized_connect_type in {"android", "adb"}:
+        connect_type_value = "Android"
+    elif normalized_connect_type in {"linux", "telnet"}:
+        connect_type_value = "Linux"
 
     adb_device: Optional[str] = None
     telnet_ip: Optional[str] = None
 
-    if normalized_connect_type == "adb":
-        adb_device = _normalize_str_token(_extract_first(connect, "adb", "device"))
-    elif normalized_connect_type == "telnet":
-        telnet_ip = _normalize_str_token(_extract_first(connect, "telnet", "ip"))
+    if normalized_connect_type in {"android", "adb"}:
+        adb_device = _normalize_str_token(
+            _extract_first(connect, "Android", "device")
+            or _extract_first(connect, "adb", "device")
+        )
+    elif normalized_connect_type in {"linux", "telnet"}:
+        telnet_ip = _normalize_str_token(
+            _extract_first(connect, "Linux", "ip")
+            or _extract_first(connect, "telnet", "ip")
+        )
     else:
-        adb_candidate = _normalize_str_token(_extract_first(connect, "adb", "device"))
-        telnet_candidate = _normalize_str_token(_extract_first(connect, "telnet", "ip"))
+        adb_candidate = _normalize_str_token(
+            _extract_first(connect, "Android", "device")
+            or _extract_first(connect, "adb", "device")
+        )
+        telnet_candidate = _normalize_str_token(
+            _extract_first(connect, "Linux", "ip")
+            or _extract_first(connect, "telnet", "ip")
+        )
         if adb_candidate and not telnet_candidate:
             adb_device = adb_candidate
         elif telnet_candidate and not adb_candidate:

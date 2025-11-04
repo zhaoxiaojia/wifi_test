@@ -118,16 +118,26 @@ def pytest_sessionstart(session):
     # The connection method to the product to DUT
     pytest.chip_info = pytest.config.get('fpga')
     connect_cfg = pytest.config.get('connect_type') or {}
-    pytest.connect_type = connect_cfg.get('type', 'adb')
+    connect_type_value = connect_cfg.get('type', 'Android')
+    if isinstance(connect_type_value, str):
+        connect_type_value = connect_type_value.strip() or 'Android'
+        lowered = connect_type_value.lower()
+        if lowered == 'adb':
+            connect_type_value = 'Android'
+        elif lowered == 'telnet':
+            connect_type_value = 'Linux'
+    else:
+        connect_type_value = 'Android'
+    pytest.connect_type = connect_type_value
     pytest.third_party_cfg = connect_cfg.get('third_party', {})
     rvr_cfg = pytest.config.get('rvr') or {}
     try:
         repeat_times = int(rvr_cfg.get('repeat', 0) or 0)
     except Exception:
         repeat_times = 0
-    if pytest.connect_type == 'adb':
+    if pytest.connect_type == 'Android':
         # Create adb obj
-        adb_cfg = connect_cfg.get('adb') or {}
+        adb_cfg = connect_cfg.get('Android') or connect_cfg.get('adb') or {}
         device = adb_cfg.get('device')
         if device is None:
             # Obtain the device number dynamically
@@ -135,12 +145,12 @@ def pytest_sessionstart(session):
             device = re.findall(r'\n(.*?)\s+device', info, re.S)
             if device: device = device[0]
         pytest.dut = adb(serialnumber=device if device else '')
-    elif pytest.connect_type == 'telnet':
+    elif pytest.connect_type == 'Linux':
         # Create telnet obj
-        telnet_cfg = connect_cfg.get('telnet') or {}
+        telnet_cfg = connect_cfg.get('Linux') or connect_cfg.get('telnet') or {}
         telnet_ip = telnet_cfg.get('ip')
         if not telnet_ip:
-            raise EnvironmentError("Not support connect type telnet: missing IP address")
+            raise EnvironmentError("Not support connect type Linux: missing IP address")
         pytest.dut = telnet_tool(telnet_ip)
         pytest.dut.roku = roku_ctrl(telnet_ip)
     else:

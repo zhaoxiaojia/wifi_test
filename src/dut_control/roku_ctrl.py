@@ -30,7 +30,9 @@ from src.util.constants import RokuConst
 def _get_roku_ip():
     """加载最新的 ROKU IP 配置"""
     cfg = load_config(refresh=True) or {}
-    ip = cfg.get("connect_type", {}).get("telnet", {}).get("ip")
+    connect_cfg = cfg.get("connect_type", {})
+    linux_cfg = connect_cfg.get("Linux") or connect_cfg.get("telnet") or {}
+    ip = linux_cfg.get("ip")
     logging.info(f"读取 ROKU IP: {ip}")
     return ip
 
