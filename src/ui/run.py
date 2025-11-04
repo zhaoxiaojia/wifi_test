@@ -53,7 +53,12 @@ import json
 from contextlib import suppress
 from src.util.constants import Paths, get_src_base
 from src.util.pytest_redact import install_redactor_for_current_process
-from src.test.stability import is_stability_case_path
+from src.test.stability import (
+    is_stability_case_path,
+    load_stability_plan,
+    prepare_stability_environment,
+    run_stability_plan,
+)
 from .theme import (
     ACCENT_COLOR,
     CONTROL_HEIGHT,
@@ -121,60 +126,9 @@ def _pytest_worker(case_path: str, q: multiprocessing.Queue):
             f"--resultpath={report_dir}",
             case_path,
         ]
-        from src.tools.config_loader import load_config
-
-        def _normalize_stability_config(raw_value: Any) -> dict[str, Any]:
-            """Normalize persisted stability plan for safe execution."""
-
-            defaults = {"mode": "loops", "loops": 1, "duration_minutes": 5}
-            if isinstance(raw_value, dict):
-                normalized = dict(raw_value)
-            else:
-                normalized = {}
-
-            mode_text = str(normalized.get("mode", defaults["mode"]))
-            mode_text = mode_text.strip().lower()
-            if mode_text not in {"loops", "duration"}:
-                mode_text = "loops"
-
-            def _coerce(key: str, fallback: int, limit: int) -> int:
-                try:
-                    value = int(normalized.get(key, fallback))
-                except (TypeError, ValueError):
-                    value = fallback
-                if value <= 0:
-                    value = fallback
-                return min(value, limit)
-
-            loops = _coerce("loops", defaults["loops"], 999_999)
-            duration = _coerce("duration_minutes", defaults["duration_minutes"], 24 * 60)
-            return {"mode": mode_text, "loops": loops, "duration_minutes": duration}
-
-        def _prepare_pytest_modules() -> None:
-            """Reload configuration and clear cached test modules."""
-
-            load_config(refresh=True)
-            for module_name in list(sys.modules):
-                if module_name.startswith("src.test"):
-                    sys.modules.pop(module_name, None)
-            sys.modules.pop("src.tools.config_loader", None)
-            sys.modules.pop("src.conftest", None)
-
-        config_snapshot = load_config(refresh=True) or {}
-        stability_cfg = _normalize_stability_config(
-            config_snapshot.get("stability_conditions")
-        )
         is_stability_case = is_stability_case_path(case_path)
-        run_mode = stability_cfg["mode"] if is_stability_case else "loops"
-        loop_target = stability_cfg["loops"] if is_stability_case else 1
-        duration_seconds = (
-            stability_cfg["duration_minutes"] * 60 if is_stability_case else 0
-        )
-        deadline = (
-            time.monotonic() + duration_seconds
-            if is_stability_case and run_mode == "duration"
-            else 0.0
-        )
+        plan = load_stability_plan() if is_stability_case else None
+
 
         def emit_log(line: str) -> None:
             q.put(("log", line))
@@ -204,103 +158,95 @@ def _pytest_worker(case_path: str, q: multiprocessing.Queue):
         root_logger.setLevel(logging.INFO)
         try:
             q.put(("log", f"<b style='{STYLE_BASE} color:#a6e3ff;'>Run pytest</b>"))
-            total_runs = 0
-            passed_runs = 0
-            stop_reason = ""
             last_exit_code = 0
-            overall_start = time.monotonic()
-            if is_stability_case:
-                target_desc = (
-                    f"{loop_target} loops"
-                    if run_mode == "loops"
-                    else f"{stability_cfg['duration_minutes']} minutes"
-                )
-                q.put(
-                    (
-                        "log",
-                        f"<span style='{STYLE_BASE} color:{TEXT_COLOR};'>[Stability] Mode: {run_mode}, target: {target_desc}.</span>",
-                    )
-                )
-            while True:
-                if not is_stability_case and total_runs >= 1:
-                    break
-                if is_stability_case and run_mode == "loops" and total_runs >= loop_target:
-                    stop_reason = "completed requested loops"
-                    break
-                if (
-                    is_stability_case
-                    and run_mode == "duration"
-                    and total_runs > 0
-                    and time.monotonic() >= deadline
-                ):
-                    stop_reason = "reached duration limit"
-                    break
 
-                total_runs += 1
-                if is_stability_case:
-                    if run_mode == "loops":
-                        phase_desc = f"loop {total_runs}/{loop_target}"
-                    else:
-                        remaining = max(int(deadline - time.monotonic()), 0)
-                        remaining_min = max(remaining // 60, 0)
-                        phase_desc = f"target {stability_cfg['duration_minutes']} min ({remaining_min}m left)"
+            def emit_stability_event(kind: str, payload: dict[str, Any]) -> None:
+                if kind == "plan_started":
+                    plan_info = payload["plan"]
+                    target_desc = (
+                        f"{plan_info.loops} loops"
+                        if plan_info.mode == "loops"
+                        else f"{plan_info.duration_minutes} minutes"
+                    )
                     q.put(
                         (
                             "log",
-                            f"<span style='{STYLE_BASE} color:{TEXT_COLOR};'>[Stability] Iteration {total_runs} started ({phase_desc}).</span>",
+                            f"<span style='{STYLE_BASE} color:{TEXT_COLOR};'>[Stability] Mode: {plan_info.mode}, target: {target_desc}.</span>",
+                        )
+                    )
+                elif kind == "iteration_started":
+                    plan_info = payload["plan"]
+                    iteration = payload["iteration"]
+                    if plan_info.mode == "loops":
+                        phase_desc = f"loop {iteration}/{plan_info.loops}"
+                    else:
+                        remaining = payload.get("remaining_seconds") or 0
+                        remaining_min = max(remaining // 60, 0)
+                        phase_desc = (
+                            f"target {plan_info.duration_minutes} min ({remaining_min}m left)"
+                        )
+                    q.put(
+                        (
+                            "log",
+                            f"<span style='{STYLE_BASE} color:{TEXT_COLOR};'>[Stability] Iteration {iteration} started ({phase_desc}).</span>",
+                        )
+                    )
+                elif kind == "iteration_succeeded":
+                    iteration = payload["iteration"]
+                    q.put(
+                        (
+                            "log",
+                            f"<span style='{STYLE_BASE} color:{TEXT_COLOR};'>[Stability] Iteration {iteration} finished successfully.</span>",
+                        )
+                    )
+                elif kind == "iteration_failed":
+                    iteration = payload["iteration"]
+                    exit_code = payload["exit_code"]
+                    q.put(
+                        (
+                            "log",
+                            f"<b style='{STYLE_BASE} color:red;'>[Stability] Iteration {iteration} failed with exit code {exit_code}; aborting remaining runs.</b>",
+                        )
+                    )
+                elif kind == "summary":
+                    total_runs = payload["total_runs"]
+                    passed_runs = payload["passed_runs"]
+                    stop_reason = payload["stop_reason"]
+                    elapsed_seconds = payload["elapsed_seconds"]
+                    summary_color = (
+                        "#a6e3ff" if passed_runs == total_runs else "red"
+                    )
+                    summary = (
+                        f"[Stability] Summary: {passed_runs}/{total_runs} runs finished, {stop_reason}. "
+                        f"Elapsed {elapsed_seconds / 60:.1f} min."
+                    )
+                    q.put(
+                        (
+                            "log",
+                            f"<b style='{STYLE_BASE} color:{summary_color};'>{summary}</b>",
                         )
                     )
 
-                _prepare_pytest_modules()
+            def emit_stability_progress(percent: int) -> None:
+                q.put(("progress", percent))
+
+            if is_stability_case and plan is not None:
+                result = run_stability_plan(
+                    plan,
+                    run_pytest=lambda: pytest.main(pytest_args, plugins=[plugin]),
+                    prepare_env=prepare_stability_environment,
+                    emit_event=emit_stability_event,
+                    progress_cb=emit_stability_progress,
+                )
+                last_exit_code = result["exit_code"]
+            else:
                 exit_code = pytest.main(pytest_args, plugins=[plugin])
                 last_exit_code = exit_code
-
-                if exit_code == 0:
-                    passed_runs += 1
-                    if is_stability_case:
-                        q.put(
-                            (
-                                "log",
-                                f"<span style='{STYLE_BASE} color:{TEXT_COLOR};'>[Stability] Iteration {total_runs} finished successfully.</span>",
-                            )
-                        )
-                        if run_mode == "loops" and loop_target:
-                            progress = int(passed_runs / loop_target * 100)
-                            q.put(("progress", progress))
-                else:
-                    stop_reason = f"stopped after failure (exit code {exit_code})"
-                    if is_stability_case:
-                        failure_msg = (
-                            f"<b style='{STYLE_BASE} color:red;'>[Stability] Iteration {total_runs} failed with exit code {exit_code}; aborting remaining runs.</b>"
-                        )
-                    else:
-                        failure_msg = (
-                            f"<b style='{STYLE_BASE} color:red;'>Pytest failed with exit code {exit_code}.</b>"
-                        )
-                    q.put(("log", failure_msg))
-                    break
-
-                if not is_stability_case:
-                    break
-
-                if run_mode == "duration" and time.monotonic() >= deadline:
-                    stop_reason = "reached duration limit"
-                    break
-
-            if is_stability_case:
-                if not stop_reason:
-                    stop_reason = (
-                        "completed requested loops"
-                        if run_mode == "loops"
-                        else "reached duration limit"
+                if exit_code != 0:
+                    failure_msg = (
+                        f"<b style='{STYLE_BASE} color:red;'>Pytest failed with exit code {exit_code}.</b>"
                     )
-                elapsed = time.monotonic() - overall_start
-                summary_color = "#a6e3ff" if passed_runs == total_runs else "red"
-                summary = (
-                    f"[Stability] Summary: {passed_runs}/{total_runs} runs finished, {stop_reason}. "
-                    f"Elapsed {elapsed / 60:.1f} min."
-                )
-                q.put(("log", f"<b style='{STYLE_BASE} color:{summary_color};'>{summary}</b>"))
+                    q.put(("log", failure_msg))
             if last_exit_code == 0:
                 q.put(("log", f"<b style='{STYLE_BASE} color:#a6e3ff;'>Test completed ！</b>"))
             elif not is_stability_case:
