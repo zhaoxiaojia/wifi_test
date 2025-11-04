@@ -18,7 +18,9 @@ from src.tools.config_loader import load_config
 from src.tools.usb_relay_controller import (
     UsbRelayDevice,
     apply_state,
+    pulse
 )
+
 
 def _script_case_key(path: str) -> str:
     normalized = path.replace("\\", "/")
@@ -82,7 +84,7 @@ def load_test_str_settings(*, refresh: bool = True) -> TestStrSettings:
                     value
                     for value in script_section.values()
                     if isinstance(value, Mapping)
-                    and value.get("case_path") == SCRIPT_RELATIVE_PATH
+                       and value.get("case_path") == SCRIPT_RELATIVE_PATH
                 ),
                 None,
             )
@@ -112,13 +114,14 @@ def _run_cycle(label: str, cycle: CycleConfig) -> None:
     if not cycle.port:
         logging.warning("[%s] relay port not configured; skipping", label)
         return
-    logging.info("[%s] cycle start: on=%ss off=%ss mode=%s port=%s", label, cycle.on_duration, cycle.off_duration, cycle.mode, cycle.port)
+    logging.info("[%s] cycle start: on=%ss off=%ss mode=%s port=%s", label, cycle.on_duration, cycle.off_duration,
+                 cycle.mode, cycle.port)
     try:
         with UsbRelayDevice(cycle.port) as relay:
-            apply_state(relay, cycle.mode, "on")
+            pulse(relay, cycle.mode)
             if cycle.on_duration > 0:
                 time.sleep(cycle.on_duration)
-            apply_state(relay, cycle.mode, "off")
+            pulse(relay, cycle.mode)
             if cycle.off_duration > 0:
                 time.sleep(cycle.off_duration)
     except Exception as exc:  # pragma: no cover - hardware dependent
