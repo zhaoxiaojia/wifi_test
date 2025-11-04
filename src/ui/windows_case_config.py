@@ -171,10 +171,14 @@ class _StepSwitcher(QWidget):
             return
         self._current = index
         for i, label in enumerate(self._labels):
+            # Ensure inline styles keep the enlarged wizard font size override.
+            font_size_rule = ""
+            if STEP_LABEL_FONT_PIXEL_SIZE > 0:
+                font_size_rule = f"font-size: {STEP_LABEL_FONT_PIXEL_SIZE}px;"
             if i == index:
-                label.setStyleSheet("color: #0078d4; font-weight: 600;")
+                label.setStyleSheet(f"{font_size_rule} color: #0078d4; font-weight: 600;")
             else:
-                label.setStyleSheet("color: #6c6c6c; font-weight: 400;")
+                label.setStyleSheet(f"{font_size_rule} color: #6c6c6c; font-weight: 400;")
 
     @staticmethod
     def _create_step_font(base_font: QFont) -> QFont:
@@ -1618,36 +1622,55 @@ class CaseConfigPage(CardWidget):
         if isinstance(raw_value, Mapping):
             normalized.update(raw_value)
 
-        type_value = normalized.get("type", "adb")
+        type_value = normalized.get("type", "Android")
         if isinstance(type_value, str):
-            type_value = type_value.strip() or "adb"
+            type_value = type_value.strip() or "Android"
         else:
-            type_value = str(type_value).strip() or "adb"
+            type_value = str(type_value).strip() or "Android"
+        lowered_type = type_value.lower()
+        if lowered_type in {"android", "adb"}:
+            type_value = "Android"
+        elif lowered_type in {"linux", "telnet"}:
+            type_value = "Linux"
         normalized["type"] = type_value
 
-        adb_cfg = normalized.get("adb")
-        if isinstance(adb_cfg, Mapping):
-            adb_dict = dict(adb_cfg)
+        android_cfg = normalized.get("Android")
+        if not isinstance(android_cfg, Mapping):
+            legacy_adb = normalized.get("adb")
+            if isinstance(legacy_adb, Mapping):
+                android_cfg = legacy_adb
+            else:
+                android_cfg = legacy_adb
+        if isinstance(android_cfg, Mapping):
+            android_dict = dict(android_cfg)
         else:
-            adb_dict = {}
-            if adb_cfg not in (None, ""):
-                adb_dict["device"] = str(adb_cfg)
-        device = adb_dict.get("device", "")
-        adb_dict["device"] = str(device).strip() if device is not None else ""
-        normalized["adb"] = adb_dict
+            android_dict = {}
+            if android_cfg not in (None, ""):
+                android_dict["device"] = str(android_cfg)
+        device = android_dict.get("device", "")
+        android_dict["device"] = str(device).strip() if device is not None else ""
+        normalized["Android"] = android_dict
+        normalized.pop("adb", None)
 
-        telnet_cfg = normalized.get("telnet")
-        if isinstance(telnet_cfg, Mapping):
-            telnet_dict = dict(telnet_cfg)
+        linux_cfg = normalized.get("Linux")
+        if not isinstance(linux_cfg, Mapping):
+            legacy_telnet = normalized.get("telnet")
+            if isinstance(legacy_telnet, Mapping):
+                linux_cfg = legacy_telnet
+            else:
+                linux_cfg = legacy_telnet
+        if isinstance(linux_cfg, Mapping):
+            linux_dict = dict(linux_cfg)
         else:
-            telnet_dict = {}
-            if isinstance(telnet_cfg, str) and telnet_cfg.strip():
-                telnet_dict["ip"] = telnet_cfg.strip()
-        telnet_ip = telnet_dict.get("ip", "")
-        telnet_dict["ip"] = str(telnet_ip).strip() if telnet_ip is not None else ""
-        wildcard = telnet_dict.get("wildcard", "")
-        telnet_dict["wildcard"] = str(wildcard).strip() if wildcard is not None else ""
-        normalized["telnet"] = telnet_dict
+            linux_dict = {}
+            if isinstance(linux_cfg, str) and linux_cfg.strip():
+                linux_dict["ip"] = linux_cfg.strip()
+        telnet_ip = linux_dict.get("ip", "")
+        linux_dict["ip"] = str(telnet_ip).strip() if telnet_ip is not None else ""
+        wildcard = linux_dict.get("wildcard", "")
+        linux_dict["wildcard"] = str(wildcard).strip() if wildcard is not None else ""
+        normalized["Linux"] = linux_dict
+        normalized.pop("telnet", None)
 
         third_cfg = normalized.get("third_party")
         if isinstance(third_cfg, Mapping):
@@ -1888,23 +1911,23 @@ class CaseConfigPage(CardWidget):
         connect_type = ""
         focus_widget: QWidget | None = None
         if hasattr(self, "connect_type_combo"):
-            connect_type = self.connect_type_combo.currentText().strip()
+            connect_type = self._current_connect_type()
             if not connect_type:
                 errors.append("Connect type is required.")
                 focus_widget = focus_widget or self.connect_type_combo
-            elif connect_type == "adb" and hasattr(self, "adb_device_edit"):
+            elif connect_type == "Android" and hasattr(self, "adb_device_edit"):
                 if not self.adb_device_edit.text().strip():
                     errors.append("ADB device is required.")
                     focus_widget = focus_widget or self.adb_device_edit
-            elif connect_type == "telnet" and hasattr(self, "telnet_ip_edit"):
+            elif connect_type == "Linux" and hasattr(self, "telnet_ip_edit"):
                 if not self.telnet_ip_edit.text().strip():
-                    errors.append("Telnet IP is required.")
+                    errors.append("Linux IP is required.")
                     focus_widget = focus_widget or self.telnet_ip_edit
                 kernel_text = ""
                 if hasattr(self, "kernel_version_combo"):
                     kernel_text = self.kernel_version_combo.currentText().strip()
                 if not kernel_text:
-                    errors.append("Kernel version is required for telnet access.")
+                    errors.append("Kernel version is required for Linux access.")
                     focus_widget = focus_widget or getattr(self, "kernel_version_combo", None)
             if hasattr(self, "third_party_checkbox") and self.third_party_checkbox.isChecked():
                 wait_text = self.third_party_wait_edit.text().strip() if hasattr(self, "third_party_wait_edit") else ""
@@ -1914,7 +1937,7 @@ class CaseConfigPage(CardWidget):
                         focus_widget = focus_widget or self.third_party_wait_edit
         else:
             errors.append("Connect type widget missing.")
-        if hasattr(self, "android_version_combo") and connect_type == "adb" and not self.android_version_combo.currentText().strip():
+        if hasattr(self, "android_version_combo") and connect_type == "Android" and not self.android_version_combo.currentText().strip():
             errors.append("Android version is required.")
             focus_widget = focus_widget or self.android_version_combo
         fpga_valid = (
@@ -2104,16 +2127,48 @@ class CaseConfigPage(CardWidget):
         base = Path(self._get_application_base())
         return str(p) if p.is_absolute() else str((base / p).resolve())
 
-    def on_connect_type_changed(self, type_str):
+    def _normalize_connect_type_label(self, label: str) -> str:
+        text = (label or "").strip()
+        lowered = text.lower()
+        if lowered in {"android", "adb"}:
+            return "Android"
+        if lowered in {"linux", "telnet"}:
+            return "Linux"
+        return text
+
+    def _current_connect_type(self) -> str:
+        """Return the persisted identifier for the selected connect type."""
+        if not hasattr(self, "connect_type_combo"):
+            return ""
+        data = self.connect_type_combo.currentData()
+        if isinstance(data, str) and data.strip():
+            return data.strip()
+        text = self.connect_type_combo.currentText()
+        return self._normalize_connect_type_label(text) if isinstance(text, str) else ""
+
+    def _set_connect_type_combo_selection(self, type_value: str) -> None:
+        """Select the combo entry matching the stored connect type identifier."""
+        if not hasattr(self, "connect_type_combo"):
+            return
+        target_value = self._normalize_connect_type_label(type_value)
+        with QSignalBlocker(self.connect_type_combo):
+            index = self.connect_type_combo.findData(target_value)
+            if index >= 0:
+                self.connect_type_combo.setCurrentIndex(index)
+            elif self.connect_type_combo.count():
+                self.connect_type_combo.setCurrentIndex(0)
+
+    def on_connect_type_changed(self, display_text):
         """切换连接方式时，仅展示对应参数组"""
-        self.adb_group.setVisible(type_str == "adb")
-        self.telnet_group.setVisible(type_str == "telnet")
+        type_str = self._normalize_connect_type_label(display_text)
+        self.adb_group.setVisible(type_str == "Android")
+        self.telnet_group.setVisible(type_str == "Linux")
         self._update_android_system_for_connect_type(type_str)
         self._request_rebalance_for_panels(self._dut_panel)
     def _update_android_system_for_connect_type(self, connect_type: str) -> None:
         if not hasattr(self, "android_version_combo") or not hasattr(self, "kernel_version_combo"):
             return
-        is_adb = connect_type == "adb"
+        is_adb = connect_type == "Android"
         # Android version selectors are only shown for ADB connections.
         self.android_version_label.setVisible(is_adb)
         self.android_version_combo.setVisible(is_adb)
@@ -2131,7 +2186,7 @@ class CaseConfigPage(CardWidget):
     def _on_android_version_changed(self, version: str) -> None:
         if not hasattr(self, "connect_type_combo"):
             return
-        if self.connect_type_combo.currentText().strip() == "adb":
+        if self._current_connect_type() == "Android":
             self._apply_android_kernel_mapping()
 
     def _apply_android_kernel_mapping(self) -> None:
@@ -2332,9 +2387,9 @@ class CaseConfigPage(CardWidget):
 
         self.config["debug"] = _normalize_debug_section(self.config.get("debug"))
         self.config["connect_type"] = self._normalize_connect_type_section(self.config.get("connect_type"))
-        telnet_cfg = self.config["connect_type"].get("telnet")
-        if isinstance(telnet_cfg, dict) and "kernel_version" in telnet_cfg:
-            self.config.setdefault("android_system", {})["kernel_version"] = telnet_cfg.pop("kernel_version")
+        linux_cfg = self.config["connect_type"].get("Linux")
+        if isinstance(linux_cfg, dict) and "kernel_version" in linux_cfg:
+            self.config.setdefault("android_system", {})["kernel_version"] = linux_cfg.pop("kernel_version")
         self.config["fpga"] = self._normalize_fpga_section(self.config.get("fpga"))
         for i, (key, value) in enumerate(self.config.items()):
             if key == "script_params":
@@ -2406,24 +2461,25 @@ class CaseConfigPage(CardWidget):
                 group = QGroupBox("Control Type")
                 vbox = QVBoxLayout(group)
                 self.connect_type_combo = ComboBox(self)
-                self.connect_type_combo.addItems(["adb", "telnet"])
-                self.connect_type_combo.setCurrentText(value.get("type", "adb"))
+                self.connect_type_combo.addItem("Android", "Android")
+                self.connect_type_combo.addItem("Linux", "Linux")
+                self._set_connect_type_combo_selection(value.get("type", "Android"))
                 self.connect_type_combo.currentTextChanged.connect(self.on_connect_type_changed)
                 vbox.addWidget(self.connect_type_combo)
-                # 独立的 ADB / Telnet 参数面板
+                # 独立的 Android / Linux 参数面板
                 self.adb_group = QWidget()
                 adb_vbox = QVBoxLayout(self.adb_group)
                 self.adb_device_edit = LineEdit(self)
-                self.adb_device_edit.setPlaceholderText("adb.device")
-                adb_vbox.addWidget(QLabel("ADB Device:"))
+                self.adb_device_edit.setPlaceholderText("Android.device")
+                adb_vbox.addWidget(QLabel("Android Device:"))
                 adb_vbox.addWidget(self.adb_device_edit)
 
                 self.telnet_group = QWidget()
                 telnet_vbox = QVBoxLayout(self.telnet_group)
-                telnet_cfg = value.get("telnet", {}) if isinstance(value, dict) else {}
+                telnet_cfg = value.get("Linux", {}) if isinstance(value, dict) else {}
                 self.telnet_ip_edit = LineEdit(self)
-                self.telnet_ip_edit.setPlaceholderText("telnet.ip")
-                telnet_vbox.addWidget(QLabel("Telnet IP:"))
+                self.telnet_ip_edit.setPlaceholderText("Linux.ip")
+                telnet_vbox.addWidget(QLabel("Linux IP:"))
                 telnet_vbox.addWidget(self.telnet_ip_edit)
 
                 self.third_party_group = QWidget()
@@ -2450,13 +2506,13 @@ class CaseConfigPage(CardWidget):
                 vbox.addWidget(self.telnet_group)
                 vbox.addWidget(self.third_party_group)
                 self._register_group(key, group, self._is_dut_key(key))
-                self.adb_device_edit.setText(value.get("adb", {}).get("device", ""))
+                self.adb_device_edit.setText(value.get("Android", {}).get("device", ""))
                 self.telnet_ip_edit.setText(telnet_cfg.get("ip", ""))
                 self.on_third_party_toggled(self.third_party_checkbox.isChecked())
-                self.on_connect_type_changed(self.connect_type_combo.currentText())
+                self.on_connect_type_changed(self._current_connect_type())
                 self.field_widgets["connect_type.type"] = self.connect_type_combo
-                self.field_widgets["connect_type.adb.device"] = self.adb_device_edit
-                self.field_widgets["connect_type.telnet.ip"] = self.telnet_ip_edit
+                self.field_widgets["connect_type.Android.device"] = self.adb_device_edit
+                self.field_widgets["connect_type.Linux.ip"] = self.telnet_ip_edit
                 self.field_widgets["connect_type.third_party.enabled"] = self.third_party_checkbox
                 self.field_widgets["connect_type.third_party.wait_seconds"] = self.third_party_wait_edit
                 continue
@@ -3023,9 +3079,9 @@ class CaseConfigPage(CardWidget):
         # 永远让 connect_type 可编辑
         info.fields |= {
             "connect_type.type",
-            "connect_type.adb.device",
-            "connect_type.telnet.ip",
-            "connect_type.telnet.wildcard",
+            "connect_type.Android.device",
+            "connect_type.Linux.ip",
+            "connect_type.Linux.wildcard",
             "connect_type.third_party.enabled",
             "connect_type.third_party.wait_seconds",
             "router.name",

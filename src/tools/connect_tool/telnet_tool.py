@@ -38,7 +38,8 @@ def _get_connect_wait_window() -> Tuple[float, float]:
         logging.debug("加载配置失败，使用默认 telnet 握手等待：%s", exc)
         return DEFAULT_CONNECT_MINWAIT, DEFAULT_CONNECT_MAXWAIT
 
-    telnet_cfg = cfg.get("connect_type", {}).get("telnet", {})
+    connect_cfg = cfg.get("connect_type", {}) or {}
+    telnet_cfg = connect_cfg.get("Linux") or connect_cfg.get("telnet") or {}
 
     minwait = telnet_cfg.get("connect_minwait", DEFAULT_CONNECT_MINWAIT)
     maxwait = telnet_cfg.get("connect_maxwait", DEFAULT_CONNECT_MAXWAIT)

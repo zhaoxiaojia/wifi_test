@@ -224,7 +224,7 @@ def common_setup(router: Router, router_info: Router) -> bool:
     band = '5G' if '2' in router_info.band else '2.4G'
     ssid = router_info.ssid + "_bat"
     router.change_setting(Router(band=band, ssid=ssid))
-    if pytest.connect_type == 'telnet':
+    if pytest.connect_type == 'Linux':
         if router_info.band == "2.4G":
             router.change_country("欧洲")
         else:
@@ -272,7 +272,7 @@ def wait_connect(router_info: Router):
         connect_status = True
     else:
         logging.info(f'dut try to connect {router_info.ssid}')
-        if pytest.connect_type == 'telnet':
+        if pytest.connect_type == 'Linux':
             connect_status = True
             pytest.dut.wait_reconnect_sync(timeout=90)
         else:
