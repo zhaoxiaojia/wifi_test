@@ -341,7 +341,7 @@ class dut():
         #     ...
 
     def push_iperf(self):
-        if pytest.connect_type == 'telnet':
+        if pytest.connect_type == 'Linux':
             return
         if self.checkoutput('[ -e /system/bin/iperf ] && echo yes || echo no').strip() != 'yes':
             path = os.path.join(os.getcwd(), 'res/iperf')
@@ -421,7 +421,7 @@ class dut():
                     _collect_output(stdout, stderr)
 
         def _build_cmd_list():
-            if use_adb and pytest.connect_type != 'telnet':
+            if use_adb and pytest.connect_type != 'Linux':
                 return ['adb', '-s', self.serialnumber, 'shell', *command.split()]
             return command.split()
 
@@ -430,7 +430,7 @@ class dut():
             # TODO: 若恢复客户端日志缓存，这里同步清理 self.iperf_client_log_list
             # self.iperf_client_log_list = []
             if use_adb:
-                if pytest.connect_type == 'telnet':
+                if pytest.connect_type == 'Linux':
                     def telnet_iperf():
                         logging.info(f'server telnet command: {command}')
                         tn = telnetlib.Telnet(self.dut_ip)
@@ -456,7 +456,7 @@ class dut():
             # TODO: 若恢复客户端日志缓存，这里需要重置 self.iperf_client_log_list
             # self.iperf_client_log_list = []
             if use_adb:
-                if pytest.connect_type == 'telnet':
+                if pytest.connect_type == 'Linux':
                     logging.info(f'client telnet command: {command}')
 
                     async def _run_telnet_client():
@@ -672,7 +672,7 @@ class dut():
         return pc_ip
 
     def get_dut_ip(self):
-        if pytest.connect_type == 'telnet':
+        if pytest.connect_type == 'Linux':
             return pytest.dut.dut_ip
         dut_info = pytest.dut.checkoutput('ifconfig wlan0')
         dut_ip = re.findall(r'inet addr:(\d+\.\d+\.\d+\.\d+)', dut_info, re.S)
@@ -742,7 +742,7 @@ class dut():
                     time.sleep(1)
                     client_cmd = pytest.dut.iperf_client_cmd.replace('{ip}', self.dut_ip)
                     pytest.dut.run_iperf(client_cmd, '')
-                    if pytest.connect_type == 'telnet':
+                    if pytest.connect_type == 'Linux':
                         time.sleep(5)
                     # Pull the latest iperf server output, parse it into IperfMetrics.
                     rx_result = self.get_logcat()
@@ -880,7 +880,7 @@ class dut():
                     time.sleep(1)
                     client_cmd = pytest.dut.iperf_client_cmd.replace('{ip}', self.pc_ip)
                     pytest.dut.run_iperf(self.tool_path + client_cmd, self.serialnumber)
-                    if pytest.connect_type == 'telnet':
+                    if pytest.connect_type == 'Linux':
                         time.sleep(5)
                     time.sleep(3)
                     tx_result = self.get_logcat()
@@ -956,7 +956,7 @@ class dut():
         return ','.join([cell for cell in throughput_cells if cell]) or 'N/A'
 
     def wait_for_wifi_address(self, cmd: str = '', target=''):
-        if pytest.connect_type == 'telnet':
+        if pytest.connect_type == 'Linux':
             pytest.dut.roku.ser.write('iw wlan0 link')
             logging.info(pytest.dut.roku.ser.recv())
             return True, pytest.dut.roku.ser.get_ip_address('wlan0')
@@ -990,7 +990,7 @@ class dut():
         '''
         Remove the network mentioned by <networkId>
         '''
-        if pytest.connect_type == 'telnet':
+        if pytest.connect_type == 'Linux':
             ...
         else:
             list_networks_cmd = "cmd wifi list-networks"
@@ -1006,7 +1006,7 @@ class dut():
                         logging.info(f"Network id {network_id[0]} closed")
 
     def wifi_scan(self, ssid):
-        if pytest.connect_type == 'telnet':
+        if pytest.connect_type == 'Linux':
             return pytest.dut.roku.wifi_scan(ssid)
         else:
             for _ in range(5):
@@ -1019,7 +1019,7 @@ class dut():
                 return False
 
     def connect_ssid(self, router=""):
-        if pytest.connect_type == 'telnet':
+        if pytest.connect_type == 'Linux':
             pytest.dut.roku.wifi_conn(ssid=router.ssid, pwd=router.wpa_passwd)
         else:
             pytest.dut.checkoutput(pytest.dut.get_wifi_cmd(router))

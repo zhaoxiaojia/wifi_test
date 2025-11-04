@@ -359,9 +359,8 @@ def get_telnet_connect_window(
     except Exception:
         logging.debug("Falling back to default telnet wait window", exc_info=True)
         return DEFAULT_CONNECT_MINWAIT, DEFAULT_CONNECT_MAXWAIT
-    telnet_cfg = (
-        (config.get("connect_type") or {}).get("telnet") or {}
-    )
+    connect_cfg = (config.get("connect_type") or {})
+    telnet_cfg = connect_cfg.get("Linux") or connect_cfg.get("telnet") or {}
     minwait = telnet_cfg.get("connect_minwait", DEFAULT_CONNECT_MINWAIT)
     maxwait = telnet_cfg.get("connect_maxwait", DEFAULT_CONNECT_MAXWAIT)
     try:
