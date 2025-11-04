@@ -129,6 +129,7 @@ def _pytest_worker(case_path: str, q: multiprocessing.Queue):
         is_stability_case = is_stability_case_path(case_path)
         plan = load_stability_plan() if is_stability_case else None
 
+
         def emit_log(line: str) -> None:
             q.put(("log", line))
             match = re.search(r"\[PYQT_PROGRESS\]\s+(\d+)/(\d+)", line)
@@ -246,7 +247,6 @@ def _pytest_worker(case_path: str, q: multiprocessing.Queue):
                         f"<b style='{STYLE_BASE} color:red;'>Pytest failed with exit code {exit_code}.</b>"
                     )
                     q.put(("log", failure_msg))
-
             if last_exit_code == 0:
                 q.put(("log", f"<b style='{STYLE_BASE} color:#a6e3ff;'>Test completed ！</b>"))
             elif not is_stability_case:
