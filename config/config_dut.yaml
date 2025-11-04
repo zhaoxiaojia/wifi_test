@@ -7,14 +7,14 @@ android_system:
   version: Android 13
   kernel_version: Kernel 5.15
 connect_type:
-  adb:
+  Android:
     device: '69512800000000611'
-  telnet:
+  Linux:
     ip: 192.168.56.12
   third_party:
     enabled: false
     wait_seconds: 45
-  type: adb
+  type: Android
 fpga:
   customer: XIAOMI
   product_line: OTT
