@@ -210,7 +210,7 @@ def _apply_step_font(widget: QWidget) -> None:
 
 class RfStepSegmentsWidget(QWidget):
 
-    """RF Step 多段输入控件，支持通过表单维护区间列表。"""
+    """RF Step multi-segment input widget that manages ranges through the form."""
 
     DEFAULT_SEGMENT = (0, 75, 3)
 
@@ -228,25 +228,25 @@ class RfStepSegmentsWidget(QWidget):
         form.setVerticalSpacing(4)
 
         self.start_edit = LineEdit(self)
-        self.start_edit.setPlaceholderText("起始 (默认 0)")
+        self.start_edit.setPlaceholderText("Start (default 0)")
         self.start_edit.setValidator(QIntValidator(0, 9999, self))
         self.start_edit.setText(str(self.DEFAULT_SEGMENT[0]))
 
         self.stop_edit = LineEdit(self)
-        self.stop_edit.setPlaceholderText("结束 (默认 75)")
+        self.stop_edit.setPlaceholderText("Stop (default 75)")
         self.stop_edit.setValidator(QIntValidator(0, 9999, self))
         self.stop_edit.setText(str(self.DEFAULT_SEGMENT[1]))
 
         self.step_edit = LineEdit(self)
-        self.step_edit.setPlaceholderText("步长 (默认 3)")
+        self.step_edit.setPlaceholderText("Step (default 3)")
         self.step_edit.setValidator(QIntValidator(1, 9999, self))
         self.step_edit.setText(str(self.DEFAULT_SEGMENT[2]))
 
-        form.addWidget(QLabel("起始"), 0, 0)
+        form.addWidget(QLabel("Start"), 0, 0)
         form.addWidget(self.start_edit, 0, 1)
-        form.addWidget(QLabel("结束"), 1, 0)
+        form.addWidget(QLabel("Stop"), 1, 0)
         form.addWidget(self.stop_edit, 1, 1)
-        form.addWidget(QLabel("步长"), 2, 0)
+        form.addWidget(QLabel("Step"), 2, 0)
         form.addWidget(self.step_edit, 2, 1)
 
         layout.addLayout(form)
@@ -267,8 +267,8 @@ class RfStepSegmentsWidget(QWidget):
         layout.addLayout(btn_row)
 
         hint_text = (
-            "未添加区间时将自动使用默认区间 0-75（步长 3）。\n"
-            "填写起始、结束与步长后点击 Add 添加区间，选中后可用 Del 删除。"
+            "If no range is added, the default 0-75 (step 3) range is used.\n"
+            "Enter start/stop/step, click Add to append, and select one then click Del to remove."
         )
 
         self.segment_stack = QStackedWidget(self)
@@ -324,7 +324,7 @@ class RfStepSegmentsWidget(QWidget):
         step_text = self.step_edit.text().strip() or str(self.DEFAULT_SEGMENT[2])
 
         if not start_text or not stop_text:
-            self._show_error("请填写起始与结束值。")
+            self._show_error("Please provide both start and stop values.")
             return None
 
         try:
@@ -332,11 +332,11 @@ class RfStepSegmentsWidget(QWidget):
             stop = int(stop_text)
             step = int(step_text)
         except ValueError:
-            self._show_error("起始、结束与步长必须为整数。")
+            self._show_error("Start, stop, and step must be integers.")
             return None
 
         if step <= 0:
-            self._show_error("步长必须大于 0。")
+            self._show_error("Step must be greater than 0.")
             return None
 
         if stop < start:
@@ -349,7 +349,7 @@ class RfStepSegmentsWidget(QWidget):
         if parsed is None:
             return
         if parsed in self._segments:
-            self._show_error("该区间已存在。")
+            self._show_error("This range already exists.")
             return
 
         self._segments.append(parsed)
@@ -358,7 +358,7 @@ class RfStepSegmentsWidget(QWidget):
     def _on_delete_segment(self) -> None:
         row = self.segment_list.currentRow()
         if row < 0 or row >= len(self._segments):
-            self._show_error("请先选择要删除的区间。")
+            self._show_error("Select a range to delete first.")
             return
 
         del self._segments[row]
