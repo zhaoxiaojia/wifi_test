@@ -18,7 +18,8 @@ BACKGROUND_COLOR = "#2b2b2b"
 STYLE_BASE = f"font-size:{FONT_SIZE}px; font-family:{FONT_FAMILY};"
 HTML_STYLE = f"{STYLE_BASE} color:{TEXT_COLOR};"
 # Wizard/step label font size in pixels (applied to tabs like “DUT Settings”).
-STEP_LABEL_FONT_PIXEL_SIZE = 30
+# Step indicator tabs (e.g. "DUT Settings") should be 6px larger than the default 16px base.
+STEP_LABEL_FONT_PIXEL_SIZE = 22
 # Left-pane tree font size (px); default tree font is FONT_SIZE px, we add 2.
 CASE_TREE_FONT_SIZE_PX = FONT_SIZE + 4
 # Shared accent colours and sizing tokens used across UI screens
@@ -138,6 +139,12 @@ def apply_groupbox_style(
 
 
 def apply_theme(widget, recursive: bool = False):
+    # Ensure wizard step labels stay larger than the base font even after theming.
+    step_label_style = ""
+    if STEP_LABEL_FONT_PIXEL_SIZE:
+        step_label_style = (
+            f" QLabel#wizardStepLabel {{ font-size:{STEP_LABEL_FONT_PIXEL_SIZE}px; }}"
+        )
     widget.setStyleSheet(
         f"""
         {STYLE_BASE} color:{TEXT_COLOR}; background:{BACKGROUND_COLOR};
@@ -147,7 +154,7 @@ def apply_theme(widget, recursive: bool = False):
             background:{BACKGROUND_COLOR};
             font-family:  {FONT_FAMILY};
             font-size: {FONT_SIZE}pt;
-        }}
+        }}{step_label_style}
         """
     )
     # 不必再 setFont，但如果你想保底也可以留着
