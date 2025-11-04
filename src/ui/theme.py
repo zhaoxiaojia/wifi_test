@@ -17,6 +17,12 @@ TEXT_COLOR = "#fafafa"
 BACKGROUND_COLOR = "#2b2b2b"
 STYLE_BASE = f"font-size:{FONT_SIZE}px; font-family:{FONT_FAMILY};"
 HTML_STYLE = f"{STYLE_BASE} color:{TEXT_COLOR};"
+# Shared accent colours and sizing tokens used across UI screens
+ACCENT_COLOR = "#0067c0"
+CONTROL_HEIGHT = 32
+ICON_SIZE = 18
+ICON_TEXT_SPACING = 8
+LEFT_PAD = ICON_SIZE + ICON_TEXT_SPACING
 # --- 追加 import ---
 
 from PyQt5.QtWidgets import (
