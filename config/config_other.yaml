@@ -20,8 +20,8 @@ rf_solution:
 rvr:
   iperf:
     path: ''
-    server_cmd: iperf -s -i 1
-    client_cmd: iperf -c {ip} -i 1 -t 5 -P 1
+    server_cmd: iperf3 -s -i 1
+    client_cmd: iperf3 -c {ip} -i 1 -t 30 -P 1
   ixchariot:
     path: D:/Program Files (x86)/Ixia/IxChariot
   repeat: '0'
@@ -30,9 +30,25 @@ rvr:
 router:
   name: asusax88u
   address: 192.168.5.1
-text_case: test/performance/test_wifi_rvr.py
+text_case: test/performance/test_wifi_peak_throughput.py
 debug:
-  database_mode: true
-  skip_router: false
+  database_mode: false
+  skip_router: true
   skip_corner_rf: false
-csv_path: performance_test_csv/rvr_wifi_setup_demo.csv
+script_params:
+  test__stability__test_str_py:
+    ac:
+      enabled: true
+      on_duration: 5
+      off_duration: 5
+      port: COM16
+      mode: NC
+      ping: false
+    str:
+      enabled: false
+      on_duration: 0
+      off_duration: 0
+      port: ''
+      mode: 'NO'
+      ping: false
+csv_path: performance_test_csv/rvr_wifi_setup_single.csv

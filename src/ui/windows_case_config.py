@@ -36,7 +36,7 @@ from PyQt5.QtCore import (
     QEvent,
     QObject,
 )
-from PyQt5.QtGui import QIntValidator, QRegularExpressionValidator
+from PyQt5.QtGui import QIntValidator, QRegularExpressionValidator, QFont
 
 from PyQt5.QtWidgets import (
     QSizePolicy,
@@ -72,6 +72,13 @@ except Exception:  # pragma: no cover - 运行环境缺失时退化为自定义�
     StepView = None
 from .animated_tree_view import AnimatedTreeView
 from .theme import apply_theme, apply_font_and_selection, apply_groupbox_style
+
+STEP_LABEL_FONT_DELTA = 2
+STEP_LABEL_MIN_POINT = 14
+STEP_LABEL_SPACING = 16
+GROUP_COLUMN_SPACING = 16
+GROUP_ROW_SPACING = 12
+PAGE_CONTENT_MARGIN = 8
 
 
 @dataclass
@@ -132,10 +139,17 @@ class _StepSwitcher(QWidget):
         self._labels: list[QLabel] = []
         self._current = -1
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(12)
+        layout.setContentsMargins(
+            PAGE_CONTENT_MARGIN,
+            PAGE_CONTENT_MARGIN,
+            PAGE_CONTENT_MARGIN,
+            PAGE_CONTENT_MARGIN,
+        )
+        layout.setSpacing(STEP_LABEL_SPACING)
+        step_font = self._create_step_font(self.font())
         for index, text in enumerate(steps):
             label = QLabel(text, self)
+            label.setFont(step_font)
             label.setObjectName("wizardStepLabel")
             label.setCursor(Qt.PointingHandCursor)
             label.installEventFilter(self)
@@ -162,6 +176,34 @@ class _StepSwitcher(QWidget):
                 label.setStyleSheet("color: #0078d4; font-weight: 600;")
             else:
                 label.setStyleSheet("color: #6c6c6c; font-weight: 400;")
+
+    @staticmethod
+    def _create_step_font(base_font: QFont) -> QFont:
+        font = QFont(base_font)
+        size = font.pointSize()
+        if size <= 0:
+            size = 12
+        size = max(size + STEP_LABEL_FONT_DELTA, STEP_LABEL_MIN_POINT)
+        font.setPointSize(size)
+        font.setWeight(QFont.DemiBold)
+        return font
+
+
+def _apply_step_font(widget: QWidget) -> None:
+    step_font = _StepSwitcher._create_step_font(widget.font())
+    widget.setFont(step_font)
+    for label in widget.findChildren(QLabel):
+        label.setFont(step_font)
+    layout = widget.layout()
+    if layout is not None:
+        margins = layout.contentsMargins()
+        if margins.left() == 0 and margins.top() == 0 and margins.right() == 0:
+            layout.setContentsMargins(
+                PAGE_CONTENT_MARGIN,
+                PAGE_CONTENT_MARGIN,
+                PAGE_CONTENT_MARGIN,
+                PAGE_CONTENT_MARGIN,
+            )
 
 
 class RfStepSegmentsWidget(QWidget):
@@ -440,11 +482,11 @@ class ConfigGroupPanel(QWidget):
         super().__init__(parent)
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(8)
+        layout.setSpacing(GROUP_ROW_SPACING)
         self._column_layouts: list[QVBoxLayout] = []
         for _ in range(3):
             column = QVBoxLayout()
-            column.setSpacing(8)
+            column.setSpacing(GROUP_COLUMN_SPACING)
             column.setAlignment(Qt.AlignTop)
             layout.addLayout(column, 1)
             self._column_layouts.append(column)
@@ -645,8 +687,13 @@ class CaseConfigPage(CardWidget):
             panel = self._page_panels[key]
             page = QWidget()
             page_layout = QVBoxLayout(page)
-            page_layout.setContentsMargins(0, 0, 0, 0)
-            page_layout.setSpacing(8)
+            page_layout.setContentsMargins(
+                PAGE_CONTENT_MARGIN,
+                PAGE_CONTENT_MARGIN,
+                PAGE_CONTENT_MARGIN,
+                PAGE_CONTENT_MARGIN,
+            )
+            page_layout.setSpacing(PAGE_CONTENT_MARGIN)
             page_layout.addWidget(panel)
             page_layout.addStretch(1)
             run_btn = self._create_run_button(page)
@@ -746,6 +793,7 @@ class CaseConfigPage(CardWidget):
                         except Exception as exc:
                             logging.debug("StepView.%s failed: %s", attr, exc)
                 self._attach_step_navigation(step_view)
+                _apply_step_font(step_view)
                 return step_view
             except Exception as exc:  # pragma: no cover - 动态环境差异
                 logging.debug("Failed to initialize StepView: %s", exc)

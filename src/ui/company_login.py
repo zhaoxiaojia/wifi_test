@@ -16,7 +16,7 @@ from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import QLineEdit
 from qfluentwidgets import LineEdit, PushButton
 
-from src.util.constants import FONT_FAMILY
+from .theme import FONT_FAMILY
 from .theme import apply_theme
 
 

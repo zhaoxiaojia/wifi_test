@@ -20,15 +20,16 @@ from PyQt5.QtWidgets import (
 )
 from qfluentwidgets import CardWidget, StrongBodyLabel, PushButton, HyperlinkButton
 
-from src.util.constants import (
+from src.util.constants import Paths, get_build_metadata
+from .theme import (
+    ACCENT_COLOR,
     FONT_FAMILY,
     FONT_SIZE,
     STYLE_BASE,
     TEXT_COLOR,
-    Paths,
-    get_build_metadata,
+    apply_theme,
+    apply_font_and_selection,
 )
-from .theme import apply_theme, apply_font_and_selection
 
 
 class AboutPage(CardWidget):
@@ -48,7 +49,7 @@ class AboutPage(CardWidget):
         title.setStyleSheet(
             f"""
             {STYLE_BASE} color:{TEXT_COLOR};
-            border-left: 4px solid #0067c0;
+            border-left: 4px solid {ACCENT_COLOR};
             padding-left: 8px;
             """
         )
@@ -82,7 +83,7 @@ class AboutPage(CardWidget):
         resource_title.setStyleSheet(
             f"""
             {STYLE_BASE} color:{TEXT_COLOR};
-            border-left: 4px solid #0067c0;
+            border-left: 4px solid {ACCENT_COLOR};
             padding-left: 8px;
             """
         )

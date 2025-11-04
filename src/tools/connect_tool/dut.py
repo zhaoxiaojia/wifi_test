@@ -172,6 +172,8 @@ class dut():
         self.skip_tx = False
         self.skip_rx = False
         self.iperf_server_log_list: list[str] = []
+        # TODO: 如需从客户端 stdout 补齐 interval，请重新启用客户端日志缓存
+        # self.iperf_client_log_list: list[str] = []
         self._current_udp_mode = False
         if self.rvr_tool == 'iperf':
             cmds = f"{self.iperf_server_cmd} {self.iperf_client_cmd}"
@@ -382,6 +384,7 @@ class dut():
                 encoding=encoding,
                 errors='ignore',
             )
+            # Keep piping stdout into iperf_server_log_list so we can analyse it later.
             Thread(target=_read_output, args=(process, self.iperf_server_log_list), daemon=True).start()
             return process
 
@@ -399,7 +402,10 @@ class dut():
                 if stderr_text:
                     logging.warning(stderr_text.strip())
                 if stdout_text:
-                    logging.debug(stdout_text.strip())
+                    logging.info(stdout_text.strip())
+                    # TODO: 重新启用客户端 stdout 聚合时，将 iperf 行写入 self.iperf_client_log_list
+                    # if 'iperf' in command:
+                    #     _extend_logs(self.iperf_client_log_list, stdout_text)
 
             try:
                 stdout, stderr = process.communicate(timeout=self.iperf_wait_time)
@@ -421,6 +427,8 @@ class dut():
 
         if '-s' in command:
             self.iperf_server_log_list = []
+            # TODO: 若恢复客户端日志缓存，这里同步清理 self.iperf_client_log_list
+            # self.iperf_client_log_list = []
             if use_adb:
                 if pytest.connect_type == 'telnet':
                     def telnet_iperf():
@@ -445,6 +453,8 @@ class dut():
             else:
                 return _start_background(_build_cmd_list(), 'server pc command:')
         else:
+            # TODO: 若恢复客户端日志缓存，这里需要重置 self.iperf_client_log_list
+            # self.iperf_client_log_list = []
             if use_adb:
                 if pytest.connect_type == 'telnet':
                     logging.info(f'client telnet command: {command}')
@@ -462,9 +472,13 @@ class dut():
                 _run_blocking(_build_cmd_list(), 'client pc command:')
 
     def _parse_iperf_log(self, server_lines: list[str]):
+        # Parse iperf stdout (collected by run_iperf) and synthesize a single IperfMetrics
+        # object. For TCP we rely on [SUM] interval lines: prefer the summary line,
+        # otherwise average whatever intervals we actually captured.
         def _analyse_lines(lines: list[str]) -> tuple[Optional[float], Optional[IperfMetrics], int, bool]:
             interval_pattern = re.compile(r'(\d+(?:\.\d*)?)\s*-\s*(\d+(?:\.\d*)?)\s*sec', re.IGNORECASE)
             values: list[float] = []
+            seen_intervals: set[tuple[str, str]] = set()
             udp_metrics_local: Optional[IperfMetrics] = None
             summary_value: Optional[float] = None
             has_summary_line = False
@@ -487,6 +501,12 @@ class dut():
                 interval_match = interval_pattern.search(line)
                 if not interval_match:
                     continue
+                interval_key = (interval_match.group(1), interval_match.group(2))
+                try:
+                    start_time = float(interval_match.group(1))
+                    end_time = float(interval_match.group(2))
+                except (TypeError, ValueError):
+                    start_time = end_time = 0.0
                 bandwidth_match = re.search(r'(\d+(?:\.\d+)?)\s*([KMG]?bits/sec)', line, re.IGNORECASE)
                 if not bandwidth_match:
                     continue
@@ -495,13 +515,12 @@ class dut():
                 )
                 if throughput is None:
                     continue
+                if interval_key in seen_intervals:
+                    logging.debug(f'skip duplicate interval {interval_key} (throughput={throughput})')
+                    continue
+                seen_intervals.add(interval_key)
                 logging.info(f'[coco] second value {throughput}')
                 values.append(throughput)
-                try:
-                    start_time = float(interval_match.group(1))
-                    end_time = float(interval_match.group(2))
-                except (TypeError, ValueError):
-                    start_time = end_time = 0.0
                 duration = end_time - start_time
                 if start_time < 0.5 and duration > 1.5:
                     summary_value = throughput
@@ -526,26 +545,30 @@ class dut():
         preferred_udp = server_udp_metrics
 
         line_count = server_count
-        expected_intervals = getattr(self, "iperf_test_time", 0) or 0
-        expected_intervals = max(1, int(expected_intervals))
-        has_enough_samples = line_count >= expected_intervals
-        if not server_has_summary and line_count:
-            if has_enough_samples:
-                logging.info(
-                    "iperf summary line missing; using average throughput over %d intervals",
-                    line_count,
-                )
+        expected_intervals_raw = getattr(self, "iperf_test_time", 0) or 0
+        expected_intervals = int(expected_intervals_raw) if expected_intervals_raw else 0
+        if not server_has_summary:
+            if line_count:
+                if expected_intervals and line_count < expected_intervals:
+                    logging.warning(
+                        "iperf output only produced %d intervals (expected %d)",
+                        line_count,
+                        expected_intervals,
+                    )
+                elif expected_intervals:
+                    logging.info(
+                        "iperf summary line missing; using average throughput over %d intervals",
+                        line_count,
+                    )
             else:
-                logging.warning(
-                    "iperf output only produced %d intervals (expected %d)",
-                    line_count,
-                    expected_intervals,
-                )
-        valid_samples = server_has_summary or has_enough_samples
-        if valid_samples:
-            throughput_result = preferred_value if preferred_value else None
-        else:
-            throughput_result = None
+                logging.warning("iperf output did not contain interval lines")
+        throughput_result = preferred_value if preferred_value is not None else None
+        logging.info(
+            "iperf throughput result after analysis: %s (intervals=%d, summary=%s)",
+            throughput_result,
+            line_count,
+            server_has_summary,
+        )
 
         if preferred_udp:
             preferred_udp.throughput_mbps = throughput_result
@@ -555,10 +578,81 @@ class dut():
 
     def get_logcat(self):
         # pytest.dut.kill_iperf()
-        # 分析 iperf 测试结果
+        # 等待 run_iperf 后台线程把 iperf stdout 收集完，再解析出 IperfMetrics。
+        expected_intervals_raw = getattr(self, "iperf_test_time", 0) or 0
+        expected_intervals = int(expected_intervals_raw) if expected_intervals_raw else 0
+        if expected_intervals:
+            interval_pattern = re.compile(r'(\d+(?:\.\d*)?)\s*-\s*(\d+(?:\.\d*)?)\s*sec', re.IGNORECASE)
+            wait_deadline = time.time() + min(5.0, max(1.0, expected_intervals * 0.1))
+            start_time = time.time()
+            last_sum_count = -1
+            last_total_lines = -1
+            exit_reason = "deadline"
+            has_summary = False
+            while time.time() < wait_deadline:
+                snapshot = list(self.iperf_server_log_list)
+                total_lines = len(snapshot)
+                sum_intervals: set[tuple[str, str]] = set()
+                for text in snapshot:
+                    sanitized = dut._sanitize_iperf_line(text)
+                    if not sanitized:
+                        continue
+                    match = interval_pattern.search(sanitized)
+                    if not match:
+                        continue
+                    start, end = match.group(1), match.group(2)
+                    if '[SUM]' not in sanitized:
+                        continue
+                    sum_intervals.add((start, end))
+                    if not has_summary:
+                        try:
+                            start_f = float(start)
+                            end_f = float(end)
+                        except (TypeError, ValueError):
+                            continue
+                        # Summary lines span几乎整个测试窗口（例：0.00-30.00），检测到即终止等待。
+                        if end_f - start_f >= max(1.0, expected_intervals - 1):
+                            has_summary = True
+                current_sum_count = len(sum_intervals)
+                elapsed = time.time() - start_time
+                if (
+                    current_sum_count != last_sum_count
+                    or total_lines != last_total_lines
+                ):
+                    logging.info(
+                        "iperf wait: SUM intervals=%d total_lines=%d after %.2fs",
+                        current_sum_count,
+                        total_lines,
+                        elapsed,
+                    )
+                    last_sum_count = current_sum_count
+                    last_total_lines = total_lines
+                if has_summary:
+                    exit_reason = "summary_line"
+                    break
+                if expected_intervals and current_sum_count >= expected_intervals:
+                    exit_reason = "expected_interval_count"
+                    break
+                time.sleep(0.1)
+            elapsed = time.time() - start_time
+            logging.info(
+                "iperf wait finished: sum_intervals=%d, summary=%s, elapsed=%.2fs, reason=%s",
+                last_sum_count if last_sum_count >= 0 else 0,
+                has_summary,
+                elapsed,
+                exit_reason,
+            )
         server_lines = list(self.iperf_server_log_list)
+        logging.info("iperf server raw lines captured: %d", len(server_lines))
+        # TODO: 如果再次启用客户端日志补齐，在此处合并 client_lines
+        # client_lines = list(self.iperf_client_log_list)
+        # if client_lines:
+        #     logging.info("iperf client raw lines captured: %d", len(client_lines))
+        #     server_lines.extend(client_lines)
         result = self._parse_iperf_log(server_lines)
         self.iperf_server_log_list.clear()
+        # TODO: 与上方合并逻辑配套，清理客户端日志缓存
+        # self.iperf_client_log_list.clear()
         if result is None:
             return None
         if result.throughput_mbps is not None:
@@ -615,6 +709,7 @@ class dut():
             pytest.testResult.save_result(self._format_result_row(values))
             return 'N/A'
 
+        # Accumulate one or more throughput samples (each IperfMetrics instance) for DL.
         rx_metrics_list: list[IperfMetrics] = []
         self.rvr_result = None
         mcs_rx = None
@@ -649,6 +744,7 @@ class dut():
                     pytest.dut.run_iperf(client_cmd, '')
                     if pytest.connect_type == 'telnet':
                         time.sleep(5)
+                    # Pull the latest iperf server output, parse it into IperfMetrics.
                     rx_result = self.get_logcat()
                     self.rvr_result = None
                     if terminal and hasattr(terminal, 'terminate'):
@@ -696,6 +792,7 @@ class dut():
             if rx_val < self.throughput_threshold:
                 self.skip_rx = True
 
+        # Convert collected metrics into CSV-ready cells and write the result.
         throughput_entries: list[str] = []
         for metric in rx_metrics_list:
             formatted = metric.formatted_throughput()

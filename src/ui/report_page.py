@@ -32,9 +32,15 @@ from PyQt5.QtWidgets import (
 )
 from qfluentwidgets import CardWidget, StrongBodyLabel
 
-from .theme import apply_theme
-from src.util.constants import (
+from .theme import (
+    ACCENT_COLOR,
     BACKGROUND_COLOR,
+    FONT_FAMILY,
+    STYLE_BASE,
+    TEXT_COLOR,
+    apply_theme,
+)
+from src.util.constants import (
     BANDWIDTH_ORDER,
     BANDWIDTH_ORDER_MAP,
     CHART_DPI,
@@ -42,13 +48,10 @@ from src.util.constants import (
     DIRECTION_ORDER_MAP,
     FREQ_BAND_ORDER,
     FREQ_BAND_ORDER_MAP,
-    FONT_FAMILY,
     STANDARD_ORDER,
     STANDARD_ORDER_MAP,
-    STYLE_BASE,
     TEST_TYPE_ORDER,
     TEST_TYPE_ORDER_MAP,
-    TEXT_COLOR,
 )
 from src.util.rvr_chart_logic import RvrChartLogic
 
@@ -232,7 +235,7 @@ class ReportPage(RvrChartLogic, CardWidget):
         self.title_label = StrongBodyLabel("Reports")
         apply_theme(self.title_label)
         self.title_label.setStyleSheet(
-            f"border-left: 4px solid #0067c0; padding-left: 8px; font-family:{FONT_FAMILY};"
+            f"border-left: 4px solid {ACCENT_COLOR}; padding-left: 8px; font-family:{FONT_FAMILY};"
         )
         root.addWidget(self.title_label)
 
