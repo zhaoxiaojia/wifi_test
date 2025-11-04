@@ -171,10 +171,14 @@ class _StepSwitcher(QWidget):
             return
         self._current = index
         for i, label in enumerate(self._labels):
+            # Ensure inline styles keep the enlarged wizard font size override.
+            font_size_rule = ""
+            if STEP_LABEL_FONT_PIXEL_SIZE > 0:
+                font_size_rule = f"font-size: {STEP_LABEL_FONT_PIXEL_SIZE}px;"
             if i == index:
-                label.setStyleSheet("color: #0078d4; font-weight: 600;")
+                label.setStyleSheet(f"{font_size_rule} color: #0078d4; font-weight: 600;")
             else:
-                label.setStyleSheet("color: #6c6c6c; font-weight: 400;")
+                label.setStyleSheet(f"{font_size_rule} color: #6c6c6c; font-weight: 400;")
 
     @staticmethod
     def _create_step_font(base_font: QFont) -> QFont:
