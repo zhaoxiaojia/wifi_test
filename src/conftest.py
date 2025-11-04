@@ -16,6 +16,7 @@ import shutil
 import subprocess
 from datetime import datetime
 from pathlib import Path
+from contextlib import suppress
 
 import pytest
 import csv
@@ -144,7 +145,7 @@ def pytest_sessionstart(session):
             info = subprocess.check_output("adb devices", shell=True, encoding='utf-8')
             device = re.findall(r'\n(.*?)\s+device', info, re.S)
             if device: device = device[0]
-        pytest.dut = adb(serialnumber=device if device else '')
+            pytest.dut = adb(serialnumber=device if device else '')
     elif pytest.connect_type == 'Linux':
         # Create telnet obj
         telnet_cfg = connect_cfg.get('Linux') or connect_cfg.get('telnet') or {}
@@ -155,7 +156,9 @@ def pytest_sessionstart(session):
         pytest.dut.roku = roku_ctrl(telnet_ip)
     else:
         raise EnvironmentError("Not support connect type %s" % pytest.connect_type)
-    pytest.testResult = TestResult(session.config.getoption("--resultpath"), [], repeat_times)
+    pytest._result_path = session.config.getoption("--resultpath") or os.getcwd()
+    pytest._testresult_repeat_times = repeat_times
+    pytest.testResult = None
     if os.path.exists('temp.txt'):
         os.remove('temp.txt')
 
@@ -173,15 +176,30 @@ def pytest_collection_finish(session):
         path_text = str(getattr(item, "fspath", "")).replace("\\", "/").lower()
         if not path_text:
             continue
+        if "test/performance/" in path_text:
+            selected_types.add("PERFORMANCE")
         if "test_wifi_rvr" in path_text:
             selected_types.add("RVR")
         elif "test_wifi_rvo" in path_text:
             selected_types.add("RVO")
+        elif "test/stability/" in path_text:
+            selected_types.add("STABILITY")
     if selected_types:
         pytest.selected_test_types = selected_types
         logging.info("Detected selected Wi-Fi test types: %s", ", ".join(sorted(selected_types)))
     else:
         pytest.selected_test_types = set()
+
+    result_path = getattr(pytest, "_result_path", None)
+    repeat_times = getattr(pytest, "_testresult_repeat_times", 0)
+    needs_performance_logging = any(kind in {"RVR", "RVO", "PERFORMANCE"} for kind in selected_types)
+    if needs_performance_logging:
+        logdir = result_path or os.getcwd()
+        pytest.testResult = TestResult(logdir, [], repeat_times)
+    else:
+        pytest.testResult = None
+        if "STABILITY" in selected_types:
+            logging.info("Performance log artifacts disabled for stability-only execution")
 
 
 def pytest_runtest_setup(item):
@@ -346,8 +364,22 @@ def pytest_sessionfinish(session, exitstatus):
     #         writer = csv.writer(file, quotechar=' ')
     #         writer.writerow(row_data)
 
-    shutil.copy("pytest.log", "debug.log")
-    shutil.move("debug.log", pytest.testResult.logdir)
-    _maybe_generate_project_report()
+    result_path = getattr(pytest, "_result_path", None)
+    destination_dir: Path | None = None
+    if result_path:
+        destination_dir = Path(result_path)
+        with suppress(Exception):
+            destination_dir.mkdir(parents=True, exist_ok=True)
+
+    src_log = Path("pytest.log")
+    if destination_dir and src_log.exists():
+        try:
+            shutil.copy(src_log, destination_dir / "debug.log")
+        except Exception as exc:
+            logging.warning("Failed to copy pytest.log to %s: %s", destination_dir, exc)
+
+    test_result = getattr(pytest, "testResult", None)
+    if isinstance(test_result, TestResult):
+        _maybe_generate_project_report()
     # shutil.copy("report.html", "report_bat.html")
     # shutil.move("report_bat.html", pytest.testResult.logdir)
