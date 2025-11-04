@@ -14,7 +14,7 @@ connect_type:
   third_party:
     enabled: false
     wait_seconds: 45
-  type: Android
+  type: Linux
 fpga:
   customer: XIAOMI
   product_line: OTT
