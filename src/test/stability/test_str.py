@@ -61,7 +61,7 @@ class TestStrSettings:
 
 
 def _extract_stability_case(
-    stability_cfg: Mapping[str, Any] | None, case_name: str
+        stability_cfg: Mapping[str, Any] | None, case_name: str
 ) -> Mapping[str, Any]:
     if not isinstance(stability_cfg, Mapping):
         return {}
@@ -115,12 +115,12 @@ def _run_cycle(label: str, cycle: CycleConfig) -> None:
     )
     try:
         with UsbRelayDevice(cycle.port) as relay:
-            pulse(relay, cycle.mode)
             if cycle.on_duration > 0:
                 time.sleep(cycle.on_duration)
             pulse(relay, cycle.mode)
             if cycle.off_duration > 0:
                 time.sleep(cycle.off_duration)
+            pulse(relay, cycle.mode)
     except Exception as exc:  # pragma: no cover - hardware dependent
         logging.error("[%s] relay operation failed: %s", label, exc)
         return
