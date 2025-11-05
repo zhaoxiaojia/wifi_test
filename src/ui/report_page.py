@@ -15,8 +15,8 @@ from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.lines import Line2D
 
 import pandas as pd
-from PyQt5.QtCore import Qt, QTimer, QEvent
-from PyQt5.QtGui import QPixmap, QImage, QFont
+from PyQt5.QtCore import Qt, QTimer, QEvent, QUrl
+from PyQt5.QtGui import QPixmap, QImage, QFont, QDesktopServices
 from PyQt5.QtWidgets import (
     QHBoxLayout,
     QVBoxLayout,
@@ -241,6 +241,8 @@ class ReportPage(RvrChartLogic, CardWidget):
 
         self.dir_label = QLabel("Report dir: -")
         apply_theme(self.dir_label)
+        self.dir_label.setCursor(Qt.PointingHandCursor)
+        self.dir_label.mousePressEvent = self._open_report_dir
         root.addWidget(self.dir_label)
 
         body = QHBoxLayout()
@@ -325,6 +327,11 @@ class ReportPage(RvrChartLogic, CardWidget):
         # refresh now if visible
         if self.isVisible():
             self.refresh_file_list()
+
+    def _open_report_dir(self, event):
+        if self._report_dir and self._report_dir.exists():
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(self._report_dir)))
+        QLabel.mousePressEvent(self.dir_label, event)
 
     def set_case_context(self, case_path: str | Path | None) -> None:
         if isinstance(case_path, str) and not case_path.strip():
