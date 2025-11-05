@@ -161,6 +161,7 @@ def run_stability_plan(
     """Execute ``pytest`` under the provided stability plan."""
 
     delegate_loops = plan.mode == "loops"
+    delegate_limit = plan.mode == "limit"
     requested_loops = plan.loops or 0
     total_runs = 0
     passed_runs = 0
@@ -201,6 +202,9 @@ def run_stability_plan(
             next_iteration = total_runs + 1
             if delegate_loops and total_runs >= 1:
                 stop_reason = "completed requested loops"
+                break
+            if delegate_limit and total_runs >= 1:
+                stop_reason = "running until stopped"
                 break
             if (
                 plan.mode == "duration"
