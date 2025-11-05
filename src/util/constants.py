@@ -109,6 +109,7 @@ CONFIG_KEY_ALIASES: Final[dict[str, str]] = {
     "dut": "connect_type",
 }
 TOOL_CONFIG_FILENAME: Final[str] = "tool_config.yaml"
+STABILITY_CONFIG_FILENAME: Final[str] = "config_stability.yaml"
 
 # UI theme defaults
 FONT_SIZE: Final[int] = 14
@@ -187,27 +188,39 @@ def _normalize_config_keys(data: Mapping[str, Any] | None) -> dict[str, Any]:
     return normalised
 
 
-def split_config_data(config: Mapping[str, Any] | None) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Split the full configuration into DUT-specific and general sections."""
+def split_config_data(
+    config: Mapping[str, Any] | None,
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    """Split the full configuration into DUT, general, and stability sections."""
     normalised = _normalize_config_keys(config)
     dut_section: dict[str, Any] = {}
     other_section: dict[str, Any] = {}
+    stability_section: dict[str, Any] = {}
     for key, value in normalised.items():
+        if key == "stability":
+            if isinstance(value, Mapping):
+                stability_section = copy.deepcopy(value)
+            continue
         if key in DUT_SECTION_KEYS:
             dut_section[key] = copy.deepcopy(value)
         else:
             other_section[key] = copy.deepcopy(value)
-    return dut_section, other_section
+    return dut_section, other_section, stability_section
 
 
 def merge_config_sections(
     dut_section: Mapping[str, Any] | None,
     other_section: Mapping[str, Any] | None,
+    stability_section: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Return a merged configuration mapping from DUT and general sections."""
+    """Return a merged configuration mapping from DUT, general, and stability sections."""
     merged: dict[str, Any] = {}
     merged.update(_normalize_config_keys(other_section))
     merged.update(_normalize_config_keys(dut_section))
+    if isinstance(stability_section, Mapping):
+        merged["stability"] = copy.deepcopy(stability_section)
+    else:
+        merged.setdefault("stability", {})
     return merged
 
 
@@ -251,9 +264,11 @@ def _load_config_cached(base_dir: str) -> dict[str, Any]:
     config_dir = Path(base_dir)
     dut_path = config_dir / DUT_CONFIG_FILENAME
     other_path = config_dir / OTHER_CONFIG_FILENAME
+    stability_path = config_dir / STABILITY_CONFIG_FILENAME
     dut_section = _read_yaml_dict(dut_path)
     other_section = _read_yaml_dict(other_path)
-    return merge_config_sections(dut_section, other_section)
+    stability_section = _read_yaml_dict(stability_path)
+    return merge_config_sections(dut_section, other_section, stability_section)
 
 
 def load_config(
@@ -261,7 +276,7 @@ def load_config(
     *,
     base_dir: str | os.PathLike[str] | None = None,
 ) -> dict[str, Any]:
-    """Return a deep-copied configuration dictionary.
+    """Return a deep-copied configuration dictionary including stability data.
 
     Set ``refresh=True`` to discard the cached content and re-read from disk.
     """
@@ -328,15 +343,19 @@ def is_database_debug_enabled(
 def save_config_sections(
     dut_section: Mapping[str, Any] | None,
     other_section: Mapping[str, Any] | None,
+    stability_section: Mapping[str, Any] | None,
     *,
     base_dir: str | os.PathLike[str] | None = None,
 ) -> None:
-    """Persist DUT and general configuration sections to their respective files."""
+    """Persist DUT, general, and stability configuration sections."""
     config_base = Path(base_dir) if base_dir is not None else get_config_base()
     dut_path = config_base / DUT_CONFIG_FILENAME
     other_path = config_base / OTHER_CONFIG_FILENAME
+    stability_path = config_base / STABILITY_CONFIG_FILENAME
     _write_yaml_dict(dut_path, _normalize_config_keys(dut_section))
     _write_yaml_dict(other_path, _normalize_config_keys(other_section))
+    stability_payload = stability_section if isinstance(stability_section, Mapping) else {}
+    _write_yaml_dict(stability_path, stability_payload)
 
 
 def save_config(
@@ -345,8 +364,8 @@ def save_config(
     base_dir: str | os.PathLike[str] | None = None,
 ) -> None:
     """Persist the combined configuration dictionary."""
-    dut_section, other_section = split_config_data(config)
-    save_config_sections(dut_section, other_section, base_dir=base_dir)
+    dut_section, other_section, stability_section = split_config_data(config)
+    save_config_sections(dut_section, other_section, stability_section, base_dir=base_dir)
     _load_config_cached.cache_clear()
 
 

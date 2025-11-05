@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, Optional
@@ -24,7 +25,7 @@ __all__ = [
 
 STABILITY_MODE_ENV = "WIFI_STABILITY_MODE"
 STABILITY_LOOPS_ENV = "WIFI_STABILITY_LOOPS"
-STABILITY_DURATION_ENV = "WIFI_STABILITY_DURATION_MINUTES"
+STABILITY_DURATION_ENV = "WIFI_STABILITY_DURATION_HOURS"
 STABILITY_COMPLETED_LOOPS_ENV = "WIFI_STABILITY_COMPLETED_LOOPS"
 
 
@@ -33,8 +34,8 @@ class StabilityPlan:
     """Normalized stability execution plan."""
 
     mode: str
-    loops: int
-    duration_minutes: int
+    loops: Optional[int]
+    duration_hours: Optional[float]
 
 
 def _iter_segments(candidate: Path) -> Iterable[str]:
@@ -83,31 +84,44 @@ def is_stability_case_path(path: Any) -> bool:
     return False
 
 
+def _coerce_positive_int(value: Any) -> Optional[int]:
+    try:
+        candidate = int(value)
+    except (TypeError, ValueError):
+        return None
+    return candidate if candidate > 0 else None
+
+
+def _coerce_positive_float(value: Any) -> Optional[float]:
+    try:
+        candidate = float(value)
+    except (TypeError, ValueError):
+        return None
+    return candidate if candidate > 0 else None
+
+
 def normalize_stability_config(raw_value: Any) -> StabilityPlan:
     """Normalize persisted stability plan for safe execution."""
 
-    defaults = {"mode": "loops", "loops": 1, "duration_minutes": 5}
     if isinstance(raw_value, dict):
         normalized: Dict[str, Any] = dict(raw_value)
     else:
         normalized = {}
 
-    mode_text = str(normalized.get("mode", defaults["mode"])).strip().lower()
-    if mode_text not in {"loops", "duration"}:
-        mode_text = "loops"
+    loop_value = _coerce_positive_int(normalized.get("loop"))
+    duration_value = _coerce_positive_float(normalized.get("duration_hours"))
 
-    def _coerce(key: str, fallback: int, limit: int) -> int:
-        try:
-            value = int(normalized.get(key, fallback))
-        except (TypeError, ValueError):
-            value = fallback
-        if value <= 0:
-            value = fallback
-        return min(value, limit)
+    if loop_value and duration_value:
+        logging.info(
+            "Both loop and duration were configured; using loop-based stability plan.",
+        )
+        duration_value = None
 
-    loops = _coerce("loops", defaults["loops"], 999_999)
-    duration = _coerce("duration_minutes", defaults["duration_minutes"], 24 * 60)
-    return StabilityPlan(mode_text, loops, duration)
+    if loop_value:
+        return StabilityPlan("loops", loop_value, None)
+    if duration_value:
+        return StabilityPlan("duration", None, duration_value)
+    return StabilityPlan("limit", None, None)
 
 
 def load_stability_plan() -> StabilityPlan:
@@ -116,7 +130,11 @@ def load_stability_plan() -> StabilityPlan:
     from src.tools.config_loader import load_config
 
     snapshot = load_config(refresh=True) or {}
-    return normalize_stability_config(snapshot.get("stability_conditions"))
+    stability_cfg = snapshot.get("stability")
+    duration_cfg = {}
+    if isinstance(stability_cfg, dict):
+        duration_cfg = stability_cfg.get("duration_control") or {}
+    return normalize_stability_config(duration_cfg)
 
 
 def prepare_stability_environment() -> None:
@@ -143,26 +161,33 @@ def run_stability_plan(
     """Execute ``pytest`` under the provided stability plan."""
 
     delegate_loops = plan.mode == "loops"
-    requested_loops = plan.loops if plan.mode == "loops" else 0
+    requested_loops = plan.loops or 0
     total_runs = 0
     passed_runs = 0
     last_exit_code = 0
     stop_reason = ""
     overall_start = time.monotonic()
     deadline = (
-        overall_start + plan.duration_minutes * 60
-        if plan.mode == "duration"
+        overall_start + plan.duration_hours * 3600
+        if plan.mode == "duration" and plan.duration_hours is not None
         else None
     )
     loop_completed = 0
 
+    if plan.mode == "duration" and plan.duration_hours is not None:
+        duration_value = f"{plan.duration_hours}"
+    elif plan.mode == "limit":
+        duration_value = "limit"
+    else:
+        duration_value = ""
+
     env_updates: Dict[str, str] = {
         STABILITY_MODE_ENV: plan.mode,
-        STABILITY_DURATION_ENV: str(plan.duration_minutes),
+        STABILITY_DURATION_ENV: duration_value,
         STABILITY_COMPLETED_LOOPS_ENV: "0",
     }
     if delegate_loops:
-        env_updates[STABILITY_LOOPS_ENV] = str(plan.loops)
+        env_updates[STABILITY_LOOPS_ENV] = str(plan.loops or 0)
 
     _sentinel = object()
     previous_env: Dict[str, Any] = {}
@@ -175,9 +200,6 @@ def run_stability_plan(
         while True:
             next_iteration = total_runs + 1
             if delegate_loops and total_runs >= 1:
-                stop_reason = "completed requested loops"
-                break
-            if plan.mode == "loops" and not delegate_loops and total_runs >= plan.loops:
                 stop_reason = "completed requested loops"
                 break
             if (
@@ -226,11 +248,7 @@ def run_stability_plan(
                 if delegate_loops and requested_loops and progress_cb is not None:
                     percent = int(loop_completed / requested_loops * 100)
                     progress_cb(min(100, max(0, percent)))
-                elif (
-                    plan.mode == "loops"
-                    and plan.loops
-                    and progress_cb is not None
-                ):
+                elif plan.mode == "loops" and plan.loops and progress_cb is not None:
                     percent = int(passed_runs / plan.loops * 100)
                     progress_cb(percent)
             else:
@@ -259,11 +277,12 @@ def run_stability_plan(
                 break
 
         if not stop_reason:
-            stop_reason = (
-                "completed requested loops"
-                if plan.mode == "loops"
-                else "reached duration limit"
-            )
+            if plan.mode == "loops":
+                stop_reason = "completed requested loops"
+            elif plan.mode == "duration":
+                stop_reason = "reached duration limit"
+            else:
+                stop_reason = "stopped by controller"
 
         if delegate_loops:
             target = requested_loops or loop_completed or 1
