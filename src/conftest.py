@@ -30,6 +30,11 @@ from src.tools.router_tool.Router import Router
 from src.tools.reporting import generate_project_report
 from src.test.pyqt_log import emit_pyqt_message
 
+try:
+    import sitecustomize  # type: ignore
+except Exception:  # pragma: no cover - defensive, sitecustomize is optional at runtime
+    sitecustomize = None
+
 # pytest_plugins = "util.report_plugin"
 test_results = []
 import logging
@@ -379,6 +384,30 @@ def pytest_sessionfinish(session, exitstatus):
             logging.warning("Failed to copy pytest.log to %s: %s", destination_dir, exc)
 
     test_result = getattr(pytest, "testResult", None)
+    if sitecustomize and hasattr(sitecustomize, "flush_python_run_log"):
+        try:
+            sitecustomize.flush_python_run_log()
+        except Exception as exc:
+            logging.warning("Failed to flush python_run.log: %s", exc)
+    python_run_env = os.environ.get("PYTHON_RUN_ROOT_LOG")
+    python_run_src = Path(python_run_env) if python_run_env else None
+    if isinstance(test_result, TestResult):
+        try:
+            logdir = Path(getattr(test_result, "logdir", "") or "").resolve()
+        except Exception:
+            logdir = None
+        else:
+            if logdir:
+                with suppress(Exception):
+                    logdir.mkdir(parents=True, exist_ok=True)
+                if python_run_src and python_run_src.is_file():
+                    try:
+                        shutil.copy2(python_run_src, logdir / python_run_src.name)
+                        logging.info("Archived python_run.log to %s", logdir)
+                    except Exception as exc:
+                        logging.warning(
+                            "Failed to archive python_run.log to %s: %s", logdir, exc
+                        )
     if isinstance(test_result, TestResult):
         _maybe_generate_project_report()
     # shutil.copy("report.html", "report_bat.html")
