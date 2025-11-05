@@ -144,8 +144,8 @@ def pytest_sessionstart(session):
             # Obtain the device number dynamically
             info = subprocess.check_output("adb devices", shell=True, encoding='utf-8')
             device = re.findall(r'\n(.*?)\s+device', info, re.S)
-            if device: device = device[0]
-            pytest.dut = adb(serialnumber=device if device else '')
+            # if device: device = device[0]
+        pytest.dut = adb(serialnumber=device if device else '')
     elif pytest.connect_type == 'Linux':
         # Create telnet obj
         telnet_cfg = connect_cfg.get('Linux') or connect_cfg.get('telnet') or {}
