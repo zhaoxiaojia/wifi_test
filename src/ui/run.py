@@ -106,7 +106,11 @@ class LiveLogWriter:
         raise io.UnsupportedOperation("Not a real file")
 
 
-def _pytest_worker(case_path: str, q: multiprocessing.Queue):
+def _pytest_worker(
+    case_path: str,
+    q: multiprocessing.Queue,
+    log_file_path_str: str | None = None,
+):
     """子进程执行pytest，将日志和进度写入队列"""
 
     pid = os.getpid()
@@ -115,13 +119,17 @@ def _pytest_worker(case_path: str, q: multiprocessing.Queue):
     log_file_path: Path | None = None
     log_write_failed = False
     try:
-        log_workspace = getattr(Paths, "WORKSPACE", None)
-        if log_workspace:
-            base_dir = Path(log_workspace)
-            base_dir.mkdir(parents=True, exist_ok=True)
+        if log_file_path_str:
+            log_file_path = Path(log_file_path_str)
+            log_file_path.parent.mkdir(parents=True, exist_ok=True)
         else:
-            base_dir = Path(tempfile.mkdtemp(prefix="pytest_log_"))
-        log_file_path = base_dir / "python.log"
+            log_workspace = getattr(Paths, "WORKSPACE", None)
+            if log_workspace:
+                base_dir = Path(log_workspace)
+                base_dir.mkdir(parents=True, exist_ok=True)
+            else:
+                base_dir = Path(tempfile.mkdtemp(prefix="pytest_log_"))
+            log_file_path = base_dir / "python.log"
         log_file_handle = open(log_file_path, "w", encoding="utf-8")
     except Exception:
         log_file_handle = None
@@ -335,8 +343,12 @@ class CaseRunner(QThread):
     def run(self):
         """启动子进程运行pytest，并监听队列更新GUI"""
         logging.info("CaseRunner: preparing to start process for %s", self.case_path)
+        python_log_path = self._prepare_python_log_path()
+        self._python_log_path = python_log_path
+        self._python_log_copied = False
         self._proc = self._ctx.Process(
-            target=_pytest_worker, args=(self.case_path, self._queue)
+            target=_pytest_worker,
+            args=(self.case_path, self._queue, python_log_path),
         )
         self._proc.start()
         logging.info(
@@ -406,7 +418,17 @@ class CaseRunner(QThread):
         if self._proc and self._proc.is_alive():
             self._proc.terminate()
 
-
+    def _prepare_python_log_path(self) -> str | None:
+        log_workspace = getattr(Paths, "WORKSPACE", None)
+        try:
+            if log_workspace:
+                base_dir = Path(log_workspace)
+                base_dir.mkdir(parents=True, exist_ok=True)
+            else:
+                base_dir = Path(tempfile.mkdtemp(prefix="pytest_log_"))
+            return str(base_dir / "python.log")
+        except Exception:
+            return None
     def _try_copy_python_log(self) -> None:
         if self._python_log_copied or not self._python_log_path:
             return
