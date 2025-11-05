@@ -418,7 +418,6 @@ class CaseRunner(QThread):
         if self._proc and self._proc.is_alive():
             self._proc.terminate()
 
-
     def _prepare_python_log_path(self) -> str | None:
         log_workspace = getattr(Paths, "WORKSPACE", None)
         try:
@@ -430,8 +429,6 @@ class CaseRunner(QThread):
             return str(base_dir / "python.log")
         except Exception:
             return None
-
-
     def _try_copy_python_log(self) -> None:
         if self._python_log_copied or not self._python_log_path:
             return
