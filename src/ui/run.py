@@ -166,7 +166,9 @@ def _pytest_worker(case_path: str, q: multiprocessing.Queue):
                     target_desc = (
                         f"{plan_info.loops} loops"
                         if plan_info.mode == "loops"
-                        else f"{plan_info.duration_minutes} minutes"
+                        else f"{plan_info.duration_hours} hours"
+                        if plan_info.mode == "duration"
+                        else "until stopped"
                     )
                     q.put(
                         (
@@ -179,12 +181,15 @@ def _pytest_worker(case_path: str, q: multiprocessing.Queue):
                     iteration = payload["iteration"]
                     if plan_info.mode == "loops":
                         phase_desc = f"loop {iteration}/{plan_info.loops}"
-                    else:
+                    elif plan_info.mode == "duration":
                         remaining = payload.get("remaining_seconds") or 0
-                        remaining_min = max(remaining // 60, 0)
+                        remaining_hours = max(remaining / 3600, 0.0)
+                        duration_hours = plan_info.duration_hours or 0
                         phase_desc = (
-                            f"target {plan_info.duration_minutes} min ({remaining_min}m left)"
+                            f"target {duration_hours} h ({remaining_hours:.2f}h left)"
                         )
+                    else:
+                        phase_desc = "running until stopped"
                     q.put(
                         (
                             "log",
