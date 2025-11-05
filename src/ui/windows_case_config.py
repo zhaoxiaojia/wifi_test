@@ -53,6 +53,7 @@ from PyQt5.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QSpinBox,
+    QDoubleSpinBox,
 )
 
 from qfluentwidgets import (
@@ -631,7 +632,8 @@ class CaseConfigPage(CardWidget):
         self._refreshing = False
         self._pending_path: str | None = None
         self.field_widgets: dict[str, QWidget] = {}
-        self._stability_conditions_group: QGroupBox | None = None
+        self._duration_control_group: QGroupBox | None = None
+        self._check_point_group: QGroupBox | None = None
         self.router_obj = None
         self.selected_csv_path: str | None = None
         self._enable_rvr_wifi: bool = False
@@ -1066,20 +1068,16 @@ class CaseConfigPage(CardWidget):
                 path_obj = path_obj.resolve().relative_to(self._get_application_base())
             except ValueError:
                 path_obj = path_obj.resolve()
-        normalized = path_obj.as_posix()
-        if not normalized.startswith("test/"):
-            normalized = self._display_to_case_path(normalized)
-        return normalized.replace('/', '__').replace('.', '_').lower()
+        stem = path_obj.stem
+        return stem.lower()
 
     def _script_field_key(self, case_key: str, *parts: str) -> str:
         suffix = ".".join(parts)
-        return f"script_params.{case_key}.{suffix}"
+        return f"stability.cases.{case_key}.{suffix}"
 
     def _initialize_script_config_groups(self) -> None:
-        script_section = self.config.get("script_params")
-        if not isinstance(script_section, dict):
-            script_section = {}
-            self.config["script_params"] = script_section
+        stability_cfg = self.config.setdefault("stability", {})
+        stability_cfg.setdefault("cases", {})
         self._script_groups.clear()
         for case_path, factory in self._script_config_factories.items():
             case_key = self._script_case_key(case_path)
@@ -1091,11 +1089,11 @@ class CaseConfigPage(CardWidget):
         self._stability_panel.set_groups(self._compose_stability_groups(None))
 
     def _ensure_script_case_defaults(self, case_key: str, case_path: str) -> dict[str, Any]:
-        script_section = self.config.setdefault("script_params", {})
-        entry = script_section.get(case_key)
+        stability_cfg = self.config.setdefault("stability", {})
+        cases_section = stability_cfg.setdefault("cases", {})
+        entry = cases_section.get(case_key)
         if not isinstance(entry, dict):
             entry = {}
-        entry["case_path"] = self._display_to_case_path(case_path)
 
         def _ensure_branch(name: str) -> None:
             branch = entry.get(name)
@@ -1106,12 +1104,11 @@ class CaseConfigPage(CardWidget):
             branch.setdefault("off_duration", 0)
             branch.setdefault("port", "")
             branch.setdefault("mode", "NO")
-            branch.setdefault("ping", False)
             entry[name] = branch
 
         _ensure_branch("ac")
         _ensure_branch("str")
-        script_section[case_key] = entry
+        cases_section[case_key] = entry
         return entry
 
     def _update_script_config_ui(self, case_path: str | Path) -> None:
@@ -1196,14 +1193,12 @@ class CaseConfigPage(CardWidget):
         _set_spin(self._script_field_key(case_key, "ac", "off_duration"), ac_cfg.get("off_duration"))
         _set_combo(self._script_field_key(case_key, "ac", "port"), ac_cfg.get("port"))
         _set_combo(self._script_field_key(case_key, "ac", "mode"), ac_cfg.get("mode"))
-        _set_checkbox(self._script_field_key(case_key, "ac", "ping"), ac_cfg.get("ping"))
 
         _set_checkbox(self._script_field_key(case_key, "str", "enabled"), str_cfg.get("enabled"))
         _set_spin(self._script_field_key(case_key, "str", "on_duration"), str_cfg.get("on_duration"))
         _set_spin(self._script_field_key(case_key, "str", "off_duration"), str_cfg.get("off_duration"))
         _set_combo(self._script_field_key(case_key, "str", "port"), str_cfg.get("port"))
         _set_combo(self._script_field_key(case_key, "str", "mode"), str_cfg.get("mode"))
-        _set_checkbox(self._script_field_key(case_key, "str", "ping"), str_cfg.get("ping"))
 
         for checkbox, controls in entry.section_controls.values():
             self._set_section_controls_state(controls, checkbox.isChecked())
@@ -1358,8 +1353,6 @@ class CaseConfigPage(CardWidget):
         ac_mode_combo.setMinimumWidth(160)
         ac_mode_combo.addItems(["NO", "NC"])
 
-        ac_ping_checkbox = QCheckBox("Ping after AC cycle", group)
-
         ac_grid.addWidget(ac_on_label, 0, 0)
         ac_grid.addWidget(ac_on_spin, 0, 1)
         ac_grid.addWidget(ac_off_label, 1, 0)
@@ -1368,16 +1361,15 @@ class CaseConfigPage(CardWidget):
         ac_grid.addWidget(ac_port_combo, 2, 1)
         ac_grid.addWidget(ac_mode_label, 3, 0)
         ac_grid.addWidget(ac_mode_combo, 3, 1)
-        ac_grid.addWidget(ac_ping_checkbox, 4, 0, 1, 2)
         layout.addLayout(ac_grid)
 
         self._bind_script_section(
             ac_checkbox,
-            (ac_on_spin, ac_off_spin, ac_port_combo, ac_mode_combo, ac_ping_checkbox),
+            (ac_on_spin, ac_off_spin, ac_port_combo, ac_mode_combo),
         )
         section_controls["ac"] = (
             ac_checkbox,
-            (ac_on_spin, ac_off_spin, ac_port_combo, ac_mode_combo, ac_ping_checkbox),
+            (ac_on_spin, ac_off_spin, ac_port_combo, ac_mode_combo),
         )
 
         str_checkbox = QCheckBox("Enable STR cycle", group)
@@ -1406,8 +1398,6 @@ class CaseConfigPage(CardWidget):
         str_mode_combo.setMinimumWidth(160)
         str_mode_combo.addItems(["NO", "NC"])
 
-        str_ping_checkbox = QCheckBox("Ping after STR cycle", group)
-
         str_grid.addWidget(str_on_label, 0, 0)
         str_grid.addWidget(str_on_spin, 0, 1)
         str_grid.addWidget(str_off_label, 1, 0)
@@ -1416,16 +1406,15 @@ class CaseConfigPage(CardWidget):
         str_grid.addWidget(str_port_combo, 2, 1)
         str_grid.addWidget(str_mode_label, 3, 0)
         str_grid.addWidget(str_mode_combo, 3, 1)
-        str_grid.addWidget(str_ping_checkbox, 4, 0, 1, 2)
         layout.addLayout(str_grid)
 
         self._bind_script_section(
             str_checkbox,
-            (str_on_spin, str_off_spin, str_port_combo, str_mode_combo, str_ping_checkbox),
+            (str_on_spin, str_off_spin, str_port_combo, str_mode_combo),
         )
         section_controls["str"] = (
             str_checkbox,
-            (str_on_spin, str_off_spin, str_port_combo, str_mode_combo, str_ping_checkbox),
+            (str_on_spin, str_off_spin, str_port_combo, str_mode_combo),
         )
 
         layout.addStretch(1)
@@ -1436,7 +1425,6 @@ class CaseConfigPage(CardWidget):
         ac_checkbox.setChecked(bool(ac_cfg.get("enabled")))
         ac_on_spin.setValue(int(ac_cfg.get("on_duration") or 0))
         ac_off_spin.setValue(int(ac_cfg.get("off_duration") or 0))
-        ac_ping_checkbox.setChecked(bool(ac_cfg.get("ping")))
         ac_port = str(ac_cfg.get("port", "") or "").strip()
         ac_mode = str(ac_cfg.get("mode", "") or "").strip().upper() or "NO"
         _set_port_default(ac_port_combo, ac_port)
@@ -1445,7 +1433,6 @@ class CaseConfigPage(CardWidget):
         str_checkbox.setChecked(bool(str_cfg.get("enabled")))
         str_on_spin.setValue(int(str_cfg.get("on_duration") or 0))
         str_off_spin.setValue(int(str_cfg.get("off_duration") or 0))
-        str_ping_checkbox.setChecked(bool(str_cfg.get("ping")))
         str_port = str(str_cfg.get("port", "") or "").strip()
         str_mode = str(str_cfg.get("mode", "") or "").strip().upper() or "NO"
         _set_port_default(str_port_combo, str_port)
@@ -1456,14 +1443,12 @@ class CaseConfigPage(CardWidget):
         widgets[self._script_field_key(case_key, "ac", "off_duration")] = ac_off_spin
         widgets[self._script_field_key(case_key, "ac", "port")] = ac_port_combo
         widgets[self._script_field_key(case_key, "ac", "mode")] = ac_mode_combo
-        widgets[self._script_field_key(case_key, "ac", "ping")] = ac_ping_checkbox
 
         widgets[self._script_field_key(case_key, "str", "enabled")] = str_checkbox
         widgets[self._script_field_key(case_key, "str", "on_duration")] = str_on_spin
         widgets[self._script_field_key(case_key, "str", "off_duration")] = str_off_spin
         widgets[self._script_field_key(case_key, "str", "port")] = str_port_combo
         widgets[self._script_field_key(case_key, "str", "mode")] = str_mode_combo
-        widgets[self._script_field_key(case_key, "str", "ping")] = str_ping_checkbox
 
         field_keys = set(widgets.keys())
 
@@ -1700,46 +1685,70 @@ class CaseConfigPage(CardWidget):
 
         return normalized
 
-    def _normalize_stability_conditions(self, raw_value: Any) -> dict[str, int | str]:
-        """Normalize global stability stress settings from the persisted config.
+    def _normalize_stability_settings(self, raw_value: Any) -> dict[str, Any]:
+        """Normalize stability settings into duration, checkpoints, and cases."""
 
-        Args:
-            raw_value: Raw mapping loaded from the configuration file.
-
-        Returns:
-            A dictionary with sanitized ``mode``, ``loops`` and ``duration_minutes``.
-        """
-
-        defaults = {"mode": "loops", "loops": 1, "duration_minutes": 5}
-        if isinstance(raw_value, Mapping):
-            normalized = dict(raw_value)
-        else:
-            normalized = {}
-
-        mode_text = str(normalized.get("mode", defaults["mode"]))
-        mode_text = mode_text.strip().lower()
-        if mode_text not in {"loops", "duration"}:
-            mode_text = "loops"
-
-        def _coerce_positive_int(value: Any, fallback: int, upper_bound: int) -> int:
-            """Convert ``value`` to a bounded positive integer or ``fallback``."""
-
+        def _coerce_positive_int(value: Any) -> int | None:
             try:
-                number = int(value)
+                candidate = int(value)
             except (TypeError, ValueError):
-                number = fallback
-            if number <= 0:
-                number = fallback
-            return min(number, upper_bound)
+                return None
+            return candidate if candidate > 0 else None
 
-        loops = _coerce_positive_int(normalized.get("loops"), defaults["loops"], 999_999)
-        duration = _coerce_positive_int(
-            normalized.get("duration_minutes"),
-            defaults["duration_minutes"],
-            24 * 60,
-        )
+        def _coerce_positive_float(value: Any) -> float | None:
+            try:
+                candidate = float(value)
+            except (TypeError, ValueError):
+                return None
+            return candidate if candidate > 0 else None
 
-        return {"mode": mode_text, "loops": loops, "duration_minutes": duration}
+        def _normalize_cycle(value: Any) -> dict[str, Any]:
+            mapping = value if isinstance(value, Mapping) else {}
+            result = {
+                "enabled": bool(mapping.get("enabled")),
+                "on_duration": max(0, int(mapping.get("on_duration", 0) or 0)),
+                "off_duration": max(0, int(mapping.get("off_duration", 0) or 0)),
+                "port": str(mapping.get("port", "") or "").strip(),
+                "mode": str(mapping.get("mode", "") or "NO").strip().upper() or "NO",
+            }
+            return result
+
+        source = raw_value if isinstance(raw_value, Mapping) else {}
+
+        duration_cfg = source.get("duration_control")
+        if isinstance(duration_cfg, Mapping):
+            loop_value = _coerce_positive_int(duration_cfg.get("loop"))
+            duration_value = _coerce_positive_float(duration_cfg.get("duration_hours"))
+        else:
+            loop_value = None
+            duration_value = None
+
+        check_point_cfg = source.get("check_point")
+        if isinstance(check_point_cfg, Mapping):
+            check_point = {key: bool(value) for key, value in check_point_cfg.items()}
+        else:
+            check_point = {"ping": False}
+        check_point.setdefault("ping", False)
+
+        cases_cfg = source.get("cases")
+        cases: dict[str, dict[str, Any]] = {}
+        if isinstance(cases_cfg, Mapping):
+            for name, case_value in cases_cfg.items():
+                if not isinstance(case_value, Mapping):
+                    continue
+                cases[name] = {
+                    "ac": _normalize_cycle(case_value.get("ac")),
+                    "str": _normalize_cycle(case_value.get("str")),
+                }
+
+        return {
+            "duration_control": {
+                "loop": loop_value,
+                "duration_hours": duration_value,
+            },
+            "check_point": check_point,
+            "cases": cases,
+        }
 
     def _refresh_fpga_product_lines(
         self,
@@ -1908,6 +1917,8 @@ class CaseConfigPage(CardWidget):
                     ref[leaf] = True if text == 'True' else False if text == 'False' else text
             elif isinstance(widget, QSpinBox):
                 ref[leaf] = widget.value()
+            elif isinstance(widget, QDoubleSpinBox):
+                ref[leaf] = float(widget.value())
             elif isinstance(widget, QCheckBox):
                 ref[leaf] = widget.isChecked()
         if hasattr(self, "_fpga_details"):
@@ -1947,6 +1958,20 @@ class CaseConfigPage(CardWidget):
             self._current_case_path = case_path
             self.config["text_case"] = case_path
         self._update_step_indicator(self.stack.currentIndex())
+
+        stability_cfg = self.config.get("stability")
+        if isinstance(stability_cfg, dict):
+            duration_cfg = stability_cfg.get("duration_control")
+            if isinstance(duration_cfg, dict):
+                loop_value = duration_cfg.get("loop")
+                if not isinstance(loop_value, int) or loop_value <= 0:
+                    duration_cfg["loop"] = None
+                duration_value = duration_cfg.get("duration_hours")
+                try:
+                    duration_float = float(duration_value)
+                except (TypeError, ValueError):
+                    duration_float = 0.0
+                duration_cfg["duration_hours"] = duration_float if duration_float > 0 else None
 
     def _validate_first_page(self) -> bool:
         errors: list[str] = []
@@ -2457,13 +2482,11 @@ class CaseConfigPage(CardWidget):
         if isinstance(linux_cfg, dict) and "kernel_version" in linux_cfg:
             self.config.setdefault("android_system", {})["kernel_version"] = linux_cfg.pop("kernel_version")
         self.config["fpga"] = self._normalize_fpga_section(self.config.get("fpga"))
-        self.config["stability_conditions"] = self._normalize_stability_conditions(
-            self.config.get("stability_conditions")
+        self.config["stability"] = self._normalize_stability_settings(
+            self.config.get("stability")
         )
         for i, (key, value) in enumerate(self.config.items()):
-            if key == "script_params":
-                continue
-            if key == "stability_conditions":
+            if key == "stability":
                 continue
             if key == "software_info":
                 data = value if isinstance(value, dict) else {}
@@ -3006,8 +3029,12 @@ class CaseConfigPage(CardWidget):
             self._register_group(key, group, self._is_dut_key(key))
             self.field_widgets[key] = edit
 
-        self._stability_conditions_group = self._build_stability_conditions_group(
-            self.config["stability_conditions"]
+        stability_cfg = self.config["stability"]
+        self._duration_control_group = self._build_duration_control_group(
+            stability_cfg.get("duration_control")
+        )
+        self._check_point_group = self._build_check_point_group(
+            stability_cfg.get("check_point")
         )
 
     def _ensure_corner_inputs_exclusive(self, source: str | None) -> None:
@@ -3031,21 +3058,13 @@ class CaseConfigPage(CardWidget):
         with QSignalBlocker(cleared):
             cleared.clear()
 
-    def _build_stability_conditions_group(
+    def _build_duration_control_group(
         self, data: Mapping[str, Any] | None
     ) -> QGroupBox:
-        """Construct the shared stability stress configuration group.
+        """Construct the duration control group."""
 
-        Args:
-            data: Normalized stability settings produced by
-                :meth:`_normalize_stability_conditions`.
-
-        Returns:
-            The group widget containing mode and limit controls.
-        """
-
-        normalized = data or {}
-        group = QGroupBox("Stability Stress Settings", self)
+        normalized = data if isinstance(data, Mapping) else {}
+        group = QGroupBox("Duration control", self)
         apply_theme(group)
         apply_groupbox_style(group)
         layout = QVBoxLayout(group)
@@ -3053,7 +3072,7 @@ class CaseConfigPage(CardWidget):
         layout.setSpacing(8)
 
         intro = QLabel(
-            "Select whether stability cases repeat by loop count or elapsed minutes.",
+            "Configure either loop count or duration in hours. Leave both empty to run until stopped.",
             group,
         )
         intro.setWordWrap(True)
@@ -3065,68 +3084,80 @@ class CaseConfigPage(CardWidget):
         grid.setVerticalSpacing(6)
         layout.addLayout(grid)
 
-        mode_label = QLabel("Execution mode", group)
-        mode_combo = ComboBox(group)
-        mode_combo.addItem("Loop count", "loops")
-        mode_combo.addItem("Duration (minutes)", "duration")
-
         loops_label = QLabel("Loop count", group)
         loops_spin = QSpinBox(group)
-        loops_spin.setRange(1, 999_999)
-        loops_spin.setToolTip("Total number of executions when mode is set to loops.")
+        loops_spin.setRange(0, 999_999)
+        loops_spin.setToolTip("Total number of test iterations. Set to zero to disable loop control.")
 
-        duration_label = QLabel("Duration (minutes)", group)
-        duration_spin = QSpinBox(group)
-        duration_spin.setRange(1, 24 * 60)
-        duration_spin.setSuffix(" min")
-        duration_spin.setToolTip("Run until the configured number of minutes elapses.")
+        duration_label = QLabel("Duration (hours)", group)
+        duration_spin = QDoubleSpinBox(group)
+        duration_spin.setRange(0.0, 999.0)
+        duration_spin.setDecimals(2)
+        duration_spin.setSingleStep(0.5)
+        duration_spin.setSuffix(" h")
+        duration_spin.setToolTip("Run until the configured number of hours elapses. Set to zero to disable.")
 
-        grid.addWidget(mode_label, 0, 0)
-        grid.addWidget(mode_combo, 0, 1)
-        grid.addWidget(loops_label, 1, 0)
-        grid.addWidget(loops_spin, 1, 1)
-        grid.addWidget(duration_label, 2, 0)
-        grid.addWidget(duration_spin, 2, 1)
+        grid.addWidget(loops_label, 0, 0)
+        grid.addWidget(loops_spin, 0, 1)
+        grid.addWidget(duration_label, 1, 0)
+        grid.addWidget(duration_spin, 1, 1)
 
         layout.addStretch(1)
 
-        mode_value = str(normalized.get("mode", "loops")).strip().lower()
-        loops_value = normalized.get("loops", 1)
-        duration_value = normalized.get("duration_minutes", 5)
-
-        with QSignalBlocker(mode_combo):
-            index = mode_combo.findData(mode_value if mode_value in {"loops", "duration"} else "loops")
-            mode_combo.setCurrentIndex(index if index >= 0 else 0)
+        loop_value = normalized.get("loop")
+        duration_value = normalized.get("duration_hours")
         with QSignalBlocker(loops_spin):
             try:
-                loops_spin.setValue(max(1, int(loops_value)))
+                loops_spin.setValue(int(loop_value))
             except (TypeError, ValueError):
-                loops_spin.setValue(1)
+                loops_spin.setValue(0)
         with QSignalBlocker(duration_spin):
             try:
-                duration_spin.setValue(max(1, int(duration_value)))
+                duration_spin.setValue(float(duration_value))
             except (TypeError, ValueError):
-                duration_spin.setValue(5)
+                duration_spin.setValue(0.0)
 
-        def _apply_mode(mode_key: str) -> None:
-            """Toggle available inputs when the execution mode changes."""
+        def _sync_controls(source: str | None = None) -> None:
+            loop_current = loops_spin.value()
+            duration_current = duration_spin.value()
+            if source == "loop" and loop_current > 0 and duration_current > 0:
+                with QSignalBlocker(duration_spin):
+                    duration_spin.setValue(0.0)
+            elif source == "duration" and loop_current > 0 and duration_current > 0:
+                with QSignalBlocker(loops_spin):
+                    loops_spin.setValue(0)
+            loops_spin.setEnabled(duration_spin.value() == 0.0)
+            duration_spin.setEnabled(loops_spin.value() == 0)
 
-            normalized_mode = "duration" if mode_key == "duration" else "loops"
-            loops_spin.setEnabled(normalized_mode == "loops")
-            duration_spin.setEnabled(normalized_mode == "duration")
+        _sync_controls()
 
-        current_mode = mode_combo.currentData()
-        _apply_mode(current_mode if isinstance(current_mode, str) else "loops")
+        loops_spin.valueChanged.connect(lambda _value: _sync_controls("loop"))
+        duration_spin.valueChanged.connect(lambda _value: _sync_controls("duration"))
 
-        def _on_mode_changed() -> None:
-            selected = mode_combo.currentData()
-            _apply_mode(selected if isinstance(selected, str) else "loops")
+        self.field_widgets["stability.duration_control.loop"] = loops_spin
+        self.field_widgets["stability.duration_control.duration_hours"] = duration_spin
 
-        mode_combo.currentIndexChanged.connect(lambda _index: _on_mode_changed())
+        return group
 
-        self.field_widgets["stability_conditions.mode"] = mode_combo
-        self.field_widgets["stability_conditions.loops"] = loops_spin
-        self.field_widgets["stability_conditions.duration_minutes"] = duration_spin
+    def _build_check_point_group(
+        self, data: Mapping[str, Any] | None
+    ) -> QGroupBox:
+        """Construct the checkpoint selection group."""
+
+        normalized = data if isinstance(data, Mapping) else {}
+        group = QGroupBox("Check point", self)
+        apply_theme(group)
+        apply_groupbox_style(group)
+        layout = QVBoxLayout(group)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(8)
+
+        ping_checkbox = QCheckBox("Ping after each step", group)
+        ping_checkbox.setChecked(bool(normalized.get("ping")))
+        layout.addWidget(ping_checkbox)
+        layout.addStretch(1)
+
+        self.field_widgets["stability.check_point.ping"] = ping_checkbox
 
         return group
 
@@ -3136,8 +3167,10 @@ class CaseConfigPage(CardWidget):
         """Combine public stability controls with the active script group."""
 
         groups: list[QWidget] = []
-        if self._stability_conditions_group is not None:
-            groups.append(self._stability_conditions_group)
+        if self._duration_control_group is not None:
+            groups.append(self._duration_control_group)
+        if self._check_point_group is not None:
+            groups.append(self._check_point_group)
         if active_entry is not None:
             groups.append(active_entry.group)
         return groups
@@ -3305,9 +3338,9 @@ class CaseConfigPage(CardWidget):
             }
         if self._is_stability_case(case_path):
             info.fields |= {
-                "stability_conditions.mode",
-                "stability_conditions.loops",
-                "stability_conditions.duration_minutes",
+                "stability.duration_control.loop",
+                "stability.duration_control.duration_hours",
+                "stability.check_point.ping",
             }
         case_key = self._script_case_key(case_path)
         entry = self._script_groups.get(case_key)
