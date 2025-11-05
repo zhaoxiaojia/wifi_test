@@ -15,28 +15,16 @@ from src.test.stability import (
     load_stability_plan,
 )
 from src.tools.config_loader import load_config
-from src.tools.usb_relay_controller import (
-    UsbRelayDevice,
-    apply_state,
-    pulse
-)
-
-
-def _script_case_key(path: str) -> str:
-    normalized = path.replace("\\", "/")
-    return normalized.replace("/", "__").replace(".", "_").lower()
-
-
-SCRIPT_RELATIVE_PATH = "test/stability/test_str.py"
-_SCRIPT_CONFIG_KEY = _script_case_key(SCRIPT_RELATIVE_PATH)
+from src.tools.usb_relay_controller import UsbRelayDevice, pulse
 
 
 @dataclass(frozen=True)
 class CycleConfig:
+    """Relay toggle cycle configuration."""
+
     enabled: bool
     on_duration: int
     off_duration: int
-    ping: bool
     port: str
     mode: str
 
@@ -55,7 +43,6 @@ class CycleConfig:
             enabled=bool(data.get("enabled")),
             on_duration=_coerce_duration(data.get("on_duration")),
             off_duration=_coerce_duration(data.get("off_duration")),
-            ping=bool(data.get("ping")),
             port=str(data.get("port", "") or "").strip(),
             mode=str(data.get("mode", "") or "NO").strip().upper() or "NO",
         )
@@ -63,6 +50,8 @@ class CycleConfig:
 
 @dataclass(frozen=True)
 class TestStrSettings:
+    """Consolidated STR stability settings."""
+
     ac: CycleConfig
     str_cycle: CycleConfig
 
@@ -71,28 +60,25 @@ class TestStrSettings:
         return self.ac.enabled or self.str_cycle.enabled
 
 
-def load_test_str_settings(*, refresh: bool = True) -> TestStrSettings:
-    config = load_config(refresh=refresh)
-    entry: Mapping[str, Any] | None = None
-    script_section = config.get("script_params")
+def _extract_stability_case(
+    stability_cfg: Mapping[str, Any] | None, case_name: str
+) -> Mapping[str, Any]:
+    if not isinstance(stability_cfg, Mapping):
+        return {}
+    cases_section = stability_cfg.get("cases")
+    if not isinstance(cases_section, Mapping):
+        return {}
+    entry = cases_section.get(case_name)
+    return entry if isinstance(entry, Mapping) else {}
 
-    if isinstance(script_section, Mapping):
-        entry = script_section.get(_SCRIPT_CONFIG_KEY)
-        if not isinstance(entry, Mapping):
-            entry = next(
-                (
-                    value
-                    for value in script_section.values()
-                    if isinstance(value, Mapping)
-                       and value.get("case_path") == SCRIPT_RELATIVE_PATH
-                ),
-                None,
-            )
 
-    entry = entry or {}
-    ac_cfg = CycleConfig.from_mapping(entry.get("ac"))
-    str_cfg = CycleConfig.from_mapping(entry.get("str"))
-    return TestStrSettings(ac=ac_cfg, str_cycle=str_cfg)
+def _extract_checkpoints(stability_cfg: Mapping[str, Any] | None) -> Mapping[str, bool]:
+    if not isinstance(stability_cfg, Mapping):
+        return {}
+    checkpoints = stability_cfg.get("check_point")
+    if not isinstance(checkpoints, Mapping):
+        return {}
+    return {key: bool(value) for key, value in checkpoints.items()}
 
 
 def execute_ac_cycle(cycle: CycleConfig) -> None:
@@ -107,6 +93,11 @@ def perform_ping_check(label: str) -> None:
     logging.info("[%s] Ping verification placeholder: implement connectivity check", label)
 
 
+def run_check_points(label: str, checkpoints: Mapping[str, bool]) -> None:
+    if checkpoints.get("ping"):
+        perform_ping_check(label)
+
+
 def _run_cycle(label: str, cycle: CycleConfig) -> None:
     if not cycle.enabled:
         logging.info("[%s] cycle disabled; skipping", label)
@@ -114,8 +105,14 @@ def _run_cycle(label: str, cycle: CycleConfig) -> None:
     if not cycle.port:
         logging.warning("[%s] relay port not configured; skipping", label)
         return
-    logging.info("[%s] cycle start: on=%ss off=%ss mode=%s port=%s", label, cycle.on_duration, cycle.off_duration,
-                 cycle.mode, cycle.port)
+    logging.info(
+        "[%s] cycle start: on=%ss off=%ss mode=%s port=%s",
+        label,
+        cycle.on_duration,
+        cycle.off_duration,
+        cycle.mode,
+        cycle.port,
+    )
     try:
         with UsbRelayDevice(cycle.port) as relay:
             pulse(relay, cycle.mode)
@@ -127,38 +124,77 @@ def _run_cycle(label: str, cycle: CycleConfig) -> None:
     except Exception as exc:  # pragma: no cover - hardware dependent
         logging.error("[%s] relay operation failed: %s", label, exc)
         return
-    if cycle.ping:
-        perform_ping_check(label)
 
 
 def test_str_workflow() -> None:
     plan = load_stability_plan()
-    loops = plan.loops if plan.mode == "loops" else 1
-    try:
-        requested_loops = int(os.environ.get(STABILITY_LOOPS_ENV, loops))
-    except (TypeError, ValueError):
-        requested_loops = loops
-    if requested_loops > 0:
-        loops = requested_loops
-    loops = max(1, loops)
+    loops: int | None
+    if plan.mode == "loops":
+        loops = max(1, plan.loops or 1)
+    else:
+        loops = None
+
+    raw_override = os.environ.get(STABILITY_LOOPS_ENV)
+    if raw_override is not None:
+        try:
+            override = int(raw_override)
+        except (TypeError, ValueError):
+            override = None
+        if override is not None and override > 0:
+            loops = override
+
+    deadline: float | None = None
+    if plan.mode == "duration" and plan.duration_hours:
+        deadline = time.monotonic() + plan.duration_hours * 3600
+
     os.environ[STABILITY_COMPLETED_LOOPS_ENV] = "0"
 
-    settings = load_test_str_settings()
+    config = load_config(refresh=True)
+    stability_cfg = config.get("stability") if isinstance(config, Mapping) else {}
+    case_cfg = _extract_stability_case(stability_cfg, "test_str")
+    settings = TestStrSettings(
+        ac=CycleConfig.from_mapping(case_cfg.get("ac")),
+        str_cycle=CycleConfig.from_mapping(case_cfg.get("str")),
+    )
     if not settings.has_work:
         os.environ[STABILITY_COMPLETED_LOOPS_ENV] = "0"
         pytest.skip("AC and STR cycles are both disabled; nothing to execute.")
 
+    checkpoints = _extract_checkpoints(stability_cfg)
     completed_loops = 0
     try:
-        for iteration in range(1, loops + 1):
-            if loops > 1:
+        iteration = 0
+        while True:
+            if loops is not None and iteration >= loops:
+                break
+            if deadline is not None and iteration > 0 and time.monotonic() >= deadline:
+                break
+
+            iteration += 1
+            if loops is not None:
                 logging.info("[STR] stability loop %s/%s start", iteration, loops)
+            elif plan.mode == "duration" and deadline is not None:
+                logging.info("[STR] stability loop %s start (duration mode)", iteration)
+            elif plan.mode == "limit":
+                logging.info("[STR] stability loop %s start (limit mode)", iteration)
+
             if settings.ac.enabled:
                 execute_ac_cycle(settings.ac)
+                run_check_points("AC", checkpoints)
             if settings.str_cycle.enabled:
                 execute_str_cycle(settings.str_cycle)
+                run_check_points("STR", checkpoints)
             completed_loops += 1
-            if loops > 1:
+            os.environ[STABILITY_COMPLETED_LOOPS_ENV] = str(completed_loops)
+
+            if loops is not None:
                 logging.info("[STR] stability loop %s/%s complete", iteration, loops)
+            elif plan.mode == "duration" and deadline is not None:
+                logging.info("[STR] stability loop %s complete (duration mode)", iteration)
+            elif plan.mode == "limit":
+                logging.info("[STR] stability loop %s complete (limit mode)", iteration)
+
+            if deadline is not None and time.monotonic() >= deadline:
+                break
     finally:
         os.environ[STABILITY_COMPLETED_LOOPS_ENV] = str(completed_loops)
