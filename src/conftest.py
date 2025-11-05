@@ -17,6 +17,7 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 from contextlib import suppress
+import threading
 
 import pytest
 import csv
@@ -33,6 +34,131 @@ from src.test.pyqt_log import emit_pyqt_message
 # pytest_plugins = "util.report_plugin"
 test_results = []
 import logging
+
+
+class StdoutTee:
+    """Duplicate writes to the original stream and a log file."""
+
+    def __init__(self, stream, log_path: Path):
+        # Preserve the original stream for console output.
+        self._stream = stream
+        self._log_path = log_path
+        self._lock = threading.Lock()
+        self._file = None
+        try:
+            if self._log_path.parent:
+                self._log_path.parent.mkdir(parents=True, exist_ok=True)
+            self._file = self._log_path.open("a", encoding="utf-8", errors="replace")
+        except Exception as exc:  # noqa: BLE001 - log and continue without file sink
+            logging.warning("Failed to open root stdout log %s: %s", self._log_path, exc)
+
+    def write(self, data):
+        # Ensure downstream handlers receive the original payload.
+        if not data:
+            return 0
+        file_data = data.decode("utf-8", "replace") if isinstance(data, bytes) else data
+        with self._lock:
+            try:
+                self._stream.write(data)
+            except Exception as exc:  # noqa: BLE001 - protect console output
+                logging.warning("Failed to write to original stream: %s", exc)
+            if self._file:
+                try:
+                    self._file.write(file_data)
+                except Exception as exc:  # noqa: BLE001 - log I/O errors
+                    logging.warning("Failed to write to root stdout log %s: %s", self._log_path, exc)
+        return len(data)
+
+    def flush(self):
+        with self._lock:
+            try:
+                self._stream.flush()
+            except Exception as exc:  # noqa: BLE001 - flush errors must not crash pytest
+                logging.warning("Failed to flush original stream: %s", exc)
+            if self._file:
+                try:
+                    self._file.flush()
+                except Exception as exc:  # noqa: BLE001
+                    logging.warning("Failed to flush root stdout log %s: %s", self._log_path, exc)
+
+    def close(self):
+        with self._lock:
+            if self._file:
+                try:
+                    self._file.flush()
+                except Exception as exc:  # noqa: BLE001 - best effort
+                    logging.warning("Failed to flush root stdout log %s: %s", self._log_path, exc)
+                try:
+                    self._file.close()
+                except Exception as exc:  # noqa: BLE001
+                    logging.warning("Failed to close root stdout log %s: %s", self._log_path, exc)
+                finally:
+                    self._file = None
+
+    def __getattr__(self, item):
+        # Delegate attribute access to maintain stream compatibility.
+        return getattr(self._stream, item)
+
+
+_original_stdout = sys.stdout
+_original_stderr = sys.stderr
+_stdout_tee: StdoutTee | None = None
+_stderr_tee: StdoutTee | None = None
+_root_log_path: Path | None = None
+
+
+def _initialize_root_stream_logging(root_dir: Path) -> Path | None:
+    """Set up StdoutTee for stdout and stderr, returning the log file path."""
+
+    global _stdout_tee, _stderr_tee, _root_log_path
+
+    if _stdout_tee or _stderr_tee:
+        return _root_log_path
+
+    log_path = root_dir / "python_run.log"
+    _root_log_path = log_path
+
+    stdout_tee = StdoutTee(_original_stdout, log_path)
+    stderr_tee = StdoutTee(_original_stderr, log_path)
+
+    sys.stdout = stdout_tee
+    sys.stderr = stderr_tee
+
+    _stdout_tee = stdout_tee
+    _stderr_tee = stderr_tee
+
+    # Rebind logging handlers so that logging output is also duplicated.
+    root_logger = logging.getLogger()
+    for handler in getattr(root_logger, "handlers", []):
+        if isinstance(handler, logging.StreamHandler):
+            try:
+                handler.setStream(sys.stdout)
+            except Exception as exc:  # noqa: BLE001 - logging fallback
+                logging.warning("Failed to redirect logging handler stream: %s", exc)
+
+    return log_path
+
+
+def _teardown_root_stream_logging() -> Path | None:
+    """Restore stdout/stderr and close the tee streams."""
+
+    global _stdout_tee, _stderr_tee
+
+    try:
+        if _stdout_tee:
+            _stdout_tee.close()
+        if _stderr_tee:
+            _stderr_tee.close()
+    except Exception as exc:  # noqa: BLE001 - do not break shutdown
+        logging.warning("Failed to close StdoutTee: %s", exc)
+    finally:
+        sys.stdout = _original_stdout
+        sys.stderr = _original_stderr
+        _stdout_tee = None
+        _stderr_tee = None
+
+    return _root_log_path
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -107,6 +233,17 @@ def pytest_sessionstart(session):
     :param session:
     :return:
     '''
+    try:
+        root_dir = Path(getattr(session.config, "rootpath", Path.cwd()))
+    except Exception as exc:  # noqa: BLE001 - fallback to cwd
+        logging.warning("Failed to resolve pytest root path: %s", exc)
+        root_dir = Path.cwd()
+    try:
+        pytest.root_stdout_log_path = _initialize_root_stream_logging(root_dir)
+    except Exception as exc:  # noqa: BLE001 - record initialization failure
+        logging.warning("Failed to initialize stdout tee: %s", exc)
+        pytest.root_stdout_log_path = None
+
     # get host os
     # pytest.host_os = host_os()
     # get the pc system
@@ -286,6 +423,29 @@ def pytest_runtest_teardown(item, nextitem):
 
 
 def pytest_sessionfinish(session, exitstatus):
+    try:
+        root_log_path = _teardown_root_stream_logging()
+    except Exception as exc:  # noqa: BLE001 - still continue shutdown
+        logging.warning("Failed to teardown stdout tee: %s", exc)
+        root_log_path = _root_log_path
+
+    if root_log_path and root_log_path.exists():
+        test_result = getattr(pytest, "testResult", None)
+        if isinstance(test_result, TestResult) and getattr(test_result, "logdir", None):
+            destination = Path(test_result.logdir) / "python_run.log"
+            try:
+                destination.parent.mkdir(parents=True, exist_ok=True)
+            except Exception as exc:  # noqa: BLE001 - directory creation best effort
+                logging.warning("Failed to prepare destination for python_run.log: %s", exc)
+            try:
+                shutil.move(str(root_log_path), destination)
+            except Exception as exc:  # noqa: BLE001 - log move failures
+                logging.warning(
+                    "Failed to move root python log %s to %s: %s", root_log_path, destination, exc
+                )
+        else:
+            logging.warning("Skip moving python_run.log: missing testResult logdir")
+
     csv_file = "../test_results.csv"
     # global test_results  # 纭繚test_results鍦ㄥ嚱鏁颁腑鍙敤
     #
