@@ -12,6 +12,7 @@ import logging
 import multiprocessing
 import queue
 import os
+import shutil
 import sip
 from typing import Any
 # ui/run.py
@@ -50,6 +51,7 @@ import threading
 import pytest
 import io
 import json
+import tempfile
 from contextlib import suppress
 from src.util.constants import Paths, get_src_base
 from src.util.pytest_redact import install_redactor_for_current_process
@@ -104,11 +106,34 @@ class LiveLogWriter:
         raise io.UnsupportedOperation("Not a real file")
 
 
-def _pytest_worker(case_path: str, q: multiprocessing.Queue):
+def _pytest_worker(
+    case_path: str,
+    q: multiprocessing.Queue,
+    log_file_path_str: str | None = None,
+):
     """子进程执行pytest，将日志和进度写入队列"""
 
     pid = os.getpid()
     start_ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    log_file_handle: io.TextIOWrapper | None = None
+    log_file_path: Path | None = None
+    log_write_failed = False
+    try:
+        if log_file_path_str:
+            log_file_path = Path(log_file_path_str)
+            log_file_path.parent.mkdir(parents=True, exist_ok=True)
+        else:
+            log_workspace = getattr(Paths, "WORKSPACE", None)
+            if log_workspace:
+                base_dir = Path(log_workspace)
+                base_dir.mkdir(parents=True, exist_ok=True)
+            else:
+                base_dir = Path(tempfile.mkdtemp(prefix="pytest_log_"))
+            log_file_path = base_dir / "python.log"
+        log_file_handle = open(log_file_path, "w", encoding="utf-8")
+    except Exception:
+        log_file_handle = None
+        log_file_path = None
     try:
         timestamp = datetime.datetime.now().strftime("%Y.%m.%d_%H.%M.%S")
         timestamp = f"{timestamp}_{random.randint(1000, 9999)}"
@@ -131,6 +156,7 @@ def _pytest_worker(case_path: str, q: multiprocessing.Queue):
 
 
         def emit_log(line: str) -> None:
+            nonlocal log_file_handle, log_write_failed
             q.put(("log", line))
             match = re.search(r"\[PYQT_PROGRESS\]\s+(\d+)/(\d+)", line)
             if match:
@@ -138,6 +164,15 @@ def _pytest_worker(case_path: str, q: multiprocessing.Queue):
                 total = int(match.group(2))
                 percent = int(finished / total * 100) if total else 0
                 q.put(("progress", percent))
+            if log_file_handle and not log_write_failed:
+                try:
+                    log_file_handle.write(line + "\n")
+                    log_file_handle.flush()
+                except Exception:
+                    log_write_failed = True
+                    with suppress(Exception):
+                        log_file_handle.close()
+                    log_file_handle = None
 
         writer = LiveLogWriter(emit_log)
         old_stdout, old_stderr = sys.stdout, sys.stderr
@@ -274,6 +309,15 @@ def _pytest_worker(case_path: str, q: multiprocessing.Queue):
         tb = traceback.format_exc()
         q.put(("log", f"<b style='{STYLE_BASE} color:red;'>Execution failed：{exc}</b>"))
         q.put(("log", f"<pre style='{STYLE_BASE} color:{TEXT_COLOR};'>{tb}</pre>"))
+    finally:
+        if log_file_handle:
+            with suppress(Exception):
+                log_file_handle.flush()
+            with suppress(Exception):
+                log_file_handle.close()
+        if log_file_path:
+            with suppress(Exception):
+                q.put(("python_log", str(log_file_path)))
 
 
 class CaseRunner(QThread):
@@ -292,12 +336,19 @@ class CaseRunner(QThread):
         self._queue: multiprocessing.Queue = self._ctx.Queue()
         self._proc: multiprocessing.Process | None = None
         self._case_start_time: float | None = None
+        self._report_dir: str | None = None
+        self._python_log_path: str | None = None
+        self._python_log_copied = False
 
     def run(self):
         """启动子进程运行pytest，并监听队列更新GUI"""
         logging.info("CaseRunner: preparing to start process for %s", self.case_path)
+        python_log_path = self._prepare_python_log_path()
+        self._python_log_path = python_log_path
+        self._python_log_copied = False
         self._proc = self._ctx.Process(
-            target=_pytest_worker, args=(self.case_path, self._queue)
+            target=_pytest_worker,
+            args=(self.case_path, self._queue, python_log_path),
         )
         self._proc.start()
         logging.info(
@@ -336,10 +387,15 @@ class CaseRunner(QThread):
                     self.progress_signal.emit(payload)
                 elif kind == "report_dir":
                     # inform UI that report dir is ready
+                    self._report_dir = str(payload)
                     self.report_dir_signal.emit(str(payload))
+                elif kind == "python_log":
+                    self._python_log_path = str(payload)
             except queue.Empty:
                 pass
+            self._try_copy_python_log()
             if not self._proc.is_alive() and self._queue.empty():
+                self._try_copy_python_log()
                 self.log_signal.emit(
                     f"<b style='color:gray;'>The queue will be closed, but the process will remain alive：{self._proc.is_alive()}</b>"
                 )
@@ -354,12 +410,62 @@ class CaseRunner(QThread):
         self.log_signal.emit(
             f"<b style='color:gray;'>The queue will be closed, but the process will remain alive：{self._proc.is_alive()}</b>"
         )
+        self._try_copy_python_log()
 
     def stop(self):
         # 设置标志位，run() 会检查该标志并自行退出
         self._should_stop = True
         if self._proc and self._proc.is_alive():
             self._proc.terminate()
+
+
+    def _prepare_python_log_path(self) -> str | None:
+        log_workspace = getattr(Paths, "WORKSPACE", None)
+        try:
+            if log_workspace:
+                base_dir = Path(log_workspace)
+                base_dir.mkdir(parents=True, exist_ok=True)
+            else:
+                base_dir = Path(tempfile.mkdtemp(prefix="pytest_log_"))
+            return str(base_dir / "python.log")
+        except Exception:
+            return None
+
+
+    def _try_copy_python_log(self) -> None:
+        if self._python_log_copied or not self._python_log_path:
+            return
+        if self._proc and self._proc.is_alive():
+            return
+        src = Path(self._python_log_path)
+        if not src.exists():
+            self._python_log_copied = True
+            return
+        if self._report_dir:
+            target_dir = Path(self._report_dir)
+        else:
+            target_dir = Path(Paths.BASE_DIR) / "report"
+        try:
+            target_dir.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            self._python_log_copied = True
+            return
+        target = target_dir / "python.log"
+        if target.exists():
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+            target = target_dir / f"python_{timestamp}.log"
+        try:
+            shutil.copy2(src, target)
+        except Exception as exc:
+            self.log_signal.emit(
+                f"<b style='{STYLE_BASE} color:red;'>Failed to copy python.log: {exc}</b>"
+            )
+            self._python_log_copied = True
+            return
+        self._python_log_copied = True
+        self.log_signal.emit(
+            f"<span style='{STYLE_BASE} color:{TEXT_COLOR};'>Python log saved to {target}</span>"
+        )
 
 
 class RunPage(CardWidget):
