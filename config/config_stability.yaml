@@ -1,0 +1,20 @@
+# Default stability execution configuration. All strings are ASCII.
+duration_control:
+  loop: 2
+  duration_hours: null
+check_point:
+  ping: false
+cases:
+  test_str:
+    ac:
+      enabled: false
+      on_duration: 5
+      off_duration: 5
+      port: ""
+      mode: NC
+    str:
+      enabled: true
+      on_duration: 5
+      off_duration: 15
+      port: "COM15 (USB-SERIAL CH340 (COM15))"
+      mode: NC
