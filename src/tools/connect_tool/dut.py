@@ -353,7 +353,7 @@ class dut():
         use_adb = bool(adb)
         self._current_udp_mode = self._is_udp_command(command)
 
-        def _extend_logs(target_list: list[str], lines):
+        def _extend_logs(target_list: list[str], lines, label: str | None = None):
             if not lines:
                 return
             if isinstance(lines, str):
@@ -366,30 +366,35 @@ class dut():
                 text = line.rstrip('\r\n') if isinstance(line, str) else str(line)
                 if text:
                     target_list.append(text)
+                    if label:
+                        logging.info("%s %s", label, text)
 
-        def _read_output(proc, target_list: list[str]):
-            if not proc.stdout:
+        def _read_output(proc, stream, target_list: list[str], label: str):
+            if not stream:
+                logging.info("iperf stream reader thread (%s) exiting: no stream", label)
                 return
-            with proc.stdout:
-                for line in iter(proc.stdout.readline, ''):
-                    if line:
-                        _extend_logs(target_list, [line])
+            logging.info(
+                "iperf stream reader thread started (%s pid=%s)",
+                label,
+                getattr(proc, "pid", None),
+            )
+            try:
+                with stream:
+                    for line in iter(stream.readline, ''):
+                        if line:
+                            _extend_logs(target_list, [line], label)
+            except Exception:
+                logging.exception("iperf stream reader thread (%s) hit an exception", label)
+            finally:
+                logging.info(
+                    "iperf stream reader thread finished (%s pid=%s)",
+                    label,
+                    getattr(proc, "pid", None),
+                )
 
         def _start_background(cmd_list, desc):
-            logging.info(f'{desc} {command}')
-            process = subprocess.Popen(
-                cmd_list,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                encoding=encoding,
-                errors='ignore',
-            )
-            # Keep piping stdout into iperf_server_log_list so we can analyse it later.
-            Thread(target=_read_output, args=(process, self.iperf_server_log_list), daemon=True).start()
-            return process
-
-        def _run_blocking(cmd_list, desc):
-            logging.info(f'{desc} {command}')
+            logging.debug('%s %s', desc, command)
+            logging.debug("command list: %s", cmd_list)
             process = subprocess.Popen(
                 cmd_list,
                 stdout=subprocess.PIPE,
@@ -397,12 +402,39 @@ class dut():
                 encoding=encoding,
                 errors='ignore',
             )
+            # Keep piping stdout into iperf_server_log_list so we can analyse it later.
+            logging.debug(
+                "background process started (%s pid=%s)",
+                desc,
+                getattr(process, "pid", None),
+            )
+            Thread(target=_read_output,
+                   args=(process, process.stdout, self.iperf_server_log_list, "iperf server stdout:"),
+                   daemon=True).start()
+            Thread(target=_read_output,
+                   args=(process, process.stderr, self.iperf_server_log_list, "iperf server stderr:"),
+                   daemon=True).start()
+            return process
+
+        def _run_blocking(cmd_list, desc):
+            logging.info('%s %s', desc, command)
+            logging.info("command list: %s", cmd_list)
+            process = subprocess.Popen(
+                cmd_list,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                encoding=encoding,
+                errors='ignore',
+            )
+            logging.info(
+                "blocking process started (%s pid=%s)", desc, getattr(process, "pid", None)
+            )
 
             def _collect_output(stdout_text: str | None, stderr_text: str | None) -> None:
                 if stderr_text:
                     logging.warning(stderr_text.strip())
                 if stdout_text:
-                    logging.info(stdout_text.strip())
+                    logging.debug(stdout_text.strip())
                     # TODO: 重新启用客户端 stdout 聚合时，将 iperf 行写入 self.iperf_client_log_list
                     # if 'iperf' in command:
                     #     _extend_logs(self.iperf_client_log_list, stdout_text)
@@ -419,6 +451,12 @@ class dut():
                     logging.debug('Failed to collect iperf output after timeout', exc_info=True)
                 else:
                     _collect_output(stdout, stderr)
+            finally:
+                logging.info(
+                    "%s process return code: %s",
+                    desc,
+                    process.returncode,
+                )
 
         def _build_cmd_list():
             if use_adb and pytest.connect_type != 'Linux':
@@ -439,7 +477,7 @@ class dut():
                             while True:
                                 line = tn.read_until(b'\n', timeout=1).decode('gbk', 'ignore').strip()
                                 if line:
-                                    _extend_logs(self.iperf_server_log_list, [line])
+                                    _extend_logs(self.iperf_server_log_list, [line], "iperf server telnet:")
                         except EOFError:
                             logging.info('telnet server session closed')
                         finally:
@@ -493,7 +531,7 @@ class dut():
                         udp_metrics_local = metrics
                         self._current_udp_mode = True
                     continue
-                logging.info(f'line : {line}')
+                # logging.info(f'line : {line}')
                 metrics = self._extract_udp_metrics(line)
                 if metrics:
                     udp_metrics_local = metrics
@@ -519,7 +557,7 @@ class dut():
                     logging.debug(f'skip duplicate interval {interval_key} (throughput={throughput})')
                     continue
                 seen_intervals.add(interval_key)
-                logging.info(f'[coco] second value {throughput}')
+                # logging.info(f'[coco] second value {throughput}')
                 values.append(throughput)
                 duration = end_time - start_time
                 if start_time < 0.5 and duration > 1.5:
@@ -619,7 +657,7 @@ class dut():
                     current_sum_count != last_sum_count
                     or total_lines != last_total_lines
                 ):
-                    logging.info(
+                    logging.debug(
                         "iperf wait: SUM intervals=%d total_lines=%d after %.2fs",
                         current_sum_count,
                         total_lines,
@@ -635,7 +673,7 @@ class dut():
                     break
                 time.sleep(0.1)
             elapsed = time.time() - start_time
-            logging.info(
+            logging.debug(
                 "iperf wait finished: sum_intervals=%d, summary=%s, elapsed=%.2fs, reason=%s",
                 last_sum_count if last_sum_count >= 0 else 0,
                 has_summary,
@@ -643,7 +681,18 @@ class dut():
                 exit_reason,
             )
         server_lines = list(self.iperf_server_log_list)
-        logging.info("iperf server raw lines captured: %d", len(server_lines))
+        logging.debug("iperf server raw lines captured: %d", len(server_lines))
+        if not server_lines:
+            logging.debug(
+                "iperf server log list is empty; background reader may not have received data yet"
+            )
+        else:
+            preview_count = min(5, len(server_lines))
+            logging.debug(
+                "iperf server log preview (first %d lines): %s",
+                preview_count,
+                server_lines[:preview_count],
+            )
         # TODO: 如果再次启用客户端日志补齐，在此处合并 client_lines
         # client_lines = list(self.iperf_client_log_list)
         # if client_lines:

@@ -8,7 +8,7 @@ android_system:
   kernel_version: Kernel 5.15
 connect_type:
   Android:
-    device: '69512800000000611'
+    device: pascal80dc1816d90f2d0b
   Linux:
     ip: 192.168.56.12
   third_party:
