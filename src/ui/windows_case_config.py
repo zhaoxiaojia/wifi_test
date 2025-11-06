@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import os
 import re
 from pathlib import Path
@@ -18,6 +19,7 @@ from src.util.constants import (
     WIFI_PRODUCT_PROJECT_MAP,
     get_config_base,
     get_src_base,
+    TOOL_SECTION_KEY,
 )
 from src.tools.config_loader import load_config, save_config
 from PyQt5.QtCore import (
@@ -629,6 +631,9 @@ class CaseConfigPage(CardWidget):
         self.selected_csv_path: str | None = None
         # -------------------- load config --------------------
         self.config: dict = self._load_config()
+        self._config_tool_snapshot: dict[str, Any] = copy.deepcopy(
+            self.config.get(TOOL_SECTION_KEY, {})
+        )
         self._load_csv_selection_from_config()
         # -------------------- state --------------------
         self._refreshing = False
@@ -1873,6 +1878,10 @@ class CaseConfigPage(CardWidget):
     def _sync_widgets_to_config(self) -> None:
         if not isinstance(self.config, dict):
             self.config = {}
+        if hasattr(self, "_config_tool_snapshot"):
+            self.config[TOOL_SECTION_KEY] = copy.deepcopy(
+                self._config_tool_snapshot
+            )
         for key, widget in self.field_widgets.items():
             parts = key.split('.')
             ref = self.config
@@ -2268,6 +2277,10 @@ class CaseConfigPage(CardWidget):
             save_config(self.config)
             logging.info("Configuration saved")
             self.config = self._load_config()
+            if hasattr(self, "_config_tool_snapshot"):
+                self._config_tool_snapshot = copy.deepcopy(
+                    self.config.get(TOOL_SECTION_KEY, {})
+                )
             self._load_csv_selection_from_config()
             logging.info("Configuration saved")
         except Exception as exc:
@@ -3587,6 +3600,10 @@ class CaseConfigPage(CardWidget):
             self.stack.setCurrentIndex(0)
             return
         self.config = self._load_config()
+        if hasattr(self, "_config_tool_snapshot"):
+            self._config_tool_snapshot = copy.deepcopy(
+                self.config.get(TOOL_SECTION_KEY, {})
+            )
         self._sync_widgets_to_config()
         if not self._validate_test_str_requirements():
             return
