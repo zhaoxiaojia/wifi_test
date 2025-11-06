@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import csv
 import os
 import re
 from pathlib import Path
@@ -14,6 +15,7 @@ from src.util.constants import (
     DEFAULT_KERNEL_VERSION_CHOICES,
     DEFAULT_RF_STEP_SPEC,
     FONT_FAMILY,
+    AUTH_OPTIONS,
     RouterConst,
     TEXT_COLOR,
     WIFI_PRODUCT_PROJECT_MAP,
@@ -56,6 +58,11 @@ from PyQt5.QtWidgets import (
     QListWidgetItem,
     QSpinBox,
     QDoubleSpinBox,
+    QFormLayout,
+    QTableWidget,
+    QTableWidgetItem,
+    QHeaderView,
+    QAbstractItemView,
 )
 
 from qfluentwidgets import (
@@ -102,6 +109,7 @@ class ScriptConfigEntry:
     section_controls: dict[str, tuple[QCheckBox, Sequence[QWidget]]]
     case_key: str
     case_path: str
+    extras: dict[str, Any] = field(default_factory=dict)
 
 
 class TestFileFilterModel(QSortFilterProxyModel):
@@ -358,6 +366,7 @@ class RfStepSegmentsWidget(QWidget):
         self._segments.append(parsed)
         self._refresh_segment_list()
 
+
     def _on_delete_segment(self) -> None:
         row = self.segment_list.currentRow()
         if row < 0 or row >= len(self._segments):
@@ -478,6 +487,229 @@ class RfStepSegmentsWidget(QWidget):
             start, stop = stop, start
 
         return start, stop, step
+
+
+class SwitchWifiManualEditor(QWidget):
+
+    """Editor widget for maintaining manual Wi-Fi switch entries."""
+
+    entriesChanged = pyqtSignal()
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._entries: list[dict[str, str]] = []
+        self._loading = False
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
+
+        self.table = QTableWidget(self)
+        self.table.setColumnCount(3)
+        self.table.setHorizontalHeaderLabels(["SSID", "Security Mode", "Password"])
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.Stretch)
+        self.table.verticalHeader().setVisible(False)
+        self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.table.setFocusPolicy(Qt.NoFocus)
+        layout.addWidget(self.table)
+
+        form = QFormLayout()
+        form.setContentsMargins(0, 0, 0, 0)
+        form.setSpacing(6)
+
+        self.ssid_edit = LineEdit(self)
+        self.ssid_edit.setPlaceholderText("SSID")
+        form.addRow("SSID", self.ssid_edit)
+
+        self.security_combo = ComboBox(self)
+        self.security_combo.addItems(AUTH_OPTIONS)
+        self.security_combo.setMinimumWidth(160)
+        form.addRow("Security", self.security_combo)
+
+        self.password_edit = LineEdit(self)
+        self.password_edit.setPlaceholderText("Password (optional)")
+        form.addRow("Password", self.password_edit)
+
+        layout.addLayout(form)
+
+        buttons_row = QHBoxLayout()
+        buttons_row.setContentsMargins(0, 0, 0, 0)
+        buttons_row.setSpacing(8)
+
+        self.add_btn = PushButton("Add", self)
+        self.del_btn = PushButton("Remove", self)
+        buttons_row.addWidget(self.add_btn)
+        buttons_row.addWidget(self.del_btn)
+        buttons_row.addStretch(1)
+        layout.addLayout(buttons_row)
+
+        self.table.currentCellChanged.connect(self._on_current_row_changed)
+        self.add_btn.clicked.connect(self._on_add_entry)
+        self.del_btn.clicked.connect(self._on_delete_entry)
+        self.ssid_edit.textChanged.connect(lambda text: self._update_current_entry("ssid", text))
+        self.security_combo.currentTextChanged.connect(
+            lambda text: self._update_current_entry("security_mode", text)
+        )
+        self.password_edit.textChanged.connect(
+            lambda text: self._update_current_entry("password", text)
+        )
+
+        self._refresh_table()
+
+    def set_entries(self, entries: Sequence[Mapping[str, Any]] | None) -> None:
+        sanitized = []
+        if isinstance(entries, Sequence):
+            for item in entries:
+                if not isinstance(item, Mapping):
+                    continue
+                sanitized.append(self._sanitize_entry(item))
+        self._entries = sanitized
+        self._refresh_table()
+        if self._entries:
+            self.table.setCurrentCell(0, 0)
+        else:
+            self._clear_form()
+
+    def serialize(self) -> list[dict[str, str]]:
+        result: list[dict[str, str]] = []
+        for item in self._entries:
+            ssid = item.get("ssid", "").strip()
+            if not ssid:
+                continue
+            mode = item.get("security_mode", AUTH_OPTIONS[0]) or AUTH_OPTIONS[0]
+            password = item.get("password", "")
+            result.append(
+                {
+                    "ssid": ssid,
+                    "security_mode": mode,
+                    "password": password,
+                }
+            )
+        return result
+
+    def _sanitize_entry(self, item: Mapping[str, Any]) -> dict[str, str]:
+        ssid = str(item.get("ssid", "") or "").strip()
+        mode = str(item.get("security_mode", AUTH_OPTIONS[0]) or AUTH_OPTIONS[0]).strip()
+        if mode not in AUTH_OPTIONS:
+            mode = AUTH_OPTIONS[0]
+        password = str(item.get("password", "") or "")
+        return {"ssid": ssid, "security_mode": mode, "password": password}
+
+    def _refresh_table(self) -> None:
+        self._loading = True
+        try:
+            self.table.setRowCount(len(self._entries))
+            for row, item in enumerate(self._entries):
+                self.table.setItem(row, 0, QTableWidgetItem(item.get("ssid", "")))
+                self.table.setItem(row, 1, QTableWidgetItem(item.get("security_mode", "")))
+                self.table.setItem(row, 2, QTableWidgetItem(item.get("password", "")))
+        finally:
+            self._loading = False
+
+    def _clear_form(self) -> None:
+        with QSignalBlocker(self.ssid_edit):
+            self.ssid_edit.setText("")
+        with QSignalBlocker(self.password_edit):
+            self.password_edit.setText("")
+        with QSignalBlocker(self.security_combo):
+            if self.security_combo.count():
+                self.security_combo.setCurrentIndex(0)
+
+    def _on_current_row_changed(self, row: int, _column: int, _prev_row: int, _prev_column: int) -> None:
+        if self._loading:
+            return
+        if 0 <= row < len(self._entries):
+            entry = self._entries[row]
+            with QSignalBlocker(self.ssid_edit):
+                self.ssid_edit.setText(entry.get("ssid", ""))
+            with QSignalBlocker(self.password_edit):
+                self.password_edit.setText(entry.get("password", ""))
+            with QSignalBlocker(self.security_combo):
+                mode = entry.get("security_mode", AUTH_OPTIONS[0])
+                index = self.security_combo.findText(mode)
+                if index < 0:
+                    index = 0
+                self.security_combo.setCurrentIndex(index)
+        else:
+            self._clear_form()
+
+    def _update_current_entry(self, key: str, value: str) -> None:
+        if self._loading:
+            return
+        row = self.table.currentRow()
+        if not (0 <= row < len(self._entries)):
+            return
+        if key == "security_mode" and value not in AUTH_OPTIONS:
+            value = AUTH_OPTIONS[0]
+        self._entries[row][key] = value
+        if key == "ssid":
+            item = self.table.item(row, 0)
+            if item is not None:
+                item.setText(value)
+        elif key == "security_mode":
+            item = self.table.item(row, 1)
+            if item is not None:
+                item.setText(value)
+        elif key == "password":
+            item = self.table.item(row, 2)
+            if item is not None:
+                item.setText(value)
+        self.entriesChanged.emit()
+
+    def _on_add_entry(self) -> None:
+        new_entry = {"ssid": "", "security_mode": AUTH_OPTIONS[0], "password": ""}
+        self._entries.append(new_entry)
+        self._refresh_table()
+        if self._entries:
+            self.table.setCurrentCell(len(self._entries) - 1, 0)
+        self.entriesChanged.emit()
+
+    def _on_delete_entry(self) -> None:
+        row = self.table.currentRow()
+        if not (0 <= row < len(self._entries)):
+            return
+        del self._entries[row]
+        self._refresh_table()
+        if self._entries:
+            new_row = min(row, len(self._entries) - 1)
+            self.table.setCurrentCell(new_row, 0)
+        else:
+            self._clear_form()
+        self.entriesChanged.emit()
+
+
+class SwitchWifiCsvPreview(QTableWidget):
+
+    """Read-only table displaying Wi-Fi entries resolved from router CSV files."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setColumnCount(3)
+        self.setHorizontalHeaderLabels(["SSID", "Security Mode", "Password"])
+        header = self.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.Stretch)
+        self.verticalHeader().setVisible(False)
+        self.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.setSelectionMode(QAbstractItemView.NoSelection)
+        self.setFocusPolicy(Qt.NoFocus)
+        self.setAlternatingRowColors(False)
+
+    def update_entries(self, entries: Sequence[Mapping[str, Any]] | None) -> None:
+        self.setRowCount(0)
+        if not entries:
+            return
+        self.setRowCount(len(entries))
+        for row, item in enumerate(entries):
+            ssid = str(item.get("ssid", "") or "")
+            mode = str(item.get("security_mode", "") or "")
+            password = str(item.get("password", "") or "")
+            self.setItem(row, 0, QTableWidgetItem(ssid))
+            self.setItem(row, 1, QTableWidgetItem(mode))
+            self.setItem(row, 2, QTableWidgetItem(password))
+
 
 class ConfigGroupPanel(QWidget):
 
@@ -646,6 +878,7 @@ class CaseConfigPage(CardWidget):
         self._locked_fields: set[str] | None = None
         self._current_case_path: str = ""
         self._last_editable_info: EditableInfo | None = None
+        self._switch_wifi_csv_combos: list[ComboBox] = []
         # -------------------- layout --------------------
         self.splitter = QSplitter(Qt.Horizontal, self)
         self.splitter.setChildrenCollapsible(False)
@@ -714,6 +947,7 @@ class CaseConfigPage(CardWidget):
         self._current_page_keys: list[str] = []
         self._script_config_factories: dict[str, Callable[[str, str, Mapping[str, Any]], ScriptConfigEntry]] = {
             "test/stability/test_str.py": self._create_test_str_config_entry,
+            "test/stability/test_swtich_wifi.py": self._create_test_swtich_wifi_config_entry,
         }
         self._script_groups: dict[str, ScriptConfigEntry] = {}
         self._active_script_case: str | None = None
@@ -1101,6 +1335,32 @@ class CaseConfigPage(CardWidget):
         if not isinstance(entry, dict):
             entry = {}
 
+        if case_key == "test_swtich_wifi":
+            entry.setdefault("use_router", False)
+            router_csv = entry.get("router_csv")
+            entry["router_csv"] = str(router_csv or "").strip()
+            manual_entries = entry.get("manual_entries")
+            normalized_entries: list[dict[str, str]] = []
+            if isinstance(manual_entries, Sequence):
+                for item in manual_entries:
+                    if not isinstance(item, Mapping):
+                        continue
+                    ssid = str(item.get("ssid", "") or "").strip()
+                    mode = str(item.get("security_mode", AUTH_OPTIONS[0]) or AUTH_OPTIONS[0]).strip()
+                    if mode not in AUTH_OPTIONS:
+                        mode = AUTH_OPTIONS[0]
+                    password = str(item.get("password", "") or "")
+                    normalized_entries.append(
+                        {
+                            "ssid": ssid,
+                            "security_mode": mode,
+                            "password": password,
+                        }
+                    )
+            entry["manual_entries"] = normalized_entries
+            cases_section[case_key] = entry
+            return entry
+
         def _ensure_branch(name: str) -> None:
             branch = entry.get(name)
             if not isinstance(branch, dict):
@@ -1156,6 +1416,38 @@ class CaseConfigPage(CardWidget):
         data: Mapping[str, Any] | None,
     ) -> None:
         data = data or {}
+        case_key = entry.case_key
+
+        if case_key == "test_swtich_wifi":
+            use_router_widget = entry.widgets.get(
+                self._script_field_key(case_key, "use_router")
+            )
+            router_combo = entry.widgets.get(
+                self._script_field_key(case_key, "router_csv")
+            )
+            manual_widget = entry.widgets.get(
+                self._script_field_key(case_key, "manual_entries")
+            )
+            use_router_value = bool(data.get("use_router"))
+            if isinstance(use_router_widget, QCheckBox):
+                use_router_widget.setChecked(use_router_value)
+            router_path = self._resolve_csv_config_path(data.get("router_csv"))
+            if isinstance(router_combo, ComboBox):
+                self._populate_csv_combo(router_combo, router_path, include_placeholder=True)
+            if isinstance(manual_widget, SwitchWifiManualEditor):
+                manual_entries = data.get("manual_entries")
+                if isinstance(manual_entries, Sequence) and not isinstance(manual_entries, (str, bytes)):
+                    manual_widget.set_entries(manual_entries)
+                else:
+                    manual_widget.set_entries(None)
+            extras = entry.extras if isinstance(entry.extras, dict) else {}
+            preview: SwitchWifiCsvPreview | None = extras.get("router_preview")
+            self._update_switch_wifi_preview(preview, router_path)
+            apply_mode = extras.get("apply_mode")
+            if callable(apply_mode):
+                apply_mode(use_router_value)
+            return
+
         ac_cfg = data.get("ac", {})
         str_cfg = data.get("str", {})
 
@@ -1193,7 +1485,6 @@ class CaseConfigPage(CardWidget):
                     widget.setCurrentIndex(index if index >= 0 else max(widget.count() - 1, 0))
                 else:
                     widget.setCurrentIndex(0 if widget.count() else -1)
-        case_key = entry.case_key
         _set_checkbox(self._script_field_key(case_key, "ac", "enabled"), ac_cfg.get("enabled"))
         _set_spin(self._script_field_key(case_key, "ac", "on_duration"), ac_cfg.get("on_duration"))
         _set_spin(self._script_field_key(case_key, "ac", "off_duration"), ac_cfg.get("off_duration"))
@@ -1224,6 +1515,122 @@ class CaseConfigPage(CardWidget):
 
         checkbox.toggled.connect(_apply)
         _apply(checkbox.isChecked())
+
+    def _create_test_swtich_wifi_config_entry(
+        self,
+        case_key: str,
+        case_path: str,
+        data: Mapping[str, Any],
+    ) -> ScriptConfigEntry:
+        group = QGroupBox("test_swtich_wifi.py Stability", self)
+        apply_theme(group)
+        apply_groupbox_style(group)
+        layout = QVBoxLayout(group)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(8)
+
+        intro = QLabel(
+            "Configure Wi-Fi BSS targets for test_swtich_wifi."
+            " Select router CSV to reuse predefined entries or maintain manual list.",
+            group,
+        )
+        intro.setWordWrap(True)
+        layout.addWidget(intro)
+
+        use_router_checkbox = QCheckBox("Use router configuration", group)
+        use_router_checkbox.setChecked(bool(data.get("use_router")))
+        layout.addWidget(use_router_checkbox)
+
+        router_box = QGroupBox("Router CSV", group)
+        apply_theme(router_box)
+        apply_groupbox_style(router_box)
+        router_layout = QVBoxLayout(router_box)
+        router_layout.setContentsMargins(8, 8, 8, 8)
+        router_layout.setSpacing(6)
+
+        router_label = QLabel("Select config csv file", router_box)
+        router_layout.addWidget(router_label)
+
+        router_combo = ComboBox(router_box)
+        router_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        router_layout.addWidget(router_combo)
+
+        router_preview = SwitchWifiCsvPreview(router_box)
+        router_layout.addWidget(router_preview)
+
+        manual_box = QGroupBox("Manual entries", group)
+        apply_theme(manual_box)
+        apply_groupbox_style(manual_box)
+        manual_layout = QVBoxLayout(manual_box)
+        manual_layout.setContentsMargins(8, 8, 8, 8)
+        manual_layout.setSpacing(6)
+
+        manual_editor = SwitchWifiManualEditor(manual_box)
+        manual_entries = data.get("manual_entries") if isinstance(data, Mapping) else None
+        if isinstance(manual_entries, Sequence) and not isinstance(manual_entries, (str, bytes)):
+            manual_editor.set_entries(manual_entries)
+        else:
+            manual_editor.set_entries(None)
+        manual_layout.addWidget(manual_editor)
+
+        layout.addWidget(router_box)
+        layout.addWidget(manual_box)
+        layout.addStretch(1)
+
+        router_path = self._resolve_csv_config_path(data.get("router_csv"))
+        self._populate_csv_combo(router_combo, router_path, include_placeholder=True)
+        self._register_switch_wifi_csv_combo(router_combo)
+        self._update_switch_wifi_preview(router_preview, router_combo.currentData())
+
+        widgets: dict[str, QWidget] = {}
+        widgets[self._script_field_key(case_key, "use_router")] = use_router_checkbox
+        widgets[self._script_field_key(case_key, "router_csv")] = router_combo
+        widgets[self._script_field_key(case_key, "manual_entries")] = manual_editor
+
+        section_controls: dict[str, tuple[QCheckBox, Sequence[QWidget]]] = {}
+
+        def _current_csv_selection() -> str | None:
+            data_value = router_combo.currentData()
+            if isinstance(data_value, str) and data_value:
+                return data_value
+            text_value = router_combo.currentText()
+            return text_value if isinstance(text_value, str) and text_value else None
+
+        def _apply_mode(checked: bool) -> None:
+            router_box.setVisible(checked)
+            manual_box.setVisible(not checked)
+            manual_editor.setEnabled(not checked)
+            if checked:
+                self._update_switch_wifi_preview(router_preview, _current_csv_selection())
+            self._request_rebalance_for_panels(self._stability_panel)
+
+        def _on_csv_changed() -> None:
+            if use_router_checkbox.isChecked():
+                self._update_switch_wifi_preview(router_preview, _current_csv_selection())
+
+        router_combo.currentIndexChanged.connect(lambda _index: _on_csv_changed())
+        use_router_checkbox.toggled.connect(_apply_mode)
+
+        entry = ScriptConfigEntry(
+            group=group,
+            widgets=widgets,
+            field_keys=set(widgets.keys()),
+            section_controls=section_controls,
+            case_key=case_key,
+            case_path=case_path,
+            extras={
+                "router_preview": router_preview,
+                "router_combo": router_combo,
+                "apply_mode": _apply_mode,
+                "router_box": router_box,
+                "manual_box": manual_box,
+                "manual_editor": manual_editor,
+            },
+        )
+
+        _apply_mode(use_router_checkbox.isChecked())
+
+        return entry
 
     def _create_test_str_config_entry(
         self,
@@ -1742,10 +2149,35 @@ class CaseConfigPage(CardWidget):
             for name, case_value in cases_cfg.items():
                 if not isinstance(case_value, Mapping):
                     continue
-                cases[name] = {
-                    "ac": _normalize_cycle(case_value.get("ac")),
-                    "str": _normalize_cycle(case_value.get("str")),
-                }
+                if name == "test_swtich_wifi":
+                    manual_entries = case_value.get("manual_entries")
+                    normalized_entries: list[dict[str, str]] = []
+                    if isinstance(manual_entries, Sequence):
+                        for item in manual_entries:
+                            if not isinstance(item, Mapping):
+                                continue
+                            ssid = str(item.get("ssid", "") or "").strip()
+                            mode = str(item.get("security_mode", AUTH_OPTIONS[0]) or AUTH_OPTIONS[0]).strip()
+                            if mode not in AUTH_OPTIONS:
+                                mode = AUTH_OPTIONS[0]
+                            password = str(item.get("password", "") or "")
+                            normalized_entries.append(
+                                {
+                                    "ssid": ssid,
+                                    "security_mode": mode,
+                                    "password": password,
+                                }
+                            )
+                    cases[name] = {
+                        "use_router": bool(case_value.get("use_router")),
+                        "router_csv": str(case_value.get("router_csv", "") or "").strip(),
+                        "manual_entries": normalized_entries,
+                    }
+                else:
+                    cases[name] = {
+                        "ac": _normalize_cycle(case_value.get("ac")),
+                        "str": _normalize_cycle(case_value.get("str")),
+                    }
 
         return {
             "duration_control": {
@@ -1916,15 +2348,20 @@ class CaseConfigPage(CardWidget):
                         ref[leaf] = val
             elif isinstance(widget, RfStepSegmentsWidget):
                 ref[leaf] = widget.serialize()
+            elif isinstance(widget, SwitchWifiManualEditor):
+                ref[leaf] = widget.serialize()
             elif isinstance(widget, ComboBox):
                 data = widget.currentData()
                 if data not in (None, "", widget.currentText()):
-                    ref[leaf] = data
+                    value = data
                 else:
                     text = widget.currentText().strip()
                     if text.lower() == 'select port':
                         text = ''
-                    ref[leaf] = True if text == 'True' else False if text == 'False' else text
+                    value = True if text == 'True' else False if text == 'False' else text
+                if key == self._script_field_key("test_swtich_wifi", "router_csv"):
+                    value = self._relativize_config_path(value)
+                ref[leaf] = value
             elif isinstance(widget, QSpinBox):
                 ref[leaf] = widget.value()
             elif isinstance(widget, QDoubleSpinBox):
@@ -2441,6 +2878,33 @@ class CaseConfigPage(CardWidget):
             self.router_obj.address = text
         self.routerInfoChanged.emit()
 
+    def _register_switch_wifi_csv_combo(self, combo: ComboBox) -> None:
+        if combo in self._switch_wifi_csv_combos:
+            return
+        self._switch_wifi_csv_combos.append(combo)
+
+        def _cleanup(_obj: QObject | None = None, *, target: ComboBox = combo) -> None:
+            self._unregister_switch_wifi_csv_combo(target)
+
+        combo.destroyed.connect(_cleanup)  # type: ignore[arg-type]
+
+    def _unregister_switch_wifi_csv_combo(self, combo: ComboBox) -> None:
+        try:
+            self._switch_wifi_csv_combos.remove(combo)
+        except ValueError:
+            return
+
+    def _list_available_csv_files(self) -> list[tuple[str, str]]:
+        csv_dir = get_config_base() / "performance_test_csv"
+        entries: list[tuple[str, str]] = []
+        if csv_dir.exists():
+            for csv_file in sorted(csv_dir.glob("*.csv")):
+                try:
+                    entries.append((csv_file.name, str(csv_file.resolve())))
+                except Exception:
+                    continue
+        return entries
+
     def _resolve_csv_config_path(self, value: Any) -> str | None:
         """Return the absolute CSV path derived from persisted configuration."""
         if not value:
@@ -2467,25 +2931,9 @@ class CaseConfigPage(CardWidget):
 
     def _update_csv_options(self):
         """刷新 CSV 下拉框"""
-        if not hasattr(self, "csv_combo"):
-            return
-        router_name = ""
-        if hasattr(self, "router_name_combo"):
-            router_name = self.router_name_combo.currentText().lower()
-        csv_dir = get_config_base() / "performance_test_csv"
-        logging.debug("_update_csv_options router=%s dir=%s", router_name, csv_dir)
-        with QSignalBlocker(self.csv_combo):
-            self.csv_combo.clear()
-            if csv_dir.exists():
-                for csv_file in sorted(csv_dir.glob("*.csv")):
-                    logging.debug("found csv: %s", csv_file)
-                    # qfluentwidgets.ComboBox 在 Qt5 和 Qt6 下对 userData 的处理不一致，
-                    # 直接通过 addItem(text, userData) 可能导致无法获取到数据。
-                    # 因此先添加文本，再显式设置 UserRole 数据，确保 itemData 能正确返回文件路径。
-                    self.csv_combo.addItem(csv_file.name)
-                    idx = self.csv_combo.count() - 1
-                    self.csv_combo.setItemData(idx, str(csv_file.resolve()))
-        self._set_selected_csv(self.selected_csv_path, sync_combo=True)
+        if hasattr(self, "csv_combo"):
+            self._populate_csv_combo(self.csv_combo, self.selected_csv_path)
+        self._refresh_registered_csv_combos()
 
     def _normalize_csv_path(self, path: Any) -> str | None:
         """Normalize CSV paths to absolute strings for reliable comparisons."""
@@ -2496,12 +2944,29 @@ class CaseConfigPage(CardWidget):
         except Exception:
             return str(path)
 
-    def _find_csv_index(self, normalized_path: str) -> int:
+    def _relativize_config_path(self, path: Any) -> str:
+        if path in (None, ""):
+            return ""
+        try:
+            candidate = Path(str(path)).resolve()
+        except Exception:
+            return str(path)
+        base_cfg = get_config_base()
+        try:
+            rel = os.path.relpath(candidate, base_cfg)
+        except ValueError:
+            return candidate.as_posix()
+        return Path(rel).as_posix()
+
+    def _find_csv_index(self, normalized_path: str | None, combo: ComboBox | None = None) -> int:
         """Return the combo index for a normalized CSV path."""
-        if not hasattr(self, "csv_combo"):
+        if not normalized_path:
             return -1
-        for idx in range(self.csv_combo.count()):
-            data = self.csv_combo.itemData(idx)
+        target_combo = combo or getattr(self, "csv_combo", None)
+        if target_combo is None:
+            return -1
+        for idx in range(target_combo.count()):
+            data = target_combo.itemData(idx)
             if not data:
                 continue
             candidate = self._normalize_csv_path(data)
@@ -2516,18 +2981,98 @@ class CaseConfigPage(CardWidget):
         Returns True when the selection actually changes.
         """
         normalized = self._normalize_csv_path(path)
-        target_index = -1
-        if sync_combo and normalized and hasattr(self, "csv_combo"):
-            target_index = self._find_csv_index(normalized)
-            if target_index == -1:
-                normalized = None
         changed = normalized != self.selected_csv_path
         self.selected_csv_path = normalized
         if sync_combo and hasattr(self, "csv_combo"):
+            index = -1
+            if normalized:
+                index = self._find_csv_index(normalized, self.csv_combo)
+            if index < 0 and self.csv_combo.count():
+                index = 0
             with QSignalBlocker(self.csv_combo):
-                self.csv_combo.setCurrentIndex(target_index)
+                self.csv_combo.setCurrentIndex(index)
         self._update_rvr_nav_button()
         return changed
+
+    def _populate_csv_combo(
+        self,
+        combo: ComboBox,
+        selected_path: str | None,
+        *,
+        include_placeholder: bool = False,
+    ) -> None:
+        entries = self._list_available_csv_files()
+        normalized_selected = self._normalize_csv_path(selected_path)
+        with QSignalBlocker(combo):
+            combo.clear()
+            if include_placeholder:
+                combo.addItem("Select config csv file", "")
+            for display, path in entries:
+                combo.addItem(display)
+                idx = combo.count() - 1
+                combo.setItemData(idx, path)
+            index = -1
+            if normalized_selected:
+                index = self._find_csv_index(normalized_selected, combo)
+                if index < 0:
+                    combo.addItem(Path(normalized_selected).name)
+                    idx = combo.count() - 1
+                    combo.setItemData(idx, normalized_selected)
+                    index = idx
+            elif include_placeholder:
+                index = combo.findData("")
+            if index < 0 and combo.count():
+                index = 0
+            combo.setCurrentIndex(index)
+
+    def _refresh_registered_csv_combos(self) -> None:
+        for combo in list(self._switch_wifi_csv_combos):
+            if combo is None:
+                continue
+            try:
+                data = combo.currentData()
+            except RuntimeError:
+                self._unregister_switch_wifi_csv_combo(combo)
+                continue
+            selected = data if isinstance(data, str) and data else combo.currentText()
+            self._populate_csv_combo(combo, selected, include_placeholder=True)
+
+    def _load_switch_wifi_entries(self, csv_path: str | None) -> list[dict[str, str]]:
+        normalized = self._normalize_csv_path(csv_path)
+        if not normalized:
+            return []
+        entries: list[dict[str, str]] = []
+        try:
+            with open(normalized, "r", encoding="utf-8-sig", newline="") as handle:
+                reader = csv.DictReader(handle)
+                for row in reader:
+                    if not isinstance(row, dict):
+                        continue
+                    ssid = str(row.get("ssid", "") or "").strip()
+                    if not ssid:
+                        continue
+                    mode = str(row.get("security_mode", "") or "").strip() or AUTH_OPTIONS[0]
+                    password = str(row.get("password", "") or "")
+                    entries.append(
+                        {
+                            "ssid": ssid,
+                            "security_mode": mode,
+                            "password": password,
+                        }
+                    )
+        except Exception as exc:
+            logging.debug("Failed to load Wi-Fi CSV %s: %s", csv_path, exc)
+        return entries
+
+    def _update_switch_wifi_preview(
+        self,
+        preview: SwitchWifiCsvPreview | None,
+        csv_path: str | None,
+    ) -> None:
+        if preview is None:
+            return
+        entries = self._load_switch_wifi_entries(csv_path)
+        preview.update_entries(entries)
 
     def _update_rvr_nav_button(self) -> None:
         """根据当前状态更新 RVR 导航按钮可用性"""
