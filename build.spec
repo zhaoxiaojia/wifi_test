@@ -16,7 +16,7 @@ a = Analysis(
         ('src/pytest.ini', 'src'),
         ('src/test', 'src/test'),
         ('config/performance_test_csv', 'config/performance_test_csv'),
-        ('config/tool_config.yaml', 'config'),
+        ('config/config_tool.yaml', 'config'),
     ],
     hiddenimports=[
         # 鎵嬪姩娣诲姞PyQt5鍜岃嚜瀹氫箟妯″潡鐨勯殣钘忎緷璧?

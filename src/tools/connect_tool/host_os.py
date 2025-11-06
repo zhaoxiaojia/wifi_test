@@ -5,6 +5,7 @@ import subprocess
 import time
 
 from src.tools.config_loader import load_config
+from src.util.constants import TOOL_SECTION_KEY
 
 
 class host_os:
@@ -16,9 +17,14 @@ class host_os:
     def __init__(self):
         # 每次实例化都刷新配置缓存，确保读取最新的配置内容
         self.config = load_config(refresh=True)
-        self.host = self.config.get('host_os')
-        self.user = self.host['user']
-        self.passwd = self.host['password']
+        tool_cfg = self.config.get(TOOL_SECTION_KEY, {})
+        self.host = tool_cfg.get('host_os') or {}
+        if not self.host:
+            raise RuntimeError("Missing host_os configuration in config_tool.yaml")
+        self.user = self.host.get('user')
+        self.passwd = self.host.get('password')
+        if not self.user or not self.passwd:
+            raise RuntimeError("Incomplete host_os credentials in config_tool.yaml")
         self.ip = ''
 
     def checkoutput(self, cmd):

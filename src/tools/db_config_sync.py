@@ -2,54 +2,34 @@
 
 import logging
 import re
-import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Sequence, Tuple
 
 import pymysql
-import yaml
 from pymysql.cursors import DictCursor
 
+from src.tools.config_loader import load_config
+from src.util.constants import TOOL_CONFIG_FILENAME, TOOL_SECTION_KEY, get_config_base
 from src.tools.mysql_tool.schema import ensure_report_tables
 
 
-def _config_path_candidates() -> list[Path]:
-    candidates: list[Path] = []
-    if getattr(sys, "frozen", False):
-        exe_dir = Path(sys.executable).resolve().parent
-        candidates.append(exe_dir / "config" / "tool_config.yaml")
-        mei_dir = getattr(sys, "_MEIPASS", None)
-        if mei_dir:
-            candidates.append(Path(mei_dir) / "config" / "tool_config.yaml")
-    repo_root = Path(__file__).resolve().parents[2]
-    candidates.append(repo_root / "config" / "tool_config.yaml")
-    candidates.append(Path.cwd() / "config" / "tool_config.yaml")
-
-    unique_candidates: list[Path] = []
-    seen: set[str] = set()
-    for path in candidates:
-        key = str(path)
-        if key not in seen:
-            unique_candidates.append(path)
-            seen.add(key)
-    return unique_candidates
-
-
 def load_mysql_settings() -> Dict[str, Any]:
-    candidates = _config_path_candidates()
-    config_path = next((path for path in candidates if path.is_file()), None)
-    if not config_path:
-        logging.error("MySQL config file not found. searched=%s", " | ".join(str(path) for path in candidates))
+    try:
+        config = load_config(refresh=True)
+    except Exception as exc:
+        logging.error("Failed to load configuration for MySQL: %s", exc)
         return {}
     try:
-        with config_path.open(encoding="utf-8") as fh:
-            payload = yaml.safe_load(fh) or {}
+        tool_cfg = config.get(TOOL_SECTION_KEY) or {}
     except Exception as exc:
-        logging.error("Failed to read %s: %s", config_path, exc)
+        logging.error("Invalid tool section in configuration: %s", exc)
         return {}
-    logging.debug("Loaded MySQL settings from %s", config_path)
-    mysql_cfg = payload.get("mysql") or {}
+    mysql_cfg = tool_cfg.get("mysql") or {}
+    config_path = get_config_base() / TOOL_CONFIG_FILENAME
+    if not mysql_cfg:
+        logging.error("MySQL settings missing mysql section in %s", config_path)
+        return {}
     settings = {
         "host": mysql_cfg.get("host"),
         "port": int(mysql_cfg.get("port", 3306)) if mysql_cfg.get("port") else 3306,
@@ -60,7 +40,7 @@ def load_mysql_settings() -> Dict[str, Any]:
     }
     missing = [key for key in ("host", "user", "password", "database") if not settings.get(key)]
     if missing:
-        logging.error("MySQL settings missing keys: %s", ", ".join(missing))
+        logging.error("MySQL settings missing keys in %s: %s", config_path, ", ".join(missing))
         return {}
     return settings
 

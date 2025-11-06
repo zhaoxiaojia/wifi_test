@@ -1,5 +1,5 @@
 duration_control:
-  loop: 2
+  loop: 1
   duration_hours: null
 check_point:
   ping: false
@@ -15,5 +15,5 @@ cases:
       enabled: true
       on_duration: 15
       off_duration: 15
-      port: COM15 (USB-SERIAL CH340 (COM15))
+      port: ''
       mode: 'NO'
