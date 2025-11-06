@@ -2039,6 +2039,80 @@ class CaseConfigPage(CardWidget):
             return False
         return True
 
+    def _validate_test_str_requirements(self) -> bool:
+        """Ensure test_str stability settings require port/mode when AC/STR enabled."""
+        config = self.config if isinstance(self.config, dict) else {}
+        case_path = config.get("text_case", "")
+        case_key = self._script_case_key(case_path)
+        if case_key != "test_str":
+            return True
+
+        stability_cfg = config.get("stability") if isinstance(config, dict) else {}
+        cases_cfg = stability_cfg.get("cases") if isinstance(stability_cfg, dict) else {}
+        case_cfg = cases_cfg.get(case_key) if isinstance(cases_cfg, dict) else {}
+
+        errors: list[str] = []
+        focus_widget: QWidget | None = None
+
+        def _require(branch: str, label: str) -> None:
+            nonlocal focus_widget
+            branch_cfg = case_cfg.get(branch) if isinstance(case_cfg, dict) else {}
+            if not isinstance(branch_cfg, dict) or not branch_cfg.get("enabled"):
+                return
+            port_value = str(branch_cfg.get("port") or "").strip()
+            mode_value = str(branch_cfg.get("mode") or "").strip()
+            if not port_value:
+                errors.append(f"{label}: USB power relay port is required.")
+                focus_widget = focus_widget or self.field_widgets.get(
+                    f"stability.cases.{case_key}.{branch}.port"
+                )
+            if not mode_value:
+                errors.append(f"{label}: Wiring mode is required.")
+                focus_widget = focus_widget or self.field_widgets.get(
+                    f"stability.cases.{case_key}.{branch}.mode"
+                )
+
+        _require("ac", "AC cycle")
+        _require("str", "STR cycle")
+        if not errors:
+            return True
+
+        current_keys = getattr(self, "_current_page_keys", [])
+        if isinstance(current_keys, list) and "stability" in current_keys:
+            try:
+                idx = current_keys.index("stability")
+            except ValueError:
+                idx = None
+            else:
+                self.stack.setCurrentIndex(idx)
+                self._update_step_indicator(idx)
+        if focus_widget is not None and focus_widget.isEnabled():
+            focus_widget.setFocus()
+            if hasattr(focus_widget, "showPopup"):
+                try:
+                    focus_widget.showPopup()  # type: ignore[call-arg]
+                except Exception:
+                    pass
+
+        message = "\n".join(errors)
+        try:
+            bar = self._show_info_bar(
+                "warning",
+                "Validation",
+                message,
+                duration=3200,
+            )
+            if bar is None:
+                raise RuntimeError("InfoBar unavailable")
+        except Exception:
+            try:
+                from PyQt5.QtWidgets import QMessageBox
+
+                QMessageBox.warning(self, "Validation", message)
+            except Exception:
+                logging.warning("Validation failed: %s", message)
+        return False
+
     def _reset_second_page_inputs(self) -> None:
         if hasattr(self, "csv_combo"):
             self._set_selected_csv(self.selected_csv_path, sync_combo=True)
@@ -3488,6 +3562,8 @@ class CaseConfigPage(CardWidget):
             return
         self.config = self._load_config()
         self._sync_widgets_to_config()
+        if not self._validate_test_str_requirements():
+            return
         logging.info(
             "[on_run] start case=%s csv=%s config=%s",
             self.field_widgets['text_case'].text().strip(),
