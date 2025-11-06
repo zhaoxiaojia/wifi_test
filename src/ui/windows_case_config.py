@@ -3131,7 +3131,7 @@ class CaseConfigPage(CardWidget):
                 self.field_widgets["serial_port.port"] = self.serial_port_edit
                 self.field_widgets["serial_port.baud"] = self.serial_baud_edit
                 continue
-            if key == "csv_path":
+            if key in  ["csv_path",TOOL_SECTION_KEY]:
                 continue
             # ------- 默认处理：创建 LineEdit 保存未覆盖字段 -------
             group = QGroupBox(key)
