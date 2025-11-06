@@ -3467,7 +3467,7 @@ class CaseConfigPage(CardWidget):
                 self.csv_combo.setEnabled(True)
                 self._set_selected_csv(self.selected_csv_path, sync_combo=True)
             else:
-                self._set_selected_csv(None, sync_combo=True)
+                # self._set_selected_csv(None, sync_combo=True)
                 self.csv_combo.setEnabled(False)
         else:
             if not snapshot.enable_csv:
