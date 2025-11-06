@@ -17,3 +17,7 @@ cases:
       off_duration: 15
       port: ''
       mode: 'NO'
+  test_swtich_wifi:
+    use_router: false
+    router_csv: ''
+    manual_entries: []
