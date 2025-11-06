@@ -1,0 +1,19 @@
+duration_control:
+  loop: 1
+  duration_hours: null
+check_point:
+  ping: false
+cases:
+  test_str:
+    ac:
+      enabled: false
+      on_duration: 5
+      off_duration: 5
+      port: ''
+      mode: NC
+    str:
+      enabled: true
+      on_duration: 15
+      off_duration: 15
+      port: ''
+      mode: 'NO'
