@@ -39,23 +39,9 @@ class serial_tool:
         logging.info(f'port {self.serial_port} baud {self.baud}')
         self.ethernet_ip = ''
         self.uboot_time = 0
-        try:
-            self.ser = serial.Serial(self.serial_port, self.baud,
-                                     bytesize=serial.EIGHTBITS,
-                                     parity=serial.PARITY_NONE,
-                                     stopbits=serial.STOPBITS_ONE,
-                                     xonxoff=False,
-                                     rtscts=False,
-                                     dsrdtr=False,
-                                     timeout=1)
-            logging.info('Serial port %s-%s opened', self.serial_port, self.baud)
-            # self.ser.write(chr(0x03))
-            # self.write('setprop persist.sys.usb.debugging y')
-            # self.write('setprop service.adb.tcp.port 5555')
-        except serial.serialutil.SerialException as e:
-            logging.info(f'not found serial:{e}')
-
-        self.status = self.ser.isOpen() if isinstance(self.ser, serial.Serial) else False
+        self.ser = None
+        self._open_serial()
+        self.status = self._is_serial_open()
         logging.info('Serial port open status: %s', self.status)
 
         # 日志文件和线程设置
@@ -71,11 +57,74 @@ class serial_tool:
                 target=self._save_and_detect_log, daemon=True)
             self.log_thread.start()
 
+    def _open_serial(self):
+        try:
+            self.ser = serial.Serial(self.serial_port, self.baud,
+                                     bytesize=serial.EIGHTBITS,
+                                     parity=serial.PARITY_NONE,
+                                     stopbits=serial.STOPBITS_ONE,
+                                     xonxoff=False,
+                                     rtscts=False,
+                                     dsrdtr=False,
+                                     timeout=1)
+            logging.info('Serial port %s-%s opened', self.serial_port, self.baud)
+        except serial.serialutil.SerialException as e:
+            logging.error('Failed to open serial port %s-%s: %s',
+                          self.serial_port, self.baud, e)
+            self.ser = None
+
+    def _is_serial_open(self):
+        if not self.ser:
+            return False
+        attr = getattr(self.ser, 'is_open', None)
+        if isinstance(attr, bool):
+            return attr
+        if callable(attr):
+            try:
+                return bool(attr())
+            except Exception:
+                return False
+        legacy = getattr(self.ser, 'isOpen', None)
+        if callable(legacy):
+            try:
+                return bool(legacy())
+            except Exception:
+                return False
+        return False
+
+    def _ensure_connection(self, retries=3, interval=2):
+        if self._is_serial_open():
+            self.status = True
+            return True
+
+        for attempt in range(1, retries + 1):
+            logging.warning('Serial connection lost, retrying to connect (%s/%s)',
+                            attempt, retries)
+            if self.ser:
+                try:
+                    self.ser.close()
+                except serial.serialutil.SerialException as e:
+                    logging.debug('Error closing serial during reconnect: %s', e)
+                finally:
+                    self.ser = None
+            self._open_serial()
+            if self._is_serial_open():
+                self.status = True
+                logging.info('Serial reconnected successfully')
+                return True
+            sleep(interval)
+
+        self.status = False
+        raise RuntimeError('Failed to reconnect serial port after multiple attempts')
+
     def _save_and_detect_log(self):
         '''在保存日志的同时检测关键字'''
         # try:
         with open(self.log_file, 'w',encoding='utf-8',errors="ignore") as file:
             while not self._stop_flag.is_set():
+                if not self._is_serial_open():
+                    time.sleep(0.5)
+                    continue
                 data = self.ser.read(1024)  # 不再立刻decode
                 if not data:
                     continue
@@ -158,7 +207,12 @@ class serial_tool:
         @param command: command
         @return: feedback
         '''
-        self.ser.write(bytes(command + '\r', encoding='utf-8'))
+        try:
+            self.ser.write(bytes(command + '\r', encoding='utf-8'))
+        except (serial.serialutil.SerialException, AttributeError, OSError) as err:
+            logging.error('Serial write failed for command %s: %s', command, err)
+            self._ensure_connection()
+            self.ser.write(bytes(command + '\r', encoding='utf-8'))
         logging.info(f'=> {command}')
         sleep(0.1)
         data = self.recv()
@@ -222,7 +276,12 @@ class serial_tool:
         @param command: command
         @return:
         '''
-        self.ser.write(bytes(command + '\r', encoding='utf-8'))
+        try:
+            self.ser.write(bytes(command + '\r', encoding='utf-8'))
+        except (serial.serialutil.SerialException, AttributeError, OSError) as err:
+            logging.error('Serial write failed for command %s: %s', command, err)
+            self._ensure_connection()
+            self.ser.write(bytes(command + '\r', encoding='utf-8'))
         logging.info(f'=> {command}')
         sleep(0.1)
 
