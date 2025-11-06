@@ -22,6 +22,13 @@ from src.util.constants import (
     get_config_base,
     get_src_base,
     TOOL_SECTION_KEY,
+    SWITCH_WIFI_CASE_KEY,
+    SWITCH_WIFI_USE_ROUTER_FIELD,
+    SWITCH_WIFI_ROUTER_CSV_FIELD,
+    SWITCH_WIFI_MANUAL_ENTRIES_FIELD,
+    SWITCH_WIFI_ENTRY_SSID_FIELD,
+    SWITCH_WIFI_ENTRY_SECURITY_FIELD,
+    SWITCH_WIFI_ENTRY_PASSWORD_FIELD,
 )
 from src.tools.config_loader import load_config, save_config
 from PyQt5.QtCore import (
@@ -549,12 +556,14 @@ class SwitchWifiManualEditor(QWidget):
         self.table.currentCellChanged.connect(self._on_current_row_changed)
         self.add_btn.clicked.connect(self._on_add_entry)
         self.del_btn.clicked.connect(self._on_delete_entry)
-        self.ssid_edit.textChanged.connect(lambda text: self._update_current_entry("ssid", text))
+        self.ssid_edit.textChanged.connect(
+            lambda text: self._update_current_entry(SWITCH_WIFI_ENTRY_SSID_FIELD, text)
+        )
         self.security_combo.currentTextChanged.connect(
-            lambda text: self._update_current_entry("security_mode", text)
+            lambda text: self._update_current_entry(SWITCH_WIFI_ENTRY_SECURITY_FIELD, text)
         )
         self.password_edit.textChanged.connect(
-            lambda text: self._update_current_entry("password", text)
+            lambda text: self._update_current_entry(SWITCH_WIFI_ENTRY_PASSWORD_FIELD, text)
         )
 
         self._refresh_table()
@@ -576,36 +585,54 @@ class SwitchWifiManualEditor(QWidget):
     def serialize(self) -> list[dict[str, str]]:
         result: list[dict[str, str]] = []
         for item in self._entries:
-            ssid = item.get("ssid", "").strip()
+            ssid = item.get(SWITCH_WIFI_ENTRY_SSID_FIELD, "").strip()
             if not ssid:
                 continue
-            mode = item.get("security_mode", AUTH_OPTIONS[0]) or AUTH_OPTIONS[0]
-            password = item.get("password", "")
+            mode = item.get(SWITCH_WIFI_ENTRY_SECURITY_FIELD, AUTH_OPTIONS[0]) or AUTH_OPTIONS[0]
+            password = item.get(SWITCH_WIFI_ENTRY_PASSWORD_FIELD, "")
             result.append(
                 {
-                    "ssid": ssid,
-                    "security_mode": mode,
-                    "password": password,
+                    SWITCH_WIFI_ENTRY_SSID_FIELD: ssid,
+                    SWITCH_WIFI_ENTRY_SECURITY_FIELD: mode,
+                    SWITCH_WIFI_ENTRY_PASSWORD_FIELD: password,
                 }
             )
         return result
 
     def _sanitize_entry(self, item: Mapping[str, Any]) -> dict[str, str]:
-        ssid = str(item.get("ssid", "") or "").strip()
-        mode = str(item.get("security_mode", AUTH_OPTIONS[0]) or AUTH_OPTIONS[0]).strip()
+        ssid = str(item.get(SWITCH_WIFI_ENTRY_SSID_FIELD, "") or "").strip()
+        mode = str(
+            item.get(SWITCH_WIFI_ENTRY_SECURITY_FIELD, AUTH_OPTIONS[0]) or AUTH_OPTIONS[0]
+        ).strip()
         if mode not in AUTH_OPTIONS:
             mode = AUTH_OPTIONS[0]
-        password = str(item.get("password", "") or "")
-        return {"ssid": ssid, "security_mode": mode, "password": password}
+        password = str(item.get(SWITCH_WIFI_ENTRY_PASSWORD_FIELD, "") or "")
+        return {
+            SWITCH_WIFI_ENTRY_SSID_FIELD: ssid,
+            SWITCH_WIFI_ENTRY_SECURITY_FIELD: mode,
+            SWITCH_WIFI_ENTRY_PASSWORD_FIELD: password,
+        }
 
     def _refresh_table(self) -> None:
         self._loading = True
         try:
             self.table.setRowCount(len(self._entries))
             for row, item in enumerate(self._entries):
-                self.table.setItem(row, 0, QTableWidgetItem(item.get("ssid", "")))
-                self.table.setItem(row, 1, QTableWidgetItem(item.get("security_mode", "")))
-                self.table.setItem(row, 2, QTableWidgetItem(item.get("password", "")))
+                self.table.setItem(
+                    row,
+                    0,
+                    QTableWidgetItem(item.get(SWITCH_WIFI_ENTRY_SSID_FIELD, "")),
+                )
+                self.table.setItem(
+                    row,
+                    1,
+                    QTableWidgetItem(item.get(SWITCH_WIFI_ENTRY_SECURITY_FIELD, "")),
+                )
+                self.table.setItem(
+                    row,
+                    2,
+                    QTableWidgetItem(item.get(SWITCH_WIFI_ENTRY_PASSWORD_FIELD, "")),
+                )
         finally:
             self._loading = False
 
@@ -624,11 +651,11 @@ class SwitchWifiManualEditor(QWidget):
         if 0 <= row < len(self._entries):
             entry = self._entries[row]
             with QSignalBlocker(self.ssid_edit):
-                self.ssid_edit.setText(entry.get("ssid", ""))
+                self.ssid_edit.setText(entry.get(SWITCH_WIFI_ENTRY_SSID_FIELD, ""))
             with QSignalBlocker(self.password_edit):
-                self.password_edit.setText(entry.get("password", ""))
+                self.password_edit.setText(entry.get(SWITCH_WIFI_ENTRY_PASSWORD_FIELD, ""))
             with QSignalBlocker(self.security_combo):
-                mode = entry.get("security_mode", AUTH_OPTIONS[0])
+                mode = entry.get(SWITCH_WIFI_ENTRY_SECURITY_FIELD, AUTH_OPTIONS[0])
                 index = self.security_combo.findText(mode)
                 if index < 0:
                     index = 0
@@ -642,25 +669,29 @@ class SwitchWifiManualEditor(QWidget):
         row = self.table.currentRow()
         if not (0 <= row < len(self._entries)):
             return
-        if key == "security_mode" and value not in AUTH_OPTIONS:
+        if key == SWITCH_WIFI_ENTRY_SECURITY_FIELD and value not in AUTH_OPTIONS:
             value = AUTH_OPTIONS[0]
         self._entries[row][key] = value
-        if key == "ssid":
+        if key == SWITCH_WIFI_ENTRY_SSID_FIELD:
             item = self.table.item(row, 0)
             if item is not None:
                 item.setText(value)
-        elif key == "security_mode":
+        elif key == SWITCH_WIFI_ENTRY_SECURITY_FIELD:
             item = self.table.item(row, 1)
             if item is not None:
                 item.setText(value)
-        elif key == "password":
+        elif key == SWITCH_WIFI_ENTRY_PASSWORD_FIELD:
             item = self.table.item(row, 2)
             if item is not None:
                 item.setText(value)
         self.entriesChanged.emit()
 
     def _on_add_entry(self) -> None:
-        new_entry = {"ssid": "", "security_mode": AUTH_OPTIONS[0], "password": ""}
+        new_entry = {
+            SWITCH_WIFI_ENTRY_SSID_FIELD: "",
+            SWITCH_WIFI_ENTRY_SECURITY_FIELD: AUTH_OPTIONS[0],
+            SWITCH_WIFI_ENTRY_PASSWORD_FIELD: "",
+        }
         self._entries.append(new_entry)
         self._refresh_table()
         if self._entries:
@@ -703,9 +734,9 @@ class SwitchWifiCsvPreview(QTableWidget):
             return
         self.setRowCount(len(entries))
         for row, item in enumerate(entries):
-            ssid = str(item.get("ssid", "") or "")
-            mode = str(item.get("security_mode", "") or "")
-            password = str(item.get("password", "") or "")
+            ssid = str(item.get(SWITCH_WIFI_ENTRY_SSID_FIELD, "") or "")
+            mode = str(item.get(SWITCH_WIFI_ENTRY_SECURITY_FIELD, "") or "")
+            password = str(item.get(SWITCH_WIFI_ENTRY_PASSWORD_FIELD, "") or "")
             self.setItem(row, 0, QTableWidgetItem(ssid))
             self.setItem(row, 1, QTableWidgetItem(mode))
             self.setItem(row, 2, QTableWidgetItem(password))
@@ -1328,6 +1359,41 @@ class CaseConfigPage(CardWidget):
             self.field_widgets.update(entry.widgets)
         self._stability_panel.set_groups(self._compose_stability_groups(None))
 
+    @staticmethod
+    def _normalize_switch_wifi_manual_entries(entries: Any) -> list[dict[str, str]]:
+        normalized: list[dict[str, str]] = []
+        if isinstance(entries, Sequence) and not isinstance(entries, (str, bytes)):
+            for item in entries:
+                if not isinstance(item, Mapping):
+                    continue
+                ssid = (
+                    str(item.get(SWITCH_WIFI_ENTRY_SSID_FIELD, "") or "")
+                    .strip()
+                )
+                mode = (
+                    str(
+                        item.get(
+                            SWITCH_WIFI_ENTRY_SECURITY_FIELD,
+                            AUTH_OPTIONS[0],
+                        )
+                        or AUTH_OPTIONS[0]
+                    )
+                    .strip()
+                )
+                if mode not in AUTH_OPTIONS:
+                    mode = AUTH_OPTIONS[0]
+                password = str(
+                    item.get(SWITCH_WIFI_ENTRY_PASSWORD_FIELD, "") or ""
+                )
+                normalized.append(
+                    {
+                        SWITCH_WIFI_ENTRY_SSID_FIELD: ssid,
+                        SWITCH_WIFI_ENTRY_SECURITY_FIELD: mode,
+                        SWITCH_WIFI_ENTRY_PASSWORD_FIELD: password,
+                    }
+                )
+        return normalized
+
     def _ensure_script_case_defaults(self, case_key: str, case_path: str) -> dict[str, Any]:
         stability_cfg = self.config.setdefault("stability", {})
         cases_section = stability_cfg.setdefault("cases", {})
@@ -1335,29 +1401,14 @@ class CaseConfigPage(CardWidget):
         if not isinstance(entry, dict):
             entry = {}
 
-        if case_key == "test_swtich_wifi":
-            entry.setdefault("use_router", False)
-            router_csv = entry.get("router_csv")
-            entry["router_csv"] = str(router_csv or "").strip()
-            manual_entries = entry.get("manual_entries")
-            normalized_entries: list[dict[str, str]] = []
-            if isinstance(manual_entries, Sequence):
-                for item in manual_entries:
-                    if not isinstance(item, Mapping):
-                        continue
-                    ssid = str(item.get("ssid", "") or "").strip()
-                    mode = str(item.get("security_mode", AUTH_OPTIONS[0]) or AUTH_OPTIONS[0]).strip()
-                    if mode not in AUTH_OPTIONS:
-                        mode = AUTH_OPTIONS[0]
-                    password = str(item.get("password", "") or "")
-                    normalized_entries.append(
-                        {
-                            "ssid": ssid,
-                            "security_mode": mode,
-                            "password": password,
-                        }
-                    )
-            entry["manual_entries"] = normalized_entries
+        if case_key == SWITCH_WIFI_CASE_KEY:
+            entry.setdefault(SWITCH_WIFI_USE_ROUTER_FIELD, False)
+            router_csv = entry.get(SWITCH_WIFI_ROUTER_CSV_FIELD)
+            entry[SWITCH_WIFI_ROUTER_CSV_FIELD] = str(router_csv or "").strip()
+            manual_entries = entry.get(SWITCH_WIFI_MANUAL_ENTRIES_FIELD)
+            entry[
+                SWITCH_WIFI_MANUAL_ENTRIES_FIELD
+            ] = self._normalize_switch_wifi_manual_entries(manual_entries)
             cases_section[case_key] = entry
             return entry
 
@@ -1418,24 +1469,26 @@ class CaseConfigPage(CardWidget):
         data = data or {}
         case_key = entry.case_key
 
-        if case_key == "test_swtich_wifi":
+        if case_key == SWITCH_WIFI_CASE_KEY:
             use_router_widget = entry.widgets.get(
-                self._script_field_key(case_key, "use_router")
+                self._script_field_key(case_key, SWITCH_WIFI_USE_ROUTER_FIELD)
             )
             router_combo = entry.widgets.get(
-                self._script_field_key(case_key, "router_csv")
+                self._script_field_key(case_key, SWITCH_WIFI_ROUTER_CSV_FIELD)
             )
             manual_widget = entry.widgets.get(
-                self._script_field_key(case_key, "manual_entries")
+                self._script_field_key(case_key, SWITCH_WIFI_MANUAL_ENTRIES_FIELD)
             )
-            use_router_value = bool(data.get("use_router"))
+            use_router_value = bool(data.get(SWITCH_WIFI_USE_ROUTER_FIELD))
             if isinstance(use_router_widget, QCheckBox):
                 use_router_widget.setChecked(use_router_value)
-            router_path = self._resolve_csv_config_path(data.get("router_csv"))
+            router_path = self._resolve_csv_config_path(
+                data.get(SWITCH_WIFI_ROUTER_CSV_FIELD)
+            )
             if isinstance(router_combo, ComboBox):
                 self._populate_csv_combo(router_combo, router_path, include_placeholder=True)
             if isinstance(manual_widget, SwitchWifiManualEditor):
-                manual_entries = data.get("manual_entries")
+                manual_entries = data.get(SWITCH_WIFI_MANUAL_ENTRIES_FIELD)
                 if isinstance(manual_entries, Sequence) and not isinstance(manual_entries, (str, bytes)):
                     manual_widget.set_entries(manual_entries)
                 else:
@@ -1538,7 +1591,7 @@ class CaseConfigPage(CardWidget):
         layout.addWidget(intro)
 
         use_router_checkbox = QCheckBox("Use router configuration", group)
-        use_router_checkbox.setChecked(bool(data.get("use_router")))
+        use_router_checkbox.setChecked(bool(data.get(SWITCH_WIFI_USE_ROUTER_FIELD)))
         layout.addWidget(use_router_checkbox)
 
         router_box = QGroupBox("Router CSV", group)
@@ -1566,7 +1619,11 @@ class CaseConfigPage(CardWidget):
         manual_layout.setSpacing(6)
 
         manual_editor = SwitchWifiManualEditor(manual_box)
-        manual_entries = data.get("manual_entries") if isinstance(data, Mapping) else None
+        manual_entries = (
+            data.get(SWITCH_WIFI_MANUAL_ENTRIES_FIELD)
+            if isinstance(data, Mapping)
+            else None
+        )
         if isinstance(manual_entries, Sequence) and not isinstance(manual_entries, (str, bytes)):
             manual_editor.set_entries(manual_entries)
         else:
@@ -1577,15 +1634,23 @@ class CaseConfigPage(CardWidget):
         layout.addWidget(manual_box)
         layout.addStretch(1)
 
-        router_path = self._resolve_csv_config_path(data.get("router_csv"))
+        router_path = self._resolve_csv_config_path(
+            data.get(SWITCH_WIFI_ROUTER_CSV_FIELD)
+        )
         self._populate_csv_combo(router_combo, router_path, include_placeholder=True)
         self._register_switch_wifi_csv_combo(router_combo)
         self._update_switch_wifi_preview(router_preview, router_combo.currentData())
 
         widgets: dict[str, QWidget] = {}
-        widgets[self._script_field_key(case_key, "use_router")] = use_router_checkbox
-        widgets[self._script_field_key(case_key, "router_csv")] = router_combo
-        widgets[self._script_field_key(case_key, "manual_entries")] = manual_editor
+        widgets[
+            self._script_field_key(case_key, SWITCH_WIFI_USE_ROUTER_FIELD)
+        ] = use_router_checkbox
+        widgets[
+            self._script_field_key(case_key, SWITCH_WIFI_ROUTER_CSV_FIELD)
+        ] = router_combo
+        widgets[
+            self._script_field_key(case_key, SWITCH_WIFI_MANUAL_ENTRIES_FIELD)
+        ] = manual_editor
 
         section_controls: dict[str, tuple[QCheckBox, Sequence[QWidget]]] = {}
 
@@ -2149,29 +2214,18 @@ class CaseConfigPage(CardWidget):
             for name, case_value in cases_cfg.items():
                 if not isinstance(case_value, Mapping):
                     continue
-                if name == "test_swtich_wifi":
-                    manual_entries = case_value.get("manual_entries")
-                    normalized_entries: list[dict[str, str]] = []
-                    if isinstance(manual_entries, Sequence):
-                        for item in manual_entries:
-                            if not isinstance(item, Mapping):
-                                continue
-                            ssid = str(item.get("ssid", "") or "").strip()
-                            mode = str(item.get("security_mode", AUTH_OPTIONS[0]) or AUTH_OPTIONS[0]).strip()
-                            if mode not in AUTH_OPTIONS:
-                                mode = AUTH_OPTIONS[0]
-                            password = str(item.get("password", "") or "")
-                            normalized_entries.append(
-                                {
-                                    "ssid": ssid,
-                                    "security_mode": mode,
-                                    "password": password,
-                                }
-                            )
+                if name == SWITCH_WIFI_CASE_KEY:
+                    manual_entries = case_value.get(SWITCH_WIFI_MANUAL_ENTRIES_FIELD)
                     cases[name] = {
-                        "use_router": bool(case_value.get("use_router")),
-                        "router_csv": str(case_value.get("router_csv", "") or "").strip(),
-                        "manual_entries": normalized_entries,
+                        SWITCH_WIFI_USE_ROUTER_FIELD: bool(
+                            case_value.get(SWITCH_WIFI_USE_ROUTER_FIELD)
+                        ),
+                        SWITCH_WIFI_ROUTER_CSV_FIELD: str(
+                            case_value.get(SWITCH_WIFI_ROUTER_CSV_FIELD, "") or ""
+                        ).strip(),
+                        SWITCH_WIFI_MANUAL_ENTRIES_FIELD: self._normalize_switch_wifi_manual_entries(
+                            manual_entries
+                        ),
                     }
                 else:
                     cases[name] = {
@@ -2359,7 +2413,9 @@ class CaseConfigPage(CardWidget):
                     if text.lower() == 'select port':
                         text = ''
                     value = True if text == 'True' else False if text == 'False' else text
-                if key == self._script_field_key("test_swtich_wifi", "router_csv"):
+                if key == self._script_field_key(
+                    SWITCH_WIFI_CASE_KEY, SWITCH_WIFI_ROUTER_CSV_FIELD
+                ):
                     value = self._relativize_config_path(value)
                 ref[leaf] = value
             elif isinstance(widget, QSpinBox):
@@ -3048,16 +3104,26 @@ class CaseConfigPage(CardWidget):
                 for row in reader:
                     if not isinstance(row, dict):
                         continue
-                    ssid = str(row.get("ssid", "") or "").strip()
+                    ssid = (
+                        str(row.get(SWITCH_WIFI_ENTRY_SSID_FIELD, "") or "")
+                        .strip()
+                    )
                     if not ssid:
                         continue
-                    mode = str(row.get("security_mode", "") or "").strip() or AUTH_OPTIONS[0]
-                    password = str(row.get("password", "") or "")
+                    mode = (
+                        str(
+                            row.get(SWITCH_WIFI_ENTRY_SECURITY_FIELD, "") or ""
+                        ).strip()
+                        or AUTH_OPTIONS[0]
+                    )
+                    password = str(
+                        row.get(SWITCH_WIFI_ENTRY_PASSWORD_FIELD, "") or ""
+                    )
                     entries.append(
                         {
-                            "ssid": ssid,
-                            "security_mode": mode,
-                            "password": password,
+                            SWITCH_WIFI_ENTRY_SSID_FIELD: ssid,
+                            SWITCH_WIFI_ENTRY_SECURITY_FIELD: mode,
+                            SWITCH_WIFI_ENTRY_PASSWORD_FIELD: password,
                         }
                     )
         except Exception as exc:
