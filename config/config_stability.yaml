@@ -18,6 +18,7 @@ cases:
       port: ''
       mode: 'NO'
   test_swtich_wifi:
+    # Default placeholders for router mode toggle and manual overrides
     use_router: false
     router_csv: ''
     manual_entries: []
