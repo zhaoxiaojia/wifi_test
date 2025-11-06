@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python 
+﻿#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
 # File       : demo_.py
@@ -21,6 +21,7 @@ from contextlib import suppress
 import pytest
 import csv
 from src.tools.connect_tool.adb import adb
+from src.tools.connect_tool.serial_tool import serial_tool
 # from tools.connect_tool.host_os import host_os
 from src.tools.connect_tool.telnet_tool import telnet_tool
 from src.tools.TestResult import TestResult
@@ -132,6 +133,19 @@ def pytest_sessionstart(session):
     pytest.connect_type = connect_type_value
     pytest.third_party_cfg = connect_cfg.get('third_party', {})
     rvr_cfg = pytest.config.get('rvr') or {}
+    serial_cfg = pytest.config.get('serial_port') or {}
+    pytest.serial = None
+    status = serial_cfg.get('status')
+    serial_enabled = status if isinstance(status, bool) else str(status).strip().lower() in {'1', 'true', 'yes', 'on'}
+    if serial_enabled:
+        try:
+            pytest.serial = serial_tool(
+                serial_port=serial_cfg.get('port', ''),
+                baud=serial_cfg.get('baud', '')
+            )
+            logging.info("Serial logging enabled; kernel_log.txt will be captured.")
+        except Exception:
+            logging.exception("Failed to initialize serial tool; serial logging disabled.")
     try:
         repeat_times = int(rvr_cfg.get('repeat', 0) or 0)
     except Exception:
@@ -378,6 +392,12 @@ def pytest_sessionfinish(session, exitstatus):
         except Exception as exc:
             logging.warning("Failed to copy pytest.log to %s: %s", destination_dir, exc)
 
+    ser_log = Path("kernel_log.txt")
+    if destination_dir and ser_log.exists():
+        try:
+            shutil.copy(ser_log, destination_dir / "kernel.log")
+        except Exception as exc:
+            logging.warning("Failed to copy pytest.log to %s: %s", destination_dir, exc)
     test_result = getattr(pytest, "testResult", None)
     if isinstance(test_result, TestResult):
         _maybe_generate_project_report()

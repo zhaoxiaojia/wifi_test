@@ -1,5 +1,5 @@
-#!/usr/bin/env python 
-# -*- coding: utf-8 -*- 
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 
 
 """
@@ -79,7 +79,9 @@ class serial_tool:
                 data = self.ser.read(1024)  # 不再立刻decode
                 if not data:
                     continue
-                file.write(data.decode('utf-8', errors='ignore').strip())
+                chunk = data.decode("utf-8", errors="ignore")
+                chunk = chunk.replace("\r\n", "\n").replace("\r", "\n")
+                file.write(chunk)
                 self._rx_queue.put(data)  # <-- 喂给业务线程
                 # 检查是否有关键字需要检测
                 with self.keyword_flags_lock:
