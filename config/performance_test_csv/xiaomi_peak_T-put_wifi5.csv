@@ -1,0 +1,13 @@
+band,ssid,wireless_mode,channel,bandwidth,security_mode,password,tx,rx
+2.4G,ax3600_2g,11n,1,20 MHz,Open System,,1,1
+2.4G,ax3600_2g,11n,6,40 MHz,Open System,,1,1
+2.4G,ax3600_2g,11n,9,20 MHz,Open System,,1,1
+2.4G,ax3600_2g,11n,11,20 MHz,Open System,,1,1
+2.4G,ax3600_2g,11ax,1,20 MHz,Open System,,1,1
+2.4G,ax3600_2g,11ax,6,20 MHz,Open System,,1,1
+2.4G,ax3600_2g,11ax,9,20 MHz,Open System,,1,1
+2.4G,ax3600_2g,11ax,11,20 MHz,Open System,,1,1
+5G,ax3600_5g,11ac,36,80 MHz,Open System,,1,1
+5G,ax3600_5g,11ac,40,20 MHz,Open System,,1,1
+5G,ax3600_5g,11ac,149,80 MHz,Open System,,1,1
+5G,ax3600_5g,11ac,161,40 MHz,Open System,,1,1
