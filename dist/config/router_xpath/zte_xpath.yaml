@@ -1,0 +1,45 @@
+# This is yaml for zte router xpath info
+
+zte:
+  passwd: 12345678
+  password_element: txtPwd
+  signin_element: btnLogin
+  signin_done_element: h_wifi_setting_btn
+
+  #  band_element: //*[@id="wl_unit_field"]/td/select
+  wireless_mode_element:
+    mode_2g: //*[@id="mode"]/option[{}]
+    mode_5g: //*[@id="modeFor5HZ"]/option[{}]
+  ssid_element_2g: ssid
+  ssid_element_5g: ssid_5G
+
+  #  //*[@id="WLgeneral"]/tbody/tr[11]/td/select/option[4]
+  channel_regu_element:
+    channel_2g: //*[@id="channel"]/option[{}]
+    channel_5g: //*[@id="channels_5g"]/option[{}]
+  bandwidth_element:
+    bandwidth_2g: //*[@id="wifi_channel_bandwidth"]/option[{}]
+    bandwidth_5g: //*[@id="wifi_channel_bandwidth_5g"]/option[{}]
+  authentication_regu_element:
+    authtication_2g: //*[@id="securityMode"]/option[{}]
+    authtication_5g: //*[@id="securityMode_5G"]/option[{}]
+  wep_passwd:
+    passwd_2g: //*[@id="pass"]
+    passwd_5g: //*[@id="pass_5G"]
+  wep_encrypt_regu_element: //*[@id="WLgeneral"]/tbody/tr[16]/td/select/option[{}]
+  wpa_encrypt_regu_element: //*[@id="WLgeneral"]/tbody/tr[14]/td/select/option[{}]
+  passwd_index_regu_element: //*[@id="WLgeneral"]/tbody/tr[17]/td/select/option[{}]
+
+  wep_passwd_element: wpa_key
+
+  wpa_passwd_element:
+    asus_86u: //*[@id="wpa_psk_key_field"]/td/div/div[1]/input
+    asus_88u: //*[@id="WLgeneral"]/tbody/tr[15]/td/input
+  protect_frame_regu_element: //*[@id="WLgeneral"]/tbody/tr[26]/td/select/option[{}]
+
+  apply_element: applyButton
+  setting_load_element: //*[@id="loadingBlock"]/tbody/tr/td[2]
+
+  wait_reboot_element:
+    asus_86u: /html/body/form/div/div/div[1]/div[2]
+    asus_88u: /html/body/form/div/div/div[2]
