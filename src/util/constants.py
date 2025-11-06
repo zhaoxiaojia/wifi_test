@@ -96,7 +96,7 @@ _DEFAULT_METADATA = {
 }
 # Configuration file split/save constants
 DUT_CONFIG_FILENAME: Final[str] = "config_dut.yaml"
-OTHER_CONFIG_FILENAME: Final[str] = "config_other.yaml"
+EXECUTION_CONFIG_FILENAME: Final[str] = "config_execution.yaml"
 DUT_SECTION_KEYS: Final[frozenset[str]] = frozenset({
     "connect_type",
     "fpga",
@@ -108,7 +108,8 @@ DUT_SECTION_KEYS: Final[frozenset[str]] = frozenset({
 CONFIG_KEY_ALIASES: Final[dict[str, str]] = {
     "dut": "connect_type",
 }
-TOOL_CONFIG_FILENAME: Final[str] = "tool_config.yaml"
+TOOL_SECTION_KEY: Final[str] = "tool"
+TOOL_CONFIG_FILENAME: Final[str] = "config_tool.yaml"
 STABILITY_CONFIG_FILENAME: Final[str] = "config_stability.yaml"
 
 # UI theme defaults
@@ -190,37 +191,47 @@ def _normalize_config_keys(data: Mapping[str, Any] | None) -> dict[str, Any]:
 
 def split_config_data(
     config: Mapping[str, Any] | None,
-) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
-    """Split the full configuration into DUT, general, and stability sections."""
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]]:
+    """Split the full configuration into DUT, execution, stability, and tool sections."""
     normalised = _normalize_config_keys(config)
     dut_section: dict[str, Any] = {}
-    other_section: dict[str, Any] = {}
+    execution_section: dict[str, Any] = {}
     stability_section: dict[str, Any] = {}
+    tool_section: dict[str, Any] = {}
     for key, value in normalised.items():
         if key == "stability":
             if isinstance(value, Mapping):
                 stability_section = copy.deepcopy(value)
             continue
+        if key == TOOL_SECTION_KEY:
+            if isinstance(value, Mapping):
+                tool_section = copy.deepcopy(value)
+            continue
         if key in DUT_SECTION_KEYS:
             dut_section[key] = copy.deepcopy(value)
         else:
-            other_section[key] = copy.deepcopy(value)
-    return dut_section, other_section, stability_section
+            execution_section[key] = copy.deepcopy(value)
+    return dut_section, execution_section, stability_section, tool_section
 
 
 def merge_config_sections(
     dut_section: Mapping[str, Any] | None,
-    other_section: Mapping[str, Any] | None,
+    execution_section: Mapping[str, Any] | None,
     stability_section: Mapping[str, Any] | None = None,
+    tool_section: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Return a merged configuration mapping from DUT, general, and stability sections."""
+    """Return a merged configuration mapping from DUT, execution, stability, and tool sections."""
     merged: dict[str, Any] = {}
-    merged.update(_normalize_config_keys(other_section))
+    merged.update(_normalize_config_keys(execution_section))
     merged.update(_normalize_config_keys(dut_section))
     if isinstance(stability_section, Mapping):
         merged["stability"] = copy.deepcopy(stability_section)
     else:
         merged.setdefault("stability", {})
+    if isinstance(tool_section, Mapping):
+        merged[TOOL_SECTION_KEY] = copy.deepcopy(tool_section)
+    else:
+        merged.setdefault(TOOL_SECTION_KEY, {})
     return merged
 
 
@@ -263,12 +274,14 @@ def _load_config_cached(base_dir: str) -> dict[str, Any]:
     """Load configuration sections from disk and merge them."""
     config_dir = Path(base_dir)
     dut_path = config_dir / DUT_CONFIG_FILENAME
-    other_path = config_dir / OTHER_CONFIG_FILENAME
+    execution_path = config_dir / EXECUTION_CONFIG_FILENAME
     stability_path = config_dir / STABILITY_CONFIG_FILENAME
+    tool_path = config_dir / TOOL_CONFIG_FILENAME
     dut_section = _read_yaml_dict(dut_path)
-    other_section = _read_yaml_dict(other_path)
+    execution_section = _read_yaml_dict(execution_path)
     stability_section = _read_yaml_dict(stability_path)
-    return merge_config_sections(dut_section, other_section, stability_section)
+    tool_section = _read_yaml_dict(tool_path)
+    return merge_config_sections(dut_section, execution_section, stability_section, tool_section)
 
 
 def load_config(
@@ -342,20 +355,24 @@ def is_database_debug_enabled(
 
 def save_config_sections(
     dut_section: Mapping[str, Any] | None,
-    other_section: Mapping[str, Any] | None,
+    execution_section: Mapping[str, Any] | None,
     stability_section: Mapping[str, Any] | None,
+    tool_section: Mapping[str, Any] | None,
     *,
     base_dir: str | os.PathLike[str] | None = None,
 ) -> None:
-    """Persist DUT, general, and stability configuration sections."""
+    """Persist DUT, execution, stability, and tool configuration sections."""
     config_base = Path(base_dir) if base_dir is not None else get_config_base()
     dut_path = config_base / DUT_CONFIG_FILENAME
-    other_path = config_base / OTHER_CONFIG_FILENAME
+    execution_path = config_base / EXECUTION_CONFIG_FILENAME
     stability_path = config_base / STABILITY_CONFIG_FILENAME
+    tool_path = config_base / TOOL_CONFIG_FILENAME
     _write_yaml_dict(dut_path, _normalize_config_keys(dut_section))
-    _write_yaml_dict(other_path, _normalize_config_keys(other_section))
+    _write_yaml_dict(execution_path, _normalize_config_keys(execution_section))
     stability_payload = stability_section if isinstance(stability_section, Mapping) else {}
     _write_yaml_dict(stability_path, stability_payload)
+    tool_payload = tool_section if isinstance(tool_section, Mapping) else {}
+    _write_yaml_dict(tool_path, tool_payload)
 
 
 def save_config(
@@ -364,8 +381,14 @@ def save_config(
     base_dir: str | os.PathLike[str] | None = None,
 ) -> None:
     """Persist the combined configuration dictionary."""
-    dut_section, other_section, stability_section = split_config_data(config)
-    save_config_sections(dut_section, other_section, stability_section, base_dir=base_dir)
+    dut_section, execution_section, stability_section, tool_section = split_config_data(config)
+    save_config_sections(
+        dut_section,
+        execution_section,
+        stability_section,
+        tool_section,
+        base_dir=base_dir,
+    )
     _load_config_cached.cache_clear()
 
 

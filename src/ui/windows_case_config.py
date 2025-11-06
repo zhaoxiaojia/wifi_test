@@ -626,8 +626,10 @@ class CaseConfigPage(CardWidget):
         self.setObjectName("caseConfigPage")
         self.on_run_callback = on_run_callback
         apply_theme(self)
+        self.selected_csv_path: str | None = None
         # -------------------- load config --------------------
         self.config: dict = self._load_config()
+        self._load_csv_selection_from_config()
         # -------------------- state --------------------
         self._refreshing = False
         self._pending_path: str | None = None
@@ -635,7 +637,6 @@ class CaseConfigPage(CardWidget):
         self._duration_control_group: QGroupBox | None = None
         self._check_point_group: QGroupBox | None = None
         self.router_obj = None
-        self.selected_csv_path: str | None = None
         self._enable_rvr_wifi: bool = False
         self._locked_fields: set[str] | None = None
         self._current_case_path: str = ""
@@ -2267,6 +2268,7 @@ class CaseConfigPage(CardWidget):
             save_config(self.config)
             logging.info("Configuration saved")
             self.config = self._load_config()
+            self._load_csv_selection_from_config()
             logging.info("Configuration saved")
         except Exception as exc:
             logging.error("[save] failed: %s", exc)
@@ -2426,6 +2428,30 @@ class CaseConfigPage(CardWidget):
             self.router_obj.address = text
         self.routerInfoChanged.emit()
 
+    def _resolve_csv_config_path(self, value: Any) -> str | None:
+        """Return the absolute CSV path derived from persisted configuration."""
+        if not value:
+            return None
+        try:
+            candidate = Path(value)
+        except (TypeError, ValueError):
+            return None
+        try:
+            if not candidate.is_absolute():
+                candidate = (get_config_base() / candidate).resolve()
+            else:
+                candidate = candidate.resolve()
+        except Exception:
+            return None
+        return str(candidate)
+
+    def _load_csv_selection_from_config(self) -> None:
+        """Initialise the cached CSV selection from stored configuration."""
+        stored = None
+        if isinstance(self.config, dict):
+            stored = self._resolve_csv_config_path(self.config.get("csv_path"))
+        self._set_selected_csv(stored, sync_combo=False)
+
     def _update_csv_options(self):
         """刷新 CSV 下拉框"""
         if not hasattr(self, "csv_combo"):
@@ -2446,7 +2472,7 @@ class CaseConfigPage(CardWidget):
                     self.csv_combo.addItem(csv_file.name)
                     idx = self.csv_combo.count() - 1
                     self.csv_combo.setItemData(idx, str(csv_file.resolve()))
-        self._set_selected_csv(None, sync_combo=True)
+        self._set_selected_csv(self.selected_csv_path, sync_combo=True)
 
     def _normalize_csv_path(self, path: Any) -> str | None:
         """Normalize CSV paths to absolute strings for reliable comparisons."""
@@ -2494,7 +2520,7 @@ class CaseConfigPage(CardWidget):
         """根据当前状态更新 RVR 导航按钮可用性"""
         main_window = self.window()
         if hasattr(main_window, "rvr_nav_button"):
-            enabled = bool(self._enable_rvr_wifi and self.selected_csv_path)
+            enabled = bool(getattr(self, "_enable_rvr_wifi", False) and self.selected_csv_path)
             main_window.rvr_nav_button.setEnabled(enabled)
 
     def _case_path_to_display(self, case_path: str) -> str:
