@@ -149,6 +149,15 @@ AUTH_OPTIONS: Final[tuple[str, ...]] = (
 )
 OPEN_AUTH: Final[frozenset[str]] = frozenset({"Open System"})
 
+# ``test_swtich_wifi`` case field names reused by UI and configuration helpers.
+SWITCH_WIFI_CASE_KEY: Final[str] = "test_swtich_wifi"
+SWITCH_WIFI_USE_ROUTER_FIELD: Final[str] = "use_router"
+SWITCH_WIFI_ROUTER_CSV_FIELD: Final[str] = "router_csv"
+SWITCH_WIFI_MANUAL_ENTRIES_FIELD: Final[str] = "manual_entries"
+SWITCH_WIFI_ENTRY_SSID_FIELD: Final[str] = "ssid"
+SWITCH_WIFI_ENTRY_SECURITY_FIELD: Final[str] = "security_mode"
+SWITCH_WIFI_ENTRY_PASSWORD_FIELD: Final[str] = "password"
+
 # Android version defaults
 DEFAULT_ANDROID_VERSION_CHOICES: Final[tuple[str, ...]] = (
     "Android 15",
