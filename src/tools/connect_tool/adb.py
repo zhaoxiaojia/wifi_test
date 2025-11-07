@@ -20,6 +20,7 @@ import subprocess
 import threading
 import time
 from collections import Counter
+from typing import Optional
 from xml.dom import minidom
 
 import _io
@@ -725,10 +726,100 @@ class adb(dut):
         if "wlan0" not in output:
             logging.debug("wifi has closed")
 
-    def connect_wifi(self, ssid, pwd, security):
-        cmd = f"cmd wifi connect-network {ssid} {security} {pwd}"
-        logging.info(f"Connect wifi command: {cmd}")
-        return self.checkoutput(cmd)
+    def connect_wifi(
+        self,
+        ssid: str,
+        pwd: str = "",
+        security: str = "wpa2",
+        *,
+        password: Optional[str] = None,
+        security_mode: Optional[str] = None,
+        hidden: bool = False,
+        retries: int = 3,
+        wait_interval: float = 5.0,
+        wait_timeout: int = 90,
+        target: Optional[str] = None,
+    ) -> bool:
+        return super().connect_wifi(
+            ssid=ssid,
+            pwd=pwd,
+            security=security,
+            password=password,
+            security_mode=security_mode,
+            hidden=hidden,
+            retries=retries,
+            wait_interval=wait_interval,
+            wait_timeout=wait_timeout,
+            target=target,
+        )
+
+    def _connect_wifi_android(
+        self,
+        *,
+        ssid: str,
+        password: str,
+        security: Optional[str],
+        hidden: bool,
+        retries: int,
+        wait_interval: float,
+        target: Optional[str],
+    ) -> bool:
+        attempts = max(int(retries), 1)
+        security_token = (security or "wpa2").strip().lower()
+        password_value = password or ""
+
+        command = self.CMD_WIFI_CONNECT.format(ssid, security_token, password_value)
+        if hidden:
+            command += self.CMD_WIFI_HIDE
+
+        try:
+            _ = self.pc_ip
+        except Exception as exc:  # pragma: no cover - hardware dependent
+            logging.debug("Failed to resolve PC IP before Wi-Fi connect: %s", exc)
+
+        target_prefix = target or getattr(self, "ip_target", "")
+
+        last_error: Optional[Exception] = None
+        for attempt in range(1, attempts + 1):
+            logging.info(
+                "Connecting to SSID '%s' (security=%s, hidden=%s) attempt %s/%s",
+                ssid,
+                security_token,
+                hidden,
+                attempt,
+                attempts,
+            )
+            try:
+                self.checkoutput(command)
+                sleep_time = wait_interval if wait_interval > 0 else 0
+                if sleep_time:
+                    time.sleep(sleep_time)
+                success, _ = self.wait_for_wifi_address(cmd=command, target=target_prefix)
+                if success:
+                    logging.info("Connected to SSID '%s'", ssid)
+                    return True
+            except Exception as exc:  # pragma: no cover - hardware dependent
+                last_error = exc
+                logging.warning(
+                    "Attempt %s to connect Wi-Fi '%s' failed: %s",
+                    attempt,
+                    ssid,
+                    exc,
+                )
+                time.sleep(1)
+
+        if last_error is not None:
+            logging.error(
+                "Failed to connect to Wi-Fi '%s' after %s attempts: %s",
+                ssid,
+                attempts,
+                last_error,
+            )
+        else:
+            logging.error(
+                "Failed to connect to Wi-Fi '%s' after %s attempts", ssid, attempts
+            )
+        return False
 
     def check_wifi_driver(self):
         self.clear_logcat()
