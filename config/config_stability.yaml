@@ -18,7 +18,12 @@ cases:
       port: ''
       mode: 'NO'
   test_swtich_wifi:
-    # Default placeholders for router mode toggle and manual overrides
     use_router: false
-    router_csv: ''
-    manual_entries: []
+    router_csv: ../Select config csv file
+    manual_entries:
+    - ssid: sunshine
+      security_mode: WPA2-Personal
+      password: Home1357
+    - ssid: SH-AP-052-2g-xts
+      security_mode: Open System
+      password: ''
