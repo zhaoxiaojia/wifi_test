@@ -37,7 +37,11 @@ from PyQt5.QtCore import (
     QThread,
     pyqtSignal,
 )
-from src.util.ldap_auth import get_configured_ldap_server, ldap_authenticate
+from src.ui.company_login import (
+    LDAP_SERVER,
+    authenticate_via_ldap,
+    create_ldap_server,
+)
 from src.util.constants import Paths, cleanup_temp_dir
 
 # Ensure working directory equals executable directory
@@ -46,6 +50,24 @@ os.chdir(Paths.BASE_DIR)
 
 def log_exception(exc_type, exc_value, exc_tb):
     logging.error("".join(traceback.format_exception(exc_type, exc_value, exc_tb)))
+
+
+def _describe_ldap_server() -> str:
+    """Return a human-readable LDAP server address for logging/UI."""
+
+    server_address = LDAP_SERVER
+    try:
+        server_obj = create_ldap_server()
+        host = getattr(server_obj, "host", None)
+        if host:
+            server_address = host
+        else:
+            text = str(server_obj)
+            if text:
+                server_address = text
+    except Exception:  # pragma: no cover - fallback path
+        logging.debug("_describe_ldap_server: failed to resolve server, using default", exc_info=True)
+    return server_address
 
 
 class LDAPAuthWorker(QObject):
@@ -60,7 +82,7 @@ class LDAPAuthWorker(QObject):
         self._password = password or ""
 
     def run(self) -> None:  # pragma: no cover - hard to cover threads
-        server = get_configured_ldap_server()
+        server = _describe_ldap_server()
         logging.info(
             "LDAPAuthWorker.run: start authentication (username=%s, server=%s)",
             self._username,
@@ -68,17 +90,27 @@ class LDAPAuthWorker(QObject):
         )
         try:
             self.progress.emit(f"Connecting to LDAP server: {server}")
-            result = ldap_authenticate(self._username, self._password)
-            if result:
+            success, result_message = authenticate_via_ldap(
+                self._username,
+                self._password,
+            )
+            if success:
+                username = result_message or self._username
                 payload = {
-                    "username": result,
+                    "username": username,
                     "server": server,
                 }
                 self.progress.emit(f"LDAP authentication succeeded (server: {server}), updating UI...")
-                self.finished.emit(True, f"Signed in successfully, welcome {result}", payload)
+                welcome = username or "user"
+                self.finished.emit(
+                    True,
+                    f"Signed in successfully, welcome {welcome}",
+                    payload,
+                )
             else:
-                message = f"LDAP login failed. Please check username or password. (server: {server})"
-                logging.warning("LDAP login failed (server=%s)", server)
+                detail = result_message or "LDAP login failed. Please check username or password."
+                message = f"{detail} (server: {server})"
+                logging.warning("LDAP login failed (server=%s): %s", server, detail)
                 self.finished.emit(False, message, {})
         except Exception as exc:  # pragma: no cover - runtime exceptions
             logging.exception("LDAP login failed (unexpected)")
@@ -244,7 +276,7 @@ class MainWindow(FluentWindow):
             self.login_page.set_status_message("Sign-in in progress, please wait...")
             logging.info("MainWindow: an auth thread is already running, ignoring new request")
             return
-        server = get_configured_ldap_server()
+        server = _describe_ldap_server()
         self.login_page.set_loading(True)
         self.login_page.set_status_message(
             f"Starting LDAP authentication (server: {server})..."
