@@ -31,7 +31,6 @@ from src.util.constants import (
     TURN_TABLE_SECTION_KEY,
 )
 
-
 _SCENARIO_KEY_FIELDS = (
     ("band", "band"),
     ("ssid", "ssid"),
@@ -202,10 +201,11 @@ def init_corner():
     cfg = get_cfg()
     turntable_cfg = _turntable_section_from_config(cfg)
     model = str(turntable_cfg.get(TURN_TABLE_FIELD_MODEL, TURN_TABLE_MODEL_RS232)).strip()
-    corner_ip = str(turntable_cfg.get(TURN_TABLE_FIELD_IP_ADDRESS, "")).strip()
+    corner_ip = ''
     if model == TURN_TABLE_MODEL_RS232:
         corner_tool = rs()
     else:
+        corner_ip = str(turntable_cfg.get(TURN_TABLE_FIELD_IP_ADDRESS, "")).strip()
         if not corner_ip:
             raise EnvironmentError(
                 "Turntable IP address is required when using network-controlled models"
@@ -366,7 +366,6 @@ def _parse_optional_int(
         )
         number = max_value
     return number
-
 
 
 def _is_scalar(value: Any) -> bool:
