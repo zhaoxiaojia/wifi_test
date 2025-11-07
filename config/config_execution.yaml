@@ -1,10 +1,9 @@
-corner_angle:
-  ip_address: 192.168.5.156
-  step:
-  - 0
-  - 360
-  static_db: ''
-  target_rssi: 45,60
+Turntable:
+  Turntable: RS232Board5
+  IP address: 192.168.5.156
+  Step: '0,360'
+  Static dB: ''
+  Target RSSI: '45,60'
 rf_solution:
   RADIORACK-4-220:
     ip_address: 192.168.50.19
