@@ -3,6 +3,11 @@
 """Amlogic 公司账号登录页面。"""
 from __future__ import annotations
 
+import logging
+import os
+
+from ldap3 import ALL, Connection, NTLM, Server
+from ldap3.core.exceptions import LDAPException
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtWidgets import (
     QWidget,
@@ -18,6 +23,73 @@ from qfluentwidgets import LineEdit, PushButton
 
 from .theme import FONT_FAMILY
 from .theme import apply_theme
+
+LDAP_HOST = os.getenv("AMLOGIC_LDAP_HOST", "ldap.amlogic.com")
+LDAP_DOMAIN = os.getenv("AMLOGIC_LDAP_DOMAIN", "AMLOGIC")
+
+
+def get_configured_ldap_server() -> str:
+    """返回当前配置的 LDAP 服务器主机名。"""
+
+    return LDAP_HOST
+
+
+def ldap_authenticate(username: str, password: str) -> str | None:
+    """使用公司 LDAP 服务验证登录凭证。"""
+
+    clean_username = (username or "").strip()
+    if not clean_username or not password:
+        logging.info("ldap_authenticate: 账号或密码为空 (username=%s)", clean_username)
+        return None
+
+    server_host = LDAP_HOST.strip()
+    connection: Connection | None = None
+    try:
+        server = Server(server_host, get_info=ALL)
+        domain_user = _normalize_username(clean_username)
+        connection = Connection(
+            server,
+            user=domain_user,
+            password=password,
+            authentication=NTLM,
+        )
+        if not connection.bind():
+            logging.warning(
+                "ldap_authenticate: LDAP bind failed (username=%s, server=%s, result=%s)",
+                domain_user,
+                server_host,
+                connection.result,
+            )
+            return None
+        logging.info(
+            "ldap_authenticate: LDAP bind success (username=%s, server=%s)",
+            domain_user,
+            server_host,
+        )
+        return clean_username
+    except LDAPException as exc:
+        logging.error(
+            "ldap_authenticate: LDAP 异常 (username=%s, server=%s): %s",
+            clean_username,
+            server_host,
+            exc,
+        )
+        return None
+    finally:
+        if connection is not None:
+            try:
+                connection.unbind()
+            except Exception:  # pragma: no cover - 清理阶段无需抛出
+                logging.debug("ldap_authenticate: 忽略 unbind 异常", exc_info=True)
+
+
+def _normalize_username(username: str) -> str:
+    """根据是否包含域信息拼接完整账号。"""
+
+    clean_username = username.strip()
+    if "\\" in clean_username or "@" in clean_username:
+        return clean_username
+    return f"{LDAP_DOMAIN}\\{clean_username}"
 
 
 class CompanyLoginPage(QWidget):
