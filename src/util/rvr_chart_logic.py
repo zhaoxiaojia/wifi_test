@@ -124,6 +124,8 @@ class RvrChartLogic:
             "corner_angle",
             "Corner_Angle",
             "CornerAngle",
+            "turntable",
+            "Turntable",
         )
         prepared["__angle_value__"] = angle_series.apply(self._parse_angle_value)
         prepared["__angle_display__"] = angle_series.apply(self._format_angle_display)
@@ -244,6 +246,8 @@ class RvrChartLogic:
                 "Corner",
                 "corner_angle",
                 "Corner_Angle",
+                "turntable",
+                "Turntable",
             ),
         )
         if angle_value is not None:
@@ -351,7 +355,14 @@ class RvrChartLogic:
         angle_columns = []
         for column in df.columns:
             name = str(column).strip().lower()
-            if name in {"angel", "angle", "corner", "corner_angle", "cornerangle"}:
+            if name in {
+                "angel",
+                "angle",
+                "corner",
+                "corner_angle",
+                "cornerangle",
+                "turntable",
+            }:
                 angle_columns.append(column)
         if not angle_columns:
             return False

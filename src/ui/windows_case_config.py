@@ -29,6 +29,15 @@ from src.util.constants import (
     SWITCH_WIFI_ENTRY_SSID_FIELD,
     SWITCH_WIFI_ENTRY_SECURITY_FIELD,
     SWITCH_WIFI_ENTRY_PASSWORD_FIELD,
+    TURN_TABLE_SECTION_KEY,
+    TURN_TABLE_FIELD_MODEL,
+    TURN_TABLE_FIELD_IP_ADDRESS,
+    TURN_TABLE_FIELD_STEP,
+    TURN_TABLE_FIELD_STATIC_DB,
+    TURN_TABLE_FIELD_TARGET_RSSI,
+    TURN_TABLE_MODEL_CHOICES,
+    TURN_TABLE_MODEL_RS232,
+    TURN_TABLE_MODEL_OTHER,
 )
 from src.tools.config_loader import load_config, save_config
 from PyQt5.QtCore import (
@@ -2387,6 +2396,18 @@ class CaseConfigPage(CardWidget):
                 if key == "rf_solution.step":
                     ref[leaf] = val.strip()
                     continue
+                if key == f"{TURN_TABLE_SECTION_KEY}.{TURN_TABLE_FIELD_STEP}":
+                    ref[leaf] = val.strip()
+                    continue
+                if key == f"{TURN_TABLE_SECTION_KEY}.{TURN_TABLE_FIELD_STATIC_DB}":
+                    ref[leaf] = val.strip()
+                    continue
+                if key == f"{TURN_TABLE_SECTION_KEY}.{TURN_TABLE_FIELD_TARGET_RSSI}":
+                    ref[leaf] = val.strip()
+                    continue
+                if key == f"{TURN_TABLE_SECTION_KEY}.{TURN_TABLE_FIELD_IP_ADDRESS}":
+                    ref[leaf] = val.strip()
+                    continue
                 old_val = ref.get(leaf)
                 if isinstance(old_val, list):
                     items = [x.strip() for x in val.split(',') if x.strip()]
@@ -3620,75 +3641,93 @@ class CaseConfigPage(CardWidget):
                 continue  # 跳过默认 LineEdit 处理
 
                 # ---------- 其余简单字段 ----------
-            if key == "corner_angle":
+            if key == TURN_TABLE_SECTION_KEY:
                 group = QGroupBox("Turntable")
                 vbox = QVBoxLayout(group)
 
                 # —— Turntable 型号选择 ——
-                self.corner_turntable_combo = ComboBox(self)
-                self.corner_turntable_combo.addItems(["RS232Board5", "other"])
-                turntable_type = value.get("turntable_type", "RS232Board5")
-                if turntable_type not in {"RS232Board5", "other"}:
-                    turntable_type = "RS232Board5"
-                self.corner_turntable_combo.setCurrentText(turntable_type)
+                self.turntable_model_combo = ComboBox(self)
+                self.turntable_model_combo.addItems(list(TURN_TABLE_MODEL_CHOICES))
+                model_value = str(
+                    value.get(TURN_TABLE_FIELD_MODEL, TURN_TABLE_MODEL_RS232)
+                )
+                if model_value not in TURN_TABLE_MODEL_CHOICES:
+                    model_value = TURN_TABLE_MODEL_RS232
+                self.turntable_model_combo.setCurrentText(model_value)
 
                 vbox.addWidget(QLabel("Turntable:"))
-                vbox.addWidget(self.corner_turntable_combo)
+                vbox.addWidget(self.turntable_model_combo)
 
                 # —— IP 地址 ——
-                self.corner_ip_label = QLabel("IP address:")
-                self.corner_ip_edit = LineEdit(self)
-                self.corner_ip_edit.setPlaceholderText("ip_address")
-                self.corner_ip_edit.setText(value.get("ip_address", ""))  # 默认值
+                self.turntable_ip_label = QLabel("IP address:")
+                self.turntable_ip_edit = LineEdit(self)
+                self.turntable_ip_edit.setPlaceholderText(TURN_TABLE_FIELD_IP_ADDRESS)
+                ip_value = value.get(TURN_TABLE_FIELD_IP_ADDRESS, "")
+                self.turntable_ip_edit.setText(str(ip_value))
 
                 # —— 角度步进 ——
-                self.corner_step_edit = LineEdit(self)
-                self.corner_step_edit.setPlaceholderText("step; such as 0,361")
-                self.corner_step_edit.setText(",".join(map(str, value.get("step", []))))
+                self.turntable_step_edit = LineEdit(self)
+                self.turntable_step_edit.setPlaceholderText("Step; e.g. 0,361")
+                step_value = value.get(TURN_TABLE_FIELD_STEP, "")
+                if isinstance(step_value, (list, tuple, set)):
+                    step_text = ",".join(str(item) for item in step_value)
+                else:
+                    step_text = str(step_value) if step_value is not None else ""
+                self.turntable_step_edit.setText(step_text)
 
-                static_db_value = value.get("static_db", "")
-                self.corner_static_db_edit = LineEdit(self)
-                self.corner_static_db_edit.setPlaceholderText("static attenuation (dB)")
-                self.corner_static_db_edit.setText(
+                static_db_value = value.get(TURN_TABLE_FIELD_STATIC_DB, "")
+                self.turntable_static_db_edit = LineEdit(self)
+                self.turntable_static_db_edit.setPlaceholderText("Static attenuation (dB)")
+                self.turntable_static_db_edit.setText(
                     "" if static_db_value is None else str(static_db_value)
                 )
 
-                target_rssi_value = value.get("target_rssi", "")
-                self.corner_target_rssi_edit = LineEdit(self)
-                self.corner_target_rssi_edit.setPlaceholderText("target RSSI (dBm)")
-                self.corner_target_rssi_edit.setText(
+                target_rssi_value = value.get(TURN_TABLE_FIELD_TARGET_RSSI, "")
+                self.turntable_target_rssi_edit = LineEdit(self)
+                self.turntable_target_rssi_edit.setPlaceholderText("Target RSSI (dBm)")
+                self.turntable_target_rssi_edit.setText(
                     "" if target_rssi_value is None else str(target_rssi_value)
                 )
 
-                vbox.addWidget(self.corner_ip_label)
-                vbox.addWidget(self.corner_ip_edit)
+                vbox.addWidget(self.turntable_ip_label)
+                vbox.addWidget(self.turntable_ip_edit)
                 vbox.addWidget(QLabel("Step:"))
-                vbox.addWidget(self.corner_step_edit)
+                vbox.addWidget(self.turntable_step_edit)
                 vbox.addWidget(QLabel("Static dB:"))
-                vbox.addWidget(self.corner_static_db_edit)
+                vbox.addWidget(self.turntable_static_db_edit)
                 vbox.addWidget(QLabel("Target RSSI:"))
-                vbox.addWidget(self.corner_target_rssi_edit)
-                self.corner_turntable_combo.currentTextChanged.connect(
-                    self._on_turntable_type_changed
+                vbox.addWidget(self.turntable_target_rssi_edit)
+                self.turntable_model_combo.currentTextChanged.connect(
+                    self._on_turntable_model_changed
                 )
-                self.corner_static_db_edit.textChanged.connect(
-                    lambda _text, source="static": self._ensure_corner_inputs_exclusive(source)
+                self.turntable_static_db_edit.textChanged.connect(
+                    lambda _text, source="static": self._ensure_turntable_inputs_exclusive(source)
                 )
-                self.corner_target_rssi_edit.textChanged.connect(
-                    lambda _text, source="target": self._ensure_corner_inputs_exclusive(source)
+                self.turntable_target_rssi_edit.textChanged.connect(
+                    lambda _text, source="target": self._ensure_turntable_inputs_exclusive(source)
                 )
-                self._ensure_corner_inputs_exclusive(None)
-                self._on_turntable_type_changed(self.corner_turntable_combo.currentText())
+                self._ensure_turntable_inputs_exclusive(None)
+                self._on_turntable_model_changed(self.turntable_model_combo.currentText())
 
                 # 加入表单
                 self._register_group(key, group, self._is_dut_key(key))
 
                 # 注册控件（用于启用/禁用、保存回 YAML）
-                self.field_widgets["corner_angle.turntable_type"] = self.corner_turntable_combo
-                self.field_widgets["corner_angle.ip_address"] = self.corner_ip_edit
-                self.field_widgets["corner_angle.step"] = self.corner_step_edit
-                self.field_widgets["corner_angle.static_db"] = self.corner_static_db_edit
-                self.field_widgets["corner_angle.target_rssi"] = self.corner_target_rssi_edit
+                self.field_widgets[
+                    f"{TURN_TABLE_SECTION_KEY}.{TURN_TABLE_FIELD_MODEL}"
+                ] = self.turntable_model_combo
+                self.field_widgets[
+                    f"{TURN_TABLE_SECTION_KEY}.{TURN_TABLE_FIELD_IP_ADDRESS}"
+                ] = self.turntable_ip_edit
+                self.field_widgets[
+                    f"{TURN_TABLE_SECTION_KEY}.{TURN_TABLE_FIELD_STEP}"
+                ] = self.turntable_step_edit
+                self.field_widgets[
+                    f"{TURN_TABLE_SECTION_KEY}.{TURN_TABLE_FIELD_STATIC_DB}"
+                ] = self.turntable_static_db_edit
+                self.field_widgets[
+                    f"{TURN_TABLE_SECTION_KEY}.{TURN_TABLE_FIELD_TARGET_RSSI}"
+                ] = self.turntable_target_rssi_edit
                 continue  # 跳过后面的通用处理
             if key == "router":
                 group = QGroupBox("Router")
@@ -3778,34 +3817,40 @@ class CaseConfigPage(CardWidget):
             stability_cfg.get("check_point")
         )
 
-    def _ensure_corner_inputs_exclusive(self, source: str | None) -> None:
-        if not hasattr(self, "corner_static_db_edit") or not hasattr(self, "corner_target_rssi_edit"):
+    def _ensure_turntable_inputs_exclusive(self, source: str | None) -> None:
+        if not hasattr(self, "turntable_static_db_edit") or not hasattr(
+            self, "turntable_target_rssi_edit"
+        ):
             return
-        static_text = self.corner_static_db_edit.text().strip()
-        target_text = self.corner_target_rssi_edit.text().strip()
+        static_text = self.turntable_static_db_edit.text().strip()
+        target_text = self.turntable_target_rssi_edit.text().strip()
         if not static_text or not target_text:
             return
 
         if source == "target":
-            cleared = self.corner_static_db_edit
-            focus_widget = self.corner_target_rssi_edit
+            cleared = self.turntable_static_db_edit
+            focus_widget = self.turntable_target_rssi_edit
         elif source == "static":
-            cleared = self.corner_target_rssi_edit
-            focus_widget = self.corner_static_db_edit
+            cleared = self.turntable_target_rssi_edit
+            focus_widget = self.turntable_static_db_edit
         else:
-            cleared = self.corner_target_rssi_edit
+            cleared = self.turntable_target_rssi_edit
             focus_widget = None
 
         with QSignalBlocker(cleared):
             cleared.clear()
 
-    def _on_turntable_type_changed(self, turntable_type: str) -> None:
-        if not hasattr(self, "corner_ip_edit") or not hasattr(self, "corner_ip_label"):
+        self._show_turntable_conflict_warning(focus_widget)
+
+    def _on_turntable_model_changed(self, model: str) -> None:
+        if not hasattr(self, "turntable_ip_edit") or not hasattr(
+            self, "turntable_ip_label"
+        ):
             return
-        requires_ip = turntable_type == "other"
-        self.corner_ip_label.setVisible(requires_ip)
-        self.corner_ip_edit.setVisible(requires_ip)
-        self.corner_ip_edit.setEnabled(requires_ip)
+        requires_ip = model == TURN_TABLE_MODEL_OTHER
+        self.turntable_ip_label.setVisible(requires_ip)
+        self.turntable_ip_edit.setVisible(requires_ip)
+        self.turntable_ip_edit.setEnabled(requires_ip)
 
     def _build_duration_control_group(
         self, data: Mapping[str, Any] | None
@@ -3924,9 +3969,11 @@ class CaseConfigPage(CardWidget):
             groups.append(active_entry.group)
         return groups
 
-        self._show_corner_conflict_warning(focus_widget)
+        self._show_turntable_conflict_warning(focus_widget)
 
-    def _show_corner_conflict_warning(self, focus_widget: QWidget | None) -> None:
+    def _show_turntable_conflict_warning(
+        self, focus_widget: QWidget | None
+    ) -> None:
         if focus_widget is None or not focus_widget.hasFocus():
             return
         message = (
@@ -4068,12 +4115,11 @@ class CaseConfigPage(CardWidget):
             info.enable_rvr_wifi = True
         if "rvo" in basename:
             info.fields |= {
-                "corner_angle",
-                "corner_angle.turntable_type",
-                "corner_angle.ip_address",
-                "corner_angle.step",
-                "corner_angle.static_db",
-                "corner_angle.target_rssi",
+                f"{TURN_TABLE_SECTION_KEY}.{TURN_TABLE_FIELD_MODEL}",
+                f"{TURN_TABLE_SECTION_KEY}.{TURN_TABLE_FIELD_IP_ADDRESS}",
+                f"{TURN_TABLE_SECTION_KEY}.{TURN_TABLE_FIELD_STEP}",
+                f"{TURN_TABLE_SECTION_KEY}.{TURN_TABLE_FIELD_STATIC_DB}",
+                f"{TURN_TABLE_SECTION_KEY}.{TURN_TABLE_FIELD_TARGET_RSSI}",
             }
         if "rvr" in basename:
             info.fields |= {

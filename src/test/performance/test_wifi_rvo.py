@@ -9,7 +9,12 @@ from typing import Optional, Tuple
 
 import pytest
 from src.tools.router_tool.Router import router_str
-from src.util.constants import get_debug_flags
+from src.util.constants import (
+    TURN_TABLE_FIELD_STATIC_DB,
+    TURN_TABLE_FIELD_TARGET_RSSI,
+    TURN_TABLE_SECTION_KEY,
+    get_debug_flags,
+)
 
 from src.test import get_testdata
 from src.test.pyqt_log import log_fixture_params, update_fixture_params
@@ -199,9 +204,13 @@ def _get_rvo_profiles() -> list[RVOProfile]:
 
     if static_values and target_values:
         logging.error(
-            'Both corner_angle.static_db %s and corner_angle.target_rssi %s detected; '
+            'Both %s.%s %s and %s.%s %s detected; '
             'only one group is supported. Target RSSI values take precedence.',
+            TURN_TABLE_SECTION_KEY,
+            TURN_TABLE_FIELD_STATIC_DB,
             static_values,
+            TURN_TABLE_SECTION_KEY,
+            TURN_TABLE_FIELD_TARGET_RSSI,
             target_values,
         )
         static_values = []

@@ -14,7 +14,12 @@ from .schema import (
     ensure_report_tables,
     read_csv_rows,
 )
-from src.util.constants import WIFI_PRODUCT_PROJECT_MAP, get_debug_flags
+from src.util.constants import (
+    TURN_TABLE_FIELD_MODEL,
+    TURN_TABLE_SECTION_KEY,
+    WIFI_PRODUCT_PROJECT_MAP,
+    get_debug_flags,
+)
 
 __all__ = [
     "PerformanceTableManager",
@@ -694,7 +699,9 @@ def _build_execution_payload(config: Mapping[str, Any]) -> Dict[str, Any]:
     router_section = _extract_first(config, "router")
     router = router_section if isinstance(router_section, Mapping) else {}
     rf_solution = config.get("rf_solution") if isinstance(config, Mapping) else {}
-    corner_cfg = config.get("corner_angle") if isinstance(config, Mapping) else {}
+    corner_cfg = (
+        config.get(TURN_TABLE_SECTION_KEY) if isinstance(config, Mapping) else {}
+    )
     lab_info = config.get("lab") if isinstance(config, Mapping) else {}
     case_path = _normalize_str_token(
         config.get("case_path")
@@ -711,7 +718,7 @@ def _build_execution_payload(config: Mapping[str, Any]) -> Dict[str, Any]:
     else:
         rf_model = None
     if isinstance(corner_cfg, Mapping) and not skip_corner_rf:
-        corner_model = _normalize_str_token(corner_cfg.get("model"))
+        corner_model = _normalize_str_token(corner_cfg.get(TURN_TABLE_FIELD_MODEL))
     else:
         corner_model = None
     if skip_router:
