@@ -43,7 +43,7 @@ from PyQt5.QtCore import (
 )
 from src.util.constants import Paths, cleanup_temp_dir
 
-# 确保工作目录为可执行文件所在目录
+# Ensure working directory equals executable directory
 os.chdir(Paths.BASE_DIR)
 
 
@@ -51,8 +51,26 @@ def log_exception(exc_type, exc_value, exc_tb):
     logging.error("".join(traceback.format_exception(exc_type, exc_value, exc_tb)))
 
 
+def _describe_ldap_server() -> str:
+    """Return a human-readable LDAP server address for logging/UI."""
+
+    server_address = LDAP_SERVER
+    try:
+        server_obj = create_ldap_server()
+        host = getattr(server_obj, "host", None)
+        if host:
+            server_address = host
+        else:
+            text = str(server_obj)
+            if text:
+                server_address = text
+    except Exception:  # pragma: no cover - fallback path
+        logging.debug("_describe_ldap_server: failed to resolve server, using default", exc_info=True)
+    return server_address
+
+
 class LDAPAuthWorker(QObject):
-    """后台线程中执行 LDAP 登录流程。"""
+    """Run LDAP sign-in in a background thread."""
 
     finished = pyqtSignal(bool, str, dict)
     progress = pyqtSignal(str)
@@ -62,32 +80,42 @@ class LDAPAuthWorker(QObject):
         self._username = username or ""
         self._password = password or ""
 
-    def run(self) -> None:  # pragma: no cover - 线程执行难以覆盖
-        server = get_configured_ldap_server()
+    def run(self) -> None:  # pragma: no cover - hard to cover threads
+        server = _describe_ldap_server()
         logging.info(
             "LDAPAuthWorker.run: start authentication (username=%s, server=%s)",
             self._username,
             server,
         )
         try:
-            self.progress.emit(f"正在连接 LDAP 服务器：{server}")
-            result = ldap_authenticate(self._username, self._password)
-            if result:
+            self.progress.emit(f"Connecting to LDAP server: {server}")
+            success, result_message = authenticate_via_ldap(
+                self._username,
+                self._password,
+            )
+            if success:
+                username = result_message or self._username
                 payload = {
-                    "username": result,
+                    "username": username,
                     "server": server,
                 }
-                self.progress.emit(f"LDAP 验证成功（服务器：{server}），正在更新界面...")
-                self.finished.emit(True, f"登录成功，欢迎 {result}", payload)
+                self.progress.emit(f"LDAP authentication succeeded (server: {server}), updating UI...")
+                welcome = username or "user"
+                self.finished.emit(
+                    True,
+                    f"Signed in successfully, welcome {welcome}",
+                    payload,
+                )
             else:
-                message = f"LDAP 登录失败，请检查账号或密码。（服务器：{server}）"
-                logging.warning("LDAP 登录失败（server=%s）", server)
+                detail = result_message or "LDAP login failed. Please check username or password."
+                message = f"{detail} (server: {server})"
+                logging.warning("LDAP login failed (server=%s): %s", server, detail)
                 self.finished.emit(False, message, {})
-        except Exception as exc:  # pragma: no cover - 运行期异常记录
-            logging.exception("LDAP 登录失败 (unexpected)")
+        except Exception as exc:  # pragma: no cover - runtime exceptions
+            logging.exception("LDAP login failed (unexpected)")
             self.finished.emit(
                 False,
-                f"登录失败：{exc}（服务器：{server}）",
+                f"Sign-in failed: {exc} (server: {server})",
                 {},
             )
 
@@ -141,7 +169,7 @@ class MainWindow(FluentWindow):
         self._show_group.finished.connect(_restore)
         self._show_group.start()
 
-        # 页面实例化
+        # Pages
         self.login_page = CompanyLoginPage(self)
         self.login_page.loginRequested.connect(self._on_login_requested)
         self.login_page.loginResult.connect(self._on_login_result)
@@ -150,11 +178,12 @@ class MainWindow(FluentWindow):
         self.case_config_page = CaseConfigPage(self.on_run)
         self.rvr_wifi_config_page = RvrWifiConfigPage(self.case_config_page)
         self.run_page = RunPage("", parent=self)
-        # 确保初始运行页为空布局
+        # Ensure run page starts empty
         self.run_page.reset()
-        # 报告页：默认置灰，等待 report_dir 创建后启用
+        # Report page (disabled until report_dir created)
         self.report_page = ReportPage(self)
-        # 导航按钮引用
+
+        # Navigation buttons
         self.login_nav_button = self.addSubInterface(
             self.login_page,
             FluentIcon.PEOPLE,
@@ -214,7 +243,7 @@ class MainWindow(FluentWindow):
         self._apply_nav_enabled(self._nav_logged_out_states)
         self.setCurrentIndex(self.login_page)
 
-        # 兼容旧属性
+        # Backward compatibility fields
         self._run_nav_button = self.run_nav_button
         self._rvr_nav_button = self.rvr_nav_button
         self._rvr_route_key = None
@@ -222,34 +251,34 @@ class MainWindow(FluentWindow):
         self._runner_finished_slot = None
         self._rvr_visible = False
 
-        # 可加更多页面，比如“历史记录”“关于”等
-        self.setMicaEffectEnabled(True)  # Win11下生效毛玻璃
+        # Enable Mica effect on Windows 11
+        self.setMicaEffectEnabled(True)
 
     def _apply_nav_enabled(self, states: dict) -> None:
-        """批量设置导航按钮的 enable 状态"""
+        """Batch set navigation buttons enabled states."""
         for btn, enabled in states.items():
             if btn and not sip.isdeleted(btn):
                 btn.setEnabled(bool(enabled))
 
     # ------------------------------------------------------------------
     def _on_login_requested(self, account: str, password: str) -> None:
-        """处理登录请求，调用 LDAP 完成身份验证。"""
+        """Handle sign-in request via LDAP."""
 
         username = (account or "").strip()
-        logging.info("MainWindow: 收到登录请求 username=%s", username)
+        logging.info("MainWindow: received sign-in request username=%s", username)
         if not username or not password:
             self.login_page.set_loading(False)
-            self.login_page.set_status_message("账号或密码不能为空。", state="error")
-            logging.warning("MainWindow: 登录失败，缺少账号或密码")
+            self.login_page.set_status_message("Username or password cannot be empty.", state="error")
+            logging.warning("MainWindow: sign-in failed, missing username or password")
             return
         if self._auth_thread and self._auth_thread.isRunning():
-            self.login_page.set_status_message("登录正在进行，请稍候…")
-            logging.info("MainWindow: 已有登录线程运行，忽略新的请求")
+            self.login_page.set_status_message("Sign-in in progress, please wait...")
+            logging.info("MainWindow: an auth thread is already running, ignoring new request")
             return
-        server = get_configured_ldap_server()
+        server = _describe_ldap_server()
         self.login_page.set_loading(True)
         self.login_page.set_status_message(
-            f"正在发起 LDAP 验证（服务器：{server}），请稍候…"
+            f"Starting LDAP authentication (server: {server})..."
         )
         self._auth_thread = QThread(self)
         self._auth_worker = LDAPAuthWorker(username, password)
@@ -266,7 +295,7 @@ class MainWindow(FluentWindow):
 
     def _handle_auth_finished(self, success: bool, message: str, payload: dict | None) -> None:
         logging.info(
-            "MainWindow: 登录完成 success=%s message=%s payload=%s",
+            "MainWindow: sign-in finished success=%s message=%s payload=%s",
             success,
             message,
             payload,
@@ -288,19 +317,19 @@ class MainWindow(FluentWindow):
             self.setCurrentIndex(self.login_page)
 
     def _on_logout_requested(self) -> None:
-        logging.info("MainWindow: 用户请求注销 (active_account=%s)", self._active_account)
+        logging.info("MainWindow: user requested sign-out (active_account=%s)", self._active_account)
         self._apply_nav_enabled(self._nav_logged_out_states)
         self.setCurrentIndex(self.login_page)
         self._active_account = None
-        self.login_page.set_status_message("已注销当前账号，请重新登录。", state="info")
+        self.login_page.set_status_message("Signed out. Please sign in again.", state="info")
 
     def show_rvr_wifi_config(self):
-        """在导航栏中显示 RVR Wi-Fi 配置页（幂等：已存在则只显示）"""
-        # 已存在的场景：不再二次 add，只改可见性
+        """Show RVR Wi-Fi config page in navigation (idempotent: make visible if already added)."""
+        # If it exists: do not add twice, just show
         if self._rvr_nav_button and not sip.isdeleted(self._rvr_nav_button):
             if self.rvr_wifi_config_page is None or sip.isdeleted(self.rvr_wifi_config_page):
                 self.rvr_wifi_config_page = RvrWifiConfigPage(self.case_config_page)
-            # 确保页在堆叠里
+            # Ensure page is in the stack
             if self.stackedWidget.indexOf(self.rvr_wifi_config_page) == -1:
                 self.stackedWidget.addWidget(self.rvr_wifi_config_page)
             self._rvr_nav_button.setVisible(True)
@@ -308,7 +337,7 @@ class MainWindow(FluentWindow):
             logging.debug("show_rvr_wifi_config: reuse nav item; setVisible(True)")
             return
 
-        # 走首次添加（保持你原有逻辑）
+        # First-time add
         nav = getattr(self, "navigationInterface", None)
         nav_items = []
         if nav:
@@ -325,10 +354,10 @@ class MainWindow(FluentWindow):
                 self.rvr_wifi_config_page, "reload_csv"):
             self.rvr_wifi_config_page.reload_csv()
 
-        # 可能存在上次未清理干净的 routeKey，需要在重新添加前先移除
+        # If a stale routeKey exists from last time, remove before re-adding
         rk = (
-                self._rvr_route_key
-                or getattr(self.rvr_wifi_config_page, "objectName", lambda: None)()
+            self._rvr_route_key
+            or getattr(self.rvr_wifi_config_page, "objectName", lambda: None)()
         )
         for attr in ("_interfaces", "_routes"):
             mapping = getattr(self, attr, None)
@@ -363,14 +392,14 @@ class MainWindow(FluentWindow):
 
         self._rvr_route_key = self._rvr_nav_button.property("routeKey") or self.rvr_wifi_config_page.objectName()
         logging.debug("show_rvr_wifi_config: routeKey=%s", self._rvr_route_key)
-        # 首次添加后，显式可见（保险）
+        # Make visible after first add
         self._rvr_nav_button.setVisible(True)
-        # 确保页在堆叠
+        # Ensure in stack
         if self.stackedWidget.indexOf(self.rvr_wifi_config_page) == -1:
             self.stackedWidget.addWidget(self.rvr_wifi_config_page)
         self._rvr_visible = True
 
-        # 启动滑动动画并切换到 RVR 配置页
+        # Slide animation and switch to RVR config page
         try:
             width = self.stackedWidget.width()
             page = self.rvr_wifi_config_page
@@ -393,7 +422,7 @@ class MainWindow(FluentWindow):
             logging.warning("show_rvr_wifi_config animation failed: %s", e)
 
     def hide_rvr_wifi_config(self):
-        """从导航栏隐藏 RVR Wi-Fi 配置页（不删除，避免 routeKey 残留）"""
+        """Hide RVR Wi-Fi config page from navigation (do not remove to avoid routeKey residue)."""
         if not self._rvr_visible:
             return
         logging.debug(
@@ -405,7 +434,7 @@ class MainWindow(FluentWindow):
         width = self.stackedWidget.width()
         page = self.rvr_wifi_config_page
 
-        # 切回安全页，并保持当前页可见以执行滑动动画
+        # Switch to a safe page, keep current page visible to play slide animation
         self.setCurrentIndex(self.case_config_page)
         QCoreApplication.processEvents()
 
@@ -443,17 +472,17 @@ class MainWindow(FluentWindow):
         if not nav or not page or sip.isdeleted(page):
             return False
 
-        # 优先尝试各种官方接口（注意顺序，最后补上 removeWidget(page)）
+        # Prefer official APIs (try in order, finally removeWidget(page))
         for name in ("removeSubInterface", "removeInterface", "removeItem", "removeWidget"):
             func = getattr(nav, name, None)
             if callable(func):
                 try:
-                    func(page)  # ← 关键：按 page 移除
+                    func(page)  # remove by page
                     return True
                 except Exception:
                     pass
 
-        # 兜底：暴力把同 routeKey 的部件从树上摘掉（不同版本可能不是 QAbstractButton）
+        # Fallback: remove any child with the same routeKey (not always QAbstractButton)
         try:
             from PyQt5.QtWidgets import QWidget
             rk = getattr(page, "objectName", lambda: None)() or "rvrWifiConfigPage"
@@ -497,17 +526,17 @@ class MainWindow(FluentWindow):
         nav = getattr(self, "navigationInterface", None)
 
         rk = (
-                route_key
-                or (nav_button.property("routeKey") if nav_button else None)
-                or getattr(page, "objectName", lambda: None)()
+            route_key
+            or (nav_button.property("routeKey") if nav_button else None)
+            or getattr(page, "objectName", lambda: None)()
         )
         removed = False
         try:
-            # ① 优先使用 FluentWindow.removeSubInterface 删除导航条目
+            # 1) Prefer FluentWindow.removeSubInterface
             func = getattr(self, "removeSubInterface", None)
             if callable(func):
                 removed = bool(func(page))
-            # ② 退而求其次，调用 navigationInterface.removeItem
+            # 2) Fallback: navigationInterface.removeItem
             elif nav and rk:
                 func = getattr(nav, "removeItem", None)
                 if callable(func):
@@ -520,26 +549,26 @@ class MainWindow(FluentWindow):
             logging.error("_remove_interface: removal failed for %s", rk)
             raise RuntimeError(f"failed to remove navigation item {rk}")
 
-        # ③ 仅在确认导航项已移除后再删除 nav_button
+        # 3) After nav item removed, detach nav_button
         if nav_button and not sip.isdeleted(nav_button):
             with suppress(Exception):
                 nav_button.clicked.disconnect()
             with suppress(Exception):
                 nav_button.setParent(None)
 
-        # ④ 从堆栈里移走页面（你原来就有）
+        # 4) Remove page from stacked widget
         if page and not sip.isdeleted(page):
             with suppress(Exception):
                 self.stackedWidget.removeWidget(page)
 
         QCoreApplication.processEvents()
 
-        # ⑤ 统一清空指针
+        # 5) Clear pointers
         self._rvr_nav_button = None
         self._rvr_route_key = None
         self.rvr_wifi_config_page = None
 
-        # ⑥ 清除 FluentWindow 内部的 routeKey 映射（必须）
+        # 6) Clean routeKey mappings inside FluentWindow (if exist)
         if rk:
             try:
                 if hasattr(self, "_interfaces"):
@@ -565,7 +594,7 @@ class MainWindow(FluentWindow):
             logging.debug("navigationInterface = None")
             return
 
-        # 1) 可用方法探测（我们关心 removeX 接口到底叫什么）
+        # 1) Detect available methods (we care how removeX is named)
         def _has(obj, name):
             try:
                 return callable(getattr(obj, name, None))
@@ -589,7 +618,7 @@ class MainWindow(FluentWindow):
         logging.debug("nav methods: %s", nav_methods)
         logging.debug("FluentWindow methods: %s", fw_methods)
 
-        # 2) 列出“看得到的可能是导航按钮的孩子”
+        # 2) List children likely to be nav buttons
         try:
             btns = nav.findChildren(QAbstractButton)
         except Exception:
@@ -612,7 +641,7 @@ class MainWindow(FluentWindow):
                 props[k] = v
             logging.debug("  [BTN#%s] id=%s class=%s props=%s", i, id(b), cls, props)
 
-        # 3) 再撒一网：找所有 QWidget 子代里“带 routeKey 属性的家伙”（有的不是 QAbstractButton）
+        # 3) Find any QWidget with a routeKey property
         try:
             from PyQt5.QtWidgets import QWidget
             widgets = nav.findChildren(QWidget)
@@ -641,11 +670,10 @@ class MainWindow(FluentWindow):
                 w.objectName(),
             )
 
-        # 4) Router 栈/路由表（不同版本字段名不同，做 best-effort 打印）
+        # 4) Router state (best-effort, names vary)
         router = getattr(nav, "router", None)
         if router:
             logging.debug("router exists: %s", type(router).__name__)
-            # 尝试打印常见成员
             for key in ("stackHistories", "currentKey", "history", "routeView"):
                 try:
                     val = getattr(router, key, None)
@@ -654,7 +682,6 @@ class MainWindow(FluentWindow):
                     logging.debug("  router.%s = %s", key, val)
                 except Exception:
                     pass
-            # 尝试打印 routes（map）
             for key in ("routes", "_routes", "routeTable", "routeMap"):
                 try:
                     routes = getattr(router, key, None)
@@ -669,7 +696,7 @@ class MainWindow(FluentWindow):
         else:
             logging.debug("router = None")
 
-        # 5) StackedWidget 里到底有谁
+        # 5) StackedWidget contents
         try:
             count = self.stackedWidget.count()
         except Exception:
@@ -692,7 +719,7 @@ class MainWindow(FluentWindow):
         except Exception:
             pass
 
-        # 6) 我们自己的指针状态
+        # 6) Our pointers
         logging.debug("self._rvr_visible = %s", getattr(self, "_rvr_visible", None))
         logging.debug("self._rvr_nav_button = %s", getattr(self, "_rvr_nav_button", None))
         logging.debug("self._rvr_route_key = %s", getattr(self, "_rvr_route_key", None))
@@ -725,31 +752,27 @@ class MainWindow(FluentWindow):
             self.case_config_page.run_btn.setEnabled(True)
 
     def _set_nav_buttons_enabled(self, enabled: bool):
-        """保持导航按钮启用，并根据需要调整样式"""
+        """Keep nav buttons enabled and optionally tweak styles."""
         nav = getattr(self, "navigationInterface", None)
         if not nav:
             return
         buttons = nav.findChildren(QAbstractButton)
         for btn in buttons:
-            # 运行页按钮始终保持可见
+            # Keep run button visible
             if btn is self._run_nav_button:
                 btn.setVisible(True)
             btn.setEnabled(True)
             btn.setStyleSheet("font-family: Verdana;")
+
     def center_window(self):
-        # 获取屏幕的几何信息
+        # Center window on the primary screen
         screen_geometry = QGuiApplication.primaryScreen().availableGeometry()
-        # 获取窗口的几何信息
         window_geometry = self.frameGeometry()
-        # 计算屏幕中心位置
         center_point = screen_geometry.center()
-        # 将窗口中心移动到屏幕中心
         window_geometry.moveCenter(center_point)
-        # 确保窗口顶部不会超出屏幕
         self.move(window_geometry.topLeft())
 
     def setCurrentIndex(self, page_widget, ssid: str | None = None, passwd: str | None = None):
-        # print("setCurrentIndex dir:", dir(self))
         try:
             if page_widget is self.rvr_wifi_config_page and (ssid or passwd):
                 if hasattr(self.rvr_wifi_config_page, "set_router_credentials"):
@@ -792,7 +815,7 @@ class MainWindow(FluentWindow):
                 with suppress(Exception):
                     self.run_page.reset()
 
-            # 更新 RunPage 信息
+            # Update RunPage info
             self.run_page.case_path = case_path
             self.run_page.display_case_path = self.run_page._calc_display_path(
                 case_path, display_case_path
@@ -801,7 +824,7 @@ class MainWindow(FluentWindow):
                 self.run_page.case_path_label.setText(self.run_page.display_case_path)
             self.run_page.config = config
 
-            # 显示运行页
+            # Show run page
             self.run_nav_button.setVisible(True)
             self.run_nav_button.setEnabled(True)
             if self.stackedWidget.indexOf(self.run_page) == -1:
@@ -810,7 +833,7 @@ class MainWindow(FluentWindow):
             self.case_config_page.lock_for_running(True)
             if hasattr(self.rvr_wifi_config_page, "set_readonly"):
                 self.rvr_wifi_config_page.set_readonly(True)
-            # 启动测试
+            # Start test
             self.run_page.run_case()
             runner = getattr(self.run_page, "runner", None)
             if runner:
@@ -818,7 +841,7 @@ class MainWindow(FluentWindow):
                     self.case_config_page.lock_for_running(False)
                     if getattr(self, "rvr_wifi_config_page", None):
                         self.rvr_wifi_config_page.set_readonly(False)
-                    # 保留运行页导航按钮状态，以便随时查看日志
+                    # Keep RVR nav button enabled when needed to review logs
                     if self.rvr_nav_button and not sip.isdeleted(self.rvr_nav_button):
                         is_perf = self.case_config_page._is_performance_case(
                             getattr(self.run_page, "case_path", "")
@@ -831,7 +854,7 @@ class MainWindow(FluentWindow):
             logging.info("Switched to RunPage: %s", self.run_page)
         except Exception as e:
             logging.error("on_run failed: %s", e, exc_info=True)
-            QMessageBox.critical(self, "Error", f"Unable to run ：{e}")
+            QMessageBox.critical(self, "Error", f"Unable to run: {e}")
             self.case_config_page.lock_for_running(False)
             if getattr(self, "rvr_wifi_config_page", None):
                 self.rvr_wifi_config_page.set_readonly(False)
@@ -845,7 +868,7 @@ class MainWindow(FluentWindow):
 
     def stop_run_and_show_case_config(self):
         self.setCurrentIndex(self.case_config_page)
-        QCoreApplication.processEvents()  # 强制事件刷新
+        QCoreApplication.processEvents()
         self.case_config_page.lock_for_running(False)
         if getattr(self, "rvr_wifi_config_page", None):
             self.rvr_wifi_config_page.set_readonly(False)
@@ -884,14 +907,13 @@ sys.excepthook = log_exception
 import multiprocessing
 import sys, os, logging, subprocess as _sp
 
-# 仅在 Windows 生效；加环境开关，必要时可关闭（WIFI_TEST_HIDE_MP_CONSOLE=0）
+# Windows only; hide subprocess console windows (can disable with WIFI_TEST_HIDE_MP_CONSOLE=0)
 if sys.platform.startswith("win") and os.environ.get("WIFI_TEST_HIDE_MP_CONSOLE", "1") == "1":
     _orig_Popen = _sp.Popen
 
-
     def _patched_Popen(*args, **kwargs):
         try:
-            # 叠加 CREATE_NO_WINDOW，并隐藏窗口
+            # Add CREATE_NO_WINDOW and hide window
             flags = kwargs.get("creationflags", 0) | 0x08000000  # CREATE_NO_WINDOW
             kwargs["creationflags"] = flags
             if kwargs.get("startupinfo") is None:
@@ -904,10 +926,11 @@ if sys.platform.startswith("win") and os.environ.get("WIFI_TEST_HIDE_MP_CONSOLE"
             logging.debug("mp-console patch noop: %s", e)
         return _orig_Popen(*args, **kwargs)
 
-
     _sp.Popen = _patched_Popen
     logging.debug("Installed mp-console hide patch for Windows")
+
 multiprocessing.freeze_support()
+
 if __name__ == "__main__":
     logging.basicConfig(
         level=logging.WARNING,
@@ -923,11 +946,11 @@ if __name__ == "__main__":
         sys.exit(app.exec())
     finally:
         cleanup_temp_dir()
+    # Example to run tests (kept commented for reference):
     # import datetime
     # import random
     # import os
     # timestamp = datetime.datetime.now().strftime("%Y.%m.%d_%H.%M.%S")
     # report_dir = os.path.join('report', timestamp)
-    # # testcase = "src/test/project/roku/UI/Connectivity Doctor/test_T6473243.py"
     # testcase = "src/test/performance/test_wifi_peak_throughtput.py"
     # pytest.main(['-v','-s',testcase,f"--resultpath={report_dir}"])
