@@ -24,7 +24,11 @@ from src.ui.rvr_wifi_config import RvrWifiConfigPage
 from src.ui.run import RunPage
 from src.ui.report_page import ReportPage
 from src.ui.about_page import AboutPage
-from src.ui.company_login import CompanyLoginPage
+from src.ui.company_login import (
+    CompanyLoginPage,
+    get_configured_ldap_server,
+    ldap_authenticate,
+)
 from qfluentwidgets import setTheme, Theme
 from PyQt5.QtGui import QGuiApplication, QFont
 from PyQt5.QtCore import (
@@ -37,7 +41,6 @@ from PyQt5.QtCore import (
     QThread,
     pyqtSignal,
 )
-from src.util.ldap_auth import get_configured_ldap_server, ldap_authenticate
 from src.util.constants import Paths, cleanup_temp_dir
 
 # 确保工作目录为可执行文件所在目录
