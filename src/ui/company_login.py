@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # encoding: utf-8
-"""Amlogic 公司账号登录页面。"""
+"""Amlogic company account sign-in page (LDAP)."""
 from __future__ import annotations
 
 import logging
@@ -19,6 +19,8 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import QLineEdit
+from ldap3 import ALL, Connection, NTLM, Server
+from ldap3.core.exceptions import LDAPException
 from qfluentwidgets import LineEdit, PushButton
 
 from .theme import FONT_FAMILY
@@ -110,14 +112,83 @@ def _normalize_username(username: str) -> str:
     return f"{LDAP_DOMAIN}\\{clean_username}"
 
 
+LDAP_HOST = os.getenv("AMLOGIC_LDAP_HOST", "ldap.amlogic.com")
+LDAP_DOMAIN = os.getenv("AMLOGIC_LDAP_DOMAIN", "AMLOGIC")
+
+
+def get_configured_ldap_server() -> str:
+    """返回当前配置的 LDAP 服务器主机名。"""
+
+    return LDAP_HOST
+
+
+def ldap_authenticate(username: str, password: str) -> str | None:
+    """使用公司 LDAP 服务验证登录凭证。"""
+
+    clean_username = (username or "").strip()
+    if not clean_username or not password:
+        logging.info("ldap_authenticate: 账号或密码为空 (username=%s)", clean_username)
+        return None
+
+    server_host = LDAP_HOST.strip()
+    connection: Connection | None = None
+    try:
+        server = Server(server_host, get_info=ALL)
+        domain_user = _normalize_username(clean_username)
+        connection = Connection(
+            server,
+            user=domain_user,
+            password=password,
+            authentication=NTLM,
+        )
+        if not connection.bind():
+            logging.warning(
+                "ldap_authenticate: LDAP bind failed (username=%s, server=%s, result=%s)",
+                domain_user,
+                server_host,
+                connection.result,
+            )
+            return None
+        logging.info(
+            "ldap_authenticate: LDAP bind success (username=%s, server=%s)",
+            domain_user,
+            server_host,
+        )
+        return clean_username
+    except LDAPException as exc:
+        logging.error(
+            "ldap_authenticate: LDAP 异常 (username=%s, server=%s): %s",
+            clean_username,
+            server_host,
+            exc,
+        )
+        return None
+
+    finally:
+        if connection is not None:
+            try:
+                connection.unbind()
+            except Exception:  # pragma: no cover - 清理阶段无需抛出
+                logging.debug("ldap_authenticate: 忽略 unbind 异常", exc_info=True)
+
+
+def _normalize_username(username: str) -> str:
+    """根据是否包含域信息拼接完整账号。"""
+
+    clean_username = username.strip()
+    if "\\" in clean_username or "@" in clean_username:
+        return clean_username
+    return f"{LDAP_DOMAIN}\\{clean_username}"
+
+
 class CompanyLoginPage(QWidget):
-    """公司账号登录页，收集凭据并对外暴露登录相关信号。"""
+    """Company account sign-in page that collects credentials and emits related signals."""
 
     loginResult = pyqtSignal(bool, str, dict)
     """登录完成后发出 (success, message, payload)"""
 
     logoutRequested = pyqtSignal()
-    """用户点击注销按钮时发出"""
+    """Emitted when the user clicks the sign-out button."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -134,7 +205,7 @@ class CompanyLoginPage(QWidget):
         main_layout.setSpacing(24)
         main_layout.setAlignment(Qt.AlignCenter)
 
-        title = QLabel("Amlogic 公司账户登录", self)
+        title = QLabel("Amlogic Account Sign In", self)
         title_font = QFont(FONT_FAMILY, 24)
         title.setFont(title_font)
         title.setAlignment(Qt.AlignCenter)
@@ -146,11 +217,11 @@ class CompanyLoginPage(QWidget):
         form_layout.setContentsMargins(0, 0, 0, 0)
 
         self.account_edit = LineEdit(form_widget)
-        self.account_edit.setPlaceholderText("账号，例如 your.name 或 your.name@amlogic.com")
+        self.account_edit.setPlaceholderText("Account, e.g. your.name or your.name@amlogic.com")
         form_layout.addWidget(self.account_edit)
 
         self.password_edit = LineEdit(form_widget)
-        self.password_edit.setPlaceholderText("密码")
+        self.password_edit.setPlaceholderText("Password")
         self.password_edit.setEchoMode(QLineEdit.Password)
         form_layout.addWidget(self.password_edit)
 
@@ -161,13 +232,11 @@ class CompanyLoginPage(QWidget):
 
         button_row.addItem(QSpacerItem(20, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
 
-        self.login_button = PushButton("登录", self)
-        # self.login_button.setIcon(FluentIcon.LOGIN)
+        self.login_button = PushButton("Sign In", self)
         self.login_button.clicked.connect(self._emit_login)
         button_row.addWidget(self.login_button)
 
-        self.logout_button = PushButton("注销", self)
-        # self.logout_button.setIcon(FluentIcon.SIGN_OUT)
+        self.logout_button = PushButton("Sign Out", self)
         self.logout_button.clicked.connect(self._emit_logout)
         self.logout_button.setVisible(False)
         self.logout_button.setEnabled(False)
@@ -187,15 +256,14 @@ class CompanyLoginPage(QWidget):
 
     # ------------------------------ public api ------------------------------
     def set_loading(self, loading: bool) -> None:
-        """切换登录按钮加载状态"""
+        """Toggle loading state of the sign-in button and inputs."""
         self._loading = loading
         self.login_button.setEnabled(not loading and not self._logged_in)
         self.account_edit.setEnabled(not loading and not self._logged_in)
         self.password_edit.setEnabled(not loading and not self._logged_in)
 
     def set_status_message(self, message: str, *, state: str = "info") -> None:
-        """更新状态标签文案及颜色。"""
-
+        """Update status label text and color."""
         color_map = {
             "info": "#2F80ED",
             "success": "#4CAF50",
@@ -221,14 +289,14 @@ class CompanyLoginPage(QWidget):
             self._last_payload = dict(payload)
         self.set_loading(False)
         if success:
-            self.set_status_message(message or "登录成功，欢迎使用！", state="success")
+            self.set_status_message(message or "Signed in successfully. Welcome!", state="success")
             self.login_button.setVisible(False)
             self.logout_button.setVisible(True)
             self.logout_button.setEnabled(True)
             self.account_edit.setEnabled(False)
             self.password_edit.setEnabled(False)
         else:
-            self.set_status_message(message or "登录失败，请重试。", state="error")
+            self.set_status_message(message or "Sign-in failed. Please try again.", state="error")
             self.login_button.setVisible(True)
             self.login_button.setEnabled(True)
             self.logout_button.setVisible(False)
@@ -241,7 +309,7 @@ class CompanyLoginPage(QWidget):
         self.loginResult.emit(success, message, dict(self._last_payload))
 
     def reset(self) -> None:
-        """重置输入框与状态"""
+        """Reset inputs and UI state."""
         self._loading = False
         self._logged_in = False
         self.account_edit.setEnabled(True)
