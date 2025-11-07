@@ -24,7 +24,11 @@ from src.ui.rvr_wifi_config import RvrWifiConfigPage
 from src.ui.run import RunPage
 from src.ui.report_page import ReportPage
 from src.ui.about_page import AboutPage
-from src.ui.company_login import CompanyLoginPage
+from src.ui.company_login import (
+    CompanyLoginPage,
+    get_configured_ldap_server,
+    ldap_authenticate,
+)
 from qfluentwidgets import setTheme, Theme
 from PyQt5.QtGui import QGuiApplication, QFont
 from PyQt5.QtCore import (
@@ -36,11 +40,6 @@ from PyQt5.QtCore import (
     QObject,
     QThread,
     pyqtSignal,
-)
-from src.ui.company_login import (
-    LDAP_SERVER,
-    authenticate_via_ldap,
-    create_ldap_server,
 )
 from src.util.constants import Paths, cleanup_temp_dir
 
