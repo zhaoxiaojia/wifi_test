@@ -230,34 +230,28 @@ def _connect_wifi(target: BssTarget) -> bool:
         security_token = "wpa2"
         password = target.password
 
-    connect_cmd = getattr(pytest.dut, "CMD_WIFI_CONNECT", None)
-    checkoutput = getattr(pytest.dut, "checkoutput", None)
-
-    if isinstance(connect_cmd, str) and callable(checkoutput):
-        command = connect_cmd.format(target.ssid, security_token, password)
-        logging.info(
-            "Connecting to SSID '%s' (security=%s)",
-            target.ssid,
-            target.security_mode,
-        )
-        try:
-            checkoutput(command)
-        except Exception as exc:  # pragma: no cover - hardware dependent
-            logging.error("Wi-Fi connect command failed for %s: %s", target.ssid, exc)
-            return False
-        return True
-
     connect_wifi = getattr(pytest.dut, "connect_wifi", None)
-    if callable(connect_wifi):
-        try:
-            connect_wifi(target.ssid, password, security_token)
-            return True
-        except Exception as exc:  # pragma: no cover - hardware dependent
-            logging.error("Wi-Fi connect API failed for %s: %s", target.ssid, exc)
-            return False
+    if not callable(connect_wifi):
+        logging.error("pytest.dut lacks Wi-Fi connect interface")
+        return False
 
-    logging.error("pytest.dut lacks Wi-Fi connect interface")
-    return False
+    logging.info(
+        "Connecting to SSID '%s' (security=%s)",
+        target.ssid,
+        target.security_mode,
+    )
+    try:
+        return bool(
+            connect_wifi(
+                target.ssid,
+                pwd=password,
+                security=security_token,
+                hidden=False,
+            )
+        )
+    except Exception as exc:  # pragma: no cover - hardware dependent
+        logging.error("Wi-Fi connect API failed for %s: %s", target.ssid, exc)
+        return False
 
 
 def _describe_iteration(iteration: int, loops: int | None, mode: str) -> str:
