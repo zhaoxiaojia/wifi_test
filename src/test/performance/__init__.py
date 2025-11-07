@@ -22,6 +22,13 @@ from src.util.constants import (
     IDENTIFIER_SANITIZE_PATTERN,
     RF_STEP_SPLIT_PATTERN,
     get_debug_flags,
+    TURN_TABLE_FIELD_IP_ADDRESS,
+    TURN_TABLE_FIELD_MODEL,
+    TURN_TABLE_FIELD_STATIC_DB,
+    TURN_TABLE_FIELD_STEP,
+    TURN_TABLE_FIELD_TARGET_RSSI,
+    TURN_TABLE_MODEL_RS232,
+    TURN_TABLE_SECTION_KEY,
 )
 
 
@@ -33,6 +40,13 @@ _SCENARIO_KEY_FIELDS = (
     ("bandwidth", "bandwidth"),
     ("security", "security_mode"),
 )
+
+
+def _turntable_section_from_config(cfg: Any) -> dict[str, Any]:
+    if not isinstance(cfg, dict):
+        return {}
+    section = cfg.get(TURN_TABLE_SECTION_KEY)
+    return section if isinstance(section, dict) else {}
 
 
 def _normalize_scenario_token(value: Any) -> str:
@@ -186,9 +200,18 @@ def init_corner():
         controller.set_turntable_zero()
         return controller
     cfg = get_cfg()
-    corner_ip = cfg['corner_angle']['ip_address']
-    corner_tool = rs() if corner_ip == '192.168.5.11' else LabDeviceController(corner_ip)
-    logging.info(f'corner_ip {corner_ip}')
+    turntable_cfg = _turntable_section_from_config(cfg)
+    model = str(turntable_cfg.get(TURN_TABLE_FIELD_MODEL, TURN_TABLE_MODEL_RS232)).strip()
+    corner_ip = str(turntable_cfg.get(TURN_TABLE_FIELD_IP_ADDRESS, "")).strip()
+    if model == TURN_TABLE_MODEL_RS232:
+        corner_tool = rs()
+    else:
+        if not corner_ip:
+            raise EnvironmentError(
+                "Turntable IP address is required when using network-controlled models"
+            )
+        corner_tool = LabDeviceController(corner_ip)
+    logging.info(f'corner model {model} ip {corner_ip}')
     logging.info('Reset corner')
     corner_tool.set_turntable_zero()
     logging.info(corner_tool.get_turntanle_current_angle())
@@ -495,16 +518,52 @@ def get_rf_step_list():
     return parse_rf_step_spec(raw_step)
 
 
+def _parse_turntable_step_bounds(raw_step: Any) -> tuple[int, int] | None:
+    if raw_step is None:
+        return None
+    if isinstance(raw_step, str):
+        tokens = [segment.strip() for segment in re.split(r'[,，]', raw_step) if segment.strip()]
+    elif isinstance(raw_step, (list, tuple, set)):
+        tokens = [str(item).strip() for item in raw_step if str(item).strip()]
+    else:
+        tokens = [str(raw_step).strip()]
+
+    values: list[int] = []
+    for token in tokens:
+        if not token:
+            continue
+        try:
+            values.append(int(token))
+        except (TypeError, ValueError):
+            logging.warning("Invalid turntable step token %r ignored", token)
+    if len(values) >= 2:
+        return values[0], values[1]
+    if len(values) == 1:
+        return values[0], values[0]
+    return None
+
+
 @lru_cache(maxsize=1)
 def get_corner_step_list():
     cfg = get_cfg()
-    corner_step = cfg['corner_angle']['step']
-    return [i for i in range(*corner_step)][::45]
+    turntable_cfg = _turntable_section_from_config(cfg)
+    raw_step = turntable_cfg.get(TURN_TABLE_FIELD_STEP, "")
+    bounds = _parse_turntable_step_bounds(raw_step)
+    if bounds is None:
+        logging.warning("Turntable step configuration %r is invalid", raw_step)
+        return []
+    start, stop = bounds
+    if start == stop:
+        return [start]
+    if start > stop:
+        start, stop = stop, start
+    return [i for i in range(start, stop)][::45]
 
 
 def get_rvo_static_db_list():
     cfg = load_config(refresh=True)
-    raw_value = cfg.get('corner_angle', {}).get('static_db', '')
+    turntable_cfg = _turntable_section_from_config(cfg)
+    raw_value = turntable_cfg.get(TURN_TABLE_FIELD_STATIC_DB, '')
     candidates = []
 
     if isinstance(raw_value, str):
@@ -519,7 +578,7 @@ def get_rvo_static_db_list():
     for item in candidates:
         parsed = _parse_optional_int(
             item,
-            field_name='corner_angle.static_db',
+            field_name=f'{TURN_TABLE_SECTION_KEY}.{TURN_TABLE_FIELD_STATIC_DB}',
             min_value=0,
             max_value=110,
         )
@@ -531,7 +590,8 @@ def get_rvo_static_db_list():
 
 def get_rvo_target_rssi_list():
     cfg = load_config(refresh=True)
-    raw_value = cfg.get('corner_angle', {}).get('target_rssi', '')
+    turntable_cfg = _turntable_section_from_config(cfg)
+    raw_value = turntable_cfg.get(TURN_TABLE_FIELD_TARGET_RSSI, '')
     candidates = []
 
     if isinstance(raw_value, str):
@@ -546,13 +606,15 @@ def get_rvo_target_rssi_list():
     for item in candidates:
         parsed = _parse_optional_int(
             item,
-            field_name='corner_angle.target_rssi',
+            field_name=f'{TURN_TABLE_SECTION_KEY}.{TURN_TABLE_FIELD_TARGET_RSSI}',
         )
         if parsed is not None:
             normalized = parsed if parsed <= 0 else -abs(parsed)
             if normalized != parsed:
                 logging.debug(
-                    "corner_angle.target_rssi %s converted to %s dBm to match RSSI sign convention",
+                    "%s.%s %s converted to %s dBm to match RSSI sign convention",
+                    TURN_TABLE_SECTION_KEY,
+                    TURN_TABLE_FIELD_TARGET_RSSI,
                     parsed,
                     normalized,
                 )

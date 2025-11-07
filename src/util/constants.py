@@ -158,6 +158,21 @@ SWITCH_WIFI_ENTRY_SSID_FIELD: Final[str] = "ssid"
 SWITCH_WIFI_ENTRY_SECURITY_FIELD: Final[str] = "security_mode"
 SWITCH_WIFI_ENTRY_PASSWORD_FIELD: Final[str] = "password"
 
+# Turntable configuration keys shared between the UI and YAML files.
+TURN_TABLE_SECTION_KEY: Final[str] = "Turntable"
+TURN_TABLE_LEGACY_SECTION_KEY: Final[str] = "corner_angle"
+TURN_TABLE_FIELD_MODEL: Final[str] = "Turntable"
+TURN_TABLE_FIELD_IP_ADDRESS: Final[str] = "IP address"
+TURN_TABLE_FIELD_STEP: Final[str] = "Step"
+TURN_TABLE_FIELD_STATIC_DB: Final[str] = "Static dB"
+TURN_TABLE_FIELD_TARGET_RSSI: Final[str] = "Target RSSI"
+TURN_TABLE_MODEL_RS232: Final[str] = "RS232Board5"
+TURN_TABLE_MODEL_OTHER: Final[str] = "other"
+TURN_TABLE_MODEL_CHOICES: Final[tuple[str, ...]] = (
+    TURN_TABLE_MODEL_RS232,
+    TURN_TABLE_MODEL_OTHER,
+)
+
 # Android version defaults
 DEFAULT_ANDROID_VERSION_CHOICES: Final[tuple[str, ...]] = (
     "Android 15",
@@ -187,12 +202,76 @@ RF_STEP_SPLIT_PATTERN = re.compile(r"[;\uFF1B|\r\n]+")
 IDENTIFIER_SANITIZE_PATTERN = re.compile(r"[^0-9A-Za-z]+")
 
 
+def _stringify_turntable_value(value: Any) -> str:
+    """Return a normalized string representation for turntable inputs."""
+
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, (list, tuple, set)):
+        items: list[str] = []
+        for item in value:
+            text = str(item).strip()
+            if text:
+                items.append(text)
+        return ",".join(items)
+    return str(value).strip()
+
+
+def _normalize_turntable_section(data: Mapping[str, Any] | None) -> dict[str, Any]:
+    """Return a mapping that aligns the turntable section with the UI field names."""
+
+    if isinstance(data, Mapping):
+        source = dict(data)
+    else:
+        source = {}
+
+    if any(
+        key in source
+        for key in (
+            TURN_TABLE_FIELD_MODEL,
+            TURN_TABLE_FIELD_IP_ADDRESS,
+            TURN_TABLE_FIELD_STEP,
+            TURN_TABLE_FIELD_STATIC_DB,
+            TURN_TABLE_FIELD_TARGET_RSSI,
+        )
+    ):
+        model_value = source.get(TURN_TABLE_FIELD_MODEL, TURN_TABLE_MODEL_RS232)
+        ip_value = source.get(TURN_TABLE_FIELD_IP_ADDRESS, "")
+        step_value = source.get(TURN_TABLE_FIELD_STEP, "")
+        static_value = source.get(TURN_TABLE_FIELD_STATIC_DB, "")
+        target_value = source.get(TURN_TABLE_FIELD_TARGET_RSSI, "")
+    else:
+        model_value = source.get("turntable_type") or source.get("model") or TURN_TABLE_MODEL_RS232
+        ip_value = source.get("ip_address") or source.get("ip") or ""
+        step_value = source.get("step", "")
+        static_value = source.get("static_db", "")
+        target_value = source.get("target_rssi", "")
+
+    model_text = str(model_value).strip() if model_value is not None else ""
+    if model_text not in TURN_TABLE_MODEL_CHOICES:
+        model_text = TURN_TABLE_MODEL_RS232
+
+    normalized = {
+        TURN_TABLE_FIELD_MODEL: model_text,
+        TURN_TABLE_FIELD_IP_ADDRESS: _stringify_turntable_value(ip_value),
+        TURN_TABLE_FIELD_STEP: _stringify_turntable_value(step_value),
+        TURN_TABLE_FIELD_STATIC_DB: _stringify_turntable_value(static_value),
+        TURN_TABLE_FIELD_TARGET_RSSI: _stringify_turntable_value(target_value),
+    }
+    return normalized
+
+
 def _normalize_config_keys(data: Mapping[str, Any] | None) -> dict[str, Any]:
     """Return a shallow copy of *data* with legacy aliases normalised."""
     if not data:
         return {}
     normalised: dict[str, Any] = {}
     for key, value in data.items():
+        if key in {TURN_TABLE_SECTION_KEY, TURN_TABLE_LEGACY_SECTION_KEY}:
+            normalised[TURN_TABLE_SECTION_KEY] = _normalize_turntable_section(value)
+            continue
         target_key = CONFIG_KEY_ALIASES.get(key, key)
         normalised[target_key] = copy.deepcopy(value)
     return normalised
