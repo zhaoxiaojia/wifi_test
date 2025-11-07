@@ -30,7 +30,7 @@ rvr:
 router:
   name: asusax88u
   address: 192.168.5.1
-text_case: test/performance/test_wifi_peak_throughput.py
+text_case: test/stability/test_swtich_wifi.py
 debug:
   database_mode: true
   skip_router: false

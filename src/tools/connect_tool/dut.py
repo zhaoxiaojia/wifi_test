@@ -654,8 +654,8 @@ class dut():
                 current_sum_count = len(sum_intervals)
                 elapsed = time.time() - start_time
                 if (
-                    current_sum_count != last_sum_count
-                    or total_lines != last_total_lines
+                        current_sum_count != last_sum_count
+                        or total_lines != last_total_lines
                 ):
                     logging.debug(
                         "iperf wait: SUM intervals=%d total_lines=%d after %.2fs",
@@ -1004,14 +1004,15 @@ class dut():
         pytest.testResult.save_result(formatted)
         return ','.join([cell for cell in throughput_cells if cell]) or 'N/A'
 
-    def wait_for_wifi_address(self, cmd: str = '', target=''):
+    def wait_for_wifi_address(self, cmd: str = '', target='', lan=True):
         if pytest.connect_type == 'Linux':
             pytest.dut.roku.ser.write('iw wlan0 link')
             logging.info(pytest.dut.roku.ser.recv())
             return True, pytest.dut.roku.ser.get_ip_address('wlan0')
         else:
             # Wait for th wireless adapter to obtaion the ip address
-            if not target:
+            if lan and (not target):
+                logging.info('coco wait for wifi address '*40)
                 target = self.ip_target
             logging.info(f"waiting for wifi {target}")
             step = 0
@@ -1067,7 +1068,7 @@ class dut():
             else:
                 return False
 
-    def connect_wifi(self, ssid: str, pwd: str, security: str, hide: bool = False) -> bool:
+    def connect_wifi(self, ssid: str, pwd: str, security: str, hide: bool = False, lan=True) -> bool:
         """Connect DUT to a Wi-Fi network."""
 
         connect_type = getattr(pytest, "connect_type", "").lower()
@@ -1080,7 +1081,7 @@ class dut():
                 return False
 
         if connect_type == "android":
-            return bool(self._android_connect_wifi(ssid, pwd, security, hide))
+            return bool(self._android_connect_wifi(ssid, pwd, security, hide, lan))
 
         logging.error("Unsupported connect_type for connect_wifi: %s", connect_type)
         return False

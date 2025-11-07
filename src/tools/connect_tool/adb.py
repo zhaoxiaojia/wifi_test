@@ -726,7 +726,7 @@ class adb(dut):
         if "wlan0" not in output:
             logging.debug("wifi has closed")
 
-    def _android_connect_wifi(self, ssid: str, pwd: str, security: str, hide: bool) -> bool:
+    def _android_connect_wifi(self, ssid: str, pwd: str, security: str, hide: bool, lan=True) -> bool:
         command = self.CMD_WIFI_CONNECT.format(ssid, security, pwd)
         if hide:
             command += self.CMD_WIFI_HIDE
@@ -736,12 +736,8 @@ class adb(dut):
             try:
                 self.checkoutput(command)
                 time.sleep(5)
-                target = ""
-                try:
-                    target = re.findall(r'(\d+\.\d+\.\d+\.)', self.pc_ip)[0]
-                except Exception:
-                    target = ""
-                if self.wait_for_wifi_address(cmd=command, target=target):
+                target = self.ip_target if lan else " "
+                if self.wait_for_wifi_address(cmd=command, target=target, lan=lan):
                     connect_status = True
                     break
             except Exception as exc:  # pragma: no cover - hardware dependent
@@ -1167,4 +1163,3 @@ class adb(dut):
             cmd += pytest.dut.CMD_WIFI_HIDE
         logging.info(f'conn wifi cmd :{cmd}')
         return cmd
-
