@@ -37,9 +37,6 @@ from PyQt5.QtCore import (
     QEasingCurve,
     QParallelAnimationGroup,
     QPoint,
-    QObject,
-    QThread,
-    pyqtSignal,
 )
 from src.util.constants import Paths, cleanup_temp_dir
 
@@ -49,76 +46,6 @@ os.chdir(Paths.BASE_DIR)
 
 def log_exception(exc_type, exc_value, exc_tb):
     logging.error("".join(traceback.format_exception(exc_type, exc_value, exc_tb)))
-
-
-def _describe_ldap_server() -> str:
-    """Return a human-readable LDAP server address for logging/UI."""
-
-    server_address = LDAP_SERVER
-    try:
-        server_obj = create_ldap_server()
-        host = getattr(server_obj, "host", None)
-        if host:
-            server_address = host
-        else:
-            text = str(server_obj)
-            if text:
-                server_address = text
-    except Exception:  # pragma: no cover - fallback path
-        logging.debug("_describe_ldap_server: failed to resolve server, using default", exc_info=True)
-    return server_address
-
-
-class LDAPAuthWorker(QObject):
-    """Run LDAP sign-in in a background thread."""
-
-    finished = pyqtSignal(bool, str, dict)
-    progress = pyqtSignal(str)
-
-    def __init__(self, username: str, password: str) -> None:
-        super().__init__()
-        self._username = username or ""
-        self._password = password or ""
-
-    def run(self) -> None:  # pragma: no cover - hard to cover threads
-        server = _describe_ldap_server()
-        logging.info(
-            "LDAPAuthWorker.run: start authentication (username=%s, server=%s)",
-            self._username,
-            server,
-        )
-        try:
-            self.progress.emit(f"Connecting to LDAP server: {server}")
-            success, result_message = authenticate_via_ldap(
-                self._username,
-                self._password,
-            )
-            if success:
-                username = result_message or self._username
-                payload = {
-                    "username": username,
-                    "server": server,
-                }
-                self.progress.emit(f"LDAP authentication succeeded (server: {server}), updating UI...")
-                welcome = username or "user"
-                self.finished.emit(
-                    True,
-                    f"Signed in successfully, welcome {welcome}",
-                    payload,
-                )
-            else:
-                detail = result_message or "LDAP login failed. Please check username or password."
-                message = f"{detail} (server: {server})"
-                logging.warning("LDAP login failed (server=%s): %s", server, detail)
-                self.finished.emit(False, message, {})
-        except Exception as exc:  # pragma: no cover - runtime exceptions
-            logging.exception("LDAP login failed (unexpected)")
-            self.finished.emit(
-                False,
-                f"Sign-in failed: {exc} (server: {server})",
-                {},
-            )
-
 
 class MainWindow(FluentWindow):
     def __init__(self):
@@ -132,8 +59,6 @@ class MainWindow(FluentWindow):
         self.center_window()
         self.show()
 
-        self._auth_thread: QThread | None = None
-        self._auth_worker: LDAPAuthWorker | None = None
         self._active_account: dict | None = None
 
         final_rect = self.geometry()
@@ -171,7 +96,6 @@ class MainWindow(FluentWindow):
 
         # Pages
         self.login_page = CompanyLoginPage(self)
-        self.login_page.loginRequested.connect(self._on_login_requested)
         self.login_page.loginResult.connect(self._on_login_result)
         self.login_page.logoutRequested.connect(self._on_logout_requested)
 
@@ -261,58 +185,19 @@ class MainWindow(FluentWindow):
                 btn.setEnabled(bool(enabled))
 
     # ------------------------------------------------------------------
-    def _on_login_requested(self, account: str, password: str) -> None:
-        """Handle sign-in request via LDAP."""
-
-        username = (account or "").strip()
-        logging.info("MainWindow: received sign-in request username=%s", username)
-        if not username or not password:
-            self.login_page.set_loading(False)
-            self.login_page.set_status_message("Username or password cannot be empty.", state="error")
-            logging.warning("MainWindow: sign-in failed, missing username or password")
-            return
-        if self._auth_thread and self._auth_thread.isRunning():
-            self.login_page.set_status_message("Sign-in in progress, please wait...")
-            logging.info("MainWindow: an auth thread is already running, ignoring new request")
-            return
-        server = _describe_ldap_server()
-        self.login_page.set_loading(True)
-        self.login_page.set_status_message(
-            f"Starting LDAP authentication (server: {server})..."
-        )
-        self._auth_thread = QThread(self)
-        self._auth_worker = LDAPAuthWorker(username, password)
-        self._auth_worker.moveToThread(self._auth_thread)
-        self._auth_thread.started.connect(self._auth_worker.run)
-        self._auth_worker.progress.connect(
-            lambda msg: self.login_page.set_status_message(msg)
-        )
-        self._auth_worker.finished.connect(self._handle_auth_finished)
-        self._auth_worker.finished.connect(self._auth_thread.quit)
-        self._auth_worker.finished.connect(self._auth_worker.deleteLater)
-        self._auth_thread.finished.connect(self._auth_thread.deleteLater)
-        self._auth_thread.start()
-
-    def _handle_auth_finished(self, success: bool, message: str, payload: dict | None) -> None:
+    def _on_login_result(self, success: bool, message: str, payload: dict) -> None:
         logging.info(
             "MainWindow: sign-in finished success=%s message=%s payload=%s",
             success,
             message,
             payload,
         )
-        self._auth_thread = None
-        self._auth_worker = None
         if success:
-            self._active_account = dict(payload or {})
-        else:
-            self._active_account = None
-        self.login_page.set_login_result(success, message)
-
-    def _on_login_result(self, success: bool, _message: str) -> None:
-        if success:
+            self._active_account = dict(payload)
             self._apply_nav_enabled(self._nav_logged_in_states)
             self.setCurrentIndex(self.case_config_page)
         else:
+            self._active_account = None
             self._apply_nav_enabled(self._nav_logged_out_states)
             self.setCurrentIndex(self.login_page)
 
