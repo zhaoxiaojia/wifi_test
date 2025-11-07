@@ -1067,69 +1067,6 @@ class dut():
             else:
                 return False
 
-    def connect_wifi(
-        self,
-        ssid: str,
-        pwd: Optional[str] = None,
-        security: Optional[str] = None,
-        *,
-        password: Optional[str] = None,
-        security_mode: Optional[str] = None,
-        hidden: bool = False,
-        retries: int = 3,
-        wait_interval: float = 5.0,
-        wait_timeout: int = 90,
-        target: Optional[str] = None,
-    ) -> bool:
-        """Connect DUT to a Wi-Fi network.
-
-        The method normalizes legacy positional arguments (``pwd`` / ``security``)
-        with the keyword-style arguments (``password`` / ``security_mode``) so
-        existing callers remain compatible. For Linux DUT it simply waits for the
-        telnet session to reconnect. For Android-based DUT it delegates to the
-        platform implementation (``_connect_wifi_android``).
-        """
-
-        normalized_password = password if password is not None else (pwd or "")
-        normalized_security = (
-            security_mode if security_mode is not None else (security or "wpa2")
-        )
-
-        connect_type = getattr(pytest, "connect_type", "").lower()
-        if connect_type == "linux":
-            waiter = getattr(self, "wait_reconnect_sync", None)
-            if callable(waiter):
-                try:
-                    return bool(waiter(timeout=wait_timeout))
-                except Exception as exc:  # pragma: no cover - hardware dependent
-                    logging.error(
-                        "Failed to wait for Linux Wi-Fi reconnect to %s: %s",
-                        ssid,
-                        exc,
-                    )
-                    return False
-            logging.error(
-                "Linux DUT %s lacks wait_reconnect_sync implementation", self
-            )
-            return False
-
-        connector = getattr(self, "_connect_wifi_android", None)
-        if callable(connector):
-            return connector(
-                ssid=ssid,
-                password=normalized_password,
-                security=normalized_security,
-                hidden=hidden,
-                retries=retries,
-                wait_interval=wait_interval,
-                target=target,
-            )
-
-        logging.error(
-            "DUT implementation %s does not support Android Wi-Fi connection", self
-        )
-        return False
-
     def connect_ssid(self, router=""):
         if pytest.connect_type == 'Linux':
             pytest.dut.roku.wifi_conn(ssid=router.ssid, pwd=router.wpa_passwd)
