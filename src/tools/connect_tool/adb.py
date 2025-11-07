@@ -20,6 +20,7 @@ import subprocess
 import threading
 import time
 from collections import Counter
+from typing import Optional
 from xml.dom import minidom
 
 import _io
@@ -725,10 +726,28 @@ class adb(dut):
         if "wlan0" not in output:
             logging.debug("wifi has closed")
 
-    def connect_wifi(self, ssid, pwd, security):
-        cmd = f"cmd wifi connect-network {ssid} {security} {pwd}"
-        logging.info(f"Connect wifi command: {cmd}")
-        return self.checkoutput(cmd)
+    def _android_connect_wifi(self, ssid: str, pwd: str, security: str, hide: bool) -> bool:
+        command = self.CMD_WIFI_CONNECT.format(ssid, security, pwd)
+        if hide:
+            command += self.CMD_WIFI_HIDE
+
+        connect_status = False
+        for _ in range(3):
+            try:
+                self.checkoutput(command)
+                time.sleep(5)
+                target = ""
+                try:
+                    target = re.findall(r'(\d+\.\d+\.\d+\.)', self.pc_ip)[0]
+                except Exception:
+                    target = ""
+                if self.wait_for_wifi_address(cmd=command, target=target):
+                    connect_status = True
+                    break
+            except Exception as exc:  # pragma: no cover - hardware dependent
+                logging.info(exc)
+                connect_status = False
+        return connect_status
 
     def check_wifi_driver(self):
         self.clear_logcat()
