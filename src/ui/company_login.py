@@ -3,6 +3,9 @@
 """Amlogic company account sign-in page (LDAP)."""
 from __future__ import annotations
 
+import logging
+import os
+
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtWidgets import (
     QWidget,
@@ -14,10 +17,80 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import QLineEdit
+from ldap3 import ALL, Connection, NTLM, Server
+from ldap3.core.exceptions import LDAPException
 from qfluentwidgets import LineEdit, PushButton
 
 from .theme import FONT_FAMILY
 from .theme import apply_theme
+
+LDAP_SERVER = os.getenv("AMLOGIC_LDAP_SERVER", "ldaps://ad.amlogic.com")
+LDAP_DOMAIN = os.getenv("AMLOGIC_LDAP_DOMAIN", "amlogic.com")
+
+
+def _normalize_account(account: str) -> str:
+    """Return an account with domain prefix when necessary."""
+
+    clean_account = account.strip()
+    if "\\" in clean_account or "@" in clean_account:
+        return clean_account
+    return f"{LDAP_DOMAIN}\\{clean_account}"
+
+
+def create_ldap_server(host: str | None = None) -> Server:
+    """Create an LDAP :class:`Server` following the official example."""
+
+    server_host = (host or LDAP_SERVER).strip()
+    return Server(server_host, get_info=ALL)
+
+
+def create_ldap_connection(server: Server, account: str, password: str) -> Connection:
+    """Create an LDAP :class:`Connection` configured for NTLM authentication."""
+
+    normalized_account = _normalize_account(account)
+    return Connection(
+        server,
+        user=normalized_account,
+        password=password,
+        authentication=NTLM,
+    )
+
+
+def authenticate_via_ldap(account: str, password: str) -> tuple[bool, str]:
+    """Authenticate a company account via LDAP and return (success, message)."""
+
+    clean_account = (account or "").strip()
+    if not clean_account or not password:
+        logging.info(
+            "authenticate_via_ldap: 账号或密码为空 (account=%s)",
+            clean_account,
+        )
+        return False, "Account or password cannot be empty."
+
+    server = create_ldap_server()
+    connection: Connection | None = None
+    try:
+        connection = create_ldap_connection(server, clean_account, password)
+        if not connection.bind():
+            logging.info(
+                "authenticate_via_ldap: LDAP bind failed -> %s",
+                connection.result,
+            )
+            return False, "LDAP bind failed. Please verify your credentials."
+        logging.info("authenticate_via_ldap: LDAP bind success")
+        return True, clean_account
+    except LDAPException as exc:
+        logging.error("authenticate_via_ldap: LDAP 异常 -> %s", exc)
+        return False, "LDAP authentication error."
+    finally:
+        if connection is not None:
+            try:
+                connection.unbind()
+            except Exception:  # pragma: no cover - cleanup should not raise
+                logging.debug(
+                    "authenticate_via_ldap: 忽略 unbind 异常",
+                    exc_info=True,
+                )
 
 
 class CompanyLoginPage(QWidget):
