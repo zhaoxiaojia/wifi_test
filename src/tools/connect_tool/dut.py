@@ -1080,9 +1080,7 @@ class dut():
                 return False
 
         if connect_type == "android":
-            android_connect = getattr(self, "_android_connect_wifi", None)
-            if callable(android_connect):
-                return bool(android_connect(ssid, pwd, security, hide))
+            return bool(self._android_connect_wifi(ssid, pwd, security, hide))
 
         logging.error("Unsupported connect_type for connect_wifi: %s", connect_type)
         return False
