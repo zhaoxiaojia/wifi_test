@@ -1067,6 +1067,24 @@ class dut():
             else:
                 return False
 
+    def connect_wifi(self, ssid: str, pwd: str, security: str, hide: bool = False) -> bool:
+        """Connect DUT to a Wi-Fi network."""
+
+        connect_type = getattr(pytest, "connect_type", "").lower()
+        if connect_type == "linux":
+            try:
+                self.wait_reconnect_sync(timeout=90)
+                return True
+            except Exception as exc:  # pragma: no cover - hardware dependent
+                logging.info(exc)
+                return False
+
+        if connect_type == "android":
+            return bool(self._android_connect_wifi(ssid, pwd, security, hide))
+
+        logging.error("Unsupported connect_type for connect_wifi: %s", connect_type)
+        return False
+
     def connect_ssid(self, router=""):
         if pytest.connect_type == 'Linux':
             pytest.dut.roku.wifi_conn(ssid=router.ssid, pwd=router.wpa_passwd)
