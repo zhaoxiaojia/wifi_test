@@ -272,34 +272,24 @@ def wait_connect(router_info: Router):
         connect_status = True
     else:
         logging.info(f'dut try to connect {router_info.ssid}')
-        if pytest.connect_type == 'Linux':
-            connect_status = True
-            pytest.dut.wait_reconnect_sync(timeout=90)
+        security_mode = getattr(router_info, "security_mode", "") or ""
+        security_lower = security_mode.lower()
+        if security_lower == "open system":
+            security_token = "open"
+            password = ""
+        elif "wpa3" in security_lower:
+            security_token = "wpa3"
+            password = getattr(router_info, "password", "") or ""
         else:
-            connect_status = False
-            for _ in range(3):
-                try:
-                    wpa_type = 'wpa3' if 'WPA3' in router_info.security_mode else 'wpa2'
-                    if router_info.security_mode.lower() == "open system":
-                        logging.info('no passwd')
-                        cmd = pytest.dut.CMD_WIFI_CONNECT.format(router_info.ssid, "open", "")
-                    else:
-                        cmd = pytest.dut.CMD_WIFI_CONNECT.format(
-                            router_info.ssid, wpa_type, router_info.password
-                        )
-                    if router_info.hide_ssid == '是':
-                        cmd += pytest.dut.CMD_WIFI_HIDE
-                    pytest.dut.checkoutput(cmd)
-                    time.sleep(5)
-                    if pytest.dut.wait_for_wifi_address(
-                            cmd=cmd,
-                            target=re.findall(r'(\d+\.\d+\.\d+\.)', pytest.dut.pc_ip)[0],
-                    ):
-                        connect_status = True
-                        break
-                except Exception as e:
-                    logging.info(e)
-                    connect_status = False
+            security_token = "wpa2"
+            password = getattr(router_info, "password", "") or ""
+
+        connect_status = pytest.dut.connect_wifi(
+            router_info.ssid,
+            password,
+            security_token,
+            hide=getattr(router_info, "hide_ssid", "") == '是',
+        )
 
     logging.info(f'dut_ip:{pytest.dut.dut_ip}')
     logging.info(f'pc_ip:{pytest.dut.pc_ip}')
