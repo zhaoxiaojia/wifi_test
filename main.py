@@ -33,11 +33,7 @@ from PyQt5.QtCore import (
     QEasingCurve,
     QParallelAnimationGroup,
     QPoint,
-    QObject,
-    QThread,
-    pyqtSignal,
 )
-from src.util.ldap_auth import get_configured_ldap_server, ldap_authenticate
 from src.util.constants import Paths, cleanup_temp_dir
 
 # 确保工作目录为可执行文件所在目录
@@ -46,47 +42,6 @@ os.chdir(Paths.BASE_DIR)
 
 def log_exception(exc_type, exc_value, exc_tb):
     logging.error("".join(traceback.format_exception(exc_type, exc_value, exc_tb)))
-
-
-class LDAPAuthWorker(QObject):
-    """后台线程中执行 LDAP 登录流程。"""
-
-    finished = pyqtSignal(bool, str, dict)
-    progress = pyqtSignal(str)
-
-    def __init__(self, username: str, password: str) -> None:
-        super().__init__()
-        self._username = username or ""
-        self._password = password or ""
-
-    def run(self) -> None:  # pragma: no cover - 线程执行难以覆盖
-        server = get_configured_ldap_server()
-        logging.info(
-            "LDAPAuthWorker.run: start authentication (username=%s, server=%s)",
-            self._username,
-            server,
-        )
-        try:
-            self.progress.emit(f"正在连接 LDAP 服务器：{server}")
-            result = ldap_authenticate(self._username, self._password)
-            if result:
-                payload = {
-                    "username": result,
-                    "server": server,
-                }
-                self.progress.emit(f"LDAP 验证成功（服务器：{server}），正在更新界面...")
-                self.finished.emit(True, f"登录成功，欢迎 {result}", payload)
-            else:
-                message = f"LDAP 登录失败，请检查账号或密码。（服务器：{server}）"
-                logging.warning("LDAP 登录失败（server=%s）", server)
-                self.finished.emit(False, message, {})
-        except Exception as exc:  # pragma: no cover - 运行期异常记录
-            logging.exception("LDAP 登录失败 (unexpected)")
-            self.finished.emit(
-                False,
-                f"登录失败：{exc}（服务器：{server}）",
-                {},
-            )
 
 
 class MainWindow(FluentWindow):
@@ -101,8 +56,6 @@ class MainWindow(FluentWindow):
         self.center_window()
         self.show()
 
-        self._auth_thread: QThread | None = None
-        self._auth_worker: LDAPAuthWorker | None = None
         self._active_account: dict | None = None
 
         final_rect = self.geometry()
@@ -140,7 +93,6 @@ class MainWindow(FluentWindow):
 
         # 页面实例化
         self.login_page = CompanyLoginPage(self)
-        self.login_page.loginRequested.connect(self._on_login_requested)
         self.login_page.loginResult.connect(self._on_login_result)
         self.login_page.logoutRequested.connect(self._on_logout_requested)
 
@@ -229,58 +181,19 @@ class MainWindow(FluentWindow):
                 btn.setEnabled(bool(enabled))
 
     # ------------------------------------------------------------------
-    def _on_login_requested(self, account: str, password: str) -> None:
-        """处理登录请求，调用 LDAP 完成身份验证。"""
-
-        username = (account or "").strip()
-        logging.info("MainWindow: 收到登录请求 username=%s", username)
-        if not username or not password:
-            self.login_page.set_loading(False)
-            self.login_page.set_status_message("账号或密码不能为空。", state="error")
-            logging.warning("MainWindow: 登录失败，缺少账号或密码")
-            return
-        if self._auth_thread and self._auth_thread.isRunning():
-            self.login_page.set_status_message("登录正在进行，请稍候…")
-            logging.info("MainWindow: 已有登录线程运行，忽略新的请求")
-            return
-        server = get_configured_ldap_server()
-        self.login_page.set_loading(True)
-        self.login_page.set_status_message(
-            f"正在发起 LDAP 验证（服务器：{server}），请稍候…"
-        )
-        self._auth_thread = QThread(self)
-        self._auth_worker = LDAPAuthWorker(username, password)
-        self._auth_worker.moveToThread(self._auth_thread)
-        self._auth_thread.started.connect(self._auth_worker.run)
-        self._auth_worker.progress.connect(
-            lambda msg: self.login_page.set_status_message(msg)
-        )
-        self._auth_worker.finished.connect(self._handle_auth_finished)
-        self._auth_worker.finished.connect(self._auth_thread.quit)
-        self._auth_worker.finished.connect(self._auth_worker.deleteLater)
-        self._auth_thread.finished.connect(self._auth_thread.deleteLater)
-        self._auth_thread.start()
-
-    def _handle_auth_finished(self, success: bool, message: str, payload: dict | None) -> None:
+    def _on_login_result(self, success: bool, message: str, payload: dict) -> None:
         logging.info(
             "MainWindow: 登录完成 success=%s message=%s payload=%s",
             success,
             message,
             payload,
         )
-        self._auth_thread = None
-        self._auth_worker = None
         if success:
-            self._active_account = dict(payload or {})
-        else:
-            self._active_account = None
-        self.login_page.set_login_result(success, message)
-
-    def _on_login_result(self, success: bool, _message: str) -> None:
-        if success:
+            self._active_account = dict(payload)
             self._apply_nav_enabled(self._nav_logged_in_states)
             self.setCurrentIndex(self.case_config_page)
         else:
+            self._active_account = None
             self._apply_nav_enabled(self._nav_logged_out_states)
             self.setCurrentIndex(self.login_page)
 
