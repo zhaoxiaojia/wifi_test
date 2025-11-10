@@ -2290,6 +2290,8 @@ class CaseConfigPage(CardWidget):
 
         section_controls: dict[str, tuple[QCheckBox, Sequence[QWidget]]] = {}
 
+        router_mode_state: dict[str, bool] = {"suppress_open": True}
+
         def _current_csv_selection() -> str | None:
             """
             Execute the current csv selection routine.
@@ -2330,6 +2332,7 @@ class CaseConfigPage(CardWidget):
                     self.csvFileChanged.emit("")
             self._update_switch_wifi_preview(router_preview, _current_csv_selection())
             self._request_rebalance_for_panels(self._stability_panel)
+            router_mode_state["suppress_open"] = False
 
         def _on_csv_changed() -> None:
             """
