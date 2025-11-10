@@ -1350,7 +1350,7 @@ class CaseConfigPage(CardWidget):
         self._current_page_keys: list[str] = []
         self._script_config_factories: dict[str, Callable[[str, str, Mapping[str, Any]], ScriptConfigEntry]] = {
             "test/stability/test_str.py": self._create_test_str_config_entry,
-            "test/stability/test_swtich_wifi.py": self._create_test_swtich_wifi_config_entry,
+            "test/stability/test_switch_wifi.py": self._create_test_swtich_wifi_config_entry,
         }
         self._script_groups: dict[str, ScriptConfigEntry] = {}
         self._active_script_case: str | None = None
@@ -2170,7 +2170,7 @@ class CaseConfigPage(CardWidget):
         This method encapsulates the logic necessary to perform its function.
         Refer to the implementation for details on parameters and return values.
         """
-        group = QGroupBox("test_swtich_wifi.py Stability", self)
+        group = QGroupBox("test_switch_wifi.py Stability", self)
         apply_theme(group)
         apply_groupbox_style(group)
         layout = QVBoxLayout(group)
@@ -2347,8 +2347,6 @@ class CaseConfigPage(CardWidget):
 
         router_combo.currentIndexChanged.connect(lambda _index: _on_csv_changed())
         use_router_checkbox.toggled.connect(_apply_mode)
-        edit_router_btn.clicked.connect(_handle_router_editor_request)
-
         router_selector.setEnabled(use_router_checkbox.isChecked())
 
         router_selector.setEnabled(use_router_checkbox.isChecked())
