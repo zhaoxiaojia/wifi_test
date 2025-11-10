@@ -15,6 +15,7 @@ from threading import Thread
 from src.tools.config_loader import load_config
 from src.tools.router_tool.router_performance import handle_expectdata
 from src.util.constants import is_database_debug_enabled
+from src.tools.connect_tool.command_batch import CommandBatch, CommandRunner, CommandExecutionError, CommandTimeoutError
 
 lock = threading.Lock()
 
@@ -306,6 +307,8 @@ class dut():
         self.skip_rx = False
         self.iperf_server_log_list: list[str] = []
         self._current_udp_mode = False
+        encoding = 'gb2312' if getattr(pytest, "win_flag", False) else "utf-8"
+        self.command_runner = CommandRunner(encoding=encoding)
         if self.rvr_tool == 'iperf':
             cmds = f"{self.iperf_server_cmd} {self.iperf_client_cmd}"
             self.test_tool = 'iperf3' if 'iperf3' in cmds else 'iperf'
@@ -650,13 +653,9 @@ class dut():
         """
         logging.info(f"command:{command}")
         try:
-            result = subprocess.Popen(command, shell=True,
-                                      stdout=subprocess.PIPE,
-                                      stderr=subprocess.PIPE,
-                                      encoding='gb2312' if pytest.win_flag else "utf-8",
-                                      errors='ignore')
-            return result.communicate()[0]
-        except subprocess.TimeoutExpired:
+            result = self.command_runner.run(command, shell=True)
+            return result.stdout
+        except CommandTimeoutError:
             logging.info("Command timed out")
             return None
 
@@ -677,20 +676,23 @@ class dut():
         if is_database_debug_enabled():
             logging.info("Database debug mode enabled, skip killing iperf processes")
             return
-        try:
-            pytest.dut.subprocess_run(pytest.dut.IPERF_KILL.format(self.test_tool))
-        except Exception:
-            ...
+        commands = [
+            pytest.dut.IPERF_KILL.format(self.test_tool),
+            pytest.dut.IPERF_WIN_KILL.format(self.test_tool),
+        ]
+        self._run_host_commands(commands)
 
+    def _run_host_commands(self, commands: Sequence[str]) -> None:
+        """Execute a sequence of host commands while swallowing non-critical failures."""
+        batch = CommandBatch(self.command_runner)
+        for cmd in commands:
+            batch.add(cmd, shell=True, ignore_error=True)
         try:
-            pytest.dut.popen_term(pytest.dut.IPERF_KILL.format(self.test_tool))
-        except Exception:
-            ...
-
-        try:
-            pytest.dut.popen_term(pytest.dut.IPERF_WIN_KILL.format(self.test_tool))
-        except Exception:
-            ...
+            batch.run()
+        except CommandExecutionError:
+            logging.debug("Host command batch reported an execution error", exc_info=True)
+        except CommandTimeoutError:
+            logging.debug("Host command batch reported a timeout", exc_info=True)
 
     def push_iperf(self):
         """
@@ -847,12 +849,11 @@ class dut():
             """
             logging.debug('%s %s', desc, command)
             logging.debug("command list: %s", cmd_list)
-            process = subprocess.Popen(
+            process = self.command_runner.popen(
                 cmd_list,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 encoding=encoding,
-                errors='ignore',
             )
             logging.debug(
                 "background process started (%s pid=%s)",
@@ -891,12 +892,11 @@ class dut():
             """
             logging.info('%s %s', desc, command)
             logging.info("command list: %s", cmd_list)
-            process = subprocess.Popen(
+            process = self.command_runner.popen(
                 cmd_list,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 encoding=encoding,
-                errors='ignore',
             )
             logging.info(
                 "blocking process started (%s pid=%s)", desc, getattr(process, "pid", None)

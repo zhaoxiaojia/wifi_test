@@ -50,10 +50,8 @@ def connect_again(func):
             The result produced by the function.
         """
         if ':5555' in self.serialnumber:
-            subprocess.check_output('adb connect {}'.format(self.serialnumber), shell=True)
-            self.wait_devices()
-        else:
-            self.wait_devices()
+            self.command_runner.run(f'adb connect {self.serialnumber}', shell=True)
+        self.wait_devices()
         return func(self, *args, **kwargs)
 
     return inner
@@ -354,7 +352,7 @@ class adb(dut):
         None
             This method does not return a value.
         """
-        subprocess.run('adb root', shell=True)
+        self.command_runner.run('adb root', shell=True)
 
     def remount(self):
         """
@@ -370,7 +368,7 @@ class adb(dut):
         None
             This method does not return a value.
         """
-        subprocess.run('adb remount', shell=True)
+        self.command_runner.run('adb remount', shell=True)
 
     def reboot(self):
         """
@@ -620,13 +618,21 @@ class adb(dut):
         """
         filepath = self.logdir + '/' + filepath
         logcat_file = open(filepath, 'w')
+        base_cmd = f"adb -s {self.serialnumber} shell logcat -v time {tag}"
         if tag and ("grep -E" not in tag) and ("all" not in tag):
             tag = f'-s {tag}'
-            log = subprocess.Popen(f"adb -s {self.serialnumber} shell logcat -v time {tag}".split(), stdout=logcat_file,
-                                   preexec_fn=os.setsid)
+            log = self.command_runner.popen(
+                f"adb -s {self.serialnumber} shell logcat -v time {tag}".split(),
+                stdout=logcat_file,
+                stderr=subprocess.STDOUT,
+            )
         else:
-            log = subprocess.Popen(f"adb -s {self.serialnumber} shell logcat -v time {tag}", stdout=logcat_file,
-                                   shell=True, stdin=subprocess.PIPE, preexec_fn=os.setsid)
+            log = self.command_runner.popen(
+                base_cmd,
+                shell=True,
+                stdout=logcat_file,
+                stderr=subprocess.STDOUT,
+            )
         return log, logcat_file
 
     def stop_save_logcat(self, log, filepath):
@@ -1748,9 +1754,12 @@ class adb(dut):
         Any
             The result produced by the function.
         """
-        if not isinstance(command, list):
-            command = (self.ADB_S + self.serialnumber + ' shell ' + command).split()
-        return subprocess.run(command, stdout=subprocess.PIPE, encoding='utf-8').stdout
+        if isinstance(command, list):
+            result = self.command_runner.run(command, shell=False)
+            return result.stdout
+        adb_command = f"{self.ADB_S}{self.serialnumber} shell {command}"
+        result = self.command_runner.run(adb_command, shell=True)
+        return result.stdout
 
     def open_omx_info(self):
         """

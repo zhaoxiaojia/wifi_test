@@ -271,31 +271,58 @@ class roku_wpa:
         -------
         None
         """
+        network_block = self._build_network_block(
+            ssid=ssid,
+            auth_type=auth_type,
+            psk=psk,
+            eap=eap,
+            identity=identity,
+            password=password,
+            key_mgmt=key_mgmt,
+            proto=proto,
+            ieee80211w=ieee80211w,
+            pairwise=pairwise,
+            group=group,
+            pmf=pmf,
+            priority=priority,
+        )
+        conf = self._compose_wpa_conf(network_block)
+        self._write_conf_file(conf, conf_path)
+
+    def _build_network_block(
+        self,
+        *,
+        ssid: str,
+        auth_type: str,
+        psk: str | None,
+        eap: str | None,
+        identity: str | None,
+        password: str | None,
+        key_mgmt: str | None,
+        proto: str | None,
+        ieee80211w: str | None,
+        pairwise: str | None,
+        group: str | None,
+        pmf: str | None,
+        priority: int | None,
+    ) -> str:
+        """Return a ``network={...}`` block for the given security profile."""
         network_lines = [f'    ssid="{ssid}"']
+        auth_upper = auth_type.upper()
 
-        # Open
-        if auth_type.upper() in ["OPEN", "NONE"]:
+        if auth_upper in {"OPEN", "NONE"}:
             network_lines.append('    key_mgmt=NONE')
-
-        # WPA-PSK/WPA2-PSK
-        elif auth_type.upper() in ["WPA-PSK", "WPA2-PSK"]:
-            network_lines.append(f'    psk="{psk}"')
-            network_lines.append('    key_mgmt=WPA-PSK')
+        elif auth_upper in {"WPA-PSK", "WPA2-PSK"}:
+            network_lines.extend([f'    psk="{psk}"', '    key_mgmt=WPA-PSK'])
             if ieee80211w is not None:
                 network_lines.append(f'    ieee80211w={ieee80211w}')
             if pmf:
                 network_lines.append(f'    pmf={pmf}')
-
-        # WPA3-SAE
-        elif auth_type.upper() == "WPA3-SAE":
-            network_lines.append(f'    psk="{psk}"')
-            network_lines.append('    key_mgmt=SAE')
-            network_lines.append('    ieee80211w=2')  # 强制开启管理帧保护
+        elif auth_upper == "WPA3-SAE":
+            network_lines.extend([f'    psk="{psk}"', '    key_mgmt=SAE', '    ieee80211w=2'])
             if pmf:
                 network_lines.append(f'    pmf={pmf}')
-
-        # WPA-EAP
-        elif auth_type.upper() == "WPA-EAP":
+        elif auth_upper == "WPA-EAP":
             network_lines.append('    key_mgmt=WPA-EAP')
             if eap:
                 network_lines.append(f'    eap={eap}')
@@ -308,25 +335,32 @@ class roku_wpa:
             if pmf:
                 network_lines.append(f'    pmf={pmf}')
 
-        # 通用扩展字段（避免重复）
-        if key_mgmt and f'key_mgmt={key_mgmt}' not in network_lines:
-            network_lines.append(f'    key_mgmt={key_mgmt}')
-        if proto:
-            network_lines.append(f'    proto={proto}')
-        if pairwise:
-            network_lines.append(f'    pairwise={pairwise}')
-        if group:
-            network_lines.append(f'    group={group}')
-        if priority is not None:
-            network_lines.append(f'    priority={priority}')
+        extras = [
+            ('key_mgmt', key_mgmt),
+            ('proto', proto),
+            ('pairwise', pairwise),
+            ('group', group),
+            ('priority', priority),
+        ]
+        for field, value in extras:
+            if value is None:
+                continue
+            line = f'    {field}={value}'
+            if line not in network_lines:
+                network_lines.append(line)
 
-        network_block = "network={\n" + "\n".join(network_lines) + "\n}"
+        return "network={\n" + "\n".join(network_lines) + "\n}"
 
-        conf = f"""ctrl_interface=/tmp/wpa_supplicant
-update_config=1
+    def _compose_wpa_conf(self, network_block: str) -> str:
+        """Wrap the provided network block into a full wpa_supplicant conf."""
+        return (
+            "ctrl_interface=/tmp/wpa_supplicant\n"
+            "update_config=1\n\n"
+            f"{network_block}\n    "
+        )
 
-{network_block}
-    """
+    def _write_conf_file(self, conf: str, conf_path: str) -> None:
+        """Write the rendered configuration to the remote device."""
         cmd = f"cat > {conf_path} <<EOF\n{conf}\nEOF"
         self.executor.write(cmd)
 
