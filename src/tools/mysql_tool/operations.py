@@ -14,6 +14,7 @@ from .schema import (
     ensure_report_tables,
     read_csv_rows,
 )
+from .sql_writer import SqlWriter
 from src.util.constants import (
     TURN_TABLE_FIELD_MODEL,
     TURN_TABLE_SECTION_KEY,
@@ -760,9 +761,8 @@ class PerformanceTableManager:
 
         insert_columns = [name for name, _ in self._BASE_COLUMNS]
         insert_columns.extend(column.name for column in self._STATIC_COLUMNS)
-        column_clause = ", ".join(f"`{name}`" for name in insert_columns)
-        placeholders = ", ".join(["%s"] * len(insert_columns))
-        insert_sql = f"INSERT INTO `{self.TABLE_NAME}` ({column_clause}) VALUES ({placeholders})"
+        writer = SqlWriter(self.TABLE_NAME)
+        insert_sql = writer.insert_statement(insert_columns)
 
         throughput_aliases = self._collect_throughput_headers(headers)
         values: List[List[Any]] = []

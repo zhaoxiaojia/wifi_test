@@ -168,67 +168,130 @@ def ast_stable_hash(n: ast.AST) -> str:
 
 # ---------- Parsing ----------
 def parse_file(path: Path) -> Dict[str, Any]:
-    src = get_text(path)
     try:
-        tree = ast.parse(src)
+        _, tree = _read_module(path)
     except SyntaxError as e:
-        return {"path": str(path), "syntax_error": ascii_only(str(e)),
-                "classes": [], "functions": [], "variables": [], "imports": [], "__all__": []}
+        return {
+            "path": str(path),
+            "syntax_error": ascii_only(str(e)),
+            "classes": [],
+            "functions": [],
+            "variables": [],
+            "imports": [],
+            "__all__": [],
+        }
 
-    classes, functions, variables = [], [], []
+    symbols = _collect_module_symbols(tree)
+    symbols["path"] = str(path)
+    return symbols
+
+
+def _read_module(path: Path) -> Tuple[str, ast.AST]:
+    """Return the source text and AST for a module."""
+    src = get_text(path)
+    tree = ast.parse(src)
+    return src, tree
+
+
+def _short_doc(node: ast.AST) -> str:
+    """Return the first line of a node's docstring."""
+    doc = ast.get_docstring(node) or ""
+    first_line = doc.splitlines()[0] if doc else ""
+    return ascii_only(first_line)
+
+
+def _build_function_entry(node: ast.FunctionDef | ast.AsyncFunctionDef) -> Dict[str, Any]:
+    """Build the metadata dictionary for a function or method."""
+    calls, assigns = collect_calls_and_assigns(node)
+    return {
+        "name": node.name,
+        "signature": func_sig(node),
+        "decorators": [safe_name(d) for d in node.decorator_list],
+        "lineno": node.lineno,
+        "loc": node_loc(node),
+        "cc": cyclomatic_complexity(node),
+        "calls": sorted(calls),
+        "assigns": sorted(assigns),
+        "hash": ast_stable_hash(node),
+        "doc": _short_doc(node),
+    }
+
+
+def _build_class_entry(node: ast.ClassDef) -> Dict[str, Any]:
+    """Build the metadata dictionary for a class definition."""
+    methods: List[Dict[str, Any]] = []
+    for body_item in node.body:
+        if isinstance(body_item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            method_entry = _build_function_entry(body_item)
+            methods.append(method_entry)
+    return {
+        "name": node.name,
+        "bases": [safe_name(b) for b in node.bases],
+        "lineno": node.lineno,
+        "loc": node_loc(node),
+        "doc": _short_doc(node),
+        "methods": methods,
+    }
+
+
+def _handle_assignment(node: ast.Assign, variables: List[Dict[str, Any]], all_list: List[str]) -> None:
+    """Capture module-level constants and __all__ definitions."""
+    for target in node.targets:
+        if isinstance(target, ast.Name) and is_simple_constant(node.value):
+            variables.append(
+                {"name": target.id, "value": const_preview(node.value), "lineno": node.lineno}
+            )
+        if isinstance(target, ast.Name) and target.id == "__all__":
+            elements = []
+            try:
+                if isinstance(node.value, (ast.List, ast.Tuple)):
+                    elements = [
+                        elt.s
+                        for elt in node.value.elts
+                        if isinstance(elt, ast.Constant) and isinstance(elt.value, str)
+                    ]
+            except Exception:
+                elements = []
+            if elements:
+                all_list[:] = elements
+
+
+def _handle_import(node: ast.Import | ast.ImportFrom, imports: List[str]) -> None:
+    """Append flattened import targets to the provided list."""
+    if isinstance(node, ast.Import):
+        for alias in node.names:
+            imports.append(alias.name)
+        return
+    module = node.module or ""
+    for alias in node.names:
+        imports.append(f"{module}:{alias.name}")
+
+
+def _collect_module_symbols(tree: ast.AST) -> Dict[str, Any]:
+    """Collect classes, functions, variables, imports, and __all__ entries."""
+    classes: List[Dict[str, Any]] = []
+    functions: List[Dict[str, Any]] = []
+    variables: List[Dict[str, Any]] = []
     imports: List[str] = []
     all_list: List[str] = []
 
     for node in tree.body:
         if isinstance(node, (ast.Import, ast.ImportFrom)):
-            if isinstance(node, ast.Import):
-                for n in node.names: imports.append(n.name)
-            else:
-                mod = node.module or ""
-                for n in node.names: imports.append(f"{mod}:{n.name}")
-        elif isinstance(node, (ast.Assign,)):
-            for tgt in node.targets:
-                if isinstance(tgt, ast.Name) and is_simple_constant(node.value):
-                    variables.append({"name": tgt.id, "value": const_preview(node.value), "lineno": node.lineno})
-                if isinstance(tgt, ast.Name) and tgt.id == "__all__":
-                    try:
-                        if isinstance(node.value, (ast.List, ast.Tuple)):
-                            all_list = [elt.s for elt in node.value.elts
-                                        if isinstance(elt, ast.Constant) and isinstance(elt.value, str)]
-                    except Exception:
-                        pass
+            _handle_import(node, imports)
+        elif isinstance(node, ast.Assign):
+            _handle_assignment(node, variables, all_list)
         elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            deco = [safe_name(d) for d in node.decorator_list]
-            doc1 = (ast.get_docstring(node) or "").splitlines()[0:1]
-            calls, assigns = collect_calls_and_assigns(node)
-            functions.append({
-                "name": node.name, "signature": func_sig(node), "decorators": deco,
-                "lineno": node.lineno, "loc": node_loc(node), "cc": cyclomatic_complexity(node),
-                "calls": sorted(calls), "assigns": sorted(assigns), "hash": ast_stable_hash(node),
-                "doc": ascii_only(doc1[0] if doc1 else "")
-            })
+            functions.append(_build_function_entry(node))
         elif isinstance(node, ast.ClassDef):
-            bases = [safe_name(b) for b in node.bases]
-            methods: List[Dict[str, Any]] = []
-            for m in node.body:
-                if isinstance(m, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    calls, assigns = collect_calls_and_assigns(m)
-                    methods.append({
-                        "name": m.name, "signature": func_sig(m), "lineno": m.lineno,
-                        "loc": node_loc(m), "cc": cyclomatic_complexity(m),
-                        "calls": sorted(calls), "assigns": sorted(assigns),
-                        "decorators": [safe_name(d) for d in m.decorator_list],
-                        "hash": ast_stable_hash(m),
-                        "doc": ascii_only((ast.get_docstring(m) or "").splitlines()[0] if ast.get_docstring(m) else "")
-                    })
-            classes.append({
-                "name": node.name, "bases": bases, "lineno": node.lineno, "loc": node_loc(node),
-                "doc": ascii_only((ast.get_docstring(node) or "").splitlines()[0] if ast.get_docstring(node) else ""),
-                "methods": methods
-            })
+            classes.append(_build_class_entry(node))
 
-    return {"path": str(path), "classes": classes, "functions": functions, "variables": variables,
-            "imports": sorted(set(imports)), "__all__": all_list}
+    return {
+        "classes": classes,
+        "functions": functions,
+        "variables": variables,
+        "imports": sorted(set(imports)),
+        "__all__": all_list,
+    }
 
 # ---------- Rendering ----------
 def md_line_escape(s: str) -> str:

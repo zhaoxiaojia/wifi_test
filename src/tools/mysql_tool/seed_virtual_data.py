@@ -32,6 +32,7 @@ if __package__ is None or __package__ == "":  # 当作脚本直接运行时补�
 
 from src.tools.mysql_tool import MySqlClient
 from src.tools.mysql_tool.schema import ensure_report_tables, get_table_spec
+from src.tools.mysql_tool.sql_writer import SqlWriter
 
 
 LOGGER = logging.getLogger("virtual_data_injector")
@@ -201,27 +202,6 @@ def _build_packet_loss_summary(rng: random.Random) -> str:
     return f"{lost}/{total}({loss_pct:.2f}%)"
 
 
-def _prepare_insert_statement(table: str, columns: Sequence[ColumnSpec]) -> str:
-    """
-    Prepare insert statement.
-
-    Parameters
-    ----------
-    table : Any
-        Name of the table in the database.
-    columns : Any
-        Sequence of column specifications.
-
-    Returns
-    -------
-    str
-        A value of type ``str``.
-    """
-    column_clause = ", ".join(f"`{col.name}`" for col in columns)
-    placeholder_clause = ", ".join("%s" for _ in columns)
-    return f"INSERT INTO `{table}` ({column_clause}) VALUES ({placeholder_clause})"
-
-
 def _truncate_tables(client: MySqlClient, tables: Sequence[str]) -> None:
     """
     Truncate tables.
@@ -276,7 +256,8 @@ def _insert_with_ids(
     List[int]
         A value of type ``List[int]``.
     """
-    sql = _prepare_insert_statement(table, columns)
+    writer = SqlWriter(table)
+    sql = writer.insert_statement([column.name for column in columns])
     inserted_ids: List[int] = []
     for row in rows:
         inserted_id = client.insert(sql, tuple(row))
@@ -338,7 +319,8 @@ def _insert_bulk(
     int
         A value of type ``int``.
     """
-    sql = _prepare_insert_statement(table, columns)
+    writer = SqlWriter(table)
+    sql = writer.insert_statement([column.name for column in columns])
     affected = 0
     for chunk in _chunked(rows, chunk_size=chunk_size):
         affected += client.executemany(sql, chunk)

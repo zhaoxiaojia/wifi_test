@@ -5,8 +5,6 @@ import math
 from pathlib import Path
 from typing import List, Optional
 
-import math
-
 import matplotlib
 
 matplotlib.use("Agg", force=True)
@@ -148,44 +146,19 @@ class PerformanceRvrChartGenerator(RvrChartLogic):
         steps = self._collect_step_labels(group)
         if not steps:
             return self._create_empty_chart(charts_dir, title, [], chart_type="line")
-        x_positions = list(range(len(steps)))
-        has_series = False
-        fig, ax = plt.subplots(figsize=(7.8, 4.4), dpi=CHART_DPI)
-        all_values: list[float] = []
+        fig, ax = self._build_chart_layout(chart_type="line", title=title)
         try:
-            for channel, channel_df in group.groupby("__channel_display__", dropna=False):
-                channel_name = channel or "Unknown"
-                values: list[Optional[float]] = []
-                for step in steps:
-                    subset = channel_df[channel_df["__step__"] == step]
-                    raw_values = [v for v in subset["__throughput_value__"].tolist() if v is not None]
-                    finite_values = [
-                        float(v)
-                        for v in raw_values
-                        if isinstance(v, (int, float))
-                    ]
-                    finite_values = [v for v in finite_values if pd.notna(v)]
-                    if finite_values:
-                        avg_value = sum(finite_values) / len(finite_values)
-                        values.append(avg_value)
-                        all_values.append(avg_value)
-                    else:
-                        values.append(None)
-                if any(v is not None for v in values):
-                    has_series = True
-                    ax.plot(
-                        x_positions,
-                        self._series_with_nan(values),
-                        marker="o",
-                        label=self._format_channel_series_label(channel_name),
-                    )
+            has_series, all_values = self._inject_series(
+                ax,
+                chart_type="line",
+                group=group,
+                steps=steps,
+            )
             if not has_series:
                 return self._create_empty_chart(charts_dir, title, steps, chart_type="line")
             self._configure_step_axis(ax, steps)
             ax.set_xlabel("attenuation (dB)")
             ax.set_ylabel("throughput (Mbps)")
-            ax.set_title(title, loc="left", pad=4)
-            ax.grid(alpha=0.3, linestyle="--")
             if all_values:
                 y_max = max(all_values)
                 y_min = min(all_values)
@@ -217,9 +190,7 @@ class PerformanceRvrChartGenerator(RvrChartLogic):
                     for text_item in legend.get_texts():
                         text_item.set_ha("center")
             fig.tight_layout(pad=0.6)
-            save_path = charts_dir / f"{self._safe_chart_name(title)}.png"
-            fig.savefig(save_path, dpi=fig.dpi)
-            return save_path
+            return self._export_chart(fig, charts_dir, title)
         except Exception:
             logging.exception("Failed to save RVR line chart: %s", title)
             return None
@@ -255,21 +226,21 @@ class PerformanceRvrChartGenerator(RvrChartLogic):
         angle_labels = [label for _, label in angle_positions]
         theta = [math.radians(value) for value in angle_values]
         theta_cycle = theta + [theta[0]] if theta else []
-        fig, ax = plt.subplots(figsize=(8.0, 6.2), dpi=CHART_DPI, subplot_kw={"projection": "polar"})
+        fig, ax = self._build_chart_layout(chart_type="polar", title=title)
         try:
-            ax.set_theta_zero_location("N")
-            ax.set_theta_direction(-1)
             ax.set_xticks(theta)
             ax.set_xticklabels(angle_labels)
             channel_series = self._collect_rvo_channel_series(group, angle_values)
             if not channel_series:
                 return self._create_empty_chart(charts_dir, title, [], chart_type="polar")
-            all_values: list[float] = []
-            for series_label, values in channel_series:
-                cycle_values = list(values)
-                cycle_values.append(values[0] if values else None)
-                ax.plot(theta_cycle, self._series_with_nan(cycle_values), marker="o", label=series_label)
-                all_values.extend([v for v in values if v is not None])
+            has_series, all_values = self._inject_series(
+                ax,
+                chart_type="polar",
+                channel_series=channel_series,
+                theta_cycle=theta_cycle,
+            )
+            if not has_series:
+                return self._create_empty_chart(charts_dir, title, [], chart_type="polar")
             if all_values:
                 max_value = max(all_values)
                 if max_value <= 0:
@@ -297,9 +268,7 @@ class PerformanceRvrChartGenerator(RvrChartLogic):
                     for text_item in legend.get_texts():
                         text_item.set_ha("left")
             fig.tight_layout(pad=0.4)
-            save_path = charts_dir / f"{self._safe_chart_name(title)}.png"
-            fig.savefig(save_path, dpi=fig.dpi, bbox_inches="tight", pad_inches=0.15)
-            return save_path
+            return self._export_chart(fig, charts_dir, title, bbox_inches="tight", pad_inches=0.15)
         except Exception:
             logging.exception("Failed to save RVO chart: %s", title)
             return None
@@ -376,6 +345,88 @@ class PerformanceRvrChartGenerator(RvrChartLogic):
             return None
         finally:
             plt.close(fig)
+
+    def _build_chart_layout(self, *, chart_type: str, title: str):
+        """Return a Matplotlib figure/axes pair configured for the chart type."""
+        chart_key = (chart_type or "line").lower()
+        if chart_key == "polar":
+            fig, ax = plt.subplots(figsize=(8.0, 6.2), dpi=CHART_DPI, subplot_kw={"projection": "polar"})
+            ax.set_theta_zero_location("N")
+            ax.set_theta_direction(-1)
+            ax.set_rlabel_position(135)
+            ax.grid(alpha=0.3, linestyle="--")
+            ax.set_title(title, pad=8)
+            return fig, ax
+        fig, ax = plt.subplots(figsize=(7.8, 4.4), dpi=CHART_DPI)
+        ax.set_title(title, loc="left", pad=4)
+        ax.grid(alpha=0.3, linestyle="--")
+        return fig, ax
+
+    def _inject_series(self, ax, *, chart_type: str, **kwargs):
+        """Plot data series on the axes and return (has_series, values)."""
+        chart_key = (chart_type or "line").lower()
+        if chart_key == "polar":
+            return self._plot_polar_series(ax, kwargs.get("channel_series"), kwargs.get("theta_cycle"))
+        return self._plot_line_series(ax, kwargs.get("group"), kwargs.get("steps"))
+
+    def _plot_line_series(self, ax, group: pd.DataFrame, steps: List[str]) -> tuple[bool, list[float]]:
+        """Render line-series per channel; returns (has_series, values)."""
+        if group is None or not len(group.index):
+            return False, []
+        x_positions = list(range(len(steps)))
+        all_values: list[float] = []
+        has_series = False
+        for channel, channel_df in group.groupby("__channel_display__", dropna=False):
+            channel_name = channel or "Unknown"
+            values: list[Optional[float]] = []
+            for step in steps:
+                subset = channel_df[channel_df["__step__"] == step]
+                raw_values = [v for v in subset["__throughput_value__"].tolist() if v is not None]
+                finite_values = [float(v) for v in raw_values if isinstance(v, (int, float))]
+                finite_values = [v for v in finite_values if pd.notna(v)]
+                if finite_values:
+                    avg_value = sum(finite_values) / len(finite_values)
+                    values.append(avg_value)
+                    all_values.append(avg_value)
+                else:
+                    values.append(None)
+            if any(v is not None for v in values):
+                has_series = True
+                ax.plot(
+                    x_positions,
+                    self._series_with_nan(values),
+                    marker="o",
+                    label=self._format_channel_series_label(channel_name),
+                )
+        return has_series, all_values
+
+    def _plot_polar_series(
+        self, ax, channel_series: list[tuple[str, list[Optional[float]]]] | None, theta_cycle: list[float] | None
+    ) -> tuple[bool, list[float]]:
+        """Render polar-series per channel; returns (has_series, values)."""
+        if not channel_series or not theta_cycle:
+            return False, []
+        all_values: list[float] = []
+        for series_label, values in channel_series:
+            cycle_values = list(values)
+            cycle_values.append(values[0] if values else None)
+            ax.plot(theta_cycle, self._series_with_nan(cycle_values), marker="o", label=series_label)
+            all_values.extend([v for v in values if v is not None])
+        return bool(channel_series), all_values
+
+    def _export_chart(
+        self,
+        fig,
+        charts_dir: Path,
+        title: str,
+        *,
+        bbox_inches: str | None = None,
+        pad_inches: float | None = None,
+    ) -> Path:
+        """Save the Matplotlib figure to disk and return the destination path."""
+        save_path = charts_dir / f"{self._safe_chart_name(title)}.png"
+        fig.savefig(save_path, dpi=fig.dpi, bbox_inches=bbox_inches, pad_inches=pad_inches)
+        return save_path
 
 
 def generate_rvr_charts(result_file: Path | str, *, charts_subdir: str | None = None) -> List[Path]:
