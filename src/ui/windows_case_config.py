@@ -1277,6 +1277,7 @@ class CaseConfigPage(CardWidget):
         self._check_point_group: QGroupBox | None = None
         self.router_obj = None
         self._enable_rvr_wifi: bool = False
+        self._router_config_active: bool = False
         self._locked_fields: set[str] | None = None
         self._current_case_path: str = ""
         self._last_editable_info: EditableInfo | None = None
@@ -2031,11 +2032,17 @@ class CaseConfigPage(CardWidget):
             preview: SwitchWifiCsvPreview | None = extras.get("router_preview")
             self._update_switch_wifi_preview(preview, router_path)
             sync_router_csv = extras.get("sync_router_csv")
-            if hasattr(sync_router_csv, "__call__"):
-                sync_router_csv(router_path, emit=use_router_value)
+            if sync_router_csv is not None:
+                try:
+                    sync_router_csv(router_path, emit=use_router_value)
+                except Exception as exc:
+                    logging.debug("sync_router_csv failed: %s", exc)
             apply_mode = extras.get("apply_mode")
-            if hasattr(apply_mode, "__call__"):
-                apply_mode(use_router_value)
+            if apply_mode is not None:
+                try:
+                    apply_mode(use_router_value)
+                except Exception as exc:
+                    logging.debug("apply_mode failed: %s", exc)
             return
 
         ac_cfg = data.get("ac", {})
@@ -2194,19 +2201,10 @@ class CaseConfigPage(CardWidget):
         router_combo.setProperty("switch_wifi_include_placeholder", False)
         router_layout.addWidget(router_combo)
 
-        router_controls = QHBoxLayout()
-        router_controls.setContentsMargins(0, 0, 0, 0)
-        router_controls.setSpacing(6)
-
         router_selector = ComboBox(router_box)
         router_selector.addItems(router_list.keys())
         router_selector.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        router_controls.addWidget(router_selector)
-
-        edit_router_btn = PushButton("Edit router Wi-Fi…", router_box)
-        router_controls.addWidget(edit_router_btn)
-
-        router_layout.addLayout(router_controls)
+        router_layout.addWidget(router_selector)
 
         router_preview = SwitchWifiCsvPreview(router_box)
         router_layout.addWidget(router_preview)
@@ -2322,6 +2320,7 @@ class CaseConfigPage(CardWidget):
             router_box.setVisible(checked)
             manual_box.setVisible(not checked)
             manual_editor.setEnabled(not checked)
+            self._router_config_active = checked
             if checked:
                 router_selector.setEnabled(True)
                 _sync_case_csv(path=_current_csv_selection(), emit=True)
@@ -2332,7 +2331,7 @@ class CaseConfigPage(CardWidget):
                     self.csvFileChanged.emit("")
             self._update_switch_wifi_preview(router_preview, _current_csv_selection())
             self._request_rebalance_for_panels(self._stability_panel)
-            router_mode_state["suppress_open"] = False
+            self._update_rvr_nav_button()
 
         def _on_csv_changed() -> None:
             """
@@ -2346,18 +2345,11 @@ class CaseConfigPage(CardWidget):
             if use_router_checkbox.isChecked():
                 _sync_case_csv(path=selection, emit=True)
 
-        def _handle_router_editor_request() -> None:
-            """Ensure router mode is active and open the RVR Wi-Fi editor."""
-            if not use_router_checkbox.isChecked():
-                use_router_checkbox.setChecked(True)
-            if not use_router_checkbox.isChecked():
-                return
-            _sync_case_csv(path=_current_csv_selection(), emit=True)
-            self._open_rvr_wifi_config()
-
         router_combo.currentIndexChanged.connect(lambda _index: _on_csv_changed())
         use_router_checkbox.toggled.connect(_apply_mode)
         edit_router_btn.clicked.connect(_handle_router_editor_request)
+
+        router_selector.setEnabled(use_router_checkbox.isChecked())
 
         router_selector.setEnabled(use_router_checkbox.isChecked())
 
@@ -2376,8 +2368,8 @@ class CaseConfigPage(CardWidget):
                 "manual_box": manual_box,
                 "manual_editor": manual_editor,
                 "router_selector": router_selector,
-                "router_edit_button": edit_router_btn,
                 "sync_router_csv": _sync_case_csv,
+                "use_router_checkbox": use_router_checkbox,
             },
         )
 
@@ -4156,8 +4148,20 @@ class CaseConfigPage(CardWidget):
         """根据当前状态更新 RVR 导航按钮可用性"""
         main_window = self.window()
         if hasattr(main_window, "rvr_nav_button"):
-            enabled = bool(getattr(self, "_enable_rvr_wifi", False) and self.selected_csv_path)
-            main_window.rvr_nav_button.setEnabled(enabled)
+            allow_case = bool(getattr(self, "_enable_rvr_wifi", False) and self.selected_csv_path)
+            router_mode = bool(getattr(self, "_router_config_active", False) and self.selected_csv_path)
+            main_window.rvr_nav_button.setEnabled(allow_case or router_mode)
+
+    def _open_rvr_wifi_config(self) -> None:
+        """Open the RVR Wi-Fi configuration page when the main window exposes it."""
+        main_window = self.window()
+        if main_window is None:
+            return
+        if hasattr(main_window, "show_rvr_wifi_config"):
+            try:
+                main_window.show_rvr_wifi_config()
+            except Exception as exc:  # pragma: no cover - defensive log only
+                logging.debug("show_rvr_wifi_config failed: %s", exc)
 
     def _open_rvr_wifi_config(self) -> None:
         """Open the RVR Wi-Fi configuration page when the main window exposes it."""
@@ -5243,6 +5247,8 @@ class CaseConfigPage(CardWidget):
         self._last_editable_info = snapshot
         self.set_fields_editable(snapshot.fields)
         self._enable_rvr_wifi = snapshot.enable_rvr_wifi
+        if not snapshot.enable_rvr_wifi:
+            self._router_config_active = False
         if hasattr(self, "csv_combo"):
             if snapshot.enable_csv:
                 self.csv_combo.setEnabled(True)
@@ -5253,6 +5259,7 @@ class CaseConfigPage(CardWidget):
         else:
             if not snapshot.enable_csv:
                 self._set_selected_csv(None, sync_combo=False)
+        self._update_rvr_nav_button()
 
     def _restore_editable_state(self) -> None:
         """
