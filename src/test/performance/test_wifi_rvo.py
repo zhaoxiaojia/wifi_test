@@ -89,17 +89,50 @@ def _initial_step_size() -> int:
     return max_gap or 1
 
 
-def _adjust_rssi_to_target(target_rssi: int, base_db: Optional[int]) -> Tuple[int, Optional[int]]:
-    max_iterations = 30
+def _resolve_target_rssi(base_db: Optional[int]) -> Tuple[int, int, int]:
     applied_db = base_db if base_db is not None else _get_current_attenuation()
     applied_db = _clamp_db(applied_db)
     step = _initial_step_size()
+    current_rssi = pytest.dut.get_rssi()
+    return current_rssi, applied_db, step
+
+
+def _step_att_db(applied_db: int, step: int, diff: int, attempt: int, target_rssi: int) -> Tuple[int, bool]:
+    direction = 1 if diff > 0 else -1
+    next_db = max(0, min(110, applied_db + direction * step))
+    if next_db == applied_db:
+        return applied_db, False
     logging.info(
-        'Start adjusting attenuation to %s dB for target RSSI %s dBm',
-        applied_db,
+        'Adjust attenuation to %s dB (attempt %s) for RSSI diff=%s dB (target %s dBm)',
+        next_db,
+        attempt + 1,
+        diff,
         target_rssi,
     )
+    try:
+        rf_tool.execute_rf_cmd(next_db)
+    except Exception as exc:
+        logging.warning('Failed to execute rf command %s: %s', next_db, exc)
+        return applied_db, False
+    return next_db, True
 
+
+def _record_adjustment(next_db: int, target_rssi: int) -> Tuple[int, Optional[int]]:
+    time.sleep(3)
+    measured = pytest.dut.get_rssi()
+    if measured == -1:
+        return measured, None
+    new_diff = measured - target_rssi
+    logging.info(
+        'Measured RSSI %s dBm (diff %s dB) after attenuation %s dB',
+        measured,
+        new_diff,
+        next_db,
+    )
+    return measured, new_diff
+
+
+def _adjust_rssi_to_target(target_rssi: int, base_db: Optional[int]) -> Tuple[int, Optional[int]]:
     flags = get_debug_flags()
     if flags.skip_corner_rf:
         simulated_rssi = pytest.dut.get_rssi()
@@ -109,22 +142,26 @@ def _adjust_rssi_to_target(target_rssi: int, base_db: Optional[int]) -> Tuple[in
             reason,
             simulated_rssi,
         )
-        return simulated_rssi, applied_db
+        return simulated_rssi, _clamp_db(base_db if base_db is not None else _get_current_attenuation())
 
-    current_rssi = pytest.dut.get_rssi()
+    current_rssi, applied_db, step = _resolve_target_rssi(base_db)
+    logging.info(
+        'Start adjusting attenuation to %s dB for target RSSI %s dBm',
+        applied_db,
+        target_rssi,
+    )
     if current_rssi == -1:
         return current_rssi, applied_db
 
+    max_iterations = 30
     for attempt in range(max_iterations):
         diff = current_rssi - target_rssi
         logging.info('current rssi %s target rssi %s', current_rssi, target_rssi)
         if diff == 0:
             break
 
-        direction = 1 if diff > 0 else -1
-        next_db = applied_db + direction * step
-        next_db = max(0, min(110, next_db))
-        if next_db == applied_db:
+        next_db, changed = _step_att_db(applied_db, step, diff, attempt, target_rssi)
+        if not changed:
             if step > 1:
                 step = 1
                 continue
@@ -135,44 +172,20 @@ def _adjust_rssi_to_target(target_rssi: int, base_db: Optional[int]) -> Tuple[in
             )
             break
 
-        logging.info(
-            'Adjust attenuation to %s dB (attempt %s) for RSSI %s dBm -> target %s dBm',
-            next_db,
-            attempt + 1,
-            current_rssi,
-            target_rssi,
-        )
-        try:
-            rf_tool.execute_rf_cmd(next_db)
-        except Exception as exc:
-            logging.warning('Failed to execute rf command %s: %s', next_db, exc)
-            break
-
-        time.sleep(3)
-        measured = pytest.dut.get_rssi()
-        if measured == -1:
-            current_rssi = measured
-            applied_db = next_db
-            break
-
-        new_diff = measured - target_rssi
-        logging.info(
-            'Measured RSSI %s dBm (diff %s dB) after attenuation %s dB',
-            measured,
-            new_diff,
-            next_db,
-        )
-
+        measured, new_diff = _record_adjustment(next_db, target_rssi)
         applied_db = next_db
         current_rssi = measured
 
+        if measured == -1:
+            break
         if new_diff == 0:
             break
 
-        if abs(new_diff) >= abs(diff) and step > 1:
-            step = max(1, step // 2)
-        elif step > 1 and abs(new_diff) <= 1:
-            step = 1
+        if new_diff is not None:
+            if abs(new_diff) >= abs(diff) and step > 1:
+                step = max(1, step // 2)
+            elif step > 1 and abs(new_diff) <= 1:
+                step = 1
 
     logging.info('Final RSSI %s dBm with attenuation %s dB', current_rssi, applied_db)
     return current_rssi, applied_db
