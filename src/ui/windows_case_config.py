@@ -2030,9 +2030,6 @@ class CaseConfigPage(CardWidget):
             extras = entry.extras if isinstance(entry.extras, dict) else {}
             preview: SwitchWifiCsvPreview | None = extras.get("router_preview")
             self._update_switch_wifi_preview(preview, router_path)
-            router_state = extras.get("router_mode_state")
-            if isinstance(router_state, dict):
-                router_state["suppress_open"] = True
             sync_router_csv = extras.get("sync_router_csv")
             if hasattr(sync_router_csv, "__call__"):
                 sync_router_csv(router_path, emit=use_router_value)
@@ -2241,6 +2238,9 @@ class CaseConfigPage(CardWidget):
             data.get(SWITCH_WIFI_ROUTER_CSV_FIELD)
         )
         self._populate_csv_combo(router_combo, router_path, include_placeholder=False)
+        placeholder_index = router_combo.findData("")
+        if placeholder_index >= 0 and router_combo.count() > 1:
+            router_combo.removeItem(placeholder_index)
         self._register_switch_wifi_csv_combo(router_combo)
         self._update_switch_wifi_preview(router_preview, router_path)
 
@@ -2312,11 +2312,6 @@ class CaseConfigPage(CardWidget):
                 self.csvFileChanged.emit(self.selected_csv_path or "")
             return changed
 
-        def _handle_router_mode_enabled(*, path: str | None = None, open_editor: bool) -> None:
-            _sync_case_csv(path, emit=True)
-            if open_editor and self.selected_csv_path:
-                self._open_rvr_wifi_config()
-
         def _apply_mode(checked: bool) -> None:
             """
             Execute the apply mode routine.
@@ -2328,9 +2323,8 @@ class CaseConfigPage(CardWidget):
             manual_box.setVisible(not checked)
             manual_editor.setEnabled(not checked)
             if checked:
-                open_editor = not router_mode_state.get("suppress_open", False)
-                _handle_router_mode_enabled(path=_current_csv_selection(), open_editor=open_editor)
                 router_selector.setEnabled(True)
+                _sync_case_csv(path=_current_csv_selection(), emit=True)
             else:
                 router_selector.setEnabled(False)
                 cleared = self._set_selected_csv(None, sync_combo=False)
@@ -2350,15 +2344,16 @@ class CaseConfigPage(CardWidget):
             selection = _current_csv_selection()
             self._update_switch_wifi_preview(router_preview, selection)
             if use_router_checkbox.isChecked():
-                _handle_router_mode_enabled(path=selection, open_editor=False)
+                _sync_case_csv(path=selection, emit=True)
 
         def _handle_router_editor_request() -> None:
             """Ensure router mode is active and open the RVR Wi-Fi editor."""
             if not use_router_checkbox.isChecked():
-                router_mode_state["suppress_open"] = False
                 use_router_checkbox.setChecked(True)
+            if not use_router_checkbox.isChecked():
                 return
-            _handle_router_mode_enabled(path=_current_csv_selection(), open_editor=True)
+            _sync_case_csv(path=_current_csv_selection(), emit=True)
+            self._open_rvr_wifi_config()
 
         router_combo.currentIndexChanged.connect(lambda _index: _on_csv_changed())
         use_router_checkbox.toggled.connect(_apply_mode)
@@ -2383,7 +2378,6 @@ class CaseConfigPage(CardWidget):
                 "router_selector": router_selector,
                 "router_edit_button": edit_router_btn,
                 "sync_router_csv": _sync_case_csv,
-                "router_mode_state": router_mode_state,
             },
         )
 
