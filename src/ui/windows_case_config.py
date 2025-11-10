@@ -2018,7 +2018,9 @@ class CaseConfigPage(CardWidget):
                 data.get(SWITCH_WIFI_ROUTER_CSV_FIELD)
             )
             if isinstance(router_combo, ComboBox):
-                self._populate_csv_combo(router_combo, router_path, include_placeholder=True)
+                include_placeholder = router_combo.property("switch_wifi_include_placeholder")
+                use_placeholder = True if include_placeholder is None else bool(include_placeholder)
+                self._populate_csv_combo(router_combo, router_path, include_placeholder=use_placeholder)
             if isinstance(manual_widget, SwitchWifiManualEditor):
                 manual_entries = data.get(SWITCH_WIFI_MANUAL_ENTRIES_FIELD)
                 if isinstance(manual_entries, Sequence) and not isinstance(manual_entries, (str, bytes)):
@@ -2028,8 +2030,11 @@ class CaseConfigPage(CardWidget):
             extras = entry.extras if isinstance(entry.extras, dict) else {}
             preview: SwitchWifiCsvPreview | None = extras.get("router_preview")
             self._update_switch_wifi_preview(preview, router_path)
+            sync_router_csv = extras.get("sync_router_csv")
+            if hasattr(sync_router_csv, "__call__"):
+                sync_router_csv(router_path, emit=use_router_value)
             apply_mode = extras.get("apply_mode")
-            if callable(apply_mode):
+            if hasattr(apply_mode, "__call__"):
                 apply_mode(use_router_value)
             return
 
@@ -2184,12 +2189,24 @@ class CaseConfigPage(CardWidget):
         router_layout.setContentsMargins(8, 8, 8, 8)
         router_layout.setSpacing(6)
 
-        router_label = QLabel("Select config csv file", router_box)
-        router_layout.addWidget(router_label)
-
         router_combo = ComboBox(router_box)
         router_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        router_combo.setProperty("switch_wifi_include_placeholder", False)
         router_layout.addWidget(router_combo)
+
+        router_controls = QHBoxLayout()
+        router_controls.setContentsMargins(0, 0, 0, 0)
+        router_controls.setSpacing(6)
+
+        router_selector = ComboBox(router_box)
+        router_selector.addItems(router_list.keys())
+        router_selector.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        router_controls.addWidget(router_selector)
+
+        edit_router_btn = PushButton("Edit router Wi-Fi…", router_box)
+        router_controls.addWidget(edit_router_btn)
+
+        router_layout.addLayout(router_controls)
 
         router_preview = SwitchWifiCsvPreview(router_box)
         router_layout.addWidget(router_preview)
@@ -2220,9 +2237,45 @@ class CaseConfigPage(CardWidget):
         router_path = self._resolve_csv_config_path(
             data.get(SWITCH_WIFI_ROUTER_CSV_FIELD)
         )
-        self._populate_csv_combo(router_combo, router_path, include_placeholder=True)
+        self._populate_csv_combo(router_combo, router_path, include_placeholder=False)
+        placeholder_index = router_combo.findData("")
+        if placeholder_index >= 0 and router_combo.count() > 1:
+            router_combo.removeItem(placeholder_index)
         self._register_switch_wifi_csv_combo(router_combo)
-        self._update_switch_wifi_preview(router_preview, router_combo.currentData())
+        self._update_switch_wifi_preview(router_preview, router_path)
+
+        primary_router_combo = getattr(self, "router_name_combo", None)
+        if isinstance(primary_router_combo, ComboBox):
+            with QSignalBlocker(router_selector):
+                router_selector.setCurrentText(primary_router_combo.currentText())
+        else:
+            router_cfg = self.config.get("router") if isinstance(self.config, Mapping) else {}
+            if isinstance(router_cfg, Mapping):
+                default_router = str(router_cfg.get("name", ""))
+                if default_router:
+                    with QSignalBlocker(router_selector):
+                        router_selector.setCurrentText(default_router)
+
+        def _sync_router_selector(name: str) -> None:
+            """Keep the router selector aligned with the primary router combo."""
+            with QSignalBlocker(router_selector):
+                router_selector.setCurrentText(name)
+
+        if isinstance(primary_router_combo, ComboBox):
+            primary_router_combo.currentTextChanged.connect(_sync_router_selector)
+
+        def _on_router_model_selected(name: str) -> None:
+            """Propagate router model changes back to the main router combo."""
+            base_combo = getattr(self, "router_name_combo", None)
+            if isinstance(base_combo, ComboBox):
+                with QSignalBlocker(base_combo):
+                    base_combo.setCurrentText(name)
+                try:
+                    self.on_router_changed(name)
+                except Exception as exc:  # pragma: no cover - defensive log only
+                    logging.debug("router selector sync failed: %s", exc)
+
+        router_selector.currentTextChanged.connect(_on_router_model_selected)
 
         widgets: dict[str, QWidget] = {}
         widgets[
@@ -2250,6 +2303,13 @@ class CaseConfigPage(CardWidget):
             text_value = router_combo.currentText()
             return text_value if isinstance(text_value, str) and text_value else None
 
+        def _sync_case_csv(path: str | None = None, *, emit: bool = True) -> bool:
+            target = path if path is not None else _current_csv_selection()
+            changed = self._set_selected_csv(target, sync_combo=False)
+            if changed and emit:
+                self.csvFileChanged.emit(self.selected_csv_path or "")
+            return changed
+
         def _apply_mode(checked: bool) -> None:
             """
             Execute the apply mode routine.
@@ -2261,7 +2321,14 @@ class CaseConfigPage(CardWidget):
             manual_box.setVisible(not checked)
             manual_editor.setEnabled(not checked)
             if checked:
-                self._update_switch_wifi_preview(router_preview, _current_csv_selection())
+                router_selector.setEnabled(True)
+                _sync_case_csv(path=_current_csv_selection(), emit=True)
+            else:
+                router_selector.setEnabled(False)
+                cleared = self._set_selected_csv(None, sync_combo=False)
+                if cleared:
+                    self.csvFileChanged.emit("")
+            self._update_switch_wifi_preview(router_preview, _current_csv_selection())
             self._request_rebalance_for_panels(self._stability_panel)
 
         def _on_csv_changed() -> None:
@@ -2271,11 +2338,25 @@ class CaseConfigPage(CardWidget):
             This method encapsulates the logic necessary to perform its function.
             Refer to the implementation for details on parameters and return values.
             """
+            selection = _current_csv_selection()
+            self._update_switch_wifi_preview(router_preview, selection)
             if use_router_checkbox.isChecked():
-                self._update_switch_wifi_preview(router_preview, _current_csv_selection())
+                _sync_case_csv(path=selection, emit=True)
+
+        def _handle_router_editor_request() -> None:
+            """Ensure router mode is active and open the RVR Wi-Fi editor."""
+            if not use_router_checkbox.isChecked():
+                use_router_checkbox.setChecked(True)
+            if not use_router_checkbox.isChecked():
+                return
+            _sync_case_csv(path=_current_csv_selection(), emit=True)
+            self._open_rvr_wifi_config()
 
         router_combo.currentIndexChanged.connect(lambda _index: _on_csv_changed())
         use_router_checkbox.toggled.connect(_apply_mode)
+        edit_router_btn.clicked.connect(_handle_router_editor_request)
+
+        router_selector.setEnabled(use_router_checkbox.isChecked())
 
         entry = ScriptConfigEntry(
             group=group,
@@ -2291,6 +2372,9 @@ class CaseConfigPage(CardWidget):
                 "router_box": router_box,
                 "manual_box": manual_box,
                 "manual_editor": manual_editor,
+                "router_selector": router_selector,
+                "router_edit_button": edit_router_btn,
+                "sync_router_csv": _sync_case_csv,
             },
         )
 
@@ -3810,6 +3894,8 @@ class CaseConfigPage(CardWidget):
         """
         if combo in self._switch_wifi_csv_combos:
             return
+        if combo.property("switch_wifi_include_placeholder") is None:
+            combo.setProperty("switch_wifi_include_placeholder", True)
         self._switch_wifi_csv_combos.append(combo)
 
         def _cleanup(_obj: QObject | None = None, *, target: ComboBox = combo) -> None:
@@ -4000,7 +4086,9 @@ class CaseConfigPage(CardWidget):
                 self._unregister_switch_wifi_csv_combo(combo)
                 continue
             selected = data if isinstance(data, str) and data else combo.currentText()
-            self._populate_csv_combo(combo, selected, include_placeholder=True)
+            include_placeholder = combo.property("switch_wifi_include_placeholder")
+            use_placeholder = True if include_placeholder is None else bool(include_placeholder)
+            self._populate_csv_combo(combo, selected, include_placeholder=use_placeholder)
 
     def _load_switch_wifi_entries(self, csv_path: str | None) -> list[dict[str, str]]:
         """
@@ -4067,6 +4155,17 @@ class CaseConfigPage(CardWidget):
         if hasattr(main_window, "rvr_nav_button"):
             enabled = bool(getattr(self, "_enable_rvr_wifi", False) and self.selected_csv_path)
             main_window.rvr_nav_button.setEnabled(enabled)
+
+    def _open_rvr_wifi_config(self) -> None:
+        """Open the RVR Wi-Fi configuration page when the main window exposes it."""
+        main_window = self.window()
+        if main_window is None:
+            return
+        if hasattr(main_window, "show_rvr_wifi_config"):
+            try:
+                main_window.show_rvr_wifi_config()
+            except Exception as exc:  # pragma: no cover - defensive log only
+                logging.debug("show_rvr_wifi_config failed: %s", exc)
 
     def _case_path_to_display(self, case_path: str) -> str:
         """
