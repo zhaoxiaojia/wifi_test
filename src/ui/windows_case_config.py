@@ -99,8 +99,17 @@ try:
 except Exception:  # pragma: no cover - 运行环境缺失时退化为自定义指示器
     StepView = None
 from .animated_tree_view import AnimatedTreeView
-from .theme import apply_theme, apply_font_and_selection, apply_groupbox_style, CASE_TREE_FONT_SIZE_PX, \
-    STEP_LABEL_FONT_PIXEL_SIZE
+from .theme import (
+    apply_theme,
+    apply_font_and_selection,
+    apply_groupbox_style,
+    CASE_TREE_FONT_SIZE_PX,
+    STEP_LABEL_FONT_PIXEL_SIZE,
+    SWITCH_WIFI_TABLE_HEADER_BG,
+    SWITCH_WIFI_TABLE_HEADER_FG,
+    SWITCH_WIFI_TABLE_SELECTION_BG,
+    SWITCH_WIFI_TABLE_SELECTION_FG,
+)
 
 STEP_LABEL_SPACING: Annotated[int, "Spacing in pixels between step labels in the GUI"] = 16
 USE_QFLUENT_STEP_VIEW: Annotated[bool, "Whether to use the QFluent StepView component if available"] = False
@@ -715,6 +724,13 @@ class SwitchWifiManualEditor(QWidget):
         self.table.setSelectionMode(QAbstractItemView.SingleSelection)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.setFocusPolicy(Qt.NoFocus)
+        apply_font_and_selection(
+            self.table,
+            header_bg=SWITCH_WIFI_TABLE_HEADER_BG,
+            header_fg=SWITCH_WIFI_TABLE_HEADER_FG,
+            sel_bg=SWITCH_WIFI_TABLE_SELECTION_BG,
+            sel_text=SWITCH_WIFI_TABLE_SELECTION_FG,
+        )
         layout.addWidget(self.table)
 
         form = QFormLayout()
@@ -986,6 +1002,13 @@ class SwitchWifiCsvPreview(QTableWidget):
         self.setSelectionMode(QAbstractItemView.NoSelection)
         self.setFocusPolicy(Qt.NoFocus)
         self.setAlternatingRowColors(False)
+        apply_font_and_selection(
+            self,
+            header_bg=SWITCH_WIFI_TABLE_HEADER_BG,
+            header_fg=SWITCH_WIFI_TABLE_HEADER_FG,
+            sel_bg=SWITCH_WIFI_TABLE_SELECTION_BG,
+            sel_text=SWITCH_WIFI_TABLE_SELECTION_FG,
+        )
 
     def update_entries(self, entries: Sequence[Mapping[str, Any]] | None) -> None:
         """
