@@ -166,53 +166,111 @@ class roku_ctrl(Roku):
                                                  ['Lookup album art on Web - [On]'], ['Display format - [Grid]'],
                                                  ['Autorun - [On]'], ['OK']]
 
+    def _focus_from_secret_endpoint(self) -> Optional[str]:
+        """Query the secret focus endpoint and return the currently focused label."""
+        for _ in range(5):
+            url = f'http://{self.ip}:8060/query/focus/secret'
+            response = requests.get(url).content.decode('utf-8')
+            if 'RoScreenWrapper' in response:
+                self.home(time=1)
+                continue
+            if 'SGScreen.RMPScene.ComponentController_0.ViewManager_0.ViewStack_0.MediaView_0.Video_' in response:
+                logging.debug("Skip focus lookup on media view stack")
+                break
+            if 'SGScreen.RMPScene.ComponentController_0.ViewManager_0.ViewStack_0.GridView_0.RenderableNode_0.ZoomRowList_0.RenderableNode_' in response:
+                logging.debug("Skip focus lookup on zoom row list")
+                break
+            focused = re.findall(r'<text>(.*?)</text>', response)
+            if focused:
+                return focused[0]
+        return None
+
+    def _focus_from_xml_tree(self, filename: str) -> Optional[str]:
+        """Extract the focused label by inspecting the current screen XML tree."""
+        root = self._get_xml_root(filename)
+        node_list = []
+        for child in root:
+            for node in child.iter():
+                label = self._extract_label_from_node(node)
+                if label:
+                    return label
+                if node.tag == 'StandardGridItemComponent' and node.attrib.get('focused') == 'true':
+                    node_list.append(node)
+        if node_list:
+            layout = node_list[-1].find('LayoutGroup')
+            if layout is not None:
+                label_node = layout.find('Label')
+                if label_node is not None and label_node.attrib.get('text'):
+                    return label_node.attrib['text']
+        return None
+
+    def _extract_label_from_node(self, node) -> Optional[str]:
+        """Return the text of the focused node if available."""
+        if node.tag == 'ItemDetailsView':
+            for child in node.iter('Label'):
+                if child.attrib.get('name') == 'title' and child.attrib.get('text'):
+                    text = child.attrib['text']
+                    return text.split('|')[0].strip() if '|' in text else text
+        if (
+            node.tag == 'RenderableNode'
+            and node.attrib.get('focused') == 'true'
+            and node.attrib.get('uiElementId') != 'overlay-root'
+        ):
+            for tag in ('RadioButtonItem', 'AVRadioButtonItem', 'LabelListNativeItem'):
+                container = node.find(tag)
+                if container is not None:
+                    scrolling = container.find('ScrollingLabel')
+                    if scrolling is not None:
+                        label = scrolling.find('Label')
+                        if label is not None and label.attrib.get('text'):
+                            return label.attrib['text']
+        if node.tag == 'Button' and node.attrib.get('focused') == 'true':
+            label = node.find('Label')
+            if label is not None:
+                return label.attrib.get('text')
+        return None
+
     def __getattr__(self, name):
-
         """
-        Execute the getattr   routine.
+        Dynamically resolve Roku remote commands and expose them as callables.
 
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
+        Each attribute lookup is translated into a callable that ultimately
+        delegates to :meth:`_dispatch_roku_command`, keeping the command
+        resolution logic in a single place.
         """
 
         def command(*args, **kwargs):
-            """
-            Execute the command routine.
+            self._dispatch_roku_command(name, args, kwargs)
 
-            This method encapsulates the logic necessary to perform its function.
-            Refer to the implementation for details on parameters and return values.
-            """
-            if name in RokuConst.SENSORS:
-                keys = [f"{name}.{axis}" for axis in ("x", "y", "z")]
-                params = dict(zip(keys, args))
-                self.input(params)
-            elif name == "literal":
-                for char in args[0]:
-                    path = f"/keypress/{RokuConst.COMMANDS[name]}_{quote_plus(char)}"
-                    self._post(path)
-            elif name == "search":
-                path = "/search/browse"
-                params = {k.replace("_", "-"): v for k, v in kwargs.items()}
-                self._post(path, params=params)
+        return command
+
+    def _dispatch_roku_command(self, name, args, kwargs):
+        """Execute a Roku remote command or sensor input."""
+        if name in RokuConst.SENSORS:
+            keys = [f"{name}.{axis}" for axis in ("x", "y", "z")]
+            params = dict(zip(keys, args))
+            self.input(params)
+        elif name == "literal":
+            for char in args[0]:
+                path = f"/keypress/{RokuConst.COMMANDS[name]}_{quote_plus(char)}"
+                self._post(path)
+        elif name == "search":
+            path = "/search/browse"
+            params = {k.replace("_", "-"): v for k, v in kwargs.items()}
+            self._post(path, params=params)
+        else:
+            if len(args) > 0 and args[0] in {"keydown", "keyup"}:
+                path = f"/{args[0]}/{RokuConst.COMMANDS[name]}"
+                logging.info("key %s", args[0])
             else:
-                if len(args) > 0 and (args[0] == "keydown" or args[0] == "keyup"):
-                    path = f"/{args[0]}/{RokuConst.COMMANDS[name]}"
-                    logging.info(f'key {args[0]}')
-                else:
-                    path = f"/keypress/{RokuConst.COMMANDS[name]}"
-                    logging.info(f'Press key {RokuConst.COMMANDS[name]}')
-                try:
-                    self._post(path)
-                except Exception:
-                    logging.warning("Can't touch roku server")
-            if 'time' in kwargs.keys():
-                time.sleep(kwargs['time'])
-
-        try:
-            return command
-        except Exception:
-            time.sleep(0.5)
-            return command
+                path = f"/keypress/{RokuConst.COMMANDS[name]}"
+                logging.info("Press key %s", RokuConst.COMMANDS[name])
+            try:
+                self._post(path)
+            except Exception:
+                logging.warning("Can't touch roku server")
+        if "time" in kwargs:
+            time.sleep(kwargs["time"])
 
     def capture_screen(self, filename):
         """
@@ -251,64 +309,15 @@ class roku_ctrl(Roku):
         Refer to the implementation for details on parameters and return values.
         """
 
+        focus = None
         if not secret:
-            for _ in range(5):
-                url = f'http://{self.ip}:8060/query/focus/secret'
-                r = requests.get(url).content.decode('utf-8')
-                if 'RoScreenWrapper' in r:
-                    self.home(time=1)
-                    continue
-                if 'SGScreen.RMPScene.ComponentController_0.ViewManager_0.ViewStack_0.MediaView_0.Video_' in r:
-                    logging.debug("Don't try to  get index in this way")
-                    break
-                if 'SGScreen.RMPScene.ComponentController_0.ViewManager_0.ViewStack_0.GridView_0.RenderableNode_0.ZoomRowList_0.RenderableNode_' in r:
-                    logging.debug("Don't try to get index in this way")
-                    break
-
-                focused = re.findall(r'<text>(.*?)</text>', r)
-                if focused:
-                    self.ir_current_location = focused[0]
-                    return focused[0]
-            else:
-                return ''
-        node_list = []
-        for child in self._get_xml_root():
-            for child_1 in child.iter():
-                if child_1.tag == 'ItemDetailsView':
-                    for child_2 in child_1.iter():
-                        if child_2.tag == 'Label' and child_2.attrib['name'] == 'title':
-                            if child_2.attrib['text']:
-                                if '|' in child_2.attrib['text']:
-                                    self.ir_current_location = child_2.attrib['text'].split('|')[0].strip()
-                                else:
-                                    self.ir_current_location = child_2.attrib['text']
-                                return self.ir_current_location
-                if child_1.tag == 'RenderableNode' and child_1.attrib.get('focused') and child_1.attrib[
-                    'focused'] == 'true':
-                    if child_1.attrib.get('uiElementId') and child_1.attrib['uiElementId'] != 'overlay-root':
-                        try:
-                            if child_1.find('RadioButtonItem'):
-                                self.ir_current_location = \
-                                    child_1.find('RadioButtonItem').find('ScrollingLabel').find('Label').attrib['text']
-                            if child_1.find('AVRadioButtonItem'):
-                                self.ir_current_location = \
-                                    child_1.find('AVRadioButtonItem').find('ScrollingLabel').find('Label').attrib[
-                                        'text']
-                            if child_1.find('LabelListNativeItem'):
-                                self.ir_current_location = \
-                                    child_1.find('LabelListNativeItem').find('ScrollingLabel').find('Label').attrib[
-                                        'text']
-                        except AttributeError:
-                            continue
-                        return self.ir_current_location
-                if child_1.tag == 'Button' and child_1.attrib.get('focused') and child_1.attrib['focused'] == 'true':
-                    self.ir_current_location = child_1.find('Label').attrib['text']
-                    return self.ir_current_location
-                if child_1.tag == 'StandardGridItemComponent':
-                    if child_1.attrib.get('focused') and child_1.attrib['focused'] == 'true':
-                        node_list.append(child_1)
-        if node_list:
-            self.ir_current_location = node_list[-1].find('LayoutGroup').find('Label').attrib['text']
+            focus = self._focus_from_secret_endpoint()
+        if focus is None:
+            focus = self._focus_from_xml_tree(filename=filename)
+        if focus:
+            self.ir_current_location = focus
+            return focus
+        return ''
 
     def _get_media_process_bar(self, filename='dumpsys.xml'):
         """
@@ -347,6 +356,32 @@ class roku_ctrl(Roku):
         logging.debug(f"Can't find such this widget {name}")
         return None, None
 
+    def _move_vertical(self, current_row: int, target_row: int, total_rows: int) -> None:
+        """Move the focus vertically between rows."""
+        step = abs(target_row - current_row)
+        if step == 0 or total_rows <= 0:
+            return
+        wrap_steps = current_row + total_rows - target_row
+        if step > total_rows / 2:
+            for _ in range(wrap_steps):
+                self.up(time=1)
+        else:
+            for _ in range(step):
+                self.down(time=1)
+
+    def _move_horizontal(self, current_col: int, target_col: int, row_length: int) -> None:
+        """Move the focus horizontally within a row."""
+        step = abs(target_col - current_col)
+        if step == 0 or row_length <= 0:
+            return
+        wrap_steps = current_col + row_length - target_col
+        if step > row_length / 2:
+            for _ in range(wrap_steps):
+                self.left(time=1)
+        else:
+            for _ in range(step):
+                self.left(time=1)
+
     def ir_navigation(self, target, item, secret=False, fuz_match=False):
         """
         Execute the ir navigation routine.
@@ -368,19 +403,8 @@ class roku_ctrl(Roku):
                 logging.info(f'navigation {target} done')
                 return True
 
-            if x_step > len(array) / 2:
-                for i in range(current_index[0] + len(array) - target_index[0]):
-                    self.up(time=1)
-            else:
-                for i in range(x_step):
-                    self.down(time=1)
-
-            if y_step > list_len / 2:
-                for i in range(current_index[1] + len(list_len) - target_index[1]):
-                    self.left(time=1)
-            else:
-                for i in range(y_step):
-                    self.left(time=1)
+            self._move_vertical(current_index[0], target_index[0], len(array))
+            self._move_horizontal(current_index[1], target_index[1], list_len)
 
         return self.ir_navigation(target, item, secret=secret, fuz_match=fuz_match)
 
@@ -711,39 +735,45 @@ class roku_ctrl(Roku):
         Refer to the implementation for details on parameters and return values.
         """
         import copy
+
         target_list = copy.deepcopy(re_list)
-        # tl = TelnetTool(self.ip, pytest.dut.wildcard)
         pytest.dut.checkoutput('\x03')
         pytest.dut.checkoutput('\x03')
         pytest.dut.checkoutput('logcat')
-        start = time.time()
-        temp = []
-        while (time.time() - start < timeout):
-            data = pytest.dut.tn.read_eager()
-            if data:
-                data = data.decode()
-            else:
-                continue
-            if '\n' in data:
-                for i in data.split('\n')[:-1]:
-                    temp.append(i)
-                    info = ''.join(temp)
-                    with open('logcat.log', 'a') as f:
-                        f.write(info)
+        self._capture_logcat_stream(timeout)
 
-                    temp.clear()
-                temp.append(data.split('\n')[-1])
-            else:
-                temp.append(data)
-        with open('logcat.log', 'r') as f:
-            for i in f.readlines():
+        with open('logcat.log', 'r') as handle:
+            for line in handle.readlines():
                 if not target_list:
                     return
-                if target_list and re.findall(target_list[0], i):
-                    logging.info(i)
+                if re.findall(target_list[0], line):
+                    logging.info(line.strip())
                     target_list.pop(0)
+        assert False, "Can't catch target log"
+
+    def _capture_logcat_stream(self, timeout: int) -> None:
+        """Capture logcat output for the specified timeout window."""
+        start = time.time()
+        buffer: list[str] = []
+        while time.time() - start < timeout:
+            data = pytest.dut.tn.read_eager()
+            if not data:
+                continue
+            try:
+                decoded = data.decode()
+            except Exception:
+                continue
+            if '\n' in decoded:
+                lines = decoded.split('\n')
+                for entry in lines[:-1]:
+                    buffer.append(entry)
+                    info = ''.join(buffer)
+                    with open('logcat.log', 'a', encoding='utf-8') as handle:
+                        handle.write(info)
+                    buffer.clear()
+                buffer.append(lines[-1])
             else:
-                assert False, "Can't catch target log"
+                buffer.append(decoded)
 
     def catch_err(self, filename, tag_list):
         """
@@ -784,51 +814,45 @@ class roku_ctrl(Roku):
         """
         logging.info(f'hdmirx for expect : {kwargs}')
 
-        def match(info):
-            """
-            Execute the match routine.
+        snapshot = self._fetch_hdmirx_snapshot()
+        logging.info(snapshot)
+        info_lines = [line.strip() for line in snapshot.split('\n') if self._is_hdmirx_attribute(line)]
+        logging.info(' ,'.join(info_lines[:5]))
+        logging.info(' ,'.join(info_lines[5:]))
+        result = {line.split(':')[0].strip(): line.split(':')[1].strip() for line in info_lines}
+        for key, value in kwargs.items():
+            lookup = {'depth': 'Color Depth', 'space': 'Color Space', 'frame': 'Frame Rate'}.get(key, key)
+            if lookup not in result:
+                logging.warning("Missing key %s in HDMI info", lookup)
+                return False
+            if lookup == 'Frame Rate':
+                if int(result[lookup]) not in range(*value):
+                    logging.warning('%s not in expect , should in %s', result[lookup], value)
+                    return False
+            elif result[lookup] != value:
+                logging.warning('%s not in expect , should be %s', result[lookup], value)
+                return False
+        return True
 
-            This method encapsulates the logic necessary to perform its function.
-            Refer to the implementation for details on parameters and return values.
-            """
-            res = re.findall(
-                r'Hactive|Vactive|Color Depth|Frame Rate|TMDS clock|HDR EOTF|Dolby Vision|HDCP Debug Value|HDCP14 state|HDCP22 state|Color Space',
-                info)
-            if res:
-                return res
+    def _is_hdmirx_attribute(self, line: str) -> bool:
+        """Return True when the line matches a known HDMI info attribute."""
+        pattern = (
+            r'Hactive|Vactive|Color Depth|Frame Rate|TMDS clock|HDR EOTF|Dolby Vision|'
+            r'HDCP Debug Value|HDCP14 state|HDCP22 state|Color Space'
+        )
+        return bool(re.findall(pattern, line))
 
+    def _fetch_hdmirx_snapshot(self) -> str:
+        """Poll the HDMI RX info sysfs node and return its contents."""
         for _ in range(3):
             try:
                 info = pytest.dut.checkoutput('cat /sys/class/hdmirx/hdmirx0/info')
-            # info = pytest.dut.checkoutput('dmesg')
-            # pytest.dut.checkoutput('dmesg -c')
             except Exception:
                 info = ''
             if 'HDCP1.4 secure' in info:
-                break
+                return info
             time.sleep(2)
-
-        logging.info(info)
-        info = [i.strip() for i in info.split('\n') if match(i)]
-        logging.info(' ,'.join(info[:5]))
-        logging.info(' ,'.join(info[5:]))
-        result = {i.split(':')[0].strip(): i.split(':')[1].strip() for i in info}
-        for k, v in kwargs.items():
-            if k == 'depth':
-                k = 'Color Depth'
-            if k == 'space':
-                k = 'Color Space'
-            if k == 'frame':
-                k = 'Frame Rate'
-                if int(result[k]) not in range(*v):
-                    logging.warning(f'{result[k]} not in expect , should in {v}')
-                    return False
-            else:
-                if result[k] != v:
-                    logging.warning(f'{result[k]} not in expect , should be {v}')
-                    return False
-        else:
-            return True
+        return info
 
     def enter_media_player(self):
         """

@@ -51,37 +51,7 @@ class LabDeviceController:
         self.lda_channels = [1]
         self._last_used_channels = None
         self.tn = None
-        if self.model == 'LDA-908V-8':
-            lda_config = pytest.config['rf_solution'].get('LDA-908V-8', {})
-            try:
-                raw_channels = lda_config.get('channels')
-                if raw_channels is None and 'ports' in lda_config:
-                    logging.warning(
-                        'Deprecated configuration key "ports" detected for %s; '
-                        'please rename it to "channels"',
-                        self.model,
-                    )
-                    raw_channels = lda_config.get('ports')
-                self.lda_channels = self._parse_channels(raw_channels)
-            except Exception as exc:
-                logging.error('Invalid LDA-908V-8 channels configuration: %s', exc)
-                raise
-            logging.info(
-                'Initialize HTTP attenuator controller %s at %s with channels %s',
-                self.model,
-                ip,
-                self.lda_channels,
-            )
-            return
-        try:
-            logging.info(f'Try to connect {ip}')
-            self.tn = telnetlib.Telnet()
-            self.tn.open(self.ip, port=23)
-            logging.info('Telnet connection established to %s:23', ip)
-
-        except Exception as f:
-            logging.info(f)
-            return None
+        self._select_device()
 
     def turn_table_init(self):
         """
@@ -124,26 +94,9 @@ class LabDeviceController:
         if int(value) < 0 or int(value) > 110:
             assert 0, 'value must be in range 1-110'
         logging.info(f'Set rf value to {value}')
-        if self.model == 'LDA-908V-8':
-            self._last_set_value = int(value)
-            self._last_used_channels = list(self.lda_channels)
-            for channel in self._last_used_channels:
-                params = {'chnl': channel, 'attn': self._last_set_value}
-                logging.debug(
-                    'Set attenuation for channel %s with params %s',
-                    channel,
-                    params,
-                )
-                self._run_curl_command('setup.cgi', params)
-        elif self.model == 'RC4DAT-8G-95':
-            self.tn.write(f":CHAN:1:2:3:4:SETATT:{value};".encode('ascii') + b'\r\n')
-            self.tn.read_some()
-        else:
-            if not self.tn:
-                raise RuntimeError('Telnet connection not initialized')
-            logging.info(f"ATT 1 {value};2 {value};3 {value};4 {value};")
-            self.tn.write(f"ATT 1 {value};2 {value};3 {value};4 {value};".encode('ascii') + b'\r')
-        time.sleep(2)
+        action = self._schedule_action(value)
+        action()
+        self._perform_cleanup()
 
     def get_rf_current_value(self):
         """
@@ -284,6 +237,64 @@ class LabDeviceController:
         if not channels:
             raise ValueError('no valid channels specified')
         return sorted(channels)
+
+    def _select_device(self) -> None:
+        """Initialise telnet or HTTP controllers based on the configured model."""
+        if self.model == 'LDA-908V-8':
+            lda_config = pytest.config['rf_solution'].get('LDA-908V-8', {})
+            raw_channels = lda_config.get('channels')
+            if raw_channels is None and 'ports' in lda_config:
+                logging.warning(
+                    'Deprecated configuration key "ports" detected for %s; please rename it to "channels"',
+                    self.model,
+                )
+                raw_channels = lda_config.get('ports')
+            self.lda_channels = self._parse_channels(raw_channels)
+            logging.info(
+                'Initialize HTTP attenuator controller %s at %s with channels %s',
+                self.model,
+                self.ip,
+                self.lda_channels,
+            )
+            return
+        try:
+            logging.info('Try to connect %s', self.ip)
+            self.tn = telnetlib.Telnet()
+            self.tn.open(self.ip, port=23)
+            logging.info('Telnet connection established to %s:23', self.ip)
+        except Exception as exc:
+            logging.error("Failed to connect to lab controller %s: %s", self.ip, exc)
+            self.tn = None
+
+    def _schedule_action(self, value: str):
+        """Return a callable that applies attenuation for the current model."""
+        if self.model == 'LDA-908V-8':
+            return lambda: self._apply_lda_attenuation(value)
+        if self.model == 'RC4DAT-8G-95':
+            return lambda: self._write_telnet(f":CHAN:1:2:3:4:SETATT:{value};", read_response=True)
+        return lambda: self._write_telnet(f"ATT 1 {value};2 {value};3 {value};4 {value};")
+
+    def _apply_lda_attenuation(self, value: str) -> None:
+        """Send HTTP commands for each configured LDA channel."""
+        self._last_set_value = int(value)
+        self._last_used_channels = list(self.lda_channels)
+        for channel in self._last_used_channels:
+            params = {'chnl': channel, 'attn': self._last_set_value}
+            logging.debug('Set attenuation for channel %s with params %s', channel, params)
+            self._run_curl_command('setup.cgi', params)
+
+    def _write_telnet(self, command: str, *, read_response: bool = False) -> None:
+        """Write a command over telnet, ensuring the connection exists."""
+        if not self.tn:
+            raise RuntimeError('Telnet connection not initialized')
+        logging.info(command)
+        self.tn.write(command.encode('ascii') + (b'\r\n' if read_response else b'\r'))
+        if read_response:
+            self.tn.read_some()
+
+    def _perform_cleanup(self) -> None:
+        """Allow hardware state to settle after issuing commands."""
+        time.sleep(2)
 
     @staticmethod
     def _validate_port(port):
