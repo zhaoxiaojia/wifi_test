@@ -56,39 +56,38 @@ def _should_skip_log_value(value):
     return False
 
 
-def _format_fixture_param_for_log(params):
+def _normalize_fixture_params(params):
     placeholder = '--'
 
     if hasattr(params, '_asdict'):
-        items = []
-        for key, value in params._asdict().items():
-            if _should_skip_log_value(value):
-                continue
-            items.append(f'{key}={value}')
-        if items:
-            return ', '.join(items)
-        return placeholder
+        items = [
+            f'{key}={value}'
+            for key, value in params._asdict().items()
+            if not _should_skip_log_value(value)
+        ]
+        return ', '.join(items) if items else placeholder
 
     if isinstance(params, Mapping) and not isinstance(params, (str, bytes, bytearray)):
-        items = []
-        for key, value in params.items():
-            if _should_skip_log_value(value):
-                continue
-            items.append(f'{key}={value}')
-        if items:
-            return ', '.join(items)
-        return placeholder
+        items = [
+            f'{key}={value}'
+            for key, value in params.items()
+            if not _should_skip_log_value(value)
+        ]
+        return ', '.join(items) if items else placeholder
 
     if isinstance(params, Sequence) and not isinstance(params, (str, bytes, bytearray)):
         items = [str(value) for value in params if not _should_skip_log_value(value)]
-        if items:
-            return ', '.join(items)
-        return placeholder
+        return ', '.join(items) if items else placeholder
 
     if _should_skip_log_value(params):
         return placeholder
 
     return str(params)
+
+
+def _emit_log_line(tag: str, fixture_name: str, params) -> None:
+    formatted = _normalize_fixture_params(params)
+    pyqt_log(tag, fixture_name, formatted)
 
 
 def get_fixture_actual_params(request, fixture_name, default):
@@ -114,10 +113,8 @@ def update_fixture_params(request, params, *, tag="FIX", name=None, log=True):
 
     _store_actual_params(request, fixture_name, params)
 
-    formatted_params = _format_fixture_param_for_log(params)
-
     if log:
-        pyqt_log(tag, fixture_name, formatted_params)
+        _emit_log_line(tag, fixture_name, params)
 
 
 def pyqt_log(tag: str, fixture: str, params):
@@ -156,8 +153,7 @@ def log_fixture_params(tag="FIX", name=None):
                 raw_param = "<PARAM_ERROR>"
 
             params_to_log = get_fixture_actual_params(request, fixture_name, raw_param)
-            formatted_params = _format_fixture_param_for_log(params_to_log)
-            pyqt_log(tag, fixture_name, formatted_params)
+            _emit_log_line(tag, fixture_name, params_to_log)
 
             # ——调用原函数，并保持其生成器/返回值语义——
             result = func(*args, **kwargs)

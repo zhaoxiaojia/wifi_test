@@ -81,6 +81,66 @@ def _extract_checkpoints(stability_cfg: Mapping[str, Any] | None) -> Mapping[str
     return {key: bool(value) for key, value in checkpoints.items()}
 
 
+def _load_case_settings(case_name: str) -> tuple[TestStrSettings, Mapping[str, bool]]:
+    config = load_config(refresh=True)
+    stability_cfg = config.get("stability") if isinstance(config, Mapping) else {}
+    case_cfg = _extract_stability_case(stability_cfg, case_name)
+    settings = TestStrSettings(
+        ac=CycleConfig.from_mapping(case_cfg.get("ac")),
+        str_cycle=CycleConfig.from_mapping(case_cfg.get("str")),
+    )
+    checkpoints = _extract_checkpoints(stability_cfg)
+    return settings, checkpoints
+
+
+def _resolve_loop_budget(plan) -> tuple[Optional[int], Optional[float]]:
+    loops: Optional[int]
+    if plan.mode == "loops":
+        loops = max(1, plan.loops or 1)
+    else:
+        loops = None
+
+    raw_override = os.environ.get(STABILITY_LOOPS_ENV)
+    if raw_override is not None:
+        try:
+            override = int(raw_override)
+        except (TypeError, ValueError):
+            override = None
+        if override is not None and override > 0:
+            loops = override
+
+    deadline: Optional[float] = None
+    if plan.mode == "duration" and plan.duration_hours:
+        deadline = time.monotonic() + plan.duration_hours * 3600
+    return loops, deadline
+
+
+def _log_loop_start(iteration: int, plan_mode: str, loops: Optional[int], has_deadline: bool) -> None:
+    if loops is not None:
+        logging.info("[STR] stability loop %s/%s start", iteration, loops)
+    elif plan_mode == "duration" and has_deadline:
+        logging.info("[STR] stability loop %s start (duration mode)", iteration)
+    elif plan_mode == "limit":
+        logging.info("[STR] stability loop %s start (limit mode)", iteration)
+
+
+def _log_loop_end(iteration: int, plan_mode: str, loops: Optional[int], has_deadline: bool) -> None:
+    if loops is not None:
+        logging.info("[STR] stability loop %s/%s complete", iteration, loops)
+    elif plan_mode == "duration" and has_deadline:
+        logging.info("[STR] stability loop %s complete (duration mode)", iteration)
+    elif plan_mode == "limit":
+        logging.info("[STR] stability loop %s complete (limit mode)", iteration)
+
+
+def _should_continue(iteration: int, loops: Optional[int], deadline: Optional[float]) -> bool:
+    if loops is not None and iteration >= loops:
+        return False
+    if deadline is not None and iteration > 0 and time.monotonic() >= deadline:
+        return False
+    return True
+
+
 def execute_ac_cycle(cycle: CycleConfig) -> None:
     _run_cycle("AC", cycle)
 
@@ -128,55 +188,24 @@ def _run_cycle(label: str, cycle: CycleConfig) -> None:
 
 def test_str_workflow() -> None:
     plan = load_stability_plan()
-    loops: int | None
-    if plan.mode == "loops":
-        loops = max(1, plan.loops or 1)
-    else:
-        loops = None
-
-    raw_override = os.environ.get(STABILITY_LOOPS_ENV)
-    if raw_override is not None:
-        try:
-            override = int(raw_override)
-        except (TypeError, ValueError):
-            override = None
-        if override is not None and override > 0:
-            loops = override
-
-    deadline: float | None = None
-    if plan.mode == "duration" and plan.duration_hours:
-        deadline = time.monotonic() + plan.duration_hours * 3600
+    loops, deadline = _resolve_loop_budget(plan)
 
     os.environ[STABILITY_COMPLETED_LOOPS_ENV] = "0"
 
-    config = load_config(refresh=True)
-    stability_cfg = config.get("stability") if isinstance(config, Mapping) else {}
-    case_cfg = _extract_stability_case(stability_cfg, "test_str")
-    settings = TestStrSettings(
-        ac=CycleConfig.from_mapping(case_cfg.get("ac")),
-        str_cycle=CycleConfig.from_mapping(case_cfg.get("str")),
-    )
+    settings, checkpoints = _load_case_settings("test_str")
     if not settings.has_work:
         os.environ[STABILITY_COMPLETED_LOOPS_ENV] = "0"
         pytest.skip("AC and STR cycles are both disabled; nothing to execute.")
 
-    checkpoints = _extract_checkpoints(stability_cfg)
     completed_loops = 0
     try:
         iteration = 0
         while True:
-            if loops is not None and iteration >= loops:
-                break
-            if deadline is not None and iteration > 0 and time.monotonic() >= deadline:
+            if not _should_continue(iteration, loops, deadline):
                 break
 
             iteration += 1
-            if loops is not None:
-                logging.info("[STR] stability loop %s/%s start", iteration, loops)
-            elif plan.mode == "duration" and deadline is not None:
-                logging.info("[STR] stability loop %s start (duration mode)", iteration)
-            elif plan.mode == "limit":
-                logging.info("[STR] stability loop %s start (limit mode)", iteration)
+            _log_loop_start(iteration, plan.mode, loops, deadline is not None)
 
             if settings.ac.enabled:
                 execute_ac_cycle(settings.ac)
@@ -187,12 +216,7 @@ def test_str_workflow() -> None:
             completed_loops += 1
             os.environ[STABILITY_COMPLETED_LOOPS_ENV] = str(completed_loops)
 
-            if loops is not None:
-                logging.info("[STR] stability loop %s/%s complete", iteration, loops)
-            elif plan.mode == "duration" and deadline is not None:
-                logging.info("[STR] stability loop %s complete (duration mode)", iteration)
-            elif plan.mode == "limit":
-                logging.info("[STR] stability loop %s complete (limit mode)", iteration)
+            _log_loop_end(iteration, plan.mode, loops, deadline is not None)
 
             if deadline is not None and time.monotonic() >= deadline:
                 break
