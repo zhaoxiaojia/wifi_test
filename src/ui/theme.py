@@ -52,19 +52,13 @@ LEFT_PAD: Annotated[int, "Left padding width combining icon size and spacing"] =
 # -----------------------------------------------------------------------------
 # Imports for Theming Helpers
 # -----------------------------------------------------------------------------
-from PyQt5.QtWidgets import (
-    QStyledItemDelegate,
-    QStyleOptionViewItem,
-    QAbstractItemView,
-    QTreeView,
-    QTableView,
-    QTableWidget,
-    QWidget,
-    QGroupBox,
+from PyQt5.QtWidgets import QAbstractItemView, QWidget, QGroupBox
+from PyQt5.QtGui import QFont, QPalette
+from PyQt5.QtCore import Qt
+from .style import (
+    apply_font_and_selection as _style_apply_font_and_selection,
+    format_log_html as _style_format_log_html,
 )
-from PyQt5.QtGui import QFont, QFontMetrics, QColor, QPalette
-from PyQt5.QtCore import QSize, Qt
-from PyQt5.QtWidgets import QStyle
 
 
 # -----------------------------------------------------------------------------
@@ -82,109 +76,19 @@ def apply_font_and_selection(
     adjust_row_height: bool = True,
     header_affects: bool = True,
 ) -> None:
-    """
-    Apply unified font, selection colors, and header styles for QTableView/QTreeView.
-
-    Behavior:
-        - Injects a delegate class that enforces font and selection color scheme.
-        - Optionally adjusts row heights and header fonts.
-        - Applies dark-theme header and grid styles.
-
-    Args:
-        view: The QAbstractItemView instance (QTableView, QTreeView, etc.).
-        family: Font family.
-        size_px: Font size in pixels.
-        sel_text: Foreground color for selected text.
-        sel_bg: Background color for selected rows.
-        header_bg: Header background color.
-        header_fg: Header text color.
-        grid: Grid line color.
-        adjust_row_height: If True, adjusts row height automatically.
-        header_affects: If True, applies font changes to headers.
-
-    Side effects:
-        - Replaces the existing item delegate.
-        - Updates widget stylesheets.
-    """
-    orig_delegate = view.itemDelegate()
-    BaseCls = type(orig_delegate) if orig_delegate is not None else QStyledItemDelegate
-
-    class _PatchedFontDelegate(BaseCls):
-        """Internal delegate enforcing custom font and selection colors."""
-
-        def __init__(self, parent=None):
-            super().__init__(parent)
-            self._font = QFont(family)
-            self._font.setPixelSize(size_px)
-            self._sel_text = QColor(sel_text)
-            self._sel_bg = QColor(sel_bg)
-
-        def initStyleOption(self, option: QStyleOptionViewItem, index):
-            super().initStyleOption(option, index)
-            option.font = self._font
-            if option.state & QStyle.State_Selected:
-                pal = option.palette
-                pal.setColor(QPalette.HighlightedText, self._sel_text)
-                pal.setColor(QPalette.Text, self._sel_text)
-                pal.setColor(QPalette.Highlight, self._sel_bg)
-                option.palette = pal
-
-    view.setItemDelegate(_PatchedFontDelegate(view))
-
-    # Row height and header font tuning
-    if adjust_row_height and isinstance(view, (QTableView, QTableWidget)):
-        view.resizeRowsToContents()
-    if header_affects and isinstance(view, (QTableView, QTableWidget)):
-        hf = QFont(family)
-        hf.setPixelSize(max(12, size_px - 1))
-        if view.horizontalHeader():
-            view.horizontalHeader().setFont(hf)
-        if view.verticalHeader():
-            view.verticalHeader().setFont(hf)
-
-    # Header and corner dark theme skin
-    header_qss = f"""
-    QHeaderView {{ background-color: {header_bg}; }}
-    QHeaderView::section {{
-        background-color: {header_bg};
-        color: {header_fg};
-        padding: 4px 6px;
-        border: 0px;
-        border-right: 1px solid {grid};
-        border-bottom: 1px solid {grid};
-    }}
-    """
-    try:
-        h = getattr(view, "horizontalHeader", lambda: None)()
-        v = getattr(view, "verticalHeader", lambda: None)()
-        if h:
-            h.setStyleSheet(header_qss)
-        if v:
-            v.setStyleSheet(header_qss)
-    except Exception:
-        # Silent: theming should not crash functional flows
-        pass
-
-    # Corner section (top-left button) and grid color
-    view.setStyleSheet(
-        view.styleSheet()
-        + f"""
-        QTableCornerButton::section {{
-            background-color: {header_bg};
-            border: 0px;
-            border-right: 1px solid {grid};
-            border-bottom: 1px solid {grid};
-        }}
-        QTableView {{
-            gridline-color: {grid};
-        }}
-        """
+    """Apply unified table/tree styles via the shared style helpers."""
+    return _style_apply_font_and_selection(
+        view,
+        family=family,
+        size_px=size_px,
+        sel_text=sel_text,
+        sel_bg=sel_bg,
+        header_bg=header_bg,
+        header_fg=header_fg,
+        grid=grid,
+        adjust_row_height=adjust_row_height,
+        header_affects=header_affects,
     )
-
-    # TreeView compatibility: allow dynamic row height
-    if hasattr(view, "setUniformRowHeights"):
-        view.setUniformRowHeights(False)
-    view.viewport().update()
 
 
 # -----------------------------------------------------------------------------
@@ -275,28 +179,5 @@ def apply_theme(widget, recursive: bool = False) -> None:
 # Function: format_log_html
 # -----------------------------------------------------------------------------
 def format_log_html(message: str) -> str:
-    """
-    Return a unified HTML-formatted log string with theme colors.
-
-    Args:
-        message: Raw log message.
-
-    Returns:
-        HTML string with a themed <span> whose color is derived from level keywords.
-        If no known level is present, returns a neutral span.
-
-    Example:
-        >>> format_log_html("Error: connection lost")
-        "<span style='... color:red;'>Error: connection lost</span>"
-    """
-    base_style = "font-family: Consolas, 'Courier New', monospace;"
-    upper_msg = message.upper()
-    colors = {
-        "ERROR": "red",
-        "WARNING": "orange",
-        "INFO": "blue",
-    }
-    for level, color in colors.items():
-        if level in upper_msg:
-            return f"<span style='{base_style} color:{color};'>{message}</span>"
-    return f"<span style='{base_style}'>{message}</span>"
+    """Return a unified HTML-formatted log string using shared helpers."""
+    return _style_format_log_html(message)
