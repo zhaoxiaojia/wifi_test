@@ -49,6 +49,24 @@ ICON_SIZE: Annotated[int, "Icon size in pixels used for buttons/labels"] = 18
 ICON_TEXT_SPACING: Annotated[int, "Horizontal spacing in pixels between icon and text"] = 8
 LEFT_PAD: Annotated[int, "Left padding width combining icon size and spacing"] = ICON_SIZE + ICON_TEXT_SPACING
 
+# Switch Wi-Fi credential table palette tuned for dark theme readability.
+SWITCH_WIFI_TABLE_HEADER_BG: Annotated[
+    str,
+    "Header background color for switch Wi-Fi credential tables",
+] = "#2F5D90"
+SWITCH_WIFI_TABLE_HEADER_FG: Annotated[
+    str,
+    "Header text color for switch Wi-Fi credential tables",
+] = "#F5FAFF"
+SWITCH_WIFI_TABLE_SELECTION_BG: Annotated[
+    str,
+    "Selection background color for switch Wi-Fi credential tables",
+] = "#1F3E66"
+SWITCH_WIFI_TABLE_SELECTION_FG: Annotated[
+    str,
+    "Selection text color for switch Wi-Fi credential tables",
+] = "#E7F1FF"
+
 # -----------------------------------------------------------------------------
 # Imports for Theming Helpers
 # -----------------------------------------------------------------------------
