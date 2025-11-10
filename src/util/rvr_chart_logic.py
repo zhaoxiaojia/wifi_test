@@ -12,6 +12,7 @@ import logging
 import math
 import re
 from pathlib import Path
+from dataclasses import dataclass
 from typing import Iterable, Optional
 
 import pandas as pd
@@ -25,37 +26,63 @@ from src.util.constants import (
 )
 
 
+@dataclass
+class RvrDataFrame:
+    """Lightweight wrapper around a prepared RVR pandas DataFrame."""
+
+    frame: pd.DataFrame
+
+    def apply_test_type(self, inferred: Optional[str]) -> None:
+        """Ensure the dataframe exposes ``__test_type_display__`` with a fallback."""
+        if inferred:
+            normalized = (inferred or "").strip().upper()
+            self.frame["__test_type_display__"] = normalized or "RVR"
+        elif "__test_type_display__" not in self.frame.columns:
+            self.frame["__test_type_display__"] = "RVR"
+
+
 class RvrChartLogic:
     """Mixin that provides common helpers for RVR chart preparation."""
 
     def _load_rvr_dataframe(self, path: Path) -> pd.DataFrame:
+        raw = self._read_rvr_results(path)
+        if raw is None or raw.empty:
+            return pd.DataFrame()
+        prepared = self._prepare_rvr_dataframe(raw)
+        dataset = RvrDataFrame(prepared)
+        final_type = self._resolve_dataframe_test_type(prepared, path)
+        dataset.apply_test_type(final_type)
+        return dataset.frame
+
+    def _read_rvr_results(self, path: Path) -> pd.DataFrame:
+        """Read raw RVR results from CSV or Excel without post-processing."""
         try:
             if path.suffix.lower() == ".csv":
                 try:
-                    df = pd.read_csv(path)
+                    return pd.read_csv(path)
                 except UnicodeDecodeError:
-                    df = pd.read_csv(path, encoding="gbk")
-            else:
-                sheets = pd.read_excel(path, sheet_name=None)
-                frames = [sheet for sheet in sheets.values() if sheet is not None and not sheet.empty]
-                df = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+                    return pd.read_csv(path, encoding="gbk")
+            sheets = pd.read_excel(path, sheet_name=None)
+            frames = [sheet for sheet in sheets.values() if sheet is not None and not sheet.empty]
+            return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
         except Exception as exc:
             logging.exception("Failed to read RVR results: %s", exc)
             return pd.DataFrame()
-        if df is None or df.empty:
-            return pd.DataFrame()
-        prepared = self._prepare_rvr_dataframe(df)
-        final_type = self._resolve_dataframe_test_type(prepared, path)
-        if final_type:
-            normalized_type = (final_type or "").strip().upper()
-            prepared["__test_type_display__"] = normalized_type or "RVR"
-        elif "__test_type_display__" not in prepared.columns:
-            prepared["__test_type_display__"] = "RVR"
-        return prepared
 
     def _prepare_rvr_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
         if df is None or df.empty:
             return pd.DataFrame()
+        prepared = self._normalize_source_dataframe(df)
+        source_series = self._build_source_series(prepared)
+        self._attach_display_columns(prepared, source_series)
+        self._attach_profile_metadata(prepared, source_series)
+        self._attach_angle_columns(prepared, source_series)
+        self._attach_step_labels(prepared)
+        self._attach_throughput_values(prepared, source_series)
+        return prepared.reset_index(drop=True)
+
+    def _normalize_source_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Strip headers/cells and normalize core columns as strings."""
         prepared = df.copy()
         prepared.columns = [str(c).strip() for c in prepared.columns]
         for column in prepared.columns:
@@ -65,6 +92,10 @@ class RvrChartLogic:
         for col in ("Freq_Band", "Standard", "BW", "CH_Freq_MHz", "DB"):
             if col in prepared.columns:
                 prepared[col] = prepared[col].astype(str)
+        return prepared
+
+    def _build_source_series(self, prepared: pd.DataFrame):
+        """Return a helper that fetches the first present column or blanks."""
         row_count = len(prepared)
 
         def source_series(*names: str) -> pd.Series:
@@ -73,6 +104,10 @@ class RvrChartLogic:
                     return prepared[name]
             return pd.Series([""] * row_count, index=prepared.index, dtype=object)
 
+        return source_series
+
+    def _attach_display_columns(self, prepared: pd.DataFrame, source_series) -> None:
+        """Populate derived display columns (standard/bandwidth/freq/etc)."""
         standard_series = source_series("Standard")
         prepared["__standard_display__"] = standard_series.apply(self._format_standard_display).replace("", "Unknown")
 
@@ -100,6 +135,8 @@ class RvrChartLogic:
             self._format_metric_display
         )
 
+    def _attach_profile_metadata(self, prepared: pd.DataFrame, source_series) -> None:
+        """Add normalized profile mode/value metadata used by reports."""
         profile_mode_series = source_series("Profile_Mode", "Profile Mode", "RVO_Profile_Mode").apply(
             self._normalize_profile_mode_value
         )
@@ -116,6 +153,8 @@ class RvrChartLogic:
             for mode, value in zip(profile_mode_series, profile_value_series)
         ]
 
+    def _attach_angle_columns(self, prepared: pd.DataFrame, source_series) -> None:
+        """Attach normalized angle columns for downstream filtering."""
         angle_series = source_series(
             "Angel",
             "Angle",
@@ -129,6 +168,9 @@ class RvrChartLogic:
         )
         prepared["__angle_value__"] = angle_series.apply(self._parse_angle_value)
         prepared["__angle_display__"] = angle_series.apply(self._format_angle_display)
+
+    def _attach_step_labels(self, prepared: pd.DataFrame) -> None:
+        """Derive the attenuation step label used by RVR charts."""
         step_candidates = ("DB", "Total_Path_Loss", "RxP", "Step", "Attenuation")
 
         def resolve_step(row: pd.Series) -> Optional[str]:
@@ -144,12 +186,15 @@ class RvrChartLogic:
             return None
 
         prepared["__step__"] = prepared.apply(resolve_step, axis=1)
+        row_count = len(prepared)
         fallback_steps = pd.Series([str(i + 1) for i in range(row_count)], index=prepared.index)
         prepared["__step__"] = prepared["__step__"].fillna(fallback_steps)
         empty_mask = prepared["__step__"] == ""
         if empty_mask.any():
             prepared.loc[empty_mask, "__step__"] = fallback_steps[empty_mask]
 
+    def _attach_throughput_values(self, prepared: pd.DataFrame, source_series) -> None:
+        """Attach the computed throughput column respecting aliases."""
         throughput_columns = self._resolve_throughput_columns(prepared.columns)
         if throughput_columns:
             prepared["__throughput_value__"] = prepared.apply(
@@ -166,8 +211,6 @@ class RvrChartLogic:
         prepared["__throughput_value__"] = prepared["__throughput_value__"].apply(
             lambda value: float(value) if isinstance(value, (int, float)) else value
         )
-
-        return prepared.reset_index(drop=True)
 
     def _resolve_throughput_columns(self, columns: Iterable[str]) -> list[str]:
         column_list = [str(col) for col in columns]
