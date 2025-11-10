@@ -6,10 +6,8 @@
 
 import ctypes
 import inspect
-import logging
 import signal
 import threading
-import time
 from functools import wraps
 
 def _async_raise(tid, exctype):
@@ -59,31 +57,6 @@ def set_timeout(limit_time):
     return functions
 
 
-def count_down(duration):
-    '''
-    闹钟-倒计时
-    :param duration: 时长 单位秒
-    :return:
-    '''
-
-    def wrapper(func):
-        res = None
-        def inner(*args, **kwargs):
-            nonlocal res
-            start = time.time()
-            while time.time() - start < duration:
-                try:
-                    res = func(*args, **kwargs)
-                except Exception as err:
-                    logging.exception("count_down wrapped function raised an exception: %s", err)
-                    break
-            return res
-
-        return inner
-
-    return wrapper
-
-
 def singleton(cls):
     '''
     单例
@@ -100,13 +73,3 @@ def singleton(cls):
     return _singleton
 
 
-def lazy_proerty(func):
-    attr_name = '_lazy_' + func.__name__
-
-    @property
-    def _lazy_proerty(self):
-        if not hasattr(self, attr_name):
-            setattr(self, attr_name, func(self))
-        return getattr(self, attr_name)
-
-    return _lazy_proerty
