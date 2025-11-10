@@ -1,3 +1,8 @@
+"""
+Xiaomi base control
+
+This module is part of the AsusRouter package.
+"""
 from src.tools.router_tool.RouterControl import RouterTools
 import time
 import logging
@@ -8,11 +13,17 @@ from src.tools.router_tool.RouterControl import ConfigError
 
 
 class XiaomiBaseControl(RouterTools):
-    """小米路由器通用控制基类
-
-    汇总各型号共享的常量和映射，避免重复定义。
     """
-
+        Xiaomi base control
+            Parameters
+            ----------
+            None
+                This class is instantiated without additional parameters.
+            Returns
+            -------
+            None
+                Classes return instances implicitly when constructed.
+    """
     BAND_2 = '2.4G'
     BAND_5 = '5G'
 
@@ -62,8 +73,7 @@ class XiaomiBaseControl(RouterTools):
         "Open System": "无加密(允许所有人连接)",
         "WPA2-Personal": "强加密(WPA2个人版)",
         "WPA3-Personal": "超强加密(WPA3个人版)",
-        # "WPA/WPA2-Personal": "混合加密(WPA/WPA2个人版)",
-        # "WPA2/WPA3-Personal": "强混合加密(WPA3/WPA2个人版)",
+
     }
 
     BANDWIDTH_5 = {
@@ -83,47 +93,69 @@ class XiaomiBaseControl(RouterTools):
     WIRELESS_5 = ['11ac', '11ax']
 
     def login(self):
+        """
+            Login
+                Interacts with the router's web interface using Selenium WebDriver.
+                Waits for specific web elements to satisfy conditions using WebDriverWait.
+                Pauses execution for a specified duration to allow operations to complete.
+                Parameters
+                ----------
+                None
+                    This function does not accept any parameters beyond the implicit context.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         super()._init()
-        # try:
+
         self.driver.get(f"http://{self.address}")
-        # input passwd
+
         self.driver.find_element(By.ID, self.xpath['password_element']).click()
         self.driver.find_element(By.ID, self.xpath['password_element']).clear()
         time.sleep(1)
         self.driver.find_element(By.ID, self.xpath['password_element']).send_keys(
             self.xpath['passwd'])
-        # click login
+
         self.driver.find_element(By.ID, self.xpath['signin_element']).click()
-        # wait for login in done
+
         WebDriverWait(driver=self.driver, timeout=10, poll_frequency=0.5).until(
             EC.presence_of_element_located((By.ID, self.xpath['signin_done_element'])))
-        # except NoSuchElementException as e:
-        #     ...
+
         time.sleep(1)
 
     def change_setting(self, router):
-        '''
-        set up wifi envrioment
-        @param router: Router instance
-        @return: status : boolean
-        '''
+        """
+            Change setting
+                Interacts with the router's web interface using Selenium WebDriver.
+                Waits for specific web elements to satisfy conditions using WebDriverWait.
+                Performs router login or authentication before executing actions.
+                Pauses execution for a specified duration to allow operations to complete.
+                Logs informational or debugging messages for tracing execution.
+                Parameters
+                ----------
+                router : object
+                    Router control object or router information required to perform operations.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         logging.info('Try to set router')
-        # try:
+
         self.login()
         WebDriverWait(driver=self.driver, timeout=10, poll_frequency=0.5).until(
             EC.invisibility_of_element_located((By.CSS_SELECTOR, "div.mask-menu")))
         element = self.driver.find_element(By.CSS_SELECTOR, "a.btn_wifi")
         self.driver.execute_script("arguments[0].click();", element)
-        # Wireless - Profession
+
         wait = WebDriverWait(driver=self.driver, timeout=5, poll_frequency=0.5)
         wait.until(EC.presence_of_element_located((By.XPATH, '//*[@id="wifiset24"]/div[1]')))
 
         if router.band == self.BAND_5:
-            # //*[@id="wifiset50"]/div[1]/span[1]
             wait_for = self.driver.find_element(By.XPATH, '//*[@id="wifiset50"]/div[1]/span[1]')
             self.scroll_to(wait_for)
 
-        # 修改 ssid
         if router.ssid:
             if self.BAND_2 == router.band:
                 target = 'ssid_2g'
@@ -143,7 +175,7 @@ class XiaomiBaseControl(RouterTools):
             target = hide_2g
         else:
             target = hide_5g
-        # 修改隐藏
+
         if router.hide_ssid:
             if router.hide_ssid == '是' and not target.is_selected():
                 target.click()
@@ -152,7 +184,7 @@ class XiaomiBaseControl(RouterTools):
         else:
             if target.is_selected():
                 target.click()
-        # 修改 security_mode
+
         if router.security_mode:
             try:
                 mode = self.SECURITY_MODE_MAP.get(router.security_mode, router.security_mode)
@@ -162,11 +194,10 @@ class XiaomiBaseControl(RouterTools):
             target = 'authentication_2g' if self.BAND_2 == router.band else 'authentication_5g'
             self.driver.find_element(
                 By.XPATH, self.xpath['authentication_select_element'][target]).click()
-            # //*[@id="dummydata"]/a[3]/span
+
             self.driver.find_element(
                 By.XPATH, self.xpath['authentication_regu_element'].format(index)).click()
 
-        # 修改密码
         if router.password:
             if self.BAND_2 == router.band:
                 target = 'passwd_2g'
@@ -206,7 +237,6 @@ class XiaomiBaseControl(RouterTools):
             except Exception:
                 ...
 
-        # 修改 bandwidth
         if router.bandwidth:
             if router.band == self.BAND_2:
                 target_dict = self.BANDWIDTH_2

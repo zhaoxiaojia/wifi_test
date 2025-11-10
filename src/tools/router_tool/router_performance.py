@@ -1,13 +1,9 @@
-#!/usr/bin/env python 
-# encoding: utf-8 
-'''
-@author: chao.li
-@contact: chao.li@amlogic.com
-@software: pycharm
-@file: router_performance.py 
-@time: 2025/2/14 10:42 
-@desc: 
-'''
+"""
+Router performance
+
+This module is part of the AsusRouter package.
+"""
+
 import logging
 import sys
 from collections.abc import Mapping
@@ -24,9 +20,39 @@ wifichip, interface = RouterConst.dut_wifichip.split('_')
 
 @dataclass
 class compatibility_router(json_mixin):
+    """
+        Compatibility router
+            Parameters
+            ----------
+            None
+                This class is instantiated without additional parameters.
+            Returns
+            -------
+            None
+                Classes return instances implicitly when constructed.
+    """
     _instances = []
 
     def set_info(self, ip, port, brand, model, setup):
+        """
+            Set info
+                Parameters
+                ----------
+                ip : object
+                    Description of parameter 'ip'.
+                port : object
+                    Description of parameter 'port'.
+                brand : object
+                    Description of parameter 'brand'.
+                model : object
+                    Description of parameter 'model'.
+                setup : object
+                    Description of parameter 'setup'.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         info = nested_dict()
         if not re.match(r'\d+\.\d+\.\d+\.', ip):
             raise ValueError("Format error, pls check the ip address")
@@ -39,23 +65,61 @@ class compatibility_router(json_mixin):
         for k, v in setup.items():
             info[k] = v
         self._instances.append(info)
-        # 直接在 self.__dict__ 中创建嵌套字典
 
     def __str__(self):
+        """
+            Str
+                Parameters
+                ----------
+                None
+                    This function does not accept any parameters beyond the implicit context.
+                Returns
+                -------
+                object
+                    Description of the returned value.
+        """
         return self.to_dict()
 
     def save_expect(self):
+        """
+            Save expect
+                Parameters
+                ----------
+                None
+                    This function does not accept any parameters beyond the implicit context.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         with open(f"{os.getcwd()}/config/compatibility_router.json", 'w') as f:
             json.dump(self._instances, f, indent=4, ensure_ascii=False)
 
 
 class dut_standard(json_mixin):
+    """
+        Dut standard
+            Parameters
+            ----------
+            None
+                This class is instantiated without additional parameters.
+            Returns
+            -------
+            None
+                Classes return instances implicitly when constructed.
+    """
+
     def set_expect(self, *args):
         """
-        Supported signatures:
-        1) set_expect(chip, band, interface, mode, security_mode, bandwidth, mimo, direction, expect_data)
-        2) set_expect(band, interface, mode, security_mode, bandwidth, mimo, direction, expect_data)
-           -> falls back to chip='COMMON' for backward compatibility.
+            Set expect
+                Parameters
+                ----------
+                args : object
+                    Description of parameter 'args'.
+                Returns
+                -------
+                None
+                    This function does not return a value.
         """
         if len(args) == 9:
             chip, band, interface, mode, security_mode, bandwidth, mimo, direction, expect_data = args
@@ -65,7 +129,6 @@ class dut_standard(json_mixin):
         else:
             raise TypeError("set_expect() expects 8 or 9 positional arguments.")
 
-        # normalize keys
         chip = str(chip).upper()
         band = str(band).upper()
         interface = str(interface).upper()
@@ -75,7 +138,6 @@ class dut_standard(json_mixin):
         mimo_key = str(mimo).upper()
         direction_key = str(direction).upper()
 
-        # validation (kept conservative; adjust if needed)
         valid_bands = {'2.4G': ["11N", "11AX"], '5G': ["11AX", "11AC"]}
         valid_bandwidth = {'2.4G': ["20/40MHZ", "20MHZ", "40MHZ"],
                            '5G': ["20/40/80MHZ", "20MHZ", "40MHZ", "80MHZ"]}
@@ -96,7 +158,6 @@ class dut_standard(json_mixin):
         if security_mode not in valid_auth:
             raise ValueError("security_mode must be one of: WPA3, WPA2, WEP, OPEN SYSTEM")
 
-        # new structure (chip dimension + security_mode dimension)
         self[chip][band][interface][mode][security_mode][bandwidth_key][mimo_key][direction_key] = expect_data
 
 
@@ -280,17 +341,17 @@ a.set_info("192.168.200.8", '3', 'Vantiva', 'SETUP-E089',
            {'2.4G': {'mode': '11N', 'security_mode': 'wpa2', 'bandwidth': '40MHz'},
             '5G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
-a.set_info("192.168.200.8", '4', 'MERCURY', 'D126-LAN100M',  # 百兆网口
+a.set_info("192.168.200.8", '4', 'MERCURY', 'D126-LAN100M',
            {'2.4G': {'mode': '11N', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
             '5G': {'mode': '11AC', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
-a.set_info("192.168.200.7", '6', 'ARRIS', 'SBR-AC1200P-LAN100M',  # 百兆网口
+a.set_info("192.168.200.7", '6', 'ARRIS', 'SBR-AC1200P-LAN100M',
            {'2.4G': {'mode': '11N', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
             '5G': {'mode': '11AC', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
 a.save_expect()
 dut = dut_standard()
-# w1
+
 dut.set_expect('W1', '2.4G', 'sdio', '11N', 'wpa2', '20MHz', '1x1', 'UL', 42.8)
 dut.set_expect('W1', '2.4G', 'sdio', '11N', 'wpa2', '20MHz', '1x1', 'DL', 42.8)
 dut.set_expect('W1', '2.4G', 'sdio', '11N', 'wpa2', '40MHz', '1x1', 'UL', 85.5)
@@ -298,7 +359,6 @@ dut.set_expect('W1', '2.4G', 'sdio', '11N', 'wpa2', '40MHz', '1x1', 'DL', 85.5)
 dut.set_expect('W1', '5G', 'sdio', '11AC', 'wpa2', '80MHz', '1x1', 'UL', 209)
 dut.set_expect('W1', '5G', 'sdio', '11AC', 'wpa2', '80MHz', '1x1', 'DL', 237.5)
 
-# w2
 dut.set_expect('W2', '2.4G', 'sdio', '11N', 'wpa2', '20MHz', '2x2', 'UL', 85.5)
 dut.set_expect('W2', '2.4G', 'sdio', '11N', 'wpa2', '20MHz', '2x2', 'DL', 85.5)
 dut.set_expect('W2', '2.4G', 'usb', '11N', 'wpa2', '20MHz', '2x2', 'UL', 85.5)
@@ -336,7 +396,6 @@ dut.set_expect('W2', '5G', 'usb', '11AX', 'wpa2', '80MHz', '2x2', 'DL', 266)
 dut.set_expect('W2', '5G', 'pcie', '11AX', 'wpa2', '80MHz', '2x2', 'UL', 712.5)
 dut.set_expect('W2', '5G', 'pcie', '11AX', 'wpa2', '80MHz', '2x2', 'DL', 712.5)
 
-# w2l
 dut.set_expect('W2L', '2.4G', 'sdio', '11N', 'wpa2', '20MHz', '2x2', 'UL', 85.5)
 dut.set_expect('W2L', '2.4G', 'sdio', '11N', 'wpa2', '20MHz', '2x2', 'DL', 85.5)
 dut.set_expect('W2L', '2.4G', 'usb', '11N', 'wpa2', '20MHz', '2x2', 'UL', 85.5)
@@ -368,26 +427,53 @@ with open(f"{os.getcwd()}/config/compatibility_dut.json", 'w', encoding='utf-8')
 
 def handle_expectdata(router_info, band, direction, chip_info=None):
     """
-    根据路由器信息和芯片方案获取预期吞吐率
-
-    Args:
-        router_info: 路由器信息字典，至少包含 band 对应的 mode、security_mode、bandwidth
-        band: '2.4G' or '5G'
-        direction: 'UL' or 'DL'
-        chip_info: 可以是旧版的 'w2_sdio' 字符串，也可以是包含
-            "wifi_module"、"interface" 等键的新字典结构
-    Returns:
-        float expected throughput
+        Handle expectdata
+            Parameters
+            ----------
+            router_info : object
+                Router information string used to derive the model and configuration paths.
+            band : object
+                Radio band selection (e.g. 2.4G, 5G) when configuring wireless settings.
+            direction : object
+                Description of parameter 'direction'.
+            chip_info : object
+                Description of parameter 'chip_info'.
+            Returns
+            -------
+            object
+                Description of the returned value.
     """
     if chip_info is None:
         chip_info = RouterConst.dut_wifichip
 
     def _normalize_mode(m: str) -> str:
+        """
+            Normalize mode
+                Parameters
+                ----------
+                m : object
+                    Description of parameter 'm'.
+                Returns
+                -------
+                str
+                    Description of the returned value.
+        """
         if not m:
             return "11AX"
         return str(m).upper().replace("802.11", "")
 
     def _normalize_bandwidth(bw: str) -> str:
+        """
+            Normalize bandwidth
+                Parameters
+                ----------
+                bw : object
+                    Description of parameter 'bw'.
+                Returns
+                -------
+                str
+                    Description of the returned value.
+        """
         if not bw:
             return "80MHZ"
         bw = str(bw).upper().replace(" ", "")
@@ -402,6 +488,17 @@ def handle_expectdata(router_info, band, direction, chip_info=None):
         return bw
 
     def _normalize_auth(auth: str) -> str:
+        """
+            Normalize auth
+                Parameters
+                ----------
+                auth : object
+                    Description of parameter 'auth'.
+                Returns
+                -------
+                str
+                    Description of the returned value.
+        """
         if not auth:
             return "WPA2"
         auth = str(auth).upper().replace("_", "-")
@@ -416,6 +513,17 @@ def handle_expectdata(router_info, band, direction, chip_info=None):
     security_mode = _normalize_auth(router_info.get(band, {}).get('security_mode', 'WPA2'))
 
     def _parse_chip_payload(payload):
+        """
+            Parse chip payload
+                Parameters
+                ----------
+                payload : object
+                    Description of parameter 'payload'.
+                Returns
+                -------
+                object
+                    Description of the returned value.
+        """
         wifi_module = ""
         interface = ""
         if isinstance(payload, str):
@@ -460,6 +568,19 @@ def handle_expectdata(router_info, band, direction, chip_info=None):
         dut_data = json.load(f2)
 
     def _get_default(data, key):
+        """
+            Get default
+                Parameters
+                ----------
+                data : object
+                    Description of parameter 'data'.
+                key : object
+                    Description of parameter 'key'.
+                Returns
+                -------
+                object
+                    Description of the returned value.
+        """
         try:
             return data[key]
         except KeyError:

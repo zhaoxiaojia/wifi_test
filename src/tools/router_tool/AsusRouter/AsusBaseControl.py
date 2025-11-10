@@ -1,3 +1,8 @@
+"""
+Asus base control
+
+This module is part of the AsusRouter package.
+"""
 from src.tools.router_tool.RouterControl import RouterTools, ConfigError
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -6,9 +11,16 @@ from selenium.webdriver.support.ui import Select, WebDriverWait
 
 
 class AsusBaseControl(RouterTools):
-    """华硕路由器通用控制基类
-
-    提供标准字段到设备实际取值的映射，以减少各型号间的重复代码。
+    """
+        Asus base control
+            Parameters
+            ----------
+            None
+                This class is instantiated without additional parameters.
+            Returns
+            -------
+            None
+                Classes return instances implicitly when constructed.
     """
     CHANNEL_2_DICT = {
         'auto': '1',
@@ -51,11 +63,19 @@ class AsusBaseControl(RouterTools):
     }
 
     def change_wireless_mode(self, mode):
-        '''
-        select mode
-        @param mode:
-        @return:
-        '''
+        """
+            Change wireless mode
+                Interacts with the router's web interface using Selenium WebDriver.
+                Asserts conditions to validate the success of operations.
+                Parameters
+                ----------
+                mode : object
+                    Wireless mode to configure on the router (e.g. 11n, 11ax).
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         ui_mode = self.WIRELESS_MAP[mode]
         wireless_mode_select = Select(
             self.driver.find_element(By.XPATH, self.xpath['wireless_mode_element'][self.router_info]))
@@ -69,20 +89,32 @@ class AsusBaseControl(RouterTools):
                                  self.xpath['wireless_ax_element'][self.router_info].format(index)).click()
 
     def change_country(self, router_or_code):
+        """
+            Change country
+                Interacts with the router's web interface using Selenium WebDriver.
+                Waits for specific web elements to satisfy conditions using WebDriverWait.
+                Performs router login or authentication before executing actions.
+                Parameters
+                ----------
+                router_or_code : object
+                    Either a router instance or a string containing the country code to configure.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         self.login()
         self.driver.find_element(By.ID, 'Advanced_Wireless_Content_menu').click()
-        # Wireless - General
+
         WebDriverWait(driver=self.driver, timeout=5, poll_frequency=0.5).until(
             EC.presence_of_element_located((By.ID, 'FormTitle'))
         )
 
-        # 判断参数类型，提取 country_code
         if isinstance(router_or_code, str):
             country_code = router_or_code
         else:
             country_code = getattr(router_or_code, "country_code", None)
 
-        # 修改 国家码
         if country_code:
             if country_code not in self.COUNTRY_CODE:
                 raise ConfigError('country code error')
@@ -105,7 +137,6 @@ class AsusBaseControl(RouterTools):
                 By.XPATH, '//*[@id="apply_btn"]/input'
             ).click()
 
-            # 处理弹窗
             for _ in range(2):
                 try:
                     self.driver.switch_to.alert.accept()

@@ -1,10 +1,8 @@
-﻿#!/usr/bin/env python 
-# -*- coding: utf-8 -*-
-# @Time    : 2021/12/30 11:05
-# @Author  : chao.li
-# @Site    :
-# @File    : router_tool.py
-# @Software: PyCharm
+﻿"""
+Router control
+
+This module is part of the AsusRouter package.
+"""
 
 import logging
 import os
@@ -21,65 +19,120 @@ from src.tools.yamlTool import yamlTool
 
 
 class RouterControl(metaclass=ABCMeta):
+    """
+        Router control
+            Parameters
+            ----------
+            None
+                This class is instantiated without additional parameters.
+            Returns
+            -------
+            None
+                Classes return instances implicitly when constructed.
+    """
 
     def __init__(self):
+        """
+            Init
+                Parameters
+                ----------
+                None
+                    This function does not accept any parameters beyond the implicit context.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         ...
 
     @abstractmethod
     def login(self):
-        '''
-        login in router
-        :return: None
-        '''
+        """
+            Login
+                Parameters
+                ----------
+                None
+                    This function does not accept any parameters beyond the implicit context.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         ...
 
     @abstractmethod
     def change_setting(self, router):
-        '''
-        change the router setting
-        @param router: router info
-        @return:
-        '''
+        """
+            Change setting
+                Parameters
+                ----------
+                router : object
+                    Router control object or router information required to perform operations.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         ...
 
     @abstractmethod
     def reboot_router(self):
-        '''
-        reboot router
-        @return:
-        '''
+        """
+            Reboot router
+                Parameters
+                ----------
+                None
+                    This function does not accept any parameters beyond the implicit context.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         ...
 
 
-# option = webdriver.ChromeOptions()
-# option.add_argument(argument='headless')
-# option.add_argument("--start-maximized")  # 绐楀彛鏈€澶у寲
-# option.add_experimental_option("detach", True)  # 涓嶈嚜鍔ㄥ叧闂祻瑙堝櫒
-# service = Service(executable_path=r"C:\Users\yu.zeng\ChromeWebDriver\chromedriver.exe")
-
 class ConfigError(Exception):
+    """
+        Config error
+            Parameters
+            ----------
+            None
+                This class is instantiated without additional parameters.
+            Returns
+            -------
+            None
+                Classes return instances implicitly when constructed.
+    """
+
     def __str__(self):
+        """
+            Str
+                Parameters
+                ----------
+                None
+                    This function does not accept any parameters beyond the implicit context.
+                Returns
+                -------
+                object
+                    Description of the returned value.
+        """
         return 'element error'
 
 
 class RouterTools(RouterControl):
-    '''
-
-        router tools
-
-        load router info from csv than generate init to channge router setting
-
-        router_info : 璺敱鍣ㄥ搧鐗宊璺敱鍣ㄥ瀷鍙?
-        display : if senlium runs silenty
-
-
-
-    '''
-
-    # 鎿嶄綔 缃戦〉 椤甸潰 婊氬姩  js 鍛戒护
+    """
+        Router tools
+            Parameters
+            ----------
+            None
+                This class is instantiated without additional parameters.
+            Returns
+            -------
+            None
+                Classes return instances implicitly when constructed.
+    """
     SCROL_JS = 'arguments[0].scrollIntoView();'
 
-    # asus router setup value
     BAND_LIST = ['2.4G', '5G']
     BANDWIDTH_2 = ['20/40 MHz', '20 MHz', '40 MHz']
     BANDWIDTH_5 = ['20/40/80 MHz', '20 MHz', '40 MHz', '80 MHz', '160 MHz']
@@ -127,30 +180,32 @@ class RouterTools(RouterControl):
     }
 
     def __init__(self, router_info, display=True, address: str | None = None):
-        """鍒濆鍖栬矾鐢卞櫒鎺у埗瀵硅薄
 
-        Parameters
-        ----------
-        router_info: str
-            璺敱鍣ㄤ俊鎭紝鏍煎紡涓?``鍝佺墝_鍨嬪彿``
-        display: bool
-            鏄惁鏄剧ず娴忚鍣ㄧ晫闈?
-        address: str | None
-            璺敱鍣ㄧ綉鍏冲湴鍧€锛屽鏋滀负绌哄垯浣跨敤榛樿鍊?
         """
-
-        # 璺敱鍣ㄥ搧鐗?
+            Init
+                Loads router‑specific configuration or XPath definitions from YAML files.
+                Logs informational or debugging messages for tracing execution.
+                Parameters
+                ----------
+                router_info : object
+                    Router information string used to derive the model and configuration paths.
+                display : object
+                    Flag indicating whether the browser should run in visible mode.
+                address : object
+                    The router's login address or IP address; if None, a default is used.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         self.router_type = router_info.split("_")[0]
-        # 璺敱鍣ㄥ畬鏁翠俊鎭?
+
         self.router_info = router_info
-        # 璺敱鍣?鍚勬帶浠?鍏冪礌 閰嶇疆鏂囦欢
+
         self.yaml_info = yamlTool(os.getcwd() + f'\\config\\router_xpath\\{self.router_type.split("_")[0]}_xpath.yaml')
-        # self.yaml_info = yamlTool(
-        #     fr'C:\Users\SH171300-1522\PycharmProjects\wifi_test\config\router_xpath\{self.router_type.split("_")[0]}_xpath.yaml')
-        # 鍏冪礌閰嶇疆鏂囦欢 鏍硅妭鐐?
+
         self.xpath = self.yaml_info.get_note(self.router_type)
-        # print(self.xpath)
-        # 璺敱鍣ㄧ櫥褰曞湴鍧€锛屼紭鍏堜娇鐢ㄤ紶鍏ュ弬鏁帮紝鍏舵浣跨敤棰勮榛樿鍊?
+
         default_address = {
             'xiaomi': '192.168.31.1',
             'asus': '192.168.50.1',
@@ -165,29 +220,56 @@ class RouterTools(RouterControl):
         self.ping_address = self.address
         logging.info("Preparing router session for %s", self.router_info)
 
-        # 鍏ㄥ眬绛夊緟3绉?锛堝綋driver 鍘绘煡璇?鎺т欢鏃剁敓鏁堬級
-
-
     def scroll_to(self, target):
+        """
+            Scroll to
+                Parameters
+                ----------
+                target : object
+                    Web element or element locator used for interaction via Selenium.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         self.driver.execute_script(self.SCROL_JS, target)
 
     def _init(self):
+        """
+            Init
+                Parameters
+                ----------
+                None
+                    This function does not accept any parameters beyond the implicit context.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         self.option = webdriver.ChromeOptions()
-        # if display == True:
-        self.option.add_argument("--start-maximized")  # 绐楀彛鏈€澶у寲
-        self.option.add_experimental_option("detach", True)  # 涓嶈嚜鍔ㄥ叧闂祻瑙堝櫒
+
+        self.option.add_argument("--start-maximized")
+        self.option.add_experimental_option("detach", True)
         self.driver = webdriver.Chrome(options=self.option)
-        # else:
-        # self.option.add_argument(argument='headless')
-        # self.driver = webdriver.Chrome(options=self.option)
+
         self.driver.implicitly_wait(3)
 
     def login(self):
-        '''
-        login in router
-        @return:
-        '''
-        # 瀹炰緥 driver 鐢ㄤ簬瀵规祻瑙堝櫒杩涜鎿嶄綔
+
+        """
+            Login
+                Interacts with the router's web interface using Selenium WebDriver.
+                Waits for specific web elements to satisfy conditions using WebDriverWait.
+                Pauses execution for a specified duration to allow operations to complete.
+                Parameters
+                ----------
+                None
+                    This function does not accept any parameters beyond the implicit context.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         self._init()
         self.driver.get(f"http://{self.address}")
         time.sleep(1)
@@ -195,24 +277,43 @@ class RouterTools(RouterControl):
             EC.presence_of_element_located((By.ID, self.xpath['username_element'])))
         self.driver.find_element(By.ID, self.xpath['username_element']).click()
         self.driver.find_element(By.ID, self.xpath['username_element']).send_keys(self.xpath['account'])
-        # input passwd
+
         self.driver.find_element(By.NAME, self.xpath['password_element']).click()
         self.driver.find_element(By.NAME, self.xpath['password_element']).send_keys(self.xpath['passwd'])
-        # click login
+
         self.driver.find_element(By.XPATH, self.xpath['signin_element'][self.router_info]).click()
-        # wait for login in done
+
         WebDriverWait(driver=self.driver, timeout=10, poll_frequency=0.5).until(
             EC.presence_of_element_located((By.ID, self.xpath['signin_done_element'])))
         time.sleep(1)
 
     def change_setting(self, router):
+        """
+            Change setting
+                Parameters
+                ----------
+                router : object
+                    Router control object or router information required to perform operations.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         ...
 
     def reboot_router(self):
-        '''
-        reboot router
-        @return:
-        '''
+        """
+            Reboot router
+                Waits for specific web elements to satisfy conditions using WebDriverWait.
+                Parameters
+                ----------
+                None
+                    This function does not accept any parameters beyond the implicit context.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         self.driver.execute_script('reboot()')
         self.driver.switch_to.alert.accept()
 
@@ -228,65 +329,107 @@ class RouterTools(RouterControl):
         self.driver.quit()
 
     def change_band(self, band):
-        '''
-        select band
-        @param band:
-        @return:
-        '''
+        """
+            Change band
+                Interacts with the router's web interface using Selenium WebDriver.
+                Parameters
+                ----------
+                band : object
+                    Radio band selection (e.g. 2.4G, 5G) when configuring wireless settings.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         bind_select = Select(self.driver.find_element(By.XPATH, self.xpath['band_element']))
         bind_select.select_by_visible_text(band)
 
-        # assert bind_select.first_selected_option.text == band, "Band not selected"
-
     def change_ssid(self, ssid):
-        '''
-        set ssid
-        @param ssid:
-        @return:
-        '''
+        """
+            Change SSID
+                Interacts with the router's web interface using Selenium WebDriver.
+                Asserts conditions to validate the success of operations.
+                Parameters
+                ----------
+                ssid : object
+                    Wi‑Fi network SSID used for association.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         ssid_element = self.driver.find_element(By.ID, self.xpath['ssid_element'])
         self.driver.execute_script(f'arguments[0].value = "{ssid}"', ssid_element)
         assert ssid_element.get_attribute('value') == ssid, "Set ssid error"
-        # self.driver.find_element(By.ID, self.xpath['ssid_element']).clear()
-        # self.driver.find_element(By.ID, self.xpath['ssid_element']).send_keys(ssid)
 
     def change_hide_ssid(self, status):
+        """
+            Change hide SSID
+                Parameters
+                ----------
+                status : object
+                    Description of parameter 'status'.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         ...
 
     def change_channel(self, channel):
-        '''
-        change channel
-        @param index: should be html source code
-        @return:
-        '''
-        # self.driver.find_element(By.XPATH, self.xpath['channel_regu_element'][self.router_info].format(index)).click()
+
+        """
+            Change channel
+                Interacts with the router's web interface using Selenium WebDriver.
+                Asserts conditions to validate the success of operations.
+                Parameters
+                ----------
+                channel : object
+                    Specific wireless channel to select during configuration.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         select = Select(
             self.driver.find_element(By.XPATH, self.xpath['channel_element'][self.router_info]))
         select.select_by_visible_text(channel)
-        # if index not in select_info:
-        #     logging.warning("Doesn't support this channel")
-        #     self.driver.find_element(By.XPATH, self.xpath['channel_element'][self.router_info].format(1)).click()
-        #     return
 
         assert select.first_selected_option.text == channel, "Channel not selected"
 
     def change_bandwidth(self, bandwidth):
-        '''
-        select bandwith
-        @param bandwith:
-        @return:
-        '''
+        """
+            Change bandwidth
+                Interacts with the router's web interface using Selenium WebDriver.
+                Asserts conditions to validate the success of operations.
+                Parameters
+                ----------
+                bandwidth : object
+                    Channel bandwidth (e.g. 20 MHz, 40 MHz, 80 MHz) when configuring wireless settings.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         bandwidth_select = Select(self.driver.find_element(By.XPATH, self.xpath['bandwidth_element']))
         bandwidth_select.select_by_visible_text(bandwidth)
 
         assert bandwidth_select.first_selected_option.text == bandwidth, "Band width mode not selected"
 
     def change_authentication(self, mode):
-        '''
-        change authentication
-        @param index: should be html source code
-        @return:
-        '''
+        """
+            Change authentication
+                Interacts with the router's web interface using Selenium WebDriver.
+                Asserts conditions to validate the success of operations.
+                Parameters
+                ----------
+                mode : object
+                    Wireless mode to configure on the router (e.g. 11n, 11ax).
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         select = Select(self.driver.find_element(
             By.XPATH, self.xpath['authentication_element'][self.router_info]))
         select.select_by_visible_text(mode)
@@ -294,11 +437,19 @@ class RouterTools(RouterControl):
         assert select.first_selected_option.text == mode, "Authentication mode not selected"
 
     def change_wep_encrypt(self, text):
-        '''
-        change wep encrypt
-        @param index:
-        @return:
-        '''
+        """
+            Change wep encrypt
+                Interacts with the router's web interface using Selenium WebDriver.
+                Asserts conditions to validate the success of operations.
+                Parameters
+                ----------
+                text : object
+                    Description of parameter 'text'.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         select = Select(self.driver.find_element(
             By.XPATH, self.xpath['wep_encrypt_regu_element'][self.router_info].format(text)))
         select.select_by_visible_text(text)
@@ -306,34 +457,58 @@ class RouterTools(RouterControl):
         assert select.first_selected_option.text == text, "Wep encrypt not selected"
 
     def change_wpa_encrypt(self, encrpyt):
-        '''
-        change wpa encrypt
-        @param index:
-        @return:
-        '''
+        """
+            Change wpa encrypt
+                Interacts with the router's web interface using Selenium WebDriver.
+                Asserts conditions to validate the success of operations.
+                Parameters
+                ----------
+                encrpyt : object
+                    Description of parameter 'encrpyt'.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         select = Select(self.driver.find_element(By.XPATH, self.xpath['wpa_encrypt_element']))
         select.select_by_visible_text(encrpyt)
 
         assert select.first_selected_option.text == encrpyt, "Wpa encrpyt not selected"
 
     def change_passwd_index(self, index):
-        '''
-        change passwd index
-        @param passwd_index: should be html source code
-        @return:
-        '''
 
+        """
+            Change passwd index
+                Interacts with the router's web interface using Selenium WebDriver.
+                Asserts conditions to validate the success of operations.
+                Parameters
+                ----------
+                index : object
+                    Description of parameter 'index'.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         select = Select(self.driver.find_element(By.XPATH, self.xpath['passwd_index_element'][self.router_info]))
         select.select_by_visible_text(index)
 
         assert select.first_selected_option.text == index, "Password index not selected"
 
     def change_wep_passwd(self, passwd):
-        '''
-        change wep passwd
-        @param passwd:
-        @return:
-        '''
+        """
+            Change wep passwd
+                Interacts with the router's web interface using Selenium WebDriver.
+                Asserts conditions to validate the success of operations.
+                Parameters
+                ----------
+                passwd : object
+                    Description of parameter 'passwd'.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         element = self.driver.find_element(By.ID, self.xpath['wep_passwd_element'])
         element.click()
         element.clear()
@@ -342,12 +517,20 @@ class RouterTools(RouterControl):
         assert element.get_property('value') == passwd, "Wep password set error"
 
     def change_passwd(self, passwd):
-        '''
-        change wpa passwd
-        @param passwd:
-        @return:
-        '''
 
+        """
+            Change passwd
+                Interacts with the router's web interface using Selenium WebDriver.
+                Asserts conditions to validate the success of operations.
+                Parameters
+                ----------
+                passwd : object
+                    Description of parameter 'passwd'.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         element = self.driver.find_element(By.XPATH, self.xpath['wpa_passwd_element'][self.router_info])
         element.click()
         element.clear()
@@ -356,11 +539,19 @@ class RouterTools(RouterControl):
         assert element.get_property('value') == passwd, "Wpa password set error"
 
     def change_protect_frame(self, frame):
-        '''
-        change protect frame
-        @param frame: should be html source code
-        @return:
-        '''
+        """
+            Change protect frame
+                Interacts with the router's web interface using Selenium WebDriver.
+                Asserts conditions to validate the success of operations.
+                Parameters
+                ----------
+                frame : object
+                    Description of parameter 'frame'.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         bind_select = Select(
             self.driver.find_element(By.XPATH, self.xpath['protect_frame_element'][self.router_info]))
         bind_select.select_by_visible_text(frame)
@@ -368,26 +559,70 @@ class RouterTools(RouterControl):
         assert bind_select.first_selected_option.text == frame, "Protect frame not selected"
 
     def apply_setting(self):
-        '''
-        click apply button
-        @return:
-        '''
+        """
+            Apply setting
+                Interacts with the router's web interface using Selenium WebDriver.
+                Parameters
+                ----------
+                None
+                    This function does not accept any parameters beyond the implicit context.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         self.driver.find_element(By.ID, self.xpath['apply_element']).click()
 
     def click_alert(self):
+        """
+            Click alert
+                Parameters
+                ----------
+                None
+                    This function does not accept any parameters beyond the implicit context.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         try:
             self.driver.switch_to.alert.accept()
         except Exception as e:
             ...
 
     def wait_setting_done(self):
+        """
+            Wait setting done
+                Waits for specific web elements to satisfy conditions using WebDriverWait.
+                Pauses execution for a specified duration to allow operations to complete.
+                Parameters
+                ----------
+                None
+                    This function does not accept any parameters beyond the implicit context.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         WebDriverWait(self.driver, 20).until_not(
-            #     //*[@id="loadingBlock"]/tbody/tr/td[2]
+
             EC.visibility_of_element_located((By.XPATH, self.xpath['setting_load_element']))
         )
         time.sleep(2)
 
     def element_is_selected(self, xpath):
+        """
+            Element is selected
+                Interacts with the router's web interface using Selenium WebDriver.
+                Parameters
+                ----------
+                xpath : object
+                    Description of parameter 'xpath'.
+                Returns
+                -------
+                object
+                    Description of the returned value.
+        """
         element = self.driver.find_element(By.XPATH, xpath)
         if element.is_selected():
             return True
@@ -395,7 +630,20 @@ class RouterTools(RouterControl):
             return False
 
     def handle_alert_or_popup(self, timeout=3):
-        # 鍏堝鐞嗗師鐢?alert
+
+        """
+            Handle alert or popup
+                Interacts with the router's web interface using Selenium WebDriver.
+                Waits for specific web elements to satisfy conditions using WebDriverWait.
+                Parameters
+                ----------
+                timeout : object
+                    Maximum time in seconds to wait for a condition to be satisfied.
+                Returns
+                -------
+                object
+                    Description of the returned value.
+        """
         try:
             alert = self.driver.switch_to.alert
             alert.accept()
@@ -403,7 +651,6 @@ class RouterTools(RouterControl):
         except NoAlertPresentException:
             pass
 
-        # 澶勭悊 HTML 寮圭獥 (OK/纭畾/纭)
         selectors = [
             "//button[text()='OK']",
             "//button[text()='确定']",
@@ -421,8 +668,7 @@ class RouterTools(RouterControl):
             except TimeoutException:
                 continue
 
-        # 濡傛灉閮芥病鏈夛紝鐩存帴杩斿洖 False锛屼笉鎶ラ敊
         return False
 
-    # def __del__(self):
-    #     self.driver.quit()
+
+

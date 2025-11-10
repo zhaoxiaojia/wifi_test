@@ -1,6 +1,8 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-"""华硕路由器基于 Telnet/NVRAM 的通用控制实现."""
+"""
+Asus telnet nvram control
+
+This module is part of the AsusRouter package.
+"""
 
 from __future__ import annotations
 
@@ -14,8 +16,17 @@ from src.tools.router_tool.AsusRouter.AsusBaseControl import AsusBaseControl
 
 
 class AsusTelnetNvramControl(AsusBaseControl):
-    """封装通过 Telnet 修改 NVRAM 的常见操作."""
-
+    """
+        Asus telnet nvram control
+            Parameters
+            ----------
+            None
+                This class is instantiated without additional parameters.
+            Returns
+            -------
+            None
+                Classes return instances implicitly when constructed.
+    """
     CHANNEL_2 = ['auto', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14']
     CHANNEL_2_CHANSPEC_MAP = {
         'auto': '0',
@@ -59,6 +70,23 @@ class AsusTelnetNvramControl(AsusBaseControl):
 
     def __init__(self, router_key: str, *, display: bool = True, address: str | None = None,
                  prompt: bytes = b':/tmp/home/root#') -> None:
+        """
+            Init
+                Parameters
+                ----------
+                router_key : object
+                    Description of parameter 'router_key'.
+                display : object
+                    Flag indicating whether the browser should run in visible mode.
+                address : object
+                    The router's login address or IP address; if None, a default is used.
+                prompt : object
+                    Description of parameter 'prompt'.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         super().__init__(router_key, display=display, address=address)
         self.host = self.address
         self.port = self.TELNET_PORT
@@ -82,11 +110,19 @@ class AsusTelnetNvramControl(AsusBaseControl):
                 '20/40/80/160MHZ': ('0', '160'),
             })
 
-    # ------------------------------------------------------------------
-    # Telnet helpers
-    # ------------------------------------------------------------------
     def _login(self) -> None:
-        """初始化 Telnet 连接并完成登录."""
+        """
+            Login
+                Logs informational or debugging messages for tracing execution.
+                Parameters
+                ----------
+                None
+                    This function does not accept any parameters beyond the implicit context.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         self.telnet = telnetlib.Telnet(self.host, self.port)
         self._is_logged_in = False
         try:
@@ -114,11 +150,38 @@ class AsusTelnetNvramControl(AsusBaseControl):
             self._is_logged_in = True
 
     def _ensure_connection(self) -> None:
+        """
+            Ensure connection
+                Parameters
+                ----------
+                None
+                    This function does not accept any parameters beyond the implicit context.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         if not self._is_logged_in or self.telnet is None or getattr(self.telnet, 'sock', None) is None:
             self._login()
 
     def telnet_write(self, cmd: Union[str, bytes], *, wait_prompt: bool = False, timeout: int = 30) -> None:
-        """发送 Telnet 命令，可选等待提示符返回."""
+        """
+            Telnet write
+                Logs informational or debugging messages for tracing execution.
+                Asserts conditions to validate the success of operations.
+                Parameters
+                ----------
+                cmd : object
+                    Description of parameter 'cmd'.
+                wait_prompt : object
+                    Description of parameter 'wait_prompt'.
+                timeout : object
+                    Maximum time in seconds to wait for a condition to be satisfied.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         self._ensure_connection()
         if isinstance(cmd, str):
             data = (cmd + '\n').encode('ascii', errors='ignore')
@@ -127,7 +190,7 @@ class AsusTelnetNvramControl(AsusBaseControl):
 
         logging.info("Executing: %r", cmd)
         try:
-            assert self.telnet is not None  # 为类型检查器消除告警
+            assert self.telnet is not None
             self.telnet.write(data)
             if wait_prompt:
                 self.telnet.read_until(self.prompt, timeout=timeout)
@@ -138,10 +201,31 @@ class AsusTelnetNvramControl(AsusBaseControl):
 
     @staticmethod
     def _normalize_bandwidth(width: str) -> str:
+        """
+            Normalize bandwidth
+                Parameters
+                ----------
+                width : object
+                    Description of parameter 'width'.
+                Returns
+                -------
+                str
+                    Description of the returned value.
+        """
         return width.replace(' ', '').upper()
 
     def _get_wl0_chanspec(self) -> str:
-        """Return chanspec based on current 2.4G channel/bandwidth."""
+        """
+            Get wl0 chanspec
+                Parameters
+                ----------
+                None
+                    This function does not accept any parameters beyond the implicit context.
+                Returns
+                -------
+                str
+                    Description of the returned value.
+        """
         channel = self._wl0_channel or 'auto'
         if channel not in self.CHANNEL_2:
             raise ConfigError('channel element error')
@@ -150,6 +234,17 @@ class AsusTelnetNvramControl(AsusBaseControl):
         return '0' if channel == 'auto' else channel
 
     def _update_wl0_chanspec(self, *, force: bool = False) -> None:
+        """
+            Update wl0 chanspec
+                Parameters
+                ----------
+                force : object
+                    Description of parameter 'force'.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         chanspec = self._get_wl0_chanspec()
         if not force and chanspec == self._last_wl0_chanspec:
             return
@@ -157,6 +252,17 @@ class AsusTelnetNvramControl(AsusBaseControl):
         self._last_wl0_chanspec = chanspec
 
     def _get_wl1_40mhz_chanspec(self, channel: str) -> str:
+        """
+            Get wl1 40mhz chanspec
+                Parameters
+                ----------
+                channel : object
+                    Specific wireless channel to select during configuration.
+                Returns
+                -------
+                str
+                    Description of the returned value.
+        """
         if channel == 'auto':
             return '0'
         try:
@@ -167,6 +273,17 @@ class AsusTelnetNvramControl(AsusBaseControl):
         return f'{channel}{suffix}'
 
     def _update_wl1_chanspec(self, *, force: bool = False) -> None:
+        """
+            Update wl1 chanspec
+                Parameters
+                ----------
+                force : object
+                    Description of parameter 'force'.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         suffix = self._wl1_chanspec_suffix
         if not suffix:
             return
@@ -182,6 +299,18 @@ class AsusTelnetNvramControl(AsusBaseControl):
         self._last_wl1_chanspec = chanspec
 
     def quit(self) -> None:
+        """
+            Quit
+                Logs informational or debugging messages for tracing execution.
+                Parameters
+                ----------
+                None
+                    This function does not accept any parameters beyond the implicit context.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         try:
             if self.telnet is not None:
                 if self._is_logged_in:
@@ -196,16 +325,46 @@ class AsusTelnetNvramControl(AsusBaseControl):
             self.telnet = None
             self._is_logged_in = False
 
-    # ------------------------------------------------------------------
-    # NVRAM setters
-    # ------------------------------------------------------------------
     def set_2g_ssid(self, ssid: str) -> None:
+        """
+            Set 2g SSID
+                Parameters
+                ----------
+                ssid : object
+                    Wi‑Fi network SSID used for association.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         self.telnet_write(f'nvram set wl0_ssid={ssid};')
 
     def set_5g_ssid(self, ssid: str) -> None:
+        """
+            Set 5g SSID
+                Parameters
+                ----------
+                ssid : object
+                    Wi‑Fi network SSID used for association.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         self.telnet_write(f'nvram set wl1_ssid={ssid};')
 
     def set_2g_wireless(self, mode: str) -> None:
+        """
+            Set 2g wireless
+                Parameters
+                ----------
+                mode : object
+                    Wireless mode to configure on the router (e.g. 11n, 11ax).
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         cmd = {
             'auto': 'nvram set wl0_11ax=1;nvram set wl0_nmode_x=0;',
             '11n': 'nvram set wl0_11ax=0;nvram set wl0_nmode_x=1;',
@@ -219,6 +378,17 @@ class AsusTelnetNvramControl(AsusBaseControl):
         self.telnet_write(cmd[mode])
 
     def set_5g_wireless(self, mode: str) -> None:
+        """
+            Set 5g wireless
+                Parameters
+                ----------
+                mode : object
+                    Wireless mode to configure on the router (e.g. 11n, 11ax).
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         cmd = {
             'auto': 'nvram set wl1_11ax=1;nvram set wl1_nmode_x=0;',
             '11a': 'nvram set wl1_11ax=0;nvram set wl1_nmode_x=7;',
@@ -232,12 +402,45 @@ class AsusTelnetNvramControl(AsusBaseControl):
         self.telnet_write(cmd[mode])
 
     def set_2g_password(self, passwd: str) -> None:
+        """
+            Set 2g password
+                Parameters
+                ----------
+                passwd : object
+                    Description of parameter 'passwd'.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         self.telnet_write(f'nvram set wl0_wpa_psk={passwd};')
 
     def set_5g_password(self, passwd: str) -> None:
+        """
+            Set 5g password
+                Parameters
+                ----------
+                passwd : object
+                    Description of parameter 'passwd'.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         self.telnet_write(f'nvram set wl1_wpa_psk={passwd};')
 
     def set_2g_authentication(self, method: str) -> None:
+        """
+            Set 2g authentication
+                Parameters
+                ----------
+                method : object
+                    Description of parameter 'method'.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         cmd = 'nvram set wl0_auth_mode_x={};'
         mode_list = self.AUTHENTICATION_METHOD if method != 'Legacy' else self.AUTHENTICATION_METHOD_LEGCY
         if method not in mode_list:
@@ -247,6 +450,17 @@ class AsusTelnetNvramControl(AsusBaseControl):
             self.set_2g_wep_encrypt('None')
 
     def set_5g_authentication(self, method: str) -> None:
+        """
+            Set 5g authentication
+                Parameters
+                ----------
+                method : object
+                    Description of parameter 'method'.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         cmd = 'nvram set wl1_auth_mode_x={};'
         mode_list = self.AUTHENTICATION_METHOD if method != 'Legacy' else self.AUTHENTICATION_METHOD_LEGCY
         if method not in mode_list:
@@ -256,6 +470,17 @@ class AsusTelnetNvramControl(AsusBaseControl):
             self.set_5g_wep_encrypt('None')
 
     def set_2g_channel(self, channel: Union[str, int]) -> None:
+        """
+            Set 2g channel
+                Parameters
+                ----------
+                channel : object
+                    Specific wireless channel to select during configuration.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         channel = str(channel)
         if channel not in self.CHANNEL_2:
             raise ConfigError('channel element error')
@@ -263,6 +488,17 @@ class AsusTelnetNvramControl(AsusBaseControl):
         self._update_wl0_chanspec(force=True)
 
     def set_2g_bandwidth(self, width: str) -> None:
+        """
+            Set 2g bandwidth
+                Parameters
+                ----------
+                width : object
+                    Description of parameter 'width'.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         if width not in self.BANDWIDTH_2:
             raise ConfigError('bandwidth element error')
         normalized_width = self._normalize_bandwidth(width)
@@ -272,12 +508,24 @@ class AsusTelnetNvramControl(AsusBaseControl):
         self.telnet_write(f'nvram set wl0_bw={self.BANDWIDTH_2.index(width)};')
 
     def set_5g_channel_bandwidth(
-        self,
-        *,
-        bandwidth: str | None = None,
-        channel: Union[str, int, None] = None,
+            self,
+            *,
+            bandwidth: str | None = None,
+            channel: Union[str, int, None] = None,
     ) -> None:
-        """同时配置 5G 信道与带宽，避免重复写入 chanspec."""
+        """
+            Set 5g channel bandwidth
+                Parameters
+                ----------
+                bandwidth : object
+                    Channel bandwidth (e.g. 20 MHz, 40 MHz, 80 MHz) when configuring wireless settings.
+                channel : object
+                    Specific wireless channel to select during configuration.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         needs_update = False
         if channel is not None:
             channel = str(channel)
@@ -302,8 +550,18 @@ class AsusTelnetNvramControl(AsusBaseControl):
         elif needs_update:
             self._update_wl1_chanspec(force=True)
 
-
     def set_2g_wep_encrypt(self, encrypt: str) -> None:
+        """
+            Set 2g wep encrypt
+                Parameters
+                ----------
+                encrypt : object
+                    Description of parameter 'encrypt'.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         if encrypt not in self.WEP_ENCRYPT:
             raise ConfigError('wep encrypt element error')
         index = '1' if '64' in encrypt else '2'
@@ -311,6 +569,17 @@ class AsusTelnetNvramControl(AsusBaseControl):
         self.telnet_write(f'nvram set wl0_wep_x={index};nvram set w1_wep_x={index};')
 
     def set_5g_wep_encrypt(self, encrypt: str) -> None:
+        """
+            Set 5g wep encrypt
+                Parameters
+                ----------
+                encrypt : object
+                    Description of parameter 'encrypt'.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         if encrypt not in self.WEP_ENCRYPT:
             raise ConfigError('wep encrypt element error')
         index = '1' if '64' in encrypt else '2'
@@ -318,12 +587,47 @@ class AsusTelnetNvramControl(AsusBaseControl):
         self.telnet_write(f'nvram set wl1_wep_x={index};nvram set w1_wep_x={index};')
 
     def set_2g_wep_passwd(self, passwd: str) -> None:
+        """
+            Set 2g wep passwd
+                Parameters
+                ----------
+                passwd : object
+                    Description of parameter 'passwd'.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         self.telnet_write(f'nvram set wl0_key1={passwd};')
 
     def set_5g_wep_passwd(self, passwd: str) -> None:
+        """
+            Set 5g wep passwd
+                Parameters
+                ----------
+                passwd : object
+                    Description of parameter 'passwd'.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         self.telnet_write(f'nvram set wl1_key1={passwd};')
 
     def commit(self) -> None:
+        """
+            Commit
+                Pauses execution for a specified duration to allow operations to complete.
+                Asserts conditions to validate the success of operations.
+                Parameters
+                ----------
+                None
+                    This function does not accept any parameters beyond the implicit context.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         self._update_wl1_chanspec()
         self.telnet_write('nvram set wl0_radio=1', wait_prompt=False)
         self.telnet_write('nvram set wl1_radio=1', wait_prompt=False)
@@ -336,10 +640,19 @@ class AsusTelnetNvramControl(AsusBaseControl):
         except EOFError:
             self._reconnect_after_restart()
 
-    # ------------------------------------------------------------------
-    # High level API
-    # ------------------------------------------------------------------
     def _reconnect_after_restart(self, max_wait: int = 120) -> None:
+        """
+            Reconnect after restart
+                Pauses execution for a specified duration to allow operations to complete.
+                Parameters
+                ----------
+                max_wait : object
+                    Description of parameter 'max_wait'.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         self._is_logged_in = False
         if self.telnet is not None:
             try:
@@ -357,6 +670,19 @@ class AsusTelnetNvramControl(AsusBaseControl):
         raise RuntimeError('Telnet reconnect after restart failed')
 
     def change_setting(self, router) -> bool:
+        """
+            Change setting
+                Pauses execution for a specified duration to allow operations to complete.
+                Logs informational or debugging messages for tracing execution.
+                Parameters
+                ----------
+                router : object
+                    Router control object or router information required to perform operations.
+                Returns
+                -------
+                bool
+                    Description of the returned value.
+        """
         if router.ssid:
             if '2' in router.band:
                 self.set_2g_ssid(router.ssid)

@@ -1,10 +1,12 @@
-#!/usr/bin/env python 
-# -*- coding: utf-8 -*-
-# @Time    : 2022/1/5 16:48
-# @Author  : chao.li
-# @Site    :
-# @File    : TestResult.py
-# @Software: PyCharm
+"""Result logging utilities for receiver sensitivity and throughput tests.
+
+This module defines the :class:`TestResult` class which collects,
+normalizes and persists test results from Wi-Fi receiver sensitivity (RVR)
+executions.  It constructs appropriate CSV headers based on the number of
+repeat runs, writes results to disk, and provides helpers for normalizing
+profile and scenario metadata.  All public methods and parameters are
+documented using a ``Parameters`` section.
+"""
 
 import logging
 import os
@@ -21,7 +23,22 @@ plt.rcParams['font.family'] = ['SimHei']
 
 
 class TestResult():
-    """Collect and persist Wi-Fi performance results for each RVR execution."""
+    """Collect and persist Wi-Fi performance results for each RVR execution.
+
+    Instances of this class manage the construction of CSV headers, the
+    accumulation of throughput results across repeated runs, and the
+    normalization of metadata such as profile modes, profile values and
+    scenario group keys.  Results are saved to a CSV file in the configured
+    log directory and can be extended to additional output formats if needed.
+
+    Parameters:
+        logdir (str): Path to the directory where log files will be written.
+        step (Sequence[Any]): A sequence of x-axis positions or other step
+            values corresponding to the measurement series.
+        repeat_times (int, optional): Number of times the measurement should be
+            repeated.  Determines how many throughput columns to allocate.
+            Defaults to ``0``.
+    """
 
     _BASE_HEADERS: Tuple[str, ...] = (
         'SerianNumber',
@@ -47,7 +64,20 @@ class TestResult():
         'Scenario_Group_Key',
     )
 
-    def __init__(self, logdir, step, repeat_times: int = 0):
+    def __init__(self, logdir: str, step: List[Any], repeat_times: int = 0) -> None:
+        """Initialize a new TestResult instance and prepare result storage.
+
+        Parameters:
+            logdir (str): Directory in which to create result files.
+            step (List[Any]): A list of x-axis values (e.g., attenuation settings)
+                used for plotting or indexing results.
+            repeat_times (int, optional): Number of repeated measurements for
+                each test case.  Determines how many throughput columns will
+                be created.  Defaults to ``0``.
+
+        Returns:
+            None
+        """
         self.logdir = logdir
         self.current_number = 0
         self.x_path = step
@@ -65,6 +95,18 @@ class TestResult():
         self.init_rvr_result()
 
     def ensure_log_file_prefix(self, test_type: str) -> None:
+        """Ensure that the current log file name starts with a given prefix.
+
+        If a log file has been created, this method will rename it so that
+        its filename begins with the upper-cased ``test_type``.  It will
+        gracefully handle missing files and OS errors.
+
+        Parameters:
+            test_type (str): A short prefix to apply to the log file name.
+
+        Returns:
+            None
+        """
         prefix = (test_type or "").strip().upper()
         if not prefix:
             return
@@ -90,12 +132,28 @@ class TestResult():
         self.log_file = str(new_path)
 
     def _build_throughput_header(self) -> List[str]:
+        """Construct the list of throughput column headers.
+
+        Returns:
+            List[str]: A list containing ``Throughput`` when there are no
+            repeated runs, or ``Throughput n`` for each run where n
+            increments from 1 to the total number of runs.
+        """
         total_runs = self._repeat_times + 1
         if total_runs <= 1:
             return ['Throughput']
         return [f'Throughput {index}' for index in range(1, total_runs + 1)]
 
     def _build_header_row(self) -> List[str]:
+        """Build the complete list of CSV header names for result files.
+
+        This method expands the single ``Throughput`` placeholder in
+        :attr:`_BASE_HEADERS` into multiple throughput columns when repeated
+        runs are configured.
+
+        Returns:
+            List[str]: The list of header names to write to the CSV.
+        """
         headers: List[str] = []
         for name in self._BASE_HEADERS:
             if name == 'Throughput':
@@ -105,8 +163,17 @@ class TestResult():
         return headers
 
     def init_rvr_result(self):
+        """Initialize on-disk files for RVR result collection.
+
+        This method creates a new CSV file for performance data and writes
+        the header row.  It also sets the path for the Excel summary file
+        used by other tools.
+
+        Returns:
+            None
+        """
         self.rvr_excelfile = os.path.join(self.logdir, 'RvrCheckExcel.xlsx')
-        if not hasattr(self, 'logFile'):
+        if not hasattr(self, 'log_file'):
             self.log_file = os.path.join(
                 self.logdir,
                 'Performance' + time.asctime().replace(' ', '_').replace(':', '_') + '.csv',
@@ -116,12 +183,16 @@ class TestResult():
                 f.write("\n")
 
     def save_result(self, result):
-        '''
-        write result to log_file
-        @param casename: wifi case name
-        @param result: tx,rx result
-        @return: None
-        '''
+        """Append a result line to the CSV log file.
+
+        Parameters:
+            result (str): A comma-separated string containing result data
+                corresponding to the base headers (excluding profile and
+                scenario metadata). Typically includes the throughput values.
+
+        Returns:
+            None
+        """
         logging.info('Writing to csv')
         mode, value = self._get_active_profile_columns()
         scenario_key = self._get_scenario_group_key()
@@ -133,6 +204,18 @@ class TestResult():
 
     # --- profile helpers -------------------------------------------------
     def set_active_profile(self, mode: Optional[str], value: Any) -> None:
+        """Set the current profile mode and value for subsequent results.
+
+        Parameters:
+            mode (Optional[str]): A symbolic name describing the active
+                profile, e.g., ``"target"`` or ``"static"``. Can be ``None``.
+            value (Any): The corresponding profile value. This can be a
+                number, string, or iterable of values. Values will be
+                normalized to a string representation.
+
+        Returns:
+            None
+        """
         normalized_mode = self._normalize_profile_mode(mode)
         normalized_value = self._normalize_profile_value(value)
         if normalized_mode == "" and normalized_value != "":
@@ -141,24 +224,64 @@ class TestResult():
         self._profile_value = normalized_value
 
     def clear_active_profile(self) -> None:
+        """Clear the current profile mode and value.
+
+        Returns:
+            None
+        """
         self._profile_mode = ""
         self._profile_value = ""
 
     def set_scenario_group_key(self, key: Optional[str]) -> None:
+        """Set the scenario group key associated with subsequent results.
+
+        Parameters:
+            key (Optional[str]): A user-defined string used to group related
+                scenarios together. May be ``None`` to clear the key.
+
+        Returns:
+            None
+        """
         self._scenario_group_key = self._normalize_scenario_group_key(key)
 
     def clear_scenario_group_key(self) -> None:
+        """Clear the scenario group key for subsequent results.
+
+        Returns:
+            None
+        """
         self._scenario_group_key = ""
 
     # internal helpers
     def _get_active_profile_columns(self) -> Tuple[str, str]:
+        """Return the current profile mode and value as a pair.
+
+        Returns:
+            Tuple[str, str]: The normalized profile mode and value strings.
+        """
         return self._profile_mode, self._profile_value
 
     def _get_scenario_group_key(self) -> str:
+        """Return the current scenario group key.
+
+        Returns:
+            str: The scenario group key or an empty string if none is set.
+        """
         return self._scenario_group_key
 
     @staticmethod
     def _normalize_profile_mode(mode: Optional[str]) -> str:
+        """Normalize a profile mode string to an uppercase canonical form.
+
+        Parameters:
+            mode (Optional[str]): A raw profile mode value.  ``None`` or an
+                empty string will result in an empty return value.
+
+        Returns:
+            str: A normalized uppercase representation of the profile mode,
+            mapping known aliases such as ``"target"`` and ``"static"`` to
+            canonical names.
+        """
         if mode is None:
             return ""
         text = str(mode).strip().lower()
@@ -174,6 +297,18 @@ class TestResult():
 
     @staticmethod
     def _normalize_profile_value(value: Any) -> str:
+        """Normalize a profile value to a concise string representation.
+
+        Parameters:
+            value (Any): A value or collection of values associated with a
+                profile.  If a collection is provided, only the first
+                non-empty normalized element will be returned.
+
+        Returns:
+            str: A string representation of the value.  Numeric values are
+            formatted to remove trailing zeros.  Non-numeric values are
+            returned as-is after stripping whitespace.
+        """
         if value is None:
             return ""
         if isinstance(value, (list, tuple, set)):
@@ -193,6 +328,17 @@ class TestResult():
 
     @staticmethod
     def _normalize_scenario_group_key(key: Optional[str]) -> str:
+        """Normalize and sanitize a scenario group key.
+
+        Parameters:
+            key (Optional[str]): A raw scenario group key value.  ``None`` or
+                an empty string will result in an empty return value.
+
+        Returns:
+            str: A sanitized version of the key where carriage returns and
+            newlines are replaced with spaces and commas are replaced with
+            underscores.
+        """
         if key is None:
             return ""
         text = str(key).strip()
@@ -203,7 +349,4 @@ class TestResult():
         return sanitized.strip()
 
 
-# rvr = RvrResult('D:\windows RVR\wins_wifi',step=[i for i in range(0,40,2)])
-# rvr.write_to_excel()
-# # rvr.write_corner_data_to_pdf()
-# rvr.write_attenuation_data_to_pdf()
+

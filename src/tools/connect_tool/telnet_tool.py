@@ -1,13 +1,7 @@
-#!/usr/bin/env python 
-# -*- coding: utf-8 -*- 
-
-
 """
-# File       : telnet_tool.py
-# Time       ：2023/6/30 16:57
-# Author     ：chao.li
-# version    ：python 3.9
-# Descrdut_iption：
+This module implements telnet tool functionality for the connect_tool package.
+
+It defines functions and classes used by the test harness to interface with devices and utilities.
 """
 
 import logging
@@ -26,16 +20,27 @@ import telnetlib3
 from telnetlib3.client import TelnetClient
 from src.tools.connect_tool.dut import dut
 from src.util.constants import DEFAULT_CONNECT_MINWAIT, DEFAULT_CONNECT_MAXWAIT, get_telnet_connect_window
-
-
+from typing import Annotated
+from src.tools.config_loader import load_config
 
 def _get_connect_wait_window() -> Tuple[float, float]:
-    """读取 telnet 连接等待窗口配置。"""
+    """
+    Retrieve connect wait window.
+
+    -------------------------
+    It logs information for debugging or monitoring purposes.
+
+    -------------------------
+    Returns
+    -------------------------
+    Tuple[float, float]
+        A value of type ``Tuple[float, float]``.
+    """
 
     try:
         cfg = load_config()
-    except Exception as exc:  # pragma: no cover - 仅在配置损坏时触发
-        logging.debug("加载配置失败，使用默认 telnet 握手等待：%s", exc)
+    except Exception as exc:  # pragma: no cover - triggered when configuration is corrupt
+        logging.debug("Failed to load configuration, using default telnet handshake wait: %s", exc)
         return DEFAULT_CONNECT_MINWAIT, DEFAULT_CONNECT_MAXWAIT
 
     connect_cfg = cfg.get("connect_type", {}) or {}
@@ -49,19 +54,19 @@ def _get_connect_wait_window() -> Tuple[float, float]:
         maxwait_val = float(maxwait)
     except (TypeError, ValueError):
         logging.warning(
-            "telnet connect_minwait/connect_maxwait 配置无效：%r/%r，退回默认值",
+            "Invalid telnet connect_minwait/connect_maxwait configuration: %r/%r, falling back to defaults",
             minwait,
             maxwait,
         )
         return DEFAULT_CONNECT_MINWAIT, DEFAULT_CONNECT_MAXWAIT
 
     if minwait_val < 0:
-        logging.warning("telnet connect_minwait %.3f 小于 0，已钳制为 0", minwait_val)
+        logging.warning("telnet connect_minwait %.3f is less than 0, clamped to 0", minwait_val)
         minwait_val = 0.0
 
     if maxwait_val < minwait_val:
         logging.warning(
-            "telnet connect_maxwait %.3f 小于 connect_minwait %.3f，已调整为相同值",
+            "telnet connect_maxwait %.3f is less than connect_minwait %.3f, adjusted to the same value",
             maxwait_val,
             minwait_val,
         )
@@ -71,63 +76,201 @@ def _get_connect_wait_window() -> Tuple[float, float]:
 
 
 class FastNegotiationTelnetClient(TelnetClient):
-    """快速确认握手状态的 Telnet 客户端。"""
+    """
+    Fast negotiation telnet client.
+
+    -------------------------
+    Returns
+    -------------------------
+    None
+        This class does not return a value.
+    """
 
     def begin_negotiation(self):
+        """
+        Begin negotiation.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         super().begin_negotiation()
         self._complete_negotiation_if_ready()
 
-    def data_received(self, data):  # noqa: D401 复用基类文档
+    def data_received(self, data):  # noqa: D401 reuse base class documentation
+        """
+        Execute the data received operation.
+
+        This function encapsulates the logic required to perform its operation. It typically validates input data, performs the core computation or side effects, and handles exceptions gracefully.
+
+        Parameters
+        ----------
+        data : Any
+            Description of the data parameter.
+
+        Returns
+        -------
+        Any
+            Description of the return value.
+        """
         super().data_received(data)
         self._complete_negotiation_if_ready()
 
-    def check_negotiation(self, final=False):  # noqa: D401 复用基类文档
+    def check_negotiation(self, final=False):  # noqa: D401 reuse base class documentation
+        """
+        Execute the check negotiation operation.
+
+        This function encapsulates the logic required to perform its operation. It typically validates input data, performs the core computation or side effects, and handles exceptions gracefully.
+
+        Parameters
+        ----------
+        final : Any
+            Description of the final parameter.
+
+        Returns
+        -------
+        Any
+            Description of the return value.
+        """
         if self._negotiation_settled(final):
+            """
+            Data received.
+    
+            -------------------------
+            Parameters
+            -------------------------
+            data : Any
+                The ``data`` parameter.
+    
+            -------------------------
+            Returns
+            -------------------------
+            None
+                This method does not return a value.
+            """
             return True
+
         return super().check_negotiation(final=final)
 
-    def _negotiation_settled(self, final=False) -> bool:
-        if self.writer is None:
-            return False
-        if any(self.writer.pending_option.values()):
-            return False
-        return final or self.duration >= self.connect_minwait
 
-    def _complete_negotiation_if_ready(self):
-        if self._waiter_connected.done():
-            return
-        if not self._negotiation_settled():
-            return
+def _negotiation_settled(self, final=False) -> bool:
+    """
+    Negotiation settled.
 
-        check_later = getattr(self, "_check_later", None)
-        if check_later is not None:
-            check_later.cancel()
-            with suppress(ValueError):
-                self._tasks.remove(check_later)
+    -------------------------
+    Parameters
+    -------------------------
+    final : Any
+        The ``final`` parameter.
 
-        self._waiter_connected.set_result(weakref.proxy(self))
+    -------------------------
+    Returns
+    -------------------------
+    bool
+        A value of type ``bool``.
+    """
+    if self.writer is None:
+        return False
+    if any(self.writer.pending_option.values()):
+        return False
+    return final or self.duration >= self.connect_minwait
+
+
+def _complete_negotiation_if_ready(self):
+    """
+    Complete negotiation if ready.
+
+    -------------------------
+    Returns
+    -------------------------
+    None
+        This method does not return a value.
+    """
+    if self._waiter_connected.done():
+        return
+    if not self._negotiation_settled():
+        return
+
+    check_later = getattr(self, "_check_later", None)
+    if check_later is not None:
+        check_later.cancel()
+        with suppress(ValueError):
+            self._tasks.remove(check_later)
+
+    self._waiter_connected.set_result(weakref.proxy(self))
 
 
 class telnet_tool(dut):
+    """
+    Telnet tool.
+
+    -------------------------
+    It runs shell commands on the target device using ADB helpers and captures the output.
+    It executes external commands via Python's subprocess module.
+    It logs information for debugging or monitoring purposes.
+    It ensures the device has root privileges when required.
+    It remounts the device's file system with write permissions.
+
+    -------------------------
+    Returns
+    -------------------------
+    None
+        This class does not return a value.
+    """
+
     def __init__(self, dut_ip):
+        """
+        Init.
+
+        -------------------------
+        It logs information for debugging or monitoring purposes.
+
+        -------------------------
+        Parameters
+        -------------------------
+        dut_ip : Any
+            The ``dut_ip`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         super().__init__()
         self.dut_ip = dut_ip
         self.port = 23
         self._connect_minwait, self._connect_maxwait = get_telnet_connect_window()
         self._client_factory = FastNegotiationTelnetClient
         logging.debug(
-            "telnet 握手等待窗口：min=%ss max=%ss",
+            "Telnet handshake wait window: min=%ss max=%ss",
             self._connect_minwait,
             self._connect_maxwait,
         )
         logging.info('Telnet target: %s:%s', self.dut_ip, self.port)
 
     async def wait_reconnect(self, timeout: int = 30, interval: float = 1.0) -> bool:
-        """等待 Telnet 连接恢复。
+        """
+        Wait for reconnect.
 
-        :param timeout: 超时时间（秒）。
-        :param interval: 每次重试前的等待时间（秒）。
-        :return: 连接成功返回 True，否则返回 False。
+        -------------------------
+        It logs information for debugging or monitoring purposes.
+
+        -------------------------
+        Parameters
+        -------------------------
+        timeout : Any
+            Timeout in seconds for waiting or connection operations.
+        interval : Any
+            The ``interval`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        bool
+            A value of type ``bool``.
         """
         if timeout <= 0:
             logging.error(
@@ -236,13 +379,52 @@ class telnet_tool(dut):
         return False
 
     def wait_reconnect_sync(self, timeout: int = 30, interval: float = 1.0) -> bool:
-        """同步等待 Telnet 连接恢复。"""
+        """
+        Wait for reconnect sync.
+
+        -------------------------
+        It logs information for debugging or monitoring purposes.
+
+        -------------------------
+        Parameters
+        -------------------------
+        timeout : Any
+            Timeout in seconds for waiting or connection operations.
+        interval : Any
+            The ``interval`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        bool
+            A value of type ``bool``.
+        """
         logging.debug(
             "Synchronously waiting for telnet reconnect to %s:%s", self.dut_ip, self.port
         )
         return asyncio.run(self.wait_reconnect(timeout=timeout, interval=interval))
 
     def checkoutput(self, cmd, wildcard=''):
+        """
+        Checkoutput.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+
+        -------------------------
+        Parameters
+        -------------------------
+        cmd : Any
+            Command string to parse or execute.
+        wildcard : Any
+            The ``wildcard`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         connection_errors = (ConnectionError, OSError, asyncio.TimeoutError, RuntimeError)
         try:
             return asyncio.run(self.telnet_client(cmd))
@@ -255,8 +437,43 @@ class telnet_tool(dut):
 
     @pytest.mark.asyncio
     async def telnet_client(self, command):
+        """
+        Telnet client.
+
+        -------------------------
+        It logs information for debugging or monitoring purposes.
+
+        -------------------------
+        Parameters
+        -------------------------
+        command : Any
+            The ``command`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
+
         async def read_all(reader, timeout=2):
-            """循环读取数据，若超时无数据，则退出"""
+            """
+            Read all.
+
+            -------------------------
+            Parameters
+            -------------------------
+            reader : Any
+                The ``reader`` parameter.
+            timeout : Any
+                Timeout in seconds for waiting or connection operations.
+
+            -------------------------
+            Returns
+            -------------------------
+            Any
+                The result produced by the function.
+            """
             output = []
             while True:
                 try:
@@ -281,11 +498,9 @@ class telnet_tool(dut):
                     connect_minwait=self._connect_minwait,
                     connect_maxwait=self._connect_maxwait,
                 )
-                # 发送命令
                 writer.write(command + "\n")
                 await writer.drain()
 
-                # 读取命令执行结果
                 result = await read_all(reader)
                 return result
             except asyncio.CancelledError:
@@ -332,28 +547,119 @@ class telnet_tool(dut):
         )
 
     def popen_term(self, command):
+        """
+        Popen term.
+
+        -------------------------
+        It executes external commands via Python's subprocess module.
+
+        -------------------------
+        Parameters
+        -------------------------
+        command : Any
+            The ``command`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         return subprocess.Popen(command.split(), stdout=subprocess.Pdut_ipE, stderr=subprocess.Pdut_ipE)
 
     def subprocess_run(self, cmd):
+        """
+        Subprocess run.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+        It executes external commands via Python's subprocess module.
+
+        -------------------------
+        Parameters
+        -------------------------
+        cmd : Any
+            Command string to parse or execute.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         return self.checkoutput(cmd)
 
     def root(self):
+        """
+        Root.
+
+        -------------------------
+        It ensures the device has root privileges when required.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         ...
 
     def remount(self):
+        """
+        Remount.
+
+        -------------------------
+        It remounts the device's file system with write permissions.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         ...
 
     def getprop(self, key):
+        """
+        Getprop.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+
+        -------------------------
+        Parameters
+        -------------------------
+        key : Any
+            Key identifier for sending input events.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         return self.checkoutput('getprop %s' % key)
 
     def get_mcs_tx(self):
+        """
+        Retrieve mcs tx.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         return 'mcs_tx'
 
     def get_mcs_rx(self):
+        """
+        Retrieve mcs rx.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         return 'mcs_rx'
-# tl = telnet_tool('192.168.50.207')
-# tl.close()
-# print(tl.checkoutput('iw dev wlan0 link'))
-# print(tl.checkoutput('iw dev wlan0 link'))
-# print('aaa')
-# print(tl.checkoutput('ls'))

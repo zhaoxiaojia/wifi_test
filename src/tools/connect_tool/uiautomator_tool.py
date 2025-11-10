@@ -1,43 +1,79 @@
-#!/usr/bin/env python 
-# -*- coding: utf-8 -*-
-# @Time    : 2022/4/27 10:08
-# @Author  : chao.li
-# @Site    :
-# @File    : uiautomator_tool.py
-# @Software: PyCharm
-
 import logging
 import time
 import uiautomator2 as u2
 
 
 class UiautomatorTool:
-    '''
-    Singleton class,should not be inherited
-    Uiautomator2 instance
+    """
+    Uiautomator tool.
 
-    Attributes:
-        d : uiautomator2 instance
+    -------------------------
+    It logs information for debugging or monitoring purposes.
+    It introduces delays to allow the device to process commands.
 
-    '''
+    -------------------------
+    Returns
+    -------------------------
+    None
+        This class does not return a value.
+    """
 
     def __init__(self, serialnumber, type="u2"):
+        """
+        Init.
+
+        -------------------------
+        Parameters
+        -------------------------
+        serialnumber : Any
+            The ADB serial number identifying the target device.
+        type : Any
+            Type specifier for the UI automation tool (e.g., "u2").
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         if type == "u2":
             self.d2 = u2.connect(serialnumber)
-        # logging.debug(f'device info {self.d.info}')
 
     def __new__(cls, *args, **kwargs):
+        """
+        New.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         if not hasattr(UiautomatorTool, "_instance"):
             if not hasattr(UiautomatorTool, "_instance"):
                 UiautomatorTool._instance = object.__new__(cls)
         return UiautomatorTool._instance
 
     def wait(self, text):
-        '''
-        wait for widget
-        @param text: widget text name
-        @return: None
-        '''
+        """
+        Wait for.
+
+        -------------------------
+        It logs information for debugging or monitoring purposes.
+        It introduces delays to allow the device to process commands.
+
+        -------------------------
+        Parameters
+        -------------------------
+        text : Any
+            Text to input into the device.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         logging.info(f'waiting for {text}')
         for _ in range(5):
             if self.d2.exists(text=text):
@@ -47,11 +83,25 @@ class UiautomatorTool:
         logging.debug('not click')
 
     def wait_not_exist(self, text):
-        '''
-        wait not exist widget
-        @param text: widget text name
-        @return: None
-        '''
+        """
+        Wait for not exist.
+
+        -------------------------
+        It logs information for debugging or monitoring purposes.
+        It introduces delays to allow the device to process commands.
+
+        -------------------------
+        Parameters
+        -------------------------
+        text : Any
+            Text to input into the device.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         logging.info(f'waiting for {text} disappear')
         for _ in range(5):
             if not self.d2.exists(text=text):
@@ -60,12 +110,23 @@ class UiautomatorTool:
         logging.info('still exists')
 
     def send_keys(self, searchKey, attribute):
-        '''
-        input text in widget
-        @param searchKey: widget name
-        @param attribute: text
-        @return: None
-        '''
+        """
+        Send keys.
+
+        -------------------------
+        Parameters
+        -------------------------
+        searchKey : Any
+            The ``searchKey`` parameter.
+        attribute : Any
+            The ``attribute`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         if self.d2.exists(resourceId=searchKey):
             self.d2(resourceId=searchKey).send_keys(attribute)
         if self.d2.exists(text=searchKey):

@@ -1,5 +1,30 @@
 #!/usr/bin/env python
 # encoding: utf-8
+"""
+About page for the Wi‑Fi Test Tool GUI.
+
+This module defines a Qt-based page that presents build/version metadata,
+quick links to local configuration folders and frequently used config files,
+and internal support resources (email / Jira / Confluence).
+
+Goals
+-----
+- Centralize **diagnostic context** (version, build time, data source) for both users and maintainers.
+- Offer **single-click access** to config directories and key files to reduce support effort.
+- Encourage **compliance** by surfacing policy reminders in the UI.
+
+Typical usage
+-------------
+The page is embedded inside the main FluentWindow navigation stack:
+
+>>> page = AboutPage(parent=window)
+>>> window.addSubInterface(page, icon=..., text="About")
+
+Notes
+-----
+This page reads project metadata via :func:`src.util.constants.get_build_metadata` and
+optionally parses the latest version and acknowledgements from a local README.md.
+"""
 
 from __future__ import annotations
 
@@ -33,9 +58,34 @@ from .theme import (
 
 
 class AboutPage(CardWidget):
-    """展示版本与构建信息的页面"""
+    """
+    The “About / Help” page. Displays build & version info, plus resource and support entry points.
+
+    UI structure
+    ------------
+    - Title section (StrongBodyLabel)
+    - Info table (key/value): app name, version, build time, author, acknowledgements
+    - Data source label
+    - Resources card (CardWidget)
+        * Quick directory buttons (config directory / res directory)
+        * One-click open for frequently used config files (e.g., config_dut.yaml)
+        * Support & documentation (maintainer email, Jira, internal docs)
+        * Compliance reminder (e.g., encryption / retention)
+
+    Parameters
+    ----------
+    parent : QWidget | None
+        Parent widget. Used for theme/typography inheritance and window hierarchy.
+
+    Notes
+    -----
+    - All visible widgets adopt a unified theme and font (see ``theme.py``).
+    - The second table column stretches to fit content to avoid truncation.
+    - The page performs no network I/O; external links open in the system browser.
+    """
 
     def __init__(self, parent: QWidget | None = None) -> None:
+        """Initialize widgets, set up layouts, and populate metadata into the table and labels."""
         super().__init__(parent)
         self.setObjectName("aboutPage")
         apply_theme(self, recursive=True)
@@ -90,6 +140,7 @@ class AboutPage(CardWidget):
         resource_title.setFont(base_font)
         resources_layout.addWidget(resource_title)
 
+        # Directory shortcuts
         config_layout = QHBoxLayout()
         config_layout.setSpacing(6)
         open_config_btn = PushButton("Open config directory", self.resources_card)
@@ -104,6 +155,7 @@ class AboutPage(CardWidget):
         config_layout.addStretch(1)
         resources_layout.addLayout(config_layout)
 
+        # Frequently used config files: one-click open
         config_files_layout = QHBoxLayout()
         config_files_layout.setSpacing(6)
         for file_name in ("config_dut.yaml", "config_execution.yaml", "config_tool.yaml", "compatibility_dut.json"):
@@ -114,6 +166,7 @@ class AboutPage(CardWidget):
         config_files_layout.addStretch(1)
         resources_layout.addLayout(config_files_layout)
 
+        # Support & documentation: maintainer / Jira / internal docs
         support_layout = QHBoxLayout()
         support_layout.setSpacing(6)
         email_btn = PushButton("Contact Maintainer", self.resources_card)
@@ -126,16 +179,17 @@ class AboutPage(CardWidget):
         jira_btn.setFont(base_font)
         support_layout.addWidget(jira_btn)
 
-        doc_btn = PushButton("Internal Documentation",self.resources_card)
+        doc_btn = PushButton("Internal Documentation", self.resources_card)
         doc_btn.clicked.connect(self._open_internal_doc)
         doc_btn.setFont(base_font)
         support_layout.addWidget(doc_btn)
         support_layout.addStretch(1)
         resources_layout.addLayout(support_layout)
 
+        # Compliance reminder
         compliance_label = QLabel(
-            "Internal use only: Follow data collection, transfer, and storage compliance policies."
-            " Encrypt sensitive logs as required and purge them within 30 days.",
+            "Internal use only: Follow data collection, transfer, and storage compliance policies. "
+            "Encrypt sensitive logs when required and purge them within 30 days.",
             self.resources_card,
         )
         compliance_label.setWordWrap(True)
@@ -144,7 +198,7 @@ class AboutPage(CardWidget):
         resources_layout.addWidget(compliance_label)
 
         hint_label = QLabel(
-            "Refer to the corporate intranet Wireless Testing Data Compliance Manual for more guidance.",
+            "For more details, see the corporate intranet Wireless Testing Data Compliance Manual.",
             self.resources_card,
         )
         hint_label.setWordWrap(True)
@@ -153,15 +207,38 @@ class AboutPage(CardWidget):
         resources_layout.addWidget(hint_label)
 
         layout.addWidget(self.resources_card)
-
         layout.addStretch(1)
 
         self._populate_metadata()
 
+    # ---------------------------------------------------------------------
+    # Helpers / Actions
+    # ---------------------------------------------------------------------
+
     def _open_path(self, path: str) -> None:
+        """
+        Open a local path in the OS file manager.
+
+        Parameters
+        ----------
+        path : str
+            Target file or directory path, absolute or relative.
+
+        Side Effects
+        ------------
+        Calls :class:`QDesktopServices` to invoke an external program (platform-dependent).
+        """
         QDesktopServices.openUrl(QUrl.fromLocalFile(path))
 
     def _show_support_email(self) -> None:
+        """
+        Show a dialog containing the maintainer's contact email.
+
+        Notes
+        -----
+        - This method does not send an actual email.
+        - Users compose and send messages via their own mail client.
+        """
         QMessageBox.information(
             self,
             "Maintainer Contact",
@@ -169,12 +246,41 @@ class AboutPage(CardWidget):
         )
 
     def _open_ticket_portal(self) -> None:
+        """
+        Open the Jira submission portal in the default browser.
+
+        Side Effects
+        ------------
+        Uses :class:`QDesktopServices` to open an external URL.
+        """
         QDesktopServices.openUrl(QUrl("https://jira.amlogic.com/browse/FQ-383"))
 
     def _open_internal_doc(self) -> None:
+        """
+        Open internal documentation (Confluence) in the default browser.
+
+        Security
+        --------
+        Access requires corporate intranet permissions; it is not reachable externally.
+        """
         QDesktopServices.openUrl(QUrl("https://confluence.amlogic.com/pages/viewpage.action?pageId=448826402"))
 
     def _populate_metadata(self) -> None:
+        """
+        Read/normalize build metadata and fill the info table and “Data Source” label.
+
+        Pipeline
+        --------
+        1. Read metadata via :func:`get_build_metadata`.
+        2. Parse the latest version from README.md (if available).
+        3. Parse acknowledgements from README.md (if available).
+        4. Fill the QTableWidget; normalize and display the data source string.
+
+        Notes
+        -----
+        - Values are safely cast to strings and stripped; empty values fallback to ``"Unknown"``.
+        - The “Data Source” string collapses excessive spaces and converts Chinese punctuation to English commas.
+        """
         metadata = get_build_metadata()
         latest_version = self._get_latest_version_from_changelog(metadata)
         acknowledgements = self._get_acknowledgements_from_readme()
@@ -183,16 +289,8 @@ class AboutPage(CardWidget):
             ("Application Name", metadata.get("package_name", "Unknown")),
             ("Version", latest_version or "Unknown"),
             ("Build Time", metadata.get("build_time", "Unknown")),
-            # ("Git Branch", metadata.get("branch", "Unknown")),
-            # ("Commit Hash", metadata.get("commit_hash", "Unknown")),
-            # ("Commit Short Hash", metadata.get("commit_short", "Unknown")),
-            # ("Commit Author", metadata.get("commit_author", "Unknown")),
-            # ("Commit Date", metadata.get("commit_date", "Unknown")),
             ("Author", "chao.li"),
-            (
-                "Acknowledgements",
-                acknowledgements if acknowledgements else "Unknown",
-            ),
+            ("Acknowledgements", acknowledgements if acknowledgements else "Unknown"),
         ]
 
         self.info_table.setRowCount(len(display_rows))
@@ -200,7 +298,7 @@ class AboutPage(CardWidget):
             key_item = QTableWidgetItem(label)
             if not isinstance(value, str):
                 value = str(value) if value is not None else ""
-            value_item = QTableWidgetItem(value.strip() or "Unknown")
+            value_item = QTableWidgetItem((value or "").strip() or "Unknown")
             key_item.setFlags(Qt.ItemIsEnabled)
             value_item.setFlags(Qt.ItemIsEnabled)
             self.info_table.setItem(row, 0, key_item)
@@ -217,6 +315,27 @@ class AboutPage(CardWidget):
         self.source_label.setText(f"Data Source: {source}")
 
     def _get_latest_version_from_changelog(self, metadata: dict[str, str]) -> str:
+        """
+        Extract the latest version label from README.md’s “Changelog” section.
+        Falls back to ``metadata["version"]`` when parsing fails.
+
+        Heuristic
+        ---------
+        - Locate the “## Changelog” header.
+        - Treat the first non-empty subsequent line as the latest entry.
+        - Prefer a token like ``v1.2.3``; otherwise return the full line.
+        - If nothing matches, return ``metadata["version"]`` or ``"Unknown"``.
+
+        Parameters
+        ----------
+        metadata : dict[str, str]
+            Metadata from :func:`get_build_metadata`.
+
+        Returns
+        -------
+        str
+            A version string.
+        """
         default_version = metadata.get("version") or "Unknown"
         readme_path = Path(Paths.BASE_DIR) / "README.md"
         try:
@@ -248,6 +367,22 @@ class AboutPage(CardWidget):
         return latest_entry or (default_version or "Unknown")
 
     def _get_acknowledgements_from_readme(self) -> str:
+        """
+        Extract acknowledgements from the README.md section “Authors and Acknowledgement(s)”.
+
+        Parsing rules
+        -------------
+        - Header pattern: ``#+\\s*Authors?\\s+and\\s+acknowledg?ment`` (case-insensitive).
+        - Collect content until the next header line (starting with ``#``).
+        - Ignore empty lines and lines that contain only bullet markers.
+        - Strip leading markers (e.g., ``-``, ``*``, ``•``, ``@``), then de-duplicate.
+        - Join with ``, `` to form a concise human-friendly list.
+
+        Returns
+        -------
+        str
+            A comma-separated list of names; empty string when nothing is found.
+        """
         readme_path = Path(Paths.BASE_DIR) / "README.md"
         try:
             content = readme_path.read_text(encoding="utf-8", errors="ignore")
@@ -281,4 +416,3 @@ class AboutPage(CardWidget):
                 ack_lines.append(cleaned)
 
         return ", ".join(dict.fromkeys(ack_lines))
-

@@ -1,5 +1,3 @@
-"""Utilities to export RVR performance charts without the UI."""
-
 from __future__ import annotations
 
 import logging
@@ -21,14 +19,53 @@ from src.util.rvr_chart_logic import RvrChartLogic
 
 
 class PerformanceRvrChartGenerator(RvrChartLogic):
-    """Generate RVR/RVO summary charts for performance test results."""
+    """
+    Performance RVR chart generator
 
+    Parameters
+    ----------
+    None
+        This class is instantiated without additional parameters.
+
+    Returns
+    -------
+    None
+        Classes return instances implicitly when constructed.
+    """
     def __init__(self, charts_subdir: str | None = None) -> None:
+        """
+        Init
+
+        Parameters
+        ----------
+        charts_subdir : object
+            Description of parameter 'charts_subdir'.
+
+        Returns
+        -------
+        None
+            This function does not return a value.
+        """
         super().__init__()
         self._charts_subdir = charts_subdir or "rvr_charts"
 
     def generate(self, path: Path) -> List[Path]:
-        """Build charts for *path* and return the saved image paths."""
+        """
+        Generate
+
+        Logs informational or warning messages for debugging and status reporting.
+        Groups data by specific keys for further aggregation and visualization.
+
+        Parameters
+        ----------
+        path : object
+            File system path pointing to a CSV report or result directory.
+
+        Returns
+        -------
+        List[Path]
+            Description of the returned value.
+        """
         path = path.resolve()
         if not path.exists():
             logging.warning("RVR result file not found: %s", path)
@@ -84,8 +121,30 @@ class PerformanceRvrChartGenerator(RvrChartLogic):
                 results.append(placeholder)
         return results
 
-    # --- helpers to render matplotlib charts ---
+
     def _save_line_chart(self, group: pd.DataFrame, title: str, charts_dir: Path) -> Optional[Path]:
+        """
+        Save line chart
+
+        Logs informational or warning messages for debugging and status reporting.
+        Generates charts using Matplotlib and saves them as image files.
+        Loads or processes data using pandas DataFrame operations.
+        Groups data by specific keys for further aggregation and visualization.
+
+        Parameters
+        ----------
+        group : object
+            Pandas DataFrame containing grouped results by test metadata.
+        title : object
+            Title text used when saving charts or creating placeholders.
+        charts_dir : object
+            Directory in which chart images should be saved.
+
+        Returns
+        -------
+        Optional[Path]
+            Description of the returned value.
+        """
         steps = self._collect_step_labels(group)
         if not steps:
             return self._create_empty_chart(charts_dir, title, [], chart_type="line")
@@ -168,6 +227,27 @@ class PerformanceRvrChartGenerator(RvrChartLogic):
             plt.close(fig)
 
     def _save_rvo_chart(self, group: pd.DataFrame, title: str, charts_dir: Path) -> Optional[Path]:
+        """
+        Save RVO chart
+
+        Logs informational or warning messages for debugging and status reporting.
+        Generates charts using Matplotlib and saves them as image files.
+        Loads or processes data using pandas DataFrame operations.
+
+        Parameters
+        ----------
+        group : object
+            Pandas DataFrame containing grouped results by test metadata.
+        title : object
+            Title text used when saving charts or creating placeholders.
+        charts_dir : object
+            Directory in which chart images should be saved.
+
+        Returns
+        -------
+        Optional[Path]
+            Description of the returned value.
+        """
         angle_positions = self._collect_angle_positions(group)
         if not angle_positions:
             return self._create_empty_chart(charts_dir, title, [], chart_type="polar")
@@ -229,6 +309,28 @@ class PerformanceRvrChartGenerator(RvrChartLogic):
     def _create_empty_chart(
         self, charts_dir: Path, title: str, steps: List[str], chart_type: str = "line"
     ) -> Optional[Path]:
+        """
+        Create empty chart
+
+        Logs informational or warning messages for debugging and status reporting.
+        Generates charts using Matplotlib and saves them as image files.
+
+        Parameters
+        ----------
+        charts_dir : object
+            Directory in which chart images should be saved.
+        title : object
+            Title text used when saving charts or creating placeholders.
+        steps : object
+            Description of parameter 'steps'.
+        chart_type : object
+            Description of parameter 'chart_type'.
+
+        Returns
+        -------
+        Optional[Path]
+            Description of the returned value.
+        """
         chart_type = (chart_type or "line").lower()
         if chart_type == "polar":
             fig = plt.figure(figsize=(8.0, 6.2), dpi=CHART_DPI)
@@ -277,6 +379,20 @@ class PerformanceRvrChartGenerator(RvrChartLogic):
 
 
 def generate_rvr_charts(result_file: Path | str, *, charts_subdir: str | None = None) -> List[Path]:
-    """Convenience wrapper to build charts for *result_file*."""
+    """
+    Generate RVR charts
+
+    Parameters
+    ----------
+    result_file : object
+        Description of parameter 'result_file'.
+    charts_subdir : object
+        Description of parameter 'charts_subdir'.
+
+    Returns
+    -------
+    List[Path]
+        Description of the returned value.
+    """
     generator = PerformanceRvrChartGenerator(charts_subdir=charts_subdir)
     return generator.generate(Path(result_file))

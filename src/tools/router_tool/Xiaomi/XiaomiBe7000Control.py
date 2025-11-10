@@ -1,13 +1,8 @@
-#!/usr/bin/env python 
-# encoding: utf-8 
-'''
-@author: chao.li
-@contact: chao.li@amlogic.com
-@software: pycharm
-@file: XiaomiRedax6000Control.py 
-@time: 2024/12/2 11:20 
-@desc: 
-'''
+"""
+Xiaomi be7000 control
+
+This module is part of the AsusRouter package.
+"""
 
 import logging
 import time
@@ -21,11 +16,47 @@ from src.tools.router_tool.Xiaomi.XiaomiBaseControl import XiaomiBaseControl
 
 
 class XiaomiBe7000Control(XiaomiBaseControl):
+    """
+        Xiaomi be7000 control
+            Parameters
+            ----------
+            None
+                This class is instantiated without additional parameters.
+            Returns
+            -------
+            None
+                Classes return instances implicitly when constructed.
+    """
 
     def __init__(self, address: str | None = None):
+        """
+            Init
+                Parameters
+                ----------
+                address : object
+                    The router's login address or IP address; if None, a default is used.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         super().__init__('xiaomi_be7000', display=True, address=address)
 
     def change_setting(self, router):
+        """
+            Change setting
+                Interacts with the router's web interface using Selenium WebDriver.
+                Pauses execution for a specified duration to allow operations to complete.
+                Logs informational or debugging messages for tracing execution.
+                Parameters
+                ----------
+                router : object
+                    Router control object or router information required to perform operations.
+                Returns
+                -------
+                object
+                    Description of the returned value.
+        """
         super().change_setting(router)
         try:
             wait_for = self.driver.find_element(
@@ -46,9 +77,9 @@ class XiaomiBe7000Control(XiaomiBaseControl):
         except Exception:
             time.sleep(75)
             logging.warning("Fail to find hold on windows")
-        # 修改wiremode
+
         if router.wireless_mode:
-            # //*[@id="WIFI6switch"]
+
             wifi6_switch = self.driver.find_element(By.XPATH, '//*[@id="WIFI6switch"]')
             self.scroll_to(wifi6_switch)
             if wifi6_switch.get_attribute("data-on") != '0' if router.wireless_mode == '11ax' else '1':
@@ -57,7 +88,7 @@ class XiaomiBe7000Control(XiaomiBaseControl):
         logging.info('Router setting done')
         self.driver.quit()
         return True
-        # except Exception as e:
-        #     logging.info('Router change setting with error')
-        #     logging.info(e)
-        #     return False
+
+
+
+

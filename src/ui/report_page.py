@@ -1,5 +1,37 @@
 #!/usr/bin/env python
 # encoding: utf-8
+"""
+Report viewer page with live tailing and RVR/RVO chart rendering.
+
+This module provides a Qt page that:
+- Lists files under a report directory and **tails** the selected text file in real time.
+- Detects RVR/RVO/performance result files (CSV/Excel) and **renders charts** into tabs.
+- Offers **interactive tooltips** on chart points via a QLabel subclass that tracks mouse hover.
+- Supports **auto-refresh** of charts when the underlying result file is updated.
+
+Design Overview
+---------------
+The page combines two main views:
+1) **Text tailer** – a QTextEdit that incrementally appends new lines from a log-like file.
+2) **Chart viewer** – a QTabWidget holding one tab per chart generated from an RVR/RVO result file.
+The view is switched based on file type/name heuristics.
+
+Key choices:
+- Matplotlib is used for static rendering to a QPixmap, which is then hosted by a QLabel-like widget.
+- Point interaction (tooltips) is achieved by recording the pixel-space coordinates of plotted points
+  and dynamically mapping mouse position to the nearest point.
+- Auto-refresh is timer-driven (300 ms) to accommodate both text growth and chart re-rendering.
+
+Failure modes considered:
+- Missing or unreadable files.
+- Partially written CSV/Excel files (e.g., while a test is running).
+- Non-UTF8 text logs (codec fallbacks).
+
+Threading:
+- All logic here is single-threaded on the GUI thread; the periodic timer is light-weight and
+  the matplotlib rendering generates a single PNG per (re)render. For very large datasets,
+  consider offloading chart rendering to a worker thread and updating the label on completion.
+"""
 
 from __future__ import annotations
 
@@ -55,12 +87,56 @@ from src.util.constants import (
 )
 from src.util.rvr_chart_logic import RvrChartLogic
 
+
 class InteractiveChartLabel(QLabel):
-    """QLabel subclass that shows tooltips for chart points when hovered."""
+    """
+    QLabel subclass that displays **HTML tooltips** for chart points and
+    automatically **rescales** interactive coordinates when the label resizes.
+
+    Purpose
+    -------
+    Matplotlib renders static bitmaps. To keep interaction, we pre-compute the
+    pixel coordinates of plotted points and attach them to this label. On hover,
+    the label finds the nearest point within a hit radius and shows a tooltip.
+
+    Attributes
+    ----------
+    _TOOLTIP_CONFIGURED : bool
+        Process-wide guard to configure tooltip font and palette only once.
+    _base_points : list[dict]
+        Point list in the coordinate system of the **original** (unscaled) pixmap.
+        Each dict contains at least ``{'position': (x_px, y_px), 'tooltip': str}``.
+    _points : list[dict]
+        Scaled/translated copy of ``_base_points`` in **current** label coordinates.
+        Recomputed on every resize or pixmap change.
+    _hit_radius : int
+        Radius in pixels used to detect hover hit; scaled based on current pixmap size.
+    _original_pixmap : QPixmap | None
+        Keeps the unscaled pixmap to allow aspect-ratio-preserving resize operations.
+    _original_width/_original_height : int
+        Dimensions of the stored original pixmap (0 when undefined).
+    _current_pixmap_width/_current_pixmap_height : int
+        Dimensions of the currently displayed pixmap after scaling.
+    _last_point : dict | None
+        The last point that triggered a tooltip; used to minimize repeated work.
+
+    Notes
+    -----
+    - The class is UI-only (no file or network I/O).
+    - Tooltips use :class:`QToolTip` and follow system behavior (may be suppressed by OS).
+    """
 
     _TOOLTIP_CONFIGURED = False
 
     def __init__(self, parent=None):
+        """
+        Initialize the label, configure tooltip appearance, and prepare state.
+
+        Parameters
+        ----------
+        parent : QWidget | None
+            Owning widget.
+        """
         super().__init__(parent)
         if not InteractiveChartLabel._TOOLTIP_CONFIGURED:
             QToolTip.setFont(QFont(FONT_FAMILY, 11))
@@ -70,6 +146,7 @@ class InteractiveChartLabel(QLabel):
                     "border: 1px solid #7f7f7f; padding: 4px; }"
                 )
             InteractiveChartLabel._TOOLTIP_CONFIGURED = True
+
         self.setAlignment(Qt.AlignCenter)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self._points: list[dict[str, object]] = []
@@ -83,11 +160,34 @@ class InteractiveChartLabel(QLabel):
         self._current_pixmap_height: int = 0
         self.setMouseTracking(True)
 
+    # ------------------------- public API -------------------------
+
     def set_points(self, points: list[dict[str, object]]) -> None:
+        """
+        Set the **original-space** point list and refresh the scaled copy.
+
+        Parameters
+        ----------
+        points : list[dict[str, object]]
+            Items must include ``'position'`` as (x_px, y_px) relative to the
+            unscaled pixmap used at render time. Any additional fields (e.g. a
+            prebuilt ``'tooltip'`` HTML) are preserved verbatim.
+        """
         self._base_points = points or []
         self._refresh_points()
 
+    # ------------------------- events -------------------------
+
     def mouseMoveEvent(self, event):
+        """
+        Show or hide a tooltip while moving across the nearest chart point.
+
+        Behavior
+        --------
+        - Compute squared distance from cursor to each candidate point.
+        - If the closest point is within ``_hit_radius``, show its tooltip.
+        - Avoid flicker by only updating when the target point actually changes.
+        """
         if self._points:
             target = self._find_point(event.pos())
             if target is not self._last_point:
@@ -100,15 +200,27 @@ class InteractiveChartLabel(QLabel):
         super().mouseMoveEvent(event)
 
     def mousePressEvent(self, event):
+        """Hide any visible tooltip and propagate the event to the base class."""
         QToolTip.hideText()
         super().mousePressEvent(event)
 
     def leaveEvent(self, event):
+        """Clear hover state and hide tooltip when the cursor leaves the label."""
         self._last_point = None
         QToolTip.hideText()
         super().leaveEvent(event)
 
+    # ------------------ pixmap / resize plumbing ------------------
+
     def setPixmap(self, pixmap: QPixmap) -> None:  # type: ignore[override]
+        """
+        Store the **original** pixmap for scaling math, then update the display.
+
+        Parameters
+        ----------
+        pixmap : QPixmap
+            New image to show. If ``None`` or null, clears internal size records.
+        """
         if pixmap is None or pixmap.isNull():
             self._original_pixmap = None
             self._original_width = 0
@@ -125,12 +237,35 @@ class InteractiveChartLabel(QLabel):
         self._refresh_points()
 
     def resizeEvent(self, event):
+        """
+        Recompute the scaled pixmap and derived point positions on widget resize.
+
+        Notes
+        -----
+        The method preserves aspect ratio and centers the scaled pixmap, then
+        applies the same transform to point coordinates.
+        """
         super().resizeEvent(event)
         if self._original_pixmap is not None:
             self._update_scaled_pixmap()
             self._refresh_points()
 
+    # ------------------------- internals -------------------------
+
     def _find_point(self, pos):
+        """
+        Return the closest point within the hit radius; otherwise ``None``.
+
+        Parameters
+        ----------
+        pos : QPoint
+            Cursor position in the label's current coordinate space.
+
+        Returns
+        -------
+        dict | None
+            The closest point dict as provided to :meth:`set_points`, or ``None``.
+        """
         radius_sq = float(self._hit_radius * self._hit_radius)
         best_point = None
         best_distance = radius_sq
@@ -149,6 +284,17 @@ class InteractiveChartLabel(QLabel):
         return best_point
 
     def _refresh_points(self) -> None:
+        """
+        Recalculate scaled positions and adjust hover radius for current size.
+
+        Details
+        -------
+        - If no base points are set, interaction is disabled.
+        - When the original or current pixmap size is unknown, base points are
+          copied verbatim to avoid crashes; interaction will be approximate.
+        - The hover radius is scaled by the average of X/Y scaling factors with
+          a reasonable minimum to remain usable on high-DPI displays.
+        """
         self._hit_radius = 12
         if not self._base_points:
             self._points = []
@@ -186,6 +332,13 @@ class InteractiveChartLabel(QLabel):
             QToolTip.hideText()
 
     def _update_scaled_pixmap(self) -> None:
+        """
+        Scale the stored original pixmap to the label's size, preserving aspect ratio.
+
+        Side Effects
+        ------------
+        Updates internal records used to map interactive point coordinates.
+        """
         if self._original_pixmap is None:
             return
         if self.width() <= 1 or self.height() <= 1:
@@ -201,34 +354,54 @@ class InteractiveChartLabel(QLabel):
         self._current_pixmap_height = scaled.height()
         super().setPixmap(scaled)
 
-class ReportPage(RvrChartLogic, CardWidget):
-    """Simple report viewer page.
 
-    - Disabled in navigation by default; MainWindow enables it once report_dir is created
-    - Lists all files under current report_dir
-    - When a file is selected, shows its content as text and tails while page is visible
-    - Stops tailing and releases file handle when page is hidden or switched away
+class ReportPage(RvrChartLogic, CardWidget):
+    """
+    Report viewer page that tails text files and renders RVR/RVO charts when applicable.
+
+    Responsibilities
+    ----------------
+    - Maintain and display a **file list** for a report directory.
+    - Provide a **text tail** view for real-time log monitoring.
+    - Detect and render **RVR/RVO** result files into **chart tabs**.
+    - Auto-refresh charts when the underlying file changes.
+
+    Lifecycle
+    ---------
+    - ``set_report_dir`` sets the working directory, clears prior state, and (if visible)
+      refreshes the list immediately.
+    - Selecting a file switches to either the text tail or chart view based on heuristics.
+    - A 300 ms timer handles both tailing updates and chart re-render checks.
     """
 
     def __init__(self, parent=None):
+        """
+        Build the UI (list + stacked viewers), initialize timers/state, and apply theme.
+
+        Parameters
+        ----------
+        parent : QWidget | None
+            Owning container in the main window.
+        """
         super().__init__(parent)
         self.setObjectName("reportPage")
         apply_theme(self)
 
+        # --- state ---
         self._report_dir: Optional[Path] = None
         self._current_file: Optional[Path] = None
-        self._fh = None  # type: ignore
-        self._pos: int = 0
-        self._partial: str = ""
+        self._fh = None  # raw binary file handle for tailing
+        self._pos: int = 0  # last-read file size
+        self._partial: str = ""  # last incomplete line buffer
         self._active_case_path: Optional[Path] = None
         self._selected_test_type: Optional[str] = None
 
-        # timer for tailing
+        # --- timer ---
         self._timer = QTimer(self)
         self._timer.setInterval(300)
         self._timer.timeout.connect(self._on_tail_tick)
 
-        # UI
+        # --- UI root ---
         root = QVBoxLayout(self)
         root.setSpacing(12)
 
@@ -242,7 +415,7 @@ class ReportPage(RvrChartLogic, CardWidget):
         self.dir_label = QLabel("Report dir: -")
         apply_theme(self.dir_label)
         self.dir_label.setCursor(Qt.PointingHandCursor)
-        self.dir_label.mousePressEvent = self._open_report_dir
+        self.dir_label.mousePressEvent = self._open_report_dir  # simple clickable label
         root.addWidget(self.dir_label)
 
         body = QHBoxLayout()
@@ -263,7 +436,7 @@ class ReportPage(RvrChartLogic, CardWidget):
         self.viewer = QTextEdit(self.viewer_stack)
         self.viewer.setReadOnly(True)
         apply_theme(self.viewer)
-        self.viewer.document().setMaximumBlockCount(5000)
+        self.viewer.document().setMaximumBlockCount(5000)  # avoid unbounded growth
         self.viewer.setMinimumHeight(400)
         self.viewer_stack.addWidget(self.viewer)
 
@@ -303,11 +476,26 @@ class ReportPage(RvrChartLogic, CardWidget):
 
         self.setLayout(root)
 
-        self._view_mode: str = 'text'
-        self._rvr_last_mtime: float | None = None
+        self._view_mode: str = 'text'  # 'text' or 'chart'
+        self._rvr_last_mtime: float | None = None  # last chart render time
 
-    # -------- public API ---------
+    # -------------------------- public API --------------------------
+
     def set_report_dir(self, path: str | Path) -> None:
+        """
+        Set the working report directory and refresh the file list if the page is visible.
+
+        Parameters
+        ----------
+        path : str | Path
+            Directory containing log files and RVR/RVO result artifacts.
+
+        Side Effects
+        ------------
+        - Stops any ongoing tail.
+        - Clears current file selection, text, and chart tabs.
+        - Updates the clickable label with an absolute path.
+        """
         p = Path(path).resolve()
         previous = getattr(self, "_report_dir", None)
         if previous is None or p != previous:
@@ -324,16 +512,23 @@ class ReportPage(RvrChartLogic, CardWidget):
                 self.file_list.clear()
         self._report_dir = p
         self.dir_label.setText(f"Report dir: {p.as_posix()}")
-        # refresh now if visible
         if self.isVisible():
             self.refresh_file_list()
 
-    def _open_report_dir(self, event):
-        if self._report_dir and self._report_dir.exists():
-            QDesktopServices.openUrl(QUrl.fromLocalFile(str(self._report_dir)))
-        QLabel.mousePressEvent(self.dir_label, event)
-
     def set_case_context(self, case_path: str | Path | None) -> None:
+        """
+        Provide the **active test case path** so the page can infer a default test type.
+
+        Parameters
+        ----------
+        case_path : str | Path | None
+            Absolute/relative case path. When provided, the helper uses path
+            segments to guess between ``RVR`` and ``RVO`` (see base logic).
+
+        Notes
+        -----
+        The inferred type affects **chart style** defaults (e.g., polar for RVO).
+        """
         if isinstance(case_path, str) and not case_path.strip():
             case_path = None
         if case_path:
@@ -348,6 +543,15 @@ class ReportPage(RvrChartLogic, CardWidget):
         self._selected_test_type = inferred
 
     def refresh_file_list(self) -> None:
+        """
+        Populate the left-hand file list from the current report directory.
+
+        Behavior
+        --------
+        - Files are sorted lexicographically by name.
+        - The **current** file is reselected when possible; otherwise the latest
+          by modification time is selected to keep the UI focused on fresh data.
+        """
         self.file_list.clear()
         if not self._report_dir or not self._report_dir.exists():
             return
@@ -358,7 +562,6 @@ class ReportPage(RvrChartLogic, CardWidget):
             ]
         except Exception:
             files = []
-        # preserve selection if possible
         current = self._current_file.as_posix() if self._current_file else None
         selected_row = -1
         latest_row = -1
@@ -383,14 +586,19 @@ class ReportPage(RvrChartLogic, CardWidget):
         elif files:
             self.file_list.setCurrentRow(len(files) - 1)
 
-    # -------- events ---------
+    # ------------------------------ events ------------------------------
+
     def showEvent(self, event: QEvent):
+        """
+        Refresh the file list and resume tailing (if any) when the page shows up.
+
+        Notes
+        -----
+        If no file is selected, the method is effectively a no-op beyond list refresh.
+        """
         super().showEvent(event)
-        # refresh files whenever entering this page
         self.refresh_file_list()
-        # resume tail if a file is already selected
         if self._current_file and not self._timer.isActive():
-            # safe-guard: re-open handle if needed
             try:
                 if self._fh is None:
                     self._start_tail(self._current_file)
@@ -400,11 +608,23 @@ class ReportPage(RvrChartLogic, CardWidget):
                 pass
 
     def hideEvent(self, event: QEvent):
+        """
+        Stop tailing when the page is hidden to avoid unnecessary I/O and timers.
+        """
         self._stop_tail()
         super().hideEvent(event)
 
-    # -------- internal tail logic ---------
+    # ------------------------- selection / routing -------------------------
+
     def _on_file_selected(self):
+        """
+        Route to **chart** or **text** view based on the newly selected file.
+
+        Rules
+        -----
+        - If the file looks like RVR/RVO/performance results (CSV/Excel), try to build charts.
+        - Otherwise, switch to text view and tail the file like a regular log.
+        """
         items = self.file_list.selectedItems()
         if not items or not self._report_dir:
             self._stop_tail()
@@ -418,8 +638,20 @@ class ReportPage(RvrChartLogic, CardWidget):
             self.viewer_stack.setCurrentWidget(self.viewer)
             self._start_tail(path)
 
-
     def _should_show_rvr_chart(self, path: Path) -> bool:
+        """
+        Return True if a file name/suffix suggests an **RVR/RVO** result file.
+
+        Parameters
+        ----------
+        path : Path
+            Candidate file path.
+
+        Heuristics
+        ----------
+        - Suffix must be one of {``.csv``, ``.xlsx``, ``.xls``}.
+        - Name contains a keyword in {``rvr``, ``rvo``, ``performance``, ``peak_throughput`` (and variants)}.
+        """
         name = path.name.lower()
         suffix = path.suffix.lower()
         if suffix not in {'.csv', '.xlsx', '.xls'}:
@@ -428,6 +660,15 @@ class ReportPage(RvrChartLogic, CardWidget):
         return any(keyword in name for keyword in keywords)
 
     def _display_rvr_summary(self, path: Path) -> None:
+        """
+        Try to render charts for an RVR/RVO file; fall back to text view when rendering fails.
+
+        Steps
+        -----
+        1. Stop any current tail and set ``_current_file`` to the new path.
+        2. Attempt chart rendering (also initializes tabs); if successful, start tail in the background.
+        3. Switch the visible widget to chart tabs and enable auto-refresh, otherwise revert to text tail.
+        """
         self._stop_tail()
         self._current_file = path
         if self._render_rvr_charts(path, fallback_to_text=True):
@@ -439,8 +680,29 @@ class ReportPage(RvrChartLogic, CardWidget):
         else:
             self._start_tail(path)
 
+    # ---------------------------- chart building ----------------------------
 
     def _render_rvr_charts(self, path: Path, fallback_to_text: bool) -> bool:
+        """
+        Create/refresh chart tabs for an RVR/RVO file, optionally falling back to text.
+
+        Parameters
+        ----------
+        path : Path
+            Path to the CSV/Excel result file.
+        fallback_to_text : bool
+            If True, switches the UI to text view on rendering failure.
+
+        Returns
+        -------
+        bool
+            True if at least one chart tab was created; False otherwise.
+
+        Error Handling
+        --------------
+        - Missing file or stat/read errors are caught and logged.
+        - When ``fallback_to_text`` is True, an explanatory message is shown in text view.
+        """
         try:
             mtime = path.stat().st_mtime
         except FileNotFoundError:
@@ -493,6 +755,14 @@ class ReportPage(RvrChartLogic, CardWidget):
         return True
 
     def _refresh_rvr_charts(self) -> None:
+        """
+        Re-render chart tabs **only** when the source file's mtime increases.
+
+        Notes
+        -----
+        Keeps the current tab index stable when possible; otherwise selects the
+        first tab (typical when tabs are rebuilt with a different count).
+        """
         if self._current_file is None:
             return
         try:
@@ -506,6 +776,28 @@ class ReportPage(RvrChartLogic, CardWidget):
             self.viewer_stack.setCurrentWidget(self.chart_tabs)
 
     def _build_rvr_charts(self, path: Path) -> list[tuple[str, InteractiveChartLabel]]:
+        """
+        Build chart widgets for a given CSV/Excel result file.
+
+        Grouping
+        --------
+        The data is grouped by a composite key:
+        ``(standard, bandwidth, frequency band, test type, direction)``.
+        For each group, a chart is created:
+        - **RVR** → line chart (throughput vs. attenuation steps)
+        - **RVO** → polar chart (throughput vs. angle)
+
+        Parameters
+        ----------
+        path : Path
+            Source CSV/Excel file.
+
+        Returns
+        -------
+        list[tuple[str, InteractiveChartLabel]]
+            A list of ``(tab_title, chart_widget)`` tuples. When data is empty
+            or a group cannot produce a series, a placeholder chart may be returned.
+        """
         df = self._load_rvr_dataframe(path)
         charts_dir = path.parent / 'rvr_charts'
         charts_dir.mkdir(exist_ok=True)
@@ -548,12 +840,33 @@ class ReportPage(RvrChartLogic, CardWidget):
             return [(title, placeholder)] if placeholder is not None else []
         return results
 
-    def _create_line_chart_widget(
-        self,
-        group: pd.DataFrame,
-        title: str,
-        charts_dir: Path,
-    ) -> Optional[InteractiveChartLabel]:
+    def _create_line_chart_widget(self, group: pd.DataFrame, title: str, charts_dir: Path) -> Optional[InteractiveChartLabel]:
+        """
+        Create a line chart of **throughput vs. attenuation** for RVR data.
+
+        Parameters
+        ----------
+        group : pandas.DataFrame
+            A grouped subset that has been normalized by :class:`RvrChartLogic`.
+        title : str
+            Title for the chart/tab.
+        charts_dir : Path
+            Directory to save rendered PNG images (for debug or reuse).
+
+        Returns
+        -------
+        Optional[InteractiveChartLabel]
+            Interactive label containing the rendered chart, or a placeholder
+            when no data series can be assembled.
+
+        Details
+        -------
+        - Steps (attenuation set points) are discovered from the group via
+          :meth:`_collect_step_labels`.
+        - Multiple channels render as multiple lines with circle markers.
+        - Legend combines channel labels and optional user annotations.
+        - Y-axis is auto-scaled to provide a small headroom above the max.
+        """
         steps = self._collect_step_labels(group)
         if not steps:
             return self._create_empty_chart_widget(title, charts_dir)
@@ -580,13 +893,7 @@ class ReportPage(RvrChartLogic, CardWidget):
                     values.append(None)
             if any(v is not None for v in values):
                 has_series = True
-                ax.plot(
-                    x_positions,
-                    self._series_with_nan(values),
-                    marker='o',
-                    markersize=5,
-                    label=self._format_channel_series_label(channel_name),
-                )
+                ax.plot(x_positions, self._series_with_nan(values), marker='o', markersize=5, label=self._format_channel_series_label(channel_name))
         if not has_series:
             plt.close(fig)
             return self._create_empty_chart_widget(title, charts_dir, steps)
@@ -615,15 +922,7 @@ class ReportPage(RvrChartLogic, CardWidget):
                 handles.extend(dummy_handles)
                 labels.extend(annotations)
             column_count = max(1, min(len(handles), 4))
-            legend = ax.legend(
-                handles,
-                labels,
-                loc='lower center',
-                bbox_to_anchor=(0.5, 0.02),
-                ncol=column_count,
-                borderaxespad=0.2,
-                frameon=False,
-            )
+            legend = ax.legend(handles, labels, loc='lower center', bbox_to_anchor=(0.5, 0.02), ncol=column_count, borderaxespad=0.2, frameon=False)
         if legend is not None:
             for text_item in legend.get_texts():
                 text_item.set_ha('center')
@@ -631,12 +930,30 @@ class ReportPage(RvrChartLogic, CardWidget):
         save_path = charts_dir / f"{self._safe_chart_name(title)}.png"
         return self._figure_to_label(fig, ax, steps, save_path)
 
-    def _create_rvo_chart_widget(
-        self,
-        group: pd.DataFrame,
-        title: str,
-        charts_dir: Path,
-    ) -> Optional[InteractiveChartLabel]:
+    def _create_rvo_chart_widget(self, group: pd.DataFrame, title: str, charts_dir: Path) -> Optional[InteractiveChartLabel]:
+        """
+        Create a **polar** chart for RVO angle-based results (throughput vs. angle).
+
+        Parameters
+        ----------
+        group : pandas.DataFrame
+            A grouped subset for a single (standard/bw/band/test_type/direction) key.
+        title : str
+            Tab/figure title.
+        charts_dir : Path
+            Directory where an image copy is saved (optional but useful for debugging).
+
+        Returns
+        -------
+        Optional[InteractiveChartLabel]
+            Interactive label or a placeholder when the series cannot be built.
+
+        Behavior
+        --------
+        - X-axis is angular; labels are taken from measured angle steps.
+        - Multiple channels are plotted as closed polylines (cycle back to the first point).
+        - The radial limit is auto-scaled to include a margin above the maximum.
+        """
         angle_positions = self._collect_angle_positions(group)
         if not angle_positions:
             return self._create_empty_chart_widget(title, charts_dir, chart_type='polar')
@@ -674,14 +991,7 @@ class ReportPage(RvrChartLogic, CardWidget):
         handles = list(handles)
         labels = list(labels)
         if handles:
-            legend = ax.legend(
-                handles,
-                labels,
-                loc='lower center',
-                bbox_to_anchor=(0.5, -0.16),
-                ncol=max(1, min(len(handles), 3)),
-                frameon=False,
-            )
+            legend = ax.legend(handles, labels, loc='lower center', bbox_to_anchor=(0.5, -0.16), ncol=max(1, min(len(handles), 3)), frameon=False)
             if legend is not None:
                 for text_item in legend.get_texts():
                     text_item.set_ha('center')
@@ -690,13 +1000,26 @@ class ReportPage(RvrChartLogic, CardWidget):
         save_path = charts_dir / f"{self._safe_chart_name(title)}.png"
         return self._figure_to_label(fig, ax, [], save_path)
 
-    def _create_empty_chart_widget(
-        self,
-        title: str,
-        charts_dir: Path,
-        steps: Optional[list[str]] = None,
-        chart_type: str = 'line',
-    ) -> Optional[InteractiveChartLabel]:
+    def _create_empty_chart_widget(self, title: str, charts_dir: Path, steps: Optional[list[str]] = None, chart_type: str = 'line') -> Optional[InteractiveChartLabel]:
+        """
+        Produce a placeholder chart when a dataset is empty or cannot be parsed.
+
+        Parameters
+        ----------
+        title : str
+            Title for the chart/tab.
+        charts_dir : Path
+            Directory where a PNG snapshot of the empty chart is saved.
+        steps : list[str] | None, optional
+            X-axis step labels used to configure the axis (line chart only).
+        chart_type : str, optional
+            One of {``'line'``, ``'polar'``}, defaults to ``'line'``.
+
+        Returns
+        -------
+        Optional[InteractiveChartLabel]
+            An interactive label containing a simple placeholder figure.
+        """
         chart_type = (chart_type or 'line').lower()
         if chart_type == 'polar':
             fig = plt.figure(figsize=(6.6, 6.6), dpi=CHART_DPI)
@@ -731,6 +1054,31 @@ class ReportPage(RvrChartLogic, CardWidget):
         return self._figure_to_label(fig, ax, steps, save_path)
 
     def _figure_to_label(self, fig, ax, steps: list[str], save_path: Optional[Path]) -> Optional[InteractiveChartLabel]:
+        """
+        Convert a matplotlib figure into an interactive label with hover tooltips.
+
+        Parameters
+        ----------
+        fig : matplotlib.figure.Figure
+            Figure to rasterize.
+        ax : matplotlib.axes.Axes
+            Axes that contain rendered series to extract points from.
+        steps : list[str]
+            X-axis step labels (line chart) to build readable tooltips.
+        save_path : Path | None
+            Optional location for saving the PNG snapshot for later inspection.
+
+        Returns
+        -------
+        Optional[InteractiveChartLabel]
+            The populated label, or ``None`` on render failure.
+
+        Notes
+        -----
+        - Uses ``FigureCanvasAgg`` to draw into an RGBA buffer and then build a QPixmap.
+        - Extracts screen-space points using ``ax.transData.transform(...)``.
+        - Ensures the figure is always closed to free memory.
+        """
         try:
             canvas = FigureCanvasAgg(fig)
             canvas.draw()
@@ -751,9 +1099,27 @@ class ReportPage(RvrChartLogic, CardWidget):
             logging.exception('Failed to render chart figure')
             plt.close(fig)
             return None
-          
 
     def _extract_chart_points(self, ax, steps: list[str], width: int, height: int) -> list[dict[str, object]]:
+        """
+        Extract plotted point coordinates and build **HTML tooltips**.
+
+        Parameters
+        ----------
+        ax : matplotlib.axes.Axes
+            Source axes with line series.
+        steps : list[str]
+            X-axis labels to map integer x positions to human-readable steps.
+        width : int
+            Figure width in pixels (used to convert to QImage space).
+        height : int
+            Figure height in pixels (Y-axis inverted for Qt coordinates).
+
+        Returns
+        -------
+        list[dict[str, object]]
+            Each dict includes ``'position'`` (x, y) and ``'tooltip'`` HTML.
+        """
         points: list[dict[str, object]] = []
         if ax is None:
             return points
@@ -790,43 +1156,75 @@ class ReportPage(RvrChartLogic, CardWidget):
                 step_label = step_label or str(x_val)
                 display_x, display_y = ax.transData.transform((x_val, y_val))
                 tooltip = self._build_point_tooltip(label, step_label, y_val, x_label, y_label)
-                points.append(
-                    {
-                        'position': (float(display_x), float(height - display_y)),
-                        'tooltip': tooltip,
-                    }
-                )
+                points.append({'position': (float(display_x), float(height - display_y)), 'tooltip': tooltip})
         return points
 
-
     def _build_point_tooltip(self, series: str, step: str, value: float, x_label: str, y_label: str) -> str:
+        """
+        Build a small HTML tooltip for a chart point.
 
+        Parameters
+        ----------
+        series : str
+            Series label as shown in the legend (e.g., channel name).
+        step : str
+            Human-readable X label (attenuation step or angle).
+        value : float
+            Y value (throughput in Mbps).
+        x_label : str
+            X-axis label text (for context in the tooltip).
+        y_label : str
+            Y-axis label text (for context in the tooltip).
+
+        Returns
+        -------
+        str
+            Minimal HTML snippet to feed to :class:`QToolTip`.
+        """
         value_str = f"{value:.2f}".rstrip('0').rstrip('.')
-
         safe_series = escape(series)
-
         safe_step = escape(step)
-
         safe_x_label = escape(x_label)
-
         safe_y_label = escape(y_label)
-
         return (
-
             '<div style="color:#202020;">'
-
             f'<b>{safe_series}</b><br/>'
-
             f'{safe_x_label}: {safe_step}<br/>'
-
             f'{safe_y_label}: {value_str}'
-
             '</div>'
-
         )
 
+    # ------------------------------ tailing ------------------------------
+
+    def _open_report_dir(self, event):
+        """
+        Open the current report directory in the system file browser (if it exists).
+
+        Edge Cases
+        ----------
+        Clicking when no directory is set or the path doesn't exist is a no-op.
+        """
+        if self._report_dir and self._report_dir.exists():
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(self._report_dir)))
+        QLabel.mousePressEvent(self.dir_label, event)
+
     def _start_tail(self, path: Path, *, force_view: bool = True):
-        # stop previous
+        """
+        Begin tailing a text file and optionally switch the UI to text mode.
+
+        Parameters
+        ----------
+        path : Path
+            Plain-text file to tail; binary read is used for robustness.
+        force_view : bool, optional
+            When True, explicitly switches to text view and clears chart state.
+
+        Behavior
+        --------
+        - The method seeks near EOF (64 KiB window) and appends the last ~500 lines.
+        - It keeps internal ``_pos`` and ``_partial`` state to resume incremental reads.
+        - The timer continues reading when new bytes are appended to the file.
+        """
         self._stop_tail()
         if force_view:
             self.viewer_stack.setCurrentWidget(self.viewer)
@@ -834,7 +1232,6 @@ class ReportPage(RvrChartLogic, CardWidget):
             self._rvr_last_mtime = None
         self._current_file = path
         self.viewer.clear()
-        # open and jump to last N lines
         try:
             fh = open(path, "rb", buffering=0)
         except Exception:
@@ -845,8 +1242,6 @@ class ReportPage(RvrChartLogic, CardWidget):
             size = os.fstat(fh.fileno()).st_size
         except Exception:
             size = path.stat().st_size if path.exists() else 0
-
-        # read tail chunk (last ~64KB) and show last 500 lines
         start = max(0, size - 64 * 1024)
         if start:
             try:
@@ -865,11 +1260,17 @@ class ReportPage(RvrChartLogic, CardWidget):
             self._append_lines(tail_lines)
         self._pos = size
         self._partial = ""
-        # start timer only if page visible
         if self.isVisible():
             self._timer.start()
 
     def _stop_tail(self):
+        """
+        Stop the tail timer and close any open file handle.
+
+        Notes
+        -----
+        The method is idempotent and safe to call regardless of the current state.
+        """
         if self._timer.isActive():
             self._timer.stop()
         if self._fh is not None:
@@ -882,6 +1283,15 @@ class ReportPage(RvrChartLogic, CardWidget):
         self._partial = ""
 
     def _on_tail_tick(self):
+        """
+        Periodic callback that refreshes charts and appends any new log lines.
+
+        Behavior
+        --------
+        - If in chart mode, checks file mtime and re-renders when changed.
+        - For text files, seeks from the last position and appends new content.
+        - A file shrink (e.g., rotation) triggers a restart of the tailing window.
+        """
         if self._view_mode == 'chart':
             self._refresh_rvr_charts()
         if not self._fh or not self._current_file:
@@ -889,12 +1299,10 @@ class ReportPage(RvrChartLogic, CardWidget):
         try:
             st = self._current_file.stat()
         except Exception:
-            # file removed; stop
             self._stop_tail()
             return
         size = st.st_size
         if size < self._pos:
-            # truncated or rotated; restart
             self._start_tail(self._current_file)
             return
         if size == self._pos:
@@ -903,7 +1311,6 @@ class ReportPage(RvrChartLogic, CardWidget):
             self._fh.seek(self._pos)
             data = self._fh.read(size - self._pos)
         except Exception:
-            # read failed; try reopen next tick
             self._stop_tail()
             return
         self._pos = size
@@ -920,22 +1327,47 @@ class ReportPage(RvrChartLogic, CardWidget):
             self._append_lines(lines)
 
     def _append_lines(self, lines: list[str]) -> None:
+        """
+        Append a batch of lines to the QTextEdit and keep the view scrolled to the end.
+
+        Parameters
+        ----------
+        lines : list[str]
+            Plain text lines to append. Extremely large batches are capped.
+
+        Implementation
+        --------------
+        - Caps batches to 2000 lines to avoid UI stutter.
+        - Renders each line as a styled HTML ``<span>`` to keep theme colors.
+        - Moves the cursor to ``End`` afterwards to auto-scroll.
+        """
         if not lines:
             return
-        # limit render per tick to avoid UI jank
         max_lines = 2000
         lines = lines[-max_lines:]
         html_lines = [
-            f"<span style='{STYLE_BASE} color:{TEXT_COLOR}; font-family: Consolas, \'Courier New\', monospace;'>{escape(l)}</span>"
+            f"<span style='{STYLE_BASE} color:{TEXT_COLOR}; font-family: Consolas, \\'Courier New\\', monospace;'>{escape(l)}</span>"
             for l in lines
         ]
         self.viewer.append("\n".join(html_lines))
-        # auto-scroll
         cursor = self.viewer.textCursor()
         cursor.movePosition(cursor.End)
         self.viewer.setTextCursor(cursor)
 
     def _decode_bytes(self, data: bytes) -> str:
+        """
+        Decode a byte buffer to text using **UTF-8**, falling back to **GBK** and **Latin-1**.
+
+        Parameters
+        ----------
+        data : bytes
+            Raw bytes read from the tailed file.
+
+        Returns
+        -------
+        str
+            Decoded text with unknown bytes replaced by a placeholder.
+        """
         if not data:
             return ""
         try:
@@ -945,48 +1377,3 @@ class ReportPage(RvrChartLogic, CardWidget):
                 return data.decode("gbk", errors="replace")
             except Exception:
                 return data.decode("latin1", errors="replace")
-            data = self._fh.read(size - self._pos)
-        except Exception:
-            # read failed; try reopen next tick
-            self._stop_tail()
-            return
-        self._pos = size
-        chunk = self._decode_bytes(data)
-        if not chunk:
-            return
-        buf = self._partial + chunk
-        lines = buf.split("\n")
-        if not buf.endswith("\n"):
-            self._partial = lines.pop() if lines else buf
-        else:
-            self._partial = ""
-        if lines:
-            self._append_lines(lines)
-
-    def _append_lines(self, lines: list[str]) -> None:
-        if not lines:
-            return
-        # limit render per tick to avoid UI jank
-        max_lines = 2000
-        lines = lines[-max_lines:]
-        html_lines = [
-            f"<span style='{STYLE_BASE} color:{TEXT_COLOR}; font-family: Consolas, \'Courier New\', monospace;'>{escape(l)}</span>"
-            for l in lines
-        ]
-        self.viewer.append("\n".join(html_lines))
-        # auto-scroll
-        cursor = self.viewer.textCursor()
-        cursor.movePosition(cursor.End)
-        self.viewer.setTextCursor(cursor)
-
-    def _decode_bytes(self, data: bytes) -> str:
-        if not data:
-            return ""
-        try:
-            return data.decode("utf-8", errors="replace")
-        except Exception:
-            try:
-                return data.decode("gbk", errors="replace")
-            except Exception:
-                return data.decode("latin1", errors="replace")
-

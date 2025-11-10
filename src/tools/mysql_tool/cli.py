@@ -11,6 +11,22 @@ from .operations import sync_test_result_to_db
 
 
 def _build_parser() -> argparse.ArgumentParser:
+    """
+    Build parser.
+
+    Defines and configures command-line arguments for the CLI.
+    Reads data from a CSV file and processes each row.
+
+    Parameters
+    ----------
+    None
+        This function does not accept any parameters.
+
+    Returns
+    -------
+    argparse.ArgumentParser
+        A value of type ``argparse.ArgumentParser``.
+    """
     parser = argparse.ArgumentParser(
         description="Bootstrap MySQL environment and optionally sync a CSV log file.",
     )
@@ -46,6 +62,21 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Optional[List[str]] = None) -> int:
+    """
+    Main.
+
+    Logs informational messages and errors for debugging purposes.
+
+    Parameters
+    ----------
+    argv : Any
+        The ``argv`` parameter.
+
+    Returns
+    -------
+    int
+        A value of type ``int``.
+    """
     parser = _build_parser()
     args = parser.parse_args(argv)
 

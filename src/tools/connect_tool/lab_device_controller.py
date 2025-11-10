@@ -1,11 +1,3 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-# @Time    : 2022/1/10 10:02
-# @Author  : chao.li
-# @Site    :
-# @File    : lab_device_controller.py
-# @Software: PyCharm
-
 
 import logging
 import re
@@ -21,7 +13,38 @@ import pytest
 
 
 class LabDeviceController:
+    """
+    Lab device controller.
+
+    -------------------------
+    It logs information for debugging or monitoring purposes.
+    It introduces delays to allow the device to process commands.
+
+    -------------------------
+    Returns
+    -------------------------
+    None
+        This class does not return a value.
+    """
     def __init__(self, ip):
+        """
+        Init.
+
+        -------------------------
+        It logs information for debugging or monitoring purposes.
+
+        -------------------------
+        Parameters
+        -------------------------
+        ip : Any
+            The ``ip`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         self.ip = ip
         self.model = pytest.config['rf_solution']['model']
         self._last_set_value = None
@@ -55,19 +78,47 @@ class LabDeviceController:
             self.tn = telnetlib.Telnet()
             self.tn.open(self.ip, port=23)
             logging.info('Telnet connection established to %s:23', ip)
-            # print('telnet init done')
 
         except Exception as f:
             logging.info(f)
             return None
 
     def turn_table_init(self):
-        # self.tn.write('gcp'.encode('ascii') + b'\r\n')
-        # current_angle = int(self.tn.read_some().decode('utf-8'))
+        """
+        Turn table init.
+
+        -------------------------
+        It logs information for debugging or monitoring purposes.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         self.angle = 0
         logging.info('Current angle: %s', self.angle)
 
     def execute_rf_cmd(self, value):
+        """
+        Execute rf cmd.
+
+        -------------------------
+        It logs information for debugging or monitoring purposes.
+        It introduces delays to allow the device to process commands.
+
+        -------------------------
+        Parameters
+        -------------------------
+        value : Any
+            Numeric value used in calculations.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         if isinstance(value, int):
             value = str(value)
         if int(value) < 0 or int(value) > 110:
@@ -95,6 +146,18 @@ class LabDeviceController:
         time.sleep(2)
 
     def get_rf_current_value(self):
+        """
+        Retrieve rf current value.
+
+        -------------------------
+        It logs information for debugging or monitoring purposes.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         if self.model == 'LDA-908V-8':
             channels_to_query = self._last_used_channels or self.lda_channels
             results = {}
@@ -119,7 +182,6 @@ class LabDeviceController:
             return results
         if self.model == 'RC4DAT-8G-95':
             self.tn.write("ATT?;".encode('ascii') + b'\r')
-            # self.tn.read_some().decode('ascii')
             res = self.tn.read_some().decode('ascii')
             return res.split()[0]
         else:
@@ -130,6 +192,26 @@ class LabDeviceController:
             return list(map(int, re.findall(r'\s(\d+);', res)))
 
     def _run_curl_command(self, endpoint, params):
+        """
+        Run curl command.
+
+        -------------------------
+        It logs information for debugging or monitoring purposes.
+
+        -------------------------
+        Parameters
+        -------------------------
+        endpoint : Any
+            The ``endpoint`` parameter.
+        params : Any
+            The ``params`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         url = f"http://{self.ip}/{endpoint}"
         query = urlencode(params)
         full_url = f"{url}?{query}" if query else url
@@ -145,6 +227,21 @@ class LabDeviceController:
 
     @staticmethod
     def _parse_channels(raw_channels):
+        """
+        Parse channels.
+
+        -------------------------
+        Parameters
+        -------------------------
+        raw_channels : Any
+            The ``raw_channels`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         if raw_channels is None:
             return [1]
 
@@ -190,10 +287,42 @@ class LabDeviceController:
 
     @staticmethod
     def _validate_port(port):
+        """
+        Validate port.
+
+        -------------------------
+        Parameters
+        -------------------------
+        port : Any
+            Port number used for the connection.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         if port < 1 or port > 8:
             raise ValueError(f'port {port} is out of range 1-8')
 
     def execute_turntable_cmd(self, type, angle=''):
+        """
+        Execute turntable cmd.
+
+        -------------------------
+        Parameters
+        -------------------------
+        type : Any
+            Type specifier for the UI automation tool (e.g., "u2").
+        angle : Any
+            The ``angle`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         if type not in ['gs', 'rt', 'gcp']:
             assert 0, 'type must be gs or tr or gcp'
         if type == 'rt':
@@ -206,12 +335,37 @@ class LabDeviceController:
         self.wait_standyby()
 
     def set_turntable_zero(self):
+        """
+        Set turntable zero.
+
+        -------------------------
+        It logs information for debugging or monitoring purposes.
+        It introduces delays to allow the device to process commands.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         self.tn.write('rt 0'.encode('ascii') + b'\r\n')
         time.sleep(2)
         logging.info('try to wait ')
         self.wait_standyby()
 
     def wait_standyby(self):
+        """
+        Wait for standyby.
+
+        -------------------------
+        It introduces delays to allow the device to process commands.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         start = time.time()
         while time.time() - start < 60:
             self.tn.write('gs'.encode('ascii') + b'\r\n')
@@ -224,46 +378,27 @@ class LabDeviceController:
         assert 0, 'wait for standby over time'
 
     def get_turntanle_current_angle(self):
-        # self.tn.read_some().decode('utf-8')
+        """
+        Retrieve turntanle current angle.
+
+        -------------------------
+        It logs information for debugging or monitoring purposes.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         self.tn.write('gcp'.encode('ascii') + b'\r\n')
         current_angle = int(self.tn.read_some().decode('utf-8'))
         self.angle = int(current_angle)
         logging.info(f'Current angle {self.angle}')
         return self.angle
 
-# tn = TelnetInterface("192.168.50.200")
-# tn.turn_table_init()
-# tn.set_turntable_zero()
-# tn.execute_turntable_cmd('rt',angle=900)
-# if not hasattr(tn, "tn"):
-#     print('Telnet 无法实例')
 
 
-# tn.execute_turntable_cmd('rt')
-# tn.execute_turntable_cmd('rt')
 
-# print('Try to rt 100')
-# tn.tn.write('rt 3600'.encode('ascii') + b'\r\n')
-#
-#
-# tn.get_turntanle_current_angle()
 
-# current = 0
-# rf = TelnetInterface('192.168.50.19')
-#
-# rf.execute_rf_cmd(80)
-#
-# print(rf.get_rf_current_value())
 
-# for i in range(20):
-#     rf.execute_rf_cmd(current)
-#     current += 3
-#     print(current)
-#     time.sleep(30)
 
-# rf = TelnetInterface("192.168.50.10")
-# rf.tn.read_some()
-# rf.execute_rf_cmd('95')
-# print(rf.get_rf_current_value())
-# rf.execute_rf_cmd('35')
-# print(rf.get_rf_current_value())

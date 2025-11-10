@@ -10,15 +10,41 @@ from src.tools.config_loader import load_config
 from src.util.constants import Paths, TOOL_CONFIG_FILENAME, TOOL_SECTION_KEY
 
 
-
 def get_tool_config_path() -> Path:
-    """Return the absolute path to config_tool.yaml."""
+    """
+    Get tool config path.
+
+    Parameters
+    ----------
+    None
+        This function does not accept any parameters.
+
+    Returns
+    -------
+    Path
+        A value of type ``Path``.
+    """
 
     return Path(Paths.CONFIG_DIR) / TOOL_CONFIG_FILENAME
 
 
 def load_mysql_config() -> Dict[str, Any]:
-    """Return MySQL connection parameters loaded from config_tool.yaml."""
+    """
+    Load MySQL config.
+
+    Loads configuration settings from a YAML or configuration file.
+    Logs informational messages and errors for debugging purposes.
+
+    Parameters
+    ----------
+    None
+        This function does not accept any parameters.
+
+    Returns
+    -------
+    Dict[str, Any]
+        A value of type ``Dict[str, Any]``.
+    """
 
     config_path = get_tool_config_path()
     try:
@@ -54,7 +80,21 @@ def load_mysql_config() -> Dict[str, Any]:
 
 
 def ensure_database_exists(config: Dict[str, Any]) -> None:
-    """Create database if it does not exist."""
+    """
+    Ensure database exists.
+
+    Runs an SQL statement using a database cursor.
+
+    Parameters
+    ----------
+    config : Any
+        Dictionary containing MySQL configuration parameters.
+
+    Returns
+    -------
+    None
+        This function does not return a value.
+    """
 
     db_name = config.get("database")
     if not db_name:

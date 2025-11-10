@@ -1,5 +1,13 @@
 from __future__ import annotations
 
+"""Configuration section proxy module.
+
+This module re-exports constants and helper functions related to splitting,
+merging and saving configuration sections from :mod:`src.util.constants`.
+Using this module provides a stable and concise API surface for other parts
+of the codebase.
+"""
+
 from src.util.constants import (
     CONFIG_KEY_ALIASES,
     DUT_CONFIG_FILENAME,
