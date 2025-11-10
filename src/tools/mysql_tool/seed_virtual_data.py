@@ -42,16 +42,55 @@ DECIMAL_PATTERN = re.compile(r"DECIMAL\(\s*(\d+)\s*,\s*(\d+)\s*\)", re.IGNORECAS
 
 @dataclass(frozen=True)
 class ColumnSpec:
+    """
+    Column spec.
+
+    Parameters
+    ----------
+    None
+        This class does not take constructor arguments beyond ``self``.
+
+    Returns
+    -------
+    None
+        This class does not return a value.
+    """
     name: str
     definition: str
 
 
 def _build_column_specs(table: str) -> Sequence[ColumnSpec]:
+    """
+    Build column specs.
+
+    Parameters
+    ----------
+    table : Any
+        Name of the table in the database.
+
+    Returns
+    -------
+    Sequence[ColumnSpec]
+        A value of type ``Sequence[ColumnSpec]``.
+    """
     spec = get_table_spec(table)
     return tuple(ColumnSpec(col.name, col.definition) for col in spec.columns)
 
 
 def _parse_enum_options(definition: str) -> Sequence[str] | None:
+    """
+    Parse enum options.
+
+    Parameters
+    ----------
+    definition : Any
+        Column definition string from the table specification.
+
+    Returns
+    -------
+    Sequence[str] | None
+        A value of type ``Sequence[str] | None``.
+    """
     match = ENUM_PATTERN.search(definition)
     if not match:
         return None
@@ -65,6 +104,19 @@ def _parse_enum_options(definition: str) -> Sequence[str] | None:
 
 
 def _guess_decimal_places(definition: str) -> int:
+    """
+    Guess decimal places.
+
+    Parameters
+    ----------
+    definition : Any
+        Column definition string from the table specification.
+
+    Returns
+    -------
+    int
+        A value of type ``int``.
+    """
     match = DECIMAL_PATTERN.search(definition)
     if not match:
         return 2
@@ -79,6 +131,25 @@ def _generate_value(
     enum_overrides: Mapping[str, Sequence[str]] | None = None,
     numeric_base: float | None = None,
 ) -> object:
+    """
+    Generate value.
+
+    Generates random values for seeding or testing purposes.
+
+    Parameters
+    ----------
+    column : Any
+        Column specification object.
+    index : Any
+        Index of the current row or item in iteration.
+    rng : Any
+        Random number generator instance.
+
+    Returns
+    -------
+    object
+        A value of type ``object``.
+    """
     definition_upper = column.definition.upper()
     enum_candidates = None
     if enum_overrides and column.name in enum_overrides:
@@ -93,7 +164,6 @@ def _generate_value(
             base_value = numeric_base
         else:
             base_value = index + 1
-        # SMALLINT/INT/INTEGER 等均按整数处理
         return int(base_value)
 
     if "DECIMAL" in definition_upper:
@@ -106,11 +176,25 @@ def _generate_value(
         span = numeric_base if numeric_base is not None else 100.0
         return round(rng.uniform(0.0, float(span) or 1.0), 3)
 
-    # 默认当作字符串处理
     return f"{column.name}_{index:05d}"
 
 
 def _build_packet_loss_summary(rng: random.Random) -> str:
+    """
+    Build packet loss summary.
+
+    Generates random values for seeding or testing purposes.
+
+    Parameters
+    ----------
+    rng : Any
+        Random number generator instance.
+
+    Returns
+    -------
+    str
+        A value of type ``str``.
+    """
     total = rng.randint(1000, 50000)
     lost = rng.randint(0, max(1, total // 20))
     loss_pct = (lost / total * 100.0) if total else 0.0
@@ -118,12 +202,44 @@ def _build_packet_loss_summary(rng: random.Random) -> str:
 
 
 def _prepare_insert_statement(table: str, columns: Sequence[ColumnSpec]) -> str:
+    """
+    Prepare insert statement.
+
+    Parameters
+    ----------
+    table : Any
+        Name of the table in the database.
+    columns : Any
+        Sequence of column specifications.
+
+    Returns
+    -------
+    str
+        A value of type ``str``.
+    """
     column_clause = ", ".join(f"`{col.name}`" for col in columns)
     placeholder_clause = ", ".join("%s" for _ in columns)
     return f"INSERT INTO `{table}` ({column_clause}) VALUES ({placeholder_clause})"
 
 
 def _truncate_tables(client: MySqlClient, tables: Sequence[str]) -> None:
+    """
+    Truncate tables.
+
+    Runs an SQL statement using a database cursor.
+
+    Parameters
+    ----------
+    client : Any
+        An instance of MySqlClient used to interact with the database.
+    tables : Any
+        The ``tables`` parameter.
+
+    Returns
+    -------
+    None
+        This function does not return a value.
+    """
     LOGGER.info("Truncating tables: %s", ", ".join(tables))
     client.execute("SET FOREIGN_KEY_CHECKS=0")
     try:
@@ -139,6 +255,27 @@ def _insert_with_ids(
     columns: Sequence[ColumnSpec],
     rows: Iterable[Sequence[object]],
 ) -> List[int]:
+    """
+    Insert with ids.
+
+    Inserts rows into the database and returns the last inserted ID.
+
+    Parameters
+    ----------
+    client : Any
+        An instance of MySqlClient used to interact with the database.
+    table : Any
+        Name of the table in the database.
+    columns : Any
+        Sequence of column specifications.
+    rows : Any
+        Iterable or sequence of data rows.
+
+    Returns
+    -------
+    List[int]
+        A value of type ``List[int]``.
+    """
     sql = _prepare_insert_statement(table, columns)
     inserted_ids: List[int] = []
     for row in rows:
@@ -149,6 +286,19 @@ def _insert_with_ids(
 
 
 def _chunked(rows: Iterable[Sequence[object]], *, chunk_size: int) -> Iterator[List[Sequence[object]]]:
+    """
+    Chunked.
+
+    Parameters
+    ----------
+    rows : Any
+        Iterable or sequence of data rows.
+
+    Returns
+    -------
+    Iterator[List[Sequence[object]]]
+        A value of type ``Iterator[List[Sequence[object]]]``.
+    """
     chunk: List[Sequence[object]] = []
     for row in rows:
         chunk.append(row)
@@ -167,6 +317,27 @@ def _insert_bulk(
     *,
     chunk_size: int = 1000,
 ) -> int:
+    """
+    Insert bulk.
+
+    Executes multiple SQL statements in a batch using a cursor.
+
+    Parameters
+    ----------
+    client : Any
+        An instance of MySqlClient used to interact with the database.
+    table : Any
+        Name of the table in the database.
+    columns : Any
+        Sequence of column specifications.
+    rows : Any
+        Iterable or sequence of data rows.
+
+    Returns
+    -------
+    int
+        A value of type ``int``.
+    """
     sql = _prepare_insert_statement(table, columns)
     affected = 0
     for chunk in _chunked(rows, chunk_size=chunk_size):
@@ -176,6 +347,23 @@ def _insert_bulk(
 
 
 def _generate_dut_rows(count: int, rng: random.Random) -> Sequence[Sequence[object]]:
+    """
+    Generate dut rows.
+
+    Generates random values for seeding or testing purposes.
+
+    Parameters
+    ----------
+    count : Any
+        Number of records to generate or process.
+    rng : Any
+        Random number generator instance.
+
+    Returns
+    -------
+    Sequence[Sequence[object]]
+        A value of type ``Sequence[Sequence[object]]``.
+    """
     columns = _build_column_specs("dut")
     version_map = {
         "software_version": ["Sahara", "Mirage", "Aurora"],
@@ -222,6 +410,23 @@ def _generate_dut_rows(count: int, rng: random.Random) -> Sequence[Sequence[obje
 
 
 def _generate_execution_rows(count: int, rng: random.Random) -> Sequence[Sequence[object]]:
+    """
+    Generate execution rows.
+
+    Generates random values for seeding or testing purposes.
+
+    Parameters
+    ----------
+    count : Any
+        Number of records to generate or process.
+    rng : Any
+        Random number generator instance.
+
+    Returns
+    -------
+    Sequence[Sequence[object]]
+        A value of type ``Sequence[Sequence[object]]``.
+    """
     columns = _build_column_specs("execution")
     rf_models = ["Spirent E6", "Octoscope", "R&S CMW" ]
     corner_models = ["Corner-A", "Corner-B", "Corner-C"]
@@ -264,6 +469,24 @@ def _generate_test_reports(
     rng: random.Random,
     min_reports: int,
 ) -> Sequence[Sequence[object]]:
+    """
+    Generate test reports.
+
+    Reads data from a CSV file and processes each row.
+    Generates random values for seeding or testing purposes.
+
+    Parameters
+    ----------
+    dut_ids : Any
+        The ``dut_ids`` parameter.
+    execution_ids : Any
+        The ``execution_ids`` parameter.
+
+    Returns
+    -------
+    Sequence[Sequence[object]]
+        A value of type ``Sequence[Sequence[object]]``.
+    """
     columns = _build_column_specs("test_report")
     combinations = list(itertools.product(execution_ids, dut_ids))
     rng.shuffle(combinations)
@@ -299,6 +522,24 @@ def _build_performance_row_generators(
     report_ids: Sequence[int],
     rng: random.Random,
 ) -> Iterator[Mapping[str, object]]:
+    """
+    Build performance row generators.
+
+    Reads data from a CSV file and processes each row.
+    Generates random values for seeding or testing purposes.
+
+    Parameters
+    ----------
+    report_ids : Any
+        The ``report_ids`` parameter.
+    rng : Any
+        Random number generator instance.
+
+    Returns
+    -------
+    Iterator[Mapping[str, object]]
+        A value of type ``Iterator[Mapping[str, object]]``.
+    """
     standards = ["11a", "11n", "11ac", "11ax"]
     bands = ["2.4", "5", "6"]
     bandwidths = [20, 40, 80, 160]
@@ -340,6 +581,23 @@ def _generate_performance_rows(
     report_ids: Sequence[int],
     rng: random.Random,
 ) -> Iterator[Sequence[object]]:
+    """
+    Generate performance rows.
+
+    Parameters
+    ----------
+    count : Any
+        Number of records to generate or process.
+    report_ids : Any
+        The ``report_ids`` parameter.
+    rng : Any
+        Random number generator instance.
+
+    Returns
+    -------
+    Iterator[Sequence[object]]
+        A value of type ``Iterator[Sequence[object]]``.
+    """
     columns = _build_column_specs("performance")
     enum_overrides: Dict[str, Sequence[str]] = {
         "direction": ("uplink", "downlink", "bi"),
@@ -366,6 +624,23 @@ def _generate_performance_rows(
 
 
 def _resolve_min_reports(performance_count: int, dut_count: int, execution_count: int) -> int:
+    """
+    Resolve min reports.
+
+    Parameters
+    ----------
+    performance_count : Any
+        The ``performance_count`` parameter.
+    dut_count : Any
+        The ``dut_count`` parameter.
+    execution_count : Any
+        The ``execution_count`` parameter.
+
+    Returns
+    -------
+    int
+        A value of type ``int``.
+    """
     if performance_count <= 0:
         return 0
     candidate = int(math.sqrt(performance_count) // 2)
@@ -374,6 +649,21 @@ def _resolve_min_reports(performance_count: int, dut_count: int, execution_count
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    """
+    Parse args.
+
+    Defines and configures command-line arguments for the CLI.
+
+    Parameters
+    ----------
+    argv : Any
+        The ``argv`` parameter.
+
+    Returns
+    -------
+    argparse.Namespace
+        A value of type ``argparse.Namespace``.
+    """
     parser = argparse.ArgumentParser(description="向数据库注入虚拟数据")
     parser.add_argument("--dut-count", type=int, default=20, help="DUT 表注入数量")
     parser.add_argument("--execution-count", type=int, default=10, help="Execution 表注入数量")
@@ -401,6 +691,23 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 
 
 def main(argv: Sequence[str] | None = None) -> None:
+    """
+    Main.
+
+    Ensures that required tables exist before inserting data.
+    Logs informational messages and errors for debugging purposes.
+    Generates random values for seeding or testing purposes.
+
+    Parameters
+    ----------
+    argv : Any
+        The ``argv`` parameter.
+
+    Returns
+    -------
+    None
+        This function does not return a value.
+    """
     args = parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
     rng = random.Random(args.seed)

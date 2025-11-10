@@ -1,22 +1,42 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*- 
 """
-# File       : Router.py
-# Time       ：2023/7/13 10:34
-# Author     ：chao.li
-# version    ：python 3.9
-# Description：
+Router
+
+This module is part of the AsusRouter package.
 """
+
+
 
 from collections import namedtuple
 from src.util.constants import RouterConst
 
 
 def _info(info):
+    """
+        Info
+            Parameters
+            ----------
+            info : object
+                Description of parameter 'info'.
+            Returns
+            -------
+            object
+                Description of the returned value.
+    """
     return 'Default' if info == None else info
 
 
 def router_str(self):
+    """
+        Router str
+            Parameters
+            ----------
+            None
+                This function does not accept any parameters beyond the implicit context.
+            Returns
+            -------
+            object
+                Description of the returned value.
+    """
     return f'{_info(self.band)},{_info(self.ssid)},{_info(self.wireless_mode)},{_info(self.channel)},{_info(self.bandwidth)},{_info(self.security_mode)}'
 
 

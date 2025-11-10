@@ -1,10 +1,8 @@
-#!/usr/bin/env python
-# _*_ coding: utf-8 _*_
-# @Time    : 2022/10/31 10:03
-# @Author  : chao.li
-# @Site    :
-# @File    : TplinkAx6000Control.py
-# @Software: PyCharm
+"""
+Tplink ax6000 control
+
+This module is part of the AsusRouter package.
+"""
 
 import logging
 import re
@@ -13,47 +11,104 @@ import time
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
-from src.tools.router_tool.RouterControl import RouterTools,ConfigError
+from src.tools.router_tool.RouterControl import RouterTools, ConfigError
 from src.tools.router_tool.Tplink.TplinkConfig import TplinkAx6000Config
 
 
 class TplinkAx6000Control:
-
+    """
+        Tplink ax6000 control
+            Parameters
+            ----------
+            None
+                This class is instantiated without additional parameters.
+            Returns
+            -------
+            None
+                Classes return instances implicitly when constructed.
+    """
     BAND_2 = '2.4G'
     BAND_5 = '5G'
 
     def __init__(self):
+        """
+            Init
+                Parameters
+                ----------
+                None
+                    This function does not accept any parameters beyond the implicit context.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         self.router_control = RouterTools('tplink_ax6000', display=True)
-        # self.router_control.driver.maximize_window()
+
         self.type = 'ax6000'
 
     def login(self):
-        # try:
+
+        """
+            Login
+                Interacts with the router's web interface using Selenium WebDriver.
+                Waits for specific web elements to satisfy conditions using WebDriverWait.
+                Pauses execution for a specified duration to allow operations to complete.
+                Parameters
+                ----------
+                None
+                    This function does not accept any parameters beyond the implicit context.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         self.router_control.driver.get(f"http://{self.router_control.address}")
-        # input passwd
+
         self.router_control.driver.find_element(By.ID, self.router_control.xpath['password_element'][self.type]).click()
         self.router_control.driver.find_element(By.ID,
                                                 self.router_control.xpath['password_element'][self.type]).send_keys(
             self.router_control.xpath['passwd'])
-        # click login
+
         self.router_control.driver.find_element(By.XPATH,
                                                 self.router_control.xpath['signin_element'][self.type]).click()
-        # wait for login in done
+
         WebDriverWait(driver=self.router_control.driver, timeout=10, poll_frequency=0.5).until(
             EC.presence_of_element_located((By.ID, self.router_control.xpath['signin_done_element'])))
-        # except NoSuchElementException as e:
-        #     ...
+
         time.sleep(1)
 
-
     def change_setting(self, router):
-        '''
-        set up wifi envrioment
-        @param router: Router instance
-        @return: status : boolean
-        '''
+
+        """
+            Change setting
+                Interacts with the router's web interface using Selenium WebDriver.
+                Waits for specific web elements to satisfy conditions using WebDriverWait.
+                Performs router login or authentication before executing actions.
+                Pauses execution for a specified duration to allow operations to complete.
+                Logs informational or debugging messages for tracing execution.
+                Parameters
+                ----------
+                router : object
+                    Router control object or router information required to perform operations.
+                Returns
+                -------
+                object
+                    Description of the returned value.
+        """
 
         def confirm():
+            """
+                Confirm
+                    Interacts with the router's web interface using Selenium WebDriver.
+                    Parameters
+                    ----------
+                    None
+                        This function does not accept any parameters beyond the implicit context.
+                    Returns
+                    -------
+                    None
+                        This function does not return a value.
+            """
             try:
                 self.router_control.driver.find_element(By.ID, 'Confirm').find_element(By.ID, "hsConf") \
                     .find_element(By.CSS_SELECTOR, '#hsConf > input.subBtn.ok').click()
@@ -69,17 +124,14 @@ class TplinkAx6000Control:
             if router.band not in TplinkAx6000Config.BAND_LIST:
                 raise ConfigError('band key error')
 
-            # 切换 路由设置
             self.router_control.driver.find_element(By.ID, 'routerSetMbtn').click()
             self.router_control.driver.find_element(By.ID, 'wireless2G_rsMenu').click()
 
             if '5' in router.band:
-                # //*[@id="hcCo"]/div[6]/label
                 select_element = self.router_control.driver.find_element(
                     By.XPATH, '//*[@id="hcCo"]/div[6]/label')
                 self.router_control.scroll_to(select_element)
 
-            # 修改 ssid
             if (router.ssid):
 
                 if '2' in router.band:
@@ -99,8 +151,6 @@ class TplinkAx6000Control:
                     ssid_input.clear()
                     ssid_input.send_keys(router.ssid)
 
-
-            # 修改 ssid 是否隐藏
             if '2' in router.band:
                 select = self.router_control.driver.find_element(By.ID, 'ssidBrd')
             else:
@@ -115,7 +165,6 @@ class TplinkAx6000Control:
                 if not select.is_selected():
                     select.click()
 
-            # 修改密码
             if (router.wpa_passwd):
                 if '2' in router.band:
                     target_element = 'passwd_2g'
@@ -147,7 +196,6 @@ class TplinkAx6000Control:
                     By.XPATH, self.router_control.xpath['authentication_regu_element'][
                         target_element].format(index)).click()
 
-            # 修改 channel
             if (router.channel):
                 channel = str(router.channel)
                 try:
@@ -176,7 +224,6 @@ class TplinkAx6000Control:
                     self.router_control.scroll_to(select_element)
                     select_element.click()
 
-            # 修改 wireless_mode
             if (router.wireless_mode):
                 if '2' in router.band:
                     target_dict = TplinkAx6000Config.WIRELESS_MODE_2G_DICT
@@ -195,7 +242,6 @@ class TplinkAx6000Control:
                     By.XPATH,
                     self.router_control.xpath['wireless_mode_element'][self.type][target_element].format(index)).click()
 
-            # 修改 bandwidth
             try:
                 if (router.bandwidth):
                     if '2' in router.band:
@@ -224,7 +270,7 @@ class TplinkAx6000Control:
                 logging.info('Select element is disabled !!')
 
             time.sleep(5)
-            # 点击apply
+
             if '2' in router.band:
                 apply_element = 'apply_2g'
             else:
@@ -257,12 +303,12 @@ class TplinkAx6000Control:
             self.router_control.driver.quit()
 
 
-# fields = ['band', 'ssid', 'wireless_mode', 'channel', 'bandwidth', 'security_mode',
-#           'wpa_passwd', 'test_type', 'wep_encrypt', 'passwd_index', 'wep_passwd', 'protect_frame',
-#           'wpa_encrypt', 'hide_ssid']
-# Router = namedtuple('Router', fields, defaults=[None, ] * len(fields))
-# router = Router(band='5G', ssid='Tplinkax6000_5G_123', wireless_mode='11a/n mixed', channel='52',
-#                 bandwidth='20MHz', authentication='WPA2-PSK/WPA3-SAE', wpa_passwd='amlogic_wifi123@')
-# control = TplinkAx6000Control()
-# control.change_setting(router)
-# control.reboot_router()
+
+
+
+
+
+
+
+
+

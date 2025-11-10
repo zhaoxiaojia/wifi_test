@@ -8,6 +8,7 @@ from pathlib import Path
 import logging
 from dataclasses import dataclass, field
 from typing import Any, Callable, Mapping, Optional, Sequence
+from typing import Annotated
 from src.tools.router_tool.router_factory import router_list, get_router
 from src.util.constants import (
     ANDROID_KERNEL_MAP,
@@ -92,24 +93,49 @@ from qfluentwidgets import (
     InfoBarPosition,
     ScrollArea
 )
+
 try:
     from qfluentwidgets import StepView  # type: ignore
 except Exception:  # pragma: no cover - 运行环境缺失时退化为自定义指示器
     StepView = None
 from .animated_tree_view import AnimatedTreeView
-from .theme import apply_theme, apply_font_and_selection, apply_groupbox_style, CASE_TREE_FONT_SIZE_PX, STEP_LABEL_FONT_PIXEL_SIZE
+from .theme import apply_theme, apply_font_and_selection, apply_groupbox_style, CASE_TREE_FONT_SIZE_PX, \
+    STEP_LABEL_FONT_PIXEL_SIZE
 
-STEP_LABEL_SPACING = 16
-USE_QFLUENT_STEP_VIEW = False
-GROUP_COLUMN_SPACING = 16
-GROUP_ROW_SPACING = 12
-PAGE_CONTENT_MARGIN = 8
+STEP_LABEL_SPACING: Annotated[int, "Spacing in pixels between step labels in the GUI"] = 16
+USE_QFLUENT_STEP_VIEW: Annotated[bool, "Whether to use the QFluent StepView component if available"] = False
+GROUP_COLUMN_SPACING: Annotated[int, "Horizontal spacing between columns in grouped form layouts"] = 16
+GROUP_ROW_SPACING: Annotated[int, "Vertical spacing between rows in grouped form layouts"] = 12
+PAGE_CONTENT_MARGIN: Annotated[int, "Margin applied around content within pages and panels"] = 8
+
+"""
+This module implements a comprehensive PyQt5 based configuration interface used
+for managing Wi‑Fi test cases on Windows.  It defines numerous widgets and
+helpers that assemble into a multi–pane GUI allowing users to browse test
+scripts, adjust parameters, switch Wi‑Fi networks manually or via CSV files,
+configure RF step ranges, and ultimately launch automated test runs.
+
+The high‑level layout consists of a tree view of available test cases, a panel
+with grouped controls for editing parameters associated with the selected case,
+and supporting editor widgets for specific subsystems like RF step segments or
+Wi‑Fi credentials.  Throughout the file, classes encapsulate these UI
+components and expose signals to coordinate interactions.  Global constants
+control spacing and margins to ensure consistent styling across panels.
+"""
 
 
 @dataclass
 class EditableInfo:
+    """
+    Simple container describing which fields within a test case can be edited
+    by the user.
 
-    """Metadata describing which fields are editable for a test case."""
+    Instances of this class are used by :class:`CaseConfigPage` to determine
+    which portions of the configuration should be locked or exposed.  The
+    ``fields`` attribute holds the set of field keys that are editable, while
+    the boolean flags toggle whether CSV based configuration and RVR Wi‑Fi
+    options are available.
+    """
     fields: set[str] = field(default_factory=set)
     enable_csv: bool = False
     enable_rvr_wifi: bool = False
@@ -117,7 +143,17 @@ class EditableInfo:
 
 @dataclass
 class ScriptConfigEntry:
-    """Container for script-specific configuration widgets."""
+    """
+    Aggregates all widget references and metadata related to a single script
+    configuration section.
+
+    Each test script presented in the case tree corresponds to a panel of
+    controls.  A :class:`ScriptConfigEntry` instance stores the parent
+    :class:`QGroupBox`, a mapping from field keys to widgets, mappings from
+    section identifiers to checkbox / child widget group tuples used to toggle
+    optional sections, the case key and path associated with the script, and an
+    ``extras`` dictionary for any additional state needed by custom panels.
+    """
 
     group: QGroupBox
     widgets: dict[str, QWidget]
@@ -129,12 +165,21 @@ class ScriptConfigEntry:
 
 
 class TestFileFilterModel(QSortFilterProxyModel):
+    """
+    Proxy model that filters a :class:`QFileSystemModel` to focus on test script
+    files.
+
+    Directories are accepted except for ``__pycache__``.  Files must start with
+    ``test_`` and end with ``.py`` and ``__init__.py`` is excluded.  This
+    ensures that only relevant test scripts appear in the case tree.
+    """
+
     def filterAcceptsRow(self, source_row, source_parent):
+        """Return True for directories (except ``__pycache__``) and test_* Python files."""
         index = self.sourceModel().index(source_row, 0, source_parent)
         file_name = self.sourceModel().fileName(index)
         is_dir = self.sourceModel().isDir(index)
 
-        # 过滤 __pycache__ 文件夹 和 __init__.py 文件
         if is_dir and file_name == "__pycache__":
             return False
         if not is_dir:
@@ -145,22 +190,36 @@ class TestFileFilterModel(QSortFilterProxyModel):
         return True
 
     def hasChildren(self, parent: QModelIndex) -> bool:
-
-        """Ensure directories remain expandable even when children are filtered."""
+        """
+        Always return True for directories so that they remain expandable even
+        when none of the contained files pass the filter.
+        """
         src_parent = self.mapToSource(parent)
-        # 原始模型中的节点是否是目录
         if not self.sourceModel().isDir(src_parent):
             return False
-        # 强制认为目录有子项（即便都被过滤了）
         return True
 
 
 class _StepSwitcher(QWidget):
-    """Lightweight fallback step indicator when StepView is unavailable."""
+    """
+    Lightweight fallback widget used to indicate and navigate between wizard
+    steps when the :class:`qfluentwidgets.StepView` is not available.
+
+    This widget renders a horizontal list of clickable labels corresponding to
+    each step.  When a label is clicked it emits a ``stepActivated`` signal
+    with the index of the selected step, allowing the parent page to update
+    its displayed panel.
+    """
 
     stepActivated = pyqtSignal(int)
 
     def __init__(self, steps: Sequence[str], parent: QWidget | None = None) -> None:
+        """
+        Initialize the class instance, set up initial state and construct UI widgets.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         super().__init__(parent)
         self._labels: list[QLabel] = []
         self._current = -1
@@ -185,6 +244,12 @@ class _StepSwitcher(QWidget):
         self.set_current_index(0)
 
     def eventFilter(self, obj: QObject, event: QEvent) -> bool:  # type: ignore[override]
+        """
+        Filter events for child widgets and emit signals when appropriate.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         if event.type() == QEvent.MouseButtonRelease and obj in self._labels:
             if getattr(event, "button", lambda: Qt.LeftButton)() == Qt.LeftButton:
                 self.stepActivated.emit(self._labels.index(obj))  # type: ignore[arg-type]
@@ -192,6 +257,12 @@ class _StepSwitcher(QWidget):
         return super().eventFilter(obj, event)
 
     def set_current_index(self, index: int) -> None:
+        """
+        Set the current index property on the instance.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         if not (0 <= index < len(self._labels)):
             return
         if self._current == index:
@@ -209,6 +280,12 @@ class _StepSwitcher(QWidget):
 
     @staticmethod
     def _create_step_font(base_font: QFont) -> QFont:
+        """
+        Execute the create step font routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         font = QFont(base_font)
         if STEP_LABEL_FONT_PIXEL_SIZE > 0:
             font.setPixelSize(STEP_LABEL_FONT_PIXEL_SIZE)
@@ -219,6 +296,12 @@ class _StepSwitcher(QWidget):
 
 
 def _apply_step_font(widget: QWidget) -> None:
+    """
+    Execute the apply step font routine.
+
+    This method encapsulates the logic necessary to perform its function.
+    Refer to the implementation for details on parameters and return values.
+    """
     step_font = _StepSwitcher._create_step_font(widget.font())
     widget.setFont(step_font)
     for label in widget.findChildren(QLabel):
@@ -236,12 +319,24 @@ def _apply_step_font(widget: QWidget) -> None:
 
 
 class RfStepSegmentsWidget(QWidget):
+    """
+    Composite widget that allows the user to define one or more RF step segments.
 
-    """RF Step multi-segment input widget that manages ranges through the form."""
+    A segment consists of a start, stop and step value.  The widget provides
+    editable fields with sensible defaults and Add/Delete buttons to maintain a
+    list of segments.  A hint is shown when no segments are added, and a list
+    view presents currently defined segments.
+    """
 
     DEFAULT_SEGMENT = (0, 75, 3)
 
     def __init__(self, parent: QWidget | None = None) -> None:
+        """
+        Initialize the class instance, set up initial state and construct UI widgets.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         super().__init__(parent)
         self._segments: list[tuple[int, int, int]] = []
 
@@ -315,7 +410,14 @@ class RfStepSegmentsWidget(QWidget):
         layout.addWidget(self.segment_stack, 1)
 
         self._refresh_segment_list()
+
     def _refresh_segment_list(self) -> None:
+        """
+        Refresh the  segment list to ensure the UI is up to date.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         self.segment_list.clear()
         for start, stop, step in self._segments:
             item_text = f"{start} - {stop} (step {step})"
@@ -330,6 +432,12 @@ class RfStepSegmentsWidget(QWidget):
             self.segment_stack.setCurrentWidget(self.segment_hint)
 
     def _on_segment_selected(self, row: int) -> None:
+        """
+        Handle the segment selected event triggered by user interaction.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         if 0 <= row < len(self._segments):
             start, stop, step = self._segments[row]
             self.start_edit.setText(str(start))
@@ -337,6 +445,12 @@ class RfStepSegmentsWidget(QWidget):
             self.step_edit.setText(str(step))
 
     def _show_error(self, message: str) -> None:
+        """
+        Execute the show error routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         InfoBar.error(
             title="RF Step",
             content=message,
@@ -346,6 +460,12 @@ class RfStepSegmentsWidget(QWidget):
         )
 
     def _parse_inputs(self) -> tuple[int, int, int] | None:
+        """
+        Parse  inputs from user input or configuration.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         start_text = self.start_edit.text().strip()
         stop_text = self.stop_edit.text().strip()
         step_text = self.step_edit.text().strip() or str(self.DEFAULT_SEGMENT[2])
@@ -372,6 +492,12 @@ class RfStepSegmentsWidget(QWidget):
         return start, stop, step
 
     def _on_add_segment(self) -> None:
+        """
+        Handle the add segment event triggered by user interaction.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         parsed = self._parse_inputs()
         if parsed is None:
             return
@@ -382,8 +508,13 @@ class RfStepSegmentsWidget(QWidget):
         self._segments.append(parsed)
         self._refresh_segment_list()
 
-
     def _on_delete_segment(self) -> None:
+        """
+        Handle the delete segment event triggered by user interaction.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         row = self.segment_list.currentRow()
         if row < 0 or row >= len(self._segments):
             self._show_error("Select a range to delete first.")
@@ -393,14 +524,32 @@ class RfStepSegmentsWidget(QWidget):
         self._refresh_segment_list()
 
     def segments(self) -> list[tuple[int, int, int]]:
+        """
+        Execute the segments routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         return list(self._segments)
 
     def set_segments_from_config(self, raw_value: object) -> None:
+        """
+        Set the segments from config property on the instance.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         segments = self._convert_raw_to_segments(raw_value)
         self._segments = segments
         self._refresh_segment_list()
 
     def serialize(self) -> str:
+        """
+        Serialize the current state into a configuration object for persistence.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         unique_segments: list[tuple[int, int, int]] = []
         seen: set[tuple[int, int, int]] = set()
         for segment in self._segments:
@@ -414,6 +563,12 @@ class RfStepSegmentsWidget(QWidget):
         return ";".join(parts)
 
     def _convert_raw_to_segments(self, raw_value: object) -> list[tuple[int, int, int]]:
+        """
+        Execute the convert raw to segments routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         segments: list[tuple[int, int, int]] = []
 
         for text in self._collect_segments(raw_value):
@@ -424,9 +579,21 @@ class RfStepSegmentsWidget(QWidget):
         return segments
 
     def _collect_segments(self, raw_value: object) -> list[str]:
+        """
+        Collect  segments from internal state for processing or serialization.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         segments: list[str] = []
 
         def _collect(value: object) -> None:
+            """
+            Collect data from internal state for processing or serialization.
+
+            This method encapsulates the logic necessary to perform its function.
+            Refer to the implementation for details on parameters and return values.
+            """
             if value is None:
                 return
             if isinstance(value, str):
@@ -462,6 +629,12 @@ class RfStepSegmentsWidget(QWidget):
         return segments
 
     def _parse_segment_text(self, segment: str) -> tuple[int, int, int] | None:
+        """
+        Parse  segment text from user input or configuration.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         normalized = (
             segment.replace("；", ";")
             .replace("，", ",")
@@ -506,12 +679,24 @@ class RfStepSegmentsWidget(QWidget):
 
 
 class SwitchWifiManualEditor(QWidget):
+    """
+    Editor widget for maintaining a list of Wi‑Fi network credentials that can
+    be switched manually.
 
-    """Editor widget for maintaining manual Wi-Fi switch entries."""
+    Presents a table of SSID, security mode and password entries and form
+    controls to add or remove rows.  Emits an ``entriesChanged`` signal when
+    the underlying list of dictionaries representing the entries is updated.
+    """
 
     entriesChanged = pyqtSignal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
+        """
+        Initialize the class instance, set up initial state and construct UI widgets.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         super().__init__(parent)
         self._entries: list[dict[str, str]] = []
         self._loading = False
@@ -578,6 +763,12 @@ class SwitchWifiManualEditor(QWidget):
         self._refresh_table()
 
     def set_entries(self, entries: Sequence[Mapping[str, Any]] | None) -> None:
+        """
+        Set the entries property on the instance.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         sanitized = []
         if isinstance(entries, Sequence):
             for item in entries:
@@ -592,6 +783,12 @@ class SwitchWifiManualEditor(QWidget):
             self._clear_form()
 
     def serialize(self) -> list[dict[str, str]]:
+        """
+        Serialize the current state into a configuration object for persistence.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         result: list[dict[str, str]] = []
         for item in self._entries:
             ssid = item.get(SWITCH_WIFI_ENTRY_SSID_FIELD, "").strip()
@@ -609,6 +806,12 @@ class SwitchWifiManualEditor(QWidget):
         return result
 
     def _sanitize_entry(self, item: Mapping[str, Any]) -> dict[str, str]:
+        """
+        Execute the sanitize entry routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         ssid = str(item.get(SWITCH_WIFI_ENTRY_SSID_FIELD, "") or "").strip()
         mode = str(
             item.get(SWITCH_WIFI_ENTRY_SECURITY_FIELD, AUTH_OPTIONS[0]) or AUTH_OPTIONS[0]
@@ -623,6 +826,12 @@ class SwitchWifiManualEditor(QWidget):
         }
 
     def _refresh_table(self) -> None:
+        """
+        Refresh the  table to ensure the UI is up to date.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         self._loading = True
         try:
             self.table.setRowCount(len(self._entries))
@@ -646,6 +855,12 @@ class SwitchWifiManualEditor(QWidget):
             self._loading = False
 
     def _clear_form(self) -> None:
+        """
+        Execute the clear form routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         with QSignalBlocker(self.ssid_edit):
             self.ssid_edit.setText("")
         with QSignalBlocker(self.password_edit):
@@ -655,6 +870,12 @@ class SwitchWifiManualEditor(QWidget):
                 self.security_combo.setCurrentIndex(0)
 
     def _on_current_row_changed(self, row: int, _column: int, _prev_row: int, _prev_column: int) -> None:
+        """
+        Handle the current row changed event triggered by user interaction.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         if self._loading:
             return
         if 0 <= row < len(self._entries):
@@ -673,6 +894,12 @@ class SwitchWifiManualEditor(QWidget):
             self._clear_form()
 
     def _update_current_entry(self, key: str, value: str) -> None:
+        """
+        Update the  current entry to reflect current data.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         if self._loading:
             return
         row = self.table.currentRow()
@@ -696,6 +923,12 @@ class SwitchWifiManualEditor(QWidget):
         self.entriesChanged.emit()
 
     def _on_add_entry(self) -> None:
+        """
+        Handle the add entry event triggered by user interaction.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         new_entry = {
             SWITCH_WIFI_ENTRY_SSID_FIELD: "",
             SWITCH_WIFI_ENTRY_SECURITY_FIELD: AUTH_OPTIONS[0],
@@ -708,6 +941,12 @@ class SwitchWifiManualEditor(QWidget):
         self.entriesChanged.emit()
 
     def _on_delete_entry(self) -> None:
+        """
+        Handle the delete entry event triggered by user interaction.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         row = self.table.currentRow()
         if not (0 <= row < len(self._entries)):
             return
@@ -722,10 +961,21 @@ class SwitchWifiManualEditor(QWidget):
 
 
 class SwitchWifiCsvPreview(QTableWidget):
+    """
+    Read‑only table view used to display Wi‑Fi credentials parsed from router
+    configuration CSV files.
 
-    """Read-only table displaying Wi-Fi entries resolved from router CSV files."""
+    Provides three columns (SSID, security mode and password) and disables
+    editing and selection, serving purely as a preview.
+    """
 
     def __init__(self, parent: QWidget | None = None) -> None:
+        """
+        Initialize the class instance, set up initial state and construct UI widgets.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         super().__init__(parent)
         self.setColumnCount(3)
         self.setHorizontalHeaderLabels(["SSID", "Security Mode", "Password"])
@@ -738,6 +988,12 @@ class SwitchWifiCsvPreview(QTableWidget):
         self.setAlternatingRowColors(False)
 
     def update_entries(self, entries: Sequence[Mapping[str, Any]] | None) -> None:
+        """
+        Update the  entries to reflect current data.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         self.setRowCount(0)
         if not entries:
             return
@@ -752,10 +1008,22 @@ class SwitchWifiCsvPreview(QTableWidget):
 
 
 class ConfigGroupPanel(QWidget):
+    """
+    Container widget that arranges configuration group boxes into three
+    columns and animates their display.
 
-    """Container that arranges groups into three columns with animations."""
+    This panel is used by :class:`CaseConfigPage` to lay out multiple related
+    parameter groups in a responsive manner.  Groups can grow or shrink as
+    content changes and the panel will adjust spacing accordingly.
+    """
 
     def __init__(self, parent: QWidget | None = None) -> None:
+        """
+        Initialize the class instance, set up initial state and construct UI widgets.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         super().__init__(parent)
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -773,6 +1041,12 @@ class ConfigGroupPanel(QWidget):
         self._active_move_anims: dict[QWidget, QPropertyAnimation] = {}
 
     def clear(self) -> None:
+        """
+        Execute the clear routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         self._group_entries.clear()
         self._group_positions.clear()
         self._col_weight = [0] * len(self._column_layouts)
@@ -784,6 +1058,12 @@ class ConfigGroupPanel(QWidget):
                     widget.setParent(None)
 
     def add_group(self, group: QWidget | None, weight: int | None = None, defer: bool = False) -> None:
+        """
+        Execute the add group routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         if group is None:
             return
         apply_theme(group)
@@ -798,16 +1078,34 @@ class ConfigGroupPanel(QWidget):
             self.request_rebalance()
 
     def set_groups(self, groups: list[QWidget]) -> None:
+        """
+        Set the groups property on the instance.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         self.clear()
         for group in groups:
             self.add_group(group, defer=True)
         self.request_rebalance()
 
     def request_rebalance(self) -> None:
+        """
+        Execute the request rebalance routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         self._rebalance_columns()
         QTimer.singleShot(0, self._rebalance_columns)
 
     def _estimate_group_weight(self, group: QWidget) -> int:
+        """
+        Execute the estimate group weight routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         from PyQt5.QtWidgets import (
             QLineEdit, QComboBox, QTextEdit, QSpinBox, QDoubleSpinBox, QCheckBox
         )
@@ -815,6 +1113,12 @@ class ConfigGroupPanel(QWidget):
         return max(1, len(inputs))
 
     def _measure_group_height(self, group: QWidget, weight_override: int | None = None) -> int:
+        """
+        Execute the measure group height routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         if weight_override is not None:
             return max(1, int(weight_override))
         hint = group.sizeHint()
@@ -827,6 +1131,12 @@ class ConfigGroupPanel(QWidget):
         return max(1, int(height))
 
     def _rebalance_columns(self) -> None:
+        """
+        Execute the rebalance columns routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         if not self._column_layouts or not self._group_entries:
             return
         old_geometries: dict[QWidget, QRect] = {}
@@ -863,12 +1173,24 @@ class ConfigGroupPanel(QWidget):
             QTimer.singleShot(0, lambda moves=tuple(moved_groups): self._animate_group_transitions(moves))
 
     def _animate_group_transitions(self, moves: tuple[tuple[QWidget, QRect | None], ...]) -> None:
+        """
+        Execute the animate group transitions routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         for group, old_rect in moves:
             if group is None or not group.isVisible():
                 continue
             self._start_move_animation(group, old_rect)
 
     def _start_move_animation(self, group: QWidget, old_rect: QRect | None) -> None:
+        """
+        Execute the start move animation routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         if old_rect is None:
             return
         current_rect = group.geometry()
@@ -888,26 +1210,43 @@ class ConfigGroupPanel(QWidget):
         animation.finished.connect(lambda g=group: self._active_move_anims.pop(g, None))
         animation.start()
 
-class CaseConfigPage(CardWidget):
 
-    """Main page widget for configuring test cases."""
+class CaseConfigPage(CardWidget):
+    """
+    The primary user interface for browsing and configuring test cases prior
+    to execution.
+
+    This page combines a tree view of available test scripts, a set of dynamic
+    configuration panels for the selected script, and controls for loading
+    router information, editing Wi‑Fi credentials, adjusting durations and
+    checkpoints, and launching the test run.  The page holds references to
+    numerous widgets, tracks application state (like the currently loaded
+    configuration and router object), and manages persistence via loading and
+    saving of a JSON configuration file.
+    """
 
     routerInfoChanged = pyqtSignal()
     csvFileChanged = pyqtSignal(str)
 
     def __init__(self, on_run_callback):
+        """
+        Initialize the class instance, set up initial state and construct UI widgets.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         super().__init__()
         self.setObjectName("caseConfigPage")
         self.on_run_callback = on_run_callback
         apply_theme(self)
         self.selected_csv_path: str | None = None
-        # -------------------- load config --------------------
+        # Load the persisted tool configuration and restore CSV selection
         self.config: dict = self._load_config()
         self._config_tool_snapshot: dict[str, Any] = copy.deepcopy(
             self.config.get(TOOL_SECTION_KEY, {})
         )
         self._load_csv_selection_from_config()
-        # -------------------- state --------------------
+        # Initialize transient state flags used by the UI during refreshes and selections
         self._refreshing = False
         self._pending_path: str | None = None
         self.field_widgets: dict[str, QWidget] = {}
@@ -919,10 +1258,10 @@ class CaseConfigPage(CardWidget):
         self._current_case_path: str = ""
         self._last_editable_info: EditableInfo | None = None
         self._switch_wifi_csv_combos: list[ComboBox] = []
-        # -------------------- layout --------------------
+        # Build the main splitter and its left/right panes
         self.splitter = QSplitter(Qt.Horizontal, self)
         self.splitter.setChildrenCollapsible(False)
-        # ----- left: case tree -----
+        # Populate the left pane with the case tree
         self.case_tree = AnimatedTreeView(self)
         apply_theme(self.case_tree)
         apply_font_and_selection(self.case_tree, size_px=CASE_TREE_FONT_SIZE_PX)
@@ -931,7 +1270,7 @@ class CaseConfigPage(CardWidget):
         self._init_case_tree(Path(self._get_application_base()) / "test")
         self.splitter.addWidget(self.case_tree)
 
-        # ----- right: parameters & run button -----
+        # Populate the right pane with parameter controls and the run button
         scroll_area = ScrollArea(self)
         scroll_area.setWidgetResizable(True)
         scroll_area.setContentsMargins(0, 0, 0, 0)
@@ -1021,10 +1360,22 @@ class CaseConfigPage(CardWidget):
         QTimer.singleShot(0, lambda: self.get_editable_fields(""))
 
     def resizeEvent(self, event):
+        """
+        Execute the resizeEvent routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         super().resizeEvent(event)
         self.splitter.setSizes([int(self.width() * 0.2), int(self.width() * 0.8)])
 
     def _create_run_button(self, parent: QWidget) -> PushButton:
+        """
+        Execute the create run button routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         button = PushButton("Run", parent)
         button.setIcon(FluentIcon.PLAY)
         if hasattr(button, "setUseRippleEffect"):
@@ -1037,6 +1388,12 @@ class CaseConfigPage(CardWidget):
         return button
 
     def _create_step_view(self, labels: Sequence[str]) -> QWidget:
+        """
+        Execute the create step view routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         labels = list(labels)
         if not labels:
             labels = [self._page_label_map["dut"]]
@@ -1060,11 +1417,11 @@ class CaseConfigPage(CardWidget):
                         except TypeError:
                             add_step(label, label)
                 for attr in (
-                    "setStepNumberVisible",
-                    "setNumberVisible",
-                    "setIndexVisible",
-                    "setShowNumber",
-                    "setDisplayIndex",
+                        "setStepNumberVisible",
+                        "setNumberVisible",
+                        "setIndexVisible",
+                        "setShowNumber",
+                        "setDisplayIndex",
                 ):
                     if hasattr(step_view, attr):
                         try:
@@ -1087,6 +1444,12 @@ class CaseConfigPage(CardWidget):
         return fallback
 
     def _update_step_indicator(self, index: int) -> None:
+        """
+        Update the  step indicator to reflect current data.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         view = getattr(self, "step_view_widget", None)
         if view is None:
             return
@@ -1104,23 +1467,35 @@ class CaseConfigPage(CardWidget):
                 logging.debug("Fallback step indicator failed: %s", exc)
 
     def _attach_step_navigation(self, view: QWidget) -> None:
+        """
+        Execute the attach step navigation routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         if isinstance(view, _StepSwitcher):
             view.stepActivated.connect(self._on_step_activated)
             return
         handler_connected = False
 
         def _handler(*args, **kwargs):
+            """
+            Execute the handler routine.
+
+            This method encapsulates the logic necessary to perform its function.
+            Refer to the implementation for details on parameters and return values.
+            """
             index = self._coerce_step_index(*(args or []), *(kwargs.values()))
             if index is not None:
                 self._on_step_activated(index)
 
         for signal_name in (
-            "stepClicked",
-            "currentIndexChanged",
-            "currentChanged",
-            "currentRowChanged",
-            "clicked",
-            "activated",
+                "stepClicked",
+                "currentIndexChanged",
+                "currentChanged",
+                "currentRowChanged",
+                "clicked",
+                "activated",
         ):
             signal = getattr(view, signal_name, None)
             if signal is None or not hasattr(signal, "connect"):
@@ -1146,12 +1521,24 @@ class CaseConfigPage(CardWidget):
             logging.debug("Step navigation hookup failed; relying on fallback behaviour")
 
     def _on_step_activated(self, *args) -> None:
+        """
+        Handle the step activated event triggered by user interaction.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         index = self._coerce_step_index(*args)
         if index is None:
             return
         self._navigate_to_index(index)
 
     def _coerce_step_index(self, *args) -> Optional[int]:
+        """
+        Execute the coerce step index routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         for arg in args:
             if isinstance(arg, int):
                 return arg
@@ -1176,6 +1563,12 @@ class CaseConfigPage(CardWidget):
         return None
 
     def _navigate_to_index(self, target_index: int) -> None:
+        """
+        Execute the navigate to index routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         if self.stack.count() == 0:
             return
         target_index = max(0, min(target_index, self.stack.count() - 1))
@@ -1189,23 +1582,41 @@ class CaseConfigPage(CardWidget):
         self.stack.setCurrentIndex(target_index)
 
     def _sync_run_buttons_enabled(self) -> None:
+        """
+        Execute the sync run buttons enabled routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         enabled = not self._run_locked
         for btn in self._run_buttons:
             btn.setEnabled(enabled)
 
     def _info_bar_parent(self) -> QWidget:
+        """
+        Execute the info bar parent routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         parent = self.window()
         if isinstance(parent, QWidget):
             return parent
         return self
 
     def _show_info_bar(
-        self,
-        level: str,
-        title: str,
-        content: str,
-        **kwargs: Any,
+            self,
+            level: str,
+            title: str,
+            content: str,
+            **kwargs: Any,
     ):
+        """
+        Execute the show info bar routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         bar_fn = getattr(InfoBar, level, None)
         if not callable(bar_fn):
             logging.debug("InfoBar level %s unavailable", level)
@@ -1240,18 +1651,42 @@ class CaseConfigPage(CardWidget):
         return bar
 
     def _request_rebalance_for_panels(self, *panels: ConfigGroupPanel) -> None:
+        """
+        Execute the request rebalance for panels routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         targets = panels or self._config_panels
         for panel in targets:
             panel.request_rebalance()
 
     def _build_wizard_pages(self) -> None:
+        """
+        Execute the build wizard pages routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         self._dut_panel.set_groups(list(self._dut_groups.values()))
         self._execution_panel.set_groups(self._compose_other_groups())
 
     def _compose_other_groups(self) -> list[QWidget]:
+        """
+        Execute the compose other groups routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         return list(self._other_groups.values())
 
     def _list_serial_ports(self) -> list[tuple[str, str]]:
+        """
+        Execute the list serial ports routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         ports: list[tuple[str, str]] = []
         try:
             from serial.tools import list_ports  # type: ignore
@@ -1270,8 +1705,13 @@ class CaseConfigPage(CardWidget):
             return []
         return ports
 
-
     def _refresh_step_view(self, page_keys: Sequence[str]) -> None:
+        """
+        Refresh the  step view to ensure the UI is up to date.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         labels = [self._page_label_map.get(key, key.title()) for key in page_keys]
         if not labels:
             labels = [self._page_label_map["dut"]]
@@ -1292,6 +1732,12 @@ class CaseConfigPage(CardWidget):
         self.step_view_widget.setVisible(len(page_keys) > 1)
 
     def _set_available_pages(self, page_keys: Sequence[str]) -> None:
+        """
+        Set the available pages property on the instance.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         normalized: list[str] = []
         for key in page_keys:
             if key not in self._page_widgets:
@@ -1327,6 +1773,12 @@ class CaseConfigPage(CardWidget):
 
     def _determine_pages_for_case(self, case_path: str, info: EditableInfo) -> list[str]:
 
+        """
+        Execute the determine pages for case routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         if not case_path:
             return ["dut"]
         keys = ["dut"]
@@ -1340,6 +1792,12 @@ class CaseConfigPage(CardWidget):
         return keys
 
     def _script_case_key(self, case_path: str | Path) -> str:
+        """
+        Execute the script case key routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         if not case_path:
             return ""
         path_obj = case_path if isinstance(case_path, Path) else Path(case_path)
@@ -1352,10 +1810,22 @@ class CaseConfigPage(CardWidget):
         return stem.lower()
 
     def _script_field_key(self, case_key: str, *parts: str) -> str:
+        """
+        Execute the script field key routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         suffix = ".".join(parts)
         return f"stability.cases.{case_key}.{suffix}"
 
     def _initialize_script_config_groups(self) -> None:
+        """
+        Execute the initialize script config groups routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         stability_cfg = self.config.setdefault("stability", {})
         stability_cfg.setdefault("cases", {})
         self._script_groups.clear()
@@ -1370,6 +1840,12 @@ class CaseConfigPage(CardWidget):
 
     @staticmethod
     def _normalize_switch_wifi_manual_entries(entries: Any) -> list[dict[str, str]]:
+        """
+        Execute the normalize switch wifi manual entries routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         normalized: list[dict[str, str]] = []
         if isinstance(entries, Sequence) and not isinstance(entries, (str, bytes)):
             for item in entries:
@@ -1404,6 +1880,12 @@ class CaseConfigPage(CardWidget):
         return normalized
 
     def _ensure_script_case_defaults(self, case_key: str, case_path: str) -> dict[str, Any]:
+        """
+        Execute the ensure script case defaults routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         stability_cfg = self.config.setdefault("stability", {})
         cases_section = stability_cfg.setdefault("cases", {})
         entry = cases_section.get(case_key)
@@ -1422,6 +1904,12 @@ class CaseConfigPage(CardWidget):
             return entry
 
         def _ensure_branch(name: str) -> None:
+            """
+            Execute the ensure branch routine.
+
+            This method encapsulates the logic necessary to perform its function.
+            Refer to the implementation for details on parameters and return values.
+            """
             branch = entry.get(name)
             if not isinstance(branch, dict):
                 branch = {}
@@ -1438,6 +1926,12 @@ class CaseConfigPage(CardWidget):
         return entry
 
     def _update_script_config_ui(self, case_path: str | Path) -> None:
+        """
+        Update the  script config ui to reflect current data.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         case_key = self._script_case_key(case_path)
         changed = False
         active_entry: ScriptConfigEntry | None = None
@@ -1471,10 +1965,16 @@ class CaseConfigPage(CardWidget):
         self._refresh_script_section_states()
 
     def _load_script_config_into_widgets(
-        self,
-        entry: ScriptConfigEntry,
-        data: Mapping[str, Any] | None,
+            self,
+            entry: ScriptConfigEntry,
+            data: Mapping[str, Any] | None,
     ) -> None:
+        """
+        Load  script config into widgets from persistent storage into memory.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         data = data or {}
         case_key = entry.case_key
 
@@ -1514,6 +2014,12 @@ class CaseConfigPage(CardWidget):
         str_cfg = data.get("str", {})
 
         def _set_spin(key: str, raw_value: Any) -> None:
+            """
+            Set the spin property on the instance.
+
+            This method encapsulates the logic necessary to perform its function.
+            Refer to the implementation for details on parameters and return values.
+            """
             widget = entry.widgets.get(key)
             if isinstance(widget, QSpinBox):
                 try:
@@ -1524,11 +2030,23 @@ class CaseConfigPage(CardWidget):
                     widget.setValue(max(0, value))
 
         def _set_checkbox(key: str, raw_value: Any) -> None:
+            """
+            Set the checkbox property on the instance.
+
+            This method encapsulates the logic necessary to perform its function.
+            Refer to the implementation for details on parameters and return values.
+            """
             widget = entry.widgets.get(key)
             if isinstance(widget, QCheckBox):
                 widget.setChecked(bool(raw_value))
 
         def _set_combo(key: str, raw_value: Any) -> None:
+            """
+            Set the combo property on the instance.
+
+            This method encapsulates the logic necessary to perform its function.
+            Refer to the implementation for details on parameters and return values.
+            """
             widget = entry.widgets.get(key)
             if not isinstance(widget, ComboBox):
                 return
@@ -1547,6 +2065,7 @@ class CaseConfigPage(CardWidget):
                     widget.setCurrentIndex(index if index >= 0 else max(widget.count() - 1, 0))
                 else:
                     widget.setCurrentIndex(0 if widget.count() else -1)
+
         _set_checkbox(self._script_field_key(case_key, "ac", "enabled"), ac_cfg.get("enabled"))
         _set_spin(self._script_field_key(case_key, "ac", "on_duration"), ac_cfg.get("on_duration"))
         _set_spin(self._script_field_key(case_key, "ac", "off_duration"), ac_cfg.get("off_duration"))
@@ -1561,29 +2080,61 @@ class CaseConfigPage(CardWidget):
 
         for checkbox, controls in entry.section_controls.values():
             self._set_section_controls_state(controls, checkbox.isChecked())
+
     @staticmethod
     def _set_section_controls_state(controls: Sequence[QWidget], enabled: bool) -> None:
+        """
+        Set the section controls state property on the instance.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         for widget in controls:
             widget.setEnabled(enabled)
 
     def _refresh_script_section_states(self) -> None:
+        """
+        Refresh the  script section states to ensure the UI is up to date.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         for entry in self._script_groups.values():
             for checkbox, controls in entry.section_controls.values():
                 self._set_section_controls_state(controls, checkbox.isEnabled() and checkbox.isChecked())
 
     def _bind_script_section(self, checkbox: QCheckBox, controls: Sequence[QWidget]) -> None:
+        """
+        Execute the bind script section routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
+
         def _apply(checked: bool) -> None:
+            """
+            Execute the apply routine.
+
+            This method encapsulates the logic necessary to perform its function.
+            Refer to the implementation for details on parameters and return values.
+            """
             self._set_section_controls_state(controls, checked)
 
         checkbox.toggled.connect(_apply)
         _apply(checkbox.isChecked())
 
     def _create_test_swtich_wifi_config_entry(
-        self,
-        case_key: str,
-        case_path: str,
-        data: Mapping[str, Any],
+            self,
+            case_key: str,
+            case_path: str,
+            data: Mapping[str, Any],
     ) -> ScriptConfigEntry:
+        """
+        Execute the create test swtich wifi config entry routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         group = QGroupBox("test_swtich_wifi.py Stability", self)
         apply_theme(group)
         apply_groupbox_style(group)
@@ -1664,6 +2215,12 @@ class CaseConfigPage(CardWidget):
         section_controls: dict[str, tuple[QCheckBox, Sequence[QWidget]]] = {}
 
         def _current_csv_selection() -> str | None:
+            """
+            Execute the current csv selection routine.
+
+            This method encapsulates the logic necessary to perform its function.
+            Refer to the implementation for details on parameters and return values.
+            """
             data_value = router_combo.currentData()
             if isinstance(data_value, str) and data_value:
                 return data_value
@@ -1671,6 +2228,12 @@ class CaseConfigPage(CardWidget):
             return text_value if isinstance(text_value, str) and text_value else None
 
         def _apply_mode(checked: bool) -> None:
+            """
+            Execute the apply mode routine.
+
+            This method encapsulates the logic necessary to perform its function.
+            Refer to the implementation for details on parameters and return values.
+            """
             router_box.setVisible(checked)
             manual_box.setVisible(not checked)
             manual_editor.setEnabled(not checked)
@@ -1679,6 +2242,12 @@ class CaseConfigPage(CardWidget):
             self._request_rebalance_for_panels(self._stability_panel)
 
         def _on_csv_changed() -> None:
+            """
+            Handle the csv changed event triggered by user interaction.
+
+            This method encapsulates the logic necessary to perform its function.
+            Refer to the implementation for details on parameters and return values.
+            """
             if use_router_checkbox.isChecked():
                 self._update_switch_wifi_preview(router_preview, _current_csv_selection())
 
@@ -1707,11 +2276,17 @@ class CaseConfigPage(CardWidget):
         return entry
 
     def _create_test_str_config_entry(
-        self,
-        case_key: str,
-        case_path: str,
-        data: Mapping[str, Any],
+            self,
+            case_key: str,
+            case_path: str,
+            data: Mapping[str, Any],
     ) -> ScriptConfigEntry:
+        """
+        Execute the create test str config entry routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         group = QGroupBox("test_str.py Stability", self)
         apply_theme(group)
         apply_groupbox_style(group)
@@ -1727,6 +2302,12 @@ class CaseConfigPage(CardWidget):
         section_controls: dict[str, tuple[QCheckBox, Sequence[QWidget]]] = {}
 
         def _build_port_combo(parent: QWidget) -> ComboBox:
+            """
+            Execute the build port combo routine.
+
+            This method encapsulates the logic necessary to perform its function.
+            Refer to the implementation for details on parameters and return values.
+            """
             combo = ComboBox(parent)
             combo.setMinimumWidth(220)
             combo.addItem("Select port", "")
@@ -1775,6 +2356,12 @@ class CaseConfigPage(CardWidget):
                     """Event filter ensuring USB ports refresh before combo opens."""
 
                     def eventFilter(self, obj: QObject, event: QEvent) -> bool:  # type: ignore[override]
+                        """
+                        Filter events for child widgets and emit signals when appropriate.
+
+                        This method encapsulates the logic necessary to perform its function.
+                        Refer to the implementation for details on parameters and return values.
+                        """
                         if event.type() == QEvent.MouseButtonPress:
                             _refresh_ports()
                         return False
@@ -1785,6 +2372,12 @@ class CaseConfigPage(CardWidget):
             return combo
 
         def _set_port_default(combo: ComboBox, value: str) -> None:
+            """
+            Set the port default property on the instance.
+
+            This method encapsulates the logic necessary to perform its function.
+            Refer to the implementation for details on parameters and return values.
+            """
             value = (value or "").strip()
             refresh_ports = getattr(combo, "refresh_ports", None)
             if callable(refresh_ports):
@@ -1799,6 +2392,12 @@ class CaseConfigPage(CardWidget):
             combo.setCurrentIndex(index if index >= 0 else 0)
 
         def _set_mode_default(combo: ComboBox, value: str) -> None:
+            """
+            Set the mode default property on the instance.
+
+            This method encapsulates the logic necessary to perform its function.
+            Refer to the implementation for details on parameters and return values.
+            """
             target = (value or "NO").strip().upper() or "NO"
             # ComboBoxBase.findText only supports the text argument, so we perform
             # an explicit case-insensitive match to keep the previous behavior.
@@ -1960,6 +2559,12 @@ class CaseConfigPage(CardWidget):
         return keys
 
     def _register_group(self, key: str, group: QWidget, is_dut: bool) -> None:
+        """
+        Execute the register group routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         if is_dut:
             self._dut_groups[key] = group
         else:
@@ -1967,6 +2572,12 @@ class CaseConfigPage(CardWidget):
 
     @staticmethod
     def _is_dut_key(key: str) -> bool:
+        """
+        Execute the is dut key routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         return key in {
             "connect_type",
             "fpga",
@@ -1978,27 +2589,45 @@ class CaseConfigPage(CardWidget):
 
     @staticmethod
     def _normalize_fpga_token(value: Any) -> str:
+        """
+        Execute the normalize fpga token routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         if value is None:
             return ""
         return str(value).strip().upper()
 
     @staticmethod
     def _split_legacy_fpga_value(raw: str) -> tuple[str, str]:
+        """
+        Execute the split legacy fpga value routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         parts = raw.split("_", 1)
         wifi_module = parts[0] if parts and parts[0] else ""
         interface = parts[1] if len(parts) > 1 and parts[1] else ""
         return wifi_module.upper(), interface.upper()
 
     def _guess_fpga_project(
-        self,
-        wifi_module: str,
-        interface: str,
-        main_chip: str = "",
-        *,
-        customer: str = "",
-        product_line: str = "",
-        project: str = "",
+            self,
+            wifi_module: str,
+            interface: str,
+            main_chip: str = "",
+            *,
+            customer: str = "",
+            product_line: str = "",
+            project: str = "",
     ) -> tuple[str, str, str, Optional[dict[str, str]]]:
+        """
+        Execute the guess fpga project routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         wifi_upper = wifi_module.strip().upper()
         interface_upper = interface.strip().upper()
         chip_upper = main_chip.strip().upper()
@@ -2027,6 +2656,12 @@ class CaseConfigPage(CardWidget):
         return "", "", "", None
 
     def _normalize_fpga_section(self, raw_value: Any) -> dict[str, str]:
+        """
+        Execute the normalize fpga section routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         normalized = {
             "customer": "",
             "product_line": "",
@@ -2091,6 +2726,12 @@ class CaseConfigPage(CardWidget):
         return normalized
 
     def _normalize_connect_type_section(self, raw_value: Any) -> dict[str, Any]:
+        """
+        Execute the normalize connect type section routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         normalized: dict[str, Any] = {}
         if isinstance(raw_value, Mapping):
             normalized.update(raw_value)
@@ -2176,6 +2817,12 @@ class CaseConfigPage(CardWidget):
         """Normalize stability settings into duration, checkpoints, and cases."""
 
         def _coerce_positive_int(value: Any) -> int | None:
+            """
+            Execute the coerce positive int routine.
+
+            This method encapsulates the logic necessary to perform its function.
+            Refer to the implementation for details on parameters and return values.
+            """
             try:
                 candidate = int(value)
             except (TypeError, ValueError):
@@ -2183,6 +2830,12 @@ class CaseConfigPage(CardWidget):
             return candidate if candidate > 0 else None
 
         def _coerce_positive_float(value: Any) -> float | None:
+            """
+            Execute the coerce positive float routine.
+
+            This method encapsulates the logic necessary to perform its function.
+            Refer to the implementation for details on parameters and return values.
+            """
             try:
                 candidate = float(value)
             except (TypeError, ValueError):
@@ -2190,6 +2843,12 @@ class CaseConfigPage(CardWidget):
             return candidate if candidate > 0 else None
 
         def _normalize_cycle(value: Any) -> dict[str, Any]:
+            """
+            Execute the normalize cycle routine.
+
+            This method encapsulates the logic necessary to perform its function.
+            Refer to the implementation for details on parameters and return values.
+            """
             mapping = value if isinstance(value, Mapping) else {}
             result = {
                 "enabled": bool(mapping.get("enabled")),
@@ -2252,12 +2911,18 @@ class CaseConfigPage(CardWidget):
         }
 
     def _refresh_fpga_product_lines(
-        self,
-        customer: str,
-        product_to_select: Optional[str] = None,
-        *,
-        block_signals: bool = False,
+            self,
+            customer: str,
+            product_to_select: Optional[str] = None,
+            *,
+            block_signals: bool = False,
     ) -> None:
+        """
+        Refresh the  fpga product lines to ensure the UI is up to date.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         if not hasattr(self, "fpga_product_combo"):
             return
         combo = self.fpga_product_combo
@@ -2275,13 +2940,19 @@ class CaseConfigPage(CardWidget):
             del blocker
 
     def _refresh_fpga_projects(
-        self,
-        customer: str,
-        product_line: str,
-        project_to_select: Optional[str] = None,
-        *,
-        block_signals: bool = False,
+            self,
+            customer: str,
+            product_line: str,
+            project_to_select: Optional[str] = None,
+            *,
+            block_signals: bool = False,
     ) -> None:
+        """
+        Refresh the  fpga projects to ensure the UI is up to date.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         if not hasattr(self, "fpga_project_combo"):
             return
         combo = self.fpga_project_combo
@@ -2307,7 +2978,14 @@ class CaseConfigPage(CardWidget):
             del blocker
 
     def _update_fpga_hidden_fields(self) -> None:
-        customer = self.fpga_customer_combo.currentText().strip().upper() if hasattr(self, "fpga_customer_combo") else ""
+        """
+        Update the  fpga hidden fields to reflect current data.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
+        customer = self.fpga_customer_combo.currentText().strip().upper() if hasattr(self,
+                                                                                     "fpga_customer_combo") else ""
         product = self.fpga_product_combo.currentText().strip().upper() if hasattr(self, "fpga_product_combo") else ""
         project = self.fpga_project_combo.currentText().strip().upper() if hasattr(self, "fpga_project_combo") else ""
         info: Mapping[str, str] | None = None
@@ -2347,6 +3025,12 @@ class CaseConfigPage(CardWidget):
         self.config["fpga"] = dict(normalized)
 
     def on_fpga_customer_changed(self, customer: str) -> None:
+        """
+        Handle the fpga customer changed event triggered by user interaction.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         if not hasattr(self, "fpga_product_combo") or not hasattr(self, "fpga_project_combo"):
             return
         current_product = self.fpga_product_combo.currentText().strip().upper()
@@ -2358,6 +3042,12 @@ class CaseConfigPage(CardWidget):
         self.on_fpga_product_line_changed(selected_product)
 
     def on_fpga_product_line_changed(self, product_line: str) -> None:
+        """
+        Handle the fpga product line changed event triggered by user interaction.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         if not hasattr(self, "fpga_project_combo"):
             return
         current_project = self.fpga_project_combo.currentText().strip().upper()
@@ -2368,9 +3058,21 @@ class CaseConfigPage(CardWidget):
         self._update_fpga_hidden_fields()
 
     def on_fpga_project_changed(self, project: str) -> None:
+        """
+        Handle the fpga project changed event triggered by user interaction.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         self._update_fpga_hidden_fields()
 
     def _sync_widgets_to_config(self) -> None:
+        """
+        Execute the sync widgets to config routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         if not isinstance(self.config, dict):
             self.config = {}
         if hasattr(self, "_config_tool_snapshot"):
@@ -2435,7 +3137,7 @@ class CaseConfigPage(CardWidget):
                         text = ''
                     value = True if text == 'True' else False if text == 'False' else text
                 if key == self._script_field_key(
-                    SWITCH_WIFI_CASE_KEY, SWITCH_WIFI_ROUTER_CSV_FIELD
+                        SWITCH_WIFI_CASE_KEY, SWITCH_WIFI_ROUTER_CSV_FIELD
                 ):
                     value = self._relativize_config_path(value)
                 ref[leaf] = value
@@ -2498,6 +3200,12 @@ class CaseConfigPage(CardWidget):
                 duration_cfg["duration_hours"] = duration_float if duration_float > 0 else None
 
     def _validate_first_page(self) -> bool:
+        """
+        Execute the validate first page routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         errors: list[str] = []
         connect_type = ""
         focus_widget: QWidget | None = None
@@ -2528,13 +3236,14 @@ class CaseConfigPage(CardWidget):
                         focus_widget = focus_widget or self.third_party_wait_edit
         else:
             errors.append("Connect type widget missing.")
-        if hasattr(self, "android_version_combo") and connect_type == "Android" and not self.android_version_combo.currentText().strip():
+        if hasattr(self,
+                   "android_version_combo") and connect_type == "Android" and not self.android_version_combo.currentText().strip():
             errors.append("Android version is required.")
             focus_widget = focus_widget or self.android_version_combo
         fpga_valid = (
-            hasattr(self, "fpga_customer_combo")
-            and hasattr(self, "fpga_product_combo")
-            and hasattr(self, "fpga_project_combo")
+                hasattr(self, "fpga_customer_combo")
+                and hasattr(self, "fpga_product_combo")
+                and hasattr(self, "fpga_project_combo")
         )
         customer_text = self.fpga_customer_combo.currentText().strip() if fpga_valid else ""
         product_text = self.fpga_product_combo.currentText().strip() if fpga_valid else ""
@@ -2579,6 +3288,12 @@ class CaseConfigPage(CardWidget):
         focus_widget: QWidget | None = None
 
         def _require(branch: str, label: str) -> None:
+            """
+            Execute the require routine.
+
+            This method encapsulates the logic necessary to perform its function.
+            Refer to the implementation for details on parameters and return values.
+            """
             nonlocal focus_widget
             branch_cfg = case_cfg.get(branch) if isinstance(case_cfg, dict) else {}
             if not isinstance(branch_cfg, dict) or not branch_cfg.get("enabled"):
@@ -2638,6 +3353,12 @@ class CaseConfigPage(CardWidget):
         return False
 
     def _reset_second_page_inputs(self) -> None:
+        """
+        Execute the reset second page inputs routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         if hasattr(self, "csv_combo"):
             self._set_selected_csv(self.selected_csv_path, sync_combo=True)
             self.csv_combo.setEnabled(bool(self._enable_rvr_wifi))
@@ -2645,22 +3366,52 @@ class CaseConfigPage(CardWidget):
             self._set_selected_csv(None, sync_combo=False)
 
     def _reset_wizard_after_run(self) -> None:
+        """
+        Execute the reset wizard after run routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         self.stack.setCurrentIndex(0)
         self._update_step_indicator(0)
         self._update_navigation_state()
         self._reset_second_page_inputs()
 
     def _on_page_changed(self, index: int) -> None:
+        """
+        Handle the page changed event triggered by user interaction.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         self._update_step_indicator(index)
         self._update_navigation_state()
 
     def _update_navigation_state(self) -> None:
+        """
+        Update the  navigation state to reflect current data.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         self._sync_run_buttons_enabled()
 
     def on_next_clicked(self) -> None:
+        """
+        Handle the next clicked event triggered by user interaction.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         self._navigate_to_index(self.stack.currentIndex() + 1)
 
     def on_previous_clicked(self) -> None:
+        """
+        Handle the previous clicked event triggered by user interaction.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         self._navigate_to_index(self.stack.currentIndex() - 1)
 
     def _is_performance_case(self, abs_case_path) -> bool:
@@ -2711,6 +3462,12 @@ class CaseConfigPage(CardWidget):
         return False
 
     def _init_case_tree(self, root_dir: Path) -> None:
+        """
+        Execute the init case tree routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         self.fs_model = QFileSystemModel(self.case_tree)
         root_index = self.fs_model.setRootPath(str(root_dir))  # ← use return value
         self.fs_model.setNameFilters(["test_*.py"])
@@ -2730,6 +3487,12 @@ class CaseConfigPage(CardWidget):
             self.case_tree.hideColumn(col)
 
     def _load_config(self) -> dict:
+        """
+        Load  config from persistent storage into memory.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         try:
             config = load_config(refresh=True) or {}
 
@@ -2786,6 +3549,12 @@ class CaseConfigPage(CardWidget):
             return {}
 
     def _save_config(self):
+        """
+        Save the current state or  config to persistent storage.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         logging.debug("[save] data=%s", self.config)
         try:
             save_config(self.config)
@@ -2822,6 +3591,12 @@ class CaseConfigPage(CardWidget):
         return str(p) if p.is_absolute() else str((base / p).resolve())
 
     def _normalize_connect_type_label(self, label: str) -> str:
+        """
+        Execute the normalize connect type label routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         text = (label or "").strip()
         lowered = text.lower()
         if lowered in {"android", "adb"}:
@@ -2859,7 +3634,14 @@ class CaseConfigPage(CardWidget):
         self.telnet_group.setVisible(type_str == "Linux")
         self._update_android_system_for_connect_type(type_str)
         self._request_rebalance_for_panels(self._dut_panel)
+
     def _update_android_system_for_connect_type(self, connect_type: str) -> None:
+        """
+        Update the  android system for connect type to reflect current data.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         if not hasattr(self, "android_version_combo") or not hasattr(self, "kernel_version_combo"):
             return
         is_adb = connect_type == "Android"
@@ -2878,12 +3660,24 @@ class CaseConfigPage(CardWidget):
                 self.kernel_version_combo.setCurrentIndex(-1)
 
     def _on_android_version_changed(self, version: str) -> None:
+        """
+        Handle the android version changed event triggered by user interaction.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         if not hasattr(self, "connect_type_combo"):
             return
         if self._current_connect_type() == "Android":
             self._apply_android_kernel_mapping()
 
     def _apply_android_kernel_mapping(self) -> None:
+        """
+        Execute the apply android kernel mapping routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         if not hasattr(self, "android_version_combo") or not hasattr(self, "kernel_version_combo"):
             return
         version = self.android_version_combo.currentText().strip()
@@ -2895,6 +3689,12 @@ class CaseConfigPage(CardWidget):
             self.kernel_version_combo.setCurrentIndex(-1)
 
     def _ensure_kernel_option(self, kernel: str) -> None:
+        """
+        Execute the ensure kernel option routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         if not kernel or not hasattr(self, "kernel_version_combo"):
             return
         combo = self.kernel_version_combo
@@ -2904,8 +3704,13 @@ class CaseConfigPage(CardWidget):
         if kernel not in self._kernel_versions:
             self._kernel_versions.append(kernel)
 
-
     def on_third_party_toggled(self, checked: bool, allow_wait_edit: bool | None = None) -> None:
+        """
+        Handle the third party toggled event triggered by user interaction.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         if not hasattr(self, "third_party_wait_edit"):
             return
         if allow_wait_edit is None:
@@ -2940,10 +3745,22 @@ class CaseConfigPage(CardWidget):
         self._request_rebalance_for_panels(self._execution_panel)
 
     def on_serial_enabled_changed(self, text: str):
+        """
+        Handle the serial enabled changed event triggered by user interaction.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         self.serial_cfg_group.setVisible(text == "True")
         self._request_rebalance_for_panels(self._dut_panel)
 
     def on_router_changed(self, name: str):
+        """
+        Handle the router changed event triggered by user interaction.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         cfg = self.config.get("router", {})
         addr = cfg.get("address") if cfg.get("name") == name else None
         self.router_obj = get_router(name, addr)
@@ -2951,27 +3768,57 @@ class CaseConfigPage(CardWidget):
         self.routerInfoChanged.emit()
 
     def on_router_address_changed(self, text: str) -> None:
+        """
+        Handle the router address changed event triggered by user interaction.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         if self.router_obj is not None:
             self.router_obj.address = text
         self.routerInfoChanged.emit()
 
     def _register_switch_wifi_csv_combo(self, combo: ComboBox) -> None:
+        """
+        Execute the register switch wifi csv combo routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         if combo in self._switch_wifi_csv_combos:
             return
         self._switch_wifi_csv_combos.append(combo)
 
         def _cleanup(_obj: QObject | None = None, *, target: ComboBox = combo) -> None:
+            """
+            Execute the cleanup routine.
+
+            This method encapsulates the logic necessary to perform its function.
+            Refer to the implementation for details on parameters and return values.
+            """
             self._unregister_switch_wifi_csv_combo(target)
 
         combo.destroyed.connect(_cleanup)  # type: ignore[arg-type]
 
     def _unregister_switch_wifi_csv_combo(self, combo: ComboBox) -> None:
+        """
+        Execute the unregister switch wifi csv combo routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         try:
             self._switch_wifi_csv_combos.remove(combo)
         except ValueError:
             return
 
     def _list_available_csv_files(self) -> list[tuple[str, str]]:
+        """
+        Execute the list available csv files routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         csv_dir = get_config_base() / "performance_test_csv"
         entries: list[tuple[str, str]] = []
         if csv_dir.exists():
@@ -3022,6 +3869,12 @@ class CaseConfigPage(CardWidget):
             return str(path)
 
     def _relativize_config_path(self, path: Any) -> str:
+        """
+        Execute the relativize config path routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         if path in (None, ""):
             return ""
         try:
@@ -3072,12 +3925,18 @@ class CaseConfigPage(CardWidget):
         return changed
 
     def _populate_csv_combo(
-        self,
-        combo: ComboBox,
-        selected_path: str | None,
-        *,
-        include_placeholder: bool = False,
+            self,
+            combo: ComboBox,
+            selected_path: str | None,
+            *,
+            include_placeholder: bool = False,
     ) -> None:
+        """
+        Execute the populate csv combo routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         entries = self._list_available_csv_files()
         normalized_selected = self._normalize_csv_path(selected_path)
         with QSignalBlocker(combo):
@@ -3103,6 +3962,12 @@ class CaseConfigPage(CardWidget):
             combo.setCurrentIndex(index)
 
     def _refresh_registered_csv_combos(self) -> None:
+        """
+        Refresh the  registered csv combos to ensure the UI is up to date.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         for combo in list(self._switch_wifi_csv_combos):
             if combo is None:
                 continue
@@ -3115,6 +3980,12 @@ class CaseConfigPage(CardWidget):
             self._populate_csv_combo(combo, selected, include_placeholder=True)
 
     def _load_switch_wifi_entries(self, csv_path: str | None) -> list[dict[str, str]]:
+        """
+        Load  switch wifi entries from persistent storage into memory.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         normalized = self._normalize_csv_path(csv_path)
         if not normalized:
             return []
@@ -3132,10 +4003,10 @@ class CaseConfigPage(CardWidget):
                     if not ssid:
                         continue
                     mode = (
-                        str(
-                            row.get(SWITCH_WIFI_ENTRY_SECURITY_FIELD, "") or ""
-                        ).strip()
-                        or AUTH_OPTIONS[0]
+                            str(
+                                row.get(SWITCH_WIFI_ENTRY_SECURITY_FIELD, "") or ""
+                            ).strip()
+                            or AUTH_OPTIONS[0]
                     )
                     password = str(
                         row.get(SWITCH_WIFI_ENTRY_PASSWORD_FIELD, "") or ""
@@ -3152,10 +4023,16 @@ class CaseConfigPage(CardWidget):
         return entries
 
     def _update_switch_wifi_preview(
-        self,
-        preview: SwitchWifiCsvPreview | None,
-        csv_path: str | None,
+            self,
+            preview: SwitchWifiCsvPreview | None,
+            csv_path: str | None,
     ) -> None:
+        """
+        Update the  switch wifi preview to reflect current data.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         if preview is None:
             return
         entries = self._load_switch_wifi_entries(csv_path)
@@ -3169,12 +4046,24 @@ class CaseConfigPage(CardWidget):
             main_window.rvr_nav_button.setEnabled(enabled)
 
     def _case_path_to_display(self, case_path: str) -> str:
+        """
+        Execute the case path to display routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         if not case_path:
             return ""
         normalized = Path(case_path).as_posix()
         return normalized[5:] if normalized.startswith("test/") else normalized
 
     def _display_to_case_path(self, display_path: str) -> str:
+        """
+        Execute the display to case path routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         if not display_path:
             return ""
         normalized = display_path.replace('\\', '/')
@@ -3186,6 +4075,12 @@ class CaseConfigPage(CardWidget):
         return normalized if normalized.startswith("test/") else f"test/{normalized}"
 
     def _update_test_case_display(self, storage_path: str) -> None:
+        """
+        Update the  test case display to reflect current data.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         normalized = Path(storage_path).as_posix() if storage_path else ""
         self._current_case_path = normalized
         if hasattr(self, 'test_case_edit'):
@@ -3207,12 +4102,25 @@ class CaseConfigPage(CardWidget):
                 self.config[_key] = _default.copy()
             else:
                 self.config[_key] = dict(existing)
+
         def _coerce_debug_flag(value) -> bool:
+            """
+            Execute the coerce debug flag routine.
+
+            This method encapsulates the logic necessary to perform its function.
+            Refer to the implementation for details on parameters and return values.
+            """
             if isinstance(value, str):
                 return value.strip().lower() in {"1", "true", "yes", "on"}
             return bool(value)
 
         def _normalize_debug_section(raw_value) -> dict[str, bool]:
+            """
+            Execute the normalize debug section routine.
+
+            This method encapsulates the logic necessary to perform its function.
+            Refer to the implementation for details on parameters and return values.
+            """
             if isinstance(raw_value, dict):
                 normalized = dict(raw_value)
             else:
@@ -3383,9 +4291,9 @@ class CaseConfigPage(CardWidget):
 
                 self._refresh_fpga_product_lines(customer_default, product_default, block_signals=True)
                 if (
-                    customer_default
-                    and product_default
-                    and product_default in WIFI_PRODUCT_PROJECT_MAP.get(customer_default, {})
+                        customer_default
+                        and product_default
+                        and product_default in WIFI_PRODUCT_PROJECT_MAP.get(customer_default, {})
                 ):
                     self.fpga_product_combo.setCurrentText(product_default)
                 else:
@@ -3393,11 +4301,11 @@ class CaseConfigPage(CardWidget):
 
                 self._refresh_fpga_projects(customer_default, product_default, project_default, block_signals=True)
                 if (
-                    customer_default
-                    and product_default
-                    and project_default
-                    and project_default
-                    in WIFI_PRODUCT_PROJECT_MAP.get(customer_default, {}).get(product_default, {})
+                        customer_default
+                        and product_default
+                        and project_default
+                        and project_default
+                        in WIFI_PRODUCT_PROJECT_MAP.get(customer_default, {}).get(product_default, {})
                 ):
                     self.fpga_project_combo.setCurrentText(project_default)
                 else:
@@ -3798,7 +4706,7 @@ class CaseConfigPage(CardWidget):
                 self.field_widgets["serial_port.port"] = self.serial_port_edit
                 self.field_widgets["serial_port.baud"] = self.serial_baud_edit
                 continue
-            if key in  ["csv_path",TOOL_SECTION_KEY]:
+            if key in ["csv_path", TOOL_SECTION_KEY]:
                 continue
             # ------- 默认处理：创建 LineEdit 保存未覆盖字段 -------
             group = QGroupBox(key)
@@ -3818,8 +4726,14 @@ class CaseConfigPage(CardWidget):
         )
 
     def _ensure_turntable_inputs_exclusive(self, source: str | None) -> None:
+        """
+        Execute the ensure turntable inputs exclusive routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         if not hasattr(self, "turntable_static_db_edit") or not hasattr(
-            self, "turntable_target_rssi_edit"
+                self, "turntable_target_rssi_edit"
         ):
             return
         static_text = self.turntable_static_db_edit.text().strip()
@@ -3843,8 +4757,14 @@ class CaseConfigPage(CardWidget):
         self._show_turntable_conflict_warning(focus_widget)
 
     def _on_turntable_model_changed(self, model: str) -> None:
+        """
+        Handle the turntable model changed event triggered by user interaction.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         if not hasattr(self, "turntable_ip_edit") or not hasattr(
-            self, "turntable_ip_label"
+                self, "turntable_ip_label"
         ):
             return
         requires_ip = model == TURN_TABLE_MODEL_OTHER
@@ -3853,7 +4773,7 @@ class CaseConfigPage(CardWidget):
         self.turntable_ip_edit.setEnabled(requires_ip)
 
     def _build_duration_control_group(
-        self, data: Mapping[str, Any] | None
+            self, data: Mapping[str, Any] | None
     ) -> QGroupBox:
         """Construct the duration control group."""
 
@@ -3912,6 +4832,12 @@ class CaseConfigPage(CardWidget):
                 duration_spin.setValue(0.0)
 
         def _sync_controls(source: str | None = None) -> None:
+            """
+            Execute the sync controls routine.
+
+            This method encapsulates the logic necessary to perform its function.
+            Refer to the implementation for details on parameters and return values.
+            """
             loop_current = loops_spin.value()
             duration_current = duration_spin.value()
             if source == "loop" and loop_current > 0 and duration_current > 0:
@@ -3934,7 +4860,7 @@ class CaseConfigPage(CardWidget):
         return group
 
     def _build_check_point_group(
-        self, data: Mapping[str, Any] | None
+            self, data: Mapping[str, Any] | None
     ) -> QGroupBox:
         """Construct the checkpoint selection group."""
 
@@ -3956,7 +4882,7 @@ class CaseConfigPage(CardWidget):
         return group
 
     def _compose_stability_groups(
-        self, active_entry: ScriptConfigEntry | None
+            self, active_entry: ScriptConfigEntry | None
     ) -> list[QWidget]:
         """Combine public stability controls with the active script group."""
 
@@ -3972,8 +4898,14 @@ class CaseConfigPage(CardWidget):
         self._show_turntable_conflict_warning(focus_widget)
 
     def _show_turntable_conflict_warning(
-        self, focus_widget: QWidget | None
+            self, focus_widget: QWidget | None
     ) -> None:
+        """
+        Execute the show turntable conflict warning routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         if focus_widget is None or not focus_widget.hasFocus():
             return
         message = (
@@ -4008,6 +4940,12 @@ class CaseConfigPage(CardWidget):
         root_item.setData(root_dir)
 
         def add_items(parent_item, dir_path):
+            """
+            Execute the add items routine.
+
+            This method encapsulates the logic necessary to perform its function.
+            Refer to the implementation for details on parameters and return values.
+            """
             for fname in sorted(os.listdir(dir_path)):
                 logging.debug("fname %s", fname)
                 if fname == '__pycache__' or fname.startswith('.'):
@@ -4146,6 +5084,12 @@ class CaseConfigPage(CardWidget):
         return info
 
     def _apply_editable_info(self, info: EditableInfo | None) -> None:
+        """
+        Execute the apply editable info routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         if info is None:
             fields: set[str] = set()
             enable_csv = False
@@ -4170,6 +5114,12 @@ class CaseConfigPage(CardWidget):
                 self._set_selected_csv(None, sync_combo=False)
 
     def _restore_editable_state(self) -> None:
+        """
+        Execute the restore editable state routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         self._apply_editable_info(self._last_editable_info)
 
     def get_editable_fields(self, case_path) -> EditableInfo:
@@ -4231,8 +5181,8 @@ class CaseConfigPage(CardWidget):
                     widget.setEnabled(desired)
             if hasattr(self, "third_party_checkbox") and hasattr(self, "third_party_wait_edit"):
                 allow_wait = (
-                    "connect_type.third_party.enabled" in editable_fields
-                    and "connect_type.third_party.wait_seconds" in editable_fields
+                        "connect_type.third_party.enabled" in editable_fields
+                        and "connect_type.third_party.wait_seconds" in editable_fields
                 )
                 self.on_third_party_toggled(self.third_party_checkbox.isChecked(), allow_wait)
             self._refresh_script_section_states()
@@ -4279,6 +5229,12 @@ class CaseConfigPage(CardWidget):
         self.csvFileChanged.emit(self.selected_csv_path or "")
 
     def on_run(self):
+        """
+        Handle the run event triggered by user interaction.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         if not self._validate_first_page():
             self.stack.setCurrentIndex(0)
             return

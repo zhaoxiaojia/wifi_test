@@ -1,6 +1,8 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-"""华硕 AX88U 路由器控制实现."""
+"""
+Asusax88u control
+
+This module is part of the AsusRouter package.
+"""
 
 from __future__ import annotations
 
@@ -8,7 +10,28 @@ from src.tools.router_tool.AsusRouter.AsusTelnetNvramControl import AsusTelnetNv
 
 
 class Asusax88uControl(AsusTelnetNvramControl):
-    """ASUS AX88U 通过 Telnet/NVRAM 的控制实现."""
+    """
+        Asusax88u control
+            Parameters
+            ----------
+            None
+                This class is instantiated without additional parameters.
+            Returns
+            -------
+            None
+                Classes return instances implicitly when constructed.
+    """
 
     def __init__(self, address: str | None = None):
+        """
+            Init
+                Parameters
+                ----------
+                address : object
+                    The router's login address or IP address; if None, a default is used.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         super().__init__('asus_88u', display=True, address=address)

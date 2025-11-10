@@ -1,122 +1,52 @@
-# _*_ coding:utf-8 _*_
-# 依赖pysnmp 请自行安装(可以使用命令 pip install pysnmp)
+"""High-level control interfaces for SNMP-based power distribution units.
+
+This module provides a simple wrapper around SNMP commands to control power
+relays. It exposes a :class:`power_ctrl` class that reads configuration
+information, constructs SNMP command strings and executes them using
+``subprocess``.  All function and method arguments are documented in a
+``Parameters`` section.
+"""
 import logging
 import subprocess
 
 from src.tools.config_loader import load_config
 
 
-# global enter_key
-# enter_key = '1.3.6.1.4.1.23280.9.1.2'
-
-
-# class PowerCtrl:
-#     ENTER_KEY = '1.3.6.1.4.1.23280.8.1.2'
-#
-#     def __init__(self, sDevIp):
-#         if self.validate_ip(sDevIp):
-#             logging.info(f"Power Control IP Address: {sDevIp}")
-#             self.devip = sDevIp
-#         else:
-#             raise ValueError("Invalid IP address")
-#         print(self.devip)
-#
-#     @staticmethod
-#     def validate_ip(ip_str):
-#         parts = ip_str.split('.')
-#         if len(parts) != 4:
-#             return False
-#         try:
-#             return all(0 <= int(x) <= 255 for x in parts)
-#         except ValueError:
-#             return False
-#
-#     @staticmethod
-#     def validate_Sock(nSock):
-#         return 1 <= nSock <= 8
-#
-#     def get_value(self, soid):
-#         iterator = getCmd(
-#             SnmpEngine(),
-#             CommunityData('pudinfo', mpModel=0),
-#             UdpTransportTarget((self.devip, 161)),
-#             ContextData(),
-#             ObjectType(ObjectIdentity(soid))
-#         )
-#         for errorIndication, errorStatus, errorIndex, varBinds in iterator:
-#             if errorIndication:
-#                 raise Exception(f"SNMP Error: {errorIndication}")
-#             elif errorStatus:
-#                 raise Exception(f"SNMP Error: {errorStatus.prettyPrint()}")
-#             else:
-#                 return varBinds[0][1].prettyPrint()  # 兼容 Python 3.x
-#
-#     def get_deviceName(self):
-#         return self.get_value('1.3.6.1.2.1.1.1.0')
-#
-#     def get_totalVoltage(self):
-#         return float(self.get_value('1.3.6.1.4.1.23280.6.1.2.1')) / 10
-#
-#     def get_totalCurrent(self):
-#         return float(self.get_value('1.3.6.1.4.1.23280.6.1.3.1')) / 100
-#
-#     def get_totalPower(self):
-#         return float(self.get_value('1.3.6.1.4.1.23280.6.1.4.1')) / 1000
-#
-#     def get_totalEnergy(self):
-#         return float(self.get_value('1.3.6.1.4.1.23280.6.1.8.1')) / 1000
-#
-#     def get_temprature(self):
-#         return float(self.get_value(self.ENTER_KEY + '.4.6.0')) / 10
-#
-#     def get_humidity(self):
-#         return float(self.get_value(self.ENTER_KEY + '.4.7.0')) / 10
-#
-#     def switch(self, sock, onoff):
-#         if not self.validate_Sock(sock):
-#             print('Invalid sock!')
-#             return None
-#         sOId = f'.1.3.6.1.4.1.23280.9.1.2.{sock}'
-#         state = 1 if onoff else 2
-#
-#         iterator = setCmd(
-#             SnmpEngine(),
-#             CommunityData('pudinfo', mpModel=0),
-#             UdpTransportTarget((self.devip, 161)),
-#             ContextData(),
-#             ObjectType(ObjectIdentity(sOId), Integer(state))
-#         )
-#         for errorIndication, errorStatus, errorIndex, varBinds in iterator:
-#             if errorIndication:
-#                 return f"Error: {errorIndication}"
-#             elif errorStatus:
-#                 return f"SNMP Error: {errorStatus.prettyPrint()}"
-#             return "Success"
-#
-#     def get_status(self, sock):
-#         if not self.validate_Sock(sock):
-#             print('Invalid sock!')
-#             return None
-#         sOId = f'.1.3.6.1.4.1.23280.8.1.2.{sock}'
-#         return self.get_value(sOId)
-#
-#     def dark(self):
-#         for i in range(1, 9):
-#             self.switch(i, False)
-
-
 class power_ctrl:
+    """Encapsulate control of power relays using SNMP via shell commands.
+
+    Instances of this class read relay configuration from a configuration
+    loader and provide methods to switch individual ports on or off as well
+    as to change the state of all configured relays at once.  Commands are
+    executed via :func:`subprocess.check_output` and log their output.
+
+    The command templates stored in :attr:`SWITCH_CMD` and :attr:`SET_CMD`
+    include placeholders for the target IP, port number and desired state.
+    """
+
     SWITCH_CMD = 'snmpset -v1 -c private {} .1.3.6.1.4.1.23280.9.1.2.{} i {}'
     SET_CMD = 'snmpset -v1 -c private {} 1.3.6.1.4.1.23273.4.4{}.0 i 255'
 
-    def __init__(self):
+    def __init__(self) -> None:
+        """Initialize the power control object from configuration.
+
+        The constructor loads power relay configuration using
+        :func:`load_config` and precomputes a list of (IP, port) tuples from
+        that configuration.
+        """
         self.config = load_config(refresh=True)
         self.power_ctrl = self.config.get('power_relay')
         self.ip_list = list(self.power_ctrl.keys())
         self.ctrl = self._handle_env_data()
 
-    def _handle_env_data(self):
-        temp = []
+    def _handle_env_data(self) -> list[tuple[str, int]]:
+        """Flatten the configuration into a list of (IP, port) tuples.
+
+        Returns:
+            list[tuple[str, int]]: A list of tuples where each tuple contains
+            an IP address and an integer port number defined in the configuration.
+        """
+        temp: list[tuple[str, int]] = []
         for k, v in self.power_ctrl.items():
             if v:
                 for i in v:
@@ -124,7 +54,16 @@ class power_ctrl:
         return temp
 
     @staticmethod
-    def check_output(cmd):
+    def check_output(cmd: str) -> bytes | None:
+        """Run a shell command and log its output.
+
+        Parameters:
+            cmd (str): The command string to execute via the shell.
+
+        Returns:
+            bytes | None: The raw command output if execution succeeded,
+            otherwise ``None``.
+        """
         try:
             info = subprocess.check_output(cmd, shell=True)
             logging.info(info)
@@ -133,23 +72,46 @@ class power_ctrl:
             logging.error(f"Command failed: {e}")
             return None
 
-    def switch(self, ip, port, status):
-        logging.info(f'Setting power relay: {ip} port {port} {"on" if status == 1 else "off"}')
+    def switch(self, ip: str, port: int, status: int) -> None:
+        """Toggle an individual relay on or off.
+
+        Parameters:
+            ip (str): The IP address of the relay device.
+            port (int): The port number on the relay device to control.
+            status (int): ``1`` to turn the port on, ``0`` or ``2`` to turn
+                it off depending on the underlying SNMP semantics.
+
+        Returns:
+            None
+        """
+        logging.info(
+            f'Setting power relay: {ip} port {port} {"on" if status == 1 else "off"}'
+        )
         cmd = self.SWITCH_CMD.format(ip, port, status)
         self.check_output(cmd)
 
-    def set_all(self, status):
+    def set_all(self, status: bool) -> None:
+        """Set all configured relays to the given state.
+
+        Parameters:
+            status (bool): ``True`` to power on all relays or ``False`` to shut
+                them down.  The SNMP command is constructed accordingly.
+
+        Returns:
+            None
+        """
         for k in ['192.168.200.3', '192.168.200.4', '192.168.200.5', '192.168.200.6']:
             cmd = self.SET_CMD.format(k, 0 if status else 1)
             self.check_output(cmd)
 
-    def shutdown(self):
+    def shutdown(self) -> None:
+        """Shut down all relays via SNMP.
+
+        Returns:
+            None
+        """
         logging.info('Shutting down all relays')
         self.set_all(False)
-
-    # def poweron(self):
-    #     logging.info('Powering on all relays')
-    #     self.set_all(True)
 
 # s = PowerCtrl("192.168.50.230")
 # s.switch(2, True)

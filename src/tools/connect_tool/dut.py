@@ -21,17 +21,50 @@ lock = threading.Lock()
 
 @dataclass
 class IperfMetrics:
+    """
+    Iperf metrics.
+
+    -------------------------
+    Returns
+    -------------------------
+    None
+        This class does not return a value.
+    """
     throughput_mbps: Optional[float]
     latency_ms: Optional[float] = None
     packet_loss: Optional[str] = None
 
     def formatted_throughput(self) -> Optional[str]:
+        """
+        Formatted throughput.
+
+        -------------------------
+        Returns
+        -------------------------
+        Optional[str]
+            A value of type ``Optional[str]``.
+        """
         if self.throughput_mbps is None:
             return None
         return f"{self.throughput_mbps:.1f}"
 
 
 class dut():
+    """
+    Dut.
+
+    -------------------------
+    It runs shell commands on the target device using ADB helpers and captures the output.
+    It executes external commands via Python's subprocess module.
+    It logs information for debugging or monitoring purposes.
+    It introduces delays to allow the device to process commands.
+
+    -------------------------
+    Returns
+    -------------------------
+    None
+        This class does not return a value.
+    """
     count = 0
     DMESG_COMMAND = 'dmesg -S'
     CLEAR_DMESG_COMMAND = 'dmesg -c'
@@ -40,12 +73,26 @@ class dut():
     MORE_SETTING_ACTIVITY_TUPLE = 'com.droidlogic.tv.settings', '.more.MorePrefFragmentActivity'
 
     SKIP_OOBE = "pm disable com.google.android.tungsten.setupwraith;settings put secure user_setup_complete 1;settings put global device_provisioned 1;settings put secure tv_user_setup_complete 1"
-    # iperf 相关命令
     IPERF_KILL = 'killall -9 {}'
     IPERF_WIN_KILL = 'taskkill /im {}.exe -f'
 
     @staticmethod
     def _parse_iperf_params(cmd: str) -> tuple[int, int]:
+        """
+        Parse Iperf params.
+
+        -------------------------
+        Parameters
+        -------------------------
+        cmd : Any
+            Command string to parse or execute.
+
+        -------------------------
+        Returns
+        -------------------------
+        tuple[int, int]
+            A value of type ``tuple[int, int]``.
+        """
         t_match = re.search(r'-t\s+(\d+)', cmd)
         p_match = re.search(r'-P\s+(\d+)', cmd)
         test_time = int(t_match.group(1)) if t_match else 30
@@ -54,16 +101,63 @@ class dut():
 
     @staticmethod
     def _is_udp_command(cmd: str) -> bool:
+        """
+        Is udp command.
+
+        -------------------------
+        Parameters
+        -------------------------
+        cmd : Any
+            Command string to parse or execute.
+
+        -------------------------
+        Returns
+        -------------------------
+        bool
+            A value of type ``bool``.
+        """
         return bool(re.search(r'(^|\s)-u(\s|$)', cmd))
 
     @staticmethod
     def _calculate_iperf_wait_time(test_time: int) -> int:
+        """
+        Calculate Iperf wait time.
+
+        -------------------------
+        Parameters
+        -------------------------
+        test_time : Any
+            Duration of an iperf test run in seconds.
+
+        -------------------------
+        Returns
+        -------------------------
+        int
+            A value of type ``int``.
+        """
         safe_time = max(test_time, 1)
         buffer = max(15, min(120, safe_time // 2))
         return safe_time + buffer
 
     @staticmethod
     def _convert_bandwidth_to_mbps(value: float, unit: str) -> Optional[float]:
+        """
+        Convert bandwidth to mbps.
+
+        -------------------------
+        Parameters
+        -------------------------
+        value : Any
+            Numeric value used in calculations.
+        unit : Any
+            Unit of measurement associated with a value.
+
+        -------------------------
+        Returns
+        -------------------------
+        Optional[float]
+            A value of type ``Optional[float]``.
+        """
         unit = unit.lower()
         if 'bits/sec' not in unit:
             return None
@@ -79,15 +173,44 @@ class dut():
 
     @staticmethod
     def _sanitize_iperf_line(text: str) -> str:
+        """
+        Sanitize Iperf line.
+
+        -------------------------
+        Parameters
+        -------------------------
+        text : Any
+            Text to input into the device.
+
+        -------------------------
+        Returns
+        -------------------------
+        str
+            A value of type ``str``.
+        """
         if not text:
             return ""
-        # 去除控制字符与 ANSI 转义序列，避免影响正则匹配
         without_ansi = re.sub(r'\x1b\[[0-9;]*[A-Za-z]', '', text)
         cleaned = re.sub(r'[\x00-\x1f\x7f]', '', without_ansi)
         return cleaned.strip()
 
     @staticmethod
     def _extract_udp_metrics(line: str) -> Optional[IperfMetrics]:
+        """
+        Extract udp metrics.
+
+        -------------------------
+        Parameters
+        -------------------------
+        line : Any
+            The ``line`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        Optional[IperfMetrics]
+            A value of type ``Optional[IperfMetrics]``.
+        """
         sanitized = dut._sanitize_iperf_line(line)
         jitter_match = re.search(r'(\d+(?:\.\d+)?)\s*ms', sanitized, re.IGNORECASE)
         loss_match = re.search(r'(\d+\s*/\s*\d+\s*\(\s*\d+(?:\.\d+)?\s*%?\s*\))', sanitized)
@@ -140,7 +263,6 @@ class dut():
     VIDEO_TAG_LIST = [
         {'link': 'r_gV5CHOSBM', 'name': '4K Amazon'},  # 4k
         {'link': 'vX2vsvdq8nw', 'name': '4K HDR 60FPS Sniper Will Smith'},  # 4k hrd 60 fps
-        # {'link': '9Auq9mYxFEE', 'name': 'Sky Live'},
         {'link': '-ZMVjKT3-5A', 'name': 'NBC News (vp9)'},  # vp9
         {'link': 'LXb3EKWsInQ', 'name': 'COSTA RICA IN 4K 60fps HDR (ULTRA HD) (vp9)'},  # vp9
         {'link': 'b6fzbyPoNXY', 'name': 'Las Vegas Strip at Night in 4k UHD HLG HDR (vp9)'},  # vp9
@@ -149,12 +271,23 @@ class dut():
         {'link': 'NVhmq-pB_cs', 'name': 'Mr Bean 720 25fps (720 25fps)'},
         {'link': 'bcOgjyHb_5Y', 'name': 'paid video'},
         {'link': 'rf7ft8-nUQQ', 'name': 'stress video'}
-        # {'link': 'hNAbQYU0wpg', 'name': 'VR 360 Video of Top 5 Roller (360)'}  # 360
     ]
 
     WIFI_BUTTON_TAG = 'Available networks'
 
     def __init__(self):
+        """
+        Init.
+
+        -------------------------
+        It logs information for debugging or monitoring purposes.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         self.serialnumber = 'executer'
         cfg = load_config(refresh=True)
         rvr_cfg = cfg.get('rvr', {})
@@ -172,8 +305,6 @@ class dut():
         self.skip_tx = False
         self.skip_rx = False
         self.iperf_server_log_list: list[str] = []
-        # TODO: 如需从客户端 stdout 补齐 interval，请重新启用客户端日志缓存
-        # self.iperf_client_log_list: list[str] = []
         self._current_udp_mode = False
         if self.rvr_tool == 'iperf':
             cmds = f"{self.iperf_server_cmd} {self.iperf_client_cmd}"
@@ -196,35 +327,138 @@ class dut():
 
     @property
     def dut_ip(self):
+        """
+        Dut ip.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         if self._dut_ip == '': self._dut_ip = self.get_dut_ip()
         return self._dut_ip
 
     @dut_ip.setter
     def dut_ip(self, value):
+        """
+        Dut ip.
+
+        -------------------------
+        Parameters
+        -------------------------
+        value : Any
+            Numeric value used in calculations.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         self._dut_ip = value
 
     @property
     def pc_ip(self):
+        """
+        Pc ip.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         if self._pc_ip == '': self._pc_ip = self.get_pc_ip()
         self.ip_target = '.'.join(self._pc_ip.split('.')[:3])
         return self._pc_ip
 
     @pc_ip.setter
     def pc_ip(self, value):
+        """
+        Pc ip.
+
+        -------------------------
+        Parameters
+        -------------------------
+        value : Any
+            Numeric value used in calculations.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         self._pc_ip = value
 
     @property
     def freq_num(self):
+        """
+        Freq num.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         return self._freq_num
 
     @freq_num.setter
     def freq_num(self, value):
+        """
+        Freq num.
+
+        -------------------------
+        Parameters
+        -------------------------
+        value : Any
+            Numeric value used in calculations.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         self._freq_num = int(value)
         self.channel = int((self._freq_num - 2412) / 5 + 1 if self._freq_num < 3000 else (self._freq_num - 5000) / 5)
 
     @staticmethod
     def _format_result_row(values):
+        """
+        Format result row.
+
+        -------------------------
+        Parameters
+        -------------------------
+        values : Any
+            The ``values`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
+
         def normalize(value: Optional[object]) -> str:
+            """
+            Normalize.
+
+            -------------------------
+            Parameters
+            -------------------------
+            value : Any
+                Numeric value used in calculations.
+
+            -------------------------
+            Returns
+            -------------------------
+            str
+                A value of type ``str``.
+            """
             if value is None:
                 return ''
             text = str(value)
@@ -250,7 +484,56 @@ class dut():
             latency_value,
             packet_loss_value,
     ):
+        """
+        Build throughput result values.
+
+        -------------------------
+        Parameters
+        -------------------------
+        router_info : Any
+            The ``router_info`` parameter.
+        protocol : Any
+            The ``protocol`` parameter.
+        direction : Any
+            The ``direction`` parameter.
+        db_set : Any
+            The ``db_set`` parameter.
+        corner : Any
+            The ``corner`` parameter.
+        mcs_value : Any
+            The ``mcs_value`` parameter.
+        throughput_values : Any
+            The ``throughput_values`` parameter.
+        expect_rate : Any
+            The ``expect_rate`` parameter.
+        latency_value : Any
+            The ``latency_value`` parameter.
+        packet_loss_value : Any
+            The ``packet_loss_value`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
+
         def _first_token(text: str) -> str:
+            """
+            First token.
+
+            -------------------------
+            Parameters
+            -------------------------
+            text : Any
+                Text to input into the device.
+
+            -------------------------
+            Returns
+            -------------------------
+            str
+                A value of type ``str``.
+            """
             return text.split()[0] if text else text
 
         values = [
@@ -279,6 +562,21 @@ class dut():
         return values
 
     def _normalize_throughput_cells(self, entries: list[str]) -> list[str]:
+        """
+        Normalize throughput cells.
+
+        -------------------------
+        Parameters
+        -------------------------
+        entries : Any
+            The ``entries`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        list[str]
+            A value of type ``list[str]``.
+        """
         total_runs = max(1, self.repest_times + 1)
         sanitized = entries[:total_runs]
         while len(sanitized) < total_runs:
@@ -286,7 +584,38 @@ class dut():
         return [entry if entry is not None else '' for entry in sanitized]
 
     def step(func):
+        """
+        Step.
+
+        -------------------------
+        It logs information for debugging or monitoring purposes.
+
+        -------------------------
+        Parameters
+        -------------------------
+        func : Any
+            The ``func`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
+
         def wrapper(*args, **kwargs):
+            """
+            Wrapper.
+
+            -------------------------
+            It logs information for debugging or monitoring purposes.
+
+            -------------------------
+            Returns
+            -------------------------
+            Any
+                The result produced by the function.
+            """
             logging.info('-' * 80)
             dut.count += 1
             logging.info(f"Test Step {dut.count}:")
@@ -299,6 +628,26 @@ class dut():
         return wrapper
 
     def checkoutput_term(self, command):
+        """
+        Checkoutput term.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+        It executes external commands via Python's subprocess module.
+        It logs information for debugging or monitoring purposes.
+
+        -------------------------
+        Parameters
+        -------------------------
+        command : Any
+            The ``command`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         logging.info(f"command:{command}")
         try:
             result = subprocess.Popen(command, shell=True,
@@ -306,13 +655,25 @@ class dut():
                                       stderr=subprocess.PIPE,
                                       encoding='gb2312' if pytest.win_flag else "utf-8",
                                       errors='ignore')
-            # logging.info(f'{result.communicate()[0]}')
             return result.communicate()[0]
         except subprocess.TimeoutExpired:
             logging.info("Command timed out")
             return None
 
     def kill_iperf(self):
+        """
+        Kill Iperf.
+
+        -------------------------
+        It executes external commands via Python's subprocess module.
+        It logs information for debugging or monitoring purposes.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         if is_database_debug_enabled():
             logging.info("Database debug mode enabled, skip killing iperf processes")
             return
@@ -325,22 +686,25 @@ class dut():
             pytest.dut.popen_term(pytest.dut.IPERF_KILL.format(self.test_tool))
         except Exception:
             ...
-        # try:
-        #     pytest.dut.subprocess_run(pytest.dut.IPERF_KILL.replace('iperf', 'iperf3'))
-        #     pytest.dut.popen_term(pytest.dut.IPERF_KILL.replace('iperf', 'iperf3'))
-        # except Exception:
-        #     ...
 
         try:
             pytest.dut.popen_term(pytest.dut.IPERF_WIN_KILL.format(self.test_tool))
         except Exception:
             ...
-        # try:
-        #     pytest.dut.popen_term(pytest.dut.IPERF_WIN_KILL.replace('iperf', 'iperf3'))
-        # except Exception:
-        #     ...
 
     def push_iperf(self):
+        """
+        Push Iperf.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         if pytest.connect_type == 'Linux':
             return
         if self.checkoutput('[ -e /system/bin/iperf ] && echo yes || echo no').strip() != 'yes':
@@ -349,11 +713,54 @@ class dut():
             self.checkoutput('chmod a+x /system/bin/iperf')
 
     def run_iperf(self, command, adb):
+        """
+        Run Iperf.
+
+        -------------------------
+        It executes external commands via Python's subprocess module.
+        It logs information for debugging or monitoring purposes.
+
+        -------------------------
+        Parameters
+        -------------------------
+        command : Any
+            The ``command`` parameter.
+        adb : Any
+            The ``adb`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         encoding = 'gbk' if pytest.win_flag else 'utf-8'
         use_adb = bool(adb)
         self._current_udp_mode = self._is_udp_command(command)
 
         def _extend_logs(target_list: list[str], lines, label: str | None = None):
+            """
+            Extend logs.
+
+            -------------------------
+            It logs information for debugging or monitoring purposes.
+
+            -------------------------
+            Parameters
+            -------------------------
+            target_list : Any
+                The ``target_list`` parameter.
+            lines : Any
+                The ``lines`` parameter.
+            label : Any
+                The ``label`` parameter.
+
+            -------------------------
+            Returns
+            -------------------------
+            None
+                This method does not return a value.
+            """
             if not lines:
                 return
             if isinstance(lines, str):
@@ -370,6 +777,30 @@ class dut():
                         logging.info("%s %s", label, text)
 
         def _read_output(proc, stream, target_list: list[str], label: str):
+            """
+            Read output.
+
+            -------------------------
+            It logs information for debugging or monitoring purposes.
+
+            -------------------------
+            Parameters
+            -------------------------
+            proc : Any
+                The ``proc`` parameter.
+            stream : Any
+                The ``stream`` parameter.
+            target_list : Any
+                The ``target_list`` parameter.
+            label : Any
+                The ``label`` parameter.
+
+            -------------------------
+            Returns
+            -------------------------
+            None
+                This method does not return a value.
+            """
             if not stream:
                 logging.info("iperf stream reader thread (%s) exiting: no stream", label)
                 return
@@ -393,6 +824,27 @@ class dut():
                 )
 
         def _start_background(cmd_list, desc):
+            """
+            Start background.
+
+            -------------------------
+            It executes external commands via Python's subprocess module.
+            It logs information for debugging or monitoring purposes.
+
+            -------------------------
+            Parameters
+            -------------------------
+            cmd_list : Any
+                The ``cmd_list`` parameter.
+            desc : Any
+                The ``desc`` parameter.
+
+            -------------------------
+            Returns
+            -------------------------
+            Any
+                The result produced by the function.
+            """
             logging.debug('%s %s', desc, command)
             logging.debug("command list: %s", cmd_list)
             process = subprocess.Popen(
@@ -402,7 +854,6 @@ class dut():
                 encoding=encoding,
                 errors='ignore',
             )
-            # Keep piping stdout into iperf_server_log_list so we can analyse it later.
             logging.debug(
                 "background process started (%s pid=%s)",
                 desc,
@@ -417,6 +868,27 @@ class dut():
             return process
 
         def _run_blocking(cmd_list, desc):
+            """
+            Run blocking.
+
+            -------------------------
+            It executes external commands via Python's subprocess module.
+            It logs information for debugging or monitoring purposes.
+
+            -------------------------
+            Parameters
+            -------------------------
+            cmd_list : Any
+                The ``cmd_list`` parameter.
+            desc : Any
+                The ``desc`` parameter.
+
+            -------------------------
+            Returns
+            -------------------------
+            None
+                This method does not return a value.
+            """
             logging.info('%s %s', desc, command)
             logging.info("command list: %s", cmd_list)
             process = subprocess.Popen(
@@ -431,13 +903,30 @@ class dut():
             )
 
             def _collect_output(stdout_text: str | None, stderr_text: str | None) -> None:
+                """
+                Collect output.
+
+                -------------------------
+                It logs information for debugging or monitoring purposes.
+
+                -------------------------
+                Parameters
+                -------------------------
+                stdout_text : Any
+                    The ``stdout_text`` parameter.
+                stderr_text : Any
+                    The ``stderr_text`` parameter.
+
+                -------------------------
+                Returns
+                -------------------------
+                None
+                    A value of type ``None``.
+                """
                 if stderr_text:
                     logging.warning(stderr_text.strip())
                 if stdout_text:
                     logging.debug(stdout_text.strip())
-                    # TODO: 重新启用客户端 stdout 聚合时，将 iperf 行写入 self.iperf_client_log_list
-                    # if 'iperf' in command:
-                    #     _extend_logs(self.iperf_client_log_list, stdout_text)
 
             try:
                 stdout, stderr = process.communicate(timeout=self.iperf_wait_time)
@@ -459,17 +948,36 @@ class dut():
                 )
 
         def _build_cmd_list():
+            """
+            Build cmd list.
+
+            -------------------------
+            Returns
+            -------------------------
+            Any
+                The result produced by the function.
+            """
             if use_adb and pytest.connect_type != 'Linux':
                 return ['adb', '-s', self.serialnumber, 'shell', *command.split()]
             return command.split()
 
         if '-s' in command:
             self.iperf_server_log_list = []
-            # TODO: 若恢复客户端日志缓存，这里同步清理 self.iperf_client_log_list
-            # self.iperf_client_log_list = []
             if use_adb:
                 if pytest.connect_type == 'Linux':
                     def telnet_iperf():
+                        """
+                        Telnet Iperf.
+
+                        -------------------------
+                        It logs information for debugging or monitoring purposes.
+
+                        -------------------------
+                        Returns
+                        -------------------------
+                        None
+                            This method does not return a value.
+                        """
                         logging.info(f'server telnet command: {command}')
                         tn = telnetlib.Telnet(self.dut_ip)
                         tn.write(command.encode('ascii') + b'\n')
@@ -491,13 +999,20 @@ class dut():
             else:
                 return _start_background(_build_cmd_list(), 'server pc command:')
         else:
-            # TODO: 若恢复客户端日志缓存，这里需要重置 self.iperf_client_log_list
-            # self.iperf_client_log_list = []
             if use_adb:
                 if pytest.connect_type == 'Linux':
                     logging.info(f'client telnet command: {command}')
 
                     async def _run_telnet_client():
+                        """
+                        Run telnet client.
+
+                        -------------------------
+                        Returns
+                        -------------------------
+                        None
+                            This method does not return a value.
+                        """
                         await asyncio.wait_for(self.telnet_client(command), timeout=self.iperf_wait_time)
 
                     try:
@@ -510,10 +1025,44 @@ class dut():
                 _run_blocking(_build_cmd_list(), 'client pc command:')
 
     def _parse_iperf_log(self, server_lines: list[str]):
-        # Parse iperf stdout (collected by run_iperf) and synthesize a single IperfMetrics
-        # object. For TCP we rely on [SUM] interval lines: prefer the summary line,
-        # otherwise average whatever intervals we actually captured.
+        """
+        Parse Iperf log.
+
+        -------------------------
+        It logs information for debugging or monitoring purposes.
+
+        -------------------------
+        Parameters
+        -------------------------
+        server_lines : Any
+            The ``server_lines`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
+
         def _analyse_lines(lines: list[str]) -> tuple[Optional[float], Optional[IperfMetrics], int, bool]:
+            """
+            Analyse lines.
+
+            -------------------------
+            It logs information for debugging or monitoring purposes.
+
+            -------------------------
+            Parameters
+            -------------------------
+            lines : Any
+                The ``lines`` parameter.
+
+            -------------------------
+            Returns
+            -------------------------
+            tuple[Optional[float], Optional[IperfMetrics], int, bool]
+                A value of type ``tuple[Optional[float], Optional[IperfMetrics], int, bool]``.
+            """
             interval_pattern = re.compile(r'(\d+(?:\.\d*)?)\s*-\s*(\d+(?:\.\d*)?)\s*sec', re.IGNORECASE)
             values: list[float] = []
             seen_intervals: set[tuple[str, str]] = set()
@@ -531,7 +1080,6 @@ class dut():
                         udp_metrics_local = metrics
                         self._current_udp_mode = True
                     continue
-                # logging.info(f'line : {line}')
                 metrics = self._extract_udp_metrics(line)
                 if metrics:
                     udp_metrics_local = metrics
@@ -557,7 +1105,6 @@ class dut():
                     logging.debug(f'skip duplicate interval {interval_key} (throughput={throughput})')
                     continue
                 seen_intervals.add(interval_key)
-                # logging.info(f'[coco] second value {throughput}')
                 values.append(throughput)
                 duration = end_time - start_time
                 if start_time < 0.5 and duration > 1.5:
@@ -615,8 +1162,19 @@ class dut():
         return IperfMetrics(throughput_result)
 
     def get_logcat(self):
-        # pytest.dut.kill_iperf()
-        # 等待 run_iperf 后台线程把 iperf stdout 收集完，再解析出 IperfMetrics。
+        """
+        Retrieve logcat.
+
+        -------------------------
+        It logs information for debugging or monitoring purposes.
+        It introduces delays to allow the device to process commands.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         expected_intervals_raw = getattr(self, "iperf_test_time", 0) or 0
         expected_intervals = int(expected_intervals_raw) if expected_intervals_raw else 0
         if expected_intervals:
@@ -648,7 +1206,6 @@ class dut():
                             end_f = float(end)
                         except (TypeError, ValueError):
                             continue
-                        # Summary lines span几乎整个测试窗口（例：0.00-30.00），检测到即终止等待。
                         if end_f - start_f >= max(1.0, expected_intervals - 1):
                             has_summary = True
                 current_sum_count = len(sum_intervals)
@@ -693,15 +1250,8 @@ class dut():
                 preview_count,
                 server_lines[:preview_count],
             )
-        # TODO: 如果再次启用客户端日志补齐，在此处合并 client_lines
-        # client_lines = list(self.iperf_client_log_list)
-        # if client_lines:
-        #     logging.info("iperf client raw lines captured: %d", len(client_lines))
-        #     server_lines.extend(client_lines)
         result = self._parse_iperf_log(server_lines)
         self.iperf_server_log_list.clear()
-        # TODO: 与上方合并逻辑配套，清理客户端日志缓存
-        # self.iperf_client_log_list.clear()
         if result is None:
             return None
         if result.throughput_mbps is not None:
@@ -711,6 +1261,18 @@ class dut():
         return result
 
     def get_pc_ip(self):
+        """
+        Retrieve pc ip.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         if pytest.win_flag:
             ipfoncig_info = pytest.dut.checkoutput_term('ipconfig').strip()
             pc_ip = re.findall(r'IPv4.*?(\d+\.\d+\.\d+\.\d+)', ipfoncig_info, re.S)[0]
@@ -721,6 +1283,18 @@ class dut():
         return pc_ip
 
     def get_dut_ip(self):
+        """
+        Retrieve dut ip.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         if pytest.connect_type == 'Linux':
             return pytest.dut.dut_ip
         dut_info = pytest.dut.checkoutput('ifconfig wlan0')
@@ -732,6 +1306,34 @@ class dut():
 
     @step
     def get_rx_rate(self, router_info, type='TCP', corner_tool=None, db_set='', debug=False):
+        """
+        Retrieve rx rate.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+        It logs information for debugging or monitoring purposes.
+        It introduces delays to allow the device to process commands.
+
+        -------------------------
+        Parameters
+        -------------------------
+        router_info : Any
+            The ``router_info`` parameter.
+        type : Any
+            Type specifier for the UI automation tool (e.g., "u2").
+        corner_tool : Any
+            The ``corner_tool`` parameter.
+        db_set : Any
+            The ``db_set`` parameter.
+        debug : Any
+            The ``debug`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         router_cfg = {
             router_info.band: {
                 'mode': router_info.wireless_mode,
@@ -758,7 +1360,6 @@ class dut():
             pytest.testResult.save_result(self._format_result_row(values))
             return 'N/A'
 
-        # Accumulate one or more throughput samples (each IperfMetrics instance) for DL.
         rx_metrics_list: list[IperfMetrics] = []
         self.rvr_result = None
         mcs_rx = None
@@ -793,7 +1394,6 @@ class dut():
                     pytest.dut.run_iperf(client_cmd, '')
                     if pytest.connect_type == 'Linux':
                         time.sleep(5)
-                    # Pull the latest iperf server output, parse it into IperfMetrics.
                     rx_result = self.get_logcat()
                     self.rvr_result = None
                     if terminal and hasattr(terminal, 'terminate'):
@@ -841,7 +1441,6 @@ class dut():
             if rx_val < self.throughput_threshold:
                 self.skip_rx = True
 
-        # Convert collected metrics into CSV-ready cells and write the result.
         throughput_entries: list[str] = []
         for metric in rx_metrics_list:
             formatted = metric.formatted_throughput()
@@ -868,6 +1467,34 @@ class dut():
 
     @step
     def get_tx_rate(self, router_info, type='TCP', corner_tool=None, db_set='', debug=False):
+        """
+        Retrieve tx rate.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+        It logs information for debugging or monitoring purposes.
+        It introduces delays to allow the device to process commands.
+
+        -------------------------
+        Parameters
+        -------------------------
+        router_info : Any
+            The ``router_info`` parameter.
+        type : Any
+            Type specifier for the UI automation tool (e.g., "u2").
+        corner_tool : Any
+            The ``corner_tool`` parameter.
+        db_set : Any
+            The ``db_set`` parameter.
+        debug : Any
+            The ``debug`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         router_cfg = {
             router_info.band: {
                 'mode': router_info.wireless_mode,
@@ -1005,14 +1632,37 @@ class dut():
         return ','.join([cell for cell in throughput_cells if cell]) or 'N/A'
 
     def wait_for_wifi_address(self, cmd: str = '', target='', lan=True):
+        """
+        Wait for for Wi‑Fi address.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+        It logs information for debugging or monitoring purposes.
+        It introduces delays to allow the device to process commands.
+
+        -------------------------
+        Parameters
+        -------------------------
+        cmd : Any
+            Command string to parse or execute.
+        target : Any
+            The ``target`` parameter.
+        lan : Any
+            The ``lan`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         if pytest.connect_type == 'Linux':
             pytest.dut.roku.ser.write('iw wlan0 link')
             logging.info(pytest.dut.roku.ser.recv())
             return True, pytest.dut.roku.ser.get_ip_address('wlan0')
         else:
-            # Wait for th wireless adapter to obtaion the ip address
             if lan and (not target):
-                logging.info('coco wait for wifi address '*40)
+                logging.info('coco wait for wifi address ' * 40)
                 target = self.ip_target
             logging.info(f"waiting for wifi {target}")
             step = 0
@@ -1020,7 +1670,6 @@ class dut():
                 time.sleep(3)
                 step += 1
                 info = self.checkoutput('ifconfig wlan0')
-                # logging.info(f'info {info}')
                 ip_address = re.findall(r'inet addr:(\d+\.\d+\.\d+\.\d+)', info, re.S)
                 if ip_address:
                     ip_address = ip_address[0]
@@ -1037,9 +1686,19 @@ class dut():
             return True, ip_address
 
     def forget_wifi(self):
-        '''
-        Remove the network mentioned by <networkId>
-        '''
+        """
+        Forget Wi‑Fi.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+        It logs information for debugging or monitoring purposes.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         if pytest.connect_type == 'Linux':
             ...
         else:
@@ -1056,6 +1715,26 @@ class dut():
                         logging.info(f"Network id {network_id[0]} closed")
 
     def wifi_scan(self, ssid):
+        """
+        Wi‑Fi scan.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+        It logs information for debugging or monitoring purposes.
+        It introduces delays to allow the device to process commands.
+
+        -------------------------
+        Parameters
+        -------------------------
+        ssid : Any
+            The ``ssid`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         if pytest.connect_type == 'Linux':
             return pytest.dut.roku.wifi_scan(ssid)
         else:
@@ -1069,7 +1748,32 @@ class dut():
                 return False
 
     def connect_wifi(self, ssid: str, pwd: str, security: str, hide: bool = False, lan=True) -> bool:
-        """Connect DUT to a Wi-Fi network."""
+        """
+        Connect Wi‑Fi.
+
+        -------------------------
+        It logs information for debugging or monitoring purposes.
+
+        -------------------------
+        Parameters
+        -------------------------
+        ssid : Any
+            The ``ssid`` parameter.
+        pwd : Any
+            The ``pwd`` parameter.
+        security : Any
+            The ``security`` parameter.
+        hide : Any
+            The ``hide`` parameter.
+        lan : Any
+            The ``lan`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        bool
+            A value of type ``bool``.
+        """
 
         connect_type = getattr(pytest, "connect_type", "").lower()
         if connect_type == "linux":
@@ -1087,6 +1791,24 @@ class dut():
         return False
 
     def connect_ssid(self, router=""):
+        """
+        Connect ssid.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+
+        -------------------------
+        Parameters
+        -------------------------
+        router : Any
+            The ``router`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         if pytest.connect_type == 'Linux':
             pytest.dut.roku.wifi_conn(ssid=router.ssid, pwd=router.wpa_passwd)
         else:
@@ -1094,6 +1816,20 @@ class dut():
 
     @step
     def get_rssi(self):
+        """
+        Retrieve rssi.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+        It logs information for debugging or monitoring purposes.
+        It introduces delays to allow the device to process commands.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         if is_database_debug_enabled():
             simulated_rssi = -random.randint(40, 80)
             self.rssi_num = simulated_rssi

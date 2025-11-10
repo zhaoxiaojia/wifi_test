@@ -28,12 +28,24 @@ __all__ = [
     "sync_file_to_db",
 ]
 
-
 ColumnNormalizer = Callable[[Any], Any]
 
 
 @dataclass(frozen=True)
 class _StaticColumn:
+    """
+    Static column.
+
+    Parameters
+    ----------
+    None
+        This class does not take constructor arguments beyond ``self``.
+
+    Returns
+    -------
+    None
+        This class does not return a value.
+    """
     name: str
     sql_type: str
     original: str
@@ -54,16 +66,27 @@ _ALLOWED_STANDARDS = [
 
 
 def _normalize_band_token(value: Any) -> Optional[str]:
+    """
+    Normalize band token.
+
+    Parameters
+    ----------
+    value : Any
+        Value to sanitize, normalize, or convert.
+
+    Returns
+    -------
+    Optional[str]
+        A value of type ``Optional[str]``.
+    """
     if value is None:
         return None
     text = str(value).strip()
     if not text:
         return None
     lowered = text.lower()
-    # Allow direct matches first
     if lowered in _ALLOWED_BANDS:
         return lowered
-    # Remove unit suffixes like "ghz" or "g"
     simplified = re.sub(r"[\s_\-]", "", lowered)
     simplified = re.sub(r"ghz$", "", simplified)
     simplified = re.sub(r"g$", "", simplified)
@@ -79,6 +102,19 @@ def _normalize_band_token(value: Any) -> Optional[str]:
 
 
 def _normalize_direction_token(value: Any) -> Optional[str]:
+    """
+    Normalize direction token.
+
+    Parameters
+    ----------
+    value : Any
+        Value to sanitize, normalize, or convert.
+
+    Returns
+    -------
+    Optional[str]
+        A value of type ``Optional[str]``.
+    """
     if value is None:
         return None
     text = str(value).strip().lower()
@@ -102,6 +138,19 @@ def _normalize_direction_token(value: Any) -> Optional[str]:
 
 
 def _normalize_standard_token(value: Any) -> Optional[str]:
+    """
+    Normalize standard token.
+
+    Parameters
+    ----------
+    value : Any
+        Value to sanitize, normalize, or convert.
+
+    Returns
+    -------
+    Optional[str]
+        A value of type ``Optional[str]``.
+    """
     if value is None:
         return None
     text = str(value).strip().lower()
@@ -112,7 +161,6 @@ def _normalize_standard_token(value: Any) -> Optional[str]:
     for candidate in _ALLOWED_STANDARDS:
         if candidate in text:
             return candidate
-    # Handle values like 802.11ax, 11AX, etc.
     match = re.search(r"11[a-z]{1,2}", text)
     if match:
         candidate = match.group(0)
@@ -122,6 +170,19 @@ def _normalize_standard_token(value: Any) -> Optional[str]:
 
 
 def _normalize_str_token(value: Any) -> Optional[str]:
+    """
+    Normalize str token.
+
+    Parameters
+    ----------
+    value : Any
+        Value to sanitize, normalize, or convert.
+
+    Returns
+    -------
+    Optional[str]
+        A value of type ``Optional[str]``.
+    """
     if value is None:
         return None
     text = str(value).strip()
@@ -129,11 +190,37 @@ def _normalize_str_token(value: Any) -> Optional[str]:
 
 
 def _normalize_lower_token(value: Any) -> Optional[str]:
+    """
+    Normalize lower token.
+
+    Parameters
+    ----------
+    value : Any
+        Value to sanitize, normalize, or convert.
+
+    Returns
+    -------
+    Optional[str]
+        A value of type ``Optional[str]``.
+    """
     text = _normalize_str_token(value)
     return text.lower() if text else None
 
 
 def _normalize_angle_token(value: Any) -> Optional[float]:
+    """
+    Normalize angle token.
+
+    Parameters
+    ----------
+    value : Any
+        Value to sanitize, normalize, or convert.
+
+    Returns
+    -------
+    Optional[float]
+        A value of type ``Optional[float]``.
+    """
     if value is None:
         return None
     if isinstance(value, (int, float, Decimal)):
@@ -159,7 +246,19 @@ _COLUMN_NORMALIZERS: Dict[str, ColumnNormalizer] = {
 
 
 class PerformanceTableManager:
-    """Manage the performance table with a fixed schema and cumulative writes."""
+    """
+    Performance table manager.
+
+    Parameters
+    ----------
+    None
+        This class does not take constructor arguments beyond ``self``.
+
+    Returns
+    -------
+    None
+        This class does not return a value.
+    """
 
     TABLE_NAME = "performance"
     REPORT_TABLE_NAME = "test_report"
@@ -181,10 +280,36 @@ class PerformanceTableManager:
     )
 
     def __init__(self, client: MySqlClient) -> None:
+        """
+        Init.
+
+        Parameters
+        ----------
+        client : Any
+            An instance of MySqlClient used to interact with the database.
+
+        Returns
+        -------
+        None
+            This method does not return a value.
+        """
         self._client = client
 
     @staticmethod
     def _classify_value(value: Any) -> tuple[str, Any]:
+        """
+        Classify value.
+
+        Parameters
+        ----------
+        value : Any
+            Value to sanitize, normalize, or convert.
+
+        Returns
+        -------
+        tuple[str, Any]
+            A value of type ``tuple[str, Any]``.
+        """
         if value is None:
             return "empty", None
         if isinstance(value, (dict, list)):
@@ -218,6 +343,19 @@ class PerformanceTableManager:
 
     @staticmethod
     def _canonical_sql_type(sql_type: str) -> str:
+        """
+        Canonical SQL type.
+
+        Parameters
+        ----------
+        sql_type : Any
+            The ``sql_type`` parameter.
+
+        Returns
+        -------
+        str
+            A value of type ``str``.
+        """
         normalized = (sql_type or "").upper()
         if normalized.startswith("DECIMAL"):
             return "DECIMAL"
@@ -239,6 +377,21 @@ class PerformanceTableManager:
 
     @staticmethod
     def _normalize_cell(value: Any, sql_type: str) -> Any:
+        """
+        Normalize cell.
+
+        Parameters
+        ----------
+        value : Any
+            Value to sanitize, normalize, or convert.
+        sql_type : Any
+            The ``sql_type`` parameter.
+
+        Returns
+        -------
+        Any
+            A value of type ``Any``.
+        """
         value_type, parsed = PerformanceTableManager._classify_value(value)
         if parsed is None:
             return None
@@ -273,12 +426,40 @@ class PerformanceTableManager:
         return str(parsed)
 
     def _describe_columns(self) -> Dict[str, Dict[str, Any]]:
+        """
+        Describe columns.
+
+        Parameters
+        ----------
+        None
+            This method does not accept any additional parameters beyond ``self``.
+
+        Returns
+        -------
+        Dict[str, Dict[str, Any]]
+            A value of type ``Dict[str, Dict[str, Any]]``.
+        """
         return {
             column["Field"]: column
             for column in self._client.query_all(f"SHOW FULL COLUMNS FROM `{self.TABLE_NAME}`")
         }
 
     def _ensure_static_columns(self) -> None:
+        """
+        Ensure static columns.
+
+        Runs an SQL statement using a database cursor.
+
+        Parameters
+        ----------
+        None
+            This method does not accept any additional parameters beyond ``self``.
+
+        Returns
+        -------
+        None
+            This method does not return a value.
+        """
         snapshot = self._describe_columns()
         snapshot = self._apply_column_renames(snapshot)
         for column in self._STATIC_COLUMNS:
@@ -296,8 +477,23 @@ class PerformanceTableManager:
             )
 
     def _apply_column_renames(
-        self, snapshot: Dict[str, Dict[str, Any]]
+            self, snapshot: Dict[str, Dict[str, Any]]
     ) -> Dict[str, Dict[str, Any]]:
+        """
+        Apply column renames.
+
+        Runs an SQL statement using a database cursor.
+
+        Parameters
+        ----------
+        snapshot : Any
+            The ``snapshot`` parameter.
+
+        Returns
+        -------
+        Dict[str, Dict[str, Any]]
+            A value of type ``Dict[str, Dict[str, Any]]``.
+        """
         updated = snapshot
         for old_name, new_name in PERFORMANCE_COLUMN_RENAMES:
             if old_name in updated and new_name not in updated:
@@ -310,6 +506,19 @@ class PerformanceTableManager:
 
     @staticmethod
     def _collect_throughput_headers(headers: Sequence[str]) -> List[str]:
+        """
+        Collect throughput headers.
+
+        Parameters
+        ----------
+        headers : Any
+            The ``headers`` parameter.
+
+        Returns
+        -------
+        List[str]
+            A value of type ``List[str]``.
+        """
         aliases: List[str] = []
         for header in headers:
             if header is None:
@@ -323,6 +532,19 @@ class PerformanceTableManager:
 
     @staticmethod
     def _parse_throughput_value(value: Any) -> List[float]:
+        """
+        Parse throughput value.
+
+        Parameters
+        ----------
+        value : Any
+            Value to sanitize, normalize, or convert.
+
+        Returns
+        -------
+        List[float]
+            A value of type ``List[float]``.
+        """
         if value is None:
             return []
         if isinstance(value, (int, float, Decimal)):
@@ -350,6 +572,19 @@ class PerformanceTableManager:
 
     @classmethod
     def _compute_throughput_average(cls, values: Sequence[Any]) -> Optional[float]:
+        """
+        Compute throughput average.
+
+        Parameters
+        ----------
+        values : Any
+            The ``values`` parameter.
+
+        Returns
+        -------
+        Optional[float]
+            A value of type ``Optional[float]``.
+        """
         samples: List[float] = []
         for value in values:
             samples.extend(cls._parse_throughput_value(value))
@@ -359,10 +594,38 @@ class PerformanceTableManager:
 
     @staticmethod
     def _format_column_definition(column: _StaticColumn) -> str:
+        """
+        Format column definition.
+
+        Parameters
+        ----------
+        column : Any
+            Column specification object.
+
+        Returns
+        -------
+        str
+            A value of type ``str``.
+        """
         comment = column.original.replace("'", "''")
         return f"{column.sql_type} NULL DEFAULT NULL COMMENT '{comment}'"
 
     def _resolve_execution_id(self, case_path: Optional[str]) -> Optional[int]:
+        """
+        Resolve execution ID.
+
+        Logs informational messages and errors for debugging purposes.
+
+        Parameters
+        ----------
+        case_path : Any
+            Path used to derive the target table name for test data.
+
+        Returns
+        -------
+        Optional[int]
+            A value of type ``Optional[int]``.
+        """
         if not case_path:
             return None
         try:
@@ -382,15 +645,31 @@ class PerformanceTableManager:
         return None
 
     def _register_test_report(
-        self,
-        *,
-        csv_name: str,
-        csv_path: str,
-        data_type: Optional[str],
-        case_path: Optional[str],
-        execution_id: Optional[int],
-        dut_id: Optional[int],
+            self,
+            *,
+            csv_name: str,
+            csv_path: str,
+            data_type: Optional[str],
+            case_path: Optional[str],
+            execution_id: Optional[int],
+            dut_id: Optional[int],
     ) -> int:
+        """
+        Register test report.
+
+        Inserts rows into the database and returns the last inserted ID.
+        Reads data from a CSV file and processes each row.
+
+        Parameters
+        ----------
+        None
+            This method does not accept any additional parameters beyond ``self``.
+
+        Returns
+        -------
+        int
+            A value of type ``int``.
+        """
         resolved_execution_id = execution_id
         if resolved_execution_id is None:
             resolved_execution_id = self._resolve_execution_id(case_path)
@@ -412,22 +691,54 @@ class PerformanceTableManager:
         )
 
     def ensure_schema_initialized(self) -> None:
+        """
+        Ensure schema initialized.
+
+        Ensures that required tables exist before inserting data.
+
+        Parameters
+        ----------
+        None
+            This method does not accept any additional parameters beyond ``self``.
+
+        Returns
+        -------
+        None
+            This method does not return a value.
+        """
         ensure_report_tables(self._client)
         self._ensure_static_columns()
 
     def replace_with_csv(
-        self,
-        *,
-        csv_name: str,
-        csv_path: str,
-        headers: Sequence[str],
-        rows: Sequence[Dict[str, Any]],
-        data_type: Optional[str],
-        run_source: str,
-        case_path: Optional[str],
-        execution_id: Optional[int] = None,
-        dut_id: Optional[int] = None,
+            self,
+            *,
+            csv_name: str,
+            csv_path: str,
+            headers: Sequence[str],
+            rows: Sequence[Dict[str, Any]],
+            data_type: Optional[str],
+            run_source: str,
+            case_path: Optional[str],
+            execution_id: Optional[int] = None,
+            dut_id: Optional[int] = None,
     ) -> int:
+        """
+        Replace with CSV.
+
+        Executes multiple SQL statements in a batch using a cursor.
+        Reads data from a CSV file and processes each row.
+        Logs informational messages and errors for debugging purposes.
+
+        Parameters
+        ----------
+        None
+            This method does not accept any additional parameters beyond ``self``.
+
+        Returns
+        -------
+        int
+            A value of type ``int``.
+        """
         logging.info(
             "Sync CSV %s into performance table | headers=%s rows=%s",
             csv_name,
@@ -514,6 +825,19 @@ class PerformanceTableManager:
 
 
 def _extract_first(mapping: Mapping[str, Any] | None, *keys: str) -> Optional[Any]:
+    """
+    Extract first.
+
+    Parameters
+    ----------
+    mapping : Any
+        The ``mapping`` parameter.
+
+    Returns
+    -------
+    Optional[Any]
+        A value of type ``Optional[Any]``.
+    """
     current: Any = mapping
     for key in keys:
         if not isinstance(current, Mapping):
@@ -523,6 +847,19 @@ def _extract_first(mapping: Mapping[str, Any] | None, *keys: str) -> Optional[An
 
 
 def _normalize_upper_token(value: Any) -> Optional[str]:
+    """
+    Normalize upper token.
+
+    Parameters
+    ----------
+    value : Any
+        Value to sanitize, normalize, or convert.
+
+    Returns
+    -------
+    Optional[str]
+        A value of type ``Optional[str]``.
+    """
     if value is None:
         return None
     text = str(value).strip()
@@ -532,6 +869,19 @@ def _normalize_upper_token(value: Any) -> Optional[str]:
 
 
 def _split_fpga(value: Any) -> tuple[Optional[str], Optional[str]]:
+    """
+    Split fpga.
+
+    Parameters
+    ----------
+    value : Any
+        Value to sanitize, normalize, or convert.
+
+    Returns
+    -------
+    tuple[Optional[str], Optional[str]]
+        A value of type ``tuple[Optional[str], Optional[str]]``.
+    """
     if isinstance(value, Mapping):
         module_value = value.get("wifi_module", value.get("series"))
         interface_value = value.get("interface")
@@ -545,10 +895,27 @@ def _split_fpga(value: Any) -> tuple[Optional[str], Optional[str]]:
 
 
 def _guess_product_by_mapping(
-    wifi_module: Optional[str],
-    interface: Optional[str],
-    main_chip: Optional[str],
+        wifi_module: Optional[str],
+        interface: Optional[str],
+        main_chip: Optional[str],
 ) -> tuple[Optional[str], Optional[str], Optional[str], Optional[dict[str, str]]]:
+    """
+    Guess product by mapping.
+
+    Parameters
+    ----------
+    wifi_module : Any
+        The ``wifi_module`` parameter.
+    interface : Any
+        The ``interface`` parameter.
+    main_chip : Any
+        The ``main_chip`` parameter.
+
+    Returns
+    -------
+    tuple[Optional[str], Optional[str], Optional[str], Optional[dict[str, str]]]
+        A value of type ``tuple[Optional[str], Optional[str], Optional[str], Optional[dict[str, str]]]``.
+    """
     wifi_upper = _normalize_upper_token(wifi_module)
     interface_upper = _normalize_upper_token(interface)
     chip_upper = _normalize_upper_token(main_chip)
@@ -570,6 +937,19 @@ def _guess_product_by_mapping(
 
 
 def _resolve_wifi_product_details(fpga_section: Any) -> Dict[str, Optional[str]]:
+    """
+    Resolve wifi product details.
+
+    Parameters
+    ----------
+    fpga_section : Any
+        The ``fpga_section`` parameter.
+
+    Returns
+    -------
+    Dict[str, Optional[str]]
+        A value of type ``Dict[str, Optional[str]]``.
+    """
     details: Dict[str, Optional[str]] = {
         "customer": None,
         "product_line": None,
@@ -638,6 +1018,19 @@ def _resolve_wifi_product_details(fpga_section: Any) -> Dict[str, Optional[str]]
 
 
 def _build_dut_payload(config: Mapping[str, Any]) -> Dict[str, Any]:
+    """
+    Build dut payload.
+
+    Parameters
+    ----------
+    config : Any
+        Dictionary containing MySQL configuration parameters.
+
+    Returns
+    -------
+    Dict[str, Any]
+        A value of type ``Dict[str, Any]``.
+    """
     software = _extract_first(config, "software_info") or _extract_first(config, "software")
     hardware = _extract_first(config, "hardware_info") or _extract_first(config, "hardware")
     android = _extract_first(config, "android_system") or _extract_first(config, "android")
@@ -696,6 +1089,19 @@ def _build_dut_payload(config: Mapping[str, Any]) -> Dict[str, Any]:
 
 
 def _build_execution_payload(config: Mapping[str, Any]) -> Dict[str, Any]:
+    """
+    Build execution payload.
+
+    Parameters
+    ----------
+    config : Any
+        Dictionary containing MySQL configuration parameters.
+
+    Returns
+    -------
+    Dict[str, Any]
+        A value of type ``Dict[str, Any]``.
+    """
     router_section = _extract_first(config, "router")
     router = router_section if isinstance(router_section, Mapping) else {}
     rf_solution = config.get("rf_solution") if isinstance(config, Mapping) else {}
@@ -753,7 +1159,21 @@ def _build_execution_payload(config: Mapping[str, Any]) -> Dict[str, Any]:
 
 
 def sync_configuration(config: dict | None) -> Optional[Any]:
-    """Persist DUT/execution metadata derived from configuration."""
+    """
+    Sync configuration.
+
+    Logs informational messages and errors for debugging purposes.
+
+    Parameters
+    ----------
+    config : Any
+        Dictionary containing MySQL configuration parameters.
+
+    Returns
+    -------
+    Optional[Any]
+        A value of type ``Optional[Any]``.
+    """
 
     if not isinstance(config, Mapping) or not config:
         logging.debug("sync_configuration: skipped, config missing or invalid (%s)", type(config))
@@ -789,14 +1209,30 @@ def sync_configuration(config: dict | None) -> Optional[Any]:
 
 
 def sync_test_result_to_db(
-    config: dict | None,
-    *,
-    log_file: str,
-    data_type: Optional[str] = None,
-    case_path: Optional[str] = None,
-    run_source: str = "local",
+        config: dict | None,
+        *,
+        log_file: str,
+        data_type: Optional[str] = None,
+        case_path: Optional[str] = None,
+        run_source: str = "local",
 ) -> int:
-    """Load a CSV file and append its rows into the performance table."""
+    """
+    Sync test result to db.
+
+    Loads configuration settings from a YAML or configuration file.
+    Reads data from a CSV file and processes each row.
+    Logs informational messages and errors for debugging purposes.
+
+    Parameters
+    ----------
+    config : Any
+        Dictionary containing MySQL configuration parameters.
+
+    Returns
+    -------
+    int
+        A value of type ``int``.
+    """
 
     active_config: Optional[Mapping[str, Any]] = None
     if isinstance(config, Mapping) and config:
@@ -896,14 +1332,28 @@ def sync_test_result_to_db(
 
 
 def sync_file_to_db(
-    file_path: str,
-    data_type: str,
-    *,
-    config: Optional[dict] = None,
-    case_path: Optional[str] = None,
-    run_source: str = "FRAMEWORK",
+        file_path: str,
+        data_type: str,
+        *,
+        config: Optional[dict] = None,
+        case_path: Optional[str] = None,
+        run_source: str = "FRAMEWORK",
 ) -> int:
-    """Convenience wrapper mirroring :func:`sync_test_result_to_db`."""
+    """
+    Sync file to db.
+
+    Parameters
+    ----------
+    file_path : Any
+        The ``file_path`` parameter.
+    data_type : Any
+        Logical data type label stored alongside test results.
+
+    Returns
+    -------
+    int
+        A value of type ``int``.
+    """
 
     return sync_test_result_to_db(
         config or {},

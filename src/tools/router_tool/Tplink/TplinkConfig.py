@@ -1,17 +1,37 @@
-#!/usr/bin/env python
-# _*_ coding: utf-8 _*_
-# @Time    : 2022/10/31 09:56
-# @Author  : chao.li
-# @Site    :
-# @File    : TplinkConfig.py
-# @Software: PyCharm
+"""
+Tplink config
 
+This module is part of the AsusRouter package.
+"""
 
 from src.tools.router_tool.RouterControl import RouterTools
 
 
 class TplinkRotuerConfig(RouterTools):
+    """
+        Tplink rotuer config
+            Parameters
+            ----------
+            None
+                This class is instantiated without additional parameters.
+            Returns
+            -------
+            None
+                Classes return instances implicitly when constructed.
+    """
+
     def __init__(self):
+        """
+            Init
+                Parameters
+                ----------
+                None
+                    This function does not accept any parameters beyond the implicit context.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         super(TplinkRotuerConfig, self).__init__()
 
     CHANNEL_2_DICT = {
@@ -33,7 +53,30 @@ class TplinkRotuerConfig(RouterTools):
 
 
 class TplinkAx6000Config(TplinkRotuerConfig):
+    """
+        Tplink ax6000 config
+            Parameters
+            ----------
+            None
+                This class is instantiated without additional parameters.
+            Returns
+            -------
+            None
+                Classes return instances implicitly when constructed.
+    """
+
     def __init__(self):
+        """
+            Init
+                Parameters
+                ----------
+                None
+                    This function does not accept any parameters beyond the implicit context.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         super(TplinkAx6000Config, self).__init__()
 
     AUTHENTICATION_METHOD_DICT = {
@@ -88,11 +131,34 @@ class TplinkAx6000Config(TplinkRotuerConfig):
 
 
 class TplinkWr842Config(TplinkRotuerConfig):
+    """
+        Tplink wr842 config
+            Parameters
+            ----------
+            None
+                This class is instantiated without additional parameters.
+            Returns
+            -------
+            None
+                Classes return instances implicitly when constructed.
+    """
+
     def __init__(self):
+        """
+            Init
+                Parameters
+                ----------
+                None
+                    This function does not accept any parameters beyond the implicit context.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         super().__init__()
 
     AUTHENTICATION_METHOD_LIST = ['WPA-PSK/WPA2-PSK', 'WPA/WPA2', 'WEP', 'WPA-PSK', 'WPA2-PSK', 'WPA', 'WPA2', '自动',
-                                  '开放系统', '共享秘钥','OPEN']
+                                  '开放系统', '共享秘钥', 'OPEN']
 
     PSK_DICT = {
         '自动': '1',

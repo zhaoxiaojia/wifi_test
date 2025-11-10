@@ -1,11 +1,8 @@
-#!/usr/bin/env python
-# _*_ coding: utf-8 _*_
-# @Time    : 2022/11/3 09:42
-# @Author  : chao.li
-# @Site    :
-# @File    : Xiaomiax3600Control.py
-# @Software: PyCharm
+"""
+Xiaomiax3600 control
 
+This module is part of the AsusRouter package.
+"""
 
 import logging
 import time
@@ -19,19 +16,49 @@ from src.tools.router_tool.Xiaomi.XiaomiBaseControl import XiaomiBaseControl
 
 
 class Xiaomiax3600Control(XiaomiBaseControl):
-    '''
-
-    rvr
-    1,2.4G, XiaomiAX3000_2.4G,11ac ,6,40MHz ,超强加密(WPA3个人版) , 12345678,rx,TCP,5 ,10 10
-    '''
+    """
+        Xiaomiax3600 control
+            Parameters
+            ----------
+            None
+                This class is instantiated without additional parameters.
+            Returns
+            -------
+            None
+                Classes return instances implicitly when constructed.
+    """
 
     def __init__(self, address: str | None = None):
+        """
+            Init
+                Parameters
+                ----------
+                address : object
+                    The router's login address or IP address; if None, a default is used.
+                Returns
+                -------
+                None
+                    This function does not return a value.
+        """
         super().__init__('xiaomi_ax3600', display=True, address=address)
 
     def change_setting(self, router):
+        """
+            Change setting
+                Interacts with the router's web interface using Selenium WebDriver.
+                Pauses execution for a specified duration to allow operations to complete.
+                Logs informational or debugging messages for tracing execution.
+                Parameters
+                ----------
+                router : object
+                    Router control object or router information required to perform operations.
+                Returns
+                -------
+                object
+                    Description of the returned value.
+        """
         super().change_setting(router)
 
-        # 点击apply
         try:
             temp = 'apply_2g' if router.band == self.BAND_2 else 'apply_5g'
             wait_for = self.driver.find_element(
@@ -53,7 +80,7 @@ class Xiaomiax3600Control(XiaomiBaseControl):
             time.sleep(75)
             logging.warning("Fail to find hold on windows")
         time.sleep(3)
-        # 修改wiremode
+
         if router.wireless_mode:
             logging.info(f'coco {router.wireless_mode}')
             wifi6_switch = self.driver.find_element(By.XPATH,
@@ -69,16 +96,16 @@ class Xiaomiax3600Control(XiaomiBaseControl):
         self.driver.quit()
         return True
 
-# fields = ['serial', 'band', 'ssid', 'wireless_mode', 'channel', 'bandwidth', 'security_mode', 'password',
-#           'test_type',
-#           'wep_encrypt', 'passwd_index', 'wep_passwd', 'protect_frame', 'wpa_encrypt', 'hide_ssid']
-# Router = namedtuple('Router', fields, defaults=[None, ] * len(fields))
-# router5 = Router(serial='1', band='5G', ssid='XiaomiAX3000_2.4G', channel='36', wireless_mode='11ax',
-#                  bandwidth='80MHz', authentication='超强加密(WPA3个人版)', password='12345678',
-#                  hide_ssid='否')
-# router2 = Router(serial='1', band='2.4G', ssid='XiaomiAX3000_2.4G', channel='1', wireless_mode='11ac',
-#                  bandwidth='40MHz', authentication='超强加密(WPA3个人版)', password='12345678',
-#                  hide_ssid='否')
-# control = Xiaomiax3000Control()
-# control.change_setting(router2)
-# control.reboot_router()
+
+
+
+
+
+
+
+
+
+
+
+
+

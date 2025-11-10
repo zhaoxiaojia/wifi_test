@@ -1,7 +1,9 @@
-#!/usr/bin/env python
-# encoding: utf-8
-"""
-Utilities to interact with the RF and turntable controllers used in RVR tests.
+"""Utility classes for interacting with RF and turntable controllers.
+
+This module provides a singleton :class:`rs` class that wraps command-line
+executables used to control RF power levels and motorized turntables in
+receiver sensitivity tests.  It exposes methods to execute commands and
+parses their output to track the current RF setting, angle and distance.
 """
 
 import logging
@@ -14,7 +16,21 @@ from src.util.decorators import singleton
 
 @singleton
 class rs:
-    def __init__(self):
+    """Singleton controller wrapper for RF power and turntable interactions.
+
+    The :class:`rs` class encapsulates state related to the current RF power,
+    turntable angle and distance.  It provides methods to send commands to
+    external executables that adjust these parameters and to parse their
+    output.  Because the class is decorated with :func:`singleton`, only one
+    instance will ever exist within a given process.
+    """
+
+    def __init__(self) -> None:
+        """Initialize the controller with default executable paths and state.
+
+        The constructor sets default paths to the RF and turntable control
+        executables and initializes the current RF value, angle and distance.
+        """
         self.rf_path = 'res/AmlACUControl.exe'
         self.corner_path = 'res/AmlSunveyController.exe'
         self.rf: int = 0
@@ -24,6 +40,16 @@ class rs:
 
     @staticmethod
     def _extract_final_numeric(text: str) -> Optional[float]:
+        """Extract the last numeric value from a string if present.
+
+        Parameters:
+            text (str): A string potentially containing numeric substrings.
+
+        Returns:
+            Optional[float]: The last floating-point number found in the
+            input string, or ``None`` if no numeric substrings are present or
+            conversion fails.
+        """
         if not text:
             return None
         matches = re.findall(r'-?\d+(?:\.\d+)?', text)
@@ -35,21 +61,63 @@ class rs:
             return None
 
     def execute_rf_cmd(self, num: int) -> None:
+        """Execute the RF control command to set the power level.
+
+        Parameters:
+            num (int): The desired RF power level or setting to pass to the
+                RF control executable.
+
+        Returns:
+            None
+        """
         exe_path = f'{self.rf_path} {num}'
         subprocess.run(exe_path, capture_output=True, text=True)
+        # Store the last RF value set by the command.
         self.rf = num
 
     def get_rf_current_value(self) -> int:
+        """Return the most recently set RF power level.
+
+        Returns:
+            int: The last numeric value passed to :meth:`execute_rf_cmd`.
+        """
         return self.rf
 
     def get_turntanle_current_angle(self) -> str:
+        """Return the current turntable angle as a formatted string.
+
+        Returns:
+            str: The most recently parsed angle, formatted with a degree
+            symbol if available, or the raw output when parsing fails.
+        """
         return self.current_angle
 
     def set_turntable_zero(self) -> None:
+        """Reset the turntable angle to zero degrees.
+
+        Returns:
+            None
+        """
         self.execute_turntable_cmd('', 0)
 
-    def execute_turntable_cmd(self, type, angle='') -> None:
-        # invoke the AutoIt-compiled executable to drive the turntable
+    def execute_turntable_cmd(self, type, angle: str | int = '') -> None:
+        """Execute the turntable control command and update angle/distance state.
+
+        This method constructs a command line to drive the turntable via an
+        external executable.  The output of the command is parsed to extract
+        the current angle and distance information, which are stored as
+        instance attributes and logged for diagnostics.
+
+        Parameters:
+            type: Unused parameter reserved for API compatibility.
+            angle (str | int, optional): Desired angle to pass to the
+                turntable control executable.  An empty string will query
+                the current angle without moving the turntable.
+
+        Returns:
+            None
+        """
+        # Invoke the AutoIt-compiled executable to drive the turntable.
         exe_path = f"{self.corner_path} -angle {angle}"
         result = subprocess.run(exe_path, capture_output=True, text=True)
 

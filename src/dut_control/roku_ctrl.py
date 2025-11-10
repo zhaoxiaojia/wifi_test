@@ -1,11 +1,12 @@
-# !/usr/bin/env python
-# -*- coding: utf-8 -*-
-# @Time    : 2024/2/20 15:09
-# @Author  : chao.li
-# @File    : rokuIr.py
-# @Project : kpi_test
-# @Software: PyCharm
+"""
+Roku control utilities.
 
+This module provides helper functions and a subclass of the ``roku.Roku`` class
+to interact with Roku devices programmatically.  It includes logic to look
+up the device's IP address from a configuration file, decode bytes while
+ignoring errors, and extend the base Roku functionality with additional
+commands, screen capture, infrared navigation and media playback helpers.
+"""
 
 import logging
 import os
@@ -25,21 +26,55 @@ from src.tools.connect_tool.serial_tool import serial_tool
 from src.tools.connect_tool.telnet_tool import telnet_tool
 from src.tools.config_loader import load_config
 from src.util.constants import RokuConst
+from typing import Annotated
 
 
-def _get_roku_ip():
-    """加载最新的 ROKU IP 配置"""
+def _get_roku_ip() -> Optional[str]:
+    """
+    Load the latest Roku IP address from the configuration.
+
+    This helper refreshes the configuration using :func:`load_config` and
+    returns the IP address defined under the ``connect_type`` section.  It
+    looks for ``Linux`` settings first, falling back to ``telnet`` if
+    necessary, and logs the result for debugging purposes.
+
+    Returns
+    -------
+    Optional[str]
+        The configured Roku IP address, or ``None`` if not defined.
+    """
     cfg = load_config(refresh=True) or {}
     connect_cfg = cfg.get("connect_type", {})
     linux_cfg = connect_cfg.get("Linux") or connect_cfg.get("telnet") or {}
     ip = linux_cfg.get("ip")
-    logging.info(f"读取 ROKU IP: {ip}")
+    logging.info(f"Read ROKU IP: {ip}")
     return ip
 
-lock = threading.Lock()
+
+lock: Annotated[threading.Lock, "A lock used to synchronize operations across threads"] = threading.Lock()
 
 
-def decode_ignore(info):
+def decode_ignore(info: Annotated[bytes, "Byte string to decode"]):
+    """
+    Decode a byte string while gracefully handling invalid sequences.
+
+    The implementation decodes the incoming byte array using UTF‑8, replacing
+    invalid bytes with their escape codes.  It then encodes back to a byte
+    string with ``unicode_escape`` and decodes again, ignoring any remaining
+    errors.  Finally, escaped carriage return, line feed and tab sequences are
+    converted to their literal counterparts.
+
+    Parameters
+    ----------
+    info : bytes
+        The input byte sequence to decode.
+
+    Returns
+    -------
+    str
+        A decoded string with problematic bytes replaced and common escape
+        sequences normalised.
+    """
     info.decode('utf-8', 'backslashreplace_backport') \
         .encode('unicode_escape') \
         .decode('utf-8', errors='ignore') \
@@ -50,33 +85,14 @@ def decode_ignore(info):
 
 class roku_ctrl(Roku):
     _instance = None
+    # Patterns used to identify notable video status log entries.
     VIDEO_STATUS_TAG = [
-        # r'screen size \d+x\d+',  # pal层设置video参数时会调用到set property,给vsink设置下来，包括是否是2k/screen size等
-        # r'set source window rect',  # 设置视频窗口的位置和宽高
-        # r'v4l_get_capture_port_formats: Found \d+ capture formats',  # 获得解码器可支持的codec类型
-        # r'avsync session \d+',  # pal层设置video参数时会调用到set property，给asink设置下来，包括是否等待video以及等待时间等
-        # r'ready to paused',  # 切换状态为pause
-        # r'output port requires \d+ buffers',  # 申请outputbuffer用于存放es数据
-        # r'starting video thread',  # video第一帧送入，开始解码线程
-        # r'detected audio sink GstAmlHalAsink',  # 检测是否有audio element
-        # r'handle_v4l_event: event.type:\d+, event.u.src_change.changes:\d+',
-        # 收到decoder发送的解出第一笔,resolution change 的signal
-        # r'v4l_setup_capture_port: capture port requires \d+ buffers',  # 申请buffer用于存放解码后的yuv数据
-        # r'video_decode_thread:<video_sink> emit first frame signal ts \d+',  # decoder解出第一帧，向pal层发送first frame的signal
-        r'display_engine_show: push frame: \d+',  # push_frame就是decoder解出的yuv数据
-        # r'gst_aml_hal_asink_pad_event:<audio_sink> done',  # audio 数据流开始start
-        # r'gst_aml_vsink_change_state:<video_sink> paused to playing avsync_paused \d+',
-        # rokuo收到video start,就会下发setspeed1，pipeline状态切换为playing，正式起播
-        # r'gst_aml_hal_asink_change_state:<audio_sink> paused to playing',
+        r'display_engine_show: push frame: \d+',
         r'display_thread_func: pop frame: \d+',
-        # r'gst_aml_hal_asink_event:<audio_sink> receive eos',
-        # r'video_eos_thread:<video_sink> Posting EOS',
-        # r'gst_aml_hal_asink_change_state:<audio_sink> ready to null',
-        # r'gst_aml_vsink_change_state:<video_sink> ready to null'
     ]
+    # Patterns used to identify notable audio status log entries.
     AUDIO_STATUS_TAG = [
         r'get_position:<audio_sink>',
-        # r'aml_audio_hwsync_audio_process'
     ]
 
     AML_SINK_ERROR_TAG = re.compile(r'gst_caps_new_empty failed|gst_pad_template_new failed|'
@@ -106,21 +122,20 @@ class roku_ctrl(Roku):
                                     r'pause failure:\d+|parse ac4 fail|frame too big \d+|header too big \d+|'
                                     r'trans mode write fail \d+/\d+|drop data \d+/\d+|null pointer')
 
-    # def __new__(cls, *args, **kw):
-    #     if cls._instance is None:
-    #         cls._instance = object.__new__(cls, *args, **kw)
-    #     return cls._instance
-
     def __init__(self, ip: Optional[str] = None):
+        """
+        Initialize the class instance, set up internal state and construct UI elements if needed.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         if ip is None:
             ip = _get_roku_ip()
         super().__init__(ip)
         self.ip = ip
         self.ptc_size, self.ptc_mode = '', ''
-        # self.get_kernel_log()
         self.current_target_array = 'launcher'
         self._layout_init()
-        # 用于记录当前 遥控光标所在 控件名称
         self.ir_current_location = ''
         self.logcat_check = False
         self._ser = ''
@@ -128,38 +143,45 @@ class roku_ctrl(Roku):
         logging.info('roku init done')
 
     def __setattr__(self, key, value):
+        """
+        Execute the setattr   routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         if key == 'ir_current_location':
             if 'amp;' in value:
                 value = value.replace('amp;', '')
         self.__dict__[key] = value
 
     def _layout_init(self):
-        '''
-        存放ui 布局相关位置信息
-        形式为二维数组 行列对应ui 控件行列 原点左上角
-        Returns:
+        """
+        Execute the layout init routine.
 
-        '''
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         self.layout_media_player_home = [['All', 'Video', 'Audio', 'Photo']]
         self.layout_media_player_help_setting = [['Help'], ['Request media type at startup - [On]'],
                                                  ['Lookup album art on Web - [On]'], ['Display format - [Grid]'],
                                                  ['Autorun - [On]'], ['OK']]
 
-    # self.layout_launcher = [['Home'], ['Live TV'], ['What to Watch'], ['Featured Free'], ['Sports'], ['Search'],
-    #                         ['Streaming Store'], ['Settings'], ['Secret Screens'], ['Debug']]
-    # self.layout_launcher = [['Home'], ['Save list'], ['Search'], ['Streaming Store'], ['Settings'],
-    #                         ['Secret Screens'], ['Debug']]
-    # self.layout_launcher_setting = [['Network'], ['Remote controls & devices'], ['Theme'], ['Accessibility'],
-    #                                 ['TV picture settings'], ['TV inputs'], ['Audio'], ['Parental controls'],
-    #                                 ['Guest Mode'], ['Home screen'], ['Payment method'],
-    #                                 ['Apple AirPlay and HomeKit'],
-    #                                 ['Legal notices'], ['Privacy'], ['Help'], ['System']]
-
     def __getattr__(self, name):
-        # if name not in RokuConst.COMMANDS and name not in RokuConst.SENSORS:
-        #     raise AttributeError(f"{name} is not a valid method")
+
+        """
+        Execute the getattr   routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
 
         def command(*args, **kwargs):
+            """
+            Execute the command routine.
+
+            This method encapsulates the logic necessary to perform its function.
+            Refer to the implementation for details on parameters and return values.
+            """
             if name in RokuConst.SENSORS:
                 keys = [f"{name}.{axis}" for axis in ("x", "y", "z")]
                 params = dict(zip(keys, args))
@@ -193,14 +215,12 @@ class roku_ctrl(Roku):
             return command
 
     def capture_screen(self, filename):
-        '''
-        获取当前ui界面的 屏幕截图
-        Args:
-            filename:  用于保存的文件名
+        """
+        Execute the capture screen routine.
 
-        Returns:
-
-        '''
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         logging.info("\rStart to capture screen ....\r")
         para = {'param-image-type': 'jpeg'}
         url = "http://%s:8060/capture-screen/secret" % (self.ip)
@@ -212,43 +232,36 @@ class roku_ctrl(Roku):
             handle.close()
 
     def load_array(self, array_txt):
-        '''
-        从 layout/xxx.txt 中 解析出二维数组
-        Args:
-            array_txt:
+        """
+        Load  array from persistent storage.
 
-        Returns:
-
-        '''
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         with open(os.getcwd() + f'/config/roku/layout/{array_txt}') as f:
             info = f.readlines()
             arr = [i.strip().split(',') for i in info]
         return arr
 
     def get_ir_focus(self, filename='dumpsys.xml', secret=False):
-        '''
-        从roku 服务器获取当前tv 页面的控件 xml
-        解析xml 获取 focused="true"
-        返回解析 得到的 列表中 最后一个元素
-        Returns:
+        """
+        Retrieve the ir focus attribute.
 
-        '''
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
 
         if not secret:
-            # 默认使用 focus 页面获取光标
             for _ in range(5):
                 url = f'http://{self.ip}:8060/query/focus/secret'
                 r = requests.get(url).content.decode('utf-8')
                 if 'RoScreenWrapper' in r:
-                    # 进入待机模式
                     self.home(time=1)
                     continue
                 if 'SGScreen.RMPScene.ComponentController_0.ViewManager_0.ViewStack_0.MediaView_0.Video_' in r:
-                    # 悬浮菜单时 不通过这个逻辑处理
                     logging.debug("Don't try to  get index in this way")
                     break
                 if 'SGScreen.RMPScene.ComponentController_0.ViewManager_0.ViewStack_0.GridView_0.RenderableNode_0.ZoomRowList_0.RenderableNode_' in r:
-                    # media player 不通过这个逻辑处理
                     logging.debug("Don't try to get index in this way")
                     break
 
@@ -259,23 +272,19 @@ class roku_ctrl(Roku):
             else:
                 return ''
         node_list = []
-        # 解析 页面布局xml 信息 从中获取 当前遥控器 光标位置
         for child in self._get_xml_root():
             for child_1 in child.iter():
                 if child_1.tag == 'ItemDetailsView':
                     for child_2 in child_1.iter():
                         if child_2.tag == 'Label' and child_2.attrib['name'] == 'title':
-                            # logging.info(child_2.attrib['text'])
                             if child_2.attrib['text']:
                                 if '|' in child_2.attrib['text']:
-                                    # 处理 media player audio ui 多文件名描述
                                     self.ir_current_location = child_2.attrib['text'].split('|')[0].strip()
                                 else:
                                     self.ir_current_location = child_2.attrib['text']
                                 return self.ir_current_location
                 if child_1.tag == 'RenderableNode' and child_1.attrib.get('focused') and child_1.attrib[
                     'focused'] == 'true':
-                    # 处理 悬浮菜单
                     if child_1.attrib.get('uiElementId') and child_1.attrib['uiElementId'] != 'overlay-root':
                         try:
                             if child_1.find('RadioButtonItem'):
@@ -291,30 +300,23 @@ class roku_ctrl(Roku):
                                         'text']
                         except AttributeError:
                             continue
-                        # logging.info(f'{self.ir_current_location}')
                         return self.ir_current_location
                 if child_1.tag == 'Button' and child_1.attrib.get('focused') and child_1.attrib['focused'] == 'true':
                     self.ir_current_location = child_1.find('Label').attrib['text']
-                    # logging.info(f'show display {self.ir_current_location}')
                     return self.ir_current_location
                 if child_1.tag == 'StandardGridItemComponent':
                     if child_1.attrib.get('focused') and child_1.attrib['focused'] == 'true':
-                        # logging.info(child_1.attrib['text'])
                         node_list.append(child_1)
         if node_list:
             self.ir_current_location = node_list[-1].find('LayoutGroup').find('Label').attrib['text']
 
     def _get_media_process_bar(self, filename='dumpsys.xml'):
-        '''
-        分析dumpsys.xml 中的信息
-        获取播放 界面的 process 值
+        """
+        Retrieve the media process bar attribute.
 
-        Args:
-            filename: 待分析的文件
-
-        Returns: 播放进度 单位为妙
-
-        '''
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         process_index = '0:0'
         for child in self._get_xml_root():
             for child_1 in child.iter():
@@ -325,50 +327,36 @@ class roku_ctrl(Roku):
                     return int(process_index.split(':')[0]) * 60 + int(process_index.split(":")[1])
 
     def get_ir_index(self, name, item, fuz_match=False):
-        '''
-        从布局信息 二维数组中 获取 控件的下标
-        Args:
-            name: 需要查询的目标 名字
-            array: 需要查询的 二维数组
-            fuz_match: 是否开启模糊匹配
-        Returns:
+        """
+        Retrieve the ir index attribute.
 
-        '''
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
 
         target_array = self.get_launcher_element(item)
-        # logging.info(f"Try to get index of  {name}")
-        # logging.info(f'Target array {array}')
         for i in target_array:
             for y in i:
                 if fuz_match:
                     if name in y:
-                        # logging.info(f'Get location : {target_array.index(i)}  {i.index(y)} {len(i)}')
                         return (target_array.index(i), i.index(y)), len(i)
                 else:
                     if name == y:
-                        # logging.info(f'Get location : {target_array.index(i)}  {i.index(y)} {len(i)}')
                         return (target_array.index(i), i.index(y)), len(i)
 
         logging.debug(f"Can't find such this widget {name}")
         return None, None
 
     def ir_navigation(self, target, item, secret=False, fuz_match=False):
-        '''
-        页面导航
+        """
+        Execute the ir navigation routine.
 
-        通过获取页面控件信息, 移动遥控器光标 至目标控件
-        Args:
-            target: 目标控件
-            item: 需要获取的标签的列表 item
-            secret: 是否使用focus获取 当前控件
-            fuz_match: 是否开启模糊匹配
-        Returns:
-
-        '''
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         logging.info(f'navigation {target}')
         self.get_ir_focus(secret=secret)
         if target in self.ir_current_location:
-            # 开启模糊匹配
             target = self.ir_current_location
         current_index, _ = self.get_ir_index(self.ir_current_location, item, fuz_match=fuz_match)
         target_index, list_len = self.get_ir_index(target, item, fuz_match=fuz_match)
@@ -397,44 +385,36 @@ class roku_ctrl(Roku):
         return self.ir_navigation(target, item, secret=secret, fuz_match=fuz_match)
 
     def ir_enter(self, target, item, secret=False, fuz_match=False):
-        '''
-        导航 遥控器光标至目标 并进入
-        Args:
-            target:
-            array:
-            secret:
+        """
+        Execute the ir enter routine.
 
-        Returns:
-
-        '''
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         self.ir_navigation(target, item, secret=secret, fuz_match=fuz_match)
         self.select(time=2)
 
     def media_playback(self, target, array):
-        '''
-        进入 media player 界面
-        Args:
-            target:
-            array:
+        """
+        Execute the media playback routine.
 
-        Returns:
-
-        '''
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         self.ir_enter(target, array)
         time.sleep(1)
         info = self._get_screen_xml()
-        # logging.info(info)
         if 'Play from beginning' in info:
             self.down(time=1)
         self.select(time=1)
 
     def _get_screen_xml(self, filename='dumpsys.xml'):
-        '''
-        http://192.168.50.109:8060/query/screen/secret
-        从roku 服务器获取当前页面的 控件xml
-        Returns:
+        """
+        Retrieve the screen xml attribute.
 
-        '''
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         r, focused = '', ''
 
         for _ in range(5):
@@ -444,24 +424,26 @@ class roku_ctrl(Roku):
                 break
         with open(file=filename, mode='w', encoding='utf-8') as handle:
             handle.write(r)
-        # logging.info(r)
         return r
 
     def _get_xml_root(self, filename='dumpsys.xml'):
+        """
+        Get the xml root attribute from the instance.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         self._get_screen_xml(filename)
         tree = ET.parse(filename)
         return tree.getroot()
 
     def wait_for_element(self, element, timeout=60):
-        '''
-        等待 ui 中刷新出某个界面
-        Args:
-            element: 目标控件
-            timeout: 超时时间
+        """
+        Execute the wait for element routine.
 
-        Returns:
-
-        '''
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         start = time.time()
         while element not in self._get_screen_xml():
             time.sleep(1)
@@ -470,17 +452,17 @@ class roku_ctrl(Roku):
                 break
 
     def get_u_disk_file_distribution(self, filename='dumpsys.xml'):
-        '''
-        解析xml 获取u 盘内 folder 分布 以及 file 分布
-        Returns: 二维数组
+        """
+        Retrieve the u disk file distribution attribute.
 
-        '''
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
 
         node_list, temp = [], []
         current_file = ''
         for child in self._get_xml_root():
             for child_1 in child.iter():
-                # 解析StandardGridItemComponent element
                 if child_1.tag == 'StandardGridItemComponent':
                     index = int(child_1.attrib['index'])
                     for child_2 in child_1.iter():
@@ -499,19 +481,16 @@ class roku_ctrl(Roku):
         return node_list
 
     def get_launcher_element(self, target_element):
-        '''
-        获取 launcher 界面的 布局信息
-        Args:
-            target_element: 需要特殊捕捉的 网页元素
+        """
+        Retrieve the launcher element attribute.
 
-        Returns: 布局信息 二维数组
-
-        '''
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         node_list = []
         current_file = ''
         for child in self._get_xml_root():
             for child_1 in child.iter():
-                # 解析StandardGridItemComponent element
                 if child_1.tag == target_element:
                     index = int(child_1.attrib['index'])
                     for child_2 in child_1.iter():
@@ -519,19 +498,16 @@ class roku_ctrl(Roku):
                             text = child_2.attrib['text']
                             if text and [text] not in node_list:
                                 node_list.append([child_2.attrib['text']])
-        # logging.info(f'node_list {node_list}')
         return node_list
 
     @classmethod
     def switch_ir(self, status):
-        '''
-        红外开关
-        Args:
-            status: 需要设置的状态
+        """
+        Execute the switch ir routine.
 
-        Returns:
-
-        '''
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         ir_command = {
             'on': 'echo 0xD > /sys/class/remote/amremote/protocol',
             'off': 'echo 0x2 > /sys/class/remote/amremote/protocol'
@@ -540,14 +516,12 @@ class roku_ctrl(Roku):
         pytest.dut.checkoutput(ir_command[status])
 
     def set_display_size(self, size):
-        '''
-        设置 picture size
-        Args:
-            size: 目标size
+        """
+        Set the display size attribute.
 
-        Returns:
-
-        '''
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         for _ in range(9):
             if self.get_ir_focus() == size:
                 self.ptc_size = size
@@ -560,14 +534,12 @@ class roku_ctrl(Roku):
         logging.info(f'Current size : {size}')
 
     def set_display_mode(self, mode):
-        '''
-        设置 picture mode
-        Args:
-            mode: 目标mode
+        """
+        Set the display mode attribute.
 
-        Returns:
-
-        '''
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         for _ in range(9):
             if self.get_ir_focus() == mode:
                 self.ptc_mode = mode
@@ -580,15 +552,12 @@ class roku_ctrl(Roku):
         logging.info(f'Current mode : {mode}')
 
     def set_picture_mode(self, mode):
-        '''
-        mode 为需要设置的  ptc mode 列表
-        方法会遍历 mode中 所有元素 依次设置
-        Args:
-            mode:
+        """
+        Set the picture mode attribute.
 
-        Returns:
-
-        '''
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         self.info(time=3)
         # if pytest.light_sensor:
         # 	res = pytest.light_sensor.count_kpi(0, roku_lux.get_note('setting_white')[pytest.panel])
@@ -606,15 +575,12 @@ class roku_ctrl(Roku):
         self.back(time=1)
 
     def set_picture_size(self, size):
-        '''
-        size 为需要设置的  ptc size 列表
-        方法会遍历 size中 所有元素 依次设置
-        Args:
-            size:
+        """
+        Set the picture size attribute.
 
-        Returns:
-
-        '''
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         self.info(time=3)
         # if pytest.light_sensor:
         # 	res = pytest.light_sensor.count_kpi(0, roku_lux.get_note('setting_white')[pytest.panel])
@@ -637,12 +603,12 @@ class roku_ctrl(Roku):
         self.back(time=1)
 
     def set_caption_status(self, status):
-        '''
-        status 为需要设置的 字幕状态
-        Returns:
+        """
+        Set the caption status attribute.
 
-        status 集合 On always,On replay,On mute,Off
-        '''
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         if status not in ['On always', 'On replay', 'On mute', 'Off']:
             raise ValueError(f"Does't support this {status}")
         self.info(time=3)
@@ -660,15 +626,12 @@ class roku_ctrl(Roku):
             logging.warning(f"Can't set caption to {status}")
 
     def set_caption(self, language):
-        '''
-        设置字幕
-        前提条件 字幕 需要被打开
-        Args:
-            language:
+        """
+        Set the caption attribute.
 
-        Returns:
-
-        '''
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         for _ in range(3):
             if 'TV settings' in self._get_screen_xml():
                 break
@@ -690,27 +653,32 @@ class roku_ctrl(Roku):
             logging.warning(f"Can't set language {language}")
 
     def get_dmesg_log(self):
-        '''
-        获取 dmesg 相关打印 存至 dmesg.log
-        Returns:
+        """
+        Retrieve the dmesg log attribute.
 
-        '''
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         with open('dmesg.log', 'a') as f:
             info = pytest.dut.checkoutput('dmesg')
             f.write(info)
         pytest.dut.checkoutput('dmesg -c')
 
     def get_kernel_log(self, filename='kernel.log'):
-        '''
-        新开一个 thread 获取8070 端口的 kernel 信息
-        Args:
-            filename: 用于保存打印的文件名
+        """
+        Retrieve the kernel log attribute.
 
-        Returns:
-
-        '''
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
 
         def run_logcast(filename):
+            """
+            Execute the run logcast routine.
+
+            This method encapsulates the logic necessary to perform its function.
+            Refer to the implementation for details on parameters and return values.
+            """
             while True:
                 info = tl.tn.read_very_eager()
                 if info != b'':
@@ -724,7 +692,6 @@ class roku_ctrl(Roku):
         logging.info('start telnet 8080 to caputre kernel log ')
         tl = telnet_tool(self.ip, 'sandia')
         info = tl.checkoutput(f'telnet {self.ip} 8080', wildcard=b'onn. Roku TV')
-        # logging.info(info)
         tl.checkoutput('logcast start')
         time.sleep(1)
         tl.checkoutput('\x03')  # ,wildcard=b'Console')
@@ -737,20 +704,12 @@ class roku_ctrl(Roku):
         t.start()
 
     def analyze_logcat(self, re_list, timeout=10):
-        '''
-        dut 需配置 autostart 文件
-        push autostart 文件
-        1. 创建文件加mkdir -p /nvram/debug_over/etc
-        2. cp /etc/autostart /nvram/debug_overlay/etc
-        3. vi /nvram/debug_overlay/etc/autostart
-        4. export GST_DEBUG=2,amlvsink:6,amlhalasink:6
-        5. 重启 dut
-        Args:
-            re_list:
+        """
+        Execute the analyze logcat routine.
 
-        Returns:
-
-        '''
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         import copy
         target_list = copy.deepcopy(re_list)
         # tl = TelnetTool(self.ip, pytest.dut.wildcard)
@@ -787,16 +746,12 @@ class roku_ctrl(Roku):
                 assert False, "Can't catch target log"
 
     def catch_err(self, filename, tag_list):
-        '''
+        """
+        Execute the catch err routine.
 
-        Args:
-            filename:  需要检测的log文件
-            tag_list: 需要捕捉的 关键字 正则表达是
-
-        检测到正则时会通过 logging 输出
-        Returns:
-
-        '''
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         logging.info(f'Start to catch err. Logfile :{filename}')
         with open(filename, 'r') as f:
             info = f.readlines()
@@ -807,6 +762,12 @@ class roku_ctrl(Roku):
         logging.info('Catch done')
 
     def shutdown(self):
+        """
+        Execute the shutdown routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         count = 0
         while pytest.light_sensor.check_backlight():
             # shut down the dut before test
@@ -815,17 +776,21 @@ class roku_ctrl(Roku):
                 raise EnvironmentError("Pls check ir control")
 
     def get_hdmirx_info(self, **kwargs):
-        '''
-        获取 hdmirx 相关信息
-        Args:
-            **kwargs:
+        """
+        Retrieve the hdmirx info attribute.
 
-        Returns:
-
-        '''
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         logging.info(f'hdmirx for expect : {kwargs}')
 
         def match(info):
+            """
+            Execute the match routine.
+
+            This method encapsulates the logic necessary to perform its function.
+            Refer to the implementation for details on parameters and return values.
+            """
             res = re.findall(
                 r'Hactive|Vactive|Color Depth|Frame Rate|TMDS clock|HDR EOTF|Dolby Vision|HDCP Debug Value|HDCP14 state|HDCP22 state|Color Space',
                 info)
@@ -866,11 +831,12 @@ class roku_ctrl(Roku):
             return True
 
     def enter_media_player(self):
-        '''
-        进入 media player
-        Returns:
+        """
+        Execute the enter media player routine.
 
-        '''
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         self['2213'].launch()
         count = 0
         while True:
@@ -883,42 +849,44 @@ class roku_ctrl(Roku):
             time.sleep(3)
 
     def check_udisk(self):
-        '''
-        在media player 界面内 检测是否 外接u盘
-        dumpsys 当前页面
-        判断是否存在 Connecting to a DLNA Media Server or USB Device 字样
-        Returns:
+        """
+        Execute the check udisk routine.
 
-        '''
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         return 'Select Media Device' in self._get_screen_xml()
 
     def enter_bt(self):
-        '''
-        通过ui导航 Setting-> remote&devices -> wireless headphones
-        Returns:
+        """
+        Execute the enter bt routine.
 
-        '''
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         self.ir_enter('Settings', 'LabelListNativeItem')
         self.ir_enter('Remotes & devices', 'ArrayGridItem')
         self.ir_enter('Wireless headphones', 'ArrayGridItem')
         self.select(time=1)
 
     def enter_wifi(self):
-        '''
-        通过ui导航 Settings -> Network
-        Returns:
+        """
+        Execute the enter wifi routine.
 
-        '''
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         self.home(time=1)
         self.ir_enter('Settings', 'LabelListNativeItem')
         self.ir_enter('Network', 'ArrayGridItem')
 
     def check_conn(self):
-        '''
-        通过ui导航 Setting -> Network -> Check connection
-        Returns:
+        """
+        Execute the check conn routine.
 
-        '''
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         self.enter_wifi()
         self.ir_enter('Check connection', 'LabelListItem')
         for _ in range(20):
@@ -929,11 +897,12 @@ class roku_ctrl(Roku):
             return False
 
     def setup_conn(self):
-        '''
-        通过ui导航 Setting -> Network -> Set up connection
-        Returns:
+        """
+        Execute the setup conn routine.
 
-        '''
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         self.enter_wifi()
         self.ir_enter('Set up connection', 'LabelListItem')
         if self.get_ir_focus() != 'Wireless':
@@ -951,16 +920,20 @@ class roku_ctrl(Roku):
             assert False, "Can't load wifi scan list"
 
     def wifi_scan(self, ssid):
-        '''
-        通过ui导航 Setting -> Network -> Scan again to see all network
-        Args:
-            ssid:  目标ssid
+        """
+        Execute the wifi scan routine.
 
-        Returns:
-
-        '''
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
 
         def wait():
+            """
+            Execute the wait routine.
+
+            This method encapsulates the logic necessary to perform its function.
+            Refer to the implementation for details on parameters and return values.
+            """
             for _ in range(20):
                 time.sleep(1)
                 if 'Looking for wireless networks...' not in self._get_screen_xml():
@@ -988,32 +961,31 @@ class roku_ctrl(Roku):
 
     @property
     def ser(self):
+        """
+        Execute the ser routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         if self._ser == '': self._ser = serial_tool()
         return self._ser
 
     def wifi_conn(self, ssid, pwd='', band=5):
-        '''
-        通过ui导航 Setting -> Network -> 目标ssid
-        Args:
-            ssid: 目标ssid
-            pwd: 目标密码
-            band: 如果存在推荐网络选项，勾选目标推荐频段（5g 还是 2g）
+        """
+        Execute the wifi conn routine.
 
-        Returns:
-
-        '''
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         band = 5 if '5G' in ssid else 2
         self.wifi_scan(ssid)
         self.ir_enter(ssid, 'ArrayGridItem', fuz_match=True)
         if 'Recommended network found' in self._get_screen_xml():
-            # 选择推荐
             if band == 2:
                 self.down()
             self.select()
         if 'Enter the network password for' in self._get_screen_xml():
-            # 填写ssid
             if 'Connect' == self.get_ir_focus():
-                # 已经连接过的ssid
                 self.down()
                 self.select()
                 self.up()
@@ -1039,6 +1011,12 @@ class roku_ctrl(Roku):
         return True
 
     def flush_ip(self):
+        """
+        Execute the flush ip routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         ip = self.ser.get_ip_address('wlan0')
         if ip:
             pytest.dut = telnet_tool(ip)
@@ -1046,6 +1024,12 @@ class roku_ctrl(Roku):
             return True
 
     def remote(self, button_list, idle=1):
+        """
+        Execute the remote routine.
+
+        This method encapsulates the logic necessary to perform its function.
+        Refer to the implementation for details on parameters and return values.
+        """
         button_dict = {'h': 'home', 'p': 'play', 's': 'select', 'l': 'left', 'r': 'right', 'd': 'down', 'u': 'up',
                        'b': 'back', 'i': 'info'}
         for i in button_list:

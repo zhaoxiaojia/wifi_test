@@ -5,12 +5,50 @@ from src.util.constants import IDENTIFIER_SANITIZE_PATTERN
 
 
 class IdentifierBuilder:
-    """Generate SQL-compliant identifiers with disambiguation."""
+    """
+    Identifier builder.
+
+    Parameters
+    ----------
+    None
+        This class does not take constructor arguments beyond ``self``.
+
+    Returns
+    -------
+    None
+        This class does not return a value.
+    """
 
     def __init__(self) -> None:
+        """
+        Init.
+
+        Parameters
+        ----------
+        None
+            This method does not accept any additional parameters beyond ``self``.
+
+        Returns
+        -------
+        None
+            This method does not return a value.
+        """
         self._counts: Dict[str, int] = {}
 
     def build(self, parts: Sequence[str], *, fallback: str = "field") -> str:
+        """
+        Build.
+
+        Parameters
+        ----------
+        parts : Any
+            Sequence of strings used to build an identifier.
+
+        Returns
+        -------
+        str
+            A value of type ``str``.
+        """
         sanitized_parts = []
         for part in parts:
             sanitized = IDENTIFIER_SANITIZE_PATTERN.sub("_", str(part).strip())
@@ -33,7 +71,19 @@ class IdentifierBuilder:
 
 
 def sanitize_identifier(value: str, *, fallback: str) -> str:
-    """Sanitize a single identifier, preserving SQL validity."""
+    """
+    Sanitize identifier.
+
+    Parameters
+    ----------
+    value : Any
+        Value to sanitize, normalize, or convert.
+
+    Returns
+    -------
+    str
+        A value of type ``str``.
+    """
 
     sanitized = IDENTIFIER_SANITIZE_PATTERN.sub("_", value.strip())
     sanitized = sanitized.strip("_").lower()

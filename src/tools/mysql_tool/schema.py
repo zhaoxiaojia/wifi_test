@@ -32,7 +32,6 @@ __all__ = [
     "PERFORMANCE_STATIC_COLUMNS",
 ]
 
-
 PERFORMANCE_STATIC_COLUMNS: Tuple[Tuple[str, str, str], ...] = (
     ("serial_number", "VARCHAR(255)", "SerianNumber"),
     ("test_category", "VARCHAR(255)", "Test_Category"),
@@ -64,13 +63,20 @@ PERFORMANCE_STATIC_COLUMNS: Tuple[Tuple[str, str, str], ...] = (
 
 
 def _assert_unique_column_names(
-    columns: Sequence[Tuple[str, str, str]], *, context: str
+        columns: Sequence[Tuple[str, str, str]], *, context: str
 ) -> None:
-    """确保 ``columns`` 中的字段名唯一。
+    """
+    Assert unique column names.
 
-    如果定义了重复的字段名，MySQL ``CREATE TABLE`` 语句会抛出
-    ``OperationalError(1060)``。在导入阶段提前检测可以让错误更早、
-    更直观地暴露出来，也避免测试运行到同步数据库时才失败。
+    Parameters
+    ----------
+    columns : Any
+        Sequence of column specifications.
+
+    Returns
+    -------
+    None
+        This function does not return a value.
     """
 
     seen: set[str] = set()
@@ -121,7 +127,23 @@ _PERFORMANCE_BASE_COLUMNS: Tuple[ColumnDefinition, ...] = (
     ColumnDefinition("data_type", "VARCHAR(64)"),
 )
 
+
 def _build_performance_definition(definition: str, comment: str) -> str:
+    """
+    Build performance definition.
+
+    Parameters
+    ----------
+    definition : Any
+        Column definition string from the table specification.
+    comment : Any
+        The ``comment`` parameter.
+
+    Returns
+    -------
+    str
+        A value of type ``str``.
+    """
     escaped = comment.replace("'", "''")
     return f"{definition} NULL DEFAULT NULL COMMENT '{escaped}'"
 
@@ -130,7 +152,6 @@ _PERFORMANCE_EXTRA_COLUMNS: Tuple[ColumnDefinition, ...] = tuple(
     ColumnDefinition(name, _build_performance_definition(definition, comment))
     for name, definition, comment in PERFORMANCE_STATIC_COLUMNS
 )
-
 
 _TABLE_SPECS: Dict[str, TableSpec] = {
     "dut": TableSpec(
@@ -341,13 +362,42 @@ _VIEW_DEFINITIONS: Dict[str, str] = {
 
 
 def ensure_table(client, table_name: str, spec: TableSpec) -> None:
+    """
+    Ensure table.
+
+    Parameters
+    ----------
+    client : Any
+        An instance of MySqlClient used to interact with the database.
+    table_name : Any
+        The ``table_name`` parameter.
+    spec : Any
+        The ``spec`` parameter.
+
+    Returns
+    -------
+    None
+        This function does not return a value.
+    """
     if _table_exists(client, table_name):
         return
     _create_table(client, table_name, spec)
 
 
 def get_table_spec(table_name: str) -> TableSpec:
-    """Return the :class:`TableSpec` registered for *table_name*."""
+    """
+    Get table spec.
+
+    Parameters
+    ----------
+    table_name : Any
+        The ``table_name`` parameter.
+
+    Returns
+    -------
+    TableSpec
+        A value of type ``TableSpec``.
+    """
 
     try:
         return _TABLE_SPECS[table_name]
@@ -356,11 +406,41 @@ def get_table_spec(table_name: str) -> TableSpec:
 
 
 def ensure_config_tables(client) -> None:
+    """
+    Ensure config tables.
+
+    Ensures that required tables exist before inserting data.
+
+    Parameters
+    ----------
+    client : Any
+        An instance of MySqlClient used to interact with the database.
+
+    Returns
+    -------
+    None
+        This function does not return a value.
+    """
     ensure_table(client, "dut", _TABLE_SPECS["dut"])
     ensure_table(client, "execution", _TABLE_SPECS["execution"])
 
 
 def ensure_report_tables(client) -> None:
+    """
+    Ensure report tables.
+
+    Ensures that required tables exist before inserting data.
+
+    Parameters
+    ----------
+    client : Any
+        An instance of MySqlClient used to interact with the database.
+
+    Returns
+    -------
+    None
+        This function does not return a value.
+    """
     ensure_config_tables(client)
     ensure_table(client, "test_report", _TABLE_SPECS["test_report"])
     ensure_table(client, "performance", _TABLE_SPECS["performance"])
@@ -373,7 +453,25 @@ def ensure_report_tables(client) -> None:
     _ensure_table_constraints(client, "perf_metric_kv", _TABLE_SPECS["perf_metric_kv"].constraints)
     _ensure_views(client)
 
+
 def _table_exists(client, table_name: str) -> bool:
+    """
+    Table exists.
+
+    Logs informational messages and errors for debugging purposes.
+
+    Parameters
+    ----------
+    client : Any
+        An instance of MySqlClient used to interact with the database.
+    table_name : Any
+        The ``table_name`` parameter.
+
+    Returns
+    -------
+    bool
+        A value of type ``bool``.
+    """
     try:
         rows = client.query_all("SHOW TABLES LIKE %s", (table_name,))
     except Exception:
@@ -383,6 +481,25 @@ def _table_exists(client, table_name: str) -> bool:
 
 
 def _create_table(client, table_name: str, spec: TableSpec) -> None:
+    """
+    Create table.
+
+    Runs an SQL statement using a database cursor.
+
+    Parameters
+    ----------
+    client : Any
+        An instance of MySqlClient used to interact with the database.
+    table_name : Any
+        The ``table_name`` parameter.
+    spec : Any
+        The ``spec`` parameter.
+
+    Returns
+    -------
+    None
+        This function does not return a value.
+    """
     all_columns = [ColumnDefinition("id", "INT PRIMARY KEY AUTO_INCREMENT")]
     all_columns.extend(spec.columns)
     if spec.include_audit_columns:
@@ -393,14 +510,35 @@ def _create_table(client, table_name: str, spec: TableSpec) -> None:
     ]
     lines = column_lines + extra_lines
     statement = (
-        f"CREATE TABLE `{table_name}` (\n    "
-        + ",\n    ".join(lines)
-        + f"\n) ENGINE={spec.engine} DEFAULT CHARSET={spec.charset};"
+            f"CREATE TABLE `{table_name}` (\n    "
+            + ",\n    ".join(lines)
+            + f"\n) ENGINE={spec.engine} DEFAULT CHARSET={spec.charset};"
     )
     client.execute(statement)
 
 
 def _ensure_index(client, table_name: str, index_name: str, definition: str) -> None:
+    """
+    Ensure index.
+
+    Runs an SQL statement using a database cursor.
+
+    Parameters
+    ----------
+    client : Any
+        An instance of MySqlClient used to interact with the database.
+    table_name : Any
+        The ``table_name`` parameter.
+    index_name : Any
+        The ``index_name`` parameter.
+    definition : Any
+        Column definition string from the table specification.
+
+    Returns
+    -------
+    None
+        This function does not return a value.
+    """
     rows = client.query_all(
         f"SHOW INDEX FROM `{table_name}` WHERE Key_name = %s",
         (index_name,),
@@ -411,6 +549,25 @@ def _ensure_index(client, table_name: str, index_name: str, definition: str) -> 
 
 
 def _ensure_unique(client, table_name: str, constraint: TableConstraint) -> None:
+    """
+    Ensure unique.
+
+    Runs an SQL statement using a database cursor.
+
+    Parameters
+    ----------
+    client : Any
+        An instance of MySqlClient used to interact with the database.
+    table_name : Any
+        The ``table_name`` parameter.
+    constraint : Any
+        The ``constraint`` parameter.
+
+    Returns
+    -------
+    None
+        This function does not return a value.
+    """
     rows = client.query_all(
         f"SHOW INDEX FROM `{table_name}` WHERE Key_name = %s",
         (constraint.name,),
@@ -421,13 +578,32 @@ def _ensure_unique(client, table_name: str, constraint: TableConstraint) -> None
 
 
 def _ensure_foreign_key(
-    client,
-    table_name: str,
-    constraint: TableConstraint,
-    *,
-    delete_rule: str = "RESTRICT",
-    update_rule: Optional[str] = None,
+        client,
+        table_name: str,
+        constraint: TableConstraint,
+        *,
+        delete_rule: str = "RESTRICT",
+        update_rule: Optional[str] = None,
 ) -> None:
+    """
+    Ensure foreign key.
+
+    Runs an SQL statement using a database cursor.
+
+    Parameters
+    ----------
+    client : Any
+        An instance of MySqlClient used to interact with the database.
+    table_name : Any
+        The ``table_name`` parameter.
+    constraint : Any
+        The ``constraint`` parameter.
+
+    Returns
+    -------
+    None
+        This function does not return a value.
+    """
     rows = client.query_all(
         """
         SELECT rc.DELETE_RULE, rc.UPDATE_RULE
@@ -456,19 +632,53 @@ def _ensure_foreign_key(
 
 
 def _ensure_table_indexes(
-    client,
-    table_name: str,
-    indexes: Sequence[TableIndex],
+        client,
+        table_name: str,
+        indexes: Sequence[TableIndex],
 ) -> None:
+    """
+    Ensure table indexes.
+
+    Parameters
+    ----------
+    client : Any
+        An instance of MySqlClient used to interact with the database.
+    table_name : Any
+        The ``table_name`` parameter.
+    indexes : Any
+        The ``indexes`` parameter.
+
+    Returns
+    -------
+    None
+        This function does not return a value.
+    """
     for index in indexes:
         _ensure_index(client, table_name, index.name, index.definition)
 
 
 def _ensure_table_constraints(
-    client,
-    table_name: str,
-    constraints: Sequence[TableConstraint],
+        client,
+        table_name: str,
+        constraints: Sequence[TableConstraint],
 ) -> None:
+    """
+    Ensure table constraints.
+
+    Parameters
+    ----------
+    client : Any
+        An instance of MySqlClient used to interact with the database.
+    table_name : Any
+        The ``table_name`` parameter.
+    constraints : Any
+        The ``constraints`` parameter.
+
+    Returns
+    -------
+    None
+        This function does not return a value.
+    """
     for constraint in constraints:
         normalized = constraint.definition.upper()
         if "FOREIGN KEY" in normalized:
@@ -478,6 +688,21 @@ def _ensure_table_constraints(
 
 
 def _ensure_views(client) -> None:
+    """
+    Ensure views.
+
+    Runs an SQL statement using a database cursor.
+
+    Parameters
+    ----------
+    client : Any
+        An instance of MySqlClient used to interact with the database.
+
+    Returns
+    -------
+    None
+        This function does not return a value.
+    """
     for name, definition in _VIEW_DEFINITIONS.items():
         statement = textwrap.dedent(definition).strip()
         if not statement:
@@ -486,8 +711,25 @@ def _ensure_views(client) -> None:
 
 
 def _flatten_section(
-    data: Any, builder: IdentifierBuilder, prefix: Tuple[str, ...] = ()
+        data: Any, builder: IdentifierBuilder, prefix: Tuple[str, ...] = ()
 ) -> List[Tuple[str, Any, str]]:
+    """
+    Flatten section.
+
+    Parameters
+    ----------
+    data : Any
+        The ``data`` parameter.
+    builder : Any
+        The ``builder`` parameter.
+    prefix : Any
+        The ``prefix`` parameter.
+
+    Returns
+    -------
+    List[Tuple[str, Any, str]]
+        A value of type ``List[Tuple[str, Any, str]]``.
+    """
     if isinstance(data, dict):
         items: List[Tuple[str, Any, str]] = []
         for key, value in data.items():
@@ -499,6 +741,19 @@ def _flatten_section(
 
 
 def _infer_sql_type(value: Any) -> str:
+    """
+    Infer SQL type.
+
+    Parameters
+    ----------
+    value : Any
+        Value to sanitize, normalize, or convert.
+
+    Returns
+    -------
+    str
+        A value of type ``str``.
+    """
     if isinstance(value, bool):
         return "TINYINT(1)"
     if isinstance(value, int) and not isinstance(value, bool):
@@ -511,6 +766,21 @@ def _infer_sql_type(value: Any) -> str:
 
 
 def _normalize_value(value: Any, sql_type: str) -> Any:
+    """
+    Normalize value.
+
+    Parameters
+    ----------
+    value : Any
+        Value to sanitize, normalize, or convert.
+    sql_type : Any
+        The ``sql_type`` parameter.
+
+    Returns
+    -------
+    Any
+        A value of type ``Any``.
+    """
     if value is None:
         return None
     if sql_type == "TINYINT(1)":
@@ -531,8 +801,21 @@ def _normalize_value(value: Any, sql_type: str) -> Any:
 
 
 def build_section_payload(
-    section: dict | None,
+        section: dict | None,
 ) -> Tuple[List[ColumnDefinition], List[Any], Dict[str, str]]:
+    """
+    Build section payload.
+
+    Parameters
+    ----------
+    section : Any
+        The ``section`` parameter.
+
+    Returns
+    -------
+    Tuple[List[ColumnDefinition], List[Any], Dict[str, str]]
+        A value of type ``Tuple[List[ColumnDefinition], List[Any], Dict[str, str]]``.
+    """
     if not isinstance(section, dict) or not section:
         return [], [], {}
 
@@ -551,11 +834,26 @@ def build_section_payload(
 
 
 def resolve_case_table_name(
-    case_path: Optional[str],
-    data_type: Optional[str],
-    *,
-    log_file_path: Optional[Path] = None,
+        case_path: Optional[str],
+        data_type: Optional[str],
+        *,
+        log_file_path: Optional[Path] = None,
 ) -> str:
+    """
+    Resolve case table name.
+
+    Parameters
+    ----------
+    case_path : Any
+        Path used to derive the target table name for test data.
+    data_type : Any
+        Logical data type label stored alongside test results.
+
+    Returns
+    -------
+    str
+        A value of type ``str``.
+    """
     candidate = None
     if case_path:
         path = Path(case_path)
@@ -577,8 +875,27 @@ def resolve_case_table_name(
 
 
 def drop_and_create_table(
-    client: "MySqlClient", table_name: str, columns: Sequence[ColumnDefinition]
+        client: "MySqlClient", table_name: str, columns: Sequence[ColumnDefinition]
 ) -> None:
+    """
+    Drop and create table.
+
+    Runs an SQL statement using a database cursor.
+
+    Parameters
+    ----------
+    client : Any
+        An instance of MySqlClient used to interact with the database.
+    table_name : Any
+        The ``table_name`` parameter.
+    columns : Any
+        Sequence of column specifications.
+
+    Returns
+    -------
+    None
+        This function does not return a value.
+    """
     client.execute(f"DROP TABLE IF EXISTS `{table_name}`")
     statements = [
         f"CREATE TABLE `{table_name}` (",
@@ -598,11 +915,32 @@ def drop_and_create_table(
 
 
 def insert_rows(
-    client: "MySqlClient",
-    table_name: str,
-    columns: Sequence[ColumnDefinition],
-    rows: Sequence[Sequence[Any]],
+        client: "MySqlClient",
+        table_name: str,
+        columns: Sequence[ColumnDefinition],
+        rows: Sequence[Sequence[Any]],
 ) -> List[int]:
+    """
+    Insert rows.
+
+    Inserts rows into the database and returns the last inserted ID.
+
+    Parameters
+    ----------
+    client : Any
+        An instance of MySqlClient used to interact with the database.
+    table_name : Any
+        The ``table_name`` parameter.
+    columns : Any
+        Sequence of column specifications.
+    rows : Any
+        Iterable or sequence of data rows.
+
+    Returns
+    -------
+    List[int]
+        A value of type ``List[int]``.
+    """
     if not rows:
         return []
     if not columns:
@@ -614,6 +952,21 @@ def insert_rows(
 
 
 def read_csv_rows(file_path: Path) -> Tuple[List[str], List[Dict[str, Any]]]:
+    """
+    Read CSV rows.
+
+    Reads data from a CSV file and processes each row.
+
+    Parameters
+    ----------
+    file_path : Any
+        The ``file_path`` parameter.
+
+    Returns
+    -------
+    Tuple[List[str], List[Dict[str, Any]]]
+        A value of type ``Tuple[List[str], List[Dict[str, Any]]]``.
+    """
     encodings = ("utf-8-sig", "gbk", "utf-8")
     for encoding in encodings:
         try:
@@ -633,6 +986,19 @@ def read_csv_rows(file_path: Path) -> Tuple[List[str], List[Dict[str, Any]]]:
 
 
 def build_header_mappings(headers: Sequence[str]) -> List[HeaderMapping]:
+    """
+    Build header mappings.
+
+    Parameters
+    ----------
+    headers : Any
+        The ``headers`` parameter.
+
+    Returns
+    -------
+    List[HeaderMapping]
+        A value of type ``List[HeaderMapping]``.
+    """
     builder = IdentifierBuilder()
     mappings: List[HeaderMapping] = []
     for header in headers:

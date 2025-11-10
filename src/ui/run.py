@@ -4,9 +4,9 @@
 @author: chao.li
 @contact: chao.li@amlogic.com
 @software: pycharm
-@file: run.py 
-@time: 2025/7/22 22:02 
-@desc: 
+@file: run.py
+@time: 2025/7/22 22:02
+@desc:
 '''
 import logging
 import multiprocessing
@@ -77,14 +77,80 @@ from .theme import (
 
 
 class LiveLogWriter:
-    """自定义stdout/err实时回调到信号"""
+    """
+    Class auto-generated documentation.
+
+    Responsibility
+    ---------------
+    Summarize what this class represents, its main collaborators,
+    and how it participates in the app's flow (construction, signals, lifecycle).
+
+    Attributes
+    ----------
+    (Add key attributes here)
+        Short description of each important attribute.
+
+    Notes
+    -----
+    Auto-generated documentation. Extend with examples and edge cases as needed.
+    """
 
     def __init__(self, emit_func):
+        """
+        Summary
+        -------
+        Briefly describe what this function does. Expand with context:
+        when it is called, what side effects it has, and its role in the flow.
+
+        Parameters
+        ----------
+        (Add parameters here)
+            Description of each parameter.
+
+        Returns
+        -------
+        Any
+            Description of the return value.
+
+        Raises
+        ------
+        Exception
+            Describe possible error conditions if relevant.
+
+        Notes
+        -----
+        This docstring was auto-generated; refine as needed to match real behavior.
+        """
         self.emit_func = emit_func
         self._lock = threading.Lock()
         self._buffer = ""
 
     def write(self, msg):
+        """
+        Summary
+        -------
+        Briefly describe what this function does. Expand with context:
+        when it is called, what side effects it has, and its role in the flow.
+
+        Parameters
+        ----------
+        (Add parameters here)
+            Description of each parameter.
+
+        Returns
+        -------
+        Any
+            Description of the return value.
+
+        Raises
+        ------
+        Exception
+            Describe possible error conditions if relevant.
+
+        Notes
+        -----
+        This docstring was auto-generated; refine as needed to match real behavior.
+        """
         # 保证分行和进度信号捕获
         with self._lock:
             self._buffer += msg
@@ -93,16 +159,90 @@ class LiveLogWriter:
                 self.emit_func(line.rstrip('\r'))
 
     def flush(self):
-        """将缓冲区剩余内容输出"""
+        """
+        Summary
+        -------
+        Briefly describe what this function does. Expand with context:
+        when it is called, what side effects it has, and its role in the flow.
+
+        Parameters
+        ----------
+        (Add parameters here)
+            Description of each parameter.
+
+        Returns
+        -------
+        Any
+            Description of the return value.
+
+        Raises
+        ------
+        Exception
+            Describe possible error conditions if relevant.
+
+        Notes
+        -----
+        This docstring was auto-generated; refine as needed to match real behavior.
+        """
         with self._lock:
             if self._buffer:
                 self.emit_func(self._buffer.rstrip('\r'))
                 self._buffer = ""
 
     def isatty(self):
+        """
+        Summary
+        -------
+        Briefly describe what this function does. Expand with context:
+        when it is called, what side effects it has, and its role in the flow.
+
+        Parameters
+        ----------
+        (Add parameters here)
+            Description of each parameter.
+
+        Returns
+        -------
+        Any
+            Description of the return value.
+
+        Raises
+        ------
+        Exception
+            Describe possible error conditions if relevant.
+
+        Notes
+        -----
+        This docstring was auto-generated; refine as needed to match real behavior.
+        """
         return False  # 必须加上这个
 
     def fileno(self):
+        """
+        Summary
+        -------
+        Briefly describe what this function does. Expand with context:
+        when it is called, what side effects it has, and its role in the flow.
+
+        Parameters
+        ----------
+        (Add parameters here)
+            Description of each parameter.
+
+        Returns
+        -------
+        Any
+            Description of the return value.
+
+        Raises
+        ------
+        Exception
+            Describe possible error conditions if relevant.
+
+        Notes
+        -----
+        This docstring was auto-generated; refine as needed to match real behavior.
+        """
         raise io.UnsupportedOperation("Not a real file")
 
 
@@ -111,7 +251,31 @@ def _pytest_worker(
     q: multiprocessing.Queue,
     log_file_path_str: str | None = None,
 ):
-    """子进程执行pytest，将日志和进度写入队列"""
+    """
+    Summary
+    -------
+    Briefly describe what this function does. Expand with context:
+    when it is called, what side effects it has, and its role in the flow.
+
+    Parameters
+    ----------
+    (Add parameters here)
+        Description of each parameter.
+
+    Returns
+    -------
+    Any
+        Description of the return value.
+
+    Raises
+    ------
+    Exception
+        Describe possible error conditions if relevant.
+
+    Notes
+    -----
+    This docstring was auto-generated; refine as needed to match real behavior.
+    """
 
     pid = os.getpid()
     start_ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -156,6 +320,31 @@ def _pytest_worker(
 
 
         def emit_log(line: str) -> None:
+            """
+            Summary
+            -------
+            Briefly describe what this function does. Expand with context:
+            when it is called, what side effects it has, and its role in the flow.
+
+            Parameters
+            ----------
+            (Add parameters here)
+                Description of each parameter.
+
+            Returns
+            -------
+            Any
+                Description of the return value.
+
+            Raises
+            ------
+            Exception
+                Describe possible error conditions if relevant.
+
+            Notes
+            -----
+            This docstring was auto-generated; refine as needed to match real behavior.
+            """
             nonlocal log_file_handle, log_write_failed
             q.put(("log", line))
             match = re.search(r"\[PYQT_PROGRESS\]\s+(\d+)/(\d+)", line)
@@ -196,6 +385,31 @@ def _pytest_worker(
             last_exit_code = 0
 
             def emit_stability_event(kind: str, payload: dict[str, Any]) -> None:
+                """
+                Summary
+                -------
+                Briefly describe what this function does. Expand with context:
+                when it is called, what side effects it has, and its role in the flow.
+
+                Parameters
+                ----------
+                (Add parameters here)
+                    Description of each parameter.
+
+                Returns
+                -------
+                Any
+                    Description of the return value.
+
+                Raises
+                ------
+                Exception
+                    Describe possible error conditions if relevant.
+
+                Notes
+                -----
+                This docstring was auto-generated; refine as needed to match real behavior.
+                """
                 if kind == "plan_started":
                     plan_info = payload["plan"]
                     target_desc = (
@@ -268,6 +482,31 @@ def _pytest_worker(
                     )
 
             def emit_stability_progress(percent: int) -> None:
+                """
+                Summary
+                -------
+                Briefly describe what this function does. Expand with context:
+                when it is called, what side effects it has, and its role in the flow.
+
+                Parameters
+                ----------
+                (Add parameters here)
+                    Description of each parameter.
+
+                Returns
+                -------
+                Any
+                    Description of the return value.
+
+                Raises
+                ------
+                Exception
+                    Describe possible error conditions if relevant.
+
+                Notes
+                -----
+                This docstring was auto-generated; refine as needed to match real behavior.
+                """
                 q.put(("progress", percent))
 
             if is_stability_case and plan is not None:
@@ -321,12 +560,54 @@ def _pytest_worker(
 
 
 class CaseRunner(QThread):
+    """
+    Class auto-generated documentation.
+
+    Responsibility
+    ---------------
+    Summarize what this class represents, its main collaborators,
+    and how it participates in the app's flow (construction, signals, lifecycle).
+
+    Attributes
+    ----------
+    (Add key attributes here)
+        Short description of each important attribute.
+
+    Notes
+    -----
+    Auto-generated documentation. Extend with examples and edge cases as needed.
+    """
     log_signal = pyqtSignal(str)
     progress_signal = pyqtSignal(int)
     # emitted when worker created report directory
     report_dir_signal = pyqtSignal(str)
 
     def __init__(self, case_path: str, parent=None):
+        """
+        Summary
+        -------
+        Briefly describe what this function does. Expand with context:
+        when it is called, what side effects it has, and its role in the flow.
+
+        Parameters
+        ----------
+        (Add parameters here)
+            Description of each parameter.
+
+        Returns
+        -------
+        Any
+            Description of the return value.
+
+        Raises
+        ------
+        Exception
+            Describe possible error conditions if relevant.
+
+        Notes
+        -----
+        This docstring was auto-generated; refine as needed to match real behavior.
+        """
         super().__init__(parent)
         self.case_path = case_path
         self._should_stop = False
@@ -341,7 +622,31 @@ class CaseRunner(QThread):
         self._python_log_copied = False
 
     def run(self):
-        """启动子进程运行pytest，并监听队列更新GUI"""
+        """
+        Summary
+        -------
+        Briefly describe what this function does. Expand with context:
+        when it is called, what side effects it has, and its role in the flow.
+
+        Parameters
+        ----------
+        (Add parameters here)
+            Description of each parameter.
+
+        Returns
+        -------
+        Any
+            Description of the return value.
+
+        Raises
+        ------
+        Exception
+            Describe possible error conditions if relevant.
+
+        Notes
+        -----
+        This docstring was auto-generated; refine as needed to match real behavior.
+        """
         logging.info("CaseRunner: preparing to start process for %s", self.case_path)
         python_log_path = self._prepare_python_log_path()
         self._python_log_path = python_log_path
@@ -413,12 +718,62 @@ class CaseRunner(QThread):
         self._try_copy_python_log()
 
     def stop(self):
+        """
+        Summary
+        -------
+        Briefly describe what this function does. Expand with context:
+        when it is called, what side effects it has, and its role in the flow.
+
+        Parameters
+        ----------
+        (Add parameters here)
+            Description of each parameter.
+
+        Returns
+        -------
+        Any
+            Description of the return value.
+
+        Raises
+        ------
+        Exception
+            Describe possible error conditions if relevant.
+
+        Notes
+        -----
+        This docstring was auto-generated; refine as needed to match real behavior.
+        """
         # 设置标志位，run() 会检查该标志并自行退出
         self._should_stop = True
         if self._proc and self._proc.is_alive():
             self._proc.terminate()
 
     def _prepare_python_log_path(self) -> str | None:
+        """
+        Summary
+        -------
+        Briefly describe what this function does. Expand with context:
+        when it is called, what side effects it has, and its role in the flow.
+
+        Parameters
+        ----------
+        (Add parameters here)
+            Description of each parameter.
+
+        Returns
+        -------
+        Any
+            Description of the return value.
+
+        Raises
+        ------
+        Exception
+            Describe possible error conditions if relevant.
+
+        Notes
+        -----
+        This docstring was auto-generated; refine as needed to match real behavior.
+        """
         log_workspace = getattr(Paths, "WORKSPACE", None)
         try:
             if log_workspace:
@@ -430,6 +785,31 @@ class CaseRunner(QThread):
         except Exception:
             return None
     def _try_copy_python_log(self) -> None:
+        """
+        Summary
+        -------
+        Briefly describe what this function does. Expand with context:
+        when it is called, what side effects it has, and its role in the flow.
+
+        Parameters
+        ----------
+        (Add parameters here)
+            Description of each parameter.
+
+        Returns
+        -------
+        Any
+            Description of the return value.
+
+        Raises
+        ------
+        Exception
+            Describe possible error conditions if relevant.
+
+        Notes
+        -----
+        This docstring was auto-generated; refine as needed to match real behavior.
+        """
         if self._python_log_copied or not self._python_log_path:
             return
         if self._proc and self._proc.is_alive():
@@ -466,9 +846,50 @@ class CaseRunner(QThread):
 
 
 class RunPage(CardWidget):
-    """运行页"""
+    """
+    Class auto-generated documentation.
+
+    Responsibility
+    ---------------
+    Summarize what this class represents, its main collaborators,
+    and how it participates in the app's flow (construction, signals, lifecycle).
+
+    Attributes
+    ----------
+    (Add key attributes here)
+        Short description of each important attribute.
+
+    Notes
+    -----
+    Auto-generated documentation. Extend with examples and edge cases as needed.
+    """
 
     def __init__(self, case_path, display_case_path=None, config=None, parent=None):
+        """
+        Summary
+        -------
+        Briefly describe what this function does. Expand with context:
+        when it is called, what side effects it has, and its role in the flow.
+
+        Parameters
+        ----------
+        (Add parameters here)
+            Description of each parameter.
+
+        Returns
+        -------
+        Any
+            Description of the return value.
+
+        Raises
+        ------
+        Exception
+            Describe possible error conditions if relevant.
+
+        Notes
+        -----
+        This docstring was auto-generated; refine as needed to match real behavior.
+        """
         super().__init__(parent)
         stack = getattr(parent, "stackedWidget", None)
         idx = stack.indexOf(self) if stack else None
@@ -628,6 +1049,31 @@ class RunPage(CardWidget):
         )
 
     def eventFilter(self, obj, event):
+        """
+        Summary
+        -------
+        Briefly describe what this function does. Expand with context:
+        when it is called, what side effects it has, and its role in the flow.
+
+        Parameters
+        ----------
+        (Add parameters here)
+            Description of each parameter.
+
+        Returns
+        -------
+        Any
+            Description of the return value.
+
+        Raises
+        ------
+        Exception
+            Describe possible error conditions if relevant.
+
+        Notes
+        -----
+        This docstring was auto-generated; refine as needed to match real behavior.
+        """
         # 用 getattr 防止属性未创建时报 AttributeError；用 QEvent.Resize 做比较
         if obj is getattr(self, "process", None) and event.type() == QEvent.Resize:
             rect = self.process.rect()
@@ -639,6 +1085,31 @@ class RunPage(CardWidget):
         return super().eventFilter(obj, event)
 
     def _fixture_upsert(self, name: str, params: str):
+        """
+        Summary
+        -------
+        Briefly describe what this function does. Expand with context:
+        when it is called, what side effects it has, and its role in the flow.
+
+        Parameters
+        ----------
+        (Add parameters here)
+            Description of each parameter.
+
+        Returns
+        -------
+        Any
+            Description of the return value.
+
+        Raises
+        ------
+        Exception
+            Describe possible error conditions if relevant.
+
+        Notes
+        -----
+        This docstring was auto-generated; refine as needed to match real behavior.
+        """
         """按顺序 upsert：存在则更新参数，不存在则追加到末尾"""
         for i, (n, _) in enumerate(self._fixture_chain):
             if n == name:
@@ -649,6 +1120,31 @@ class RunPage(CardWidget):
         self._rebuild_case_info_label()
 
     def _rebuild_case_info_label(self):
+        """
+        Summary
+        -------
+        Briefly describe what this function does. Expand with context:
+        when it is called, what side effects it has, and its role in the flow.
+
+        Parameters
+        ----------
+        (Add parameters here)
+            Description of each parameter.
+
+        Returns
+        -------
+        Any
+            Description of the return value.
+
+        Raises
+        ------
+        Exception
+            Describe possible error conditions if relevant.
+
+        Notes
+        -----
+        This docstring was auto-generated; refine as needed to match real behavior.
+        """
         """用基线 + 链式 fixture 重建 Current case 文本"""
         parts = [self._case_name_base.strip()]
         for n, p in self._fixture_chain:
@@ -657,6 +1153,31 @@ class RunPage(CardWidget):
         self.case_info_label.setText(" | ".join(parts))
 
     def _append_log(self, msg: str):
+        """
+        Summary
+        -------
+        Briefly describe what this function does. Expand with context:
+        when it is called, what side effects it has, and its role in the flow.
+
+        Parameters
+        ----------
+        (Add parameters here)
+            Description of each parameter.
+
+        Returns
+        -------
+        Any
+            Description of the return value.
+
+        Raises
+        ------
+        Exception
+            Describe possible error conditions if relevant.
+
+        Notes
+        -----
+        This docstring was auto-generated; refine as needed to match real behavior.
+        """
         if "libpng warning: iCCP: known incorrect sRGB profile" in msg:
             return
         if msg.strip() == "KeyboardInterrupt":
@@ -712,6 +1233,31 @@ class RunPage(CardWidget):
             cursor.deleteChar()
 
     def _format_hms(self, seconds: int) -> str:
+        """
+        Summary
+        -------
+        Briefly describe what this function does. Expand with context:
+        when it is called, what side effects it has, and its role in the flow.
+
+        Parameters
+        ----------
+        (Add parameters here)
+            Description of each parameter.
+
+        Returns
+        -------
+        Any
+            Description of the return value.
+
+        Raises
+        ------
+        Exception
+            Describe possible error conditions if relevant.
+
+        Notes
+        -----
+        This docstring was auto-generated; refine as needed to match real behavior.
+        """
         s = max(0, int(seconds))
         h = s // 3600
         m = (s % 3600) // 60
@@ -719,6 +1265,31 @@ class RunPage(CardWidget):
         return f"Remaining : {h:02d}:{m:02d}:{sec:02d}"
 
     def _start_remaining_timer(self, seconds: int):
+        """
+        Summary
+        -------
+        Briefly describe what this function does. Expand with context:
+        when it is called, what side effects it has, and its role in the flow.
+
+        Parameters
+        ----------
+        (Add parameters here)
+            Description of each parameter.
+
+        Returns
+        -------
+        Any
+            Description of the return value.
+
+        Raises
+        ------
+        Exception
+            Describe possible error conditions if relevant.
+
+        Notes
+        -----
+        This docstring was auto-generated; refine as needed to match real behavior.
+        """
         seconds = max(0, int(seconds))
         if seconds <= 0:
             # 不在这里停表；由 _on_remaining_tick() 或 _update_remaining_time_label() 决定
@@ -738,6 +1309,31 @@ class RunPage(CardWidget):
             self._remaining_time_timer.start()
 
     def _stop_remaining_timer(self):
+        """
+        Summary
+        -------
+        Briefly describe what this function does. Expand with context:
+        when it is called, what side effects it has, and its role in the flow.
+
+        Parameters
+        ----------
+        (Add parameters here)
+            Description of each parameter.
+
+        Returns
+        -------
+        Any
+            Description of the return value.
+
+        Raises
+        ------
+        Exception
+            Describe possible error conditions if relevant.
+
+        Notes
+        -----
+        This docstring was auto-generated; refine as needed to match real behavior.
+        """
         if hasattr(self, "_remaining_time_timer"):
             self._remaining_time_timer.stop()
         self._remaining_overtime = False
@@ -746,6 +1342,31 @@ class RunPage(CardWidget):
             self.remaining_time_label.hide()
 
     def _on_remaining_tick(self):
+        """
+        Summary
+        -------
+        Briefly describe what this function does. Expand with context:
+        when it is called, what side effects it has, and its role in the flow.
+
+        Parameters
+        ----------
+        (Add parameters here)
+            Description of each parameter.
+
+        Returns
+        -------
+        Any
+            Description of the return value.
+
+        Raises
+        ------
+        Exception
+            Describe possible error conditions if relevant.
+
+        Notes
+        -----
+        This docstring was auto-generated; refine as needed to match real behavior.
+        """
         if self._remaining_overtime:
             # Overtime：每秒 +1
             self._overtime_seconds += 1
@@ -773,6 +1394,31 @@ class RunPage(CardWidget):
         self.remaining_time_label.setText(self._format_hms(self._remaining_seconds))
 
     def _update_remaining_time_label(self):
+        """
+        Summary
+        -------
+        Briefly describe what this function does. Expand with context:
+        when it is called, what side effects it has, and its role in the flow.
+
+        Parameters
+        ----------
+        (Add parameters here)
+            Description of each parameter.
+
+        Returns
+        -------
+        Any
+            Description of the return value.
+
+        Raises
+        ------
+        Exception
+            Describe possible error conditions if relevant.
+
+        Notes
+        -----
+        This docstring was auto-generated; refine as needed to match real behavior.
+        """
         if not hasattr(self, "remaining_time_label"):
             return
 
@@ -800,6 +1446,31 @@ class RunPage(CardWidget):
             pass
 
     def update_progress(self, percent: int):
+        """
+        Summary
+        -------
+        Briefly describe what this function does. Expand with context:
+        when it is called, what side effects it has, and its role in the flow.
+
+        Parameters
+        ----------
+        (Add parameters here)
+            Description of each parameter.
+
+        Returns
+        -------
+        Any
+            Description of the return value.
+
+        Raises
+        ------
+        Exception
+            Describe possible error conditions if relevant.
+
+        Notes
+        -----
+        This docstring was auto-generated; refine as needed to match real behavior.
+        """
         # 1) 归一化 & 记录
         percent = max(0, min(100, int(percent)))
         self._current_percent = percent
@@ -839,6 +1510,31 @@ class RunPage(CardWidget):
         self._progress_animation = anim
 
     def _trigger_config_run(self):
+        """
+        Summary
+        -------
+        Briefly describe what this function does. Expand with context:
+        when it is called, what side effects it has, and its role in the flow.
+
+        Parameters
+        ----------
+        (Add parameters here)
+            Description of each parameter.
+
+        Returns
+        -------
+        Any
+            Description of the return value.
+
+        Raises
+        ------
+        Exception
+            Describe possible error conditions if relevant.
+
+        Notes
+        -----
+        This docstring was auto-generated; refine as needed to match real behavior.
+        """
         """触发配置页的运行逻辑，确保与配置页按钮一致"""
         cfg_page = getattr(self.main_window, "case_config_page", None)
         if cfg_page and not sip.isdeleted(cfg_page):
@@ -848,7 +1544,31 @@ class RunPage(CardWidget):
             self.run_case()
 
     def _set_action_button(self, mode: str):
-        """根据模式设置操作按钮"""
+        """
+        Summary
+        -------
+        Briefly describe what this function does. Expand with context:
+        when it is called, what side effects it has, and its role in the flow.
+
+        Parameters
+        ----------
+        (Add parameters here)
+            Description of each parameter.
+
+        Returns
+        -------
+        Any
+            Description of the return value.
+
+        Raises
+        ------
+        Exception
+            Describe possible error conditions if relevant.
+
+        Notes
+        -----
+        This docstring was auto-generated; refine as needed to match real behavior.
+        """
         with suppress(TypeError):
             self.action_btn.clicked.disconnect()
         if mode == "run":
@@ -863,7 +1583,31 @@ class RunPage(CardWidget):
         logging.info("Action button set to %s mode for RunPage id=%s", mode, id(self))
 
     def reset(self):
-        """重置页面状态"""
+        """
+        Summary
+        -------
+        Briefly describe what this function does. Expand with context:
+        when it is called, what side effects it has, and its role in the flow.
+
+        Parameters
+        ----------
+        (Add parameters here)
+            Description of each parameter.
+
+        Returns
+        -------
+        Any
+            Description of the return value.
+
+        Raises
+        ------
+        Exception
+            Describe possible error conditions if relevant.
+
+        Notes
+        -----
+        This docstring was auto-generated; refine as needed to match real behavior.
+        """
         with suppress(Exception):
             self.cleanup()
         self.log_area.clear()
@@ -878,6 +1622,31 @@ class RunPage(CardWidget):
         self.action_btn.setEnabled(True)
 
     def run_case(self):
+        """
+        Summary
+        -------
+        Briefly describe what this function does. Expand with context:
+        when it is called, what side effects it has, and its role in the flow.
+
+        Parameters
+        ----------
+        (Add parameters here)
+            Description of each parameter.
+
+        Returns
+        -------
+        Any
+            Description of the return value.
+
+        Raises
+        ------
+        Exception
+            Describe possible error conditions if relevant.
+
+        Notes
+        -----
+        This docstring was auto-generated; refine as needed to match real behavior.
+        """
         self.reset()
         self._set_action_button("stop")
         self.runner = CaseRunner(self.case_path)
@@ -900,6 +1669,31 @@ class RunPage(CardWidget):
         self.runner.start()
 
     def _finalize_runner(self):
+        """
+        Summary
+        -------
+        Briefly describe what this function does. Expand with context:
+        when it is called, what side effects it has, and its role in the flow.
+
+        Parameters
+        ----------
+        (Add parameters here)
+            Description of each parameter.
+
+        Returns
+        -------
+        Any
+            Description of the return value.
+
+        Raises
+        ------
+        Exception
+            Describe possible error conditions if relevant.
+
+        Notes
+        -----
+        This docstring was auto-generated; refine as needed to match real behavior.
+        """
         runner = getattr(self, "runner", None)
         if not runner:
             self.on_runner_finished()
@@ -919,6 +1713,31 @@ class RunPage(CardWidget):
         self.on_runner_finished()
 
     def _on_report_dir_ready(self, path: str) -> None:
+        """
+        Summary
+        -------
+        Briefly describe what this function does. Expand with context:
+        when it is called, what side effects it has, and its role in the flow.
+
+        Parameters
+        ----------
+        (Add parameters here)
+            Description of each parameter.
+
+        Returns
+        -------
+        Any
+            Description of the return value.
+
+        Raises
+        ------
+        Exception
+            Describe possible error conditions if relevant.
+
+        Notes
+        -----
+        This docstring was auto-generated; refine as needed to match real behavior.
+        """
         """Enable report page when report dir is created."""
         try:
             mw = getattr(self, "main_window", None) or self.window()
@@ -928,6 +1747,31 @@ class RunPage(CardWidget):
             pass
 
     def cleanup(self, disconnect_page: bool = True):
+        """
+        Summary
+        -------
+        Briefly describe what this function does. Expand with context:
+        when it is called, what side effects it has, and its role in the flow.
+
+        Parameters
+        ----------
+        (Add parameters here)
+            Description of each parameter.
+
+        Returns
+        -------
+        Any
+            Description of the return value.
+
+        Raises
+        ------
+        Exception
+            Describe possible error conditions if relevant.
+
+        Notes
+        -----
+        This docstring was auto-generated; refine as needed to match real behavior.
+        """
         stack = getattr(self.main_window, "stackedWidget", None)
         idx = stack.indexOf(self) if stack else None
         logging.info(
@@ -994,6 +1838,31 @@ class RunPage(CardWidget):
         )
 
     def on_runner_finished(self):
+        """
+        Summary
+        -------
+        Briefly describe what this function does. Expand with context:
+        when it is called, what side effects it has, and its role in the flow.
+
+        Parameters
+        ----------
+        (Add parameters here)
+            Description of each parameter.
+
+        Returns
+        -------
+        Any
+            Description of the return value.
+
+        Raises
+        ------
+        Exception
+            Describe possible error conditions if relevant.
+
+        Notes
+        -----
+        This docstring was auto-generated; refine as needed to match real behavior.
+        """
         self.cleanup()
         self._stop_remaining_timer()
         self._set_action_button("run")
@@ -1004,6 +1873,31 @@ class RunPage(CardWidget):
         self.case_info_label.setText(self._case_name_base)
 
     def on_stop(self):
+        """
+        Summary
+        -------
+        Briefly describe what this function does. Expand with context:
+        when it is called, what side effects it has, and its role in the flow.
+
+        Parameters
+        ----------
+        (Add parameters here)
+            Description of each parameter.
+
+        Returns
+        -------
+        Any
+            Description of the return value.
+
+        Raises
+        ------
+        Exception
+            Describe possible error conditions if relevant.
+
+        Notes
+        -----
+        This docstring was auto-generated; refine as needed to match real behavior.
+        """
         self._append_log("on_stop entered")
         self.cleanup()
         self._stop_remaining_timer()
@@ -1011,11 +1905,59 @@ class RunPage(CardWidget):
         self.action_btn.setEnabled(True)
 
     def _get_application_base(self) -> Path:
-        """获取应用根路径"""
+        """
+        Summary
+        -------
+        Briefly describe what this function does. Expand with context:
+        when it is called, what side effects it has, and its role in the flow.
+
+        Parameters
+        ----------
+        (Add parameters here)
+            Description of each parameter.
+
+        Returns
+        -------
+        Any
+            Description of the return value.
+
+        Raises
+        ------
+        Exception
+            Describe possible error conditions if relevant.
+
+        Notes
+        -----
+        This docstring was auto-generated; refine as needed to match real behavior.
+        """
         return Path(get_src_base()).resolve()
 
     def _calc_display_path(self, case_path: str, display_case_path: str | None) -> str:
-        """计算用于显示的用例路径"""
+        """
+        Summary
+        -------
+        Briefly describe what this function does. Expand with context:
+        when it is called, what side effects it has, and its role in the flow.
+
+        Parameters
+        ----------
+        (Add parameters here)
+            Description of each parameter.
+
+        Returns
+        -------
+        Any
+            Description of the return value.
+
+        Raises
+        ------
+        Exception
+            Describe possible error conditions if relevant.
+
+        Notes
+        -----
+        This docstring was auto-generated; refine as needed to match real behavior.
+        """
         if display_case_path:
             p = Path(display_case_path)
             if ".." not in p.parts and not p.drive and not p.is_absolute():

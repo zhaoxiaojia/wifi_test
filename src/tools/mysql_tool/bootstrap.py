@@ -7,7 +7,22 @@ from .operations import sync_configuration
 
 
 def bootstrap_mysql_environment(*, refresh_config: bool = False) -> Tuple[dict, Optional[object]]:
-    """Bootstrap database state by loading config (no DB persistence)."""
+    """
+    Bootstrap MySQL environment.
+
+    Loads configuration settings from a YAML or configuration file.
+    Logs informational messages and errors for debugging purposes.
+
+    Parameters
+    ----------
+    None
+        This function does not accept any parameters.
+
+    Returns
+    -------
+    Tuple[dict, Optional[object]]
+        A value of type ``Tuple[dict, Optional[object]]``.
+    """
 
     try:
         from src.tools import config_loader

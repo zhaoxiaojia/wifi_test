@@ -1,6 +1,25 @@
 # !/usr/bin/env python
 # -*-coding:utf-8 -*-
 
+"""Main entry point for the FAE‑QA Wi‑Fi Test Tool.
+
+This module bootstraps the graphical user interface for the Wi‑Fi test
+application.  It defines a :class:`MainWindow` class derived from
+``qfluentwidgets.FluentWindow`` that orchestrates navigation between the
+login page, configuration pages, test execution page and report page.  The
+window is initialised with animated geometry and opacity transitions to
+provide a smooth user experience.  Top‑level functions and classes
+include:
+
+* ``log_exception`` – a helper to capture and log unhandled exceptions
+  raised from Qt slots.
+* ``MainWindow`` – the primary application window that manages pages,
+  navigation buttons and authentication state.
+
+When run as a script, this module constructs a QApplication, instantiates
+``MainWindow`` and enters the Qt event loop.
+"""
+
 from __future__ import annotations
 
 import sys
@@ -40,15 +59,54 @@ from PyQt5.QtCore import (
 )
 from src.util.constants import Paths, cleanup_temp_dir
 
+# NOTE: The following annotations are used for module‑level variables.  They
+# provide descriptive metadata alongside type information using
+# ``typing.Annotated``.  Import ``Annotated`` here so that global
+# assignments can be documented inline later in the file.
+from typing import Annotated
+
 # Ensure working directory equals executable directory
 os.chdir(Paths.BASE_DIR)
 
 
-def log_exception(exc_type, exc_value, exc_tb):
+def log_exception(exc_type, exc_value, exc_tb) -> None:
+    """Write an unhandled exception to the application log.
+
+    This function is intended to be registered via
+    ``sys.excepthook`` or passed to Qt's exception handling hooks.  It
+    formats the exception tuple into a single string and emits it via
+    the :mod:`logging` subsystem at error level.
+
+    Parameters
+    ----------
+    exc_type:
+        The exception class being handled.
+    exc_value:
+        The exception instance.
+    exc_tb:
+        A traceback object describing where the exception occurred.
+
+    Returns
+    -------
+    None
+    """
     logging.error("".join(traceback.format_exception(exc_type, exc_value, exc_tb)))
 
 class MainWindow(FluentWindow):
-    def __init__(self):
+    """Main application window for the Wi‑Fi Test Tool.
+
+    The :class:`MainWindow` class encapsulates all user‑facing UI logic.
+    It manages the creation and placement of pages (login, case config,
+    RVR Wi‑Fi config, run, report and about), controls navigation button
+    visibility based on authentication state, and triggers animations when
+    pages are shown or hidden.  Slots prefixed with ``_on_`` respond to
+    signals emitted from child widgets, while methods beginning with
+    ``_`` implement reusable UI behaviours such as enabling/disabling
+    navigation buttons or adding/removing interfaces from the navigation
+    stack.
+    """
+
+    def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("FAE-QA  Wi-Fi Test Tool")
         screen = QGuiApplication.primaryScreen().availableGeometry()
@@ -179,15 +237,55 @@ class MainWindow(FluentWindow):
         self.setMicaEffectEnabled(True)
 
     def _apply_nav_enabled(self, states: dict) -> None:
-        """Batch set navigation buttons enabled states."""
+        """Enable or disable multiple navigation buttons in one call.
+
+        Iterate through a mapping of navigation buttons to boolean flags and
+        call ``setEnabled`` on each button that still exists.  This helper
+        centralises the logic for toggling entire groups of navigation
+        controls when a user signs in or out.
+
+        Parameters
+        ----------
+        states:
+            A mapping whose keys are navigation button instances and whose
+            values indicate whether the button should be enabled (truthy) or
+            disabled (falsy).
+
+        Returns
+        -------
+        None
+        """
         for btn, enabled in states.items():
             if btn and not sip.isdeleted(btn):
                 btn.setEnabled(bool(enabled))
 
     # ------------------------------------------------------------------
     def _on_login_result(self, success: bool, message: str, payload: dict) -> None:
+        """Handle completion of a login attempt.
+
+        This slot is connected to the ``loginResult`` signal from
+        :class:`~src.ui.company_login.CompanyLoginPage`.  If authentication
+        succeeds, the user's account details are recorded and the
+        navigation buttons appropriate for a logged‑in user are enabled,
+        after which the interface switches to the case configuration page.
+        On failure, the active account is cleared and the interface returns
+        to the login page.
+
+        Parameters
+        ----------
+        success:
+            Indicates whether the sign‑in attempt succeeded.
+        message:
+            A human‑readable message describing the outcome of the login.
+        payload:
+            A dictionary containing account metadata returned on success.
+
+        Returns
+        -------
+        None
+        """
         logging.info(
-            "MainWindow: sign-in finished success=%s message=%s payload=%s",
+            "MainWindow: sign‑in finished success=%s message=%s payload=%s",
             success,
             message,
             payload,
@@ -202,14 +300,44 @@ class MainWindow(FluentWindow):
             self.setCurrentIndex(self.login_page)
 
     def _on_logout_requested(self) -> None:
-        logging.info("MainWindow: user requested sign-out (active_account=%s)", self._active_account)
+        """Respond to a user‑initiated sign‑out.
+
+        This slot is connected to the ``logoutRequested`` signal from
+        :class:`CompanyLoginPage`.  It resets navigation to the login page,
+        disables buttons that require authentication and clears the
+        ``_active_account`` state.  A status message is displayed on the
+        login page to inform the user of the sign‑out.
+
+        Returns
+        -------
+        None
+        """
+        logging.info("MainWindow: user requested sign‑out (active_account=%s)", self._active_account)
         self._apply_nav_enabled(self._nav_logged_out_states)
         self.setCurrentIndex(self.login_page)
         self._active_account = None
         self.login_page.set_status_message("Signed out. Please sign in again.", state="info")
 
     def show_rvr_wifi_config(self):
-        """Show RVR Wi-Fi config page in navigation (idempotent: make visible if already added)."""
+        """Ensure that the RVR Wi‑Fi configuration page is visible in the UI.
+
+        This method is idempotent: if the RVR navigation button and page
+        already exist they are simply made visible.  Otherwise it
+        performs several steps to construct and register the page.  It
+        reloads the CSV backing the RVR page if needed, removes any
+        stale route keys from internal dictionaries, calls
+        :meth:`_add_interface` to obtain a new navigation button,
+        stores the assigned route key, and adds the page to the stacked
+        widget if it is not already present.  When the page is shown
+        for the first time, a short slide animation brings it into
+        view from the right.  If any part of the process fails a
+        critical message box is displayed and the navigation button
+        remains hidden.
+
+        Returns
+        -------
+        None
+        """
         # If it exists: do not add twice, just show
         if self._rvr_nav_button and not sip.isdeleted(self._rvr_nav_button):
             if self.rvr_wifi_config_page is None or sip.isdeleted(self.rvr_wifi_config_page):
@@ -307,7 +435,21 @@ class MainWindow(FluentWindow):
             logging.warning("show_rvr_wifi_config animation failed: %s", e)
 
     def hide_rvr_wifi_config(self):
-        """Hide RVR Wi-Fi config page from navigation (do not remove to avoid routeKey residue)."""
+        """Slide the RVR Wi‑Fi configuration page out of view and hide its navigation button.
+
+        When the user deselects the RVR configuration, this method gently
+        animates the page off the screen to the right and toggles the
+        corresponding navigation button's visibility.  Unlike
+        :meth:`_remove_interface`, the page instance and route key remain
+        registered with the navigation controller so that it can be shown
+        again later without re‑instantiating or re‑registering the page.
+        If the page has already been hidden or does not exist, the call
+        performs no action.
+
+        Returns
+        -------
+        None
+        """
         if not self._rvr_visible:
             return
         logging.debug(
@@ -352,7 +494,29 @@ class MainWindow(FluentWindow):
             logging.debug("hide_rvr_wifi_config end: page=%s", self.rvr_wifi_config_page)
 
     def _detach_sub_interface(self, page):
-        """Detach the given page from navigation, best-effort for different QFluent versions."""
+        """Disconnect a page from the Fluent navigation system.
+
+        QFluentWidgets has evolved over time and the public API for
+        removing pages varies between versions.  This helper performs a
+        best‑effort removal by probing for several removal methods on
+        the current navigation interface (``removeSubInterface``,
+        ``removeInterface``, ``removeItem``, ``removeWidget``) and
+        invoking the first one that succeeds.  Should those APIs be
+        unavailable, the function falls back to manually scanning the
+        navigation widget for any child widget whose ``routeKey``
+        matches the given page, disconnecting and deleting it if found.
+
+        Parameters
+        ----------
+        page:
+            The widget instance to detach from the navigation hierarchy.
+
+        Returns
+        -------
+        bool
+            ``True`` if a removal operation was performed, ``False`` if no
+            suitable API was found or no matching widget existed.
+        """
         nav = getattr(self, "navigationInterface", None)
         if not nav or not page or sip.isdeleted(page):
             return False
@@ -390,6 +554,35 @@ class MainWindow(FluentWindow):
         return False
 
     def _add_interface(self, *args, **kwargs):
+        """Wrapper around :meth:`addSubInterface` that logs diagnostic information.
+
+        This helper centralises the checks and diagnostics around
+        dynamically inserting new pages into the navigation stack.  It
+        validates that the first positional argument (or the ``interface``/``widget``
+        keyword argument) is a live widget before attempting to add it.
+        After calling :meth:`addSubInterface`, it logs the number of
+        navigation buttons and stacked widgets for troubleshooting.
+        Should ``addSubInterface`` return ``None``, a warning is emitted
+        because this typically signals that a duplicate route key has been
+        supplied or that the framework rejected the addition.
+
+        Parameters
+        ----------
+        *args:
+            Positional arguments forwarded verbatim to
+            :meth:`addSubInterface`.  The first positional argument is
+            expected to be the widget to add.
+        **kwargs:
+            Keyword arguments forwarded verbatim to
+            :meth:`addSubInterface`.  The ``interface`` or ``widget`` key
+            may be used to specify the page to add.
+
+        Returns
+        -------
+        QAbstractButton | None
+            The navigation button created by the framework, or ``None`` if
+            the framework refused to create one.
+        """
         widget = args[0] if args else kwargs.get("interface") or kwargs.get("widget")
         if widget is None or sip.isdeleted(widget):
             raise RuntimeError("_add_interface called with a None/invalid widget")
@@ -408,6 +601,42 @@ class MainWindow(FluentWindow):
         return btn
 
     def _remove_interface(self, page, route_key=None, nav_button=None):
+        """Remove a page and its navigation entry from the UI.
+
+        This method orchestrates the removal of a previously added page from
+        both the navigation interface and the stacked widget.  It first
+        attempts to invoke the appropriate removal method exposed by the
+        framework (preferring :meth:`removeSubInterface` on the
+        :class:`FluentWindow` instance, then falling back to
+        ``navigationInterface.removeItem``).  If the removal fails an
+        exception is raised.  After successful removal, associated
+        navigation buttons are disconnected and dereferenced, the page is
+        detached from the stacked widget, and internal state pointers
+        tracking the RVR configuration page are reset.  Any lingering
+        route key entries in the framework's internal dictionaries are
+        also cleaned up to avoid collisions on subsequent adds.
+
+        Parameters
+        ----------
+        page:
+            The widget instance representing the page to remove.
+        route_key:
+            Optional explicit route key associated with the page; if not
+            provided, it is inferred from ``nav_button`` or the
+            ``objectName`` of ``page``.
+        nav_button:
+            Optional navigation button tied to the page; if provided it
+            will be disconnected and dereferenced after removal.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        RuntimeError
+            If the removal via the underlying framework fails.
+        """
         nav = getattr(self, "navigationInterface", None)
 
         rk = (
@@ -473,6 +702,29 @@ class MainWindow(FluentWindow):
 
     # ==== DEBUG: deep nav/router/stack introspection ====
     def _debug_nav_state(self, tag: str):
+        """Dump diagnostic information about the navigation stack.
+
+        This utility prints a tree of information to the logger at
+        DEBUG level.  It enumerates available removal methods on the
+        navigation controller, lists each navigation button along with
+        its class and properties, shows any QWidget with a ``routeKey``
+        property, inspects router internals such as history and route
+        tables, and prints out all widgets present in the stacked
+        container.  Finally it logs the internal state variables
+        controlling the RVR Wi‑Fi page.  Use this to troubleshoot
+        navigation issues or understand the internal state of QFluent
+        components at runtime.
+
+        Parameters
+        ----------
+        tag:
+            A short label included in the log output to distinguish
+            multiple debug dumps.
+
+        Returns
+        -------
+        None
+        """
         logging.debug("\n===== DEBUG NAV STATE [%s] =====", tag)
         nav = getattr(self, "navigationInterface", None)
         if not nav:
@@ -616,6 +868,21 @@ class MainWindow(FluentWindow):
     # ==== DEBUG END ====
 
     def clear_run_page(self):
+        """Reset the RunPage and disconnect any associated event hooks.
+
+        When tests are completed or aborted, the RunPage may retain
+        connections to long‑running worker threads or button click
+        handlers.  This method cleans up those references: it
+        disconnects the runner's ``finished`` signal, disconnects the
+        navigation button click logger slot, and invokes the page's
+        :meth:`RunPage.reset` method to clear any state.  It then
+        processes pending Qt events and re‑enables the ``run_btn`` on the
+        case configuration page so that the user can start a new run.
+
+        Returns
+        -------
+        None
+        """
         if self.run_page and not sip.isdeleted(self.run_page):
             runner = getattr(self.run_page, "runner", None)
             if runner and self._runner_finished_slot:
@@ -637,7 +904,28 @@ class MainWindow(FluentWindow):
             self.case_config_page.run_btn.setEnabled(True)
 
     def _set_nav_buttons_enabled(self, enabled: bool):
-        """Keep nav buttons enabled and optionally tweak styles."""
+        """Enable all navigation buttons and optionally adjust their appearance.
+
+        Regardless of the ``enabled`` parameter, this method currently
+        forces every navigation button to be both visible and enabled
+        because the underlying FluentWidgets framework may disable
+        buttons when switching pages.  It also sets a specific font
+        family on the buttons to maintain visual consistency with the
+        Verdana font used elsewhere in the application.  Future
+        enhancements could respect the ``enabled`` flag and apply
+        customised styling based on state.
+
+        Parameters
+        ----------
+        enabled:
+            Placeholder parameter reserved for future use when dynamic
+            enabling/disabling of buttons is implemented.  Currently
+            ignored.
+
+        Returns
+        -------
+        None
+        """
         nav = getattr(self, "navigationInterface", None)
         if not nav:
             return
@@ -650,6 +938,18 @@ class MainWindow(FluentWindow):
             btn.setStyleSheet("font-family: Verdana;")
 
     def center_window(self):
+        """Center this window on the primary monitor.
+
+        Computes the geometry of the available desktop workspace and
+        translates the window's frame geometry so that its centre aligns
+        with the centre of the screen.  This ensures that the main
+        application window appears in the middle of the screen when
+        initially shown or when explicitly invoked.
+
+        Returns
+        -------
+        None
+        """
         # Center window on the primary screen
         screen_geometry = QGuiApplication.primaryScreen().availableGeometry()
         window_geometry = self.frameGeometry()
@@ -658,6 +958,31 @@ class MainWindow(FluentWindow):
         self.move(window_geometry.topLeft())
 
     def setCurrentIndex(self, page_widget, ssid: str | None = None, passwd: str | None = None):
+        """Switch the active page with a cross‑fade animation.
+
+        This override of :meth:`FluentWindow.setCurrentIndex` changes the
+        currently displayed widget in the stacked container while
+        performing a fade‑out on the outgoing widget and a fade‑in on
+        the incoming widget.  When the RVR Wi‑Fi configuration page is
+        the target and Wi‑Fi credentials are supplied, those credentials
+        are passed to the page before it becomes visible.  Errors
+        encountered during the transition are logged but not re‑raised.
+
+        Parameters
+        ----------
+        page_widget:
+            The widget instance to display.
+        ssid:
+            Optional Wi‑Fi SSID to pre‑populate in the RVR Wi‑Fi config
+            page when it becomes active.
+        passwd:
+            Optional Wi‑Fi password to pre‑populate in the RVR Wi‑Fi
+            config page when it becomes active.
+
+        Returns
+        -------
+        None
+        """
         try:
             if page_widget is self.rvr_wifi_config_page and (ssid or passwd):
                 if hasattr(self.rvr_wifi_config_page, "set_router_credentials"):
@@ -692,6 +1017,32 @@ class MainWindow(FluentWindow):
             logging.error("Failed to set current widget: %s", e)
 
     def on_run(self, case_path, display_case_path, config):
+        """Kick off execution of a test case and display the run page.
+
+        When the user clicks the "Run" button on the case configuration
+        page, this slot locks down configuration inputs, copies the
+        selected case path and settings into the run page, and adds the
+        run page to the stacked widget if necessary.  It then invokes
+        :meth:`RunPage.run_case` to start the test run.  A callback is
+        connected to the runner's ``finished`` signal to unlock the UI
+        when execution completes and to re‑enable the RVR navigation
+        button if the case is a performance test.
+
+        Parameters
+        ----------
+        case_path:
+            Filesystem path to the Python test module to execute.
+        display_case_path:
+            User‑friendly representation of ``case_path`` (e.g.,
+            truncated base name) for display in the run page.
+        config:
+            Arbitrary configuration object passed down to the run page
+            and ultimately to the test runner.
+
+        Returns
+        -------
+        None
+        """
         self.case_config_page.lock_for_running(True)
         if getattr(self, "rvr_wifi_config_page", None):
             self.rvr_wifi_config_page.set_readonly(True)
@@ -748,10 +1099,37 @@ class MainWindow(FluentWindow):
                 self._run_nav_button.setVisible(False)
 
     def show_case_config(self):
+        """Switch to the case configuration page.
+
+        This convenience method simply calls :meth:`setCurrentIndex` with
+        the case configuration page and logs the transition.  Exposed
+        separately so that other components can request a return to the
+        configuration page without needing access to the underlying
+        stacked widget.
+
+        Returns
+        -------
+        None
+        """
         self.setCurrentIndex(self.case_config_page)
         logging.info("Switched to CaseConfigPage")
 
     def stop_run_and_show_case_config(self):
+        """Abort a running test and return to the case configuration page.
+
+        This method is called when the user requests to stop an ongoing
+        test run.  It switches the stacked widget back to the case
+        configuration page, processes any pending Qt events, unlocks
+        previously disabled UI elements (including the RVR Wi‑Fi config
+        page) and disables the run navigation button.  It also re‑enables
+        the RVR navigation button only if the most recent case was a
+        performance test, ensuring that the user can still access RVR
+        logs after cancelling such a run.
+
+        Returns
+        -------
+        None
+        """
         self.setCurrentIndex(self.case_config_page)
         QCoreApplication.processEvents()
         self.case_config_page.lock_for_running(False)
@@ -771,9 +1149,24 @@ class MainWindow(FluentWindow):
 
     # --- Reports ---
     def enable_report_page(self, report_dir: str) -> None:
-        """Enable report page and set current report directory.
+        """Activate the report viewing page after test execution.
 
-        Called when runner notifies that report_dir.mkdir(...) succeeded.
+        When the test runner finishes and creates a report directory,
+        this method updates :attr:`last_report_dir` with the absolute
+        path of that directory, populates the report page with context
+        about the case that just ran, and enables the report navigation
+        button.  Without invoking this function the reports page
+        remains disabled and the user cannot review test results from
+        within the application.
+
+        Parameters
+        ----------
+        report_dir:
+            Filesystem path pointing to the newly created report directory.
+
+        Returns
+        -------
+        None
         """
         try:
             self.last_report_dir = str(Path(report_dir).resolve())
@@ -794,9 +1187,37 @@ import sys, os, logging, subprocess as _sp
 
 # Windows only; hide subprocess console windows (can disable with WIFI_TEST_HIDE_MP_CONSOLE=0)
 if sys.platform.startswith("win") and os.environ.get("WIFI_TEST_HIDE_MP_CONSOLE", "1") == "1":
-    _orig_Popen = _sp.Popen
+    # Preserve original subprocess.Popen so that it can be restored or
+    # called from within the wrapper.  Annotate with ``Annotated`` to
+    # describe its purpose.
+    _orig_Popen: Annotated[callable, "Reference to the unmodified subprocess.Popen function"] = _sp.Popen
 
-    def _patched_Popen(*args, **kwargs):
+    def _patched_Popen(*args, **kwargs) -> _sp.Popen:
+        """Launch a subprocess on Windows while suppressing console windows.
+
+        On Windows platforms, Python's default :class:`subprocess.Popen`
+        pops up a console window for each child process when run from a
+        GUI application.  This wrapper modifies the ``creationflags`` and
+        ``startupinfo`` arguments to create the process with no window
+        displayed.  It delegates all other arguments to the original
+        :func:`subprocess.Popen` preserved in
+        :data:`_orig_Popen`.  If any exception is raised while
+        adjusting the startup parameters, the wrapper logs the issue and
+        proceeds to call :data:`_orig_Popen` without modification.
+
+        Parameters
+        ----------
+        *args, **kwargs:
+            Positional and keyword arguments accepted by
+            :class:`subprocess.Popen`.  ``creationflags`` and
+            ``startupinfo`` will be overridden to hide the console
+            window.
+
+        Returns
+        -------
+        subprocess.Popen
+            The newly created Popen instance.
+        """
         try:
             # Add CREATE_NO_WINDOW and hide window
             flags = kwargs.get("creationflags", 0) | 0x08000000  # CREATE_NO_WINDOW
@@ -811,6 +1232,7 @@ if sys.platform.startswith("win") and os.environ.get("WIFI_TEST_HIDE_MP_CONSOLE"
             logging.debug("mp-console patch noop: %s", e)
         return _orig_Popen(*args, **kwargs)
 
+    # Overwrite subprocess.Popen so that all subsequent calls use the patched version.
     _sp.Popen = _patched_Popen
     logging.debug("Installed mp-console hide patch for Windows")
 

@@ -1,17 +1,3 @@
-#
-# Copyright 2021 Amlogic.com, Inc. or its affiliates. All rights reserved.
-#
-# AMLOGIC PROPRIETARY/CONFIDENTIAL
-#
-# You may not use this file except in compliance with the terms and conditions
-# set forth in the accompanying LICENSE.TXT file.
-#
-# THESE MATERIALS ARE PROVIDED ON AN "AS IS" BASIS. AMLOGIC SPECIFICALLY
-# DISCLAIMS, WITH RESPECT TO THESE MATERIALS, ALL WARRANTIES, EXPRESS,
-# IMPLIED, OR STATUTORY, INCLUDING THE IMPLIED WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT.
-#
-
 import logging
 import os
 import re
@@ -31,7 +17,38 @@ from src.tools.connect_tool.uiautomator_tool import UiautomatorTool
 
 
 def connect_again(func):
+    """
+    Connect again.
+
+    -------------------------
+    It executes external commands via Python's subprocess module.
+
+    -------------------------
+    Parameters
+    -------------------------
+    func : Any
+        The ``func`` parameter.
+
+    -------------------------
+    Returns
+    -------------------------
+    Any
+        The result produced by the function.
+    """
+
     def inner(self, *args, **kwargs):
+        """
+        Inner.
+
+        -------------------------
+        It executes external commands via Python's subprocess module.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         if ':5555' in self.serialnumber:
             subprocess.check_output('adb connect {}'.format(self.serialnumber), shell=True)
             self.wait_devices()
@@ -44,12 +61,23 @@ def connect_again(func):
 
 class adb(dut):
     """
-    ADB class Provide common device control functions over the ADB bridge
+    ADB.
 
-    Attributes:
-        serialnumber : adb number : str
-        logdir : testcase result log path
+    -------------------------
+    It runs shell commands on the target device using ADB helpers and captures the output.
+    It executes external commands via Python's subprocess module.
+    It logs information for debugging or monitoring purposes.
+    It ensures the device has root privileges when required.
+    It remounts the device's file system with write permissions.
+    It sends key events to the device using ADB.
+    It simulates user input on the device's screen (tap, swipe, or text entry).
+    It introduces delays to allow the device to process commands.
 
+    -------------------------
+    Returns
+    -------------------------
+    None
+        This class does not return a value.
     """
 
     ADB_S = 'adb -s '
@@ -57,19 +85,51 @@ class adb(dut):
     OSD_VIDEO_LAYER = 'osd+video'
 
     def __init__(self, serialnumber="", logdir=""):
+        """
+        Init.
+
+        -------------------------
+        It ensures the device has root privileges when required.
+        It remounts the device's file system with write permissions.
+
+        -------------------------
+        Parameters
+        -------------------------
+        serialnumber : Any
+            The ADB serial number identifying the target device.
+        logdir : Any
+            Path to the directory where logs will be stored.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         super().__init__()
         self.serialnumber = serialnumber
         self.logdir = logdir or os.path.join(os.getcwd(), 'results')
         self.timer = None
         self.live = False
         self.lock = threading.Lock()
-        # self.wait_devices()
         self.p_config_wifi = ''
         if self.serialnumber:
             self.root()
             self.remount()
 
     def set_status_on(self):
+        """
+        Set status on.
+
+        -------------------------
+        It logs information for debugging or monitoring purposes.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         with self.lock:
             if self.live:
                 return
@@ -77,32 +137,109 @@ class adb(dut):
             logging.debug('Adb status is on')
 
     def set_status_off(self):
+        """
+        Set status off.
+
+        -------------------------
+        It logs information for debugging or monitoring purposes.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         with self.lock:
             if not self.live:
                 return
             self.live = False
             logging.debug('Adb status is Off')
 
-    # @property
     def u(self, type="u2"):
+        """
+        U.
+
+        -------------------------
+        Parameters
+        -------------------------
+        type : Any
+            Type specifier for the UI automation tool (e.g., "u2").
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         self._u = UiautomatorTool(self.serialnumber, type)
         return self._u
 
     def get_uuid(self):
+        """
+        Retrieve  UUID.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+        It ensures the device has root privileges when required.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         self.root()
         return self.checkoutput("ls /storage/ |awk '{print $1}' |head -n 1")
 
     def get_uuids(self):
+        """
+        Retrieve uuids.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+        It ensures the device has root privileges when required.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         self.root()
         return self.checkoutput("ls /storage/ |awk '{print $1}'")[1].split("\n")
 
     def get_uuid_size(self):
+        """
+        Retrieve  UUID size.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+        It logs information for debugging or monitoring purposes.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         uuid = self.get_uuid()
         logging.info(f'uuid {uuid}')
         size = self.checkoutput(f"df -h |grep {uuid}|cut -f 3 -d ' '").strip()[:-1]
         return int(float(size))
 
     def get_uuid_avail_size(self):
+        """
+        Retrieve  UUID avail size.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         uuid = self.get_uuid()
         size = self.checkoutput(f"df -h |grep {uuid}|cut -f 7 -d ' '").strip()[:-1]
         unit = re.findall(r'[A-Za-z]', self.checkoutput(f"df -h |grep {uuid}|cut -f 7 -d ' '"))
@@ -119,6 +256,26 @@ class adb(dut):
         return int(float(size))
 
     def keyevent(self, keycode):
+        """
+        Keyevent.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+        It sends key events to the device using ADB.
+        It introduces delays to allow the device to process commands.
+
+        -------------------------
+        Parameters
+        -------------------------
+        keycode : Any
+            Key code representing the button to press.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         if isinstance(keycode, int):
             keycode = str(keycode)
         self.checkoutput_term(self.ADB_S + self.serialnumber +
@@ -126,7 +283,27 @@ class adb(dut):
         time.sleep(0.5)
 
     def send_event(self, key, hold=3):
-        # /dev/input/event5: 0004 0004 000c0045
+        """
+        Send event.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+        It introduces delays to allow the device to process commands.
+
+        -------------------------
+        Parameters
+        -------------------------
+        key : Any
+            Key identifier for sending input events.
+        hold : Any
+            Time in seconds to hold the key pressed.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         self.checkoutput(
             f'sendevent /dev/input/event5 4 4 786501;sendevent /dev/input/event5 1 {key} 1;sendevent  /dev/input/event5 0 0 0;')
         time.sleep(hold)
@@ -134,63 +311,313 @@ class adb(dut):
             f'sendevent /dev/input/event5 4 4 786501;sendevent /dev/input/event5 1 {key} 0;sendevent  /dev/input/event5 0 0 0;')
 
     def home(self):
+        """
+        Home.
+
+        -------------------------
+        It sends key events to the device using ADB.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         self.keyevent("KEYCODE_HOME")
 
     def enter(self):
+        """
+        Enter.
+
+        -------------------------
+        It sends key events to the device using ADB.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         self.keyevent("KEYCODE_ENTER")
 
     def root(self):
+        """
+        Root.
+
+        -------------------------
+        It executes external commands via Python's subprocess module.
+        It ensures the device has root privileges when required.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         subprocess.run('adb root', shell=True)
 
     def remount(self):
+        """
+        Remount.
+
+        -------------------------
+        It executes external commands via Python's subprocess module.
+        It remounts the device's file system with write permissions.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         subprocess.run('adb remount', shell=True)
 
     def reboot(self):
+        """
+        Reboot.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         self.checkoutput_shell('reboot')
         self.wait_devices()
 
     def back(self):
+        """
+        Back.
+
+        -------------------------
+        It sends key events to the device using ADB.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         self.keyevent("KEYCODE_BACK")
 
     def app_switch(self):
+        """
+        App switch.
+
+        -------------------------
+        It sends key events to the device using ADB.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         self.keyevent("KEYCODE_APP_SWITCH")
 
     def app_stop(self, app_name):
+        """
+        App stop.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+        It logs information for debugging or monitoring purposes.
+
+        -------------------------
+        Parameters
+        -------------------------
+        app_name : Any
+            Name of the application package.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         logging.info("Stop app(%s)" % app_name)
         self.checkoutput("am force-stop %s" % app_name)
-        # self.kill_logcat_pid()
 
     def clear_app_data(self, app_name):
+        """
+        Clear app data.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+
+        -------------------------
+        Parameters
+        -------------------------
+        app_name : Any
+            Name of the application package.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         self.checkoutput(f"pm clear {app_name}")
 
     def expand_logcat_capacity(self):
+        """
+        Expand logcat capacity.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         self.checkoutput("logcat -G 40m")
         self.checkoutput("renice -n -50 `pidof logd`")
 
     def delete(self, times=1):
+        """
+        Delete.
+
+        -------------------------
+        It sends key events to the device using ADB.
+
+        -------------------------
+        Parameters
+        -------------------------
+        times : Any
+            Number of repetitions for the action.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         remain = times
         batch = 64
         while remain > 0:
-            # way faster delete
             self.keyevent("67 " * batch)
             remain -= batch
 
     def tap(self, x, y):
+        """
+        Tap.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+        It simulates user input on the device's screen (tap, swipe, or text entry).
+
+        -------------------------
+        Parameters
+        -------------------------
+        x : Any
+            Horizontal coordinate on the device screen.
+        y : Any
+            Vertical coordinate on the device screen.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         self.checkoutput_term(self.ADB_S + self.serialnumber + " shell input tap " + str(x) + " " + str(y))
 
     def swipe(self, x_start, y_start, x_end, y_end, duration):
+        """
+        Swipe.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+        It simulates user input on the device's screen (tap, swipe, or text entry).
+
+        -------------------------
+        Parameters
+        -------------------------
+        x_start : Any
+            Starting horizontal coordinate for a swipe gesture.
+        y_start : Any
+            Starting vertical coordinate for a swipe gesture.
+        x_end : Any
+            Ending horizontal coordinate for a swipe gesture.
+        y_end : Any
+            Ending vertical coordinate for a swipe gesture.
+        duration : Any
+            Duration of the swipe gesture in milliseconds.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         self.checkoutput_term(self.ADB_S + self.serialnumber + " shell input swipe " + str(x_start) +
                               " " + str(y_start) + " " + str(x_end) + " " + str(y_end) + " " + str(duration))
 
     def text(self, text):
+        """
+        Text.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+        It simulates user input on the device's screen (tap, swipe, or text entry).
+
+        -------------------------
+        Parameters
+        -------------------------
+        text : Any
+            Text to input into the device.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         if isinstance(text, int):
             text = str(text)
         self.checkoutput_term(self.ADB_S + self.serialnumber + " shell input text " + text)
 
     def clear_logcat(self):
+        """
+        Clear logcat.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         self.checkoutput_term(self.ADB_S + self.serialnumber + " logcat -b all -c")
 
     def save_logcat(self, filepath, tag=''):
+        """
+        Save logcat.
+
+        -------------------------
+        It executes external commands via Python's subprocess module.
+
+        -------------------------
+        Parameters
+        -------------------------
+        filepath : Any
+            Path of the file on the host machine where data should be saved.
+        tag : Any
+            Logcat tag used for filtering output.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         filepath = self.logdir + '/' + filepath
         logcat_file = open(filepath, 'w')
         if tag and ("grep -E" not in tag) and ("all" not in tag):
@@ -203,35 +630,86 @@ class adb(dut):
         return log, logcat_file
 
     def stop_save_logcat(self, log, filepath):
+        """
+        Stop save logcat.
+
+        -------------------------
+        It executes external commands via Python's subprocess module.
+        It logs information for debugging or monitoring purposes.
+
+        -------------------------
+        Parameters
+        -------------------------
+        log : Any
+            Popen object representing a running logcat process.
+        filepath : Any
+            Path of the file on the host machine where data should be saved.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         if not isinstance(log, subprocess.Popen):
             logging.warning('pls pass in the popen object')
             return 'pls pass in the popen object'
         if not isinstance(filepath, _io.TextIOWrapper):
             logging.warning('pls pass in the stream object')
             return 'pls pass int the stream object'
-        # subprocess.Popen.send_signal(signal.SIGINT)
         self.filter_logcat_pid()
         log.terminate()
         log.send_signal(signal.SIGINT)
-        # os.kill(log.pid, signal.SIGTERM)
         filepath.close()
 
     def filter_logcat_pid(self):
+        """
+        Filter logcat pid.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         p_lookup_logcat_thread_cmd = 'ps -e | grep logcat'
         output = self.checkoutput(p_lookup_logcat_thread_cmd)
         if 'logcat' in output:
             p_logcat_pid = re.search('(.*?) logcat', output, re.M | re.I).group(1).strip().split(" ")
-            # print(f"p_logcat_pid 1: {p_logcat_pid}")
-            # print(f"p_logcat_pid 1-1: {p_logcat_pid[9]}")
             if "S" in p_logcat_pid:
                 for one in p_logcat_pid:
                     if re.findall(r".*\d+", one):
-                        # print(f"p_logcat_pid 2: {one}")
                         self.checkoutput(f"kill -9 {one}")
                         break
         return output
 
     def start_activity(self, packageName, activityName, intentname=""):
+        """
+        Start activity.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+        It logs information for debugging or monitoring purposes.
+
+        -------------------------
+        Parameters
+        -------------------------
+        packageName : Any
+            The ``packageName`` parameter.
+        activityName : Any
+            The ``activityName`` parameter.
+        intentname : Any
+            The ``intentname`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         try:
             self.app_stop(packageName)
         except Exception as e:
@@ -242,35 +720,108 @@ class adb(dut):
                               " shell am start -a " + intentname + " -n " + packageName + "/" + activityName)
 
     def pull(self, filepath, destination):
+        """
+        Pull.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+
+        -------------------------
+        Parameters
+        -------------------------
+        filepath : Any
+            Path of the file on the host machine where data should be saved.
+        destination : Any
+            The ``destination`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         self.checkoutput_term(self.ADB_S + self.serialnumber +
                               " pull " + filepath + " " + destination)
 
     def push(self, filepath, destination):
+        """
+        Push.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+        It logs information for debugging or monitoring purposes.
+
+        -------------------------
+        Parameters
+        -------------------------
+        filepath : Any
+            Path of the file on the host machine where data should be saved.
+        destination : Any
+            The ``destination`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         logging.info(self.ADB_S + self.serialnumber +
                      " push " + filepath + " " + destination)
         self.checkoutput_term(self.ADB_S + self.serialnumber +
                               " push " + filepath + " " + destination)
 
     def shell(self, cmd):
+        """
+        Shell.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+
+        -------------------------
+        Parameters
+        -------------------------
+        cmd : Any
+            Command string to parse or execute.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         self.checkoutput_term(self.ADB_S + self.serialnumber + " shell " + cmd)
 
     def ping(self, interface=None, hostname="www.baidu.com",
              interval_in_seconds=1, ping_time_in_seconds=5,
              timeout_in_seconds=10, size_in_bytes=None):
-        """Can ping the given hostname without any packet loss
+        """
+        Ping.
 
-        Args:
-            hostname (str, optional): ip or URL of the host to ping
-            interval_in_seconds (float, optional): Time interval between
-                                                   pings in seconds
-            ping_time_in_seconds (int, optional)  : How many seconds to ping
-            timeout_in_seconds (int, optional): wait time for this method to
-                                                finish
-            size_in_bytes (int, optional): Ping packet size in bytes
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+        It logs information for debugging or monitoring purposes.
 
-        Returns:
-            dict: Keys: 'sent' and 'received', values are the packet count.
-                  Empty dictionary if ping failed
+        -------------------------
+        Parameters
+        -------------------------
+        interface : Any
+            The ``interface`` parameter.
+        hostname : Any
+            The ``hostname`` parameter.
+        interval_in_seconds : Any
+            The ``interval_in_seconds`` parameter.
+        ping_time_in_seconds : Any
+            The ``ping_time_in_seconds`` parameter.
+        timeout_in_seconds : Any
+            The ``timeout_in_seconds`` parameter.
+        size_in_bytes : Any
+            The ``size_in_bytes`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
         """
         ping_output = {}
         if not (hostname and isinstance(hostname, str)):
@@ -279,8 +830,6 @@ class adb(dut):
         p_conf_wifi_ping_count = 5
         count = int(p_conf_wifi_ping_count / interval_in_seconds)
         timeout_in_seconds += p_conf_wifi_ping_count
-        # Changing count based on the interval, so that it always finishes
-        # in ping_time seconds
 
         p_conf_wifi_ping_pass_percentage = 0
         ping_pass_percentage = int(count * p_conf_wifi_ping_pass_percentage * 0.01)
@@ -301,15 +850,12 @@ class adb(dut):
             output = self.checkoutput(cmd)
         except Exception as e:
             output = str(e)
-        # rc, result = self.run_shell_cmd(cmd,  timeout=timeout_in_seconds)
         RE_PING_STATUS = re.compile(
             r".*(---.+ping statistics ---\s+\d+ packets transmitted, \d+ received, "
             r"(?:\+\d+ duplicates, )?(\d+)% packet loss, time.+ms\s*?rtt\s+?"
             r"min/avg/max/mdev)\s+?=\s+?(\d+(\.\d+)?)/(\d+(\.\d+)?)/(\d+(\.\d+)?)"
             r"/(\d+(\.\d+)?)\s+?ms.*?")
         match = RE_PING_STATUS.search(output)
-        # logging.info(output)
-        # logging.info(match)
         ping_output['duplicates'] = 0
         if match:
             stats = match.group(1).split('\n')[1].split(',')
@@ -329,15 +875,72 @@ class adb(dut):
             return False
 
     def check_apk_exist(self, package_name):
+        """
+        Check apk exist.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+
+        -------------------------
+        Parameters
+        -------------------------
+        package_name : Any
+            The ``package_name`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         return True if package_name in self.checkoutput('pm list packages') else False
 
     def install_apk(self, apk_path):
+        """
+        Install apk.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+        It logs information for debugging or monitoring purposes.
+
+        -------------------------
+        Parameters
+        -------------------------
+        apk_path : Any
+            The ``apk_path`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         apk_path = os.path.join(os.getcwd(), 'res\\' + apk_path)
         cmd = f'install -r -t {apk_path}'
         logging.info(cmd)
         return self.checkoutput_shell(cmd)
 
     def uninstall_apk(self, apk_name):
+        """
+        Uninstall apk.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+        It logs information for debugging or monitoring purposes.
+        It introduces delays to allow the device to process commands.
+
+        -------------------------
+        Parameters
+        -------------------------
+        apk_name : Any
+            The ``apk_name`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         cmd = f'uninstall {apk_name}'
         logging.info(cmd)
         output = self.checkoutput_shell(cmd)
@@ -351,30 +954,96 @@ class adb(dut):
             return False
 
     def get_time(self, time=None):
+        """
+        Retrieve time.
+
+        -------------------------
+        Parameters
+        -------------------------
+        time : Any
+            The ``time`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         if (":" not in time[6:8]) and (":" not in time[9:11]) and (":" not in time[12:14]) and (
                 ":" not in time[15:18]) and ("." not in time[15:18]):
             th = int(time[6:8])
-            # print(th)
             tm = int(time[9:11])
-            # print(tm)
             ts = int(time[12:14])
-            # print(ts)
             tms = int()
             if "-" not in time[15:18]:
                 tms = int(time[15:18])
-            # print(tms)
-            # print(time)
             return (tms + ts * 1000 + tm * 60 * 1000 + th * 3600 * 1000) / 1000
-        # else:
-        #     return 0
 
     def getprop(self, key):
+        """
+        Getprop.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+
+        -------------------------
+        Parameters
+        -------------------------
+        key : Any
+            Key identifier for sending input events.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         return self.checkoutput('getprop %s' % key, )
 
     def rm(self, flags, path):
+        """
+        Rm.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+
+        -------------------------
+        Parameters
+        -------------------------
+        flags : Any
+            The ``flags`` parameter.
+        path : Any
+            The ``path`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         self.checkoutput_term(self.ADB_S + self.serialnumber + " shell rm " + flags + " " + path)
 
     def uiautomator_dump(self, filepath='', uiautomator_type='u2'):
+        """
+        Uiautomator dump.
+
+        -------------------------
+        It logs information for debugging or monitoring purposes.
+
+        -------------------------
+        Parameters
+        -------------------------
+        filepath : Any
+            Path of the file on the host machine where data should be saved.
+        uiautomator_type : Any
+            The ``uiautomator_type`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         if not filepath:
             filepath = self.logdir
         logging.debug('doing uiautomator dump')
@@ -391,6 +1060,15 @@ class adb(dut):
         logging.debug('uiautomator dump done')
 
     def get_dump_info(self):
+        """
+        Retrieve dump info.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         path = self.logdir + self.DUMP_FILE if os.path.exists(
             self.logdir + self.DUMP_FILE) else self.logdir + '/view.xml'
         with open(path, 'r', encoding='utf-8') as f:
@@ -398,10 +1076,44 @@ class adb(dut):
         return temp
 
     def expand_notifications(self):
+        """
+        Expand notifications.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         self.checkoutput_term(self.ADB_S + self.serialnumber + " shell cmd statusbar expand-notifications")
 
     def _screencap(self, filepath, layer="osd", app_level=28):
+        """
+        Screencap.
 
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+        It logs information for debugging or monitoring purposes.
+
+        -------------------------
+        Parameters
+        -------------------------
+        filepath : Any
+            Path of the file on the host machine where data should be saved.
+        layer : Any
+            The ``layer`` parameter.
+        app_level : Any
+            The ``app_level`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         if layer == "osd":
             self.checkoutput_term(self.ADB_S + self.serialnumber + " shell screencap -p " + filepath)
         else:
@@ -418,6 +1130,28 @@ class adb(dut):
                 logging.info("please check the set screen layer arg")
 
     def screenshot(self, destination, layer="osd", app_level=28):
+        """
+        Screenshot.
+
+        -------------------------
+        It introduces delays to allow the device to process commands.
+
+        -------------------------
+        Parameters
+        -------------------------
+        destination : Any
+            The ``destination`` parameter.
+        layer : Any
+            The ``layer`` parameter.
+        app_level : Any
+            The ``app_level`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         if layer == "osd":
             devicePath = "/sdcard/screen.png"
             destination = self.logdir + "/" + "screencap_" + destination + ".png"
@@ -439,6 +1173,31 @@ class adb(dut):
             self.rm("-r", dirs)
 
     def continuous_screenshot(self, destination, layer="osd+video", app_level=30, screenshot_counter=3):
+        """
+        Continuous screenshot.
+
+        -------------------------
+        It logs information for debugging or monitoring purposes.
+        It introduces delays to allow the device to process commands.
+
+        -------------------------
+        Parameters
+        -------------------------
+        destination : Any
+            The ``destination`` parameter.
+        layer : Any
+            The ``layer`` parameter.
+        app_level : Any
+            The ``app_level`` parameter.
+        screenshot_counter : Any
+            The ``screenshot_counter`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         dirs = self.mkdir_temp()
         if app_level > 28 and screenshot_counter > 1 and (layer == "video" or layer == self.OSD_VIDEO_LAYER):
             self.screencatch(layer, screenshot_counter)
@@ -455,7 +1214,26 @@ class adb(dut):
         self.rm("-r", dirs)
 
     def screencatch(self, layer="osd+video", counter=1):
+        """
+        Screencatch.
 
+        -------------------------
+        It logs information for debugging or monitoring purposes.
+
+        -------------------------
+        Parameters
+        -------------------------
+        layer : Any
+            The ``layer`` parameter.
+        counter : Any
+            The ``counter`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         if layer == self.OSD_VIDEO_LAYER:
             capture_type = "1"
         else:
@@ -466,17 +1244,37 @@ class adb(dut):
 
     def video_record(self, destination, app_level=28, record_time=30, sleep_time=30,
                      frame=30, bits=4000000, type=1):
-        '''
-        video record 后pull到logdir目录下 (the command maybe is not ok when record security video,
-                                          example youtube/googleMovies DRM security video)
-        Android R support args, Android P not support args just can use tspacktest command
-        tspacktest [-h] [-f <framerate>] [-b <bitrate>] [-t <type>] [-s <second>] [<width> <height>]
-            Args:
-               -f <framerate>: frame per second, unit bps, default as 30
-               -b <bitrate>  : bits per second, unit bit, default as 4000000
-               -t <type>     : select video-only(0) or video+osd(1), default as video+osd
-               -s <second>   : record times, unit second(s), default as 30
-        '''
+        """
+        Video record.
+
+        -------------------------
+        It logs information for debugging or monitoring purposes.
+        It introduces delays to allow the device to process commands.
+
+        -------------------------
+        Parameters
+        -------------------------
+        destination : Any
+            The ``destination`` parameter.
+        app_level : Any
+            The ``app_level`` parameter.
+        record_time : Any
+            The ``record_time`` parameter.
+        sleep_time : Any
+            The ``sleep_time`` parameter.
+        frame : Any
+            The ``frame`` parameter.
+        bits : Any
+            The ``bits`` parameter.
+        type : Any
+            Type specifier for the UI automation tool (e.g., "u2").
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         destination = self.logdir + "/" + "video_record_" + destination + ".ts"
         dirs = self.mkdir_temp()
         if app_level <= 28:
@@ -494,6 +1292,19 @@ class adb(dut):
         self.rm("-r", dirs)
 
     def mkdir_temp(self):
+        """
+        Mkdir temp.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+        It ensures the device has root privileges when required.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         self.root()
         dirs = '/data/temp'
         temp = self.checkoutput("ls /data")
@@ -503,6 +1314,26 @@ class adb(dut):
         return dirs
 
     def check_adb_status(self, waitTime=100):
+        """
+        Check ADB status.
+
+        -------------------------
+        It executes external commands via Python's subprocess module.
+        It logs information for debugging or monitoring purposes.
+        It introduces delays to allow the device to process commands.
+
+        -------------------------
+        Parameters
+        -------------------------
+        waitTime : Any
+            The ``waitTime`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         i = 0
         waitCnt = waitTime / 5
         while i < waitCnt:
@@ -520,6 +1351,28 @@ class adb(dut):
         return False
 
     def wait_and_tap(self, searchKey, attribute, times=5):
+        """
+        Wait for and tap.
+
+        -------------------------
+        It introduces delays to allow the device to process commands.
+
+        -------------------------
+        Parameters
+        -------------------------
+        searchKey : Any
+            The ``searchKey`` parameter.
+        attribute : Any
+            The ``attribute`` parameter.
+        times : Any
+            Number of repetitions for the action.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         for _ in range(times):
             if self.find_element(searchKey, attribute):
                 self.find_and_tap(searchKey, attribute)
@@ -527,19 +1380,60 @@ class adb(dut):
             time.sleep(1)
 
     def wait_element(self, searchKey, attribute):
+        """
+        Wait for element.
+
+        -------------------------
+        It introduces delays to allow the device to process commands.
+
+        -------------------------
+        Parameters
+        -------------------------
+        searchKey : Any
+            The ``searchKey`` parameter.
+        attribute : Any
+            The ``attribute`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         for _ in range(5):
             if self.find_element(searchKey, attribute):
                 return 1
             time.sleep(1)
 
     def find_element(self, searchKey, attribute, extractKey=None):
+        """
+        Find element.
+
+        -------------------------
+        It logs information for debugging or monitoring purposes.
+
+        -------------------------
+        Parameters
+        -------------------------
+        searchKey : Any
+            The ``searchKey`` parameter.
+        attribute : Any
+            The ``attribute`` parameter.
+        extractKey : Any
+            The ``extractKey`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         logging.info(f'find {searchKey}')
         filepath = os.path.join(self.logdir, self.DUMP_FILE)
         self.uiautomator_dump(filepath)
         xml_file = minidom.parse(filepath)
         itemlist = xml_file.getElementsByTagName('node')
         for item in itemlist:
-            # print(item.attributes[attribute].value)
             if searchKey == item.attributes[attribute].value:
                 logging.info(
                     item.attributes[attribute].value if extractKey is None else item.attributes[extractKey].value)
@@ -547,6 +1441,26 @@ class adb(dut):
         return None
 
     def find_pos(self, searchKey, attribute):
+        """
+        Find pos.
+
+        -------------------------
+        It logs information for debugging or monitoring purposes.
+
+        -------------------------
+        Parameters
+        -------------------------
+        searchKey : Any
+            The ``searchKey`` parameter.
+        attribute : Any
+            The ``attribute`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         logging.info('find_pos')
         filepath = self.logdir + self.DUMP_FILE
         self.uiautomator_dump(filepath)
@@ -562,8 +1476,6 @@ class adb(dut):
             logging.error("attr: %s not found" % attribute)
             return -1, -1
         bounds = re.findall(r'\[(\d+)\,(\d+)\]', bounds)
-        # good for debugging button press coordinates
-        # print(bounds)
         x_start, y_start = bounds[0]
         x_end, y_end = bounds[1]
         x_midpoint, y_midpoint = (int(x_start) + int(x_end)) / 2, (int(y_start) + int(y_end)) / 2
@@ -571,14 +1483,60 @@ class adb(dut):
         return (x_midpoint, y_midpoint)
 
     def find_and_tap(self, searchKey, attribute):
+        """
+        Find and tap.
+
+        -------------------------
+        It logs information for debugging or monitoring purposes.
+        It simulates user input on the device's screen (tap, swipe, or text entry).
+        It introduces delays to allow the device to process commands.
+
+        -------------------------
+        Parameters
+        -------------------------
+        searchKey : Any
+            The ``searchKey`` parameter.
+        attribute : Any
+            The ``attribute`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         logging.info(f'find_and_tap {searchKey}')
         x_midpoint, y_midpoint = self.find_pos(searchKey, attribute)
         if (x_midpoint, y_midpoint) != (-1, -1):
             self.tap(x_midpoint, y_midpoint)
-            # time.sleep(1)
         return x_midpoint, y_midpoint
 
     def text_entry(self, text, searchKey, attribute, delete=64):
+        """
+        Text entry.
+
+        -------------------------
+        It sends key events to the device using ADB.
+        It simulates user input on the device's screen (tap, swipe, or text entry).
+
+        -------------------------
+        Parameters
+        -------------------------
+        text : Any
+            Text to input into the device.
+        searchKey : Any
+            The ``searchKey`` parameter.
+        attribute : Any
+            The ``attribute`` parameter.
+        delete : Any
+            The ``delete`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         filepath = self.logdir + self.DUMP_FILE
         self.uiautomator_dump(filepath)
         xml_file = minidom.parse(filepath)
@@ -598,21 +1556,29 @@ class adb(dut):
 
         self.tap(x_midpoint, y_midpoint)
 
-        # move to the end, and delete characters
-        # TODO. This should be a select-all and delete but there is no easy way
-        # to do this
         self.keyevent("KEYCODE_MOVE_END")
         self.delete(delete)
 
-        # enter the text
         self.text(text)
 
-        # hit enter
         self.keyevent("KEYCODE_ENTER")
         return x_midpoint, y_midpoint
 
     @classmethod
     def wait_power(cls):
+        """
+        Wait for power.
+
+        -------------------------
+        It executes external commands via Python's subprocess module.
+        It introduces delays to allow the device to process commands.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         for i in range(10):
             info = subprocess.check_output("adb devices", shell=True, encoding='utf-8')
             devices = re.findall(r'\n(.*?)\s+device', info, re.S)
@@ -623,6 +1589,20 @@ class adb(dut):
             assert False, "Can't find any device"
 
     def wait_devices(self):
+        """
+        Wait for devices.
+
+        -------------------------
+        It executes external commands via Python's subprocess module.
+        It logs information for debugging or monitoring purposes.
+        It introduces delays to allow the device to process commands.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         count = 0
 
         while subprocess.run(f'adb -s {self.serialnumber} shell getprop sys.boot_completed'.split(),
@@ -637,7 +1617,6 @@ class adb(dut):
             if count % 10 == 0:
                 logging.info('devices not exists')
             self.set_status_off()
-            # subprocess.check_output('adb connect {}'.format(self.serialnumber), shell=True, encoding='utf-8')
             time.sleep(5)
             count += 1
             if count > 20:
@@ -646,46 +1625,185 @@ class adb(dut):
         self.set_status_on()
 
     def kill_logcat_pid(self):
+        """
+        Kill logcat pid.
+
+        -------------------------
+        It executes external commands via Python's subprocess module.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         self.subprocess_run("killall logcat")
 
-    # @connect_again
     def popen(self, command):
+        """
+        Popen.
+
+        -------------------------
+        It logs information for debugging or monitoring purposes.
+
+        -------------------------
+        Parameters
+        -------------------------
+        command : Any
+            The ``command`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         logging.debug(f"command:{self.ADB_S + self.serialnumber + ' ' + command}")
         cmd = self.ADB_S + self.serialnumber + ' ' + command
         return self.popen_term(cmd)
 
     def popen_term(self, command):
+        """
+        Popen term.
+
+        -------------------------
+        It executes external commands via Python's subprocess module.
+
+        -------------------------
+        Parameters
+        -------------------------
+        command : Any
+            The ``command`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         return subprocess.Popen(command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        # preexec_fn=os.setsid)
 
     def checkoutput(self, command):
+        """
+        Checkoutput.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+
+        -------------------------
+        Parameters
+        -------------------------
+        command : Any
+            The ``command`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         command = 'shell ' + f'"{command}"'
         return self.checkoutput_shell(command)
 
     @connect_again
     def checkoutput_shell(self, command):
+        """
+        Checkoutput shell.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+
+        -------------------------
+        Parameters
+        -------------------------
+        command : Any
+            The ``command`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         command = self.ADB_S + self.serialnumber + ' ' + command
         return self.checkoutput_term(command)
 
     @connect_again
     def subprocess_run(self, command):
+        """
+        Subprocess run.
+
+        -------------------------
+        It executes external commands via Python's subprocess module.
+
+        -------------------------
+        Parameters
+        -------------------------
+        command : Any
+            The ``command`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         if not isinstance(command, list):
             command = (self.ADB_S + self.serialnumber + ' shell ' + command).split()
         return subprocess.run(command, stdout=subprocess.PIPE, encoding='utf-8').stdout
 
     def open_omx_info(self):
+        """
+        Open omx info.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         self.checkoutput("setprop media.omx.log_levels 255")
         self.checkoutput("setprop vendor.media.omx.log_levels 255")
         self.checkoutput("setprop debug.stagefright.omx-debug 5")
         self.checkoutput("setprop vendor.mediahal.loglevels 255")
 
     def close_omx_info(self):
+        """
+        Close omx info.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         self.checkoutput("setprop media.omx.log_levels 0")
         self.checkoutput("setprop vendor.media.omx.log_levels 0")
         self.checkoutput("setprop debug.stagefright.omx-debug 0")
         self.checkoutput("setprop vendor.mediahal.loglevels 0")
 
     def factory_reset_bootloader(self):
+        """
+        Factory reset bootloader.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+        It executes external commands via Python's subprocess module.
+        It logs information for debugging or monitoring purposes.
+        It introduces delays to allow the device to process commands.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         self.checkoutput_term('adb reboot bootloader')
         self.set_status_off()
         for i in range(10):
@@ -705,16 +1823,59 @@ class adb(dut):
         time.sleep(120)
 
     def apk_enable(self, packageName):
+        """
+        Apk enable.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+
+        -------------------------
+        Parameters
+        -------------------------
+        packageName : Any
+            The ``packageName`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         output = self.checkoutput(f'pm enable {packageName}')
         return output
 
     def check_cmd_wifi(self):
+        """
+        Check cmd Wi‑Fi.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         try:
             return 'connect-network' in self.checkoutput("cmd wifi -h")
         except Exception:
             return False
 
     def set_wifi_enabled(self):
+        """
+        Set Wi‑Fi enabled.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+        It logs information for debugging or monitoring purposes.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         output = self.checkoutput("ifconfig")
         if "wlan0" not in output:
             self.checkoutput("cmd wifi set-wifi-enabled enabled")
@@ -722,11 +1883,52 @@ class adb(dut):
             logging.debug("wifi has opened,no need to open wifi")
 
     def set_wifi_disabled(self):
+        """
+        Set Wi‑Fi disabled.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+        It logs information for debugging or monitoring purposes.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         output = self.checkoutput("cmd wifi set-wifi-enabled disabled")
         if "wlan0" not in output:
             logging.debug("wifi has closed")
 
     def _android_connect_wifi(self, ssid: str, pwd: str, security: str, hide: bool, lan=True) -> bool:
+        """
+        Android connect Wi‑Fi.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+        It logs information for debugging or monitoring purposes.
+        It introduces delays to allow the device to process commands.
+
+        -------------------------
+        Parameters
+        -------------------------
+        ssid : Any
+            The ``ssid`` parameter.
+        pwd : Any
+            The ``pwd`` parameter.
+        security : Any
+            The ``security`` parameter.
+        hide : Any
+            The ``hide`` parameter.
+        lan : Any
+            The ``lan`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        bool
+            A value of type ``bool``.
+        """
         command = self.CMD_WIFI_CONNECT.format(ssid, security, pwd)
         if hide:
             command += self.CMD_WIFI_HIDE
@@ -746,6 +1948,19 @@ class adb(dut):
         return connect_status
 
     def check_wifi_driver(self):
+        """
+        Check Wi‑Fi driver.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+        It logs information for debugging or monitoring purposes.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         self.clear_logcat()
         file_list = self.checkoutput("ls /vendor/lib/modules")
         if 'vlsicomm.ko' in file_list:
@@ -756,10 +1971,22 @@ class adb(dut):
             return False
 
     def get_mcs_rx(self):
+        """
+        Retrieve mcs rx.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+        It logs information for debugging or monitoring purposes.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         try:
             self.checkoutput(self.MCS_RX_GET_COMMAND)
             mcs_info = self.checkoutput(self.DMESG_COMMAND)
-            # logging.debug(mcs_info)
             result = re.findall(r'RX rate info for \w\w:\w\w:\w\w:\w\w:\w\w:\w\w:(.*?)Last received rate', mcs_info,
                                 re.S)
             result_list = []
@@ -776,9 +2003,21 @@ class adb(dut):
             return 'mcs_rx'
 
     def get_mcs_tx(self):
+        """
+        Retrieve mcs tx.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+        It logs information for debugging or monitoring purposes.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         try:
             mcs_info = self.checkoutput(self.DMESG_COMMAND)
-            # logging.debug(mcs_info)
             result = re.findall(r'TX rate info for \w\w:\w\w:\w\w:\w\w:\w\w:\w\w:(.*?)MPDUs AMPDUs AvLen trialP',
                                 mcs_info,
                                 re.S)
@@ -795,6 +2034,19 @@ class adb(dut):
             return 'mcs_tx'
 
     def get_tx_bitrate(self):
+        """
+        Retrieve tx bitrate.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+        It ensures the device has root privileges when required.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         try:
             self.root()
             result = self.checkoutput(self.IW_LINNK_COMMAND)
@@ -804,9 +2056,29 @@ class adb(dut):
             return 'Data Error'
 
     def wait_for_wifi_service(self, type='wlan0', recv='Link encap') -> None:
-        # Wait for Wi-Fi network is available
+        """
+        Wait for for Wi‑Fi service.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+        It logs information for debugging or monitoring purposes.
+        It introduces delays to allow the device to process commands.
+
+        -------------------------
+        Parameters
+        -------------------------
+        type : Any
+            Type specifier for the UI automation tool (e.g., "u2").
+        recv : Any
+            The ``recv`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            A value of type ``None``.
+        """
         count = 0
-        # time.sleep(10)
         while True:
             info = self.checkoutput(f'ifconfig {type}')
             logging.info(info)
@@ -818,6 +2090,19 @@ class adb(dut):
                 raise EnvironmentError('Lost device')
 
     def wait_for_launcher(self) -> None:
+        """
+        Wait for for launcher.
+
+        -------------------------
+        It logs information for debugging or monitoring purposes.
+        It introduces delays to allow the device to process commands.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            A value of type ``None``.
+        """
         log = self.popen('logcat')
         while True:
             try:
@@ -832,6 +2117,18 @@ class adb(dut):
         log.send_signal(signal.SIGINT)
 
     def enter_wifi_activity(self) -> None:
+        """
+        Enter Wi‑Fi activity.
+
+        -------------------------
+        It logs information for debugging or monitoring purposes.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            A value of type ``None``.
+        """
         self.app_stop(self.SETTING_ACTIVITY_TUPLE[0])
         logging.info('Enter wifi activity')
         self.start_activity(*self.SETTING_ACTIVITY_TUPLE)
@@ -843,6 +2140,18 @@ class adb(dut):
         self.wait_element('Wi-Fi', 'text')
 
     def enter_hotspot(self) -> None:
+        """
+        Enter hotspot.
+
+        -------------------------
+        It sends key events to the device using ADB.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            A value of type ``None``.
+        """
         self.start_activity(*self.SETTING_ACTIVITY_TUPLE)
         self.wait_element('Network & Internet', 'text')
         self.wait_and_tap('Network & Internet', 'text')
@@ -851,6 +2160,18 @@ class adb(dut):
         self.wait_and_tap('HotSpot', 'text')
 
     def open_hotspot(self) -> None:
+        """
+        Open hotspot.
+
+        -------------------------
+        It introduces delays to allow the device to process commands.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            A value of type ``None``.
+        """
         self.enter_hotspot()
         self.wait_element('Portable HotSpot Enabled', 'text')
         self.uiautomator_dump()
@@ -866,6 +2187,18 @@ class adb(dut):
                 raise EnvironmentError("Can't open hotspot")
 
     def close_hotspot(self) -> None:
+        """
+        Close hotspot.
+
+        -------------------------
+        It introduces delays to allow the device to process commands.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            A value of type ``None``.
+        """
         self.kill_setting()
         self.enter_hotspot()
         self.wait_element('Portable HotSpot Enabled', 'text')
@@ -882,14 +2215,55 @@ class adb(dut):
                 raise EnvironmentError("Can't close hotspot")
 
     def kill_setting(self) -> None:
+        """
+        Kill setting.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            A value of type ``None``.
+        """
         self.app_stop(self.SETTING_ACTIVITY_TUPLE[0])
 
     def kill_moresetting(self) -> None:
+        """
+        Kill moresetting.
+
+        -------------------------
+        It sends key events to the device using ADB.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            A value of type ``None``.
+        """
         for i in range(5):
             self.keyevent(4)
         self.kill_setting()
 
     def find_ssid(self, ssid) -> bool:
+        """
+        Find ssid.
+
+        -------------------------
+        It logs information for debugging or monitoring purposes.
+        It sends key events to the device using ADB.
+        It introduces delays to allow the device to process commands.
+
+        -------------------------
+        Parameters
+        -------------------------
+        ssid : Any
+            The ``ssid`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        bool
+            A value of type ``bool``.
+        """
         self.enter_wifi_activity()
         logging.info('enter activity done')
         time.sleep(1)
@@ -923,16 +2297,53 @@ class adb(dut):
         return result
 
     def wait_keyboard(self):
+        """
+        Wait for keyboard.
+
+        -------------------------
+        It sends key events to the device using ADB.
+        It introduces delays to allow the device to process commands.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         for i in range(5):
             self.uiautomator_dump()
             if 'keyboard_area' in self.get_dump_info():  # or \
-                # '"com.android.tv.settings:id/guidedactions_item_title" class="android.widget.EditText"' in self.get_dump_info():
                 break
             else:
                 self.keyevent(23)
                 time.sleep(2)
 
     def connect_ssid_via_ui(self, ssid, passwd='', target="192.168.50") -> bool:
+        """
+        Connect ssid via ui.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+        It logs information for debugging or monitoring purposes.
+        It sends key events to the device using ADB.
+        It introduces delays to allow the device to process commands.
+
+        -------------------------
+        Parameters
+        -------------------------
+        ssid : Any
+            The ``ssid`` parameter.
+        passwd : Any
+            The ``passwd`` parameter.
+        target : Any
+            The ``target`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        bool
+            A value of type ``bool``.
+        """
         self.find_ssid(ssid)
         self.uiautomator_dump()
         if 'IP address' in self.get_dump_info():
@@ -947,7 +2358,6 @@ class adb(dut):
                     logging.info('try to input passwd')
                     self.u().d2(resourceId="com.android.tv.settings:id/guidedactions_item_title").clear_text()
                     time.sleep(1)
-                    # wifi.u().d2(resourceId="com.android.tv.settings:id/guidedactions_item_title").click()
                     self.checkoutput(f'input text {passwd}')
                     time.sleep(1)
                     self.uiautomator_dump()
@@ -961,18 +2371,74 @@ class adb(dut):
         return True
 
     def connect_save_ssid(self, ssid, target=''):
+        """
+        Connect save ssid.
+
+        -------------------------
+        Parameters
+        -------------------------
+        ssid : Any
+            The ``ssid`` parameter.
+        target : Any
+            The ``target`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         self.find_ssid(ssid)
         self.wait_and_tap('Connect', 'text')
         self.wait_for_wifi_address(target=target)
         return True
 
     def forget_ssid(self, ssid):
+        """
+        Forget ssid.
+
+        -------------------------
+        It introduces delays to allow the device to process commands.
+
+        -------------------------
+        Parameters
+        -------------------------
+        ssid : Any
+            The ``ssid`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         self.find_ssid(ssid)
         self.wait_and_tap('Forget network', 'text')
         self.wait_and_tap('OK', 'text')
         time.sleep(1)
 
     def wait_ssid_cmd(self, ssid: str) -> None:
+        """
+        Wait for ssid cmd.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+        It executes external commands via Python's subprocess module.
+        It logs information for debugging or monitoring purposes.
+        It introduces delays to allow the device to process commands.
+
+        -------------------------
+        Parameters
+        -------------------------
+        ssid : Any
+            The ``ssid`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            A value of type ``None``.
+        """
         self.checkoutput('cmd wifi start-scan')
         scan_list = self.subprocess_run(f'cmd wifi list-scan-results |grep "{ssid}"')
         step = 0
@@ -987,12 +2453,40 @@ class adb(dut):
                 assert False, "hotspot can't be found"
 
     def wait_ssid_disapper_cmd(self, ssid: str) -> None:
+        """
+        Wait for ssid disapper cmd.
+
+        -------------------------
+        Parameters
+        -------------------------
+        ssid : Any
+            The ``ssid`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            A value of type ``None``.
+        """
         try:
             self.wait_ssid_cmd(ssid)
         except AssertionError as e:
             assert "hotspot can't be found" in e, "hotspot still can be found"
 
     def change_keyboard_language(self) -> None:
+        """
+        Change keyboard language.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+        It sends key events to the device using ADB.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            A value of type ``None``.
+        """
         self.install_apk('ADBKeyboard.apk')
         self.start_activity(*self.SETTING_ACTIVITY_TUPLE)
         for i in range(5):
@@ -1008,9 +2502,43 @@ class adb(dut):
             self.keyevent(4)
 
     def reset_keyboard_language(self) -> None:
+        """
+        Reset keyboard language.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            A value of type ``None``.
+        """
         self.uninstall_apk('com.android.adbkeyboard')
 
     def add_network(self, ssid, type, passwd='') -> None:
+        """
+        Add network.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+        It sends key events to the device using ADB.
+        It simulates user input on the device's screen (tap, swipe, or text entry).
+        It introduces delays to allow the device to process commands.
+
+        -------------------------
+        Parameters
+        -------------------------
+        ssid : Any
+            The ``ssid`` parameter.
+        type : Any
+            Type specifier for the UI automation tool (e.g., "u2").
+        passwd : Any
+            The ``passwd`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            A value of type ``None``.
+        """
         self.enter_wifi_activity()
         time.sleep(2)
         self.wait_and_tap('Add new network', 'text')
@@ -1032,6 +2560,15 @@ class adb(dut):
         return True
 
     def open_wifi(self) -> None:
+        """
+        Open Wi‑Fi.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            A value of type ``None``.
+        """
         self.enter_wifi_activity()
         self.wait_element('Wi-Fi', 'text')
         self.uiautomator_dump()
@@ -1041,16 +2578,39 @@ class adb(dut):
         self.kill_setting()
 
     def close_wifi(self) -> None:
+        """
+        Close Wi‑Fi.
+
+        -------------------------
+        It logs information for debugging or monitoring purposes.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            A value of type ``None``.
+        """
         self.enter_wifi_activity()
         self.wait_element('Wi-Fi', 'text')
         self.uiautomator_dump()
-        # logging.info(self.get_dump_info())
         if 'Available networks' in self.get_dump_info():
             self.wait_and_tap('Wi-Fi', 'text')
         self.wait_element('IP settings', 'text')
         self.kill_setting()
 
     def get_wifi_hw_addr(self) -> str:
+        """
+        Retrieve Wi‑Fi hw addr.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+
+        -------------------------
+        Returns
+        -------------------------
+        str
+            A value of type ``str``.
+        """
         hw_addr = self.checkoutput('ifconfig wlan0')
         hw_addr = re.findall(r'HWaddr (.*?)  Driver', hw_addr, re.S)
         if hw_addr[0]:
@@ -1059,6 +2619,20 @@ class adb(dut):
             raise Exception("Can't get hw addr")
 
     def wait_router(self):
+        """
+        Wait for router.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+        It logs information for debugging or monitoring purposes.
+        It introduces delays to allow the device to process commands.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         ipaddress = self.checkoutput_term('ifconfig')
         count = 0
         while '192.168.50' not in ipaddress:
@@ -1070,17 +2644,39 @@ class adb(dut):
         logging.info('Router is power on')
 
     def playback_youtube(self, sleep_time=60, seek=False, seek_time=3):
+        """
+        Playback youtube.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+        It sends key events to the device using ADB.
+        It introduces delays to allow the device to process commands.
+
+        -------------------------
+        Parameters
+        -------------------------
+        sleep_time : Any
+            The ``sleep_time`` parameter.
+        seek : Any
+            The ``seek`` parameter.
+        seek_time : Any
+            The ``seek_time`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         try:
             self.checkoutput(self.PLAYERACTIVITY_REGU.format(self.VIDEO_TAG_LIST[0]['link']))
             time.sleep(10)
             if seek:
                 for _ in range(60 * 24):
-                    # Long right press
                     self.keyevent(23)
                     self.send_event(106, seek_time)
                     self.keyevent(23)
                     time.sleep(30)
-                    # Long left press
                     self.keyevent(23)
                     self.send_event(105, seek_time)
                     self.keyevent(23)
@@ -1092,6 +2688,31 @@ class adb(dut):
             ...
 
     def set_hotspot(self, ssid='', passwd='', type='', encrypt=''):
+        """
+        Set hotspot.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+        It sends key events to the device using ADB.
+
+        -------------------------
+        Parameters
+        -------------------------
+        ssid : Any
+            The ``ssid`` parameter.
+        passwd : Any
+            The ``passwd`` parameter.
+        type : Any
+            Type specifier for the UI automation tool (e.g., "u2").
+        encrypt : Any
+            The ``encrypt`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         if ssid:
             self.wait_and_tap("Hotspot name", "text")
             self.wait_element("android:id/edit", "resource-id")
@@ -1123,9 +2744,36 @@ class adb(dut):
             self.wait_element('AP Band', 'text')
 
     def get_hotspot_config(self):
+        """
+        Retrieve hotspot config.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         return self.checkoutput('cat /data/vendor/wifi/hostapd/hostapd_*.conf')
 
     def factory_reset_ui(self):
+        """
+        Factory reset ui.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+        It logs information for debugging or monitoring purposes.
+        It sends key events to the device using ADB.
+        It introduces delays to allow the device to process commands.
+
+        -------------------------
+        Returns
+        -------------------------
+        None
+            This method does not return a value.
+        """
         self.start_activity(*self.SETTING_ACTIVITY_TUPLE)
         self.wait_and_tap('Device Preferences', 'text')
         self.wait_and_tap('About', 'text')
@@ -1144,6 +2792,18 @@ class adb(dut):
         logging.info('device done')
 
     def get_hwaddr(self):
+        """
+        Retrieve hwaddr.
+
+        -------------------------
+        It runs shell commands on the target device using ADB helpers and captures the output.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         hwAddr = self.checkoutput('ifconfig wlan0')
         hwAddr = re.findall(r'HWaddr (.*?)  Driver', hwAddr, re.S)
         if hwAddr[0]:
@@ -1152,14 +2812,35 @@ class adb(dut):
             raise Exception("Can't get hw addr")
 
     def get_wifi_cmd(self, router_info):
+        """
+        Retrieve Wi‑Fi cmd.
+
+        -------------------------
+        It logs information for debugging or monitoring purposes.
+
+        -------------------------
+        Parameters
+        -------------------------
+        router_info : Any
+            The ``router_info`` parameter.
+
+        -------------------------
+        Returns
+        -------------------------
+        Any
+            The result produced by the function.
+        """
         type = 'wpa3' if 'WPA3' in router_info.security_mode else 'wpa2'
-        if router_info.security_mode.lower() in \
-                ['open', '不加密', '无', 'open system', '无加密(允许所有人连接)', 'none']:
+        # Treat several synonyms for unencrypted networks; Chinese labels removed
+        unencrypted_labels = ['open', 'unencrypted', 'none', 'open system',
+                              'unencrypted (allow all connections)']
+        if router_info.security_mode.lower() in unencrypted_labels:
             cmd = pytest.dut.CMD_WIFI_CONNECT.format(router_info.ssid, "open", "")
         else:
             cmd = pytest.dut.CMD_WIFI_CONNECT.format(router_info.ssid, type,
                                                      router_info.wpa_passwd)
-        if router_info.hide_ssid == '是':
+        # Hide SSID if the flag is set to a truthy value
+        if router_info.hide_ssid in ('yes', 'true', True):
             cmd += pytest.dut.CMD_WIFI_HIDE
         logging.info(f'conn wifi cmd :{cmd}')
         return cmd

@@ -1,13 +1,8 @@
-#!/usr/bin/env python 
-# encoding: utf-8 
-'''
-@author: chao.li
-@contact: chao.li@amlogic.com
-@software: pycharm
-@file: router_factory.py 
-@time: 2024/12/17 14:08 
-@desc: 
-'''
+"""
+Router factory
+
+This module is part of the AsusRouter package.
+"""
 
 from src.tools.router_tool.AsusRouter.Asusax86uControl import Asusax86uControl
 from src.tools.router_tool.AsusRouter.Asusax88uControl import Asusax88uControl
@@ -22,24 +17,26 @@ router_list = {
     'asusax86u': Asusax86uControl,
     'asusax88u': Asusax88uControl,
     'asusax88upro': Asusax88uProControl,
-    # 'asusax5400': Asusax5400Control,
-    # 'asusax6700': Asusax6700Control,
+
     'xiaomibe7000': XiaomiBe7000Control,
     'xiaomiax3600': Xiaomiax3600Control,
 }
 
 
 def get_router(router_name: str, address: str | None = None):
-    """根据路由器名称获取对应控制对象
-
-    Parameters
-    ----------
-    router_name: str
-        路由器名称
-    address: str | None
-        指定的网关地址，若为空则尝试从配置文件读取
     """
-
+        Get router
+            Parameters
+            ----------
+            router_name : object
+                Description of parameter 'router_name'.
+            address : object
+                The router's login address or IP address; if None, a default is used.
+            Returns
+            -------
+            object
+                Description of the returned value.
+    """
     if router_name not in router_list:
         raise ValueError("Doesn't support this router")
 

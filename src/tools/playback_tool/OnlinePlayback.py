@@ -1,69 +1,115 @@
-# !/usr/bin/env python
-# -*- coding: utf-8 -*-
-# @Time    : 2024/8/19 10:30
-# @Author  : chao.li
-# @File    : OnlinePlayback.p
-
 import logging
-
 import pytest
-
 from src.util.decorators import set_timeout
 
 
 class Online():
-    '''
-    Online video playback
+    """
+    Online
 
-    Attributes:
-        DECODE_TAG : logcat tag
-        DECODE_TAG_AndroidS : logcat tag
-        PLAYER_PACKAGE_TUPLE : player package tuple
+    Parameters
+    ----------
+    None
+        This class is instantiated without additional parameters.
 
-    '''
-
+    Returns
+    -------
+    None
+        Classes return instances implicitly when constructed.
+    """
     DECODE_TAG = 'AmlogicVideoDecoderAwesome'
     DECODE_TAG_AndroidS = 'VDA'
     PLAYER_PACKAGE_TUPLE = '', ''
 
     def __init__(self):
+        """
+        Init
+
+        Parameters
+        ----------
+        None
+            This function does not accept any parameters beyond the implicit context.
+
+        Returns
+        -------
+        None
+            This function does not return a value.
+        """
         ...
 
     def playback(self, activity, link):
-        '''
-        start apk
-        am start -n xxx
-        @param activity: activity name
-        @param link: video link
-        @return:
-        '''
+        """
+        Playback
+
+        Sends shell commands to the host or device and returns the output.
+        Interacts with the DUT via pytest to issue commands or key events.
+        Logs informational or warning messages for debugging and status reporting.
+
+        Parameters
+        ----------
+        activity : object
+            Activity component name used to launch an Android application.
+        link : object
+            Video identifier or URL used for media playback.
+
+        Returns
+        -------
+        None
+            This function does not return a value.
+        """
         logging.info(activity.format(link))
         pytest.dut.checkoutput(activity.format(link))
 
     def time_out(self):
-        '''
-        kill logcat process
-        clear logcat
-        @return:
-        '''
+        """
+        Time out
+
+        Logs informational or warning messages for debugging and status reporting.
+
+        Parameters
+        ----------
+        None
+            This function does not accept any parameters beyond the implicit context.
+
+        Returns
+        -------
+        None
+            This function does not return a value.
+        """
         logging.warning('Time over!')
-        # if hasattr(self, 'logcat') and isinstance(self.logcat, subprocess.Popen):
-        #     os.kill(self.logcat.pid, signal.SIGTERM)
-        #     self.logcat.terminate()
-        # self.clear_logcat()
 
     @set_timeout(300)
     def check_playback_status(self):
-        '''
-        Waiting for network load video
-        @return: True (When video is playing) or error (Timeout) : boolean
-        '''
+        """
+        Check playback status
 
+        Parameters
+        ----------
+        None
+            This function does not accept any parameters beyond the implicit context.
+
+        Returns
+        -------
+        object
+            Description of the returned value.
+        """
         return True
 
     def check_apk_exist(self):
-        '''
-        check apk status
-        @return: apk status : boolean
-        '''
+        """
+        Check apk exist
+
+        Sends shell commands to the host or device and returns the output.
+        Interacts with the DUT via pytest to issue commands or key events.
+
+        Parameters
+        ----------
+        None
+            This function does not accept any parameters beyond the implicit context.
+
+        Returns
+        -------
+        object
+            Description of the returned value.
+        """
         return True if self.PLAYER_PACKAGE_TUPLE[0] in pytest.dut.checkoutput('ls /data/data/') else False
