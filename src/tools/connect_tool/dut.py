@@ -301,6 +301,7 @@ class dut():
         self.repest_times = int(rvr_cfg.get('repeat', 0))
         self._dut_ip = ''
         self._pc_ip = ''
+        self.ip_target = ''
         self.rvr_result = None
         self.throughput_threshold = float(rvr_cfg.get('throughput_threshold', 0))
         self.skip_tx = False
@@ -1663,6 +1664,8 @@ class dut():
         else:
             if lan and (not target):
                 logging.info('coco wait for wifi address ' * 40)
+                if not self.ip_target:
+                    _ = self.pc_ip
                 target = self.ip_target
             logging.info(f"waiting for wifi {target}")
             step = 0
