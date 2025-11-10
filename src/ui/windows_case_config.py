@@ -4638,73 +4638,10 @@ class CaseConfigPage(CardWidget):
                 ] = self.turntable_target_rssi_edit
                 continue  # 跳过后面的通用处理
             if key == "router":
-                group = QGroupBox("Router")
-                vbox = QVBoxLayout(group)
-
-                self.router_name_combo = ComboBox(self)
-                self.router_name_combo.addItems(router_list.keys())
-                self.router_name_combo.setCurrentText(value.get("name", "xiaomiax3000"))
-                addr = value.get("address")
-                self.router_obj = get_router(self.router_name_combo.currentText(), addr)
-                self.router_addr_edit = LineEdit(self)
-                self.router_addr_edit.setPlaceholderText("Gateway")
-                self.router_addr_edit.setText(self.router_obj.address)
-                self.router_addr_edit.textChanged.connect(self.on_router_address_changed)
-
-                vbox.addWidget(QLabel("Model:"))
-                vbox.addWidget(self.router_name_combo)
-                vbox.addWidget(QLabel("Gateway:"))
-                vbox.addWidget(self.router_addr_edit)
-                self._register_group(key, group, self._is_dut_key(key))
-                # 注册控件
-                self.field_widgets["router.name"] = self.router_name_combo
-                self.field_widgets["router.address"] = self.router_addr_edit
-                self.router_name_combo.currentTextChanged.connect(self.on_router_changed)
-                self.on_router_changed(self.router_name_combo.currentText())
+                self._build_network_group(value)
                 continue  # ← 继续下一顶层 key
             if key == "serial_port":
-                group = QGroupBox("Serial Port")
-                vbox = QVBoxLayout(group)
-
-                # 开关（True/False 下拉，同一套保存逻辑即可）
-                self.serial_enable_combo = ComboBox(self)
-                self.serial_enable_combo.addItems(["False", "True"])
-                self.serial_enable_combo.setCurrentText(
-                    str(value.get("status", False))
-                )
-                self.serial_enable_combo.currentTextChanged.connect(
-                    self.on_serial_enabled_changed
-                )
-                vbox.addWidget(QLabel("Enable:"))
-                vbox.addWidget(self.serial_enable_combo)
-
-                # —— 子参数区 ——（默认隐藏，开关=True 时可见）
-                self.serial_cfg_group = QWidget()
-                cfg_box = QVBoxLayout(self.serial_cfg_group)
-
-                self.serial_port_edit = LineEdit(self)
-                self.serial_port_edit.setPlaceholderText("port (e.g. COM5)")
-                self.serial_port_edit.setText(value.get("port", ""))
-
-                self.serial_baud_edit = LineEdit(self)
-                self.serial_baud_edit.setPlaceholderText("baud (e.g. 115200)")
-                self.serial_baud_edit.setText(str(value.get("baud", "")))
-
-                cfg_box.addWidget(QLabel("Port:"))
-                cfg_box.addWidget(self.serial_port_edit)
-                cfg_box.addWidget(QLabel("Baud:"))
-                cfg_box.addWidget(self.serial_baud_edit)
-
-                vbox.addWidget(self.serial_cfg_group)
-                self._register_group(key, group, self._is_dut_key(key))
-
-                # 初始化显隐
-                self.on_serial_enabled_changed(self.serial_enable_combo.currentText())
-
-                # 注册控件
-                self.field_widgets["serial_port.status"] = self.serial_enable_combo
-                self.field_widgets["serial_port.port"] = self.serial_port_edit
-                self.field_widgets["serial_port.baud"] = self.serial_baud_edit
+                self._build_traffic_group(value)
                 continue
             if key in ["csv_path", TOOL_SECTION_KEY]:
                 continue
@@ -4717,13 +4654,92 @@ class CaseConfigPage(CardWidget):
             self._register_group(key, group, self._is_dut_key(key))
             self.field_widgets[key] = edit
 
-        stability_cfg = self.config["stability"]
-        self._duration_control_group = self._build_duration_control_group(
+        self._build_duration_group()
+
+    def _build_network_group(self, value: Mapping[str, Any] | None) -> None:
+        """Create the router configuration group (model + gateway)."""
+        data = value if isinstance(value, Mapping) else {}
+        group = QGroupBox("Router")
+        vbox = QVBoxLayout(group)
+
+        self.router_name_combo = ComboBox(self)
+        self.router_name_combo.addItems(router_list.keys())
+        self.router_name_combo.setCurrentText(str(data.get("name", "xiaomiax3000")))
+        addr = data.get("address")
+        self.router_obj = get_router(self.router_name_combo.currentText(), addr)
+
+        self.router_addr_edit = LineEdit(self)
+        self.router_addr_edit.setPlaceholderText("Gateway")
+        self.router_addr_edit.setText(self.router_obj.address)
+        self.router_addr_edit.textChanged.connect(self.on_router_address_changed)
+
+        vbox.addWidget(QLabel("Model:"))
+        vbox.addWidget(self.router_name_combo)
+        vbox.addWidget(QLabel("Gateway:"))
+        vbox.addWidget(self.router_addr_edit)
+        self._register_group("router", group, self._is_dut_key("router"))
+
+        self.field_widgets["router.name"] = self.router_name_combo
+        self.field_widgets["router.address"] = self.router_addr_edit
+        self.router_name_combo.currentTextChanged.connect(self.on_router_changed)
+        self.on_router_changed(self.router_name_combo.currentText())
+
+    def _build_traffic_group(self, value: Mapping[str, Any] | None) -> None:
+        """Create serial/traffic controls used by stability runs."""
+        data = value if isinstance(value, Mapping) else {}
+        group = QGroupBox("Serial Port")
+        vbox = QVBoxLayout(group)
+
+        self.serial_enable_combo = ComboBox(self)
+        self.serial_enable_combo.addItems(["False", "True"])
+        self.serial_enable_combo.setCurrentText(str(data.get("status", False)))
+        self.serial_enable_combo.currentTextChanged.connect(
+            self.on_serial_enabled_changed
+        )
+        vbox.addWidget(QLabel("Enable:"))
+        vbox.addWidget(self.serial_enable_combo)
+
+        self.serial_cfg_group = QWidget()
+        cfg_box = QVBoxLayout(self.serial_cfg_group)
+
+        self.serial_port_edit = LineEdit(self)
+        self.serial_port_edit.setPlaceholderText("port (e.g. COM5)")
+        self.serial_port_edit.setText(str(data.get("port", "")))
+
+        self.serial_baud_edit = LineEdit(self)
+        self.serial_baud_edit.setPlaceholderText("baud (e.g. 115200)")
+        self.serial_baud_edit.setText(str(data.get("baud", "")))
+
+        cfg_box.addWidget(QLabel("Port:"))
+        cfg_box.addWidget(self.serial_port_edit)
+        cfg_box.addWidget(QLabel("Baud:"))
+        cfg_box.addWidget(self.serial_baud_edit)
+
+        vbox.addWidget(self.serial_cfg_group)
+        self._register_group("serial_port", group, self._is_dut_key("serial_port"))
+
+        self.on_serial_enabled_changed(self.serial_enable_combo.currentText())
+
+        self.field_widgets["serial_port.status"] = self.serial_enable_combo
+        self.field_widgets["serial_port.port"] = self.serial_port_edit
+        self.field_widgets["serial_port.baud"] = self.serial_baud_edit
+
+    def _build_duration_group(self) -> None:
+        """Attach duration/checkpoint groups derived from stability config."""
+        stability_cfg = self.config.get("stability", {})
+        duration_cfg = (
             stability_cfg.get("duration_control")
+            if isinstance(stability_cfg, Mapping)
+            else None
         )
-        self._check_point_group = self._build_check_point_group(
+        checkpoint_cfg = (
             stability_cfg.get("check_point")
+            if isinstance(stability_cfg, Mapping)
+            else None
         )
+        self._duration_control_group = self._build_duration_control_group(duration_cfg)
+        self._check_point_group = self._build_check_point_group(checkpoint_cfg)
+
 
     def _ensure_turntable_inputs_exclusive(self, source: str | None) -> None:
         """

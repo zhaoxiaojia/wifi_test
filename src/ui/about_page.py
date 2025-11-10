@@ -55,6 +55,11 @@ from .theme import (
     apply_theme,
     apply_font_and_selection,
 )
+from .style import (
+    acknowledgements_from_readme,
+    latest_version_from_changelog,
+    normalize_data_source_label,
+)
 
 
 class AboutPage(CardWidget):
@@ -282,8 +287,8 @@ class AboutPage(CardWidget):
         - The “Data Source” string collapses excessive spaces and converts Chinese punctuation to English commas.
         """
         metadata = get_build_metadata()
-        latest_version = self._get_latest_version_from_changelog(metadata)
-        acknowledgements = self._get_acknowledgements_from_readme()
+        latest_version = latest_version_from_changelog(metadata)
+        acknowledgements = acknowledgements_from_readme()
 
         display_rows = [
             ("Application Name", metadata.get("package_name", "Unknown")),
@@ -306,113 +311,5 @@ class AboutPage(CardWidget):
         self.info_table.resizeColumnsToContents()
 
         source = metadata.get("data_source", "Unknown") or "Unknown"
-        source = source.replace("、", ", ")
-        source = source.replace("，", ", ")
-        source = source.replace("缓存", "Cache")
-        source = source.replace("未知", "Unknown")
-        source = re.sub(r"\s*,\s*", ", ", source)
-        source = re.sub(r"\s+", " ", source).strip()
-        self.source_label.setText(f"Data Source: {source}")
+        self.source_label.setText(f"Data Source: {normalize_data_source_label(source)}")
 
-    def _get_latest_version_from_changelog(self, metadata: dict[str, str]) -> str:
-        """
-        Extract the latest version label from README.md’s “Changelog” section.
-        Falls back to ``metadata["version"]`` when parsing fails.
-
-        Heuristic
-        ---------
-        - Locate the “## Changelog” header.
-        - Treat the first non-empty subsequent line as the latest entry.
-        - Prefer a token like ``v1.2.3``; otherwise return the full line.
-        - If nothing matches, return ``metadata["version"]`` or ``"Unknown"``.
-
-        Parameters
-        ----------
-        metadata : dict[str, str]
-            Metadata from :func:`get_build_metadata`.
-
-        Returns
-        -------
-        str
-            A version string.
-        """
-        default_version = metadata.get("version") or "Unknown"
-        readme_path = Path(Paths.BASE_DIR) / "README.md"
-        try:
-            content = readme_path.read_text(encoding="utf-8", errors="ignore")
-        except Exception:
-            return default_version
-
-        lines = content.splitlines()
-        in_changelog = False
-        latest_entry: str | None = None
-        for line in lines:
-            stripped = line.strip()
-            if not in_changelog:
-                if stripped.lower().startswith("## changelog"):
-                    in_changelog = True
-                continue
-            if stripped.startswith("## ") and not stripped.lower().startswith("## changelog"):
-                break
-            if stripped:
-                latest_entry = stripped
-
-        if not latest_entry:
-            return default_version or "Unknown"
-
-        match = re.search(r"v\s*[0-9][\w.]*", latest_entry, re.IGNORECASE)
-        if match:
-            return match.group(0).replace(" ", "")
-
-        return latest_entry or (default_version or "Unknown")
-
-    def _get_acknowledgements_from_readme(self) -> str:
-        """
-        Extract acknowledgements from the README.md section “Authors and Acknowledgement(s)”.
-
-        Parsing rules
-        -------------
-        - Header pattern: ``#+\\s*Authors?\\s+and\\s+acknowledg?ment`` (case-insensitive).
-        - Collect content until the next header line (starting with ``#``).
-        - Ignore empty lines and lines that contain only bullet markers.
-        - Strip leading markers (e.g., ``-``, ``*``, ``•``, ``@``), then de-duplicate.
-        - Join with ``, `` to form a concise human-friendly list.
-
-        Returns
-        -------
-        str
-            A comma-separated list of names; empty string when nothing is found.
-        """
-        readme_path = Path(Paths.BASE_DIR) / "README.md"
-        try:
-            content = readme_path.read_text(encoding="utf-8", errors="ignore")
-        except Exception:
-            return ""
-
-        lines = content.splitlines()
-        in_section = False
-        ack_lines: list[str] = []
-
-        section_pattern = re.compile(r"#+\s*Authors?\s+and\s+acknowledg?ment", re.IGNORECASE)
-
-        for line in lines:
-            stripped = line.strip()
-            if not in_section:
-                if section_pattern.match(stripped):
-                    in_section = True
-                continue
-
-            if stripped.startswith("#"):
-                break
-
-            if not stripped:
-                continue
-
-            # Remove common leading markers like bullets or '@'
-            cleaned = stripped.lstrip("-*•").strip()
-            if cleaned.startswith("@"):
-                cleaned = cleaned[1:]
-            if cleaned:
-                ack_lines.append(cleaned)
-
-        return ", ".join(dict.fromkeys(ack_lines))

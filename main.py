@@ -319,120 +319,27 @@ class MainWindow(FluentWindow):
         self.login_page.set_status_message("Signed out. Please sign in again.", state="info")
 
     def show_rvr_wifi_config(self):
-        """Ensure that the RVR Wi‑Fi configuration page is visible in the UI.
-
-        This method is idempotent: if the RVR navigation button and page
-        already exist they are simply made visible.  Otherwise it
-        performs several steps to construct and register the page.  It
-        reloads the CSV backing the RVR page if needed, removes any
-        stale route keys from internal dictionaries, calls
-        :meth:`_add_interface` to obtain a new navigation button,
-        stores the assigned route key, and adds the page to the stacked
-        widget if it is not already present.  When the page is shown
-        for the first time, a short slide animation brings it into
-        view from the right.  If any part of the process fails a
-        critical message box is displayed and the navigation button
-        remains hidden.
-
-        Returns
-        -------
-        None
-        """
-        # If it exists: do not add twice, just show
-        if self._rvr_nav_button and not sip.isdeleted(self._rvr_nav_button):
-            if self.rvr_wifi_config_page is None or sip.isdeleted(self.rvr_wifi_config_page):
-                self.rvr_wifi_config_page = RvrWifiConfigPage(self.case_config_page)
-            # Ensure page is in the stack
-            if self.stackedWidget.indexOf(self.rvr_wifi_config_page) == -1:
-                self.stackedWidget.addWidget(self.rvr_wifi_config_page)
-            self._rvr_nav_button.setVisible(True)
-            self._rvr_visible = True
-            logging.debug("show_rvr_wifi_config: reuse nav item; setVisible(True)")
+        """Ensure the RVR config page exists, then slide it into view."""
+        page = self._ensure_rvr_page()
+        if not page:
             return
-
-        # First-time add
-        nav = getattr(self, "navigationInterface", None)
-        nav_items = []
-        if nav:
-            nav_items = [getattr(btn, "text", lambda: "")() for btn in nav.findChildren(QAbstractButton)]
-        logging.debug(
-            "show_rvr_wifi_config start: page id=%s nav items=%s",
-            id(self.rvr_wifi_config_page),
-            nav_items,
-        )
-
-        if self.rvr_wifi_config_page is None or sip.isdeleted(self.rvr_wifi_config_page):
-            self.rvr_wifi_config_page = RvrWifiConfigPage(self.case_config_page)
-        if self.rvr_wifi_config_page and not sip.isdeleted(self.rvr_wifi_config_page) and hasattr(
-                self.rvr_wifi_config_page, "reload_csv"):
-            self.rvr_wifi_config_page.reload_csv()
-
-        # If a stale routeKey exists from last time, remove before re-adding
-        rk = (
-            self._rvr_route_key
-            or getattr(self.rvr_wifi_config_page, "objectName", lambda: None)()
-        )
-        for attr in ("_interfaces", "_routes"):
-            mapping = getattr(self, attr, None)
-            if mapping and rk in mapping:
-                try:
-                    mapping.pop(rk, None)
-                    logging.debug(
-                        "show_rvr_wifi_config: removed stale %s[%s] before re-add", attr, rk
-                    )
-                except Exception as e:
-                    logging.warning(
-                        "show_rvr_wifi_config: failed to remove %s[%s]: %s", attr, rk, e
-                    )
-
-        self._rvr_nav_button = self._add_interface(
-            self.rvr_wifi_config_page,
-            FluentIcon.WIFI,
-            "RVR Scenario Config",
-            "RVR Wi-Fi Config",
-        )
-        if not self._rvr_nav_button:
-            logging.warning(
-                "addSubInterface returned None (duplicate routeKey or internal reject)",
-            )
-            QMessageBox.critical(
-                self,
-                "Error",
-                "Failed to add RVR Wi-Fi Config page. Please check logs.",
-            )
-            self._rvr_visible = False
-            return
-
-        self._rvr_route_key = self._rvr_nav_button.property("routeKey") or self.rvr_wifi_config_page.objectName()
-        logging.debug("show_rvr_wifi_config: routeKey=%s", self._rvr_route_key)
-        # Make visible after first add
-        self._rvr_nav_button.setVisible(True)
-        # Ensure in stack
-        if self.stackedWidget.indexOf(self.rvr_wifi_config_page) == -1:
-            self.stackedWidget.addWidget(self.rvr_wifi_config_page)
-        self._rvr_visible = True
-
-        # Slide animation and switch to RVR config page
         try:
             width = self.stackedWidget.width()
-            page = self.rvr_wifi_config_page
-            if page:
-                page.move(width, 0)
-                self.setCurrentIndex(page)
-                anim = QPropertyAnimation(page, b"pos", self)
-                anim.setDuration(200)
+            page.move(width, 0)
+            self.setCurrentIndex(page)
+
+            def _reset_pos():
+                page.move(0, 0)
+
+            anim = self._build_slide_animation(page)
+            if anim:
                 anim.setStartValue(QPoint(width, 0))
                 anim.setEndValue(QPoint(0, 0))
-                anim.setEasingCurve(QEasingCurve.OutCubic)
-
-                def _reset_pos():
-                    page.move(0, 0)
-
                 anim.finished.connect(_reset_pos)
                 anim.start()
                 self._rvr_slide_anim = anim
-        except Exception as e:
-            logging.warning("show_rvr_wifi_config animation failed: %s", e)
+        except Exception as exc:
+            logging.warning("show_rvr_wifi_config animation failed: %s", exc)
 
     def hide_rvr_wifi_config(self):
         """Slide the RVR Wi‑Fi configuration page out of view and hide its navigation button.
@@ -466,13 +373,6 @@ class MainWindow(FluentWindow):
         QCoreApplication.processEvents()
 
         if page:
-            page.show()
-            page.raise_()
-            anim = QPropertyAnimation(page, b"pos", self)
-            anim.setDuration(200)
-            anim.setStartValue(QPoint(0, 0))
-            anim.setEndValue(QPoint(width, 0))
-            anim.setEasingCurve(QEasingCurve.OutCubic)
 
             def _after():
                 page.move(0, 0)
@@ -483,15 +383,100 @@ class MainWindow(FluentWindow):
                 self._rvr_visible = False
                 logging.debug("hide_rvr_wifi_config end: page=%s", self.rvr_wifi_config_page)
 
-            anim.finished.connect(_after)
-            anim.start()
-            self._rvr_slide_anim = anim
+            anim = self._build_slide_animation(page)
+            if anim:
+                anim.setStartValue(QPoint(0, 0))
+                anim.setEndValue(QPoint(width, 0))
+                anim.finished.connect(_after)
+                anim.start()
+                self._rvr_slide_anim = anim
         else:
             if self._rvr_nav_button and not sip.isdeleted(self._rvr_nav_button):
                 self._rvr_nav_button.setVisible(False)
                 logging.debug("hide_rvr_wifi_config: setVisible(False) for nav item")
             self._rvr_visible = False
             logging.debug("hide_rvr_wifi_config end: page=%s", self.rvr_wifi_config_page)
+
+    def _build_slide_animation(self, widget, duration_ms: int = 250) -> QPropertyAnimation | None:
+        """Return a QPropertyAnimation configured for slide transitions."""
+        if widget is None or sip.isdeleted(widget):
+            return None
+        anim = QPropertyAnimation(widget, b"pos", self)
+        anim.setDuration(duration_ms)
+        anim.setEasingCurve(QEasingCurve.OutCubic)
+        return anim
+
+    def _ensure_rvr_page(self):
+        """Return a live RVR page, registering it with the nav stack if required."""
+        page = getattr(self, "rvr_wifi_config_page", None)
+        if page is None or sip.isdeleted(page):
+            self.rvr_wifi_config_page = RvrWifiConfigPage(self.case_config_page)
+            page = self.rvr_wifi_config_page
+        if page and not sip.isdeleted(page) and hasattr(page, "reload_csv"):
+            page.reload_csv()
+        if self._rvr_nav_button and not sip.isdeleted(self._rvr_nav_button):
+            if self.stackedWidget.indexOf(page) == -1:
+                self.stackedWidget.addWidget(page)
+            self._rvr_nav_button.setVisible(True)
+            self._rvr_visible = True
+            logging.debug("show_rvr_wifi_config: reuse nav item; setVisible(True)")
+            return page
+        nav = getattr(self, "navigationInterface", None)
+        nav_items = []
+        if nav:
+            nav_items = [getattr(btn, "text", lambda: "")() for btn in nav.findChildren(QAbstractButton)]
+        logging.debug(
+            "show_rvr_wifi_config start: page id=%s nav items=%s",
+            id(page),
+            nav_items,
+        )
+        route_key = self._rvr_route_key or getattr(page, "objectName", lambda: None)()
+        self._cleanup_route(route_key)
+        self._rvr_nav_button = self._add_interface(
+            page,
+            FluentIcon.WIFI,
+            "RVR Scenario Config",
+            "RVR Wi-Fi Config",
+        )
+        if not self._rvr_nav_button:
+            logging.warning(
+                "addSubInterface returned None (duplicate routeKey or internal reject)",
+            )
+            self._rvr_visible = False
+            QMessageBox.critical(
+                self,
+                "Error",
+                "Failed to add RVR Wi-Fi Config page. Please check logs.",
+            )
+            return None
+        self._rvr_route_key = (
+            self._rvr_nav_button.property("routeKey") or page.objectName()
+        )
+        logging.debug("show_rvr_wifi_config: routeKey=%s", self._rvr_route_key)
+        self._rvr_nav_button.setVisible(True)
+        if self.stackedWidget.indexOf(page) == -1:
+            self.stackedWidget.addWidget(page)
+        self._rvr_visible = True
+        return page
+
+    def _cleanup_route(self, route_key: str | None) -> None:
+        """Remove stale FluentWindow route mappings if they still exist."""
+        if not route_key:
+            return
+        for attr in ("_interfaces", "_routes"):
+            mapping = getattr(self, attr, None)
+            if not mapping:
+                continue
+            try:
+                if mapping.pop(route_key, None) is not None:
+                    logging.debug("show_rvr_wifi_config: removed stale %s[%s]", attr, route_key)
+            except Exception as exc:
+                logging.warning(
+                    "show_rvr_wifi_config: failed to remove %s[%s]: %s",
+                    attr,
+                    route_key,
+                    exc,
+                )
 
     def _detach_sub_interface(self, page):
         """Disconnect a page from the Fluent navigation system.
@@ -683,22 +668,60 @@ class MainWindow(FluentWindow):
         self.rvr_wifi_config_page = None
 
         # 6) Clean routeKey mappings inside FluentWindow (if exist)
-        if rk:
+        self._cleanup_route(rk)
+
+    def _walk_nav_state(self) -> dict[str, object]:
+        """Collect diagnostic navigation data for logging."""
+        nav = getattr(self, "navigationInterface", None)
+        data: dict[str, object] = {
+            "nav": nav,
+            "nav_methods": [],
+            "fw_methods": [],
+            "buttons": [],
+            "stack": [],
+            "routes": {},
+            "interfaces": {},
+        }
+        if not nav:
+            return data
+
+        def _has(obj, name):
             try:
-                if hasattr(self, "_interfaces"):
-                    self._interfaces.pop(rk, None)
-                    logging.debug(
-                        ">>> _remove_interface: removed %s from self._interfaces", rk
-                    )
-                if hasattr(self, "_routes"):
-                    self._routes.pop(rk, None)
-                    logging.debug(
-                        ">>> _remove_interface: removed %s from self._routes", rk
-                    )
-            except Exception as e:
-                logging.warning(
-                    ">>> _remove_interface: failed to clean routeKey mapping: %s", e
-                )
+                return callable(getattr(obj, name, None))
+            except Exception:
+                return False
+
+        data["nav_methods"] = [
+            n
+            for n in (
+                "removeItem",
+                "removeWidget",
+                "removeButton",
+                "removeSubInterface",
+                "removeInterface",
+                "addItem",
+                "addWidget",
+            )
+            if _has(nav, n)
+        ]
+        data["fw_methods"] = [n for n in ("removeSubInterface", "addSubInterface") if _has(self, n)]
+        try:
+            data["buttons"] = nav.findChildren(QAbstractButton)
+        except Exception:
+            data["buttons"] = []
+        stack_widgets = []
+        try:
+            count = self.stackedWidget.count()
+            for i in range(count):
+                stack_widgets.append(self.stackedWidget.widget(i))
+        except Exception:
+            stack_widgets = []
+        data["stack"] = stack_widgets
+        if hasattr(self, "_routes"):
+            data["routes"] = dict(getattr(self, "_routes", {}))
+        if hasattr(self, "_interfaces"):
+            data["interfaces"] = dict(getattr(self, "_interfaces", {}))
+        return data
 
     # ==== DEBUG: deep nav/router/stack introspection ====
     def _debug_nav_state(self, tag: str):
@@ -725,41 +748,18 @@ class MainWindow(FluentWindow):
         -------
         None
         """
+        info = self._walk_nav_state()
         logging.debug("\n===== DEBUG NAV STATE [%s] =====", tag)
-        nav = getattr(self, "navigationInterface", None)
+        nav = info.get("nav")
         if not nav:
             logging.debug("navigationInterface = None")
             return
 
-        # 1) Detect available methods (we care how removeX is named)
-        def _has(obj, name):
-            try:
-                return callable(getattr(obj, name, None))
-            except Exception:
-                return False
-
-        nav_methods = [
-            n
-            for n in (
-                "removeItem",
-                "removeWidget",
-                "removeButton",
-                "removeSubInterface",
-                "removeInterface",
-                "addItem",
-                "addWidget",
-            )
-            if _has(nav, n)
-        ]
-        fw_methods = [n for n in ("removeSubInterface", "addSubInterface") if _has(self, n)]
-        logging.debug("nav methods: %s", nav_methods)
-        logging.debug("FluentWindow methods: %s", fw_methods)
+        logging.debug("nav methods: %s", info.get("nav_methods"))
+        logging.debug("FluentWindow methods: %s", info.get("fw_methods"))
 
         # 2) List children likely to be nav buttons
-        try:
-            btns = nav.findChildren(QAbstractButton)
-        except Exception:
-            btns = []
+        btns = info.get("buttons", []) or []
         logging.debug("QAbstractButton count: %s", len(btns))
         for i, b in enumerate(btns):
             try:
@@ -987,34 +987,48 @@ class MainWindow(FluentWindow):
             if page_widget is self.rvr_wifi_config_page and (ssid or passwd):
                 if hasattr(self.rvr_wifi_config_page, "set_router_credentials"):
                     self.rvr_wifi_config_page.set_router_credentials(ssid or "", passwd or "")
-            current = self.stackedWidget.currentWidget()
-            if current is not page_widget:
-                if current:
-                    effect = QGraphicsOpacityEffect(current)
-                    current.setGraphicsEffect(effect)
-                    fade_out = QPropertyAnimation(effect, b"opacity", current)
-                    fade_out.setDuration(200)
-                    fade_out.setStartValue(1.0)
-                    fade_out.setEndValue(0.0)
-                    fade_out.setEasingCurve(QEasingCurve.OutCubic)
-                    fade_out.start()
-                    self._fade_out = fade_out
-                    fade_out.finished.connect(lambda: current.setGraphicsEffect(None))
-                self.stackedWidget.setCurrentWidget(page_widget)
-                if page_widget:
-                    effect_in = QGraphicsOpacityEffect(page_widget)
-                    page_widget.setGraphicsEffect(effect_in)
-                    fade_in = QPropertyAnimation(effect_in, b"opacity", page_widget)
-                    fade_in.setDuration(200)
-                    fade_in.setStartValue(0.0)
-                    fade_in.setEndValue(1.0)
-                    fade_in.setEasingCurve(QEasingCurve.OutCubic)
-                    fade_in.start()
-                    self._fade_in = fade_in
-                    fade_in.finished.connect(lambda: page_widget.setGraphicsEffect(None))
-                logging.debug("Switched widget to %s", page_widget)
+            self._route_to_page(page_widget)
         except Exception as e:
             logging.error("Failed to set current widget: %s", e)
+
+    def _route_to_page(self, page_widget) -> None:
+        """Apply a fade transition to the requested stacked widget."""
+        if page_widget is None:
+            return
+        current = self.stackedWidget.currentWidget()
+        if current is page_widget:
+            return
+        if current:
+            effect = QGraphicsOpacityEffect(current)
+            current.setGraphicsEffect(effect)
+            fade_out = QPropertyAnimation(effect, b"opacity", current)
+            fade_out.setDuration(200)
+            fade_out.setStartValue(1.0)
+            fade_out.setEndValue(0.0)
+            fade_out.setEasingCurve(QEasingCurve.OutCubic)
+            fade_out.start()
+            self._fade_out = fade_out
+
+            def _clear_old_effect():
+                current.setGraphicsEffect(None)
+
+            fade_out.finished.connect(_clear_old_effect)
+        self.stackedWidget.setCurrentWidget(page_widget)
+        effect_in = QGraphicsOpacityEffect(page_widget)
+        page_widget.setGraphicsEffect(effect_in)
+        fade_in = QPropertyAnimation(effect_in, b"opacity", page_widget)
+        fade_in.setDuration(200)
+        fade_in.setStartValue(0.0)
+        fade_in.setEndValue(1.0)
+        fade_in.setEasingCurve(QEasingCurve.OutCubic)
+        fade_in.start()
+        self._fade_in = fade_in
+
+        def _clear_new_effect():
+            page_widget.setGraphicsEffect(None)
+
+        fade_in.finished.connect(_clear_new_effect)
+        logging.debug("Switched widget to %s", page_widget)
 
     def on_run(self, case_path, display_case_path, config):
         """Kick off execution of a test case and display the run page.
@@ -1047,47 +1061,7 @@ class MainWindow(FluentWindow):
         if getattr(self, "rvr_wifi_config_page", None):
             self.rvr_wifi_config_page.set_readonly(True)
         try:
-            if self.run_page:
-                with suppress(Exception):
-                    self.run_page.reset()
-
-            # Update RunPage info
-            self.run_page.case_path = case_path
-            self.run_page.display_case_path = self.run_page._calc_display_path(
-                case_path, display_case_path
-            )
-            if hasattr(self.run_page, "case_path_label"):
-                self.run_page.case_path_label.setText(self.run_page.display_case_path)
-            self.run_page.config = config
-
-            # Show run page
-            self.run_nav_button.setVisible(True)
-            self.run_nav_button.setEnabled(True)
-            if self.stackedWidget.indexOf(self.run_page) == -1:
-                self.stackedWidget.addWidget(self.run_page)
-            self.switchTo(self.run_page)
-            self.case_config_page.lock_for_running(True)
-            if hasattr(self.rvr_wifi_config_page, "set_readonly"):
-                self.rvr_wifi_config_page.set_readonly(True)
-            # Start test
-            self.run_page.run_case()
-            runner = getattr(self.run_page, "runner", None)
-            if runner:
-                def _on_runner_finished():
-                    self.case_config_page.lock_for_running(False)
-                    if getattr(self, "rvr_wifi_config_page", None):
-                        self.rvr_wifi_config_page.set_readonly(False)
-                    # Keep RVR nav button enabled when needed to review logs
-                    if self.rvr_nav_button and not sip.isdeleted(self.rvr_nav_button):
-                        is_perf = self.case_config_page._is_performance_case(
-                            getattr(self.run_page, "case_path", "")
-                        )
-                        self.rvr_nav_button.setEnabled(is_perf)
-
-                self._runner_finished_slot = _on_runner_finished
-                runner.finished.connect(self._runner_finished_slot)
-
-            logging.info("Switched to RunPage: %s", self.run_page)
+            self._trigger_run(case_path, display_case_path, config)
         except Exception as e:
             logging.error("on_run failed: %s", e, exc_info=True)
             QMessageBox.critical(self, "Error", f"Unable to run: {e}")
@@ -1097,6 +1071,46 @@ class MainWindow(FluentWindow):
             if self._run_nav_button and not sip.isdeleted(self._run_nav_button):
                 self._run_nav_button.setEnabled(False)
                 self._run_nav_button.setVisible(False)
+
+    def _trigger_run(self, case_path, display_case_path, config) -> None:
+        """Populate the RunPage state and start executing the selected case."""
+        if self.run_page:
+            with suppress(Exception):
+                self.run_page.reset()
+        self.run_page.case_path = case_path
+        self.run_page.display_case_path = self.run_page._calc_display_path(
+            case_path, display_case_path
+        )
+        if hasattr(self.run_page, "case_path_label"):
+            self.run_page.case_path_label.setText(self.run_page.display_case_path)
+        self.run_page.config = config
+
+        self.run_nav_button.setVisible(True)
+        self.run_nav_button.setEnabled(True)
+        if self.stackedWidget.indexOf(self.run_page) == -1:
+            self.stackedWidget.addWidget(self.run_page)
+        self.switchTo(self.run_page)
+        if hasattr(self.rvr_wifi_config_page, "set_readonly"):
+            self.rvr_wifi_config_page.set_readonly(True)
+
+        self.run_page.run_case()
+        runner = getattr(self.run_page, "runner", None)
+        if runner:
+
+            def _on_runner_finished():
+                self.case_config_page.lock_for_running(False)
+                if getattr(self, "rvr_wifi_config_page", None):
+                    self.rvr_wifi_config_page.set_readonly(False)
+                if self.rvr_nav_button and not sip.isdeleted(self.rvr_nav_button):
+                    is_perf = self.case_config_page._is_performance_case(
+                        getattr(self.run_page, "case_path", "")
+                    )
+                    self.rvr_nav_button.setEnabled(is_perf)
+
+            self._runner_finished_slot = _on_runner_finished
+            runner.finished.connect(self._runner_finished_slot)
+
+        logging.info("Switched to RunPage: %s", self.run_page)
 
     def show_case_config(self):
         """Switch to the case configuration page.
