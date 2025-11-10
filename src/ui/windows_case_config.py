@@ -2288,6 +2288,8 @@ class CaseConfigPage(CardWidget):
 
         section_controls: dict[str, tuple[QCheckBox, Sequence[QWidget]]] = {}
 
+        router_mode_state: dict[str, bool] = {"suppress_open": True}
+
         def _current_csv_selection() -> str | None:
             """
             Execute the current csv selection routine.
@@ -2345,6 +2347,9 @@ class CaseConfigPage(CardWidget):
 
         router_combo.currentIndexChanged.connect(lambda _index: _on_csv_changed())
         use_router_checkbox.toggled.connect(_apply_mode)
+        edit_router_btn.clicked.connect(_handle_router_editor_request)
+
+        router_selector.setEnabled(use_router_checkbox.isChecked())
 
         router_selector.setEnabled(use_router_checkbox.isChecked())
 
@@ -4146,6 +4151,17 @@ class CaseConfigPage(CardWidget):
             allow_case = bool(getattr(self, "_enable_rvr_wifi", False) and self.selected_csv_path)
             router_mode = bool(getattr(self, "_router_config_active", False) and self.selected_csv_path)
             main_window.rvr_nav_button.setEnabled(allow_case or router_mode)
+
+    def _open_rvr_wifi_config(self) -> None:
+        """Open the RVR Wi-Fi configuration page when the main window exposes it."""
+        main_window = self.window()
+        if main_window is None:
+            return
+        if hasattr(main_window, "show_rvr_wifi_config"):
+            try:
+                main_window.show_rvr_wifi_config()
+            except Exception as exc:  # pragma: no cover - defensive log only
+                logging.debug("show_rvr_wifi_config failed: %s", exc)
 
     def _open_rvr_wifi_config(self) -> None:
         """Open the RVR Wi-Fi configuration page when the main window exposes it."""
