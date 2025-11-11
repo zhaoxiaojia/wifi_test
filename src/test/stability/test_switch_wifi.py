@@ -18,6 +18,7 @@ from src.test.stability import (
     extract_stability_case,
     iterate_stability_loops,
     load_stability_plan,
+    run_checkpoints,
 )
 from src.tools.config_loader import load_config
 from src.util.constants import (
@@ -239,7 +240,13 @@ def _cycle_targets(targets: Iterable[BssTarget], checkpoints: Mapping[str, bool]
         try:
             success = _connect_wifi(target)
             if success:
-                _run_check_points(label, checkpoints)
+                run_checkpoints(
+                    label,
+                    checkpoints,
+                    ping_cb=lambda current_label: logging.info(
+                        "[Ping] Placeholder verification for %s", current_label
+                    ),
+                )
         finally:
             _disconnect_wifi()
 
@@ -249,13 +256,6 @@ def _cycle_targets(targets: Iterable[BssTarget], checkpoints: Mapping[str, bool]
             message = f"{label} ({target.security_mode})"
             logging.error("Failed to cycle %s", message)
             failures.append(f"{iteration_label}: {message}")
-
-
-def _run_check_points(label: str, checkpoints: Mapping[str, bool]) -> None:
-    if checkpoints.get("ping"):
-        logging.info("[Ping] Placeholder verification for %s", label)
-
-
 def test_swtich_wifi_workflow() -> None:
     plan = load_stability_plan()
 
