@@ -12,6 +12,8 @@ import pytest
 from src.test.stability import (
     STABILITY_COMPLETED_LOOPS_ENV,
     STABILITY_LOOPS_ENV,
+    extract_checkpoints,
+    extract_stability_case,
     load_stability_plan,
 )
 from src.tools.config_loader import load_config
@@ -60,36 +62,15 @@ class TestStrSettings:
         return self.ac.enabled or self.str_cycle.enabled
 
 
-def _extract_stability_case(
-        stability_cfg: Mapping[str, Any] | None, case_name: str
-) -> Mapping[str, Any]:
-    if not isinstance(stability_cfg, Mapping):
-        return {}
-    cases_section = stability_cfg.get("cases")
-    if not isinstance(cases_section, Mapping):
-        return {}
-    entry = cases_section.get(case_name)
-    return entry if isinstance(entry, Mapping) else {}
-
-
-def _extract_checkpoints(stability_cfg: Mapping[str, Any] | None) -> Mapping[str, bool]:
-    if not isinstance(stability_cfg, Mapping):
-        return {}
-    checkpoints = stability_cfg.get("check_point")
-    if not isinstance(checkpoints, Mapping):
-        return {}
-    return {key: bool(value) for key, value in checkpoints.items()}
-
-
 def _load_case_settings(case_name: str) -> tuple[TestStrSettings, Mapping[str, bool]]:
     config = load_config(refresh=True)
     stability_cfg = config.get("stability") if isinstance(config, Mapping) else {}
-    case_cfg = _extract_stability_case(stability_cfg, case_name)
+    case_cfg = extract_stability_case(stability_cfg, case_name)
     settings = TestStrSettings(
         ac=CycleConfig.from_mapping(case_cfg.get("ac")),
         str_cycle=CycleConfig.from_mapping(case_cfg.get("str")),
     )
-    checkpoints = _extract_checkpoints(stability_cfg)
+    checkpoints = extract_checkpoints(stability_cfg)
     return settings, checkpoints
 
 
