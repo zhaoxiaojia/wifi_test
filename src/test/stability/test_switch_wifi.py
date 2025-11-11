@@ -15,6 +15,8 @@ import pytest
 from src.test.stability import (
     STABILITY_COMPLETED_LOOPS_ENV,
     STABILITY_LOOPS_ENV,
+    extract_checkpoints,
+    extract_stability_case,
     load_stability_plan,
 )
 from src.tools.config_loader import load_config
@@ -76,34 +78,6 @@ class SwitchWifiSettings:
             return
         if self.manual_targets:
             yield from self.manual_targets
-
-
-def _extract_stability_case(
-    stability_cfg: Mapping[str, Any] | None, case_name: str
-) -> Mapping[str, Any]:
-    if not isinstance(stability_cfg, Mapping):
-        return {}
-    cases_section = stability_cfg.get("cases")
-    if not isinstance(cases_section, Mapping):
-        return {}
-    entry = cases_section.get(case_name)
-    if isinstance(entry, Mapping):
-        return entry
-    if case_name == SWITCH_WIFI_CASE_KEY:
-        for legacy_name in SWITCH_WIFI_CASE_ALIASES:
-            legacy_entry = cases_section.get(legacy_name)
-            if isinstance(legacy_entry, Mapping):
-                return legacy_entry
-    return {}
-
-
-def _extract_checkpoints(stability_cfg: Mapping[str, Any] | None) -> Mapping[str, bool]:
-    if not isinstance(stability_cfg, Mapping):
-        return {}
-    checkpoints = stability_cfg.get("check_point")
-    if not isinstance(checkpoints, Mapping):
-        return {}
-    return {key: bool(value) for key, value in checkpoints.items()}
 
 
 def _normalize_manual_targets(data: Iterable[Any] | None) -> tuple[BssTarget, ...]:
@@ -201,10 +175,14 @@ def _resolve_loop_limits(plan) -> tuple[int | None, float | None]:
 def _load_switch_settings() -> tuple[SwitchWifiSettings, tuple[BssTarget, ...], Mapping[str, bool]]:
     config = load_config(refresh=True)
     stability_cfg = config.get("stability") if isinstance(config, Mapping) else {}
-    case_cfg = _extract_stability_case(stability_cfg, SWITCH_WIFI_CASE_KEY)
+    case_cfg = extract_stability_case(
+        stability_cfg,
+        SWITCH_WIFI_CASE_KEY,
+        aliases=SWITCH_WIFI_CASE_ALIASES,
+    )
     settings = _parse_switch_wifi_settings(case_cfg)
     targets = _load_planned_targets(settings)
-    checkpoints = _extract_checkpoints(stability_cfg)
+    checkpoints = extract_checkpoints(stability_cfg)
     return settings, targets, checkpoints
 
 
