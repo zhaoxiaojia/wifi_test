@@ -14,9 +14,9 @@ import pytest
 
 from src.test.stability import (
     STABILITY_COMPLETED_LOOPS_ENV,
-    STABILITY_LOOPS_ENV,
     extract_checkpoints,
     extract_stability_case,
+    iterate_stability_loops,
     load_stability_plan,
 )
 from src.tools.config_loader import load_config
@@ -149,29 +149,6 @@ def _parse_switch_wifi_settings(data: Mapping[str, Any] | None) -> SwitchWifiSet
     )
 
 
-def _coerce_loop_count(plan_mode: str, planned_loops: int | None) -> int | None:
-    if plan_mode == "loops":
-        return max(1, planned_loops or 1)
-    return None
-
-
-def _resolve_loop_limits(plan) -> tuple[int | None, float | None]:
-    loops = _coerce_loop_count(plan.mode, plan.loops)
-    raw_override = os.environ.get(STABILITY_LOOPS_ENV)
-    if raw_override is not None:
-        try:
-            override = int(raw_override)
-        except (TypeError, ValueError):
-            override = None
-        if override is not None and override > 0:
-            loops = override
-
-    deadline = None
-    if plan.mode == "duration" and plan.duration_hours:
-        deadline = time.monotonic() + plan.duration_hours * 3600
-    return loops, deadline
-
-
 def _load_switch_settings() -> tuple[SwitchWifiSettings, tuple[BssTarget, ...], Mapping[str, bool]]:
     config = load_config(refresh=True)
     stability_cfg = config.get("stability") if isinstance(config, Mapping) else {}
@@ -255,14 +232,6 @@ def _describe_iteration(iteration: int, loops: int | None, mode: str) -> str:
     return f"loop {iteration}"
 
 
-def _should_continue(iteration: int, loops: int | None, deadline: float | None) -> bool:
-    if loops is not None and iteration >= loops:
-        return False
-    if deadline is not None and iteration > 0 and time.monotonic() >= deadline:
-        return False
-    return True
-
-
 def _cycle_targets(targets: Iterable[BssTarget], checkpoints: Mapping[str, bool], failures: list[str], iteration_label: str) -> None:
     for target in targets:
         label = f"SSID {target.ssid}"
@@ -289,7 +258,6 @@ def _run_check_points(label: str, checkpoints: Mapping[str, bool]) -> None:
 
 def test_swtich_wifi_workflow() -> None:
     plan = load_stability_plan()
-    loops, deadline = _resolve_loop_limits(plan)
 
     os.environ[STABILITY_COMPLETED_LOOPS_ENV] = "0"
 
@@ -302,29 +270,16 @@ def test_swtich_wifi_workflow() -> None:
         os.environ[STABILITY_COMPLETED_LOOPS_ENV] = "0"
         pytest.skip("Switch Wi-Fi stability currently supports Android DUT only")
 
-    completed_loops = 0
     failures: list[str] = []
 
-    try:
-        iteration = 0
-        while True:
-            if not _should_continue(iteration, loops, deadline):
-                break
+    for iteration, budget, report_completion in iterate_stability_loops(plan):
+        iteration_label = _describe_iteration(iteration, budget.total_loops, plan.mode)
+        logging.info("[Switch Wi-Fi] %s start", iteration_label)
 
-            iteration += 1
-            iteration_label = _describe_iteration(iteration, loops, plan.mode)
-            logging.info("[Switch Wi-Fi] %s start", iteration_label)
+        _cycle_targets(targets, checkpoints, failures, iteration_label)
 
-            _cycle_targets(targets, checkpoints, failures, iteration_label)
-
-            completed_loops += 1
-            os.environ[STABILITY_COMPLETED_LOOPS_ENV] = str(completed_loops)
-            logging.info("[Switch Wi-Fi] %s complete", iteration_label)
-
-            if deadline is not None and time.monotonic() >= deadline:
-                break
-    finally:
-        os.environ[STABILITY_COMPLETED_LOOPS_ENV] = str(completed_loops)
+        report_completion()
+        logging.info("[Switch Wi-Fi] %s complete", iteration_label)
 
     if failures:
         logging.warning(
