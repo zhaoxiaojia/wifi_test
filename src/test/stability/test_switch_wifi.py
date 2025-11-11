@@ -215,15 +215,6 @@ def _load_planned_targets(settings: SwitchWifiSettings) -> tuple[BssTarget, ...]
     return targets
 
 
-def _ensure_wifi_enabled() -> None:
-    toggle = getattr(pytest.dut, "set_wifi_enabled", None)
-    if callable(toggle):
-        try:
-            toggle()
-        except Exception as exc:  # pragma: no cover - hardware dependent
-            logging.debug("Failed to ensure Wi-Fi enabled: %s", exc)
-
-
 def _disconnect_wifi() -> None:
     forget = getattr(pytest.dut, "forget_wifi", None)
     if callable(forget):
@@ -252,7 +243,6 @@ def _connect_wifi(target: BssTarget) -> bool:
         )
         return False
 
-    _ensure_wifi_enabled()
 
     security_lower = target.security_mode.strip().lower()
     if security_lower == "open system":

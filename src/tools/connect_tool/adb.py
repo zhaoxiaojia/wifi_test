@@ -1952,7 +1952,7 @@ class adb(dut):
                         _ = self.pc_ip
                     target = self.ip_target
                 else:
-                    target = " "
+                    target = "."
                 if self.wait_for_wifi_address(cmd=command, target=target, lan=lan):
                     connect_status = True
                     break
