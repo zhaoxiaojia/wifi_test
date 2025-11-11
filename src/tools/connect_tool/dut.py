@@ -652,7 +652,7 @@ class dut():
         Any
             The result produced by the function.
         """
-        logging.info(f"command:{command}")
+        logging.debug(f"command:{command}")
         try:
             result = self.command_runner.run(command, shell=True)
             return result.stdout
@@ -1632,7 +1632,7 @@ class dut():
         pytest.testResult.save_result(formatted)
         return ','.join([cell for cell in throughput_cells if cell]) or 'N/A'
 
-    def wait_for_wifi_address(self, cmd: str = '', target='', lan=True):
+    def wait_for_wifi_address(self, cmd: str = '', target='.', lan=True):
         """
         Wait for for Wi‑Fi address.
 
@@ -1663,7 +1663,6 @@ class dut():
             return True, pytest.dut.roku.ser.get_ip_address('wlan0')
         else:
             if lan and (not target):
-                logging.info('coco wait for wifi address ' * 40)
                 if not self.ip_target:
                     _ = self.pc_ip
                 target = self.ip_target
