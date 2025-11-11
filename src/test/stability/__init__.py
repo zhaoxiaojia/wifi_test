@@ -18,6 +18,7 @@ __all__ = [
     "load_stability_plan",
     "prepare_stability_environment",
     "run_stability_plan",
+    "run_checkpoints",
     "LoopBudget",
     "iterate_stability_loops",
     "STABILITY_COMPLETED_LOOPS_ENV",
@@ -133,6 +134,23 @@ def extract_checkpoints(stability_cfg: Mapping[str, Any] | None) -> Dict[str, bo
     if not isinstance(checkpoints, Mapping):
         return {}
     return {key: bool(value) for key, value in checkpoints.items()}
+
+
+def run_checkpoints(
+    label: str,
+    checkpoints: Mapping[str, bool] | None,
+    *,
+    ping_cb: Callable[[str], None] | None = None,
+) -> None:
+    """Execute enabled checkpoint verifications for ``label``."""
+
+    if not isinstance(checkpoints, Mapping):
+        return
+    if checkpoints.get("ping"):
+        if ping_cb is None:
+            logging.info("[Ping] Placeholder verification for %s", label)
+        else:
+            ping_cb(label)
 
 
 def _coerce_positive_int(value: Any) -> Optional[int]:

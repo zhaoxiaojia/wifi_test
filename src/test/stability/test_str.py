@@ -15,6 +15,7 @@ from src.test.stability import (
     extract_stability_case,
     iterate_stability_loops,
     load_stability_plan,
+    run_checkpoints,
 )
 from src.tools.config_loader import load_config
 from src.tools.usb_relay_controller import UsbRelayDevice, pulse
@@ -86,11 +87,6 @@ def perform_ping_check(label: str) -> None:
     logging.info("[%s] Ping verification placeholder: implement connectivity check", label)
 
 
-def run_check_points(label: str, checkpoints: Mapping[str, bool]) -> None:
-    if checkpoints.get("ping"):
-        perform_ping_check(label)
-
-
 def _run_cycle(label: str, cycle: CycleConfig) -> None:
     if not cycle.enabled:
         logging.info("[%s] cycle disabled; skipping", label)
@@ -139,10 +135,10 @@ def test_str_workflow() -> None:
 
         if settings.ac.enabled:
             execute_ac_cycle(settings.ac)
-            run_check_points("AC", checkpoints)
+            run_checkpoints("AC", checkpoints, ping_cb=perform_ping_check)
         if settings.str_cycle.enabled:
             execute_str_cycle(settings.str_cycle)
-            run_check_points("STR", checkpoints)
+            run_checkpoints("STR", checkpoints, ping_cb=perform_ping_check)
 
         report_completion()
 
