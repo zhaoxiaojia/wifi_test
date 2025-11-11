@@ -1,0 +1,9 @@
+{
+  "chatgpt.customInstructions": "${workspaceFolder}/.vscode/codex_rules.md",
+  "chatgpt.responseFormat": "unified-diff",
+  "chatgpt.autoConfirmSmallEdits": true,
+  "chatgpt.diffContext": 3,
+  "chatgpt.enableWorkspaceSettings": true,
+  "python-envs.defaultEnvManager": "ms-python.python:system",
+  "python-envs.pythonProjects": []
+}

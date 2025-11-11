@@ -1,5 +1,5 @@
 duration_control:
-  loop: 1
+  loop: 2
   duration_hours: null
 check_point:
   ping: false
@@ -17,3 +17,13 @@ cases:
       off_duration: 15
       port: ''
       mode: 'NO'
+  test_switch_wifi:
+    use_router: false
+    router_csv: performance_test_csv/rvr_wifi_setup_demo.csv
+    manual_entries:
+    - ssid: SH-AP-052-2g-xts
+      security_mode: Open System
+      password: ''
+    - ssid: sunshine
+      security_mode: WPA2-Personal
+      password: Home1357
