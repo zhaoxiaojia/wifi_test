@@ -1,9 +1,9 @@
 Turntable:
   Turntable: RS232Board5
   IP address: 192.168.5.156
-  Step: '0,360'
+  Step: 0,360
   Static dB: ''
-  Target RSSI: '45,60'
+  Target RSSI: 45,60
 rf_solution:
   RADIORACK-4-220:
     ip_address: 192.168.50.19
@@ -29,9 +29,8 @@ rvr:
 router:
   name: asusax88u
   address: 192.168.5.1
-text_case: test/performance/test_wifi_peak_throughput.py
+text_case: test/stability/test_switch_wifi.py
 debug:
   database_mode: true
   skip_router: false
   skip_corner_rf: false
-csv_path: performance_test_csv/rvr_wifi_setup_demo.csv

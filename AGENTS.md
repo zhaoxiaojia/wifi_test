@@ -1,60 +1,101 @@
-# Codex Agent Rules — wifi_test
+Codex Agent Rules
+Goals
 
-## Goals
-- Primary goal: **save tokens** and avoid redundant work.
-- Implement exactly what I ask, nothing more.
+Primary goal: save tokens and avoid redundant work.
 
-## Always Read First
-- Before any planning or changes, **read**:
-  - `docs/code_index/SUMMARY.md`
-  - any relevant `docs/code_index/by_file/*.md`
-- Use these indexes to locate existing classes/functions/variables and avoid re-creating logic.
-- If similar code exists, propose **reuse** with references (file + line or method name).
+Implement exactly what I ask, nothing more.
 
-## Output Format
-- **Unified diff only** (3-line context), must be `git apply`-able.
-- No unrelated edits: no reformatting, reordering, mass renaming.
-- New files: provide minimal stub only; ask before adding heavy deps.
+Always Read First
 
-## Scope & Boundaries
-- Modify **only** the explicitly named files/functions.
-- Reuse existing helpers; prefer fewer dependencies and fewer lines.
-- Keep public APIs stable. If unsure, provide a **wrapper/adapter**.
+Before any planning or changes, read:
 
-## Large Changes Policy
-- For anything non-trivial → **plan first**:
-  1) Impact list (affected files/functions)
-  2) Design proposal (signatures, call sites, rollback)
-  3) Risks & test plan
-- Wait for my literal signal **`CONFIRM_APPLY`** before producing diffs.
+docs/code_index/SUMMARY.md
 
-## Code Quality
-- New/changed functions must include short docstring or comments (1–3 lines).
-- Prefer cyclomatic complexity ≤10 per function, split if needed.
-- Handle errors briefly (no over-engineering).
+any relevant docs/code_index/by_file/*.md
 
-## Safety & Rollback
-- If deletion is proposed, mark as `# safe-to-remove` and list reference checks.
-- Default to backward-compatible wrappers when global impact is unclear.
+Use these indexes to locate existing classes, functions, or variables and avoid re-creating logic.
+If similar code exists, propose reuse with explicit references (file + line or method name).
 
-## Language
-- Communicate in **English**. Be concise. Skip self-reasoning dumps.
+Output Format
 
-## Test & CI Notes
-- If tests are needed, put them under `tests/` with minimal fixtures.
-- Provide example commands to run tests (pytest) or quick verification steps.
+Unified diff only (3-line context), must be git apply-able.
 
-## Examples (prompts it should obey)
-- “Plan minimal design to add scan scheduler jitter. Scope: `src/scan/*`. Read code index first. Output proposal only; wait for `CONFIRM_APPLY`.”
-- “Implement auto-retry (max=3, 1s backoff) in `src/dut_control/roku_wpa.py` (`connect`, `reconnect`). Unified diff only.”
+No unrelated edits: no reformatting, reordering, or renaming.
 
+New files: provide minimal stub only; ask before adding heavy dependencies.
 
-Wave 1 – UI Shell & Entry Flow 1. Impact list (≤5 touchpoints) - main.py (MainWindow + nav/animation helpers) - src/ui/run.py (LiveLogWriter, _pytest_worker, CaseRunner.run) - src/ui/windows_case_config.py (CaseConfigPage renderers/validators) - src/ui/report_page.py + side pages (src/ui/about_page.py, src/ui/theme.py) sharing the reporting widgets/styles - src/ui/rvr_wifi_config.py (RVR config panel render/animation) 2. Design proposal - main.py: split show_rvr_wifi_config, _detach_sub_interface, _remove_interface, _debug_nav_state, setCurrentIndex, and on_run into private helpers (_ensure_rvr_page, _cleanup_route, _walk_nav_state, _route_to_page, _trigger_run) so each handles ≤1 responsibility; move QMessageBox/QPropertyAnimation setup into _build_slide_animation to keep logic/IO separate; add docstrings per helper (per .vscode/codex_rules.md). - src/ui/run.py: extract _pytest_worker into composable steps (_init_env, _stream_pytest_events, _finalize_run) and move file/queue IO into a new _RunLogSession class; same for CaseRunner.run/_try_copy_python_log by delegating spawn/monitor logic to helpers and keeping GUI signal emissions in the main method. - src/ui/windows_case_config.py: break render_all_fields (LOC 638, CC 51) into per-section builders (_build_network_group, _build_traffic_group, _build_duration_group), move CSV parsing & validation into dedicated _ConfigLoader helpers, and collapse _sync_widgets_to_config/_validate_* into composable validators with shared schema data. - src/ui/report_page.py plus src/ui/about_page.py/src/ui/theme.py: introduce shared ui/style.py exporting apply_font_and_selection, metadata loaders, and log formatter consumed by ReportPage and AboutPage; move _get_latest_version_from_changelog & _populate_metadata IO into reusable functions referenced from ReportPage to eliminate duplication and shrink AboutPage. - src/ui/rvr_wifi_config.py: slice long state machine methods (e.g., _validate_first_page, _validate_test_str_requirements, on_run) into helpers for input gathering, rule evaluation, and toast display; move CSV reload/animation code out of UI slot into _RvrConfigModel. 3. Risks & quick tests - UI wiring is signal-heavy; splitting helpers risks disconnecting slots—verify each navigation button still triggers expected view by running python main.py smoke test and PyQt unit harness if available. - _pytest_worker shares multiprocessing queues; ensure new helper boundaries don’t break redaction installs— exercise pytest main.py::run dry-run plus an integration script launching a sample case. 4. Churn target - Expect ~1.2–1.4k lines removed (duplicated UI building + massive methods) and ~900 lines reintroduced as small helpers and docstrings → net −300 to −450 LOC.
+Scope & Boundaries
 
-Wave 2 – Test Harness & Stability Suites 1. Impact list - src/test/performance/__init__.py - src/test/performance/conftest.py - src/test/performance/test_wifi_rvo.py - src/test/pyqt_log.py - src/test/stability/test_str.py (folding in src/test/stability/__init__.py + test_swtich_wifi.py) 2. Design proposal - src/test/performance/__init__.py: move _parse_optional_int, _collect_rf_step_segments, _expand_rf_step_segments, _parse_turntable_step_bounds IO/parsing to a new rf_steps.py so each helper handles 1 concern; express segment parsing via dataclasses (pure logic) with CC ≤10, add concise docstrings for new pure helpers. - conftest.py: break performance_sync_manager (LOC 98, CC 24) into inner closures _acquire_slot, _release_slot, _record_sync to isolate logging/IO from shared-state mutation; ensure fixtures still expose stable API. - test_wifi_rvo.py: split _adjust_rssi_to_target loops into _resolve_target_rssi, _step_att_db, _record_adjustment so each handles clamp, iteration, logging; keep fixture functions delegating to new helpers for clarity. - src/test/pyqt_log.py: centralize repeated formatting/dedupe logic by adding _normalize_fixture_params and _emit_log_line helpers; keep Qt signal hooks thin. - src/test/stability/test_str.py: merge logic from stability/__init__ and test_swtich_wifi into a schema-driven builder (e.g., SwitchWifiPlan), split _sync_widgets_to_config, _validate_*, and render_all_fields analogues just as in Wave1 but for CLI; expose a single load_stability_plan helper reused by both stability suites. 3. Risks & tests - Pytest fixtures rely on naming—renames must keep performance_sync_manager signature intact; run targeted pytest src/test/performance -k rvo -vv. - Stability plans run hardware loops; add dry-run flag in helper to run unit tests without devices; run pytest src/test/stability/test_str.py -k dry_run if available. 4. Churn target - Remove ~700 lines (duplicated parsing + monolithic fixtures) and add ~500 lines of helpers/docs → net −200 LOC.
+Modify only the explicitly named files/functions.
 
-Wave 3 – Device Control & Connector Stack 1. Impact list - src/dut_control/roku_ctrl.py - src/dut_control/roku_wpa.py - src/tools/connect_tool/dut.py - src/tools/connect_tool/adb.py - src/tools/connect_tool/lab_device_controller.py 2. Design proposal - roku_ctrl.py: carve get_ir_focus, ir_navigation, analyze_logcat, get_hdmirx_info, __getattr__ into smaller units —e.g., _wait_for_ir_screen, _locate_focus_candidate, _parse_logcat, _fetch_hdmi_status; move repeated Selenium/ pattern matching IO into a RokuIrNavigator helper; keep class LOC just over 600 by introducing mixins. - roku_wpa.py: split create_conf(...) into _build_network_block, _build_security_block, _write_conf_file; keep file IO isolated, return config string for easier testing. - connect_tool/dut.py & adb.py: these >800 LOC modules need separation between command composition, subprocess execution, and retry/error handling; introduce CommandBatch helper plus per-platform adapters; ensure send_cmd remains stable but uses new helper. - lab_device_controller.py: break orchestration methods (CC spikes) into _select_device, _schedule_action, _perform_cleanup; centralize repeated telnet/uiauto formatting into shared module imported by adb.py & dut.py. - Ensure all new helpers get 1–2 line docstrings clarifying side effects; IO/formatting moved out per instructions. 3. Risks & tests - Device connectors interact with real DUTs; after refactor run lab smoke tests (existing tools/connect_tool CLI) against a mock or hardware stub; verify roku_ctrl automation still navigates menus via an integration script. - Multiprocessing contexts in adb.py must remain picklable—keep helper classes module-top-level. 4. Churn target - Expect ~1.5k lines removed (monolithic builders) and ~1.1k added as helpers/adapters → net −400 LOC.
+Reuse existing helpers; prefer fewer dependencies and fewer lines.
 
-Wave 4 – Data, Reporting & Visualization Pipeline 1. Impact list - index_symbols.py - src/util/rvr_chart_logic.py - src/tools/performance/rvr_chart_generator.py (covers src/tools/rs_test.py + src/tools/playback_tool/Youtube.py via shared builders) - src/tools/reporting/project_report.py (includes dependent IO helpers like src/tools/network_tool/wpa.py) - src/tools/mysql_tool/{operations.py, schema.py, seed_virtual_data.py} (treated as one data-ingestion cluster) 2. Design proposal - index_symbols.py: break parse_file, func_sig, md_for_file_minified/pretty into pipeline steps (_read_ast, _collect_symbols, _render_minified, _render_pretty); move heavy loops into generator helpers with docstrings; share formatting logic to avoid duplication. - src/util/rvr_chart_logic.py: class LOC 1026 with many CC>20 helpers (_prepare_rvr_dataframe, _format_freq_band_display, _collect_user_annotations); refactor into a RvrDataFrame dataclass plus pure functions for detection/formatting; move pandas IO to _load_dataframe. - src/tools/performance/rvr_chart_generator.py: split chart construction (axes, data, annotations, file IO) into _build_chart_layout, _inject_series, _export_chart; reuse these from src/tools/rs_test.py and src/tools/ playback_tool/Youtube.py via a new module-level API to centralize repeated throughput/result builders. - src/tools/reporting/project_report.py: isolate openpyxl styling, IO (Excel/JSON), and KPI computation into separate helpers; move wifi scan/YouTube playback integrations (src/tools/network_tool/wpa.py, src/tools/ playback_tool/Youtube.py) behind adapters that only expose pure data to the report aggregator. - mysql_tool cluster: share SQL-building templates between operations.py, schema.py, seed_virtual_data.py via a SqlWriter helper; keep CLI/external calls out of core logic; ensure docstrings describe new helper responsibilities. 3. Risks & tests - Regenerating index/coverage docs must stay deterministic—rerun python index_symbols.py and compare docs/ code_index outputs. - Reporting pipeline touches Excel and DB; run pytest -k project_report (if exists) plus a CLI command to generate sample report/SQL seeds; diff output vs baseline. 4. Churn target - Remove ~1.8k LOC (duplicated formatting/SQL builders) and add ~1.3k LOC of shared helpers/docstrings → net −500 LOC.
+Keep public APIs stable. If unsure, provide a wrapper/adapter.
 
-Wave 5 – Router Automation & Vendor Profiles 1. Impact list - src/tools/router_tool/router_performance.py - Asus cluster: src/tools/router_tool/AsusRouter/Asusax5400Control.py, plus shared cleanup for Asusax6700Control.py, Asusax86uControl.py, AsusTelnetNvramControl.py - Tplink cluster: src/tools/router_tool/Tplink/TplinkAx6000Control.py + TplinkWr842Control.py - Xiaomi/ZTE cluster: src/tools/router_tool/Xiaomi/XiaomiBaseControl.py + ZTEax5400Control.py - Other vendor cluster: src/tools/router_tool/H3CBX54Control.py, Linksys1200acControl.py, NetgearR6100Control.py 2. Design proposal - router_performance.py: introduce declarative router capability tables (bandwidth, auth combos, UI xpaths) and builder helpers (_apply_radio_settings, _persist_changes) so vendor controllers can drop their giant change_setting logic in favor of reference implementations; keep public APIs intact by exposing wrapper methods. - Vendor clusters: for each high-CC change_setting (CC 20–33), split into _prepare_driver, _apply_security, _finalize_and_verify; push shared webdriver waits / logging into mixins per vendor family; convert repeated ConfigError/selenium flows into reusable routines defined under router_performance. - Ensure vendor-specific deltas (special XPath, authentication quirks) live in data dictionaries so per-vendor files shrink to table definitions + tiny wrappers ≤80 LOC; add docstrings referencing data entries. - Provide adapter in router_factory (no hotspot but will re-export) so existing call sites continue to import vendor classes from same modules. 3. Risks & tests - Selenium/router automation is timing-sensitive; after refactor run smoke tests against at least one router per family to ensure XPaths still correct; keep rollback plan (re-export old class) if automation flakes. - Data tables must cover every existing parameter; add validation script comparing new metadata to legacy attribute usage before deleting code. 4. Churn target - Remove ~2.4k LOC across router controllers, add ~1.5k LOC of metadata tables + helpers → net −900 LOC. Global Notes - Every new helper/class gets a 1–3 line English docstring per .vscode/codex_rules.md. - IO/formatting must sit outside core logic, with tests reusing shared builders. - Wait for CONFIRM_APPLY WAVE n before emitting diffs; each wave can be implemented independently with unified diffs + churn summary.
+Large Changes Policy
+
+For any non-trivial work, plan first:
+
+Impact list (affected files/functions)
+
+Design proposal (signatures, call sites, rollback)
+
+Risks & test plan
+
+Wait for my literal signal CONFIRM_APPLY before producing diffs.
+
+Code Quality
+
+Every new or modified function must include a short docstring or comment (1–3 lines).
+
+Keep cyclomatic complexity ≤10 per function; split when needed.
+
+Handle errors briefly — avoid over-engineering.
+
+Safety & Rollback
+
+When proposing deletions, mark as # safe-to-remove and list reference checks.
+
+Default to backward-compatible wrappers when impact is unclear.
+
+Language
+
+Communicate in English, concise and direct.
+
+No reasoning dumps or verbose internal thoughts.
+
+Test & CI Notes
+
+If tests are required, place them under tests/ with minimal fixtures.
+
+Provide example commands for quick verification (pytest, etc.).
+
+Examples (prompts it should obey)
+
+“Plan minimal design to add scan scheduler jitter. Scope: src/scan/*. Read code index first. Output proposal only; wait for CONFIRM_APPLY.”
+
+“Implement auto-retry (max=3, 1s backoff) in src/dut_control/roku_wpa.py (connect, reconnect). Unified diff only.”
+
+Implementation Style Rules ← (New Section)
+1. Cross-file Reuse
+
+In any package, if a class, function, or variable needs to be reused by multiple files within that folder,
+it must be defined and exported inside that folder’s __init__.py rather than being re-declared elsewhere.
+
+Avoid scattered helper definitions — centralize shared symbols in __init__.py for clarity and reusability.
+
+2. Default Implementation Source
+
+When implementing a new requirement, check the util/ package first for existing utilities or logic before writing anything new.
+
+If no reusable logic exists in util/, only then is a fresh implementation allowed.
+
+All new generic tools or helpers that might be reused later should be placed in util/ rather than the local module.
+
+3. Input Handling & Type Operations
+
+Avoid excessive “null / empty” checks or defensive guards in business logic.
+
+All type conversions, validation, or data transpositions must be implemented or imported from util/.
+
+Functions in other modules should assume clean, pre-validated inputs and delegate input normalization to util.
