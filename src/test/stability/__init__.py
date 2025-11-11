@@ -21,6 +21,7 @@ __all__ = [
     "run_checkpoints",
     "LoopBudget",
     "iterate_stability_loops",
+    "describe_iteration",
     "STABILITY_COMPLETED_LOOPS_ENV",
     "STABILITY_LOOPS_ENV",
     "STABILITY_MODE_ENV",
@@ -259,6 +260,18 @@ def iterate_stability_loops(plan: StabilityPlan) -> Iterator[tuple[int, LoopBudg
             yield current_iteration, budget, _report
     finally:
         os.environ[STABILITY_COMPLETED_LOOPS_ENV] = str(completed)
+
+
+def describe_iteration(iteration: int, budget: LoopBudget, mode: str) -> str:
+    """Return human-friendly stability loop label."""
+
+    if budget.total_loops is not None:
+        return f"loop {iteration}/{budget.total_loops}"
+    if mode == "duration" and budget.remaining_seconds is not None:
+        return f"loop {iteration} (duration mode)"
+    if mode == "limit":
+        return f"loop {iteration} (limit mode)"
+    return f"loop {iteration}"
 
 
 def prepare_stability_environment() -> None:
