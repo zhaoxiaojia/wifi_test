@@ -24,6 +24,8 @@ from src.util.constants import (
     get_src_base,
     TOOL_SECTION_KEY,
     SWITCH_WIFI_CASE_KEY,
+    SWITCH_WIFI_CASE_ALIASES,
+    SWITCH_WIFI_CASE_KEYS,
     SWITCH_WIFI_USE_ROUTER_FIELD,
     SWITCH_WIFI_ROUTER_CSV_FIELD,
     SWITCH_WIFI_MANUAL_ENTRIES_FIELD,
@@ -1830,8 +1832,10 @@ class CaseConfigPage(CardWidget):
                 path_obj = path_obj.resolve().relative_to(self._get_application_base())
             except ValueError:
                 path_obj = path_obj.resolve()
-        stem = path_obj.stem
-        return stem.lower()
+        stem = path_obj.stem.lower()
+        if stem in SWITCH_WIFI_CASE_KEYS:
+            return SWITCH_WIFI_CASE_KEY
+        return stem
 
     def _script_field_key(self, case_key: str, *parts: str) -> str:
         """
@@ -1914,6 +1918,14 @@ class CaseConfigPage(CardWidget):
         cases_section = stability_cfg.setdefault("cases", {})
         entry = cases_section.get(case_key)
         if not isinstance(entry, dict):
+            entry = None
+        if case_key == SWITCH_WIFI_CASE_KEY and entry is None:
+            for legacy_key in SWITCH_WIFI_CASE_ALIASES:
+                legacy_entry = cases_section.get(legacy_key)
+                if isinstance(legacy_entry, dict):
+                    entry = dict(legacy_entry)
+                    break
+        if entry is None:
             entry = {}
 
         if case_key == SWITCH_WIFI_CASE_KEY:
@@ -1925,6 +1937,13 @@ class CaseConfigPage(CardWidget):
                 SWITCH_WIFI_MANUAL_ENTRIES_FIELD
             ] = self._normalize_switch_wifi_manual_entries(manual_entries)
             cases_section[case_key] = entry
+            if case_key == SWITCH_WIFI_CASE_KEY:
+                for legacy_key in SWITCH_WIFI_CASE_ALIASES:
+                    if legacy_key in cases_section:
+                        cases_section.pop(
+                            legacy_key,
+                            None,
+                        )  # safe-to-remove: legacy alias migrated; references handled via SWITCH_WIFI_CASE_ALIASES
             return entry
 
         def _ensure_branch(name: str) -> None:
@@ -2165,7 +2184,7 @@ class CaseConfigPage(CardWidget):
             data: Mapping[str, Any],
     ) -> ScriptConfigEntry:
         """
-        Execute the create test swtich wifi config entry routine.
+        Execute the create test switch wifi config entry routine.
 
         This method encapsulates the logic necessary to perform its function.
         Refer to the implementation for details on parameters and return values.
@@ -2178,7 +2197,7 @@ class CaseConfigPage(CardWidget):
         layout.setSpacing(8)
 
         intro = QLabel(
-            "Configure Wi-Fi BSS targets for test_swtich_wifi."
+            "Configure Wi-Fi BSS targets for test_switch_wifi."
             " Select router CSV to reuse predefined entries or maintain manual list.",
             group,
         )
@@ -2982,9 +3001,14 @@ class CaseConfigPage(CardWidget):
             for name, case_value in cases_cfg.items():
                 if not isinstance(case_value, Mapping):
                     continue
-                if name == SWITCH_WIFI_CASE_KEY:
+                normalized_name = (
+                    SWITCH_WIFI_CASE_KEY
+                    if name in SWITCH_WIFI_CASE_KEYS
+                    else name
+                )
+                if normalized_name == SWITCH_WIFI_CASE_KEY:
                     manual_entries = case_value.get(SWITCH_WIFI_MANUAL_ENTRIES_FIELD)
-                    cases[name] = {
+                    cases[SWITCH_WIFI_CASE_KEY] = {
                         SWITCH_WIFI_USE_ROUTER_FIELD: bool(
                             case_value.get(SWITCH_WIFI_USE_ROUTER_FIELD)
                         ),
@@ -2996,7 +3020,7 @@ class CaseConfigPage(CardWidget):
                         ),
                     }
                 else:
-                    cases[name] = {
+                    cases[normalized_name] = {
                         "ac": _normalize_cycle(case_value.get("ac")),
                         "str": _normalize_cycle(case_value.get("str")),
                     }
