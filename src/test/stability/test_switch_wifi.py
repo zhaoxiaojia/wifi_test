@@ -20,6 +20,7 @@ from src.test.stability import (
 from src.tools.config_loader import load_config
 from src.util.constants import (
     AUTH_OPTIONS,
+    SWITCH_WIFI_CASE_ALIASES,
     SWITCH_WIFI_CASE_KEY,
     SWITCH_WIFI_ENTRY_PASSWORD_FIELD,
     SWITCH_WIFI_ENTRY_SECURITY_FIELD,
@@ -60,7 +61,7 @@ class BssTarget:
 
 @dataclass(frozen=True)
 class SwitchWifiSettings:
-    """Persisted configuration for ``test_swtich_wifi``."""
+    """Persisted configuration for ``test_switch_wifi``."""
 
     use_router: bool
     router_path: Path | None
@@ -86,7 +87,14 @@ def _extract_stability_case(
     if not isinstance(cases_section, Mapping):
         return {}
     entry = cases_section.get(case_name)
-    return entry if isinstance(entry, Mapping) else {}
+    if isinstance(entry, Mapping):
+        return entry
+    if case_name == SWITCH_WIFI_CASE_KEY:
+        for legacy_name in SWITCH_WIFI_CASE_ALIASES:
+            legacy_entry = cases_section.get(legacy_name)
+            if isinstance(legacy_entry, Mapping):
+                return legacy_entry
+    return {}
 
 
 def _extract_checkpoints(stability_cfg: Mapping[str, Any] | None) -> Mapping[str, bool]:
@@ -320,7 +328,7 @@ def test_swtich_wifi_workflow() -> None:
     _, targets, checkpoints = _load_switch_settings()
     if not targets:
         os.environ[STABILITY_COMPLETED_LOOPS_ENV] = "0"
-        pytest.skip("No Wi-Fi targets configured for test_swtich_wifi")
+        pytest.skip("No Wi-Fi targets configured for test_switch_wifi")
 
     if getattr(pytest, "connect_type", "").lower() != "android":
         os.environ[STABILITY_COMPLETED_LOOPS_ENV] = "0"

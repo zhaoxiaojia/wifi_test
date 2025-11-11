@@ -149,8 +149,12 @@ AUTH_OPTIONS: Final[tuple[str, ...]] = (
 )
 OPEN_AUTH: Final[frozenset[str]] = frozenset({"Open System"})
 
-# ``test_swtich_wifi`` case field names reused by UI and configuration helpers.
-SWITCH_WIFI_CASE_KEY: Final[str] = "test_swtich_wifi"
+# ``test_switch_wifi`` case field names reused by UI and configuration helpers.
+SWITCH_WIFI_CASE_KEY: Final[str] = "test_switch_wifi"
+SWITCH_WIFI_CASE_ALIASES: Final[tuple[str, ...]] = ("test_swtich_wifi",)
+SWITCH_WIFI_CASE_KEYS: Final[frozenset[str]] = frozenset(
+    (SWITCH_WIFI_CASE_KEY, *SWITCH_WIFI_CASE_ALIASES)
+)
 SWITCH_WIFI_USE_ROUTER_FIELD: Final[str] = "use_router"
 SWITCH_WIFI_ROUTER_CSV_FIELD: Final[str] = "router_csv"
 SWITCH_WIFI_MANUAL_ENTRIES_FIELD: Final[str] = "manual_entries"
