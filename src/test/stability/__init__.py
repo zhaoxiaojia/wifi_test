@@ -6,12 +6,14 @@ import os
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, Optional
+from typing import Any, Callable, Dict, Iterable, Mapping, Optional
 import sys
 import time
 
 __all__ = [
     "StabilityPlan",
+    "extract_checkpoints",
+    "extract_stability_case",
     "is_stability_case_path",
     "load_stability_plan",
     "prepare_stability_environment",
@@ -82,6 +84,44 @@ def is_stability_case_path(path: Any) -> bool:
                 return True
 
     return False
+
+
+def extract_stability_case(
+    stability_cfg: Mapping[str, Any] | None,
+    case_name: str,
+    *,
+    aliases: Iterable[str] | None = None,
+) -> Dict[str, Any]:
+    """Return normalized stability case configuration."""
+
+    if not isinstance(stability_cfg, Mapping):
+        return {}
+    cases_section = stability_cfg.get("cases")
+    if not isinstance(cases_section, Mapping):
+        return {}
+
+    entry = cases_section.get(case_name)
+    if isinstance(entry, Mapping):
+        return dict(entry)
+
+    if aliases:
+        for alias in aliases:
+            alias_entry = cases_section.get(alias)
+            if isinstance(alias_entry, Mapping):
+                return dict(alias_entry)
+
+    return {}
+
+
+def extract_checkpoints(stability_cfg: Mapping[str, Any] | None) -> Dict[str, bool]:
+    """Return normalized stability checkpoint flags."""
+
+    if not isinstance(stability_cfg, Mapping):
+        return {}
+    checkpoints = stability_cfg.get("check_point")
+    if not isinstance(checkpoints, Mapping):
+        return {}
+    return {key: bool(value) for key, value in checkpoints.items()}
 
 
 def _coerce_positive_int(value: Any) -> Optional[int]:
