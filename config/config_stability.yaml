@@ -27,3 +27,13 @@ cases:
     - ssid: SH-AP-052-2g-xts
       security_mode: Open System
       password: ''
+  test_switch_wifi:
+    use_router: false
+    router_csv: C:\Users\SH171300-1522\PycharmProjects\wifi_test\config\performance_test_csv\rvr_wifi_setup.csv
+    manual_entries:
+    - ssid: SH-AP-052-2g-xts
+      security_mode: Open System
+      password: ''
+    - ssid: sunshine
+      security_mode: WPA2-Personal
+      password: Home1357
