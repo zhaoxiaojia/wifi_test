@@ -1,5 +1,5 @@
 duration_control:
-  loop: 1
+  loop: 2
   duration_hours: null
 check_point:
   ping: false

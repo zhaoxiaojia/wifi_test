@@ -171,27 +171,6 @@ def _load_planned_targets(settings: SwitchWifiSettings) -> tuple[BssTarget, ...]
         logging.warning("No Wi-Fi BSS targets configured for %s", SWITCH_WIFI_CASE_KEY)
     return targets
 
-
-def _disconnect_wifi() -> None:
-    forget = getattr(pytest.dut, "forget_wifi", None)
-    if callable(forget):
-        try:
-            forget()
-        except Exception as exc:  # pragma: no cover - hardware dependent
-            logging.debug("Failed to forget Wi-Fi network: %s", exc)
-
-    disable = getattr(pytest.dut, "set_wifi_disabled", None)
-    enable = getattr(pytest.dut, "set_wifi_enabled", None)
-    if callable(disable) and callable(enable):
-        try:
-            disable()
-            time.sleep(2)
-            enable()
-            time.sleep(2)
-        except Exception as exc:  # pragma: no cover - hardware dependent
-            logging.debug("Failed to toggle Wi-Fi interface: %s", exc)
-
-
 def _connect_wifi(target: BssTarget) -> bool:
     if getattr(pytest, "connect_type", "").lower() != "android":
         logging.error(
@@ -239,7 +218,7 @@ def _cycle_targets(targets: Iterable[BssTarget], checkpoints: Mapping[str, bool]
                     ),
                 )
         finally:
-            _disconnect_wifi()
+            pytest.dut.forget_wifi()
 
         if success:
             logging.info("Successfully cycled %s", label)

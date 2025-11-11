@@ -1666,7 +1666,6 @@ class dut():
                 if not self.ip_target:
                     _ = self.pc_ip
                 target = self.ip_target
-            logging.info(f"waiting for wifi ->{target}<-")
             step = 0
             while True:
                 time.sleep(3)
