@@ -11,6 +11,7 @@ import pytest
 
 from src.test.stability import (
     STABILITY_COMPLETED_LOOPS_ENV,
+    describe_iteration,
     extract_checkpoints,
     extract_stability_case,
     iterate_stability_loops,
@@ -126,12 +127,8 @@ def test_str_workflow() -> None:
         pytest.skip("AC and STR cycles are both disabled; nothing to execute.")
 
     for iteration, budget, report_completion in iterate_stability_loops(plan):
-        if budget.total_loops is not None:
-            logging.info("[STR] stability loop %s/%s start", iteration, budget.total_loops)
-        elif plan.mode == "duration" and budget.remaining_seconds is not None:
-            logging.info("[STR] stability loop %s start (duration mode)", iteration)
-        elif plan.mode == "limit":
-            logging.info("[STR] stability loop %s start (limit mode)", iteration)
+        iteration_label = describe_iteration(iteration, budget, plan.mode)
+        logging.info("[STR] stability %s start", iteration_label)
 
         if settings.ac.enabled:
             execute_ac_cycle(settings.ac)
@@ -141,10 +138,4 @@ def test_str_workflow() -> None:
             run_checkpoints("STR", checkpoints, ping_cb=perform_ping_check)
 
         report_completion()
-
-        if budget.total_loops is not None:
-            logging.info("[STR] stability loop %s/%s complete", iteration, budget.total_loops)
-        elif plan.mode == "duration" and budget.remaining_seconds is not None:
-            logging.info("[STR] stability loop %s complete (duration mode)", iteration)
-        elif plan.mode == "limit":
-            logging.info("[STR] stability loop %s complete (limit mode)", iteration)
+        logging.info("[STR] stability %s complete", iteration_label)

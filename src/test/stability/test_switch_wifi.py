@@ -14,6 +14,7 @@ import pytest
 
 from src.test.stability import (
     STABILITY_COMPLETED_LOOPS_ENV,
+    describe_iteration,
     extract_checkpoints,
     extract_stability_case,
     iterate_stability_loops,
@@ -223,16 +224,6 @@ def _connect_wifi(target: BssTarget) -> bool:
         return False
 
 
-def _describe_iteration(iteration: int, loops: int | None, mode: str) -> str:
-    if loops is not None:
-        return f"loop {iteration}/{loops}"
-    if mode == "duration":
-        return f"loop {iteration} (duration mode)"
-    if mode == "limit":
-        return f"loop {iteration} (limit mode)"
-    return f"loop {iteration}"
-
-
 def _cycle_targets(targets: Iterable[BssTarget], checkpoints: Mapping[str, bool], failures: list[str], iteration_label: str) -> None:
     for target in targets:
         label = f"SSID {target.ssid}"
@@ -273,7 +264,7 @@ def test_swtich_wifi_workflow() -> None:
     failures: list[str] = []
 
     for iteration, budget, report_completion in iterate_stability_loops(plan):
-        iteration_label = _describe_iteration(iteration, budget.total_loops, plan.mode)
+        iteration_label = describe_iteration(iteration, budget, plan.mode)
         logging.info("[Switch Wi-Fi] %s start", iteration_label)
 
         _cycle_targets(targets, checkpoints, failures, iteration_label)
