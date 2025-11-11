@@ -6,7 +6,7 @@ import os
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, Mapping, Optional
+from typing import Any, Callable, Dict, Iterable, Iterator, Mapping, Optional
 import sys
 import time
 
@@ -18,6 +18,8 @@ __all__ = [
     "load_stability_plan",
     "prepare_stability_environment",
     "run_stability_plan",
+    "LoopBudget",
+    "iterate_stability_loops",
     "STABILITY_COMPLETED_LOOPS_ENV",
     "STABILITY_LOOPS_ENV",
     "STABILITY_MODE_ENV",
@@ -38,6 +40,15 @@ class StabilityPlan:
     mode: str
     loops: Optional[int]
     duration_hours: Optional[float]
+
+
+@dataclass(frozen=True)
+class LoopBudget:
+    """Snapshot of the remaining stability execution budget."""
+
+    total_loops: Optional[int]
+    remaining_loops: Optional[int]
+    remaining_seconds: Optional[int]
 
 
 def _iter_segments(candidate: Path) -> Iterable[str]:
@@ -175,6 +186,61 @@ def load_stability_plan() -> StabilityPlan:
     if isinstance(stability_cfg, dict):
         duration_cfg = stability_cfg.get("duration_control") or {}
     return normalize_stability_config(duration_cfg)
+
+
+def iterate_stability_loops(plan: StabilityPlan) -> Iterator[tuple[int, LoopBudget, Callable[[bool], None]]]:
+    """Yield iteration index, budget snapshot, and completion reporter."""
+
+    loops = plan.loops if plan.mode == "loops" else None
+    loops = _coerce_positive_int(loops)
+    if loops is not None:
+        loops = max(1, loops)
+
+    override = _coerce_positive_int(os.environ.get(STABILITY_LOOPS_ENV))
+    if override is not None:
+        loops = override
+
+    deadline = None
+    if plan.mode == "duration" and plan.duration_hours:
+        deadline = time.monotonic() + plan.duration_hours * 3600
+
+    completed = _coerce_positive_int(os.environ.get(STABILITY_COMPLETED_LOOPS_ENV)) or 0
+    os.environ[STABILITY_COMPLETED_LOOPS_ENV] = str(completed)
+
+    iteration = 0
+    try:
+        while True:
+            if loops is not None and iteration >= loops:
+                break
+            if deadline is not None and iteration > 0 and time.monotonic() >= deadline:
+                break
+
+            iteration += 1
+            current_iteration = iteration
+            budget = LoopBudget(
+                total_loops=loops,
+                remaining_loops=(max(loops - current_iteration, 0) if loops is not None else None),
+                remaining_seconds=(
+                    max(int(deadline - time.monotonic()), 0)
+                    if deadline is not None
+                    else None
+                ),
+            )
+
+            reported = False
+
+            def _report(success: bool = True) -> None:
+                nonlocal completed, reported
+                if reported:
+                    return
+                if success:
+                    completed = max(completed, current_iteration)
+                reported = True
+                os.environ[STABILITY_COMPLETED_LOOPS_ENV] = str(completed)
+
+            yield current_iteration, budget, _report
+    finally:
+        os.environ[STABILITY_COMPLETED_LOOPS_ENV] = str(completed)
 
 
 def prepare_stability_environment() -> None:

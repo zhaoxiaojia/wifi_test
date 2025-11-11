@@ -5,15 +5,15 @@ import logging
 import os
 import time
 from dataclasses import dataclass
-from typing import Any, Mapping, Optional
+from typing import Any, Mapping
 
 import pytest
 
 from src.test.stability import (
     STABILITY_COMPLETED_LOOPS_ENV,
-    STABILITY_LOOPS_ENV,
     extract_checkpoints,
     extract_stability_case,
+    iterate_stability_loops,
     load_stability_plan,
 )
 from src.tools.config_loader import load_config
@@ -74,54 +74,6 @@ def _load_case_settings(case_name: str) -> tuple[TestStrSettings, Mapping[str, b
     return settings, checkpoints
 
 
-def _resolve_loop_budget(plan) -> tuple[Optional[int], Optional[float]]:
-    loops: Optional[int]
-    if plan.mode == "loops":
-        loops = max(1, plan.loops or 1)
-    else:
-        loops = None
-
-    raw_override = os.environ.get(STABILITY_LOOPS_ENV)
-    if raw_override is not None:
-        try:
-            override = int(raw_override)
-        except (TypeError, ValueError):
-            override = None
-        if override is not None and override > 0:
-            loops = override
-
-    deadline: Optional[float] = None
-    if plan.mode == "duration" and plan.duration_hours:
-        deadline = time.monotonic() + plan.duration_hours * 3600
-    return loops, deadline
-
-
-def _log_loop_start(iteration: int, plan_mode: str, loops: Optional[int], has_deadline: bool) -> None:
-    if loops is not None:
-        logging.info("[STR] stability loop %s/%s start", iteration, loops)
-    elif plan_mode == "duration" and has_deadline:
-        logging.info("[STR] stability loop %s start (duration mode)", iteration)
-    elif plan_mode == "limit":
-        logging.info("[STR] stability loop %s start (limit mode)", iteration)
-
-
-def _log_loop_end(iteration: int, plan_mode: str, loops: Optional[int], has_deadline: bool) -> None:
-    if loops is not None:
-        logging.info("[STR] stability loop %s/%s complete", iteration, loops)
-    elif plan_mode == "duration" and has_deadline:
-        logging.info("[STR] stability loop %s complete (duration mode)", iteration)
-    elif plan_mode == "limit":
-        logging.info("[STR] stability loop %s complete (limit mode)", iteration)
-
-
-def _should_continue(iteration: int, loops: Optional[int], deadline: Optional[float]) -> bool:
-    if loops is not None and iteration >= loops:
-        return False
-    if deadline is not None and iteration > 0 and time.monotonic() >= deadline:
-        return False
-    return True
-
-
 def execute_ac_cycle(cycle: CycleConfig) -> None:
     _run_cycle("AC", cycle)
 
@@ -169,7 +121,6 @@ def _run_cycle(label: str, cycle: CycleConfig) -> None:
 
 def test_str_workflow() -> None:
     plan = load_stability_plan()
-    loops, deadline = _resolve_loop_budget(plan)
 
     os.environ[STABILITY_COMPLETED_LOOPS_ENV] = "0"
 
@@ -178,28 +129,26 @@ def test_str_workflow() -> None:
         os.environ[STABILITY_COMPLETED_LOOPS_ENV] = "0"
         pytest.skip("AC and STR cycles are both disabled; nothing to execute.")
 
-    completed_loops = 0
-    try:
-        iteration = 0
-        while True:
-            if not _should_continue(iteration, loops, deadline):
-                break
+    for iteration, budget, report_completion in iterate_stability_loops(plan):
+        if budget.total_loops is not None:
+            logging.info("[STR] stability loop %s/%s start", iteration, budget.total_loops)
+        elif plan.mode == "duration" and budget.remaining_seconds is not None:
+            logging.info("[STR] stability loop %s start (duration mode)", iteration)
+        elif plan.mode == "limit":
+            logging.info("[STR] stability loop %s start (limit mode)", iteration)
 
-            iteration += 1
-            _log_loop_start(iteration, plan.mode, loops, deadline is not None)
+        if settings.ac.enabled:
+            execute_ac_cycle(settings.ac)
+            run_check_points("AC", checkpoints)
+        if settings.str_cycle.enabled:
+            execute_str_cycle(settings.str_cycle)
+            run_check_points("STR", checkpoints)
 
-            if settings.ac.enabled:
-                execute_ac_cycle(settings.ac)
-                run_check_points("AC", checkpoints)
-            if settings.str_cycle.enabled:
-                execute_str_cycle(settings.str_cycle)
-                run_check_points("STR", checkpoints)
-            completed_loops += 1
-            os.environ[STABILITY_COMPLETED_LOOPS_ENV] = str(completed_loops)
+        report_completion()
 
-            _log_loop_end(iteration, plan.mode, loops, deadline is not None)
-
-            if deadline is not None and time.monotonic() >= deadline:
-                break
-    finally:
-        os.environ[STABILITY_COMPLETED_LOOPS_ENV] = str(completed_loops)
+        if budget.total_loops is not None:
+            logging.info("[STR] stability loop %s/%s complete", iteration, budget.total_loops)
+        elif plan.mode == "duration" and budget.remaining_seconds is not None:
+            logging.info("[STR] stability loop %s complete (duration mode)", iteration)
+        elif plan.mode == "limit":
+            logging.info("[STR] stability loop %s complete (limit mode)", iteration)
