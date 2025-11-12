@@ -84,10 +84,6 @@ def execute_str_cycle(cycle: CycleConfig) -> None:
     _run_cycle("STR", cycle)
 
 
-def perform_ping_check(label: str) -> None:
-    logging.info("[%s] Ping verification placeholder: implement connectivity check", label)
-
-
 def _run_cycle(label: str, cycle: CycleConfig) -> None:
     if not cycle.enabled:
         logging.info("[%s] cycle disabled; skipping", label)
@@ -132,10 +128,10 @@ def test_str_workflow() -> None:
 
         if settings.ac.enabled:
             execute_ac_cycle(settings.ac)
-            run_checkpoints("AC", checkpoints, ping_cb=perform_ping_check)
+            run_checkpoints("AC", checkpoints)
         if settings.str_cycle.enabled:
             execute_str_cycle(settings.str_cycle)
-            run_checkpoints("STR", checkpoints, ping_cb=perform_ping_check)
+            run_checkpoints("STR", checkpoints)
 
         report_completion()
         logging.info("[STR] stability %s complete", iteration_label)

@@ -1,8 +1,11 @@
 duration_control:
-  loop: 1
+  loop: 2
   duration_hours: null
+  exitfirst: true
+  retry_limit: 0
 check_point:
-  ping: false
+  ping: true
+  ping_targets: www.coco.com
 cases:
   test_str:
     ac:

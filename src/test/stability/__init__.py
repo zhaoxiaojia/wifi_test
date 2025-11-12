@@ -10,6 +10,10 @@ from typing import Any, Callable, Dict, Iterable, Iterator, Mapping, Optional
 import sys
 import time
 
+import pytest
+
+from src.util import parse_host_list
+
 __all__ = [
     "StabilityPlan",
     "extract_checkpoints",
@@ -26,6 +30,7 @@ __all__ = [
     "STABILITY_LOOPS_ENV",
     "STABILITY_MODE_ENV",
     "STABILITY_DURATION_ENV",
+    "CheckpointConfig",
 ]
 
 
@@ -42,6 +47,8 @@ class StabilityPlan:
     mode: str
     loops: Optional[int]
     duration_hours: Optional[float]
+    exit_first: bool = False
+    retry_limit: int = 0
 
 
 @dataclass(frozen=True)
@@ -51,6 +58,14 @@ class LoopBudget:
     total_loops: Optional[int]
     remaining_loops: Optional[int]
     remaining_seconds: Optional[int]
+
+
+@dataclass(frozen=True)
+class CheckpointConfig:
+    """Normalized checkpoint configuration shared across stability suites."""
+
+    ping_enabled: bool = False
+    ping_targets: tuple[str, ...] = ()
 
 
 def _iter_segments(candidate: Path) -> Iterable[str]:
@@ -126,32 +141,64 @@ def extract_stability_case(
     return {}
 
 
-def extract_checkpoints(stability_cfg: Mapping[str, Any] | None) -> Dict[str, bool]:
-    """Return normalized stability checkpoint flags."""
+def extract_checkpoints(stability_cfg: Mapping[str, Any] | None) -> CheckpointConfig:
+    """Return normalized stability checkpoint configuration."""
 
     if not isinstance(stability_cfg, Mapping):
-        return {}
+        return CheckpointConfig()
     checkpoints = stability_cfg.get("check_point")
     if not isinstance(checkpoints, Mapping):
-        return {}
-    return {key: bool(value) for key, value in checkpoints.items()}
+        return CheckpointConfig()
+    ping_enabled = bool(checkpoints.get("ping"))
+    ping_targets = parse_host_list(checkpoints.get("ping_targets"))
+    return CheckpointConfig(ping_enabled=ping_enabled, ping_targets=ping_targets)
 
 
 def run_checkpoints(
     label: str,
-    checkpoints: Mapping[str, bool] | None,
-    *,
-    ping_cb: Callable[[str], None] | None = None,
+    checkpoints: CheckpointConfig | Mapping[str, Any] | None,
 ) -> None:
     """Execute enabled checkpoint verifications for ``label``."""
 
-    if not isinstance(checkpoints, Mapping):
-        return
-    if checkpoints.get("ping"):
-        if ping_cb is None:
-            logging.info("[Ping] Placeholder verification for %s", label)
-        else:
-            ping_cb(label)
+    config = _coerce_checkpoint_config(checkpoints)
+    if config.ping_enabled:
+        _execute_ping_checkpoint(label, config.ping_targets)
+
+
+def _coerce_checkpoint_config(
+    checkpoints: CheckpointConfig | Mapping[str, Any] | None,
+) -> CheckpointConfig:
+    """Return a normalized checkpoint configuration for runtime use."""
+
+    if isinstance(checkpoints, CheckpointConfig):
+        return checkpoints
+    if isinstance(checkpoints, Mapping):
+        return CheckpointConfig(
+            ping_enabled=bool(checkpoints.get("ping")),
+            ping_targets=parse_host_list(checkpoints.get("ping_targets")),
+        )
+    return CheckpointConfig()
+
+
+def _execute_ping_checkpoint(label: str, targets: Iterable[str]) -> None:
+    """Assert DUT connectivity for each configured ping target."""
+
+    dut = getattr(pytest, "dut", None)
+    if dut is None or not hasattr(dut, "ping"):
+        pytest.fail(f"[{label}] Unable to execute ping checkpoint without pytest.dut", pytrace=False)
+    target_list = tuple(targets)
+    if not target_list:
+        pytest.fail(f"[{label}] Ping checkpoint requires at least one target", pytrace=False)
+
+    failures: list[bool] = []
+    for target in target_list:
+        result = dut.ping(hostname=target)
+        failures.append(result)
+
+    if any(not x for x in failures):
+        pytest.fail(
+            f"[{label}] Ping failures", pytrace=False
+        )
 
 
 def _coerce_positive_int(value: Any) -> Optional[int]:
@@ -180,6 +227,8 @@ def normalize_stability_config(raw_value: Any) -> StabilityPlan:
 
     loop_value = _coerce_positive_int(normalized.get("loop"))
     duration_value = _coerce_positive_float(normalized.get("duration_hours"))
+    exit_first = bool(normalized.get("exitfirst"))
+    retry_limit = _coerce_positive_int(normalized.get("retry_limit")) or 0
 
     if loop_value and duration_value:
         logging.info(
@@ -188,10 +237,10 @@ def normalize_stability_config(raw_value: Any) -> StabilityPlan:
         duration_value = None
 
     if loop_value:
-        return StabilityPlan("loops", loop_value, None)
+        return StabilityPlan("loops", loop_value, None, exit_first=exit_first, retry_limit=retry_limit)
     if duration_value:
-        return StabilityPlan("duration", None, duration_value)
-    return StabilityPlan("limit", None, None)
+        return StabilityPlan("duration", None, duration_value, exit_first=exit_first, retry_limit=retry_limit)
+    return StabilityPlan("limit", None, None, exit_first=exit_first, retry_limit=retry_limit)
 
 
 def load_stability_plan() -> StabilityPlan:
@@ -467,4 +516,3 @@ def run_stability_plan(
         if completed_value is not None:
             # Preserve completed loops for callers that inspect the environment after restoration.
             os.environ[STABILITY_COMPLETED_LOOPS_ENV] = completed_value
-

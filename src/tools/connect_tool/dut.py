@@ -326,8 +326,74 @@ class dut():
             self.script_path = ix_cfg.get('path', '')
             logging.info(f'path {self.script_path}')
             logging.info(f'test_tool {self.test_tool}')
-            self.ix.modify_tcl_script("set ixchariot_installation_dir ",
-                                      f"set ixchariot_installation_dir \"{self.script_path}\"\n")
+            self.ix.modify_tcl_script(
+                "set ixchariot_installation_dir ",
+                f"set ixchariot_installation_dir \"{self.script_path}\"\n",
+            )
+
+    def ping(
+        self,
+        interface=None,
+        hostname="www.baidu.com",
+        interval_in_seconds=1,
+        ping_time_in_seconds=5,
+        timeout_in_seconds=10,
+        size_in_bytes=None,
+    ):
+        """Run an ICMP ping on the DUT side and return True when packet loss is acceptable."""
+
+        if not hostname or not isinstance(hostname, str):
+            logging.error("Ping checkpoint missing hostname")
+            return False
+        interval = max(float(interval_in_seconds or 1), 0.2)
+        duration = max(float(ping_time_in_seconds or 1), interval)
+        count = max(int(duration / interval), 1)
+        timeout = max(int(timeout_in_seconds or 1), 1) + count
+
+        if interface:
+            if size_in_bytes:
+                cmd = f"ping -i {interval:.2f} -I {interface} -c {count} -s {size_in_bytes} {hostname}"
+            else:
+                cmd = f"ping -i {interval:.2f} -I {interface} -c {count} {hostname}"
+        else:
+            if size_in_bytes:
+                cmd = f"ping -i {interval:.2f} -c {count} -s {size_in_bytes} {hostname}"
+            else:
+                cmd = f"ping -i {interval:.2f} -c {count} {hostname}"
+
+        logging.debug("Ping command: %s", cmd)
+        try:
+            output = self.checkoutput(cmd)
+        except Exception as exc:  # pragma: no cover - transports differ per DUT
+            logging.error("Ping command failed: %s", exc)
+            return False
+        if not output:
+            return False
+
+        # Inspect tracked return code/stderr to flag remote ping failures.
+        last_code = getattr(self, "_last_command_returncode", 0)
+        stderr_output = getattr(self, "_last_command_stderr", "")
+        if last_code:
+            logging.debug("Ping exit code %s stderr: %s", last_code, stderr_output.strip())
+            return False
+
+        lowered = output.lower()
+        error_lowered = stderr_output.lower()
+        if "unknown host" in lowered or "name or service not known" in lowered:
+            logging.debug("Ping reported unknown host: %s", hostname)
+            return False
+        if "unknown host" in error_lowered or "name or service not known" in error_lowered:
+            logging.debug("Ping stderr reported unknown host: %s", hostname)
+            return False
+
+        loss_match = re.search(r"(\d+)% packet loss", output)
+        if loss_match:
+            packet_loss = int(loss_match.group(1))
+            logging.debug("Ping packet loss = %s%%", packet_loss)
+            return packet_loss == 0
+
+        logging.debug("Ping output unparsable:\n%s", output)
+        return False
 
     @property
     def dut_ip(self):
@@ -655,9 +721,16 @@ class dut():
         logging.debug(f"command:{command}")
         try:
             result = self.command_runner.run(command, shell=True)
+            # Track last host command status for later diagnostics.
+            self._last_command_stdout = result.stdout or ""
+            self._last_command_stderr = result.stderr or ""
+            self._last_command_returncode = result.returncode
             return result.stdout
         except CommandTimeoutError:
             logging.info("Command timed out")
+            self._last_command_stdout = ''
+            self._last_command_stderr = 'Command timed out'
+            self._last_command_returncode = -1
             return None
 
     def kill_iperf(self):

@@ -61,8 +61,9 @@ def _init_worker_env(
         f"--resultpath={report_dir}",
         case_path,
     ]
+    plan = load_stability_plan()
+    pytest_args = _apply_exitfirst_flags(pytest_args, plan)
     is_stability_case = is_stability_case_path(case_path)
-    plan = load_stability_plan() if is_stability_case else None
     return _WorkerContext(
         case_path=case_path,
         queue=q,
@@ -70,9 +71,27 @@ def _init_worker_env(
         report_dir=report_dir,
         plugin=plugin,
         is_stability_case=is_stability_case,
-        plan=plan,
+        plan=plan if is_stability_case else None,
         log_session=session,
     )
+
+
+def _apply_exitfirst_flags(pytest_args: list[str], plan) -> list[str]:
+    """Return pytest args extended with exit-first and retry flags when requested."""
+
+    if plan is None or not getattr(plan, "exit_first", False) or not pytest_args:
+        return pytest_args
+
+    args = list(pytest_args)
+    case_arg = args.pop() if args else None
+    args.append("-x")
+    retry_limit = max(0, int(getattr(plan, "retry_limit", 0) or 0))
+    if retry_limit > 0:
+        args.append(f"--count={retry_limit + 1}")
+        args.append(f"--maxfail={retry_limit}")
+    if case_arg is not None:
+        args.append(case_arg)
+    return args
 
 
 def _stream_pytest_events(ctx: _WorkerContext) -> None:
