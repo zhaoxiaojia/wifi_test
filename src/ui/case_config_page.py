@@ -1868,9 +1868,13 @@ class CaseConfigPage(CardWidget):
         if isinstance(duration_cfg, Mapping):
             loop_value = _coerce_positive_int(duration_cfg.get("loop"))
             duration_value = _coerce_positive_float(duration_cfg.get("duration_hours"))
+            exitfirst_flag = bool(duration_cfg.get("exitfirst"))
+            retry_limit = _coerce_positive_int(duration_cfg.get("retry_limit")) or 0
         else:
             loop_value = None
             duration_value = None
+            exitfirst_flag = False
+            retry_limit = 0
 
         check_point_cfg = source.get("check_point")
         if isinstance(check_point_cfg, Mapping):
@@ -1878,6 +1882,10 @@ class CaseConfigPage(CardWidget):
         else:
             check_point = {"ping": False}
         check_point.setdefault("ping", False)
+        ping_targets = str(check_point_cfg.get("ping_targets", "")).strip() if isinstance(
+            check_point_cfg, Mapping
+        ) else ""
+        check_point["ping_targets"] = ping_targets
 
         cases_cfg = source.get("cases")
         cases: dict[str, dict[str, Any]] = {}
@@ -1913,6 +1921,8 @@ class CaseConfigPage(CardWidget):
             "duration_control": {
                 "loop": loop_value,
                 "duration_hours": duration_value,
+                "exitfirst": exitfirst_flag,
+                "retry_limit": retry_limit,
             },
             "check_point": check_point,
             "cases": cases,
@@ -2206,6 +2216,18 @@ class CaseConfigPage(CardWidget):
                 except (TypeError, ValueError):
                     duration_float = 0.0
                 duration_cfg["duration_hours"] = duration_float if duration_float > 0 else None
+                duration_cfg["exitfirst"] = bool(duration_cfg.get("exitfirst"))
+                try:
+                    retry_int = int(duration_cfg.get("retry_limit") or 0)
+                except (TypeError, ValueError):
+                    retry_int = 0
+                duration_cfg["retry_limit"] = max(0, retry_int)
+            checkpoint_cfg = stability_cfg.get("check_point")
+            if isinstance(checkpoint_cfg, dict):
+                checkpoint_cfg["ping"] = bool(checkpoint_cfg.get("ping"))
+                checkpoint_cfg["ping_targets"] = str(
+                    checkpoint_cfg.get("ping_targets", "") or ""
+                ).strip()
 
     def _validate_first_page(self) -> bool:
         """
@@ -2868,6 +2890,21 @@ class CaseConfigPage(CardWidget):
         if hasattr(self, "csv_combo"):
             self._populate_csv_combo(self.csv_combo, self.selected_csv_path)
         self._refresh_registered_csv_combos()
+
+    def _capture_preselected_csv(self) -> None:
+        """Cache the combo selection when no CSV has been recorded yet."""
+        combo = getattr(self, "csv_combo", None)
+        if combo is None or self.selected_csv_path:
+            return
+        index = combo.currentIndex()
+        if index < 0:
+            return
+        data = combo.itemData(index)
+        normalized = self._normalize_csv_path(data) if data else None
+        if not normalized:
+            normalized = self._normalize_csv_path(combo.itemText(index))
+        if normalized:
+            self._set_selected_csv(normalized, sync_combo=False)
 
     def _normalize_csv_path(self, path: Any) -> str | None:
         """Normalize CSV paths to absolute strings for reliable comparisons."""
@@ -3863,10 +3900,24 @@ class CaseConfigPage(CardWidget):
         grid.addWidget(duration_label, 1, 0)
         grid.addWidget(duration_spin, 1, 1)
 
+        exitfirst_checkbox = QCheckBox("Stop immediately on failure (exitfirst)", group)
+        retry_label = QLabel("Retry count", group)
+        retry_spin = QSpinBox(group)
+        retry_spin.setRange(0, 10)
+        retry_spin.setToolTip("Retries failed iterations before aborting. 0 disables retries.")
+
+        grid.addWidget(exitfirst_checkbox, 2, 0, 1, 2)
+        retry_row = QHBoxLayout()
+        retry_row.setContentsMargins(0, 0, 0, 0)
+        retry_row.addWidget(retry_label)
+        retry_row.addWidget(retry_spin, 1)
+        layout.addLayout(retry_row)
         layout.addStretch(1)
 
         loop_value = normalized.get("loop")
         duration_value = normalized.get("duration_hours")
+        exitfirst_value = bool(normalized.get("exitfirst"))
+        retry_value = normalized.get("retry_limit", 0) or 0
         with QSignalBlocker(loops_spin):
             try:
                 loops_spin.setValue(int(loop_value))
@@ -3877,6 +3928,13 @@ class CaseConfigPage(CardWidget):
                 duration_spin.setValue(float(duration_value))
             except (TypeError, ValueError):
                 duration_spin.setValue(0.0)
+        with QSignalBlocker(exitfirst_checkbox):
+            exitfirst_checkbox.setChecked(exitfirst_value)
+        with QSignalBlocker(retry_spin):
+            try:
+                retry_spin.setValue(int(retry_value))
+            except (TypeError, ValueError):
+                retry_spin.setValue(0)
 
         def _sync_controls(source: str | None = None) -> None:
             """
@@ -3897,12 +3955,16 @@ class CaseConfigPage(CardWidget):
             duration_spin.setEnabled(loops_spin.value() == 0)
 
         _sync_controls()
+        retry_spin.setEnabled(exitfirst_checkbox.isChecked())
 
         loops_spin.valueChanged.connect(lambda _value: _sync_controls("loop"))
         duration_spin.valueChanged.connect(lambda _value: _sync_controls("duration"))
+        exitfirst_checkbox.toggled.connect(retry_spin.setEnabled)
 
         self.field_widgets["stability.duration_control.loop"] = loops_spin
         self.field_widgets["stability.duration_control.duration_hours"] = duration_spin
+        self.field_widgets["stability.duration_control.exitfirst"] = exitfirst_checkbox
+        self.field_widgets["stability.duration_control.retry_limit"] = retry_spin
 
         return group
 
@@ -3921,9 +3983,20 @@ class CaseConfigPage(CardWidget):
         ping_checkbox = QCheckBox("Ping after each step", group)
         ping_checkbox.setChecked(bool(normalized.get("ping")))
         layout.addWidget(ping_checkbox)
+
+        targets_label = QLabel("Ping targets (comma separated)", group)
+        targets_edit = LineEdit(group)
+        targets_edit.setPlaceholderText("192.168.50.1,www.baidu.com")
+        targets_edit.setText(str(normalized.get("ping_targets", "") or ""))
+        targets_edit.setClearButtonEnabled(True)
+        targets_edit.setEnabled(ping_checkbox.isChecked())
+        ping_checkbox.toggled.connect(targets_edit.setEnabled)
+        layout.addWidget(targets_label)
+        layout.addWidget(targets_edit)
         layout.addStretch(1)
 
         self.field_widgets["stability.check_point.ping"] = ping_checkbox
+        self.field_widgets["stability.check_point.ping_targets"] = targets_edit
 
         return group
 
@@ -4120,7 +4193,10 @@ class CaseConfigPage(CardWidget):
             info.fields |= {
                 "stability.duration_control.loop",
                 "stability.duration_control.duration_hours",
+                "stability.duration_control.exitfirst",
+                "stability.duration_control.retry_limit",
                 "stability.check_point.ping",
+                "stability.check_point.ping_targets",
             }
         case_key = self._script_case_key(case_path)
         entry = self._script_groups.get(case_key)
@@ -4292,6 +4368,7 @@ class CaseConfigPage(CardWidget):
             self._config_tool_snapshot = copy.deepcopy(
                 self.config.get(TOOL_SECTION_KEY, {})
             )
+        self._capture_preselected_csv()
         self._sync_widgets_to_config()
         if not self._validate_test_str_requirements():
             return

@@ -210,13 +210,7 @@ def _cycle_targets(targets: Iterable[BssTarget], checkpoints: Mapping[str, bool]
         try:
             success = _connect_wifi(target)
             if success:
-                run_checkpoints(
-                    label,
-                    checkpoints,
-                    ping_cb=lambda current_label: logging.info(
-                        "[Ping] Placeholder verification for %s", current_label
-                    ),
-                )
+                run_checkpoints(label, checkpoints)
         finally:
             pytest.dut.forget_wifi()
 

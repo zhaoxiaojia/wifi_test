@@ -21,7 +21,7 @@ from typing import Any
 
 import pytest
 import sip
-from PyQt5.QtCore import QEasingCurve, QEvent, QRect, QSize, Qt, QTimer
+from PyQt5.QtCore import QEasingCurve, QEvent, QPropertyAnimation, QRect, QSize, Qt, QTimer
 from PyQt5.QtGui import QTextCursor
 from PyQt5.QtWidgets import (
     QApplication,
