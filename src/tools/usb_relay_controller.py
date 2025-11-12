@@ -266,7 +266,7 @@ def pulse(device: UsbRelayDevice, mode: str, press_seconds: float | None = None)
         None
     """
     wiring = _normalize_wiring(mode)
-    hold = _SEND_INTERVAL if press_seconds is None else max(0.0, press_seconds)
+    hold = _SEND_INTERVAL if press_seconds is None else max(0.1, press_seconds)
     logging.debug(
         "Relay pulse wiring=%s hold=%ss (contact presses %s)",
         wiring,
