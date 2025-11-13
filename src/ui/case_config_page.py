@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import copy
-import csv
 import os
 import re
 from pathlib import Path
@@ -107,6 +106,35 @@ from .rf_step_segments import RfStepSegmentsWidget
 from .switch_wifi_widgets import SwitchWifiManualEditor, SwitchWifiCsvPreview
 from .windows_case_panels import ConfigGroupPanel
 from . import build_groupbox
+from .config_proxy import ConfigProxy
+from .group_proxy import (
+    _build_network_group as _proxy_build_network_group,
+    _build_traffic_group as _proxy_build_traffic_group,
+    _build_duration_group as _proxy_build_duration_group,
+    _build_duration_control_group as _proxy_build_duration_control_group,
+    _build_check_point_group as _proxy_build_check_point_group,
+)
+from .run_proxy import on_run as _proxy_on_run
+from .rvrwifi_proxy import (
+    _normalize_switch_wifi_manual_entries as _proxy_normalize_switch_wifi_manual_entries,
+    _register_switch_wifi_csv_combo as _proxy_register_switch_wifi_csv_combo,
+    _unregister_switch_wifi_csv_combo as _proxy_unregister_switch_wifi_csv_combo,
+    _list_available_csv_files as _proxy_list_available_csv_files,
+    _resolve_csv_config_path as _proxy_resolve_csv_config_path,
+    _load_csv_selection_from_config as _proxy_load_csv_selection_from_config,
+    _update_csv_options as _proxy_update_csv_options,
+    _capture_preselected_csv as _proxy_capture_preselected_csv,
+    _normalize_csv_path as _proxy_normalize_csv_path,
+    _relativize_config_path as _proxy_relativize_config_path,
+    _find_csv_index as _proxy_find_csv_index,
+    _set_selected_csv as _proxy_set_selected_csv,
+    _populate_csv_combo as _proxy_populate_csv_combo,
+    _refresh_registered_csv_combos as _proxy_refresh_registered_csv_combos,
+    _load_switch_wifi_entries as _proxy_load_switch_wifi_entries,
+    _update_switch_wifi_preview as _proxy_update_switch_wifi_preview,
+    _update_rvr_nav_button as _proxy_update_rvr_nav_button,
+    _open_rvr_wifi_config as _proxy_open_rvr_wifi_config,
+)
 from .theme import (
     apply_theme,
     apply_font_and_selection,
@@ -147,6 +175,7 @@ class CaseConfigPage(CardWidget):
         super().__init__()
         self.setObjectName("caseConfigPage")
         self.on_run_callback = on_run_callback
+        self.config_proxy = ConfigProxy(self)
         apply_theme(self)
         self.selected_csv_path: str | None = None
         # Load the persisted tool configuration and restore CSV selection
@@ -752,105 +781,12 @@ class CaseConfigPage(CardWidget):
 
     @staticmethod
     def _normalize_switch_wifi_manual_entries(entries: Any) -> list[dict[str, str]]:
-        """
-        Execute the normalize switch wifi manual entries routine.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        normalized: list[dict[str, str]] = []
-        if isinstance(entries, Sequence) and not isinstance(entries, (str, bytes)):
-            for item in entries:
-                if not isinstance(item, Mapping):
-                    continue
-                ssid = (
-                    str(item.get(SWITCH_WIFI_ENTRY_SSID_FIELD, "") or "")
-                    .strip()
-                )
-                mode = (
-                    str(
-                        item.get(
-                            SWITCH_WIFI_ENTRY_SECURITY_FIELD,
-                            AUTH_OPTIONS[0],
-                        )
-                        or AUTH_OPTIONS[0]
-                    )
-                    .strip()
-                )
-                if mode not in AUTH_OPTIONS:
-                    mode = AUTH_OPTIONS[0]
-                password = str(
-                    item.get(SWITCH_WIFI_ENTRY_PASSWORD_FIELD, "") or ""
-                )
-                normalized.append(
-                    {
-                        SWITCH_WIFI_ENTRY_SSID_FIELD: ssid,
-                        SWITCH_WIFI_ENTRY_SECURITY_FIELD: mode,
-                        SWITCH_WIFI_ENTRY_PASSWORD_FIELD: password,
-                    }
-                )
-        return normalized
+        """Proxy to normalise manual Wi-Fi entries for switch Wi-Fi cases."""
+        return _proxy_normalize_switch_wifi_manual_entries(entries)
 
     def _ensure_script_case_defaults(self, case_key: str, case_path: str) -> dict[str, Any]:
-        """
-        Execute the ensure script case defaults routine.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        stability_cfg = self.config.setdefault("stability", {})
-        cases_section = stability_cfg.setdefault("cases", {})
-        entry = cases_section.get(case_key)
-        if not isinstance(entry, dict):
-            entry = None
-        if case_key == SWITCH_WIFI_CASE_KEY and entry is None:
-            for legacy_key in SWITCH_WIFI_CASE_ALIASES:
-                legacy_entry = cases_section.get(legacy_key)
-                if isinstance(legacy_entry, dict):
-                    entry = dict(legacy_entry)
-                    break
-        if entry is None:
-            entry = {}
-
-        if case_key == SWITCH_WIFI_CASE_KEY:
-            entry.setdefault(SWITCH_WIFI_USE_ROUTER_FIELD, False)
-            router_csv = entry.get(SWITCH_WIFI_ROUTER_CSV_FIELD)
-            entry[SWITCH_WIFI_ROUTER_CSV_FIELD] = str(router_csv or "").strip()
-            manual_entries = entry.get(SWITCH_WIFI_MANUAL_ENTRIES_FIELD)
-            entry[
-                SWITCH_WIFI_MANUAL_ENTRIES_FIELD
-            ] = self._normalize_switch_wifi_manual_entries(manual_entries)
-            cases_section[case_key] = entry
-            if case_key == SWITCH_WIFI_CASE_KEY:
-                for legacy_key in SWITCH_WIFI_CASE_ALIASES:
-                    if legacy_key in cases_section:
-                        cases_section.pop(
-                            legacy_key,
-                            None,
-                        )  # safe-to-remove: legacy alias migrated; references handled via SWITCH_WIFI_CASE_ALIASES
-            return entry
-
-        def _ensure_branch(name: str) -> None:
-            """
-            Execute the ensure branch routine.
-
-            This method encapsulates the logic necessary to perform its function.
-            Refer to the implementation for details on parameters and return values.
-            """
-            branch = entry.get(name)
-            if not isinstance(branch, dict):
-                branch = {}
-            branch.setdefault("enabled", False)
-            branch.setdefault("on_duration", 0)
-            branch.setdefault("off_duration", 0)
-            branch.setdefault("port", "")
-            branch.setdefault("mode", "NO")
-            entry[name] = branch
-
-        _ensure_branch("ac")
-        _ensure_branch("str")
-        cases_section[case_key] = entry
-        return entry
+        """Delegate stability case defaults to the config proxy."""
+        return self.config_proxy.ensure_script_case_defaults(case_key, case_path)
 
     def _update_script_config_ui(self, case_path: str | Path) -> None:
         """
@@ -1590,17 +1526,9 @@ class CaseConfigPage(CardWidget):
             "android_system",
         }
 
-    @staticmethod
-    def _normalize_fpga_token(value: Any) -> str:
-        """
-        Execute the normalize fpga token routine.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        if value is None:
-            return ""
-        return str(value).strip().upper()
+    def _normalize_fpga_token(self, value: Any) -> str:
+        """Normalise FPGA identifier tokens via the config proxy."""
+        return self.config_proxy.normalize_fpga_token(value)
 
     @staticmethod
     def _split_legacy_fpga_value(raw: str) -> tuple[str, str]:
@@ -1659,274 +1587,16 @@ class CaseConfigPage(CardWidget):
         return "", "", "", None
 
     def _normalize_fpga_section(self, raw_value: Any) -> dict[str, str]:
-        """
-        Execute the normalize fpga section routine.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        normalized = {
-            "customer": "",
-            "product_line": "",
-            "project": "",
-            "main_chip": "",
-            "wifi_module": "",
-            "interface": "",
-        }
-        if isinstance(raw_value, Mapping):
-            customer = self._normalize_fpga_token(raw_value.get("customer"))
-            product_line = self._normalize_fpga_token(raw_value.get("product_line"))
-            project = self._normalize_fpga_token(raw_value.get("project"))
-            main_chip = self._normalize_fpga_token(raw_value.get("main_chip"))
-            wifi_module = raw_value.get("wifi_module") or raw_value.get("series") or ""
-            interface = raw_value.get("interface") or ""
-            normalized.update(
-                {
-                    "customer": customer,
-                    "product_line": product_line,
-                    "project": project,
-                    "main_chip": main_chip,
-                    "wifi_module": self._normalize_fpga_token(wifi_module),
-                    "interface": self._normalize_fpga_token(interface),
-                }
-            )
-            guessed_customer, guessed_product, guessed_project, info = self._guess_fpga_project(
-                normalized["wifi_module"],
-                normalized["interface"],
-                main_chip,
-                customer=customer,
-                product_line=product_line,
-                project=project,
-            )
-            if guessed_customer:
-                normalized["customer"] = guessed_customer
-            if guessed_product:
-                normalized["product_line"] = guessed_product
-            if guessed_project:
-                normalized["project"] = guessed_project
-            if info:
-                if not normalized["main_chip"]:
-                    normalized["main_chip"] = self._normalize_fpga_token(info.get("main_chip"))
-                if not normalized["wifi_module"]:
-                    normalized["wifi_module"] = self._normalize_fpga_token(info.get("wifi_module"))
-                if not normalized["interface"]:
-                    normalized["interface"] = self._normalize_fpga_token(info.get("interface"))
-        elif isinstance(raw_value, str):
-            wifi_module, interface = self._split_legacy_fpga_value(raw_value)
-            normalized["wifi_module"] = wifi_module
-            normalized["interface"] = interface
-            customer, product, project, info = self._guess_fpga_project(wifi_module, interface)
-            if customer:
-                normalized["customer"] = customer
-            if product:
-                normalized["product_line"] = product
-            if project:
-                normalized["project"] = project
-            if info:
-                normalized["main_chip"] = self._normalize_fpga_token(info.get("main_chip"))
-                normalized["wifi_module"] = self._normalize_fpga_token(info.get("wifi_module"))
-                normalized["interface"] = self._normalize_fpga_token(info.get("interface"))
-        return normalized
+        """Normalise FPGA configuration through the config proxy."""
+        return self.config_proxy.normalize_fpga_section(raw_value)
 
     def _normalize_connect_type_section(self, raw_value: Any) -> dict[str, Any]:
-        """
-        Execute the normalize connect type section routine.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        normalized: dict[str, Any] = {}
-        if isinstance(raw_value, Mapping):
-            normalized.update(raw_value)
-
-        type_value = normalized.get("type", "Android")
-        if isinstance(type_value, str):
-            type_value = type_value.strip() or "Android"
-        else:
-            type_value = str(type_value).strip() or "Android"
-        lowered_type = type_value.lower()
-        if lowered_type in {"android", "adb"}:
-            type_value = "Android"
-        elif lowered_type in {"linux", "telnet"}:
-            type_value = "Linux"
-        normalized["type"] = type_value
-
-        android_cfg = normalized.get("Android")
-        if not isinstance(android_cfg, Mapping):
-            legacy_adb = normalized.get("adb")
-            if isinstance(legacy_adb, Mapping):
-                android_cfg = legacy_adb
-            else:
-                android_cfg = legacy_adb
-        if isinstance(android_cfg, Mapping):
-            android_dict = dict(android_cfg)
-        else:
-            android_dict = {}
-            if android_cfg not in (None, ""):
-                android_dict["device"] = str(android_cfg)
-        device = android_dict.get("device", "")
-        android_dict["device"] = str(device).strip() if device is not None else ""
-        normalized["Android"] = android_dict
-        normalized.pop("adb", None)
-
-        linux_cfg = normalized.get("Linux")
-        if not isinstance(linux_cfg, Mapping):
-            legacy_telnet = normalized.get("telnet")
-            if isinstance(legacy_telnet, Mapping):
-                linux_cfg = legacy_telnet
-            else:
-                linux_cfg = legacy_telnet
-        if isinstance(linux_cfg, Mapping):
-            linux_dict = dict(linux_cfg)
-        else:
-            linux_dict = {}
-            if isinstance(linux_cfg, str) and linux_cfg.strip():
-                linux_dict["ip"] = linux_cfg.strip()
-        telnet_ip = linux_dict.get("ip", "")
-        linux_dict["ip"] = str(telnet_ip).strip() if telnet_ip is not None else ""
-        wildcard = linux_dict.get("wildcard", "")
-        linux_dict["wildcard"] = str(wildcard).strip() if wildcard is not None else ""
-        normalized["Linux"] = linux_dict
-        normalized.pop("telnet", None)
-
-        third_cfg = normalized.get("third_party")
-        if isinstance(third_cfg, Mapping):
-            third_dict = dict(third_cfg)
-        else:
-            third_dict = {}
-        enabled_val = third_dict.get("enabled", False)
-        if isinstance(enabled_val, str):
-            enabled_bool = enabled_val.strip().lower() in {"1", "true", "yes", "on"}
-        else:
-            enabled_bool = bool(enabled_val)
-        third_dict["enabled"] = enabled_bool
-        wait_val = third_dict.get("wait_seconds")
-        wait_seconds: Optional[int]
-        if wait_val in (None, ""):
-            wait_seconds = None
-        else:
-            try:
-                wait_seconds = int(str(wait_val).strip())
-            except (TypeError, ValueError):
-                wait_seconds = None
-        if wait_seconds is not None and wait_seconds < 0:
-            wait_seconds = None
-        third_dict["wait_seconds"] = wait_seconds
-        normalized["third_party"] = third_dict
-
-        return normalized
+        """Normalise connect-type settings through the config proxy."""
+        return self.config_proxy.normalize_connect_type_section(raw_value)
 
     def _normalize_stability_settings(self, raw_value: Any) -> dict[str, Any]:
-        """Normalize stability settings into duration, checkpoints, and cases."""
-
-        def _coerce_positive_int(value: Any) -> int | None:
-            """
-            Execute the coerce positive int routine.
-
-            This method encapsulates the logic necessary to perform its function.
-            Refer to the implementation for details on parameters and return values.
-            """
-            try:
-                candidate = int(value)
-            except (TypeError, ValueError):
-                return None
-            return candidate if candidate > 0 else None
-
-        def _coerce_positive_float(value: Any) -> float | None:
-            """
-            Execute the coerce positive float routine.
-
-            This method encapsulates the logic necessary to perform its function.
-            Refer to the implementation for details on parameters and return values.
-            """
-            try:
-                candidate = float(value)
-            except (TypeError, ValueError):
-                return None
-            return candidate if candidate > 0 else None
-
-        def _normalize_cycle(value: Any) -> dict[str, Any]:
-            """
-            Execute the normalize cycle routine.
-
-            This method encapsulates the logic necessary to perform its function.
-            Refer to the implementation for details on parameters and return values.
-            """
-            mapping = value if isinstance(value, Mapping) else {}
-            result = {
-                "enabled": bool(mapping.get("enabled")),
-                "on_duration": max(0, int(mapping.get("on_duration", 0) or 0)),
-                "off_duration": max(0, int(mapping.get("off_duration", 0) or 0)),
-                "port": str(mapping.get("port", "") or "").strip(),
-                "mode": str(mapping.get("mode", "") or "NO").strip().upper() or "NO",
-            }
-            return result
-
-        source = raw_value if isinstance(raw_value, Mapping) else {}
-
-        duration_cfg = source.get("duration_control")
-        if isinstance(duration_cfg, Mapping):
-            loop_value = _coerce_positive_int(duration_cfg.get("loop"))
-            duration_value = _coerce_positive_float(duration_cfg.get("duration_hours"))
-            exitfirst_flag = bool(duration_cfg.get("exitfirst"))
-            retry_limit = _coerce_positive_int(duration_cfg.get("retry_limit")) or 0
-        else:
-            loop_value = None
-            duration_value = None
-            exitfirst_flag = False
-            retry_limit = 0
-
-        check_point_cfg = source.get("check_point")
-        if isinstance(check_point_cfg, Mapping):
-            check_point = {key: bool(value) for key, value in check_point_cfg.items()}
-        else:
-            check_point = {"ping": False}
-        check_point.setdefault("ping", False)
-        ping_targets = str(check_point_cfg.get("ping_targets", "")).strip() if isinstance(
-            check_point_cfg, Mapping
-        ) else ""
-        check_point["ping_targets"] = ping_targets
-
-        cases_cfg = source.get("cases")
-        cases: dict[str, dict[str, Any]] = {}
-        if isinstance(cases_cfg, Mapping):
-            for name, case_value in cases_cfg.items():
-                if not isinstance(case_value, Mapping):
-                    continue
-                normalized_name = (
-                    SWITCH_WIFI_CASE_KEY
-                    if name in SWITCH_WIFI_CASE_KEYS
-                    else name
-                )
-                if normalized_name == SWITCH_WIFI_CASE_KEY:
-                    manual_entries = case_value.get(SWITCH_WIFI_MANUAL_ENTRIES_FIELD)
-                    cases[SWITCH_WIFI_CASE_KEY] = {
-                        SWITCH_WIFI_USE_ROUTER_FIELD: bool(
-                            case_value.get(SWITCH_WIFI_USE_ROUTER_FIELD)
-                        ),
-                        SWITCH_WIFI_ROUTER_CSV_FIELD: str(
-                            case_value.get(SWITCH_WIFI_ROUTER_CSV_FIELD, "") or ""
-                        ).strip(),
-                        SWITCH_WIFI_MANUAL_ENTRIES_FIELD: self._normalize_switch_wifi_manual_entries(
-                            manual_entries
-                        ),
-                    }
-                else:
-                    cases[normalized_name] = {
-                        "ac": _normalize_cycle(case_value.get("ac")),
-                        "str": _normalize_cycle(case_value.get("str")),
-                    }
-
-        return {
-            "duration_control": {
-                "loop": loop_value,
-                "duration_hours": duration_value,
-                "exitfirst": exitfirst_flag,
-                "retry_limit": retry_limit,
-            },
-            "check_point": check_point,
-            "cases": cases,
-        }
+        """Normalize stability settings using the config proxy implementation."""
+        return self.config_proxy.normalize_stability_settings(raw_value)
 
     def _refresh_fpga_product_lines(
             self,
@@ -2517,96 +2187,12 @@ class CaseConfigPage(CardWidget):
             self.case_tree.hideColumn(col)
 
     def _load_config(self) -> dict:
-        """
-        Load  config from persistent storage into memory.
+        """Load configuration via the config proxy."""
+        return self.config_proxy.load_config()
 
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        try:
-            config = load_config(refresh=True) or {}
-
-            app_base = self._get_application_base()
-            changed = False
-            path = config.get("text_case", "")
-            if path:
-                abs_path = Path(path)
-                if not abs_path.is_absolute():
-                    abs_path = app_base / abs_path
-                abs_path = abs_path.resolve()
-                if abs_path.exists():
-                    try:
-                        rel_path = abs_path.relative_to(app_base)
-                    except ValueError:
-                        config["text_case"] = ""
-                        changed = True
-                    else:
-                        rel_str = rel_path.as_posix()
-                        if rel_str != path:
-                            config["text_case"] = rel_str
-                            changed = True
-                else:
-                    config["text_case"] = ""
-                    changed = True
-            else:
-                config["text_case"] = ""
-
-            if changed:
-                try:
-                    save_config(config)
-                except Exception as exc:
-                    logging.error("Failed to normalize and persist config: %s", exc)
-                    QTimer.singleShot(
-                        0,
-                        lambda exc=exc: InfoBar.error(
-                            title="Error",
-                            content=f"Failed to write config: {exc}",
-                            parent=self,
-                            position=InfoBarPosition.TOP,
-                        ),
-                    )
-            return config
-        except Exception as exc:
-            QTimer.singleShot(
-                0,
-                lambda exc=exc: InfoBar.error(
-                    title="Error",
-                    content=f"Failed to load config : {exc}",
-                    parent=self,
-                    position=InfoBarPosition.TOP,
-                ),
-            )
-            return {}
-
-    def _save_config(self):
-        """
-        Save the current state or  config to persistent storage.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        logging.debug("[save] data=%s", self.config)
-        try:
-            save_config(self.config)
-            logging.info("Configuration saved")
-            self.config = self._load_config()
-            if hasattr(self, "_config_tool_snapshot"):
-                self._config_tool_snapshot = copy.deepcopy(
-                    self.config.get(TOOL_SECTION_KEY, {})
-                )
-            self._load_csv_selection_from_config()
-            logging.info("Configuration saved")
-        except Exception as exc:
-            logging.error("[save] failed: %s", exc)
-            QTimer.singleShot(
-                0,
-                lambda exc=exc: InfoBar.error(
-                    title="Error",
-                    content=f"Failed to save config: {exc}",
-                    parent=self,
-                    position=InfoBarPosition.TOP,
-                ),
-            )
+    def _save_config(self) -> None:
+        """Persist configuration changes via the config proxy."""
+        self.config_proxy.save_config()
 
     def _get_application_base(self) -> Path:
         """获取应用根路径"""
@@ -2809,167 +2395,48 @@ class CaseConfigPage(CardWidget):
         self.routerInfoChanged.emit()
 
     def _register_switch_wifi_csv_combo(self, combo: ComboBox) -> None:
-        """
-        Execute the register switch wifi csv combo routine.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        if combo in self._switch_wifi_csv_combos:
-            return
-        if combo.property("switch_wifi_include_placeholder") is None:
-            combo.setProperty("switch_wifi_include_placeholder", True)
-        self._switch_wifi_csv_combos.append(combo)
-
-        def _cleanup(_obj: QObject | None = None, *, target: ComboBox = combo) -> None:
-            """
-            Execute the cleanup routine.
-
-            This method encapsulates the logic necessary to perform its function.
-            Refer to the implementation for details on parameters and return values.
-            """
-            self._unregister_switch_wifi_csv_combo(target)
-
-        combo.destroyed.connect(_cleanup)  # type: ignore[arg-type]
+        """Delegate CSV combo registration to the RvR Wi-Fi proxy."""
+        _proxy_register_switch_wifi_csv_combo(self, combo)
 
     def _unregister_switch_wifi_csv_combo(self, combo: ComboBox) -> None:
-        """
-        Execute the unregister switch wifi csv combo routine.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        try:
-            self._switch_wifi_csv_combos.remove(combo)
-        except ValueError:
-            return
+        """Delegate CSV combo unregistration to the RvR Wi-Fi proxy."""
+        _proxy_unregister_switch_wifi_csv_combo(self, combo)
 
     def _list_available_csv_files(self) -> list[tuple[str, str]]:
-        """
-        Execute the list available csv files routine.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        csv_dir = get_config_base() / "performance_test_csv"
-        entries: list[tuple[str, str]] = []
-        if csv_dir.exists():
-            for csv_file in sorted(csv_dir.glob("*.csv")):
-                try:
-                    entries.append((csv_file.name, str(csv_file.resolve())))
-                except Exception:
-                    continue
-        return entries
+        """List CSV files using the RvR Wi-Fi proxy helper."""
+        return _proxy_list_available_csv_files()
 
     def _resolve_csv_config_path(self, value: Any) -> str | None:
-        """Return the absolute CSV path derived from persisted configuration."""
-        if not value:
-            return None
-        try:
-            candidate = Path(value)
-        except (TypeError, ValueError):
-            return None
-        try:
-            if not candidate.is_absolute():
-                candidate = (get_config_base() / candidate).resolve()
-            else:
-                candidate = candidate.resolve()
-        except Exception:
-            return None
-        return str(candidate)
+        """Resolve persisted CSV paths via the RvR Wi-Fi proxy."""
+        return _proxy_resolve_csv_config_path(value)
 
     def _load_csv_selection_from_config(self) -> None:
-        """Initialise the cached CSV selection from stored configuration."""
-        stored = None
-        if isinstance(self.config, dict):
-            stored = self._resolve_csv_config_path(self.config.get("csv_path"))
-        self._set_selected_csv(stored, sync_combo=False)
+        """Load CSV selections using the RvR Wi-Fi proxy helpers."""
+        _proxy_load_csv_selection_from_config(self)
 
-    def _update_csv_options(self):
-        """刷新 CSV 下拉框"""
-        if hasattr(self, "csv_combo"):
-            self._populate_csv_combo(self.csv_combo, self.selected_csv_path)
-        self._refresh_registered_csv_combos()
+    def _update_csv_options(self) -> None:
+        """Refresh CSV drop-downs via the RvR Wi-Fi proxy."""
+        _proxy_update_csv_options(self)
 
     def _capture_preselected_csv(self) -> None:
-        """Cache the combo selection when no CSV has been recorded yet."""
-        combo = getattr(self, "csv_combo", None)
-        if combo is None or self.selected_csv_path:
-            return
-        index = combo.currentIndex()
-        if index < 0:
-            return
-        data = combo.itemData(index)
-        normalized = self._normalize_csv_path(data) if data else None
-        if not normalized:
-            normalized = self._normalize_csv_path(combo.itemText(index))
-        if normalized:
-            self._set_selected_csv(normalized, sync_combo=False)
+        """Cache CSV selections using the RvR Wi-Fi proxy helper."""
+        _proxy_capture_preselected_csv(self)
 
     def _normalize_csv_path(self, path: Any) -> str | None:
-        """Normalize CSV paths to absolute strings for reliable comparisons."""
-        if not path:
-            return None
-        try:
-            return str(Path(path).resolve())
-        except Exception:
-            return str(path)
+        """Normalise CSV paths via the RvR Wi-Fi proxy."""
+        return _proxy_normalize_csv_path(path)
 
     def _relativize_config_path(self, path: Any) -> str:
-        """
-        Execute the relativize config path routine.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        if path in (None, ""):
-            return ""
-        try:
-            candidate = Path(str(path)).resolve()
-        except Exception:
-            return str(path)
-        base_cfg = get_config_base()
-        try:
-            rel = os.path.relpath(candidate, base_cfg)
-        except ValueError:
-            return candidate.as_posix()
-        return Path(rel).as_posix()
+        """Relativise CSV paths through the RvR Wi-Fi proxy."""
+        return _proxy_relativize_config_path(path)
 
     def _find_csv_index(self, normalized_path: str | None, combo: ComboBox | None = None) -> int:
-        """Return the combo index for a normalized CSV path."""
-        if not normalized_path:
-            return -1
-        target_combo = combo or getattr(self, "csv_combo", None)
-        if target_combo is None:
-            return -1
-        for idx in range(target_combo.count()):
-            data = target_combo.itemData(idx)
-            if not data:
-                continue
-            candidate = self._normalize_csv_path(data)
-            if candidate == normalized_path:
-                return idx
-        return -1
+        """Locate CSV indices using the RvR Wi-Fi proxy helper."""
+        return _proxy_find_csv_index(self, normalized_path, combo)
 
     def _set_selected_csv(self, path: str | None, *, sync_combo: bool = True) -> bool:
-        """
-        Update the cached CSV selection and optionally sync the combo box.
-
-        Returns True when the selection actually changes.
-        """
-        normalized = self._normalize_csv_path(path)
-        changed = normalized != self.selected_csv_path
-        self.selected_csv_path = normalized
-        if sync_combo and hasattr(self, "csv_combo"):
-            index = -1
-            if normalized:
-                index = self._find_csv_index(normalized, self.csv_combo)
-            if index < 0 and self.csv_combo.count():
-                index = 0
-            with QSignalBlocker(self.csv_combo):
-                self.csv_combo.setCurrentIndex(index)
-        self._update_rvr_nav_button()
-        return changed
+        """Update CSV selection via the RvR Wi-Fi proxy implementation."""
+        return _proxy_set_selected_csv(self, path, sync_combo=sync_combo)
 
     def _populate_csv_combo(
             self,
@@ -2978,144 +2445,37 @@ class CaseConfigPage(CardWidget):
             *,
             include_placeholder: bool = False,
     ) -> None:
-        """
-        Execute the populate csv combo routine.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        entries = self._list_available_csv_files()
-        normalized_selected = self._normalize_csv_path(selected_path)
-        with QSignalBlocker(combo):
-            combo.clear()
-            if include_placeholder:
-                combo.addItem("Select config csv file", "")
-            for display, path in entries:
-                combo.addItem(display)
-                idx = combo.count() - 1
-                combo.setItemData(idx, path)
-            index = -1
-            if normalized_selected:
-                index = self._find_csv_index(normalized_selected, combo)
-                if index < 0:
-                    combo.addItem(Path(normalized_selected).name)
-                    idx = combo.count() - 1
-                    combo.setItemData(idx, normalized_selected)
-                    index = idx
-            elif include_placeholder:
-                index = combo.findData("")
-            if index < 0 and combo.count():
-                index = 0
-            combo.setCurrentIndex(index)
+        """Populate CSV combos via the RvR Wi-Fi proxy helper."""
+        _proxy_populate_csv_combo(
+            self,
+            combo,
+            selected_path,
+            include_placeholder=include_placeholder,
+        )
 
     def _refresh_registered_csv_combos(self) -> None:
-        """
-        Refresh the  registered csv combos to ensure the UI is up to date.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        for combo in list(self._switch_wifi_csv_combos):
-            if combo is None:
-                continue
-            try:
-                data = combo.currentData()
-            except RuntimeError:
-                self._unregister_switch_wifi_csv_combo(combo)
-                continue
-            selected = data if isinstance(data, str) and data else combo.currentText()
-            include_placeholder = combo.property("switch_wifi_include_placeholder")
-            use_placeholder = True if include_placeholder is None else bool(include_placeholder)
-            self._populate_csv_combo(combo, selected, include_placeholder=use_placeholder)
+        """Refresh CSV combo registrations via the RvR Wi-Fi proxy."""
+        _proxy_refresh_registered_csv_combos(self)
 
     def _load_switch_wifi_entries(self, csv_path: str | None) -> list[dict[str, str]]:
-        """
-        Load  switch wifi entries from persistent storage into memory.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        normalized = self._normalize_csv_path(csv_path)
-        if not normalized:
-            return []
-        entries: list[dict[str, str]] = []
-        try:
-            with open(normalized, "r", encoding="utf-8-sig", newline="") as handle:
-                reader = csv.DictReader(handle)
-                for row in reader:
-                    if not isinstance(row, dict):
-                        continue
-                    ssid = (
-                        str(row.get(SWITCH_WIFI_ENTRY_SSID_FIELD, "") or "")
-                        .strip()
-                    )
-                    if not ssid:
-                        continue
-                    mode = (
-                            str(
-                                row.get(SWITCH_WIFI_ENTRY_SECURITY_FIELD, "") or ""
-                            ).strip()
-                            or AUTH_OPTIONS[0]
-                    )
-                    password = str(
-                        row.get(SWITCH_WIFI_ENTRY_PASSWORD_FIELD, "") or ""
-                    )
-                    entries.append(
-                        {
-                            SWITCH_WIFI_ENTRY_SSID_FIELD: ssid,
-                            SWITCH_WIFI_ENTRY_SECURITY_FIELD: mode,
-                            SWITCH_WIFI_ENTRY_PASSWORD_FIELD: password,
-                        }
-                    )
-        except Exception as exc:
-            logging.debug("Failed to load Wi-Fi CSV %s: %s", csv_path, exc)
-        return entries
+        """Load Wi-Fi CSV rows through the RvR Wi-Fi proxy implementation."""
+        return _proxy_load_switch_wifi_entries(self, csv_path)
 
     def _update_switch_wifi_preview(
             self,
             preview: SwitchWifiCsvPreview | None,
             csv_path: str | None,
     ) -> None:
-        """
-        Update the  switch wifi preview to reflect current data.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        if preview is None:
-            return
-        entries = self._load_switch_wifi_entries(csv_path)
-        preview.update_entries(entries)
+        """Update Wi-Fi preview widgets via the RvR Wi-Fi proxy."""
+        _proxy_update_switch_wifi_preview(self, preview, csv_path)
 
     def _update_rvr_nav_button(self) -> None:
-        """根据当前状态更新 RVR 导航按钮可用性"""
-        main_window = self.window()
-        if hasattr(main_window, "rvr_nav_button"):
-            allow_case = bool(getattr(self, "_enable_rvr_wifi", False) and self.selected_csv_path)
-            router_mode = bool(getattr(self, "_router_config_active", False) and self.selected_csv_path)
-            main_window.rvr_nav_button.setEnabled(allow_case or router_mode)
+        """Update the RVR navigation button using the proxy helper."""
+        _proxy_update_rvr_nav_button(self)
 
     def _open_rvr_wifi_config(self) -> None:
-        """Open the RVR Wi-Fi configuration page when the main window exposes it."""
-        main_window = self.window()
-        if main_window is None:
-            return
-        if hasattr(main_window, "show_rvr_wifi_config"):
-            try:
-                main_window.show_rvr_wifi_config()
-            except Exception as exc:  # pragma: no cover - defensive log only
-                logging.debug("show_rvr_wifi_config failed: %s", exc)
-
-    def _open_rvr_wifi_config(self) -> None:
-        """Open the RVR Wi-Fi configuration page when the main window exposes it."""
-        main_window = self.window()
-        if main_window is None:
-            return
-        if hasattr(main_window, "show_rvr_wifi_config"):
-            try:
-                main_window.show_rvr_wifi_config()
-            except Exception as exc:  # pragma: no cover - defensive log only
-                logging.debug("show_rvr_wifi_config failed: %s", exc)
+        """Open the RVR Wi-Fi configuration page via the proxy helper."""
+        _proxy_open_rvr_wifi_config(self)
 
     def _case_path_to_display(self, case_path: str) -> str:
         """
@@ -3728,86 +3088,16 @@ class CaseConfigPage(CardWidget):
         self._build_duration_group()
 
     def _build_network_group(self, value: Mapping[str, Any] | None) -> None:
-        """Create the router configuration group (model + gateway)."""
-        data = value if isinstance(value, Mapping) else {}
-        group, vbox = build_groupbox("Router")
-
-        self.router_name_combo = ComboBox(self)
-        self.router_name_combo.addItems(router_list.keys())
-        self.router_name_combo.setCurrentText(str(data.get("name", "xiaomiax3000")))
-        addr = data.get("address")
-        self.router_obj = get_router(self.router_name_combo.currentText(), addr)
-
-        self.router_addr_edit = LineEdit(self)
-        self.router_addr_edit.setPlaceholderText("Gateway")
-        self.router_addr_edit.setText(self.router_obj.address)
-        self.router_addr_edit.textChanged.connect(self.on_router_address_changed)
-
-        vbox.addWidget(QLabel("Model:"))
-        vbox.addWidget(self.router_name_combo)
-        vbox.addWidget(QLabel("Gateway:"))
-        vbox.addWidget(self.router_addr_edit)
-        self._register_group("router", group, self._is_dut_key("router"))
-
-        self.field_widgets["router.name"] = self.router_name_combo
-        self.field_widgets["router.address"] = self.router_addr_edit
-        self.router_name_combo.currentTextChanged.connect(self.on_router_changed)
-        self.on_router_changed(self.router_name_combo.currentText())
+        """Create the router configuration group via the proxy helper."""
+        _proxy_build_network_group(self, value)
 
     def _build_traffic_group(self, value: Mapping[str, Any] | None) -> None:
-        """Create serial/traffic controls used by stability runs."""
-        data = value if isinstance(value, Mapping) else {}
-        group, vbox = build_groupbox("Serial Port")
-
-        self.serial_enable_combo = ComboBox(self)
-        self.serial_enable_combo.addItems(["False", "True"])
-        self.serial_enable_combo.setCurrentText(str(data.get("status", False)))
-        self.serial_enable_combo.currentTextChanged.connect(
-            self.on_serial_enabled_changed
-        )
-        vbox.addWidget(QLabel("Enable:"))
-        vbox.addWidget(self.serial_enable_combo)
-
-        self.serial_cfg_group = QWidget()
-        cfg_box = QVBoxLayout(self.serial_cfg_group)
-
-        self.serial_port_edit = LineEdit(self)
-        self.serial_port_edit.setPlaceholderText("port (e.g. COM5)")
-        self.serial_port_edit.setText(str(data.get("port", "")))
-
-        self.serial_baud_edit = LineEdit(self)
-        self.serial_baud_edit.setPlaceholderText("baud (e.g. 115200)")
-        self.serial_baud_edit.setText(str(data.get("baud", "")))
-
-        cfg_box.addWidget(QLabel("Port:"))
-        cfg_box.addWidget(self.serial_port_edit)
-        cfg_box.addWidget(QLabel("Baud:"))
-        cfg_box.addWidget(self.serial_baud_edit)
-
-        vbox.addWidget(self.serial_cfg_group)
-        self._register_group("serial_port", group, self._is_dut_key("serial_port"))
-
-        self.on_serial_enabled_changed(self.serial_enable_combo.currentText())
-
-        self.field_widgets["serial_port.status"] = self.serial_enable_combo
-        self.field_widgets["serial_port.port"] = self.serial_port_edit
-        self.field_widgets["serial_port.baud"] = self.serial_baud_edit
+        """Create serial/traffic controls via the proxy helper."""
+        _proxy_build_traffic_group(self, value)
 
     def _build_duration_group(self) -> None:
-        """Attach duration/checkpoint groups derived from stability config."""
-        stability_cfg = self.config.get("stability", {})
-        duration_cfg = (
-            stability_cfg.get("duration_control")
-            if isinstance(stability_cfg, Mapping)
-            else None
-        )
-        checkpoint_cfg = (
-            stability_cfg.get("check_point")
-            if isinstance(stability_cfg, Mapping)
-            else None
-        )
-        self._duration_control_group = self._build_duration_control_group(duration_cfg)
-        self._check_point_group = self._build_check_point_group(checkpoint_cfg)
+        """Attach duration/checkpoint groups using the proxy helpers."""
+        _proxy_build_duration_group(self)
 
 
     def _ensure_turntable_inputs_exclusive(self, source: str | None) -> None:
@@ -3860,145 +3150,14 @@ class CaseConfigPage(CardWidget):
     def _build_duration_control_group(
             self, data: Mapping[str, Any] | None
     ) -> QGroupBox:
-        """Construct the duration control group."""
-
-        normalized = data if isinstance(data, Mapping) else {}
-        group, layout = build_groupbox("Duration control", parent=self)
-        apply_theme(group)
-        apply_groupbox_style(group)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(8)
-
-        intro = QLabel(
-            "Configure either loop count or duration in hours. Leave both empty to run until stopped.",
-            group,
-        )
-        intro.setWordWrap(True)
-        layout.addWidget(intro)
-
-        grid = QGridLayout()
-        grid.setContentsMargins(0, 0, 0, 0)
-        grid.setHorizontalSpacing(12)
-        grid.setVerticalSpacing(6)
-        layout.addLayout(grid)
-
-        loops_label = QLabel("Loop count", group)
-        loops_spin = QSpinBox(group)
-        loops_spin.setRange(0, 999_999)
-        loops_spin.setToolTip("Total number of test iterations. Set to zero to disable loop control.")
-
-        duration_label = QLabel("Duration (hours)", group)
-        duration_spin = QDoubleSpinBox(group)
-        duration_spin.setRange(0.0, 999.0)
-        duration_spin.setDecimals(2)
-        duration_spin.setSingleStep(0.5)
-        duration_spin.setSuffix(" h")
-        duration_spin.setToolTip("Run until the configured number of hours elapses. Set to zero to disable.")
-
-        grid.addWidget(loops_label, 0, 0)
-        grid.addWidget(loops_spin, 0, 1)
-        grid.addWidget(duration_label, 1, 0)
-        grid.addWidget(duration_spin, 1, 1)
-
-        exitfirst_checkbox = QCheckBox("Stop immediately on failure (exitfirst)", group)
-        retry_label = QLabel("Retry count", group)
-        retry_spin = QSpinBox(group)
-        retry_spin.setRange(0, 10)
-        retry_spin.setToolTip("Retries failed iterations before aborting. 0 disables retries.")
-
-        grid.addWidget(exitfirst_checkbox, 2, 0, 1, 2)
-        retry_row = QHBoxLayout()
-        retry_row.setContentsMargins(0, 0, 0, 0)
-        retry_row.addWidget(retry_label)
-        retry_row.addWidget(retry_spin, 1)
-        layout.addLayout(retry_row)
-        layout.addStretch(1)
-
-        loop_value = normalized.get("loop")
-        duration_value = normalized.get("duration_hours")
-        exitfirst_value = bool(normalized.get("exitfirst"))
-        retry_value = normalized.get("retry_limit", 0) or 0
-        with QSignalBlocker(loops_spin):
-            try:
-                loops_spin.setValue(int(loop_value))
-            except (TypeError, ValueError):
-                loops_spin.setValue(0)
-        with QSignalBlocker(duration_spin):
-            try:
-                duration_spin.setValue(float(duration_value))
-            except (TypeError, ValueError):
-                duration_spin.setValue(0.0)
-        with QSignalBlocker(exitfirst_checkbox):
-            exitfirst_checkbox.setChecked(exitfirst_value)
-        with QSignalBlocker(retry_spin):
-            try:
-                retry_spin.setValue(int(retry_value))
-            except (TypeError, ValueError):
-                retry_spin.setValue(0)
-
-        def _sync_controls(source: str | None = None) -> None:
-            """
-            Execute the sync controls routine.
-
-            This method encapsulates the logic necessary to perform its function.
-            Refer to the implementation for details on parameters and return values.
-            """
-            loop_current = loops_spin.value()
-            duration_current = duration_spin.value()
-            if source == "loop" and loop_current > 0 and duration_current > 0:
-                with QSignalBlocker(duration_spin):
-                    duration_spin.setValue(0.0)
-            elif source == "duration" and loop_current > 0 and duration_current > 0:
-                with QSignalBlocker(loops_spin):
-                    loops_spin.setValue(0)
-            loops_spin.setEnabled(duration_spin.value() == 0.0)
-            duration_spin.setEnabled(loops_spin.value() == 0)
-
-        _sync_controls()
-        retry_spin.setEnabled(exitfirst_checkbox.isChecked())
-
-        loops_spin.valueChanged.connect(lambda _value: _sync_controls("loop"))
-        duration_spin.valueChanged.connect(lambda _value: _sync_controls("duration"))
-        exitfirst_checkbox.toggled.connect(retry_spin.setEnabled)
-
-        self.field_widgets["stability.duration_control.loop"] = loops_spin
-        self.field_widgets["stability.duration_control.duration_hours"] = duration_spin
-        self.field_widgets["stability.duration_control.exitfirst"] = exitfirst_checkbox
-        self.field_widgets["stability.duration_control.retry_limit"] = retry_spin
-
-        return group
+        """Construct the duration control group via the proxy helper."""
+        return _proxy_build_duration_control_group(self, data)
 
     def _build_check_point_group(
             self, data: Mapping[str, Any] | None
     ) -> QGroupBox:
-        """Construct the checkpoint selection group."""
-
-        normalized = data if isinstance(data, Mapping) else {}
-        group, layout = build_groupbox("Check point", parent=self)
-        apply_theme(group)
-        apply_groupbox_style(group)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(8)
-
-        ping_checkbox = QCheckBox("Ping after each step", group)
-        ping_checkbox.setChecked(bool(normalized.get("ping")))
-        layout.addWidget(ping_checkbox)
-
-        targets_label = QLabel("Ping targets (comma separated)", group)
-        targets_edit = LineEdit(group)
-        targets_edit.setPlaceholderText("192.168.50.1,www.baidu.com")
-        targets_edit.setText(str(normalized.get("ping_targets", "") or ""))
-        targets_edit.setClearButtonEnabled(True)
-        targets_edit.setEnabled(ping_checkbox.isChecked())
-        ping_checkbox.toggled.connect(targets_edit.setEnabled)
-        layout.addWidget(targets_label)
-        layout.addWidget(targets_edit)
-        layout.addStretch(1)
-
-        self.field_widgets["stability.check_point.ping"] = ping_checkbox
-        self.field_widgets["stability.check_point.ping_targets"] = targets_edit
-
-        return group
+        """Construct the checkpoint selection group via the proxy helper."""
+        return _proxy_build_check_point_group(self, data)
 
     def _compose_stability_groups(
             self, active_entry: ScriptConfigEntry | None
@@ -4354,95 +3513,5 @@ class CaseConfigPage(CardWidget):
         self.csvFileChanged.emit(self.selected_csv_path or "")
 
     def on_run(self):
-        """
-        Handle the run event triggered by user interaction.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        if not self._validate_first_page():
-            self.stack.setCurrentIndex(0)
-            return
-        self.config = self._load_config()
-        if hasattr(self, "_config_tool_snapshot"):
-            self._config_tool_snapshot = copy.deepcopy(
-                self.config.get(TOOL_SECTION_KEY, {})
-            )
-        self._capture_preselected_csv()
-        self._sync_widgets_to_config()
-        if not self._validate_test_str_requirements():
-            return
-        logging.info(
-            "[on_run] start case=%s csv=%s config=%s",
-            self.field_widgets['text_case'].text().strip(),
-            self.selected_csv_path,
-            self.config,
-        )
-        base = Path(self._get_application_base())
-        case_path = self.config.get("text_case", "")
-        abs_case_path = (
-            (base / case_path).resolve().as_posix() if case_path else ""
-        )
-        logging.debug("[on_run] before performance check abs_case_path=%s csv=%s", abs_case_path,
-                      self.selected_csv_path)
-        # 先将当前用例路径及 CSV 选择写入配置
-        logging.debug("[on_run] after performance check abs_case_path=%s csv=%s", abs_case_path, self.selected_csv_path)
-        # 若树状视图中选择了有效用例，则覆盖默认路径
-        proxy_idx = self.case_tree.currentIndex()
-        model = self.case_tree.model()
-        src_idx = (
-            model.mapToSource(proxy_idx)
-            if isinstance(model, QSortFilterProxyModel)
-            else proxy_idx
-        )
-        selected_path = self.fs_model.filePath(src_idx)
-        if os.path.isfile(selected_path) and selected_path.endswith(".py"):
-            abs_path = Path(selected_path).resolve()
-            display_path = os.path.relpath(abs_path, base)
-            case_path = Path(display_path).as_posix()
-
-            abs_case_path = abs_path.as_posix()
-            self.config["text_case"] = case_path
-        # 保存配置
-        logging.debug("[on_run] before _save_config")
-        self._save_config()
-        logging.debug("[on_run] after _save_config")
-        try:
-            if self._is_performance_case(abs_case_path) and not getattr(self, "selected_csv_path", None):
-                try:
-                    # 如果你工程里有 InfoBar（QFluentWidgets），用这个更友好
-                    bar = self._show_info_bar(
-                        "warning",
-                        "Hint",
-                        "This is a performance test. Please select a CSV file before running.",
-                        duration=3000,
-                    )
-                    if bar is None:
-                        raise RuntimeError("InfoBar unavailable")
-                except Exception:
-                    # 没有 InfoBar 就退化到标准对话框
-                    from PyQt5.QtWidgets import QMessageBox
-                    QMessageBox.warning(
-                        self,
-                        "Hint",
-                        "This is a performance test.\nPlease select a CSV file before running."
-                    )
-                return
-        except Exception:
-            # 兜底避免因为路径解析等异常导致崩溃
-            pass
-
-        if os.path.isfile(abs_case_path) and abs_case_path.endswith(".py"):
-            try:
-                self.on_run_callback(abs_case_path, case_path, self.config)
-            except Exception as exc:  # pragma: no cover - 运行回调抛错时记录日志
-                logging.exception("Run callback failed: %s", exc)
-            else:
-                self._reset_wizard_after_run()
-        else:
-            self._show_info_bar(
-                "warning",
-                "Hint",
-                "Pls select a test case before test",
-                duration=1800,
-            )
+        """Trigger the run workflow via the run proxy implementation."""
+        _proxy_on_run(self)
