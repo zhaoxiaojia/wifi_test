@@ -10,30 +10,18 @@ import logging
 import subprocess
 
 from src.tools.config_loader import load_config
+from src.tools.relay_tool import Relay
 
 
-class power_ctrl:
-    """Encapsulate control of power relays using SNMP via shell commands.
-
-    Instances of this class read relay configuration from a configuration
-    loader and provide methods to switch individual ports on or off as well
-    as to change the state of all configured relays at once.  Commands are
-    executed via :func:`subprocess.check_output` and log their output.
-
-    The command templates stored in :attr:`SWITCH_CMD` and :attr:`SET_CMD`
-    include placeholders for the target IP, port number and desired state.
-    """
+class power_ctrl(Relay):
+    """Encapsulate control of power relays using SNMP via shell commands."""
 
     SWITCH_CMD = 'snmpset -v1 -c private {} .1.3.6.1.4.1.23280.9.1.2.{} i {}'
     SET_CMD = 'snmpset -v1 -c private {} 1.3.6.1.4.1.23273.4.4{}.0 i 255'
 
-    def __init__(self) -> None:
-        """Initialize the power control object from configuration.
-
-        The constructor loads power relay configuration using
-        :func:`load_config` and precomputes a list of (IP, port) tuples from
-        that configuration.
-        """
+    def __init__(self, default_port: tuple[str, int] | None = None) -> None:
+        """Load SNMP relay config and optional default port."""
+        super().__init__(default_port)
         self.config = load_config(refresh=True)
         self.power_ctrl = self.config.get('power_relay')
         self.ip_list = list(self.power_ctrl.keys())
@@ -112,6 +100,22 @@ class power_ctrl:
         """
         logging.info('Shutting down all relays')
         self.set_all(False)
+
+    def pulse(self, direction: str = "power_off", *, port: tuple[str, int] | None = None) -> None:
+        """Send a simple SNMP switch for one relay port."""
+        target = port or self.port
+        if not target:
+            logging.warning("No relay port specified for SNMP pulse")
+            return
+        ip, relay_port = target
+        action = (direction or "power_off").strip().lower()
+        off_alias = {"power_off", "off", "断通"}
+        on_alias = {"power_on", "on", "通断"}
+        if action not in off_alias | on_alias:
+            logging.warning("Unknown direction %s; defaulting to power_off", direction)
+            action = "power_off"
+        status = 0 if action in off_alias else 1
+        self.switch(ip, relay_port, status)
 
 # s = PowerCtrl("192.168.50.230")
 # s.switch(2, True)

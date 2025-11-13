@@ -19,7 +19,7 @@ from src.test.stability import (
     run_checkpoints,
 )
 from src.tools.config_loader import load_config
-from src.tools.usb_relay_controller import UsbRelayDevice, pulse
+from src.tools.relay_tool.usb_relay_controller import UsbRelayDevice, pulse
 
 
 @dataclass(frozen=True)
