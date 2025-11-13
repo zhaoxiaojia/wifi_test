@@ -16,6 +16,8 @@ import re
 import time
 from typing import Iterable, Annotated
 
+from src.tools.relay_tool import Relay
+
 try:
     import serial  # type: ignore
 except ImportError:  # pragma: no cover - optional dependency
@@ -168,6 +170,40 @@ class UsbRelayDevice:
         for command in commands:
             self.send(command)
             time.sleep(max(0.0, interval))
+
+
+class UsbRelayController(Relay):
+    """Expose Relay ABC behavior for USB relays."""
+
+    def __init__(self, port: str | None = None, *, mode: str = "NO", press_seconds: float | None = None) -> None:
+        """Store default USB relay parameters."""
+        super().__init__(port)
+        self.mode = mode
+        self.press_seconds = press_seconds
+
+    def pulse(
+        self,
+        direction: str = "power_off",
+        *,
+        port: str | None = None,
+        mode: str | None = None,
+        press_seconds: float | None = None,
+    ) -> None:
+        """Dispatch the standard USB relay pulse."""
+        relay_port = port or self.port
+        if not relay_port:
+            raise ValueError("USB relay port is not configured")
+        device_mode = mode or self.mode
+        duration = press_seconds if press_seconds is not None else self.press_seconds
+        logging.debug(
+            "USB relay pulse direction=%s port=%s mode=%s hold=%s",
+            direction,
+            relay_port,
+            device_mode,
+            duration,
+        )
+        with UsbRelayDevice(relay_port) as device:
+            pulse(device, device_mode, duration)
 
 
 def _normalize_wiring(mode: str) -> str:
