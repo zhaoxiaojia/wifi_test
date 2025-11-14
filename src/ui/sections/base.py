@@ -57,12 +57,27 @@ class ConfigSection:
 
         self.groups[key] = group
         self.page._register_group(key, group, is_dut)
+        # Also expose the group via the page's logical control registry when available.
+        register = getattr(self.page, "_register_config_control_from_section", None)
+        if callable(register):
+            try:
+                register(self.section_id or key, getattr(self, "panel", "main"), key, group)
+            except Exception:
+                pass
 
     def register_field(self, key: str, widget: QWidget) -> None:
         """Expose ``widget`` through the page field registry."""
 
         self.widgets[key] = widget
         self.page.field_widgets[key] = widget
+        # Optionally register a logical control identifier on the hosting page.
+        register = getattr(self.page, "_register_config_control_from_section", None)
+        if callable(register):
+            try:
+                register(self.section_id or key, getattr(self, "panel", "main"), key, widget)
+            except Exception:
+                # Mapping failures should never break UI construction.
+                pass
 
 
 __all__ = [

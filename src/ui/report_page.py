@@ -474,6 +474,17 @@ class ReportPage(RvrChartLogic, CardWidget):
         self.viewer_stack.addWidget(self.chart_tabs)
         self.viewer_stack.setCurrentWidget(self.viewer)
 
+        # Logical control map for the report page.
+        # Keys follow: page_frame_group_purpose_type
+        self.report_controls: dict[str, object] = {
+            "report_main_title_label": self.title_label,
+            "report_main_dir_label": self.dir_label,
+            "report_main_file_list_list": self.file_list,
+            "report_main_viewer_stack": self.viewer_stack,
+            "report_main_text_viewer": self.viewer,
+            "report_main_chart_tabs": self.chart_tabs,
+        }
+
         self.setLayout(root)
 
         self._view_mode: str = 'text'  # 'text' or 'chart'

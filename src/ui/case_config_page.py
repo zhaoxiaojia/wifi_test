@@ -189,7 +189,10 @@ class CaseConfigPage(CardWidget):
         # Initialize transient state flags used by the UI during refreshes and selections
         self._refreshing = False
         self._pending_path: str | None = None
+        # Mapping from config field keys (e.g. "android_system.version") to widgets
         self.field_widgets: dict[str, QWidget] = {}
+        # Mapping from logical UI identifiers (config_panel_group_field_type) to widgets
+        self.config_controls: dict[str, QWidget] = {}
         self._section_instances: dict[str, ConfigSection] = {}
         self._section_context = SectionContext()
         self._duration_control_group: QGroupBox | None = None
@@ -1662,15 +1665,101 @@ class CaseConfigPage(CardWidget):
 
     def _register_group(self, key: str, group: QWidget, is_dut: bool) -> None:
         """
-        Execute the register group routine.
+        Register a configuration group on the DUT or non‑DUT panel.
 
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
+        This keeps two internal mappings (``_dut_groups`` and
+        ``_other_groups``) used when re‑balancing panel layouts.  The
+        function itself does not create widgets; it simply stores
+        references passed in from section builders.
         """
         if is_dut:
             self._dut_groups[key] = group
         else:
             self._other_groups[key] = group
+
+    # ------------------------------------------------------------------
+    # Logical control identifiers for the Config page
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _normalize_control_token(value: str) -> str:
+        """Return a lower‑case identifier token derived from ``value``."""
+        text = (value or "").strip().lower()
+        # Only allow [a‑z0‑9_]; collapse other characters into underscores.
+        text = re.sub(r"[^0-9a-z]+", "_", text)
+        return text.strip("_") or "x"
+
+    def _widget_suffix(self, widget: QWidget) -> str:
+        """Return a short type suffix for ``widget`` (text/combo/check/btn/...)."""
+        if isinstance(widget, ComboBox):
+            return "combo"
+        if isinstance(widget, (LineEdit, TextEdit)):
+            return "text"
+        if isinstance(widget, QCheckBox):
+            return "check"
+        if isinstance(widget, (QSpinBox, QDoubleSpinBox)):
+            return "spin"
+        if isinstance(widget, QTableWidget):
+            return "table"
+        if isinstance(widget, QListWidget):
+            return "list"
+        if isinstance(widget, QGroupBox):
+            return "group"
+        if isinstance(widget, PushButton):
+            return "btn"
+        return "widget"
+
+    def _register_config_control(
+            self,
+            panel: str,
+            group: str,
+            field: str,
+            widget: QWidget,
+    ) -> None:
+        """Store a logical identifier for a Config page control.
+
+        The identifier follows the pattern ``config_panel_group_field_type``
+        where each token is normalised to lower case and uses underscores
+        instead of spaces or punctuation.  This mapping is intended for
+        higher‑level schema/automation code and does not affect existing
+        field lookups.
+        """
+        panel_token = self._normalize_control_token(panel or "main")
+        group_token = self._normalize_control_token(group or panel or "group")
+        field_token = self._normalize_control_token(field or group or "field")
+        suffix = self._widget_suffix(widget)
+        control_id = f"config_{panel_token}_{group_token}_{field_token}_{suffix}"
+        existing = self.config_controls.get(control_id)
+        if existing is widget:
+            return
+        if existing is not None and existing is not widget:
+            logging.debug(
+                "CaseConfigPage: control id collision for %s (old=%r new=%r)",
+                control_id,
+                existing,
+                widget,
+            )
+        self.config_controls[control_id] = widget
+
+    def _register_config_control_from_section(
+            self,
+            section_id: str,
+            panel: str,
+            field_key: str,
+            widget: QWidget,
+    ) -> None:
+        """Helper used by section classes to register logical control IDs.
+
+        ``field_key`` is typically a dotted path such as
+        ``\"android_system.version\"``.  The first component is treated as
+        the group name, the last component as the field name.
+        """
+        if not field_key:
+            return
+        parts = str(field_key).split(".")
+        group = parts[0] if parts else (section_id or "")
+        field = parts[-1] if parts else (section_id or field_key)
+        self._register_config_control(panel or "main", group, field, widget)
 
     @staticmethod
     def _is_dut_key(key: str) -> bool:
@@ -2781,6 +2870,13 @@ class CaseConfigPage(CardWidget):
             vbox.addWidget(edit)
             self._register_group(key, group, self._is_dut_key(key))
             self.field_widgets[key] = edit
+            # Register a generic logical identifier for these fallback fields.
+            self._register_config_control(
+                "dut" if self._is_dut_key(key) else "execution",
+                key,
+                key,
+                edit,
+            )
 
         self._build_duration_group()
 
