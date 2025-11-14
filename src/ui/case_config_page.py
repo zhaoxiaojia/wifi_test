@@ -106,6 +106,8 @@ from .rf_step_segments import RfStepSegmentsWidget
 from .switch_wifi_widgets import SwitchWifiManualEditor, SwitchWifiCsvPreview
 from .windows_case_panels import ConfigGroupPanel
 from . import build_groupbox
+from .sections import build_sections
+from .sections.base import ConfigSection, SectionContext
 from .config_proxy import ConfigProxy
 from .group_proxy import (
     _build_network_group as _proxy_build_network_group,
@@ -188,6 +190,8 @@ class CaseConfigPage(CardWidget):
         self._refreshing = False
         self._pending_path: str | None = None
         self.field_widgets: dict[str, QWidget] = {}
+        self._section_instances: dict[str, ConfigSection] = {}
+        self._section_context = SectionContext()
         self._duration_control_group: QGroupBox | None = None
         self._check_point_group: QGroupBox | None = None
         self.router_obj = None
@@ -2518,11 +2522,27 @@ class CaseConfigPage(CardWidget):
         if hasattr(self, 'test_case_edit'):
             self.test_case_edit.setText(self._case_path_to_display(normalized))
 
+    def _active_case_type(self) -> str:
+        """Return the current case type identifier used for section selection."""
+        if getattr(self, "_current_case_path", ""):
+            return self._script_case_key(self._current_case_path)
+        return "default"
+
+    def _build_registered_sections(self) -> set[str]:
+        """Instantiate registered sections and build their widgets."""
+        case_type = self._active_case_type()
+        tags: set[str] = set()
+        sections = build_sections(self, case_type, tags)
+        self._section_context = SectionContext(case_type, tags)
+        self._section_instances = {section.section_id: section for section in sections}
+        for section in sections:
+            section.build(self.config)
+        return set(self._section_instances.keys())
+
     def render_all_fields(self):
         """自动渲染配置字段，支持 LineEdit / ComboBox（可扩展 Checkbox）。"""
         self._dut_groups.clear()
         self._other_groups.clear()
-        # Ensure DUT metadata placeholders exist
         defaults_for_dut = {
             "software_info": {},
             "hardware_info": {},
@@ -2536,23 +2556,11 @@ class CaseConfigPage(CardWidget):
                 self.config[_key] = dict(existing)
 
         def _coerce_debug_flag(value) -> bool:
-            """
-            Execute the coerce debug flag routine.
-
-            This method encapsulates the logic necessary to perform its function.
-            Refer to the implementation for details on parameters and return values.
-            """
             if isinstance(value, str):
                 return value.strip().lower() in {"1", "true", "yes", "on"}
             return bool(value)
 
         def _normalize_debug_section(raw_value) -> dict[str, bool]:
-            """
-            Execute the normalize debug section routine.
-
-            This method encapsulates the logic necessary to perform its function.
-            Refer to the implementation for details on parameters and return values.
-            """
             if isinstance(raw_value, dict):
                 normalized = dict(raw_value)
             else:
@@ -2570,514 +2578,12 @@ class CaseConfigPage(CardWidget):
         self.config["stability"] = self._normalize_stability_settings(
             self.config.get("stability")
         )
-        for i, (key, value) in enumerate(self.config.items()):
-            if key == "stability":
-                continue
-            if key == "software_info":
-                data = value if isinstance(value, dict) else {}
-                group = QGroupBox("Software Info")
-                vbox = QVBoxLayout(group)
-                self.software_version_edit = LineEdit(self)
-                self.software_version_edit.setPlaceholderText("e.g. V1.2.3")
-                self.software_version_edit.setText(str(data.get("software_version", "")))
-                vbox.addWidget(QLabel("Software Version:"))
-                vbox.addWidget(self.software_version_edit)
-                self.driver_version_edit = LineEdit(self)
-                self.driver_version_edit.setPlaceholderText("Driver build")
-                self.driver_version_edit.setText(str(data.get("driver_version", "")))
-                vbox.addWidget(QLabel("Driver Version:"))
-                vbox.addWidget(self.driver_version_edit)
-                self._register_group(key, group, True)
-                self.field_widgets["software_info.software_version"] = self.software_version_edit
-                self.field_widgets["software_info.driver_version"] = self.driver_version_edit
-                continue
-            if key == "hardware_info":
-                data = value if isinstance(value, dict) else {}
-                group = QGroupBox("Hardware Info")
-                vbox = QVBoxLayout(group)
-                self.hardware_version_edit = LineEdit(self)
-                self.hardware_version_edit.setPlaceholderText("PCB revision / BOM")
-                self.hardware_version_edit.setText(str(data.get("hardware_version", "")))
-                vbox.addWidget(QLabel("Hardware Version:"))
-                vbox.addWidget(self.hardware_version_edit)
-                self._register_group(key, group, True)
-                self.field_widgets["hardware_info.hardware_version"] = self.hardware_version_edit
-                continue
-            if key == "android_system":
-                data = value if isinstance(value, dict) else {}
-                group = QGroupBox("Android System")
-                vbox = QVBoxLayout(group)
-                self.android_version_label = QLabel("Android Version:")
-                vbox.addWidget(self.android_version_label)
-                self.android_version_combo = ComboBox(self)
-                self.android_version_combo.addItems(self._android_versions)
-                current_version = str(data.get("version", ""))
-                if current_version and current_version not in self._android_versions:
-                    self.android_version_combo.addItem(current_version)
-                if current_version:
-                    self.android_version_combo.setCurrentText(current_version)
-                else:
-                    self.android_version_combo.setCurrentIndex(-1)
-                self.android_version_combo.currentTextChanged.connect(self._on_android_version_changed)
-                vbox.addWidget(self.android_version_combo)
-                self.kernel_version_label = QLabel("Kernel Version:")
-                vbox.addWidget(self.kernel_version_label)
-                self.kernel_version_combo = ComboBox(self)
-                self.kernel_version_combo.addItems(self._kernel_versions)
-                kernel_value = str(data.get("kernel_version", ""))
-                if kernel_value and kernel_value not in self._kernel_versions:
-                    self.kernel_version_combo.addItem(kernel_value)
-                if kernel_value:
-                    self.kernel_version_combo.setCurrentText(kernel_value)
-                else:
-                    self.kernel_version_combo.setCurrentIndex(-1)
-                vbox.addWidget(self.kernel_version_combo)
-                self._register_group(key, group, True)
-                self.field_widgets["android_system.version"] = self.android_version_combo
-                self.field_widgets["android_system.kernel_version"] = self.kernel_version_combo
-                continue
-            if key == "connect_type":
-                group = QGroupBox("Control Type")
-                vbox = QVBoxLayout(group)
-                self.connect_type_combo = ComboBox(self)
-                self.connect_type_combo.addItem("Android", "Android")
-                self.connect_type_combo.addItem("Linux", "Linux")
-                self._set_connect_type_combo_selection(value.get("type", "Android"))
-                self.connect_type_combo.currentTextChanged.connect(self.on_connect_type_changed)
-                vbox.addWidget(self.connect_type_combo)
-                # 独立的 Android / Linux 参数面板
-                self.adb_group = QWidget()
-                adb_vbox = QVBoxLayout(self.adb_group)
-                self.adb_device_edit = LineEdit(self)
-                self.adb_device_edit.setPlaceholderText("Android.device")
-                adb_vbox.addWidget(QLabel("Android Device:"))
-                adb_vbox.addWidget(self.adb_device_edit)
-
-                self.telnet_group = QWidget()
-                telnet_vbox = QVBoxLayout(self.telnet_group)
-                telnet_cfg = value.get("Linux", {}) if isinstance(value, dict) else {}
-                self.telnet_ip_edit = LineEdit(self)
-                self.telnet_ip_edit.setPlaceholderText("Linux.ip")
-                telnet_vbox.addWidget(QLabel("Linux IP:"))
-                telnet_vbox.addWidget(self.telnet_ip_edit)
-
-                self.third_party_group = QWidget()
-                third_party_vbox = QVBoxLayout(self.third_party_group)
-                third_cfg = value.get("third_party", {}) if isinstance(value, dict) else {}
-                enabled = bool(third_cfg.get("enabled", False))
-                wait_seconds = third_cfg.get("wait_seconds")
-                wait_text = "" if wait_seconds in (None, "") else str(wait_seconds)
-
-                self.third_party_checkbox = QCheckBox("Enable third-party control", self)
-                self.third_party_checkbox.setChecked(enabled)
-                self.third_party_checkbox.toggled.connect(self.on_third_party_toggled)
-                third_party_vbox.addWidget(self.third_party_checkbox)
-
-                self.third_party_wait_label = QLabel("Wait seconds:")
-                third_party_vbox.addWidget(self.third_party_wait_label)
-                self.third_party_wait_edit = LineEdit(self)
-                self.third_party_wait_edit.setPlaceholderText("wait seconds (e.g. 3)")
-                self.third_party_wait_edit.setValidator(QIntValidator(1, 999999, self))
-                self.third_party_wait_edit.setText(wait_text)
-                third_party_vbox.addWidget(self.third_party_wait_edit)
-
-                vbox.addWidget(self.adb_group)
-                vbox.addWidget(self.telnet_group)
-                vbox.addWidget(self.third_party_group)
-                self._register_group(key, group, self._is_dut_key(key))
-                self.adb_device_edit.setText(value.get("Android", {}).get("device", ""))
-                self.telnet_ip_edit.setText(telnet_cfg.get("ip", ""))
-                self.on_third_party_toggled(self.third_party_checkbox.isChecked())
-                self.on_connect_type_changed(self._current_connect_type())
-                self.field_widgets["connect_type.type"] = self.connect_type_combo
-                self.field_widgets["connect_type.Android.device"] = self.adb_device_edit
-                self.field_widgets["connect_type.Linux.ip"] = self.telnet_ip_edit
-                self.field_widgets["connect_type.third_party.enabled"] = self.third_party_checkbox
-                self.field_widgets["connect_type.third_party.wait_seconds"] = self.third_party_wait_edit
-                continue
-                continue
-            if key == "fpga":
-                group = QGroupBox("Project")
-                vbox = QVBoxLayout(group)
-                defaults = self._normalize_fpga_section(value)
-                customer_default = defaults.get("customer", "")
-                product_default = defaults.get("product_line", "")
-                project_default = defaults.get("project", "")
-
-                if not customer_default and product_default:
-                    for customer_name, product_lines in WIFI_PRODUCT_PROJECT_MAP.items():
-                        if product_default in product_lines:
-                            customer_default = customer_name
-                            break
-
-                self.fpga_customer_combo = ComboBox(self)
-                for customer_name in WIFI_PRODUCT_PROJECT_MAP.keys():
-                    self.fpga_customer_combo.addItem(customer_name)
-                if customer_default and customer_default in WIFI_PRODUCT_PROJECT_MAP:
-                    self.fpga_customer_combo.setCurrentText(customer_default)
-                else:
-                    self.fpga_customer_combo.setCurrentIndex(-1)
-
-                self.fpga_product_combo = ComboBox(self)
-                self.fpga_project_combo = ComboBox(self)
-
-                self._refresh_fpga_product_lines(customer_default, product_default, block_signals=True)
-                if (
-                        customer_default
-                        and product_default
-                        and product_default in WIFI_PRODUCT_PROJECT_MAP.get(customer_default, {})
-                ):
-                    self.fpga_product_combo.setCurrentText(product_default)
-                else:
-                    self.fpga_product_combo.setCurrentIndex(-1)
-
-                self._refresh_fpga_projects(customer_default, product_default, project_default, block_signals=True)
-                if (
-                        customer_default
-                        and product_default
-                        and project_default
-                        and project_default
-                        in WIFI_PRODUCT_PROJECT_MAP.get(customer_default, {}).get(product_default, {})
-                ):
-                    self.fpga_project_combo.setCurrentText(project_default)
-                else:
-                    self.fpga_project_combo.setCurrentIndex(-1)
-
-                vbox.addWidget(QLabel("Customer:"))
-                vbox.addWidget(self.fpga_customer_combo)
-                vbox.addWidget(QLabel("Product Line:"))
-                vbox.addWidget(self.fpga_product_combo)
-                vbox.addWidget(QLabel("Project:"))
-                vbox.addWidget(self.fpga_project_combo)
-
-                self.fpga_customer_combo.currentTextChanged.connect(self.on_fpga_customer_changed)
-                self.fpga_product_combo.currentTextChanged.connect(self.on_fpga_product_line_changed)
-                self.fpga_project_combo.currentTextChanged.connect(self.on_fpga_project_changed)
-
-                self._fpga_details = defaults
-                self._update_fpga_hidden_fields()
-                self._register_group(key, group, self._is_dut_key(key))
-                self.field_widgets["fpga.customer"] = self.fpga_customer_combo
-                self.field_widgets["fpga.product_line"] = self.fpga_product_combo
-                self.field_widgets["fpga.project"] = self.fpga_project_combo
-                continue
-            if key == "rf_solution":
-                group = QGroupBox("Attenuator")
-                vbox = QVBoxLayout(group)
-                # -------- 下拉：选择型号 --------
-                self.rf_model_combo = ComboBox(self)
-                self.rf_model_combo.addItems([
-                    "RS232Board5",
-                    "RC4DAT-8G-95",
-                    "RADIORACK-4-220",
-                    "LDA-908V-8",
-                ])
-                self.rf_model_combo.setCurrentText(value.get("model", "RS232Board5"))
-                self.rf_model_combo.currentTextChanged.connect(self.on_rf_model_changed)
-                vbox.addWidget(QLabel("Model:"))
-                vbox.addWidget(self.rf_model_combo)
-
-                # ========== ① RS232Board5 参数区（目前无额外字段，可放提醒文字） ==========
-                self.xin_group = QWidget()
-                xin_box = QVBoxLayout(self.xin_group)
-                xin_box.addWidget(QLabel("SH - New Wi-Fi full-wave anechoic chamber "))
-                vbox.addWidget(self.xin_group)
-
-                # ========== ② RC4DAT-8G-95 参数区 ==========
-                self.rc4_group = QWidget()
-                rc4_box = QVBoxLayout(self.rc4_group)
-                rc4_cfg = value.get("RC4DAT-8G-95", {})
-                self.rc4_vendor_edit = LineEdit(self)
-                self.rc4_product_edit = LineEdit(self)
-                self.rc4_ip_edit = LineEdit(self)
-                self.rc4_vendor_edit.setPlaceholderText("idVendor")
-                self.rc4_product_edit.setPlaceholderText("idProduct")
-                self.rc4_ip_edit.setPlaceholderText("ip_address")
-                self.rc4_vendor_edit.setText(str(rc4_cfg.get("idVendor", "")))
-                self.rc4_product_edit.setText(str(rc4_cfg.get("idProduct", "")))
-                self.rc4_ip_edit.setText(rc4_cfg.get("ip_address", ""))
-                rc4_box.addWidget(QLabel("idVendor:"))
-                rc4_box.addWidget(self.rc4_vendor_edit)
-                rc4_box.addWidget(QLabel("idProduct:"))
-                rc4_box.addWidget(self.rc4_product_edit)
-                rc4_box.addWidget(QLabel("IP address :"))
-                rc4_box.addWidget(self.rc4_ip_edit)
-                vbox.addWidget(self.rc4_group)
-
-                # ========== ③ RADIORACK-4-220 参数区 ==========
-                self.rack_group = QWidget()
-                rack_box = QVBoxLayout(self.rack_group)
-                rack_cfg = value.get("RADIORACK-4-220", {})
-                self.rack_ip_edit = LineEdit(self)
-                self.rack_ip_edit.setPlaceholderText("ip_address")
-                self.rack_ip_edit.setText(rack_cfg.get("ip_address", ""))
-                rack_box.addWidget(QLabel("IP address :"))
-                rack_box.addWidget(self.rack_ip_edit)
-                vbox.addWidget(self.rack_group)
-
-                # ========== ④ LDA-908V-8 参数区 ==========
-                self.lda_group = QWidget()
-                lda_box = QVBoxLayout(self.lda_group)
-                lda_cfg = value.get("LDA-908V-8", {})
-                if not isinstance(lda_cfg, dict):
-                    lda_cfg = {}
-                    value["LDA-908V-8"] = lda_cfg
-                channels_value = lda_cfg.setdefault("channels", [])
-                self.lda_ip_edit = LineEdit(self)
-                self.lda_ip_edit.setPlaceholderText("ip_address")
-                self.lda_ip_edit.setText(lda_cfg.get("ip_address", ""))
-                lda_channels = lda_cfg.get("channels", "")
-                if isinstance(lda_channels, (list, tuple, set)):
-                    lda_channels_text = ",".join(map(str, lda_channels))
-                else:
-                    lda_channels_text = str(lda_channels or "")
-                self.lda_channels_edit = LineEdit(self)
-                self.lda_channels_edit.setPlaceholderText("channels (1-8, e.g. 1,2,3)")
-                self.lda_channels_edit.setText(lda_channels_text)
-                lda_box.addWidget(QLabel("IP address :"))
-                lda_box.addWidget(self.lda_ip_edit)
-                lda_box.addWidget(QLabel("Channels (1-8):"))
-                lda_box.addWidget(self.lda_channels_edit)
-                vbox.addWidget(self.lda_group)
-
-                # -------- 通用字段：step --------
-                self.rf_step_widget = RfStepSegmentsWidget(self)
-                self.rf_step_widget.set_segments_from_config(value.get("step"))
-                vbox.addWidget(QLabel("Step:"))
-                vbox.addWidget(self.rf_step_widget)
-
-                # ---- 加入表单 & 初始化可见性 ----
-                self._register_group(key, group, self._is_dut_key(key))
-                self.on_rf_model_changed(self.rf_model_combo.currentText())
-
-                # ---- 注册控件 ----
-                self.field_widgets["rf_solution.model"] = self.rf_model_combo
-                self.field_widgets["rf_solution.RC4DAT-8G-95.idVendor"] = self.rc4_vendor_edit
-                self.field_widgets["rf_solution.RC4DAT-8G-95.idProduct"] = self.rc4_product_edit
-                self.field_widgets["rf_solution.RC4DAT-8G-95.ip_address"] = self.rc4_ip_edit
-                self.field_widgets["rf_solution.RADIORACK-4-220.ip_address"] = self.rack_ip_edit
-                self.field_widgets["rf_solution.LDA-908V-8.ip_address"] = self.lda_ip_edit
-                self.field_widgets["rf_solution.LDA-908V-8.channels"] = self.lda_channels_edit
-                self.field_widgets["rf_solution.step"] = self.rf_step_widget
-                continue  # 跳过后面的通用字段处理
-            if key == "debug":
-                data = self.config.get("debug", {}) if isinstance(self.config, dict) else {}
-                group = QGroupBox("Debug Options")
-                vbox = QVBoxLayout(group)
-
-                debug_options = [
-                    (
-                        "database_mode",
-                        "Enable database debug mode",
-                        "When enabled, performance tests skip router/RF/corner setup and "
-                        "simulate iperf results for database debugging.",
-                    ),
-                    (
-                        "skip_router",
-                        "Skip router workflow",
-                        "Skip router instantiation, configuration, and Wi-Fi reconnection steps "
-                        "during performance tests.",
-                    ),
-                    (
-                        "skip_corner_rf",
-                        "Skip corner && RF workflow",
-                        "Skip corner turntable and RF attenuator initialization and adjustments.",
-                    ),
-                ]
-
-                for index, (option_key, label, hint_text) in enumerate(debug_options):
-                    checkbox = QCheckBox(label, self)
-                    checkbox.setChecked(bool(data.get(option_key)))
-                    vbox.addWidget(checkbox)
-                    self.field_widgets[f"debug.{option_key}"] = checkbox
-                    if index == 0:
-                        self.database_debug_checkbox = checkbox
-                    if hint_text:
-                        hint_label = QLabel(hint_text)
-                        hint_label.setWordWrap(True)
-                        hint_label.setObjectName("debugHintLabel")
-                        vbox.addWidget(hint_label)
-
-                self._register_group(key, group, self._is_dut_key(key))
-                continue
-            if key == "rvr":
-                group = QGroupBox("RvR Config")  # 外层分组
-                vbox = QVBoxLayout(group)
-                # Tool 下拉
-                self.rvr_tool_combo = ComboBox(self)
-                self.rvr_tool_combo.addItems(["iperf", "ixchariot"])
-                self.rvr_tool_combo.setCurrentText(value.get("tool", "iperf"))
-                self.rvr_tool_combo.currentTextChanged.connect(self.on_rvr_tool_changed)
-                vbox.addWidget(QLabel("Data Generator:"))
-                vbox.addWidget(self.rvr_tool_combo)
-
-                # ----- iperf 子组 -----
-                self.rvr_iperf_group = QWidget()
-                iperf_box = QVBoxLayout(self.rvr_iperf_group)
-
-                self.iperf_path_edit = LineEdit(self)
-                self.iperf_path_edit.setPlaceholderText("iperf path (DUT)")
-                self.iperf_path_edit.setText(value.get("iperf", {}).get("path", ""))
-                iperf_box.addWidget(QLabel("Path:"))
-                iperf_box.addWidget(self.iperf_path_edit)
-
-                self.iperf_server_edit = LineEdit(self)
-                self.iperf_server_edit.setPlaceholderText("iperf -s command")
-                self.iperf_server_edit.setText(value.get("iperf", {}).get("server_cmd", ""))
-                iperf_box.addWidget(QLabel("Server cmd:"))
-                iperf_box.addWidget(self.iperf_server_edit)
-
-                self.iperf_client_edit = LineEdit(self)
-                self.iperf_client_edit.setPlaceholderText("iperf -c command")
-                self.iperf_client_edit.setText(value.get("iperf", {}).get("client_cmd", ""))
-                iperf_box.addWidget(QLabel("Client cmd:"))
-                iperf_box.addWidget(self.iperf_client_edit)
-                vbox.addWidget(self.rvr_iperf_group)
-
-                # ----- ixchariot 子组 -----
-                self.rvr_ix_group = QWidget()
-                ix_box = QVBoxLayout(self.rvr_ix_group)
-                # CSV 选择框
-                vbox.addWidget(QLabel("Select config csv file"))
-                self.csv_combo = ComboBox(self)
-                self.csv_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-                self.csv_combo.setEnabled(False)
-                # currentIndexChanged 在选择相同项时不会触发，activated 每次用户点击都会触发
-                self.csv_combo.currentIndexChanged.connect(self.on_csv_changed)
-                self.csv_combo.activated.connect(self.on_csv_activated)
-                vbox.addWidget(self.csv_combo)
-
-                self.ix_path_edit = LineEdit(self)
-                self.ix_path_edit.setPlaceholderText("IxChariot path")
-                self.ix_path_edit.setText(value.get("ixchariot", {}).get("path", ""))
-                ix_box.addWidget(self.ix_path_edit)
-                vbox.addWidget(self.rvr_ix_group)
-
-                # ----- 其它通用字段 -----
-                self.repeat_combo = LineEdit()
-                self.repeat_combo.setText(str(value.get("repeat", 0)))
-
-                vbox.addWidget(QLabel("Repeat:"))
-                vbox.addWidget(self.repeat_combo)
-                self.rvr_threshold_edit = LineEdit()
-                self.rvr_threshold_edit.setPlaceholderText("throughput threshold")
-                self.rvr_threshold_edit.setText(str(value.get("throughput_threshold", 0)))
-
-                vbox.addWidget(QLabel("Zero Point Threshold:"))
-                vbox.addWidget(self.rvr_threshold_edit)
-                # 加入表单
-                self._register_group(key, group, self._is_dut_key(key))
-
-                # 字段注册（供启用/禁用和收集参数用）
-                self.field_widgets["rvr.tool"] = self.rvr_tool_combo
-                self.field_widgets["rvr.iperf.path"] = self.iperf_path_edit
-                self.field_widgets["rvr.iperf.server_cmd"] = self.iperf_server_edit
-                self.field_widgets["rvr.iperf.client_cmd"] = self.iperf_client_edit
-                self.field_widgets["rvr.ixchariot.path"] = self.ix_path_edit
-                self.field_widgets["rvr.repeat"] = self.repeat_combo
-                self.field_widgets["rvr.throughput_threshold"] = self.rvr_threshold_edit
-                # 根据当前 Tool 值隐藏/显示子组
-                self.on_rvr_tool_changed(self.rvr_tool_combo.currentText())
-                continue  # 跳过默认 LineEdit 处理
-
-                # ---------- 其余简单字段 ----------
-            if key == TURN_TABLE_SECTION_KEY:
-                group = QGroupBox("Turntable")
-                vbox = QVBoxLayout(group)
-
-                # —— Turntable 型号选择 ——
-                self.turntable_model_combo = ComboBox(self)
-                self.turntable_model_combo.addItems(list(TURN_TABLE_MODEL_CHOICES))
-                model_value = str(
-                    value.get(TURN_TABLE_FIELD_MODEL, TURN_TABLE_MODEL_RS232)
-                )
-                if model_value not in TURN_TABLE_MODEL_CHOICES:
-                    model_value = TURN_TABLE_MODEL_RS232
-                self.turntable_model_combo.setCurrentText(model_value)
-
-                vbox.addWidget(QLabel("Turntable:"))
-                vbox.addWidget(self.turntable_model_combo)
-
-                # —— IP 地址 ——
-                self.turntable_ip_label = QLabel("IP address:")
-                self.turntable_ip_edit = LineEdit(self)
-                self.turntable_ip_edit.setPlaceholderText(TURN_TABLE_FIELD_IP_ADDRESS)
-                ip_value = value.get(TURN_TABLE_FIELD_IP_ADDRESS, "")
-                self.turntable_ip_edit.setText(str(ip_value))
-
-                # —— 角度步进 ——
-                self.turntable_step_edit = LineEdit(self)
-                self.turntable_step_edit.setPlaceholderText("Step; e.g. 0,361")
-                step_value = value.get(TURN_TABLE_FIELD_STEP, "")
-                if isinstance(step_value, (list, tuple, set)):
-                    step_text = ",".join(str(item) for item in step_value)
-                else:
-                    step_text = str(step_value) if step_value is not None else ""
-                self.turntable_step_edit.setText(step_text)
-
-                static_db_value = value.get(TURN_TABLE_FIELD_STATIC_DB, "")
-                self.turntable_static_db_edit = LineEdit(self)
-                self.turntable_static_db_edit.setPlaceholderText("Static attenuation (dB)")
-                self.turntable_static_db_edit.setText(
-                    "" if static_db_value is None else str(static_db_value)
-                )
-
-                target_rssi_value = value.get(TURN_TABLE_FIELD_TARGET_RSSI, "")
-                self.turntable_target_rssi_edit = LineEdit(self)
-                self.turntable_target_rssi_edit.setPlaceholderText("Target RSSI (dBm)")
-                self.turntable_target_rssi_edit.setText(
-                    "" if target_rssi_value is None else str(target_rssi_value)
-                )
-
-                vbox.addWidget(self.turntable_ip_label)
-                vbox.addWidget(self.turntable_ip_edit)
-                vbox.addWidget(QLabel("Step:"))
-                vbox.addWidget(self.turntable_step_edit)
-                vbox.addWidget(QLabel("Static dB:"))
-                vbox.addWidget(self.turntable_static_db_edit)
-                vbox.addWidget(QLabel("Target RSSI:"))
-                vbox.addWidget(self.turntable_target_rssi_edit)
-                self.turntable_model_combo.currentTextChanged.connect(
-                    self._on_turntable_model_changed
-                )
-                self.turntable_static_db_edit.textChanged.connect(
-                    lambda _text, source="static": self._ensure_turntable_inputs_exclusive(source)
-                )
-                self.turntable_target_rssi_edit.textChanged.connect(
-                    lambda _text, source="target": self._ensure_turntable_inputs_exclusive(source)
-                )
-                self._ensure_turntable_inputs_exclusive(None)
-                self._on_turntable_model_changed(self.turntable_model_combo.currentText())
-
-                # 加入表单
-                self._register_group(key, group, self._is_dut_key(key))
-
-                # 注册控件（用于启用/禁用、保存回 YAML）
-                self.field_widgets[
-                    f"{TURN_TABLE_SECTION_KEY}.{TURN_TABLE_FIELD_MODEL}"
-                ] = self.turntable_model_combo
-                self.field_widgets[
-                    f"{TURN_TABLE_SECTION_KEY}.{TURN_TABLE_FIELD_IP_ADDRESS}"
-                ] = self.turntable_ip_edit
-                self.field_widgets[
-                    f"{TURN_TABLE_SECTION_KEY}.{TURN_TABLE_FIELD_STEP}"
-                ] = self.turntable_step_edit
-                self.field_widgets[
-                    f"{TURN_TABLE_SECTION_KEY}.{TURN_TABLE_FIELD_STATIC_DB}"
-                ] = self.turntable_static_db_edit
-                self.field_widgets[
-                    f"{TURN_TABLE_SECTION_KEY}.{TURN_TABLE_FIELD_TARGET_RSSI}"
-                ] = self.turntable_target_rssi_edit
-                continue  # 跳过后面的通用处理
-            if key == "router":
-                self._build_network_group(value)
-                continue  # ← 继续下一顶层 key
-            if key == "serial_port":
-                self._build_traffic_group(value)
+        handled_section_ids = self._build_registered_sections()
+        for key, value in self.config.items():
+            if key in handled_section_ids or key == "stability":
                 continue
             if key in ["csv_path", TOOL_SECTION_KEY]:
                 continue
-            # ------- 默认处理：创建 LineEdit 保存未覆盖字段 -------
             group, vbox = build_groupbox(key)
             edit = LineEdit(self)
             edit.setText(str(value) if value is not None else "")
