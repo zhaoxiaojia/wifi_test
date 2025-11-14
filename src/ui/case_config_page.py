@@ -148,6 +148,7 @@ from .theme import (
     SWITCH_WIFI_TABLE_SELECTION_BG,
     SWITCH_WIFI_TABLE_SELECTION_FG,
 )
+from .ui_rules import CONFIG_UI_RULES, FieldEffect, RuleSpec
 
 
 class CaseConfigPage(CardWidget):
@@ -1760,6 +1761,142 @@ class CaseConfigPage(CardWidget):
         group = parts[0] if parts else (section_id or "")
         field = parts[-1] if parts else (section_id or field_key)
         self._register_config_control(panel or "main", group, field, widget)
+
+    # ------------------------------------------------------------------
+    # Rule evaluation helpers (for CONFIG_UI_RULES)
+    # ------------------------------------------------------------------
+
+    def _get_field_value(self, field_key: str) -> Any:
+        """Return a Python value representing the current state of a field widget."""
+        widget = self.field_widgets.get(field_key)
+        if widget is None:
+            return None
+        # Basic widget types used by the config page
+        from qfluentwidgets import ComboBox, LineEdit, TextEdit  # local import to avoid cycles
+
+        if isinstance(widget, QCheckBox):
+            return widget.isChecked()
+        if isinstance(widget, ComboBox):
+            data = widget.currentData()
+            if data not in (None, ""):
+                return data
+            return widget.currentText()
+        if isinstance(widget, LineEdit):
+            return widget.text()
+        if isinstance(widget, TextEdit):
+            return widget.toPlainText()
+        if isinstance(widget, QSpinBox):
+            return widget.value()
+        if isinstance(widget, QDoubleSpinBox):
+            return float(widget.value())
+        return None
+
+    def _apply_field_effects(self, effects: FieldEffect) -> None:
+        """Apply enable/disable/show/hide effects to widgets based on a rule."""
+        if not effects:
+            return
+
+        def _set_enabled(key: str, enabled: bool) -> None:
+            widget = self.field_widgets.get(key)
+            if widget is None:
+                return
+            if widget.isEnabled() == enabled:
+                return
+            with QSignalBlocker(widget):
+                widget.setEnabled(enabled)
+
+        def _set_visible(key: str, visible: bool) -> None:
+            widget = self.field_widgets.get(key)
+            if widget is None:
+                return
+            if widget.isVisible() == visible:
+                return
+            widget.setVisible(visible)
+
+        for key in effects.get("enable_fields", []) or []:
+            _set_enabled(key, True)
+        for key in effects.get("disable_fields", []) or []:
+            _set_enabled(key, False)
+        for key in effects.get("show_fields", []) or []:
+            _set_visible(key, True)
+        for key in effects.get("hide_fields", []) or []:
+            _set_visible(key, False)
+
+    def _eval_case_type_flag(self, flag: str) -> bool:
+        """Return True/False for high level case-type flags used by rules."""
+        if not flag:
+            return True
+        case_path = getattr(self, "_current_case_path", "") or ""
+        basename = os.path.basename(case_path) if case_path else ""
+        # Normalise absolute path for performance/stability checks
+        abs_path = case_path
+        try:
+            path_obj = Path(case_path)
+            if not path_obj.is_absolute():
+                abs_path = (Path(self._get_application_base()) / path_obj).as_posix()
+            else:
+                abs_path = path_obj.as_posix()
+        except Exception:
+            pass
+
+        if flag == "performance_or_enable_csv":
+            info = getattr(self, "_last_editable_info", None)
+            enable_csv = bool(getattr(info, "enable_csv", False))
+            return bool(self._is_performance_case(abs_path) or enable_csv)
+        if flag == "execution_panel_visible":
+            keys = getattr(self, "_current_page_keys", [])
+            return "execution" in keys
+        if flag == "stability_case":
+            return self._is_stability_case(abs_path or case_path)
+        if flag == "rvr_case":
+            return "rvr" in basename.lower()
+        if flag == "rvo_case":
+            return "rvo" in basename.lower()
+        if flag == "performance_case_with_rvr_wifi":
+            is_perf = self._is_performance_case(abs_path)
+            has_rvr = bool(getattr(self, "_enable_rvr_wifi", False) and getattr(self, "selected_csv_path", None))
+            return bool(is_perf and has_rvr)
+        return False
+
+    def _apply_config_ui_rules(self) -> None:
+        """Evaluate CONFIG_UI_RULES against current UI state.
+
+        This method is currently a pure helper and is not wired into
+        event handlers yet.  It can be called from slots or refresh
+        routines to drive widget enabled/visible state from the rules
+        defined in ``ui_rules.py``.
+        """
+        try:
+            rules: dict[str, RuleSpec] = CONFIG_UI_RULES
+        except Exception:
+            return
+        # Precompute script key once for rules that depend on a specific script.
+        case_path = getattr(self, "_current_case_path", "") or ""
+        script_key = self._script_case_key(case_path) if case_path else ""
+
+        for rule_id, spec in rules.items():
+            active = True
+            trigger_case_type = spec.get("trigger_case_type")
+            if trigger_case_type:
+                active = active and self._eval_case_type_flag(trigger_case_type)
+            trigger_script_key = spec.get("trigger_script_key")
+            if active and trigger_script_key:
+                active = active and (script_key == trigger_script_key)
+            trigger_field = spec.get("trigger_field")
+            value = None
+            if active and trigger_field:
+                value = self._get_field_value(trigger_field)
+            if not active:
+                continue
+            effects_to_apply: list[FieldEffect] = []
+            case_map = spec.get("cases") or {}
+            if trigger_field and case_map and value in case_map:
+                effects_to_apply.append(case_map[value])
+            base_effects = spec.get("effects")
+            if base_effects:
+                effects_to_apply.append(base_effects)
+            for eff in effects_to_apply:
+                self._apply_field_effects(eff)
 
     @staticmethod
     def _is_dut_key(key: str) -> bool:
