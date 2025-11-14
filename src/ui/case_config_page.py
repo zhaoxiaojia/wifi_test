@@ -1356,6 +1356,72 @@ class CaseConfigPage(CardWidget):
                 )
             combo.setCurrentIndex(index if index >= 0 else 0)
 
+        def _set_relay_type_default(combo: ComboBox, value: str) -> None:
+            """Select the relay type option matching the stored value."""
+
+            target = (value or "usb_relay").strip()
+            if not target:
+                target = "usb_relay"
+            normalized = target.lower()
+            relay_display_map = {
+                "usb_relay": "USB Relay",
+                "gwgj-xc3012": "GWGJ-XC3012",
+            }
+            display_text = relay_display_map.get(normalized, target)
+            # Remove empty placeholder entries that have no visible effect.
+            for index in range(combo.count() - 1, -1, -1):
+                if not combo.itemText(index).strip() and combo.itemData(index) is None:
+                    combo.removeItem(index)
+            index = next(
+                (
+                    i
+                    for i in range(combo.count())
+                    if isinstance(combo.itemData(i), str)
+                    and combo.itemData(i).strip().lower() == normalized
+                ),
+                -1,
+            )
+            if index < 0:
+                index = next(
+                    (i for i in range(combo.count()) if combo.itemText(i).strip().lower() == display_text.lower()),
+                    -1,
+                )
+            if index < 0 and target:
+                combo.addItem(display_text, target)
+                index = next(
+                    (
+                        i
+                        for i in range(combo.count())
+                        if isinstance(combo.itemData(i), str)
+                        and combo.itemData(i).strip().lower() == normalized
+                    ),
+                    combo.count() - 1,
+                )
+            combo.setCurrentIndex(index if index >= 0 else 0)
+
+        def _configure_relay_controls(
+            checkbox: QCheckBox,
+            combo: ComboBox,
+            usb_widgets: Sequence[QWidget],
+            snmp_widgets: Sequence[QWidget],
+        ) -> None:
+            """Toggle USB/SNMP specific widgets based on the selected relay type."""
+
+            def _apply(*_args: object) -> None:
+                data_value = combo.currentData()
+                relay_value = data_value if isinstance(data_value, str) else combo.currentText()
+                key = (relay_value or "").strip().lower().replace(" ", "_")
+                is_usb = key in {"usb_relay"}
+                section_enabled = checkbox.isChecked()
+                for widget in usb_widgets:
+                    widget.setEnabled(section_enabled and is_usb)
+                for widget in snmp_widgets:
+                    widget.setEnabled(section_enabled and not is_usb)
+
+            combo.currentIndexChanged.connect(_apply)
+            checkbox.toggled.connect(_apply)
+            _apply()
+
         ac_checkbox = QCheckBox("Enable AC cycle", group)
         layout.addWidget(ac_checkbox)
 
@@ -1382,6 +1448,16 @@ class CaseConfigPage(CardWidget):
         ac_mode_combo.setMinimumWidth(160)
         ac_mode_combo.addItems(["NO", "NC"])
 
+        ac_relay_type_label = QLabel("Relay type", group)
+        ac_relay_type_combo = ComboBox(group)
+        ac_relay_type_combo.setMinimumWidth(200)
+        ac_relay_type_combo.addItem("USB Relay", "usb_relay")
+        ac_relay_type_combo.addItem("GWGJ-XC3012", "GWGJ-XC3012")
+
+        ac_params_label = QLabel("Relay params (ip,port)", group)
+        ac_params_edit = LineEdit(group)
+        ac_params_edit.setPlaceholderText("192.168.0.10,4")
+
         ac_grid.addWidget(ac_on_label, 0, 0)
         ac_grid.addWidget(ac_on_spin, 0, 1)
         ac_grid.addWidget(ac_off_label, 1, 0)
@@ -1390,15 +1466,33 @@ class CaseConfigPage(CardWidget):
         ac_grid.addWidget(ac_port_combo, 2, 1)
         ac_grid.addWidget(ac_mode_label, 3, 0)
         ac_grid.addWidget(ac_mode_combo, 3, 1)
+        ac_grid.addWidget(ac_relay_type_label, 4, 0)
+        ac_grid.addWidget(ac_relay_type_combo, 4, 1)
+        ac_grid.addWidget(ac_params_label, 5, 0)
+        ac_grid.addWidget(ac_params_edit, 5, 1)
         layout.addLayout(ac_grid)
 
         self._bind_script_section(
             ac_checkbox,
-            (ac_on_spin, ac_off_spin, ac_port_combo, ac_mode_combo),
+            (
+                ac_on_spin,
+                ac_off_spin,
+                ac_port_combo,
+                ac_mode_combo,
+                ac_relay_type_combo,
+                ac_params_edit,
+            ),
         )
         section_controls["ac"] = (
             ac_checkbox,
-            (ac_on_spin, ac_off_spin, ac_port_combo, ac_mode_combo),
+            (
+                ac_on_spin,
+                ac_off_spin,
+                ac_port_combo,
+                ac_mode_combo,
+                ac_relay_type_combo,
+                ac_params_edit,
+            ),
         )
 
         str_checkbox = QCheckBox("Enable STR cycle", group)
@@ -1419,6 +1513,12 @@ class CaseConfigPage(CardWidget):
         str_off_spin.setRange(0, 24 * 60 * 60)
         str_off_spin.setSuffix(" s")
 
+        str_relay_type_label = QLabel("Relay type", group)
+        str_relay_type_combo = ComboBox(group)
+        str_relay_type_combo.setMinimumWidth(200)
+        str_relay_type_combo.addItem("USB Relay", "usb_relay")
+        str_relay_type_combo.addItem("GWGJ-XC3012", "GWGJ-XC3012")
+
         str_port_label = QLabel("USB relay port", group)
         str_port_combo = _build_port_combo(group)
 
@@ -1427,23 +1527,45 @@ class CaseConfigPage(CardWidget):
         str_mode_combo.setMinimumWidth(160)
         str_mode_combo.addItems(["NO", "NC"])
 
+        str_params_label = QLabel("Relay params (ip,port)", group)
+        str_params_edit = LineEdit(group)
+        str_params_edit.setPlaceholderText("192.168.0.10,4")
+
         str_grid.addWidget(str_on_label, 0, 0)
         str_grid.addWidget(str_on_spin, 0, 1)
         str_grid.addWidget(str_off_label, 1, 0)
         str_grid.addWidget(str_off_spin, 1, 1)
-        str_grid.addWidget(str_port_label, 2, 0)
-        str_grid.addWidget(str_port_combo, 2, 1)
-        str_grid.addWidget(str_mode_label, 3, 0)
-        str_grid.addWidget(str_mode_combo, 3, 1)
+        str_grid.addWidget(str_relay_type_label, 2, 0)
+        str_grid.addWidget(str_relay_type_combo, 2, 1)
+        str_grid.addWidget(str_port_label, 3, 0)
+        str_grid.addWidget(str_port_combo, 3, 1)
+        str_grid.addWidget(str_mode_label, 4, 0)
+        str_grid.addWidget(str_mode_combo, 4, 1)
+        str_grid.addWidget(str_params_label, 5, 0)
+        str_grid.addWidget(str_params_edit, 5, 1)
         layout.addLayout(str_grid)
 
         self._bind_script_section(
             str_checkbox,
-            (str_on_spin, str_off_spin, str_port_combo, str_mode_combo),
+            (
+                str_on_spin,
+                str_off_spin,
+                str_port_combo,
+                str_mode_combo,
+                str_relay_type_combo,
+                str_params_edit,
+            ),
         )
         section_controls["str"] = (
             str_checkbox,
-            (str_on_spin, str_off_spin, str_port_combo, str_mode_combo),
+            (
+                str_on_spin,
+                str_off_spin,
+                str_port_combo,
+                str_mode_combo,
+                str_relay_type_combo,
+                str_params_edit,
+            ),
         )
 
         layout.addStretch(1)
@@ -1456,28 +1578,65 @@ class CaseConfigPage(CardWidget):
         ac_off_spin.setValue(int(ac_cfg.get("off_duration") or 0))
         ac_port = str(ac_cfg.get("port", "") or "").strip()
         ac_mode = str(ac_cfg.get("mode", "") or "").strip().upper() or "NO"
+        ac_type = str(ac_cfg.get("relay_type", "usb_relay") or "usb_relay").strip()
+        ac_params = ac_cfg.get("relay_params")
+        if isinstance(ac_params, (list, tuple)):
+            ac_params_text = ", ".join(str(item) for item in ac_params if str(item).strip())
+        elif isinstance(ac_params, str):
+            ac_params_text = ac_params
+        else:
+            ac_params_text = ""
         _set_port_default(ac_port_combo, ac_port)
         _set_mode_default(ac_mode_combo, ac_mode)
+        _set_relay_type_default(ac_relay_type_combo, ac_type)
+        ac_params_edit.setText(ac_params_text)
 
         str_checkbox.setChecked(bool(str_cfg.get("enabled")))
         str_on_spin.setValue(int(str_cfg.get("on_duration") or 0))
         str_off_spin.setValue(int(str_cfg.get("off_duration") or 0))
         str_port = str(str_cfg.get("port", "") or "").strip()
         str_mode = str(str_cfg.get("mode", "") or "").strip().upper() or "NO"
+        str_type = str(str_cfg.get("relay_type", "usb_relay") or "usb_relay").strip()
+        str_params = str_cfg.get("relay_params")
+        if isinstance(str_params, (list, tuple)):
+            str_params_text = ", ".join(str(item) for item in str_params if str(item).strip())
+        elif isinstance(str_params, str):
+            str_params_text = str_params
+        else:
+            str_params_text = ""
         _set_port_default(str_port_combo, str_port)
         _set_mode_default(str_mode_combo, str_mode)
+        _set_relay_type_default(str_relay_type_combo, str_type)
+        str_params_edit.setText(str_params_text)
+
+        _configure_relay_controls(
+            ac_checkbox,
+            ac_relay_type_combo,
+            (ac_port_label, ac_port_combo, ac_mode_label, ac_mode_combo),
+            (ac_params_label, ac_params_edit),
+        )
+        _configure_relay_controls(
+            str_checkbox,
+            str_relay_type_combo,
+            (str_port_label, str_port_combo, str_mode_label, str_mode_combo),
+            (str_params_label, str_params_edit),
+        )
 
         widgets[self._script_field_key(case_key, "ac", "enabled")] = ac_checkbox
         widgets[self._script_field_key(case_key, "ac", "on_duration")] = ac_on_spin
         widgets[self._script_field_key(case_key, "ac", "off_duration")] = ac_off_spin
         widgets[self._script_field_key(case_key, "ac", "port")] = ac_port_combo
         widgets[self._script_field_key(case_key, "ac", "mode")] = ac_mode_combo
+        widgets[self._script_field_key(case_key, "ac", "relay_type")] = ac_relay_type_combo
+        widgets[self._script_field_key(case_key, "ac", "relay_params")] = ac_params_edit
 
         widgets[self._script_field_key(case_key, "str", "enabled")] = str_checkbox
         widgets[self._script_field_key(case_key, "str", "on_duration")] = str_on_spin
         widgets[self._script_field_key(case_key, "str", "off_duration")] = str_off_spin
         widgets[self._script_field_key(case_key, "str", "port")] = str_port_combo
         widgets[self._script_field_key(case_key, "str", "mode")] = str_mode_combo
+        widgets[self._script_field_key(case_key, "str", "relay_type")] = str_relay_type_combo
+        widgets[self._script_field_key(case_key, "str", "relay_params")] = str_params_edit
 
         field_keys = set(widgets.keys())
 
@@ -1802,6 +1961,13 @@ class CaseConfigPage(CardWidget):
                 if key == f"{TURN_TABLE_SECTION_KEY}.{TURN_TABLE_FIELD_IP_ADDRESS}":
                     ref[leaf] = val.strip()
                     continue
+                if leaf == "relay_params":
+                    items = [item.strip() for item in val.split(',') if item.strip()]
+                    normalized = []
+                    for item in items:
+                        normalized.append(int(item) if item.isdigit() else item)
+                    ref[leaf] = normalized
+                    continue
                 old_val = ref.get(leaf)
                 if isinstance(old_val, list):
                     items = [x.strip() for x in val.split(',') if x.strip()]
@@ -2002,18 +2168,43 @@ class CaseConfigPage(CardWidget):
             branch_cfg = case_cfg.get(branch) if isinstance(case_cfg, dict) else {}
             if not isinstance(branch_cfg, dict) or not branch_cfg.get("enabled"):
                 return
-            port_value = str(branch_cfg.get("port") or "").strip()
-            mode_value = str(branch_cfg.get("mode") or "").strip()
-            if not port_value:
-                errors.append(f"{label}: USB power relay port is required.")
-                focus_widget = focus_widget or self.field_widgets.get(
-                    f"stability.cases.{case_key}.{branch}.port"
-                )
-            if not mode_value:
-                errors.append(f"{label}: Wiring mode is required.")
-                focus_widget = focus_widget or self.field_widgets.get(
-                    f"stability.cases.{case_key}.{branch}.mode"
-                )
+            relay_type = str(branch_cfg.get("relay_type") or "usb_relay").strip() or "usb_relay"
+            relay_key = relay_type.lower()
+            if relay_key == "usb_relay":
+                port_value = str(branch_cfg.get("port") or "").strip()
+                mode_value = str(branch_cfg.get("mode") or "").strip()
+                if not port_value:
+                    errors.append(f"{label}: USB power relay port is required.")
+                    focus_widget = focus_widget or self.field_widgets.get(
+                        f"stability.cases.{case_key}.{branch}.port"
+                    )
+                if not mode_value:
+                    errors.append(f"{label}: Wiring mode is required.")
+                    focus_widget = focus_widget or self.field_widgets.get(
+                        f"stability.cases.{case_key}.{branch}.mode"
+                    )
+            elif relay_key == "gwgj-xc3012":
+                params = branch_cfg.get("relay_params")
+                if isinstance(params, (list, tuple)):
+                    items = list(params)
+                elif isinstance(params, str):
+                    items = [item.strip() for item in params.split(',') if item.strip()]
+                else:
+                    items = []
+                ip_value = str(items[0]).strip() if items else ""
+                port_value = None
+                if len(items) > 1:
+                    try:
+                        port_value = int(str(items[1]).strip())
+                    except (TypeError, ValueError):
+                        port_value = None
+                if not ip_value or port_value is None:
+                    errors.append(
+                        f"{label}: Relay params must include IP and port for GWGJ-XC3012."
+                    )
+                    focus_widget = focus_widget or self.field_widgets.get(
+                        f"stability.cases.{case_key}.{branch}.relay_params"
+                    )
 
         _require("ac", "AC cycle")
         _require("str", "STR cycle")
