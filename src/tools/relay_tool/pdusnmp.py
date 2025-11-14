@@ -8,6 +8,7 @@ information, constructs SNMP command strings and executes them using
 """
 import logging
 import subprocess
+from typing import Any, Sequence
 
 from src.tools.config_loader import load_config
 from src.tools.relay_tool import Relay
@@ -19,13 +20,38 @@ class power_ctrl(Relay):
     SWITCH_CMD = 'snmpset -v1 -c private {} .1.3.6.1.4.1.23280.9.1.2.{} i {}'
     SET_CMD = 'snmpset -v1 -c private {} 1.3.6.1.4.1.23273.4.4{}.0 i 255'
 
-    def __init__(self, default_port: tuple[str, int] | None = None) -> None:
+    def __init__(self, default_port: tuple[str, int] | Sequence[Any] | None = None) -> None:
         """Load SNMP relay config and optional default port."""
-        super().__init__(default_port)
+        super().__init__(self._coerce_default_port(default_port))
         self.config = load_config(refresh=True)
         self.power_ctrl = self.config.get('power_relay')
         self.ip_list = list(self.power_ctrl.keys())
         self.ctrl = self._handle_env_data()
+
+    @staticmethod
+    def _coerce_default_port(value: tuple[str, int] | Sequence[Any] | None) -> tuple[str, int] | None:
+        """Normalize list-like relay params into an (ip, port) tuple."""
+
+        if value is None:
+            return None
+        if isinstance(value, tuple) and len(value) == 2:
+            ip, port = value
+        elif isinstance(value, Sequence):
+            items = list(value)
+            if not items:
+                return None
+            ip = str(items[0]).strip()
+            port = items[1] if len(items) > 1 else None
+        else:
+            return None
+        ip = str(ip).strip()
+        try:
+            port_int = int(str(port).strip()) if port is not None else None
+        except (TypeError, ValueError):
+            port_int = None
+        if ip and port_int is not None:
+            return ip, port_int
+        return None
 
     def _handle_env_data(self) -> list[tuple[str, int]]:
         """Flatten the configuration into a list of (IP, port) tuples.

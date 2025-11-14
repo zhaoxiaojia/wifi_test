@@ -5,7 +5,7 @@ import logging
 import os
 import time
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 import pytest
 
@@ -19,7 +19,7 @@ from src.test.stability import (
     run_checkpoints,
 )
 from src.tools.config_loader import load_config
-from src.tools.relay_tool.usb_relay_controller import UsbRelayDevice, pulse
+from src.tools.relay_tool import Relay, get_relay_controller
 
 
 @dataclass(frozen=True)
@@ -31,6 +31,9 @@ class CycleConfig:
     off_duration: int
     port: str
     mode: str
+    relay_type: str
+    relay_params: tuple[Any, ...]
+    relay: Relay | None
 
     @classmethod
     def from_mapping(cls, data: Mapping[str, Any] | None) -> "CycleConfig":
@@ -43,12 +46,29 @@ class CycleConfig:
                 return 0
             return max(0, value)
 
+        port = str(data.get("port", "") or "").strip()
+        mode = str(data.get("mode", "") or "NO").strip().upper() or "NO"
+        relay_type = str(data.get("relay_type", "usb_relay") or "usb_relay").strip()
+        raw_params = data.get("relay_params")
+        params: tuple[Any, ...]
+        if isinstance(raw_params, (list, tuple)):
+            params = tuple(raw_params)
+        elif isinstance(raw_params, Sequence) and not isinstance(raw_params, (str, bytes, bytearray)):
+            params = tuple(raw_params)
+        elif isinstance(raw_params, str):
+            params = tuple(item.strip() for item in raw_params.split(",") if item.strip())
+        else:
+            params = ()
+        relay = get_relay_controller(relay_type, params, port=port, mode=mode)
         return cls(
             enabled=bool(data.get("enabled")),
             on_duration=_coerce_duration(data.get("on_duration")),
             off_duration=_coerce_duration(data.get("off_duration")),
-            port=str(data.get("port", "") or "").strip(),
-            mode=str(data.get("mode", "") or "NO").strip().upper() or "NO",
+            port=port,
+            mode=mode,
+            relay_type=relay_type,
+            relay_params=params,
+            relay=relay,
         )
 
 
@@ -88,8 +108,9 @@ def _run_cycle(label: str, cycle: CycleConfig) -> None:
     if not cycle.enabled:
         logging.info("[%s] cycle disabled; skipping", label)
         return
-    if not cycle.port:
-        logging.warning("[%s] relay port not configured; skipping", label)
+    controller = cycle.relay
+    if controller is None:
+        logging.warning("[%s] relay controller unavailable; skipping", label)
         return
     logging.info(
         "[%s] cycle start: on=%ss off=%ss mode=%s port=%s",
@@ -100,13 +121,12 @@ def _run_cycle(label: str, cycle: CycleConfig) -> None:
         cycle.port,
     )
     try:
-        with UsbRelayDevice(cycle.port) as relay:
-            if cycle.on_duration > 0:
-                time.sleep(cycle.on_duration)
-            pulse(relay, cycle.mode)
-            if cycle.off_duration > 0:
-                time.sleep(cycle.off_duration)
-            pulse(relay, cycle.mode)
+        if cycle.on_duration > 0:
+            time.sleep(cycle.on_duration)
+        controller.pulse("power_off")
+        if cycle.off_duration > 0:
+            time.sleep(cycle.off_duration)
+        controller.pulse("power_on")
     except Exception as exc:  # pragma: no cover - hardware dependent
         logging.error("[%s] relay operation failed: %s", label, exc)
         return
