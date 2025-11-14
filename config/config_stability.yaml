@@ -12,12 +12,16 @@ cases:
       enabled: false
       on_duration: 5
       off_duration: 5
+      relay_type: usb_relay
+      relay_params: []
       port: ''
       mode: NC
     str:
       enabled: true
       on_duration: 15
       off_duration: 15
+      relay_type: usb_relay
+      relay_params: []
       port: ''
       mode: 'NO'
   test_switch_wifi:
