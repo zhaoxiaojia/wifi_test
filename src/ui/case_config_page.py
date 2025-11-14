@@ -1360,15 +1360,43 @@ class CaseConfigPage(CardWidget):
             """Select the relay type option matching the stored value."""
 
             target = (value or "usb_relay").strip()
-            index = combo.findData(target)
+            if not target:
+                target = "usb_relay"
+            normalized = target.lower()
+            relay_display_map = {
+                "usb_relay": "USB Relay",
+                "gwgj-xc3012": "GWGJ-XC3012",
+            }
+            display_text = relay_display_map.get(normalized, target)
+            # Remove empty placeholder entries that have no visible effect.
+            for index in range(combo.count() - 1, -1, -1):
+                if not combo.itemText(index).strip() and combo.itemData(index) is None:
+                    combo.removeItem(index)
+            index = next(
+                (
+                    i
+                    for i in range(combo.count())
+                    if isinstance(combo.itemData(i), str)
+                    and combo.itemData(i).strip().lower() == normalized
+                ),
+                -1,
+            )
             if index < 0:
                 index = next(
-                    (i for i in range(combo.count()) if combo.itemText(i).strip().lower() == target.lower()),
+                    (i for i in range(combo.count()) if combo.itemText(i).strip().lower() == display_text.lower()),
                     -1,
                 )
             if index < 0 and target:
-                combo.addItem(target, target)
-                index = combo.findData(target)
+                combo.addItem(display_text, target)
+                index = next(
+                    (
+                        i
+                        for i in range(combo.count())
+                        if isinstance(combo.itemData(i), str)
+                        and combo.itemData(i).strip().lower() == normalized
+                    ),
+                    combo.count() - 1,
+                )
             combo.setCurrentIndex(index if index >= 0 else 0)
 
         def _configure_relay_controls(
@@ -1485,6 +1513,12 @@ class CaseConfigPage(CardWidget):
         str_off_spin.setRange(0, 24 * 60 * 60)
         str_off_spin.setSuffix(" s")
 
+        str_relay_type_label = QLabel("Relay type", group)
+        str_relay_type_combo = ComboBox(group)
+        str_relay_type_combo.setMinimumWidth(200)
+        str_relay_type_combo.addItem("USB Relay", "usb_relay")
+        str_relay_type_combo.addItem("GWGJ-XC3012", "GWGJ-XC3012")
+
         str_port_label = QLabel("USB relay port", group)
         str_port_combo = _build_port_combo(group)
 
@@ -1492,12 +1526,6 @@ class CaseConfigPage(CardWidget):
         str_mode_combo = ComboBox(group)
         str_mode_combo.setMinimumWidth(160)
         str_mode_combo.addItems(["NO", "NC"])
-
-        str_relay_type_label = QLabel("Relay type", group)
-        str_relay_type_combo = ComboBox(group)
-        str_relay_type_combo.setMinimumWidth(200)
-        str_relay_type_combo.addItem("USB Relay", "usb_relay")
-        str_relay_type_combo.addItem("GWGJ-XC3012", "GWGJ-XC3012")
 
         str_params_label = QLabel("Relay params (ip,port)", group)
         str_params_edit = LineEdit(group)
@@ -1507,12 +1535,12 @@ class CaseConfigPage(CardWidget):
         str_grid.addWidget(str_on_spin, 0, 1)
         str_grid.addWidget(str_off_label, 1, 0)
         str_grid.addWidget(str_off_spin, 1, 1)
-        str_grid.addWidget(str_port_label, 2, 0)
-        str_grid.addWidget(str_port_combo, 2, 1)
-        str_grid.addWidget(str_mode_label, 3, 0)
-        str_grid.addWidget(str_mode_combo, 3, 1)
-        str_grid.addWidget(str_relay_type_label, 4, 0)
-        str_grid.addWidget(str_relay_type_combo, 4, 1)
+        str_grid.addWidget(str_relay_type_label, 2, 0)
+        str_grid.addWidget(str_relay_type_combo, 2, 1)
+        str_grid.addWidget(str_port_label, 3, 0)
+        str_grid.addWidget(str_port_combo, 3, 1)
+        str_grid.addWidget(str_mode_label, 4, 0)
+        str_grid.addWidget(str_mode_combo, 4, 1)
         str_grid.addWidget(str_params_label, 5, 0)
         str_grid.addWidget(str_params_edit, 5, 1)
         layout.addLayout(str_grid)
