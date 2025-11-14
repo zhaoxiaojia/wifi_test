@@ -1410,7 +1410,7 @@ class CaseConfigPage(CardWidget):
             def _apply(*_args: object) -> None:
                 data_value = combo.currentData()
                 relay_value = data_value if isinstance(data_value, str) else combo.currentText()
-                key = (relay_value or "").strip().lower()
+                key = (relay_value or "").strip().lower().replace(" ", "_")
                 is_usb = key in {"usb_relay"}
                 section_enabled = checkbox.isChecked()
                 for widget in usb_widgets:
