@@ -214,6 +214,20 @@ class AboutPage(CardWidget):
         layout.addWidget(self.resources_card)
         layout.addStretch(1)
 
+        # Logical control map for the about page.
+        # Keys follow: page_frame_group_purpose_type
+        self.about_controls: dict[str, object] = {
+            "about_main_title_label": title,
+            "about_main_info_table": self.info_table,
+            "about_main_source_label": self.source_label,
+            "about_main_resources_card": self.resources_card,
+            "about_main_resources_title_label": resource_title,
+            "about_main_resources_open_config_btn": open_config_btn,
+            "about_main_resources_open_res_btn": open_res_btn,
+            "about_main_resources_compliance_label": compliance_label,
+            "about_main_resources_hint_label": hint_label,
+        }
+
         self._populate_metadata()
 
     # ---------------------------------------------------------------------

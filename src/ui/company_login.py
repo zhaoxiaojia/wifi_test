@@ -328,6 +328,17 @@ class CompanyLoginPage(QWidget):
         main_layout.addWidget(self.status_label)
         main_layout.addStretch(1)
 
+        # Logical control map for the account page.
+        # Keys follow: page_frame_group_purpose_type
+        self.account_controls: dict[str, object] = {
+            "account_main_title_label": title,
+            "account_main_form_account_text": self.account_edit,
+            "account_main_form_password_text": self.password_edit,
+            "account_main_buttons_login_btn": self.login_button,
+            "account_main_buttons_logout_btn": self.logout_button,
+            "account_main_status_label": self.status_label,
+        }
+
     # ---------------------------------------------------------------------
     # Public API
     # ---------------------------------------------------------------------

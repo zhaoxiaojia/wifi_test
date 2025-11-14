@@ -38,6 +38,7 @@ from PyQt5.QtWidgets import (
 )
 import sip
 from qfluentwidgets import FluentIcon, FluentWindow, NavigationItemPosition
+from src.ui import SIDEBAR_PAGE_LABELS, SIDEBAR_PAGE_KEYS
 from src.ui.windows_case_config import CaseConfigPage
 from src.ui.rvr_wifi_config import RvrWifiConfigPage
 from src.ui.run import RunPage
@@ -166,39 +167,49 @@ class MainWindow(FluentWindow):
         self.report_page = ReportPage(self)
 
         # Navigation buttons
-        self.login_nav_button = self.addSubInterface(
+        # Logical sidebar keys (top -> bottom): account, config, case, run, report, about
+        self.sidebar_page_keys = SIDEBAR_PAGE_KEYS
+        self.sidebar_labels = SIDEBAR_PAGE_LABELS
+
+        # Account / login entry
+        self.login_nav_button = self._create_sidebar_button(
+            "account",
             self.login_page,
             FluentIcon.PEOPLE,
-            "Login",
         )
         self.login_nav_button.setVisible(True)
         self.login_nav_button.setEnabled(True)
 
-        self.case_nav_button = self.addSubInterface(
-            self.case_config_page, FluentIcon.SETTING, "Config Setup", "Case Config"
+        # Case configuration / main config page
+        self.case_nav_button = self._create_sidebar_button(
+            "config",
+            self.case_config_page,
+            FluentIcon.SETTING,
         )
         self.case_nav_button.setVisible(True)
 
-        self.rvr_nav_button = self.addSubInterface(
+        # RVR Wi‑Fi / scenario configuration
+        self.rvr_nav_button = self._create_sidebar_button(
+            "case",
             self.rvr_wifi_config_page,
             FluentIcon.WIFI,
-            "RVR Scenario Config",
-            "RVR Wi-Fi Config",
         )
         self.rvr_nav_button.setVisible(True)
 
-        self.run_nav_button = self.addSubInterface(
+        # Run / execution page
+        self.run_nav_button = self._create_sidebar_button(
+            "run",
             self.run_page,
             FluentIcon.PLAY,
-            "Test",
             position=NavigationItemPosition.BOTTOM,
         )
         self.run_nav_button.setVisible(True)
 
-        self.report_nav_button = self.addSubInterface(
+        # Report browser
+        self.report_nav_button = self._create_sidebar_button(
+            "report",
             self.report_page,
             FluentIcon.DOCUMENT,
-            "Reports",
             position=NavigationItemPosition.BOTTOM,
         )
         self.report_nav_button.setVisible(True)
@@ -206,20 +217,38 @@ class MainWindow(FluentWindow):
         self.last_report_dir = None
 
         self.about_page = AboutPage(self)
-        self.about_nav_button = self.addSubInterface(
+        self.about_nav_button = self._create_sidebar_button(
+            "about",
             self.about_page,
             FluentIcon.INFO,
-            "About",
             position=NavigationItemPosition.BOTTOM,
         )
         self.about_nav_button.setVisible(True)
 
+        # Canonical mapping from logical sidebar keys to pages/buttons
+        self.sidebar_pages = {
+            "account": self.login_page,
+            "config": self.case_config_page,
+            "case": self.rvr_wifi_config_page,
+            "run": self.run_page,
+            "report": self.report_page,
+            "about": self.about_page,
+        }
+        self.sidebar_nav_buttons = {
+            "account": self.login_nav_button,
+            "config": self.case_nav_button,
+            "case": self.rvr_nav_button,
+            "run": self.run_nav_button,
+            "report": self.report_nav_button,
+            "about": self.about_nav_button,
+        }
+
         self._nav_logged_out_states = {
-            self.case_nav_button: True,
-            self.rvr_nav_button: False,
-            self.run_nav_button: True,
-            self.report_nav_button: False,
-            self.about_nav_button: True,
+            self.sidebar_nav_buttons["config"]: True,
+            self.sidebar_nav_buttons["case"]: False,
+            self.sidebar_nav_buttons["run"]: True,
+            self.sidebar_nav_buttons["report"]: False,
+            self.sidebar_nav_buttons["about"]: True,
         }
         self._nav_logged_in_states = dict(self._nav_logged_out_states)
         self._apply_nav_enabled(self._nav_logged_out_states)
@@ -235,6 +264,31 @@ class MainWindow(FluentWindow):
 
         # Enable Mica effect on Windows 11
         self.setMicaEffectEnabled(True)
+
+    def _create_sidebar_button(
+        self,
+        key: str,
+        page,
+        icon,
+        *,
+        position: NavigationItemPosition | None = None,
+    ):
+        """Create a navigation button based on a logical sidebar key.
+
+        The ``key`` must be one of ``SIDEBAR_PAGE_KEYS`` and is mapped to a
+        human‑readable label via :data:`SIDEBAR_PAGE_LABELS`.  This keeps
+        variable names (all lower‑case with underscores) decoupled from the
+        user‑visible text shown in the sidebar.
+        """
+        text, subtext = SIDEBAR_PAGE_LABELS.get(key, (key.title(), None))
+        kwargs = {}
+        if position is not None:
+            kwargs["position"] = position
+        if subtext:
+            button = self._add_interface(page, icon, text, subtext, **kwargs)
+        else:
+            button = self._add_interface(page, icon, text, **kwargs)
+        return button
 
     def _apply_nav_enabled(self, states: dict) -> None:
         """Enable or disable multiple navigation buttons in one call.
@@ -432,12 +486,7 @@ class MainWindow(FluentWindow):
         )
         route_key = self._rvr_route_key or getattr(page, "objectName", lambda: None)()
         self._cleanup_route(route_key)
-        self._rvr_nav_button = self._add_interface(
-            page,
-            FluentIcon.WIFI,
-            "RVR Scenario Config",
-            "RVR Wi-Fi Config",
-        )
+        self._rvr_nav_button = self._create_sidebar_button("case", page, FluentIcon.WIFI)
         if not self._rvr_nav_button:
             logging.warning(
                 "addSubInterface returned None (duplicate routeKey or internal reject)",

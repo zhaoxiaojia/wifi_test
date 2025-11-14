@@ -211,6 +211,23 @@ class RvrWifiConfigPage(CardWidget):
         self._on_auth_changed(self.auth_combo.currentText())
         self.refresh_table()
 
+        # Logical control map for the case (RVR Wi-Fi) page.
+        # Keys follow: page_frame_group_purpose_type
+        self.case_controls: dict[str, object] = {
+            "case_main_wifi_band_combo": self.band_combo,
+            "case_main_wifi_mode_combo": self.wireless_combo,
+            "case_main_wifi_channel_combo": self.channel_combo,
+            "case_main_wifi_bandwidth_combo": self.bandwidth_combo,
+            "case_main_wifi_security_combo": self.auth_combo,
+            "case_main_wifi_ssid_text": self.ssid_edit,
+            "case_main_wifi_password_text": self.passwd_edit,
+            "case_main_wifi_tx_check": self.tx_check,
+            "case_main_wifi_rx_check": self.rx_check,
+            "case_main_wifi_delete_btn": self.del_btn,
+            "case_main_wifi_add_btn": self.add_btn,
+            "case_main_wifi_table": self.table,
+        }
+
         # Listen to signals from the main Case config page
         self.case_config_page.routerInfoChanged.connect(self.reload_router)
         self.case_config_page.csvFileChanged.connect(self.on_csv_file_changed)

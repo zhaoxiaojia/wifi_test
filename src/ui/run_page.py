@@ -247,6 +247,20 @@ class RunPage(CardWidget):
         self.action_btn.setFixedHeight(CONTROL_HEIGHT)
         layout.addWidget(self.action_btn)
         self.setLayout(layout)
+
+        # Logical control map for the run page.
+        # Keys follow: page_frame_group_purpose_type
+        self.run_controls: dict[str, object] = {
+            "run_main_header_case_label": self.case_path_label,
+            "run_main_log_text": self.log_area,
+            "run_main_case_info_label": self.case_info_label,
+            "run_main_progress_frame": self.process,
+            "run_main_progress_fill_frame": self.process_fill,
+            "run_main_progress_percent_label": self.process_label,
+            "run_main_remaining_label": self.remaining_time_label,
+            "run_main_action_btn": self.action_btn,
+        }
+
         self.reset()
         self.finished_count = 0
         self.total_count = 0
