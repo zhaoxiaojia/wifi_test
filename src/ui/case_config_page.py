@@ -122,6 +122,10 @@ from src.ui.view.config.actions import (
     apply_serial_enabled_ui_state,
     apply_turntable_model_ui_state,
     update_step_indicator,
+    refresh_config_page_controls,
+    update_fpga_hidden_fields,
+    apply_connect_type_ui_state,
+    apply_third_party_ui_state,
 )
 from .config_proxy import ConfigProxy
 from .view.builder import load_ui_schema, build_groups_from_schema
@@ -245,10 +249,10 @@ class CaseConfigPage(CardWidget):
         self._active_script_case: str | None = None
         self._config_panels = tuple(self._page_panels[key] for key in ("dut", "execution", "stability"))
         self._sync_run_buttons_enabled()
-        # render form fields from yaml
+        # render form fields from yaml（委托给 view/config/actions.refresh_config_page_controls）
         self._dut_groups: dict[str, QWidget] = {}
         self._other_groups: dict[str, QWidget] = {}
-        self.render_all_fields()
+        refresh_config_page_controls(self)
         self._initialize_script_config_groups()
         self._build_wizard_pages()
         # initialise case tree using src/test as root (non-fatal on failure)
@@ -1029,11 +1033,11 @@ class CaseConfigPage(CardWidget):
         return "widget"
 
     def _register_config_control(
-            self,
-            panel: str,
-            group: str,
-            field: str,
-            widget: QWidget,
+        self,
+        panel: str,
+        group: str,
+        field: str,
+        widget: QWidget,
     ) -> None:
         """Store a logical identifier for a Config page control.
 
@@ -1274,7 +1278,8 @@ class CaseConfigPage(CardWidget):
             "serial_port",
             "software_info",
             "hardware_info",
-            "android_system",
+            "android_system",  # legacy
+            "system",
         }
 
     def _normalize_fpga_token(self, value: Any) -> str:
@@ -1317,13 +1322,16 @@ class CaseConfigPage(CardWidget):
         product_upper = product_line.strip().upper()
         project_upper = project.strip().upper()
         for customer_name, product_lines in WIFI_PRODUCT_PROJECT_MAP.items():
-            if customer_upper and customer_name != customer_upper:
+            customer_name_upper = self._normalize_fpga_token(customer_name)
+            if customer_upper and customer_name_upper != customer_upper:
                 continue
             for product_name, projects in product_lines.items():
-                if product_upper and product_name != product_upper:
+                product_name_upper = self._normalize_fpga_token(product_name)
+                if product_upper and product_name_upper != product_upper:
                     continue
                 for project_name, info in projects.items():
-                    if project_upper and project_name != project_upper:
+                    project_name_upper = self._normalize_fpga_token(project_name)
+                    if project_upper and project_name_upper != project_upper:
                         continue
                     info_wifi = self._normalize_fpga_token(info.get("wifi_module"))
                     info_if = self._normalize_fpga_token(info.get("interface"))
@@ -1416,53 +1424,6 @@ class CaseConfigPage(CardWidget):
         if blocker is not None:
             del blocker
 
-    def _update_fpga_hidden_fields(self) -> None:
-        """
-        Update the  fpga hidden fields to reflect current data.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        customer = self.fpga_customer_combo.currentText().strip().upper() if hasattr(self,
-                                                                                     "fpga_customer_combo") else ""
-        product = self.fpga_product_combo.currentText().strip().upper() if hasattr(self, "fpga_product_combo") else ""
-        project = self.fpga_project_combo.currentText().strip().upper() if hasattr(self, "fpga_project_combo") else ""
-        info: Mapping[str, str] | None = None
-        if customer and product and project:
-            info = (
-                WIFI_PRODUCT_PROJECT_MAP.get(customer, {})
-                .get(product, {})
-                .get(project, {})
-            )
-        elif product and project:
-            for customer_name, product_lines in WIFI_PRODUCT_PROJECT_MAP.items():
-                project_info = product_lines.get(product, {}).get(project)
-                if project_info:
-                    if not customer:
-                        customer = customer_name
-                    info = project_info
-                    break
-        if product and project and info:
-            normalized = {
-                "customer": customer,
-                "product_line": product,
-                "project": project,
-                "main_chip": self._normalize_fpga_token(info.get("main_chip")),
-                "wifi_module": self._normalize_fpga_token(info.get("wifi_module")),
-                "interface": self._normalize_fpga_token(info.get("interface")),
-            }
-        else:
-            normalized = {
-                "customer": customer,
-                "product_line": product,
-                "project": project,
-                "main_chip": "",
-                "wifi_module": "",
-                "interface": "",
-            }
-        self._fpga_details = normalized
-        self.config["fpga"] = dict(normalized)
-
     def on_fpga_customer_changed(self, customer: str) -> None:
         """
         Handle the fpga customer changed event triggered by user interaction.
@@ -1494,7 +1455,7 @@ class CaseConfigPage(CardWidget):
         projects = WIFI_PRODUCT_PROJECT_MAP.get(customer.strip().upper(), {}).get(product_line.strip().upper(), {})
         project_to_select = current_project if current_project in projects else None
         self._refresh_fpga_projects(customer, product_line, project_to_select, block_signals=True)
-        self._update_fpga_hidden_fields()
+        update_fpga_hidden_fields(self)
 
     def on_fpga_project_changed(self, project: str) -> None:
         """
@@ -1503,7 +1464,7 @@ class CaseConfigPage(CardWidget):
         This method encapsulates the logic necessary to perform its function.
         Refer to the implementation for details on parameters and return values.
         """
-        self._update_fpga_hidden_fields()
+        update_fpga_hidden_fields(self)
 
     def _sync_widgets_to_config(self) -> None:
         """
@@ -2037,29 +1998,12 @@ class CaseConfigPage(CardWidget):
                 self.connect_type_combo.setCurrentIndex(0)
 
     def on_connect_type_changed(self, display_text):
-        """Switch connect type and apply both UI state and system mapping."""
+        """Connect type 变更时的业务逻辑（kernel 映射 + 规则）."""
         type_str = self._normalize_connect_type_label(display_text)
-        self._apply_connect_type_ui_state(type_str)
         self._update_android_system_for_connect_type(type_str)
         self._request_rebalance_for_panels(self._dut_panel)
-        # Re-apply rules that depend on connect_type.type and android_system.*.
         self._apply_config_ui_rules()
 
-    def _apply_connect_type_ui_state(self, connect_type: str) -> None:
-        """Handle pure UI state when connect type changes."""
-        # Show only the relevant parameter group.
-        if hasattr(self, "adb_group"):
-            self.adb_group.setVisible(connect_type == "Android")
-        if hasattr(self, "telnet_group"):
-            self.telnet_group.setVisible(connect_type == "Linux")
-        # Android/system version visibility is always on; enabled/disabled state
-        # is driven by CONFIG_UI_RULES (see R04_android_system_visibility).
-        if not hasattr(self, "android_version_combo") or not hasattr(self, "kernel_version_combo"):
-            return
-        self.android_version_label.setVisible(True)
-        self.android_version_combo.setVisible(True)
-        self.kernel_version_label.setVisible(True)
-        self.kernel_version_combo.setVisible(True)
 
     def _update_android_system_for_connect_type(self, connect_type: str) -> None:
         """Handle non-visual Android system mapping for the given connect type."""
@@ -2126,11 +2070,12 @@ class CaseConfigPage(CardWidget):
         This method encapsulates the logic necessary to perform its function.
         Refer to the implementation for details on parameters and return values.
         """
-        if not hasattr(self, "third_party_wait_edit"):
-            return
-        # Let the rule engine drive wait_seconds enable/disable based on
-        # connect_type.third_party.enabled and editable fields.
-        self._apply_config_ui_rules()
+        # allow_wait_edit 表示规则层是否允许该字段可编辑;
+        # 最终是否 enable 由 (checked and allow_wait_edit) 共同决定.
+        enabled = bool(checked)
+        if allow_wait_edit is not None:
+            enabled = enabled and bool(allow_wait_edit)
+        apply_third_party_ui_state(self, enabled)
 
     def on_rf_model_changed(self, model_str):
         """
@@ -2327,62 +2272,6 @@ class CaseConfigPage(CardWidget):
     def _build_registered_sections(self) -> set[str]:
         """Deprecated: section-based layout has been removed; kept for compatibility."""
         return set()
-
-    def render_all_fields(self):
-        """Automatically render config fields; supports LineEdit / ComboBox (can be extended for Checkbox)."""
-        self._dut_groups.clear()
-        self._other_groups.clear()
-        defaults_for_dut = {
-            "software_info": {},
-            "hardware_info": {},
-            "android_system": {},
-        }
-        for _key, _default in defaults_for_dut.items():
-            existing = self.config.get(_key)
-            if not isinstance(existing, dict):
-                self.config[_key] = _default.copy()
-            else:
-                self.config[_key] = dict(existing)
-
-        def _coerce_debug_flag(value) -> bool:
-            if isinstance(value, str):
-                return value.strip().lower() in {"1", "true", "yes", "on"}
-            return bool(value)
-
-        def _normalize_debug_section(raw_value) -> dict[str, bool]:
-            if isinstance(raw_value, dict):
-                normalized = dict(raw_value)
-            else:
-                normalized = {"database_mode": raw_value}
-            for option in ("database_mode", "skip_router", "skip_corner_rf"):
-                normalized[option] = _coerce_debug_flag(normalized.get(option))
-            return normalized
-
-        self.config["debug"] = _normalize_debug_section(self.config.get("debug"))
-        self.config["connect_type"] = self._normalize_connect_type_section(self.config.get("connect_type"))
-        linux_cfg = self.config["connect_type"].get("Linux")
-        if isinstance(linux_cfg, dict) and "kernel_version" in linux_cfg:
-            self.config.setdefault("android_system", {})["kernel_version"] = linux_cfg.pop("kernel_version")
-        self.config["fpga"] = self._normalize_fpga_section(self.config.get("fpga"))
-        self.config["stability"] = self._normalize_stability_settings(
-            self.config.get("stability")
-        )
-        # Sections-based layout has been disabled; handled_section_ids is always empty.
-        handled_section_ids = self._build_registered_sections()
-
-        # ------------------------------------------------------------------
-        # New path: build groups from YAML UI schemas via the view builder.
-        # ------------------------------------------------------------------
-        dut_schema = load_ui_schema("dut")
-        build_groups_from_schema(self, self.config, dut_schema, panel_key="dut")
-
-        exec_schema = load_ui_schema("execution")
-        build_groups_from_schema(self, self.config, exec_schema, panel_key="execution")
-
-        stability_cfg = self.config.get("stability") or {}
-        stab_schema = load_ui_schema("stability")
-        build_groups_from_schema(self, stability_cfg, stab_schema, panel_key="stability")
-
 
     def _ensure_turntable_inputs_exclusive(self, source: str | None) -> None:
         """

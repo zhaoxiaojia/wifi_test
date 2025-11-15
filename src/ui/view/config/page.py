@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Mapping, Sequence
+from typing import Any, Sequence
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
@@ -29,6 +29,7 @@ from src.ui.view.theme import (
     apply_theme,
 )
 from src.ui.view.builder import build_groups_from_schema, load_ui_schema
+from src.ui.view.config.actions import init_fpga_dropdowns
 
 
 class ConfigView(CardWidget):

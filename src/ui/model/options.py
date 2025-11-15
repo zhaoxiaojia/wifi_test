@@ -63,9 +63,11 @@ def _fpga_customer_choices() -> Sequence[str]:
 
 
 _FIELD_CHOICE_SOURCES: dict[str, Callable[[], Sequence[str]]] = {
-    # Android / kernel system fields
+    # Android / kernel system fields (support both legacy and new keys)
     "android_system.version": _android_version_choices,
     "android_system.kernel_version": _kernel_version_choices,
+    "system.version": _android_version_choices,
+    "system.kernel_version": _kernel_version_choices,
     # Turntable models
     "Turntable.model": _turntable_model_choices,
     # Router selection
@@ -94,4 +96,3 @@ def get_field_choices(field_key: str) -> list[str]:
 
 
 __all__ = ["get_field_choices"]
-
