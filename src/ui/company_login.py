@@ -23,19 +23,13 @@ import os
 from ldap3 import ALL, Connection, NTLM, Server
 from ldap3.core.exceptions import LDAPException
 from PyQt5.QtCore import QObject, Qt, pyqtSignal, QThread
-from PyQt5.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
-    QHBoxLayout,
-    QLabel,
-    QSpacerItem,
-    QSizePolicy,
-    QLineEdit,
-)
+from PyQt5.QtWidgets import QWidget
 from PyQt5.QtGui import QFont
 from qfluentwidgets import LineEdit, PushButton
 
-from .theme import FONT_FAMILY, apply_theme
+from src.ui.view.theme import FONT_FAMILY, apply_theme
+from .view.account import AccountView
+from .view.common import attach_view_to_page
 
 # -----------------------------------------------------------------------------
 # Global constants
@@ -277,67 +271,21 @@ class CompanyLoginPage(QWidget):
         self._last_payload: dict = {}
         apply_theme(self, recursive=True)
 
-        main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(120, 80, 120, 80)
-        main_layout.setSpacing(24)
-        main_layout.setAlignment(Qt.AlignCenter)
+        # Compose the pure UI view and re‑export its widgets.
+        self.view = AccountView(self)
+        attach_view_to_page(self, self.view)
 
-        title = QLabel("Amlogic Account Sign In", self)
-        title_font = QFont(FONT_FAMILY, 24)
-        title.setFont(title_font)
-        title.setAlignment(Qt.AlignCenter)
-        main_layout.addWidget(title)
+        # Convenience aliases so existing logic continues to work.
+        self.account_edit: LineEdit = self.view.account_edit
+        self.password_edit: LineEdit = self.view.password_edit
+        self.login_button: PushButton = self.view.login_button
+        self.logout_button: PushButton = self.view.logout_button
+        self.status_label = self.view.status_label
+        self.account_controls = self.view.account_controls
 
-        form_widget = QWidget(self)
-        form_layout = QVBoxLayout(form_widget)
-        form_layout.setSpacing(16)
-        form_layout.setContentsMargins(0, 0, 0, 0)
-
-        self.account_edit = LineEdit(form_widget)
-        self.account_edit.setPlaceholderText("Account, e.g. your.name or your.name@amlogic.com")
-        form_layout.addWidget(self.account_edit)
-
-        self.password_edit = LineEdit(form_widget)
-        self.password_edit.setPlaceholderText("Password")
-        self.password_edit.setEchoMode(QLineEdit.Password)
-        form_layout.addWidget(self.password_edit)
-        main_layout.addWidget(form_widget)
-
-        button_row = QHBoxLayout()
-        button_row.setSpacing(12)
-        button_row.addItem(QSpacerItem(20, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
-
-        self.login_button = PushButton("Sign In", self)
+        # Wire button clicks to the existing slots on this page.
         self.login_button.clicked.connect(self._emit_login)
-        button_row.addWidget(self.login_button)
-
-        self.logout_button = PushButton("Sign Out", self)
         self.logout_button.clicked.connect(self._emit_logout)
-        self.logout_button.setVisible(False)
-        self.logout_button.setEnabled(False)
-        button_row.addWidget(self.logout_button)
-
-        button_row.addItem(QSpacerItem(20, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
-        main_layout.addLayout(button_row)
-
-        self.status_label = QLabel("", self)
-        self.status_label.setWordWrap(True)
-        self.status_label.setAlignment(Qt.AlignCenter)
-        status_font = QFont(FONT_FAMILY, 14)
-        self.status_label.setFont(status_font)
-        main_layout.addWidget(self.status_label)
-        main_layout.addStretch(1)
-
-        # Logical control map for the account page.
-        # Keys follow: page_frame_group_purpose_type
-        self.account_controls: dict[str, object] = {
-            "account_main_title_label": title,
-            "account_main_form_account_text": self.account_edit,
-            "account_main_form_password_text": self.password_edit,
-            "account_main_buttons_login_btn": self.login_button,
-            "account_main_buttons_logout_btn": self.logout_button,
-            "account_main_status_label": self.status_label,
-        }
 
     # ---------------------------------------------------------------------
     # Public API

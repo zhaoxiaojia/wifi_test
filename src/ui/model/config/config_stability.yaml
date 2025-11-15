@@ -31,3 +31,4 @@ cases:
     - ssid: SH-AP-052-2g-xts
       security_mode: Open System
       password: ''
+

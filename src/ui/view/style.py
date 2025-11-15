@@ -203,7 +203,7 @@ def acknowledgements_from_readme() -> str:
         if in_section and stripped.startswith("#"):
             break
         if in_section and stripped:
-            cleaned = stripped.lstrip("-•* ").strip()
+            cleaned = stripped.lstrip("-�? ").strip()
             ack_lines.append(cleaned)
     return ", ".join(dict.fromkeys(ack_lines))
 
@@ -211,10 +211,11 @@ def acknowledgements_from_readme() -> str:
 def normalize_data_source_label(source: str) -> str:
     """Normalize the data source string used by the About page."""
 
-    source = source.replace("、", ", ")
+    # Normalise common Chinese punctuation variants into ASCII commas.
     source = source.replace("，", ", ")
-    source = source.replace("缓存", "Cache")
-    source = source.replace("未知", "Unknown")
-    source = re.sub(r"\\s*,\\s*", ", ", source)
-    source = re.sub(r"\\s+", " ", source)
+    source = source.replace("、", ", ")
+    source = source.replace("\u7f13\u5b58", "Cache")
+    source = source.replace("\u672a\u77e5", "Unknown")
+    source = re.sub(r"\s*,\s*", ", ", source)
+    source = re.sub(r"\s+", " ", source)
     return source.strip()

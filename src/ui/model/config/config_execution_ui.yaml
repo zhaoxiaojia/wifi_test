@@ -1,0 +1,118 @@
+panels:
+  execution:
+    sections:
+      - id: Turntable
+        label: "Turntable"
+        fields:
+          - key: Turntable.model
+            widget: combo_box
+            label: "Turntable"
+          - key: Turntable.ip_address
+            widget: line_edit
+            label: "IP address"
+            placeholder: "192.168.x.x"
+          - key: Turntable.step
+            widget: line_edit
+            label: "Step"
+            placeholder: "0,360 or 0,75:3"
+          - key: Turntable.static_db
+            widget: line_edit
+            label: "Static dB"
+            placeholder: "Static attenuation (dB)"
+          - key: Turntable.target_rssi
+            widget: line_edit
+            label: "Target RSSI"
+            placeholder: "Target RSSI (dBm)"
+
+      - id: rf_solution
+        label: "RF Solution"
+        fields:
+          - key: rf_solution.model
+            widget: combo_box
+            label: "RF Model"
+          - key: rf_solution.RC4DAT-8G-95.idVendor
+            widget: line_edit
+            label: "RC4DAT-8G-95 idVendor"
+          - key: rf_solution.RC4DAT-8G-95.idProduct
+            widget: line_edit
+            label: "RC4DAT-8G-95 idProduct"
+          - key: rf_solution.RC4DAT-8G-95.ip_address
+            widget: line_edit
+            label: "RC4DAT-8G-95 IP"
+          - key: rf_solution.RADIORACK-4-220.ip_address
+            widget: line_edit
+            label: "RADIORACK-4-220 IP"
+          - key: rf_solution.LDA-908V-8.ip_address
+            widget: line_edit
+            label: "LDA-908V-8 IP"
+          - key: rf_solution.LDA-908V-8.channels
+            widget: line_edit
+            label: "LDA-908V-8 Channels"
+
+      - id: rvr
+        label: "RvR Config"
+        fields:
+          - key: rvr.tool
+            widget: combo_box
+            label: "Data Generator"
+            choices: ["iperf", "ixchariot"]
+          - key: rvr.iperf.path
+            widget: line_edit
+            label: "iperf path (DUT)"
+          - key: rvr.iperf.server_cmd
+            widget: line_edit
+            label: "iperf server cmd"
+          - key: rvr.iperf.client_cmd
+            widget: line_edit
+            label: "iperf client cmd"
+          - key: rvr.ixchariot.path
+            widget: line_edit
+            label: "IxChariot path"
+          - key: rvr.repeat
+            widget: int
+            label: "Repeat"
+            minimum: 0
+          - key: rvr.throughput_threshold
+            widget: int
+            label: "Zero Point Threshold"
+            minimum: 0
+
+      - id: router
+        label: "Router"
+        fields:
+          - key: router.name
+            widget: combo_box
+            label: "Router"
+          - key: router.address
+            widget: line_edit
+            label: "Router IP"
+            placeholder: "192.168.x.x"
+
+      - id: text_case
+        label: "Selected Test Case"
+        fields:
+          - key: text_case
+            widget: read_only_text
+            label: "Test case"
+
+      - id: debug
+        label: "Debug Options"
+        fields:
+          - key: debug.database_mode
+            widget: checkbox
+            label: "Enable database debug mode"
+          - key: debug.skip_router
+            widget: checkbox
+            label: "Skip router workflow"
+          - key: debug.skip_corner_rf
+            widget: checkbox
+            label: "Skip corner && RF workflow"
+
+      - id: csv_path
+        label: "Performance CSV"
+        fields:
+          - key: csv_path
+            widget: line_edit
+            label: "CSV path"
+            placeholder: "performance_test_csv/rvr_wifi_setup.csv"
+

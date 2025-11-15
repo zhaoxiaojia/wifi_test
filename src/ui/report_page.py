@@ -50,8 +50,6 @@ import pandas as pd
 from PyQt5.QtCore import Qt, QTimer, QEvent, QUrl
 from PyQt5.QtGui import QPixmap, QImage, QFont, QDesktopServices
 from PyQt5.QtWidgets import (
-    QHBoxLayout,
-    QVBoxLayout,
     QListWidget,
     QListWidgetItem,
     QTextEdit,
@@ -64,7 +62,7 @@ from PyQt5.QtWidgets import (
 )
 from qfluentwidgets import CardWidget, StrongBodyLabel
 
-from .theme import (
+from src.ui.view.theme import (
     ACCENT_COLOR,
     BACKGROUND_COLOR,
     FONT_FAMILY,
@@ -86,6 +84,8 @@ from src.util.constants import (
     TEST_TYPE_ORDER_MAP,
 )
 from src.util.rvr_chart_logic import RvrChartLogic
+from .view.common import attach_view_to_page
+from .view.report import ReportView
 
 
 class InteractiveChartLabel(QLabel):
@@ -401,91 +401,22 @@ class ReportPage(RvrChartLogic, CardWidget):
         self._timer.setInterval(300)
         self._timer.timeout.connect(self._on_tail_tick)
 
-        # --- UI root ---
-        root = QVBoxLayout(self)
-        root.setSpacing(12)
+        # --- compose pure UI view ---
+        self.view = ReportView(self)
+        attach_view_to_page(self, self.view)
 
-        self.title_label = StrongBodyLabel("Reports")
-        apply_theme(self.title_label)
-        self.title_label.setStyleSheet(
-            f"border-left: 4px solid {ACCENT_COLOR}; padding-left: 8px; font-family:{FONT_FAMILY};"
-        )
-        root.addWidget(self.title_label)
+        # Convenience aliases so existing logic can keep using old attributes.
+        self.title_label: StrongBodyLabel = self.view.title_label
+        self.dir_label: QLabel = self.view.dir_label
+        self.file_list: QListWidget = self.view.file_list
+        self.viewer_stack: QStackedWidget = self.view.viewer_stack
+        self.viewer: QTextEdit = self.view.viewer
+        self.chart_tabs: QTabWidget = self.view.chart_tabs
+        self.report_controls = self.view.report_controls
 
-        self.dir_label = QLabel("Report dir: -")
-        apply_theme(self.dir_label)
-        self.dir_label.setCursor(Qt.PointingHandCursor)
-        self.dir_label.mousePressEvent = self._open_report_dir  # simple clickable label
-        root.addWidget(self.dir_label)
-
-        body = QHBoxLayout()
-        body.setSpacing(12)
-        root.addLayout(body)
-
-        # left: files
-        self.file_list = QListWidget(self)
-        apply_theme(self.file_list)
-        self.file_list.setSelectionMode(self.file_list.SingleSelection)
+        # Wire UI interactions into this page's logic.
+        self.dir_label.mousePressEvent = self._open_report_dir
         self.file_list.itemSelectionChanged.connect(self._on_file_selected)
-        body.addWidget(self.file_list, 1)
-
-        # right: stacked viewer (text tail + chart tabs)
-        self.viewer_stack = QStackedWidget(self)
-        body.addWidget(self.viewer_stack, 3)
-
-        self.viewer = QTextEdit(self.viewer_stack)
-        self.viewer.setReadOnly(True)
-        apply_theme(self.viewer)
-        self.viewer.document().setMaximumBlockCount(5000)  # avoid unbounded growth
-        self.viewer.setMinimumHeight(400)
-        self.viewer_stack.addWidget(self.viewer)
-
-        self.chart_tabs = QTabWidget(self.viewer_stack)
-        apply_theme(self.chart_tabs)
-        self.chart_tabs.setDocumentMode(True)
-        self.chart_tabs.setElideMode(Qt.ElideRight)
-        pane_style = f"""
-        QTabWidget::pane {{
-            background: {BACKGROUND_COLOR};
-            border: 1px solid #3a3a3a;
-        }}
-        """
-        tab_bar_style = f"""
-        QTabBar::tab {{
-            {STYLE_BASE}
-            color: {TEXT_COLOR};
-            background: #3a3a3a;
-            padding: 6px 14px;
-            margin: 2px 8px 0 0;
-            border-radius: 4px;
-        }}
-        QTabBar::tab:selected {{
-            background: #565656;
-            color: {TEXT_COLOR};
-        }}
-        QTabBar::tab:hover {{
-            background: #464646;
-        }}
-        """
-        self.chart_tabs.setStyleSheet(self.chart_tabs.styleSheet() + pane_style)
-        tab_bar = self.chart_tabs.tabBar()
-        if tab_bar is not None:
-            tab_bar.setStyleSheet(tab_bar.styleSheet() + tab_bar_style)
-        self.viewer_stack.addWidget(self.chart_tabs)
-        self.viewer_stack.setCurrentWidget(self.viewer)
-
-        # Logical control map for the report page.
-        # Keys follow: page_frame_group_purpose_type
-        self.report_controls: dict[str, object] = {
-            "report_main_title_label": self.title_label,
-            "report_main_dir_label": self.dir_label,
-            "report_main_file_list_list": self.file_list,
-            "report_main_viewer_stack": self.viewer_stack,
-            "report_main_text_viewer": self.viewer,
-            "report_main_chart_tabs": self.chart_tabs,
-        }
-
-        self.setLayout(root)
 
         self._view_mode: str = 'text'  # 'text' or 'chart'
         self._rvr_last_mtime: float | None = None  # last chart render time
@@ -743,25 +674,8 @@ class ReportPage(RvrChartLogic, CardWidget):
                 self._rvr_last_mtime = None
             return False
         current_index = self.chart_tabs.currentIndex()
-        self.chart_tabs.blockSignals(True)
-        try:
-            self.chart_tabs.clear()
-            for title, chart_widget in charts:
-                if chart_widget is None:
-                    continue
-                container = QWidget(self.chart_tabs)
-                container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-                layout = QVBoxLayout(container)
-                layout.setContentsMargins(0, 0, 0, 0)
-                layout.setSpacing(0)
-                layout.addWidget(chart_widget)
-                self.chart_tabs.addTab(container, title)
-        finally:
-            self.chart_tabs.blockSignals(False)
-        if 0 <= current_index < self.chart_tabs.count():
-            self.chart_tabs.setCurrentIndex(current_index)
-        elif self.chart_tabs.count() > 0:
-            self.chart_tabs.setCurrentIndex(0)
+        charts_for_view = [(title, chart_widget) for title, chart_widget in charts if chart_widget is not None]
+        self.view.rebuild_chart_tabs(charts_for_view, keep_index=current_index)
         self._rvr_last_mtime = mtime
         return True
 

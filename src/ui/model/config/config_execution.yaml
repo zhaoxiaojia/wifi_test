@@ -35,3 +35,37 @@ debug:
   skip_router: false
   skip_corner_rf: false
 csv_path: performance_test_csv/rvr_wifi_setup.csv
+duration_control:
+  loop: 3
+  duration_hours: null
+  exitfirst: true
+  retry_limit: 2
+check_point:
+  ping: true
+  ping_targets: 192.168.1.1
+cases:
+  test_str:
+    ac:
+      enabled: false
+      on_duration: 5
+      off_duration: 5
+      relay_type: usb_relay
+      relay_params: []
+      port: ''
+      mode: NC
+    str:
+      enabled: true
+      on_duration: 15
+      off_duration: 15
+      relay_type: usb_relay
+      relay_params: []
+      port: ''
+      mode: 'NO'
+  test_switch_wifi:
+    use_router: false
+    router_csv: performance_test_csv/rvr_wifi_setup_demo.csv
+    manual_entries:
+    - ssid: SH-AP-052-2g-xts
+      security_mode: Open System
+      password: ''
+

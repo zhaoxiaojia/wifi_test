@@ -21,52 +21,16 @@ import logging
 from contextlib import ExitStack
 from PyQt5.QtCore import Qt, QSignalBlocker
 from src.util.constants import AUTH_OPTIONS, OPEN_AUTH, Paths, RouterConst
-from PyQt5.QtWidgets import QHBoxLayout, QTableWidgetItem, QGroupBox, QVBoxLayout, QAbstractItemView, QFormLayout, QCheckBox, QHeaderView, QWidget
-from qfluentwidgets import TableWidget, CardWidget, ComboBox, LineEdit, PushButton, InfoBar, InfoBarPosition
+from PyQt5.QtWidgets import QHBoxLayout, QTableWidgetItem, QVBoxLayout, QAbstractItemView, QHeaderView, QWidget
+from qfluentwidgets import CardWidget, InfoBar, InfoBarPosition
 from src.tools.router_tool.router_factory import get_router
-from .theme import apply_theme, apply_font_and_selection
+from src.ui.view.theme import apply_theme, apply_font_and_selection
+from .view.common import attach_view_to_page
+from .view.case import CaseView, WifiTableWidget
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .windows_case_config import CaseConfigPage
-
-
-class WifiTableWidget(TableWidget):
-    """Wi-Fi parameter table widget.
-
-    Behavior:
-    - Enforces single row selection to cooperate with the checkbox column.
-    - Clicking on an empty area clears selection and asks the parent page to reset the form.
-
-    Notes:
-    - Signals interact with the outer RvrWifiConfigPage; the widget does not write CSV directly.
-    """
-
-    def __init__(self, page: "RvrWifiConfigPage"):
-        """Initialize table properties and bind to the outer page."""
-        super().__init__(page)
-        self.page = page
-        # Enforce single row selection to avoid conflicts with the checkbox column
-        self.setSelectionMode(QAbstractItemView.SingleSelection)
-        self.setSelectionBehavior(QAbstractItemView.SelectRows)
-
-    def mousePressEvent(self, event):
-        """Custom mouse press behavior.
-
-        Behavior:
-            - If clicking on an empty area: clear selection and ask the page to reset the form.
-            - Otherwise: keep default selection.
-
-        Args:
-            event (QMouseEvent): mouse event.
-
-        Side effects:
-            - Calls self.page.reset_form() (UI only).
-        """
-        super().mousePressEvent(event)
-        if self.itemAt(event.pos()) is None:
-            self.clearSelection()
-            self.page.reset_form()
 
 
 class RvrWifiConfigPage(CardWidget):
@@ -108,94 +72,44 @@ class RvrWifiConfigPage(CardWidget):
         # Guard flag to avoid signal recursion
         self._loading = False
 
-        main_layout = QHBoxLayout(self)
+        # Compose the pure UI view (form + table).
+        self.view = CaseView(self)
+        attach_view_to_page(self, self.view, orientation=Qt.Horizontal)
 
-        # -----------------------------
-        # Left-side form (single-row editor)
-        # -----------------------------
-        form_box = QGroupBox(self)
-        apply_theme(form_box, recursive=True)
-        form_layout = QFormLayout(form_box)
+        # Convenience aliases to keep existing logic working.
+        self.band_combo = self.view.band_combo
+        self.wireless_combo = self.view.wireless_combo
+        self.channel_combo = self.view.channel_combo
+        self.bandwidth_combo = self.view.bandwidth_combo
+        self.auth_combo = self.view.auth_combo
+        self.ssid_edit = self.view.ssid_edit
+        self.passwd_edit = self.view.passwd_edit
+        self.tx_check = self.view.tx_check
+        self.rx_check = self.view.rx_check
+        self.del_btn = self.view.del_btn
+        self.add_btn = self.view.add_btn
+        self.table: WifiTableWidget = self.view.table  # type: ignore[assignment]
 
-        self.band_combo = ComboBox(form_box)
+        # Configure widgets that depend on router/auth state.
         band_list = getattr(self.router, "BAND_LIST", ["2.4G", "5G"])
         self.band_combo.addItems(band_list)
-        self.band_combo.currentTextChanged.connect(self._on_band_changed)
-        form_layout.addRow("band", self.band_combo)
-
-        self.wireless_combo = ComboBox(form_box)
-        form_layout.addRow("wireless mode", self.wireless_combo)
-
-        self.channel_combo = ComboBox(form_box)
-        form_layout.addRow("channel", self.channel_combo)
-
-        self.bandwidth_combo = ComboBox(form_box)
-        form_layout.addRow("bandwidth", self.bandwidth_combo)
-
-        self.auth_combo = ComboBox(form_box)
-        self.auth_combo.addItems(AUTH_OPTIONS)
-        form_layout.addRow("security", self.auth_combo)
-
-        self.ssid_edit = LineEdit(form_box)
-        form_layout.addRow("ssid", self.ssid_edit)
-
-        self.passwd_edit = LineEdit(form_box)
-        self.passwd_edit.setEchoMode(LineEdit.Password)
-        form_layout.addRow("password", self.passwd_edit)
-        self.auth_combo.currentTextChanged.connect(self._on_auth_changed)
-
-        test_widget = QWidget(form_box)
-        test_layout = QHBoxLayout(test_widget)
-        test_layout.setContentsMargins(0, 0, 0, 0)
-        self.tx_check = QCheckBox("tx", test_widget)
-        self.rx_check = QCheckBox("rx", test_widget)
-        test_layout.addWidget(self.tx_check)
-        test_layout.addWidget(self.rx_check)
-        self.tx_check.stateChanged.connect(self._update_tx_rx)
-        self.rx_check.stateChanged.connect(self._update_tx_rx)
-        form_layout.addRow("direction", test_widget)
-
-        btn_widget = QWidget(form_box)
-        btn_layout = QHBoxLayout(btn_widget)
-        btn_layout.setContentsMargins(0, 0, 0, 0)
-        self.del_btn = PushButton("Del", btn_widget)
-        self.del_btn.clicked.connect(self.delete_row)
-        btn_layout.addWidget(self.del_btn)
-        self.add_btn = PushButton("Add", btn_widget)
-        self.add_btn.clicked.connect(self.add_row)
-        btn_layout.addWidget(self.add_btn)
-        form_layout.addRow(btn_widget)
-
-        main_layout.addWidget(form_box, 2)
-
-        self.table = WifiTableWidget(self)
-
-        # Turn off alternating row colors and keep stylesheets from turning them back on
-        # Reason: we unify styling explicitly via apply_font_and_selection below
-        self.table.setAlternatingRowColors(False)
-        self.table.setSortingEnabled(False)
-        self.table.setSelectionMode(QAbstractItemView.SingleSelection)
-        self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.table.cellClicked.connect(self._on_table_cell_clicked)
-
-        header = self.table.horizontalHeader()
-        header.setSectionResizeMode(QHeaderView.Stretch)
-        header.setMinimumSectionSize(100)
-
-        main_layout.addWidget(self.table, 5)
-
-        apply_theme(header)
-        # Unify fonts/selection colors for this page only; no global stylesheet changes
+        apply_theme(self.table.horizontalHeader())
         apply_font_and_selection(
             self.table,
             family="Verdana",
             size_px=12,
-            sel_text="#A6E3FF",  # selected text
-            sel_bg="#2B2B2B",  # selected background
-            grid="#3F3F46",  # grid line color
+            sel_text="#A6E3FF",
+            sel_bg="#2B2B2B",
+            grid="#3F3F46",
             header_bg="#0B0B0C",
             header_fg="#D0D0D0",
         )
+
+        # Behaviour wiring (signals) remains here.
+        self.band_combo.currentTextChanged.connect(self._on_band_changed)
+        self.table.cellClicked.connect(self._on_table_cell_clicked)
+        self.tx_check.stateChanged.connect(self._update_tx_rx)
+        self.rx_check.stateChanged.connect(self._update_tx_rx)
 
         # Form/table field sync
         self.band_combo.currentTextChanged.connect(self._update_current_row)
@@ -211,22 +125,8 @@ class RvrWifiConfigPage(CardWidget):
         self._on_auth_changed(self.auth_combo.currentText())
         self.refresh_table()
 
-        # Logical control map for the case (RVR Wi-Fi) page.
-        # Keys follow: page_frame_group_purpose_type
-        self.case_controls: dict[str, object] = {
-            "case_main_wifi_band_combo": self.band_combo,
-            "case_main_wifi_mode_combo": self.wireless_combo,
-            "case_main_wifi_channel_combo": self.channel_combo,
-            "case_main_wifi_bandwidth_combo": self.bandwidth_combo,
-            "case_main_wifi_security_combo": self.auth_combo,
-            "case_main_wifi_ssid_text": self.ssid_edit,
-            "case_main_wifi_password_text": self.passwd_edit,
-            "case_main_wifi_tx_check": self.tx_check,
-            "case_main_wifi_rx_check": self.rx_check,
-            "case_main_wifi_delete_btn": self.del_btn,
-            "case_main_wifi_add_btn": self.add_btn,
-            "case_main_wifi_table": self.table,
-        }
+        # Logical control map for the case (RVR Wi-Fi) page remains unchanged.
+        self.case_controls = self.view.case_controls
 
         # Listen to signals from the main Case config page
         self.case_config_page.routerInfoChanged.connect(self.reload_router)

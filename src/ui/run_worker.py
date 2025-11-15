@@ -20,7 +20,7 @@ from src.test.stability import (
 )
 from src.util.constants import Paths
 from src.util.pytest_redact import install_redactor_for_current_process
-from .theme import STYLE_BASE, TEXT_COLOR
+from src.ui.view.theme import STYLE_BASE, TEXT_COLOR
 from .run_log import _RunLogSession
 
 __all__ = ["_pytest_worker"]

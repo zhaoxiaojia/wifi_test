@@ -21,16 +21,9 @@ from typing import Any
 
 import pytest
 import sip
-from PyQt5.QtCore import QEasingCurve, QEvent, QPropertyAnimation, QRect, QSize, Qt, QTimer
+from PyQt5.QtCore import QEasingCurve, QEvent, QSize, Qt, QTimer
 from PyQt5.QtGui import QTextCursor
-from PyQt5.QtWidgets import (
-    QApplication,
-    QFrame,
-    QHBoxLayout,
-    QLabel,
-    QTextEdit,
-    QVBoxLayout,
-)
+from PyQt5.QtWidgets import QApplication, QFrame, QHBoxLayout, QLabel, QTextEdit
 from qfluentwidgets import (
     CardWidget,
     FluentIcon,
@@ -45,7 +38,7 @@ from src.util.constants import Paths, get_src_base
 from src.util.pytest_redact import install_redactor_for_current_process
 from .run_log import LiveLogWriter
 from .run_runner import CaseRunner
-from .theme import (
+from src.ui.view.theme import (
     ACCENT_COLOR,
     CONTROL_HEIGHT,
     FONT_FAMILY,
@@ -57,6 +50,9 @@ from .theme import (
     apply_theme,
     format_log_html,
 )
+from .view.common import animate_progress_fill
+from .view.common import attach_view_to_page
+from .view.run import RunView
 
 
 class RunPage(CardWidget):
@@ -117,149 +113,36 @@ class RunPage(CardWidget):
         apply_theme(self)
         self.case_path = case_path
         self.config = config
-        self.main_window = parent  # 保存主窗口引用（用于InfoBar父窗口）
+        self.main_window = parent  # keep reference to main window (for InfoBar parent)
 
         self.display_case_path = self._calc_display_path(case_path, display_case_path)
 
-        layout = QVBoxLayout(self)
-        layout.setSpacing(16)
-        self.case_path_label = StrongBodyLabel(self.display_case_path)
-        apply_theme(self.case_path_label)
-        self.case_path_label.setStyleSheet(
-            f"border-left: 4px solid {ACCENT_COLOR}; padding-left: 8px; font-family:{FONT_FAMILY};"
-        )
-        self.case_path_label.setFixedHeight(CONTROL_HEIGHT)
-        self.case_path_label.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
-        self.case_path_label.setVisible(True)
-        layout.addWidget(self.case_path_label)
+        # Compose pure UI view and alias widgets for logic.
+        self.view = RunView(self)
+        attach_view_to_page(self, self.view)
 
-        self.log_area = QTextEdit(self)
-        self.log_area.setStyleSheet(
-            f"""
-            QTextEdit {{
-                background: rgba(255,255,255,0.04);
-                border: 1px solid rgba(0,103,192,0.35);
-                border-radius: 6px;
-                padding: 6px;
-                selection-background-color: {ACCENT_COLOR};
-                selection-color: white;
-                font-family: {FONT_FAMILY};
-            }}
-            """
-        )
-        self.log_area.setReadOnly(True)
-        self.log_area.setMinimumHeight(400)
-        apply_theme(self.log_area)
+        self.case_path_label: StrongBodyLabel = self.view.case_path_label
+        self.case_path_label.setText(self.display_case_path)
+        self.log_area: QTextEdit = self.view.log_area
         self.log_area.document().setMaximumBlockCount(2000)
-        layout.addWidget(self.log_area, stretch=5)
-        # 当前用例信息展示
-        self.case_info_label = QLabel("Current case : ", self)
-        apply_theme(self.case_info_label)
-        self.case_info_label.setStyleSheet(
-            f"border-left: 4px solid {ACCENT_COLOR}; padding-left: 8px; font-family:{FONT_FAMILY};"
-        )
-        # ← 新增：统一高度 & 垂直居中，避免看起来更“瘦”
-        self.case_info_label.setFixedHeight(CONTROL_HEIGHT)
-        self.case_info_label.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
-        self.case_info_label.setStyleSheet(
-            f"border-left: 4px solid {ACCENT_COLOR}; "
-            f"padding-left: 8px; padding-top:0px; padding-bottom:0px; "
-            f"font-family:{FONT_FAMILY};"
-        )
-        layout.addWidget(self.case_info_label)
-        self.process = QFrame(self)
-        self.process.setFixedHeight(CONTROL_HEIGHT)
-        self.process.setStyleSheet(
-            f"""
-            QFrame {{
-                background-color: rgba(255,255,255,0.06);
-                border: 1px solid rgba(0,103,192,0.35);  /* ← 淡蓝描边 */
-                border-radius: 4px;
-                font-family: {FONT_FAMILY};
-            }}
-            """
-        )
-        layout.addWidget(self.process)
-        # 填充条（作为背景动画层）
-        self.process_fill = QFrame(self.process)
-        self.process_fill.setGeometry(0, 0, 0, CONTROL_HEIGHT)
-        self.process_fill.setStyleSheet(
-            f"QFrame {{ background-color: {ACCENT_COLOR}; border-radius: 4px; }}"
-        )
-        # 百分比文字（居中覆盖）
-        self.process_label = QLabel("Process: 0%", self.process)
-        self.process_label.setAttribute(Qt.WA_TransparentForMouseEvents, True)
-        self.process_label.setAlignment(Qt.AlignLeft)
-        self.process_label.setAlignment(Qt.AlignVCenter)
-
-        apply_theme(self.process_label)
-        self.process_label.setStyleSheet(
-            f"font-family: {FONT_FAMILY};"
-        )
-        self.process_label.setGeometry(self.process.rect())
-        self.remaining_time_label = QLabel("Remaining : 00:00:00", self.process)
-        self.remaining_time_label.setAttribute(Qt.WA_TransparentForMouseEvents, True)
-        self.remaining_time_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        apply_theme(self.remaining_time_label)
-        self.remaining_time_label.setStyleSheet(f"font-family: {FONT_FAMILY};")
-        self.remaining_time_label.setGeometry(self.process.rect())
-        self.remaining_time_label.hide()
-        # —— Remaining 倒计时：每秒刷新 ——
+        self.case_info_label: QLabel = self.view.case_info_label
+        self.process: QFrame = self.view.process
+        self.process_fill: QFrame = self.view.process_fill
+        self.process_label: QLabel = self.view.process_label
+        self.remaining_time_label: QLabel = self.view.remaining_time_label
+        self.action_btn: PushButton = self.view.action_btn
+        self.run_controls = self.view.run_controls
+        # Remaining countdown: refresh every second
         self._remaining_time_timer = QTimer(self)
         self._remaining_time_timer.setInterval(1000)  # 1s
         self._remaining_time_timer.timeout.connect(self._on_remaining_tick)
         self._remaining_seconds = 0
-        # —— Overtime（倒计时到 0 后继续计时）——
+        # Overtime: keep counting after countdown reaches 0
         self._remaining_overtime = False
         self._overtime_seconds = 0
-        self.process.installEventFilter(self)  # 让容器尺寸变化时同步 label/fill
+        self.process.installEventFilter(self)  # keep label/fill in sync with container size changes
         self._progress_animation = None
         self._current_percent = 0
-        self.action_btn = PushButton(self)
-        self.action_btn.setObjectName("actionBtn")
-        self.action_btn.setStyleSheet(
-            f"""
-            #actionBtn {{
-                background-color: {ACCENT_COLOR};
-                color: white;
-                border: none;
-                border-radius: 4px;
-                height: {CONTROL_HEIGHT}px;
-                font-family: {FONT_FAMILY};
-                padding: 0 20px;
-            }}
-            #actionBtn:hover {{
-                background-color: #0b5ea8;  /* 深一点 */
-            }}
-            #actionBtn:pressed {{
-                background-color: #084a85;  /* 更深 */
-            }}
-            #actionBtn:disabled {{
-                background-color: rgba(0,103,192,0.35);
-                color: rgba(255,255,255,0.6);
-            }}
-            """
-        )
-        if hasattr(self.action_btn, "setUseRippleEffect"):
-            self.action_btn.setUseRippleEffect(True)
-        if hasattr(self.action_btn, "setUseStateEffect"):
-            self.action_btn.setUseStateEffect(True)
-        self.action_btn.setFixedHeight(CONTROL_HEIGHT)
-        layout.addWidget(self.action_btn)
-        self.setLayout(layout)
-
-        # Logical control map for the run page.
-        # Keys follow: page_frame_group_purpose_type
-        self.run_controls: dict[str, object] = {
-            "run_main_header_case_label": self.case_path_label,
-            "run_main_log_text": self.log_area,
-            "run_main_case_info_label": self.case_info_label,
-            "run_main_progress_frame": self.process,
-            "run_main_progress_fill_frame": self.process_fill,
-            "run_main_progress_percent_label": self.process_label,
-            "run_main_remaining_label": self.remaining_time_label,
-            "run_main_action_btn": self.action_btn,
-        }
 
         self.reset()
         self.finished_count = 0
@@ -302,7 +185,7 @@ class RunPage(CardWidget):
         -----
         This docstring was auto-generated; refine as needed to match real behavior.
         """
-        # 用 getattr 防止属性未创建时报 AttributeError；用 QEvent.Resize 做比较
+        # use getattr to avoid AttributeError if attribute not created; compare with QEvent.Resize
         if obj is getattr(self, "process", None) and event.type() == QEvent.Resize:
             rect = self.process.rect()
             self.process_label.setGeometry(rect)
@@ -338,7 +221,7 @@ class RunPage(CardWidget):
         -----
         This docstring was auto-generated; refine as needed to match real behavior.
         """
-        """按顺序 upsert：存在则更新参数，不存在则追加到末尾"""
+        """Upsert in order: update parameters if exists, otherwise append at the end."""
         for i, (n, _) in enumerate(self._fixture_chain):
             if n == name:
                 self._fixture_chain[i] = (name, params)
@@ -373,11 +256,11 @@ class RunPage(CardWidget):
         -----
         This docstring was auto-generated; refine as needed to match real behavior.
         """
-        """用基线 + 链式 fixture 重建 Current case 文本"""
+        """Rebuild Current case text using baseline and chained fixtures."""
         parts = [self._case_name_base.strip()]
         for n, p in self._fixture_chain:
             parts.append(f"{n}={p}")
-        # 用竖线分隔，直观显示执行先后顺序
+        # use vertical bar as separator to show execution order
         self.case_info_label.setText(" | ".join(parts))
 
     def _append_log(self, msg: str):
@@ -415,15 +298,15 @@ class RunPage(CardWidget):
             name = str(info.get("fixture", "")).strip()
             params = str(info.get("params", "")).strip()
             if name and params:
-                self._fixture_upsert(name, params)  # 累计或原位更新，不覆盖其它 fixture
+                self._fixture_upsert(name, params)  # accumulate or in-place update without overwriting other fixtures
             return
         if msg.startswith("[PYQT_CASE]"):
             fn = msg[len("[PYQT_CASE]"):].strip()
             if fn != self._case_fn:
-                # 只有用例真的变化时才清空链
+                # clear chain only when case actually changes
                 self._case_fn = fn
                 self._fixture_chain = []
-            # 无论是否变化，都更新基线文本
+            # always update baseline text
             self._case_name_base = f"Current case : {fn}"
             self._rebuild_case_info_label()
             return
@@ -520,12 +403,12 @@ class RunPage(CardWidget):
         """
         seconds = max(0, int(seconds))
         if seconds <= 0:
-            # 不在这里停表；由 _on_remaining_tick() 或 _update_remaining_time_label() 决定
+            # do not stop timer here; _on_remaining_tick() or _update_remaining_time_label() decides
             return
 
-        # 收到新的有效 ETA ⇒ 回到倒计时模式
+        # when new valid ETA is received, switch back to countdown mode
         self._remaining_overtime = False
-        # 只在差异较大时重置，避免 UI 跳动；若当前是 Overtime，则无条件重置
+        # reset only when difference is large to avoid UI jitter; if currently in Overtime, always reset
         if self._remaining_time_timer.isActive() and not self._remaining_overtime:
             if abs(seconds - self._remaining_seconds) < 3:
                 return
@@ -596,15 +479,15 @@ class RunPage(CardWidget):
         This docstring was auto-generated; refine as needed to match real behavior.
         """
         if self._remaining_overtime:
-            # Overtime：每秒 +1
+            # Overtime: +1 every second
             self._overtime_seconds += 1
             self.remaining_time_label.setText(f"Overtime : {self._format_hms(self._overtime_seconds)[12:]}")
             return
 
-        # 倒计时模式：每秒 -1
+        # countdown mode: -1 every second
         self._remaining_seconds -= 1
         if self._remaining_seconds <= 0:
-            # 还有任务？→ 切 Overtime；没有任务 → 停表隐藏
+            # if there are tasks, switch to Overtime; if no tasks, stop and hide
             remaining_cases = max(self.total_count - self.finished_count, 0)
             runner_running = bool(getattr(self, "runner", None) and self.runner.isRunning())
             if remaining_cases > 0 or runner_running:
@@ -612,13 +495,13 @@ class RunPage(CardWidget):
                 self._overtime_seconds = 0
                 self.remaining_time_label.setText("Overtime : 00:00:00")
                 self.remaining_time_label.show()
-                # 计时器继续跑，由本函数负责递增
+                # timer keeps running; this function increments it
                 return
             else:
                 self._stop_remaining_timer()
                 return
 
-        # 正常倒计时刷新
+        # normal countdown refresh
         self.remaining_time_label.setText(self._format_hms(self._remaining_seconds))
 
     def _update_remaining_time_label(self):
@@ -652,23 +535,23 @@ class RunPage(CardWidget):
 
         remaining_cases = max(self.total_count - self.finished_count, 0)
 
-        # 全部完成：停表隐藏
+        # all done: stop and hide
         if remaining_cases <= 0:
             self._stop_remaining_timer()
             return
 
-        # 有新 ETA ⇒ 重置倒计时（会自动退出 Overtime）
+        # new ETA: reset countdown (automatically exits Overtime)
         remaining_ms = self.avg_case_duration * remaining_cases
         seconds = int(remaining_ms // 1000) if remaining_ms > 0 else -1
         if seconds > 0:
             self._start_remaining_timer(seconds)
             return
 
-        # 无新 ETA：
-        # 1) 若已在 Overtime，保持不动（继续每秒递增）；
-        # 2) 若不在 Overtime 且计时器未启动，保持静默（避免闪烁）。
+        # no new ETA:
+        # 1) if already in Overtime, keep incrementing every second
+        # 2) if not in Overtime and timer not started, stay silent (avoid flicker)
         if not self._remaining_time_timer.isActive() and not self._remaining_overtime:
-            # 你也可在此显示“Estimating...”占位
+            # you may also show an 'Estimating...' placeholder here
             # self.remaining_time_label.setText("Remaining : estimating...")
             # self.remaining_time_label.show()
             pass
@@ -699,43 +582,26 @@ class RunPage(CardWidget):
         -----
         This docstring was auto-generated; refine as needed to match real behavior.
         """
-        # 1) 归一化 & 记录
+        # 1) normalize and record
         percent = max(0, min(100, int(percent)))
         self._current_percent = percent
 
-        # 2) 文本
+        # 2) text
         self.process_label.setText(f"Process: {percent}%")
 
-        # 3) 颜色（使用你的主题蓝）
+        # 3) color (use your theme blue)
         try:
-            color = ACCENT_COLOR  # 若未定义 ACCENT_COLOR，则改成 "#0067c0"
+            color = ACCENT_COLOR  # if ACCENT_COLOR is not defined, change to "#0067c0"
         except NameError:
             color = "#0067c0"
         self.process_fill.setStyleSheet(
             f"QFrame {{ background-color: {color}; border-radius: 4px; }}"
         )
 
-        # 4) 目标宽度（100% 直接吃满，避免取整误差）
-        rect = self.process.rect()
-        total_w = rect.width() or 300
-        target_w = total_w if percent >= 99 else int(total_w * percent / 100)
-
-        # 5) 小于 2 像素的变化直接定位，避免末段频繁动画卡顿
-        current_geo = self.process_fill.geometry()
-        current_w = current_geo.width()
-
-        if abs(target_w - current_w) < 2:
-            self.process_fill.setGeometry(0, 0, target_w, rect.height())
-            return
-
-        # 6) 正常做平滑动画
-        anim = QPropertyAnimation(self.process_fill, b"geometry")
-        anim.setDuration(300)
-        anim.setStartValue(current_geo)
-        anim.setEndValue(QRect(0, 0, target_w, rect.height()))
-        anim.setEasingCurve(QEasingCurve.OutCubic)
-        anim.start()
-        self._progress_animation = anim
+        # 4) target width (100% fills completely to avoid rounding error)
+        anim = animate_progress_fill(self.process_fill, self.process, percent)
+        if anim is not None:
+            self._progress_animation = anim
 
     def _trigger_config_run(self):
         """
@@ -763,12 +629,12 @@ class RunPage(CardWidget):
         -----
         This docstring was auto-generated; refine as needed to match real behavior.
         """
-        """触发配置页的运行逻辑，确保与配置页按钮一致"""
+        """Trigger configuration page run logic, keeping consistent with config page button."""
         cfg_page = getattr(self.main_window, "case_config_page", None)
         if cfg_page and not sip.isdeleted(cfg_page):
             cfg_page.on_run()
         else:
-            # 回退到直接运行当前 case
+            # fall back to directly running current case
             self.run_case()
 
     def _set_action_button(self, mode: str):
@@ -883,12 +749,12 @@ class RunPage(CardWidget):
         # notify main window when report directory is ready
         with suppress(Exception):
             self.runner.report_dir_signal.connect(self._on_report_dir_ready)
-        # 关键修改：InfoBar的父窗口改为主窗口（而非RunPage自身）
+        # key change: InfoBar's parent window is main window (not RunPage itself)
         # self.runner.finished.connect(
         #     lambda: InfoBar.success(
         #         title="Done",
         #         content="Test Done",
-        #         parent=self.main_window,  # 这里改为主窗口
+        #         parent=self.main_window,  # use main window as parent here
         #         position=InfoBarPosition.TOP,
         #         duration=1800,
         #     )
@@ -1033,7 +899,7 @@ class RunPage(CardWidget):
                 )
                 # InfoBar.warning(
                 #     title="Warning",
-                #     content="线程未能及时结束",
+                #     content=\"Thread did not finish in time\",
                 #     parent=self.main_window,
                 #     position=InfoBarPosition.TOP,
                 #     duration=3000,
