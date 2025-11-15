@@ -108,7 +108,9 @@ DUT_SECTION_KEYS: Final[frozenset[str]] = frozenset({
     "serial_port",
     "software_info",
     "hardware_info",
+    # Support both legacy and new naming for the system section.
     "android_system",
+    "system",
 })
 CONFIG_KEY_ALIASES: Final[dict[str, str]] = {
     "dut": "connect_type",

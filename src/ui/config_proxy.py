@@ -198,13 +198,16 @@ class ConfigProxy:
         product_upper = product_line.strip().upper()
         project_upper = project.strip().upper()
         for customer_name, product_lines in WIFI_PRODUCT_PROJECT_MAP.items():
-            if customer_upper and customer_name != customer_upper:
+            customer_name_upper = self.normalize_fpga_token(customer_name)
+            if customer_upper and customer_name_upper != customer_upper:
                 continue
             for product_name, projects in product_lines.items():
-                if product_upper and product_name != product_upper:
+                product_name_upper = self.normalize_fpga_token(product_name)
+                if product_upper and product_name_upper != product_upper:
                     continue
                 for project_name, info in projects.items():
-                    if project_upper and project_name != project_upper:
+                    project_name_upper = self.normalize_fpga_token(project_name)
+                    if project_upper and project_name_upper != project_upper:
                         continue
                     info_wifi = self.normalize_fpga_token(info.get("wifi_module"))
                     info_if = self.normalize_fpga_token(info.get("interface"))

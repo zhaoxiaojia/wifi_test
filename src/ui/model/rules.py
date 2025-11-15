@@ -150,42 +150,38 @@ CONFIG_UI_RULES: Dict[str, RuleSpec] = {
     "R04_android_system_visibility": {
         "number": 4,
         "description": (
-            "When Control Type is Android, Android Version is editable and "
-            "Kernel Version is read-only; when Linux is selected, Android "
-            "Version is disabled and Kernel Version is editable. Both fields "
-            "remain visible in all cases."
+            "When Control Type is Android, both Android Version and Kernel "
+            "Version are editable; when Linux is selected, Android Version "
+            "is hidden/disabled and Kernel Version is editable."
         ),
         "trigger_field": "connect_type.type",
         "cases": {
             "Android": {
                 "show_fields": [
-                    "android_system.version",
-                    "android_system.kernel_version",
+                    "system.version",
+                    "system.kernel_version",
                 ],
                 "enable_fields": [
-                    "android_system.version",
-                ],
-                "disable_fields": [
-                    "android_system.kernel_version",
+                    "system.version",
+                    "system.kernel_version",
                 ],
             },
             "Linux": {
                 "show_fields": [
-                    "android_system.version",
-                    "android_system.kernel_version",
+                    "system.kernel_version",
+                ],
+                "hide_fields": [
+                    "system.version",
                 ],
                 "enable_fields": [
-                    "android_system.kernel_version",
-                ],
-                "disable_fields": [
-                    "android_system.version",
+                    "system.kernel_version",
                 ],
             },
         },
         "related_fields": [
             "connect_type.type",
-            "android_system.version",
-            "android_system.kernel_version",
+            "system.version",
+            "system.kernel_version",
         ],
     },
 

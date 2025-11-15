@@ -21,13 +21,13 @@ panels:
             label: "Hardware Version"
             placeholder: "PCB revision / BOM"
 
-      - id: android_system
-        label: "Android System"
+      - id: system
+        label: "System"
         fields:
-          - key: android_system.version
+          - key: system.version
             widget: combo_box
             label: "Android Version"
-          - key: android_system.kernel_version
+          - key: system.kernel_version
             widget: combo_box
             label: "Kernel Version"
 
@@ -90,4 +90,3 @@ panels:
             widget: combo_box
             label: "Baud Rate"
             choices: ["9600", "19200", "38400", "57600", "115200", "921600"]
-

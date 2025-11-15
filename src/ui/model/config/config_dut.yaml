@@ -3,7 +3,7 @@ software_info:
   driver_version: ''
 hardware_info:
   hardware_version: ''
-android_system:
+system:
   version: Android 13
   kernel_version: Kernel 5.15
 connect_type:
@@ -26,4 +26,3 @@ serial_port:
   baud: '961200'
   port: COM5
   status: false
-
