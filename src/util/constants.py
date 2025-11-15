@@ -35,6 +35,11 @@ def get_config_base() -> Path:
     return Path(__file__).resolve().parents[2] / "config"
 
 
+def get_model_config_base() -> Path:
+    """Return the base directory for YAML model configuration."""
+    return Path(__file__).resolve().parents[2] / "src" / "ui" / "model" / "config"
+
+
 _SRC_TEMP_DIR: Path | None = None
 
 
@@ -385,7 +390,7 @@ def load_config(
 
     Set ``refresh=True`` to discard the cached content and re-read from disk.
     """
-    config_base = Path(base_dir) if base_dir is not None else get_config_base()
+    config_base = Path(base_dir) if base_dir is not None else get_model_config_base()
     cache_key = str(config_base.resolve())
     if refresh:
         _load_config_cached.cache_clear()
@@ -454,7 +459,7 @@ def save_config_sections(
     base_dir: str | os.PathLike[str] | None = None,
 ) -> None:
     """Persist DUT, execution, stability, and tool configuration sections."""
-    config_base = Path(base_dir) if base_dir is not None else get_config_base()
+    config_base = Path(base_dir) if base_dir is not None else get_model_config_base()
     dut_path = config_base / DUT_CONFIG_FILENAME
     execution_path = config_base / EXECUTION_CONFIG_FILENAME
     stability_path = config_base / STABILITY_CONFIG_FILENAME
@@ -812,4 +817,3 @@ class RokuConst:
     SENSORS: Final[tuple[str, ...]] = (
         "acceleration", "magnetic", "orientation", "rotation"
     )
-

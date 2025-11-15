@@ -199,3 +199,4 @@ def apply_theme(widget, recursive: bool = False) -> None:
 def format_log_html(message: str) -> str:
     """Return a unified HTML-formatted log string using shared helpers."""
     return _style_format_log_html(message)
+

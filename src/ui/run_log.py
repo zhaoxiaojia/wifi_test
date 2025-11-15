@@ -12,7 +12,7 @@ from contextlib import suppress
 from pathlib import Path
 
 from src.util.constants import Paths
-from .theme import STYLE_BASE, TEXT_COLOR
+from src.ui.view.theme import STYLE_BASE, TEXT_COLOR
 
 
 class LiveLogWriter:
@@ -90,7 +90,7 @@ class LiveLogWriter:
         -----
         This docstring was auto-generated; refine as needed to match real behavior.
         """
-        # 保证分行和进度信号捕获
+        # ensure line breaks and progress signal capturing
         with self._lock:
             self._buffer += msg
             while '\n' in self._buffer:
@@ -154,7 +154,7 @@ class LiveLogWriter:
         -----
         This docstring was auto-generated; refine as needed to match real behavior.
         """
-        return False  # 必须加上这个
+        return False  # must return False here
 
     def fileno(self):
         """

@@ -3,15 +3,18 @@
 """
 Declarative UI interaction rules for the Config page and sidebar.
 
-This module only records rules; it does not modify widgets directly.
-Later, CaseConfigPage or MainWindow can consume these rules to replace
-scattered if/else logic.
+This module lives in the **model** layer (``src/ui/model``) so that
+all rules describing UI state and relationships are kept separate from
+view and controller code.  Controllers such as ``CaseConfigPage`` and
+``MainWindow`` consume these rules to drive widget state instead of
+hard‑coding if/else logic.
 
 Conventions
 -----------
 - Field names use keys from ``CaseConfigPage.field_widgets``, for example
   ``"connect_type.type"`` or ``"stability.duration_control.exitfirst"``.
-- Sidebar items use logical keys: ``"account"|"config"|"case"|"run"|"report"|"about"``.
+- Sidebar items use logical keys:
+  ``"account"|"config"|"case"|"run"|"report"|"about"``.
 - All text is ASCII only (no Chinese characters or punctuation).
 """
 
@@ -123,13 +126,13 @@ CONFIG_UI_RULES: Dict[str, RuleSpec] = {
         ),
         "trigger_field": "serial_port.status",
         "cases": {
-            "True": {
+            True: {
                 "enable_fields": [
                     "serial_port.port",
                     "serial_port.baud",
                 ],
             },
-            "False": {
+            False: {
                 "disable_fields": [
                     "serial_port.port",
                     "serial_port.baud",
@@ -147,9 +150,10 @@ CONFIG_UI_RULES: Dict[str, RuleSpec] = {
     "R04_android_system_visibility": {
         "number": 4,
         "description": (
-            "When Control Type is Android, both Android Version and Kernel "
-            "Version fields are visible; when Linux is selected only Kernel "
-            "Version is shown."
+            "When Control Type is Android, Android Version is editable and "
+            "Kernel Version is read-only; when Linux is selected, Android "
+            "Version is disabled and Kernel Version is editable. Both fields "
+            "remain visible in all cases."
         ),
         "trigger_field": "connect_type.type",
         "cases": {
@@ -158,13 +162,23 @@ CONFIG_UI_RULES: Dict[str, RuleSpec] = {
                     "android_system.version",
                     "android_system.kernel_version",
                 ],
-            },
-            "Linux": {
-                "hide_fields": [
+                "enable_fields": [
                     "android_system.version",
                 ],
-                "show_fields": [
+                "disable_fields": [
                     "android_system.kernel_version",
+                ],
+            },
+            "Linux": {
+                "show_fields": [
+                    "android_system.version",
+                    "android_system.kernel_version",
+                ],
+                "enable_fields": [
+                    "android_system.kernel_version",
+                ],
+                "disable_fields": [
+                    "android_system.version",
                 ],
             },
         },
@@ -189,6 +203,27 @@ CONFIG_UI_RULES: Dict[str, RuleSpec] = {
         },
         "related_fields": [
             "text_case",
+        ],
+    },
+
+    # 14) FPGA detail fields are always read-only
+    "R14_fpga_details_readonly": {
+        "number": 14,
+        "description": (
+            "Main Chip, Wi-Fi Module and Interface are derived from the "
+            "selected Project and are not editable directly."
+        ),
+        "effects": {
+            "disable_fields": [
+                "fpga.main_chip",
+                "fpga.wifi_module",
+                "fpga.interface",
+            ],
+        },
+        "related_fields": [
+            "fpga.main_chip",
+            "fpga.wifi_module",
+            "fpga.interface",
         ],
     },
 
@@ -262,94 +297,170 @@ CONFIG_UI_RULES: Dict[str, RuleSpec] = {
         ],
     },
 
-    # 12) Stability case -> show Stability Settings panel
-    "R12_stability_panel_visible": {
+    # 12) Stability case -> Stability Settings visible
+    "R12_stability_case_shows_stability_settings": {
         "number": 12,
         "description": (
-            "For stability cases (path under test/stability or mapped by "
-            "script key), the Stability Settings panel should be visible."
+            "When the selected case is a stability case, the Stability "
+            "Settings panel should be visible."
         ),
         "trigger_case_type": "stability_case",
         "effects": {},
         "related_fields": [],
     },
 
-    # 13) Stability case -> Duration control and Check point editable
-    "R13_stability_duration_and_checkpoint": {
+    # 13) Stability case -> Duration control and Check point always editable
+    "R13_stability_duration_and_checkpoint_editable": {
         "number": 13,
         "description": (
-            "For stability cases, Duration control and Check point fields "
-            "under 'stability.duration_control.*' and 'stability.check_point.*' "
-            "are always editable."
+            "For stability cases, Duration control and Check point related "
+            "fields are always editable."
         ),
         "trigger_case_type": "stability_case",
         "effects": {
             "enable_fields": [
-                "stability.duration_control.loop",
-                "stability.duration_control.duration_hours",
+                "stability.duration_control.runforever",
                 "stability.duration_control.exitfirst",
+                "stability.duration_control.stop",
                 "stability.duration_control.retry_limit",
                 "stability.check_point.ping",
                 "stability.check_point.ping_targets",
             ],
         },
         "related_fields": [
-            "stability.duration_control.loop",
-            "stability.duration_control.duration_hours",
+            "stability.duration_control.runforever",
             "stability.duration_control.exitfirst",
+            "stability.duration_control.stop",
             "stability.duration_control.retry_limit",
             "stability.check_point.ping",
             "stability.check_point.ping_targets",
         ],
     },
 
-    # 14) test_str script -> AC/STR groups controlled by their checkboxes
-    "R14_test_str_section_toggles": {
+    # 14) test_str case -> AC / STR sections driven by checkbox
+    "R14a_test_str_ac_section_enabled": {
         "number": 14,
         "description": (
-            "In the stability case test_str, controls in the AC and STR groups "
-            "are only effective when their corresponding 'enabled' checkboxes "
-            "are checked."
+            "In the test_str stability configuration, AC-related fields are "
+            "editable only when the AC checkbox is checked."
         ),
         "trigger_script_key": "test_str",
-        "effects": {
-            "enable_fields": [
-                "stability.cases.test_str.ac.enabled",
-                "stability.cases.test_str.ac.on_duration",
-                "stability.cases.test_str.ac.off_duration",
-                "stability.cases.test_str.ac.port",
-                "stability.cases.test_str.ac.mode",
-                "stability.cases.test_str.ac.relay_type",
-                "stability.cases.test_str.ac.relay_params",
-                "stability.cases.test_str.str.enabled",
-                "stability.cases.test_str.str.on_duration",
-                "stability.cases.test_str.str.off_duration",
-                "stability.cases.test_str.str.port",
-                "stability.cases.test_str.str.mode",
-                "stability.cases.test_str.str.relay_type",
-                "stability.cases.test_str.str.relay_params",
-            ],
+        "trigger_field": "stability.cases.test_str.ac.enabled",
+        "cases": {
+            True: {
+                "enable_fields": [
+                    "stability.cases.test_str.ac",
+                ],
+            },
+            False: {
+                "disable_fields": [
+                    "stability.cases.test_str.ac",
+                ],
+            },
         },
         "related_fields": [
             "stability.cases.test_str.ac.enabled",
+        ],
+    },
+    "R14b_test_str_str_section_enabled": {
+        "number": 14,
+        "description": (
+            "In the test_str stability configuration, STR-related fields are "
+            "editable only when the STR checkbox is checked."
+        ),
+        "trigger_script_key": "test_str",
+        "trigger_field": "stability.cases.test_str.str.enabled",
+        "cases": {
+            True: {
+                "enable_fields": [
+                    "stability.cases.test_str.str",
+                ],
+            },
+            False: {
+                "disable_fields": [
+                    "stability.cases.test_str.str",
+                ],
+            },
+        },
+        "related_fields": [
             "stability.cases.test_str.str.enabled",
         ],
     },
 
-    # 15) test_str relay type -> USB relay vs SNMP
-    "R15_test_str_relay_type_usb_vs_snmp": {
+    # 15) test_str Relay Type -> USB vs Relay params (AC and STR branches)
+    "R15a_test_str_ac_relay_type": {
         "number": 15,
         "description": (
-            "In test_str stability configuration, when Relay type is USB Relay "
-            "the USB relay port and Wiring mode fields are editable and the "
-            "Relay params field is read-only; when Relay type is a SNMP-style "
-            "value, USB controls are disabled and Relay params is editable."
+            "In test_str stability configuration (AC branch), when Relay type "
+            "is USB Relay the USB relay port and Wiring mode fields are "
+            "editable and the Relay params field is disabled; when Relay type "
+            "is another value, USB-specific fields are disabled and Relay "
+            "params is editable."
         ),
         "trigger_script_key": "test_str",
+        "trigger_field": "stability.cases.test_str.ac.relay_type",
+        "cases": {
+            "usb_relay": {
+                "enable_fields": [
+                    "stability.cases.test_str.ac.port",
+                    "stability.cases.test_str.ac.mode",
+                ],
+                "disable_fields": [
+                    "stability.cases.test_str.ac.relay_params",
+                ],
+            },
+            "GWGJ-XC3012": {
+                "disable_fields": [
+                    "stability.cases.test_str.ac.port",
+                    "stability.cases.test_str.ac.mode",
+                ],
+                "enable_fields": [
+                    "stability.cases.test_str.ac.relay_params",
+                ],
+            },
+        },
         "related_fields": [
             "stability.cases.test_str.ac.relay_type",
+            "stability.cases.test_str.ac.port",
+            "stability.cases.test_str.ac.mode",
             "stability.cases.test_str.ac.relay_params",
+        ],
+    },
+    "R15b_test_str_str_relay_type": {
+        "number": 15,
+        "description": (
+            "In test_str stability configuration (STR branch), when Relay type "
+            "is USB Relay the USB relay port and Wiring mode fields are "
+            "editable and the Relay params field is disabled; when Relay type "
+            "is another value, USB-specific fields are disabled and Relay "
+            "params is editable."
+        ),
+        "trigger_script_key": "test_str",
+        "trigger_field": "stability.cases.test_str.str.relay_type",
+        "cases": {
+            "usb_relay": {
+                "enable_fields": [
+                    "stability.cases.test_str.str.port",
+                    "stability.cases.test_str.str.mode",
+                ],
+                "disable_fields": [
+                    "stability.cases.test_str.str.relay_params",
+                ],
+            },
+            "GWGJ-XC3012": {
+                "disable_fields": [
+                    "stability.cases.test_str.str.port",
+                    "stability.cases.test_str.str.mode",
+                ],
+                "enable_fields": [
+                    "stability.cases.test_str.str.relay_params",
+                ],
+            },
+        },
+        "related_fields": [
             "stability.cases.test_str.str.relay_type",
+            "stability.cases.test_str.str.port",
+            "stability.cases.test_str.str.mode",
             "stability.cases.test_str.str.relay_params",
         ],
     },
@@ -536,4 +647,3 @@ __all__ = [
     "CONFIG_UI_RULES",
     "SIDEBAR_RULES",
 ]
-

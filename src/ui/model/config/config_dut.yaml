@@ -26,3 +26,4 @@ serial_port:
   baud: '961200'
   port: COM5
   status: false
+

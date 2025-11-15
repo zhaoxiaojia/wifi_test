@@ -34,19 +34,11 @@ from pathlib import Path
 
 from PyQt5.QtCore import Qt, QUrl
 from PyQt5.QtGui import QDesktopServices, QFont
-from PyQt5.QtWidgets import (
-    QVBoxLayout,
-    QLabel,
-    QTableWidget,
-    QTableWidgetItem,
-    QWidget,
-    QMessageBox,
-    QHBoxLayout,
-)
+from PyQt5.QtWidgets import QLabel, QTableWidget, QTableWidgetItem, QWidget, QMessageBox
 from qfluentwidgets import CardWidget, StrongBodyLabel, PushButton, HyperlinkButton
 
 from src.util.constants import Paths, get_build_metadata
-from .theme import (
+from src.ui.view.theme import (
     ACCENT_COLOR,
     FONT_FAMILY,
     FONT_SIZE,
@@ -55,11 +47,9 @@ from .theme import (
     apply_theme,
     apply_font_and_selection,
 )
-from .style import (
-    acknowledgements_from_readme,
-    latest_version_from_changelog,
-    normalize_data_source_label,
-)
+from src.ui.view.style import acknowledgements_from_readme, latest_version_from_changelog, normalize_data_source_label
+from .view.common import attach_view_to_page
+from .view.about import AboutView
 
 
 class AboutPage(CardWidget):
@@ -94,140 +84,34 @@ class AboutPage(CardWidget):
         super().__init__(parent)
         self.setObjectName("aboutPage")
         apply_theme(self, recursive=True)
-        base_font = QFont(FONT_FAMILY, FONT_SIZE)
 
-        layout = QVBoxLayout(self)
-        layout.setSpacing(12)
+        # Compose pure UI view and re-export its widgets.
+        self.view = AboutView(self)
+        attach_view_to_page(self, self.view)
 
-        title = StrongBodyLabel("About")
-        apply_theme(title)
-        title.setStyleSheet(
-            f"""
-            {STYLE_BASE} color:{TEXT_COLOR};
-            border-left: 4px solid {ACCENT_COLOR};
-            padding-left: 8px;
-            """
-        )
-        title.setFont(base_font)
-        layout.addWidget(title)
+        # Convenience aliases for existing logic and external callers.
+        self.info_table: QTableWidget = self.view.info_table
+        self.source_label: QLabel = self.view.source_label
+        self.resources_card = self.view.resources_card
+        self.about_controls = self.view.about_controls
 
-        self.info_table = QTableWidget(0, 2, self)
-        self.info_table.setHorizontalHeaderLabels(["Field", "Details"])
-        self.info_table.verticalHeader().setVisible(False)
-        self.info_table.setEditTriggers(self.info_table.NoEditTriggers)
-        self.info_table.setSelectionMode(self.info_table.NoSelection)
-        self.info_table.horizontalHeader().setStretchLastSection(True)
-        apply_theme(self.info_table)
-        apply_font_and_selection(self.info_table)
-        self.info_table.setFont(base_font)
-        layout.addWidget(self.info_table)
+        # Wire directory shortcut buttons.
+        self.view.open_config_btn.clicked.connect(lambda: self._open_path(Paths.CONFIG_DIR))
+        self.view.open_res_btn.clicked.connect(lambda: self._open_path(Paths.RES_DIR))
 
-        self.source_label = QLabel("Data Source: Unknown", self)
-        apply_theme(self.source_label)
-        self.source_label.setFont(base_font)
-        layout.addWidget(self.source_label)
+        # Wire frequently used config file buttons.
+        for btn in getattr(self.view, "config_file_buttons", []):
+            file_name = btn.property("configFileName") or btn.text()
+            btn.clicked.connect(
+                lambda _=False, name=file_name: self._open_path(os.path.join(Paths.CONFIG_DIR, name))
+            )
 
-        self.resources_card = CardWidget(self)
-        apply_theme(self.resources_card)
-        self.resources_card.setFont(base_font)
-        resources_layout = QVBoxLayout(self.resources_card)
-        resources_layout.setSpacing(8)
+        # Wire support / documentation buttons.
+        self.view.email_btn.clicked.connect(self._show_support_email)
+        self.view.jira_btn.clicked.connect(self._open_ticket_portal)
+        self.view.doc_btn.clicked.connect(self._open_internal_doc)
 
-        resource_title = StrongBodyLabel("Resources & Support")
-        apply_theme(resource_title)
-        resource_title.setStyleSheet(
-            f"""
-            {STYLE_BASE} color:{TEXT_COLOR};
-            border-left: 4px solid {ACCENT_COLOR};
-            padding-left: 8px;
-            """
-        )
-        resource_title.setFont(base_font)
-        resources_layout.addWidget(resource_title)
-
-        # Directory shortcuts
-        config_layout = QHBoxLayout()
-        config_layout.setSpacing(6)
-        open_config_btn = PushButton("Open config directory", self.resources_card)
-        open_config_btn.clicked.connect(lambda: self._open_path(Paths.CONFIG_DIR))
-        open_config_btn.setFont(base_font)
-        config_layout.addWidget(open_config_btn)
-
-        open_res_btn = PushButton("Open res directory", self.resources_card)
-        open_res_btn.clicked.connect(lambda: self._open_path(Paths.RES_DIR))
-        open_res_btn.setFont(base_font)
-        config_layout.addWidget(open_res_btn)
-        config_layout.addStretch(1)
-        resources_layout.addLayout(config_layout)
-
-        # Frequently used config files: one-click open
-        config_files_layout = QHBoxLayout()
-        config_files_layout.setSpacing(6)
-        for file_name in ("config_dut.yaml", "config_execution.yaml", "config_tool.yaml", "compatibility_dut.json"):
-            btn = PushButton(file_name, self.resources_card)
-            btn.clicked.connect(lambda _, name=file_name: self._open_path(os.path.join(Paths.CONFIG_DIR, name)))
-            btn.setFont(base_font)
-            config_files_layout.addWidget(btn)
-        config_files_layout.addStretch(1)
-        resources_layout.addLayout(config_files_layout)
-
-        # Support & documentation: maintainer / Jira / internal docs
-        support_layout = QHBoxLayout()
-        support_layout.setSpacing(6)
-        email_btn = PushButton("Contact Maintainer", self.resources_card)
-        email_btn.clicked.connect(self._show_support_email)
-        email_btn.setFont(base_font)
-        support_layout.addWidget(email_btn)
-
-        jira_btn = PushButton("Jira Submit", self.resources_card)
-        jira_btn.clicked.connect(self._open_ticket_portal)
-        jira_btn.setFont(base_font)
-        support_layout.addWidget(jira_btn)
-
-        doc_btn = PushButton("Internal Documentation", self.resources_card)
-        doc_btn.clicked.connect(self._open_internal_doc)
-        doc_btn.setFont(base_font)
-        support_layout.addWidget(doc_btn)
-        support_layout.addStretch(1)
-        resources_layout.addLayout(support_layout)
-
-        # Compliance reminder
-        compliance_label = QLabel(
-            "Internal use only: Follow data collection, transfer, and storage compliance policies. "
-            "Encrypt sensitive logs when required and purge them within 30 days.",
-            self.resources_card,
-        )
-        compliance_label.setWordWrap(True)
-        apply_theme(compliance_label)
-        compliance_label.setFont(base_font)
-        resources_layout.addWidget(compliance_label)
-
-        hint_label = QLabel(
-            "For more details, see the corporate intranet Wireless Testing Data Compliance Manual.",
-            self.resources_card,
-        )
-        hint_label.setWordWrap(True)
-        apply_theme(hint_label)
-        hint_label.setFont(base_font)
-        resources_layout.addWidget(hint_label)
-
-        layout.addWidget(self.resources_card)
-        layout.addStretch(1)
-
-        # Logical control map for the about page.
-        # Keys follow: page_frame_group_purpose_type
-        self.about_controls: dict[str, object] = {
-            "about_main_title_label": title,
-            "about_main_info_table": self.info_table,
-            "about_main_source_label": self.source_label,
-            "about_main_resources_card": self.resources_card,
-            "about_main_resources_title_label": resource_title,
-            "about_main_resources_open_config_btn": open_config_btn,
-            "about_main_resources_open_res_btn": open_res_btn,
-            "about_main_resources_compliance_label": compliance_label,
-            "about_main_resources_hint_label": hint_label,
-        }
-
+        # Populate metadata into the table and data source label.
         self._populate_metadata()
 
     # ---------------------------------------------------------------------

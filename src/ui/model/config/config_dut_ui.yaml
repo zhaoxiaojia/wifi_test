@@ -1,0 +1,93 @@
+panels:
+  dut:
+    sections:
+      - id: software_info
+        label: "Software Info"
+        fields:
+          - key: software_info.software_version
+            widget: line_edit
+            label: "Software Version"
+            placeholder: "e.g. V1.2.3"
+          - key: software_info.driver_version
+            widget: line_edit
+            label: "Driver Version"
+            placeholder: "Driver build"
+
+      - id: hardware_info
+        label: "Hardware Info"
+        fields:
+          - key: hardware_info.hardware_version
+            widget: line_edit
+            label: "Hardware Version"
+            placeholder: "PCB revision / BOM"
+
+      - id: android_system
+        label: "Android System"
+        fields:
+          - key: android_system.version
+            widget: combo_box
+            label: "Android Version"
+          - key: android_system.kernel_version
+            widget: combo_box
+            label: "Kernel Version"
+
+      - id: connect_type
+        label: "Control Type"
+        fields:
+          - key: connect_type.type
+            widget: combo_box
+            label: "Control Type"
+            choices: ["Android", "Linux"]
+          - key: connect_type.Android.device
+            widget: line_edit
+            label: "Android Device"
+            placeholder: "adb device identifier"
+          - key: connect_type.Linux.ip
+            widget: line_edit
+            label: "Linux IP"
+            placeholder: "192.168.x.x"
+          - key: connect_type.third_party.enabled
+            widget: checkbox
+            label: "Enable third-party control"
+          - key: connect_type.third_party.wait_seconds
+            widget: int
+            label: "Wait seconds"
+            minimum: 1
+            maximum: 999999
+
+      - id: fpga
+        label: "Project"
+        fields:
+          - key: fpga.customer
+            widget: combo_box
+            label: "Customer"
+          - key: fpga.product_line
+            widget: combo_box
+            label: "Product Line"
+          - key: fpga.project
+            widget: combo_box
+            label: "Project"
+          - key: fpga.main_chip
+            widget: line_edit
+            label: "Main Chip"
+          - key: fpga.wifi_module
+            widget: line_edit
+            label: "Wi-Fi Module"
+          - key: fpga.interface
+            widget: line_edit
+            label: "Interface"
+
+      - id: serial_port
+        label: "Serial Port"
+        fields:
+          - key: serial_port.status
+            widget: checkbox
+            label: "Enable Serial Port"
+          - key: serial_port.port
+            widget: combo_box
+            label: "Port"
+          - key: serial_port.baud
+            widget: combo_box
+            label: "Baud Rate"
+            choices: ["9600", "19200", "38400", "57600", "115200", "921600"]
+

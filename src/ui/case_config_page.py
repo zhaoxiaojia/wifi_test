@@ -8,6 +8,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Callable, Mapping, Optional, Sequence
 from typing import Annotated
+import sip
 from src.tools.router_tool.router_factory import router_list, get_router
 from src.util.constants import (
     ANDROID_KERNEL_MAP,
@@ -97,25 +98,33 @@ from qfluentwidgets import (
 
 try:
     from qfluentwidgets import StepView  # type: ignore
-except Exception:  # pragma: no cover - 运行环境缺失时退化为自定义指示器
+except Exception:  # pragma: no cover - fall back to custom indicator when runtime is missing
     StepView = None
-from .animated_tree_view import AnimatedTreeView
-from .windows_case_shared import (EditableInfo, ScriptConfigEntry, PAGE_CONTENT_MARGIN, GROUP_COLUMN_SPACING, GROUP_ROW_SPACING, STEP_LABEL_SPACING, USE_QFLUENT_STEP_VIEW, _apply_step_font)
-from .windows_case_tree import TestFileFilterModel, _StepSwitcher
-from .rf_step_segments import RfStepSegmentsWidget
-from .switch_wifi_widgets import SwitchWifiManualEditor, SwitchWifiCsvPreview
-from .windows_case_panels import ConfigGroupPanel
-from . import build_groupbox
-from .sections import build_sections
-from .sections.base import ConfigSection, SectionContext
-from .config_proxy import ConfigProxy
-from .group_proxy import (
-    _build_network_group as _proxy_build_network_group,
-    _build_traffic_group as _proxy_build_traffic_group,
-    _build_duration_group as _proxy_build_duration_group,
-    _build_duration_control_group as _proxy_build_duration_control_group,
-    _build_check_point_group as _proxy_build_check_point_group,
+from .view.common import (
+    AnimatedTreeView,
+    ConfigGroupPanel,
+    EditableInfo,
+    ScriptConfigEntry,
+    PAGE_CONTENT_MARGIN,
+    GROUP_COLUMN_SPACING,
+    GROUP_ROW_SPACING,
+    STEP_LABEL_SPACING,
+    USE_QFLUENT_STEP_VIEW,
+    _apply_step_font,
+    attach_view_to_page,
 )
+from .view.common import TestFileFilterModel, _StepSwitcher
+from .view.config import RfStepSegmentsWidget, SwitchWifiCsvPreview, SwitchWifiManualEditor
+from src.ui.view.config.actions import (
+    apply_rf_model_ui_state,
+    apply_run_lock_ui_state,
+    apply_rvr_tool_ui_state,
+    apply_serial_enabled_ui_state,
+    apply_turntable_model_ui_state,
+    update_step_indicator,
+)
+from .config_proxy import ConfigProxy
+from .view.builder import load_ui_schema, build_groups_from_schema
 from .run_proxy import on_run as _proxy_on_run
 from .rvrwifi_proxy import (
     _normalize_switch_wifi_manual_entries as _proxy_normalize_switch_wifi_manual_entries,
@@ -137,7 +146,7 @@ from .rvrwifi_proxy import (
     _update_rvr_nav_button as _proxy_update_rvr_nav_button,
     _open_rvr_wifi_config as _proxy_open_rvr_wifi_config,
 )
-from .theme import (
+from src.ui.view.theme import (
     apply_theme,
     apply_font_and_selection,
     apply_groupbox_style,
@@ -148,7 +157,7 @@ from .theme import (
     SWITCH_WIFI_TABLE_SELECTION_BG,
     SWITCH_WIFI_TABLE_SELECTION_FG,
 )
-from .ui_rules import CONFIG_UI_RULES, FieldEffect, RuleSpec
+from .model.rules import CONFIG_UI_RULES, FieldEffect, RuleSpec, SIDEBAR_RULES
 
 
 class CaseConfigPage(CardWidget):
@@ -194,107 +203,62 @@ class CaseConfigPage(CardWidget):
         self.field_widgets: dict[str, QWidget] = {}
         # Mapping from logical UI identifiers (config_panel_group_field_type) to widgets
         self.config_controls: dict[str, QWidget] = {}
-        self._section_instances: dict[str, ConfigSection] = {}
-        self._section_context = SectionContext()
         self._duration_control_group: QGroupBox | None = None
         self._check_point_group: QGroupBox | None = None
         self.router_obj = None
         self._enable_rvr_wifi: bool = False
         self._router_config_active: bool = False
+        self._run_locked: bool = False
         self._locked_fields: set[str] | None = None
         self._current_case_path: str = ""
         self._last_editable_info: EditableInfo | None = None
         self._switch_wifi_csv_combos: list[ComboBox] = []
-        # Build the main splitter and its left/right panes
-        self.splitter = QSplitter(Qt.Horizontal, self)
-        self.splitter.setChildrenCollapsible(False)
-        # Populate the left pane with the case tree
-        self.case_tree = AnimatedTreeView(self)
-        apply_theme(self.case_tree)
-        apply_font_and_selection(self.case_tree, size_px=CASE_TREE_FONT_SIZE_PX)
-        logging.debug("TreeView font: %s", self.case_tree.font().family())
-        logging.debug("TreeView stylesheet: %s", self.case_tree.styleSheet())
-        self._init_case_tree(Path(self._get_application_base()) / "test")
-        self.splitter.addWidget(self.case_tree)
 
-        # Populate the right pane with parameter controls and the run button
-        scroll_area = ScrollArea(self)
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setContentsMargins(0, 0, 0, 0)
-        self.scroll_area = scroll_area
-        container = QWidget()
-        right = QVBoxLayout(container)
-        right.setContentsMargins(0, 0, 0, 0)
-        right.setSpacing(10)
+        # Delegate view construction to ConfigView for layout/structure.
+        from .view.config import ConfigView
+
         self._android_versions = list(DEFAULT_ANDROID_VERSION_CHOICES)
         self._kernel_versions = list(DEFAULT_KERNEL_VERSION_CHOICES)
-        self._right_layout = right
-        self._page_label_map: dict[str, str] = {
-            "dut": "DUT Settings",
-            "execution": "Execution Settings",
-            "stability": "Stability Settings",
-        }
-        self.step_view_widget = self._create_step_view([self._page_label_map["dut"]])
-        self.step_view_widget.setVisible(False)
-        right.addWidget(self.step_view_widget)
 
-        self.stack = QStackedWidget(self)
-        right.addWidget(self.stack, 1)
-
-        self._page_panels: dict[str, ConfigGroupPanel] = {
-            "dut": ConfigGroupPanel(self),
-            "execution": ConfigGroupPanel(self),
-            "stability": ConfigGroupPanel(self),
-        }
+        # Compose pure UI view and attach it to this page.
+        self.view = ConfigView(self)
+        attach_view_to_page(self, self.view)
+        self.splitter = self.view.splitter
+        self.case_tree = self.view.case_tree
+        self.scroll_area = self.view.scroll_area
+        self.step_view_widget = self.view.step_view_widget
+        self.stack = self.view.stack
+        self._page_panels = self.view._page_panels
+        self._page_widgets = self.view._page_widgets
+        self._wizard_pages = self.view._wizard_pages
+        self._run_buttons = self.view._run_buttons
         self._dut_panel = self._page_panels["dut"]
         self._execution_panel = self._page_panels["execution"]
         self._stability_panel = self._page_panels["stability"]
-        self._page_widgets: dict[str, QWidget] = {}
-        self._wizard_pages: list[QWidget] = []
-        self._run_buttons: list[PushButton] = []
-        self._run_locked = False
-        for key in ("dut", "execution", "stability"):
-            panel = self._page_panels[key]
-            page = QWidget()
-            page_layout = QVBoxLayout(page)
-            page_layout.setContentsMargins(
-                PAGE_CONTENT_MARGIN,
-                PAGE_CONTENT_MARGIN,
-                PAGE_CONTENT_MARGIN,
-                PAGE_CONTENT_MARGIN,
-            )
-            page_layout.setSpacing(PAGE_CONTENT_MARGIN)
-            page_layout.addWidget(panel)
-            page_layout.addStretch(1)
-            run_btn = self._create_run_button(page)
-            page_layout.addWidget(run_btn)
-            self._page_widgets[key] = page
-            self._wizard_pages.append(page)
-        self._current_page_keys: list[str] = []
+        # Track logical pages from the controller perspective (used by rules/business logic).
+        self._current_page_keys: list[str] = ["dut"]
         self._script_config_factories: dict[str, Callable[[str, str, Mapping[str, Any]], ScriptConfigEntry]] = {
-            "test/stability/test_str.py": self._create_test_str_config_entry,
-            "test/stability/test_switch_wifi.py": self._create_test_swtich_wifi_config_entry,
+            "test/stability/test_str.py": self._create_test_str_config_entry_from_schema,
+            "test/stability/test_switch_wifi.py": self._create_test_swtich_wifi_config_entry_from_schema,
         }
         self._script_groups: dict[str, ScriptConfigEntry] = {}
         self._active_script_case: str | None = None
         self._config_panels = tuple(self._page_panels[key] for key in ("dut", "execution", "stability"))
         self._sync_run_buttons_enabled()
-        scroll_area.setWidget(container)
-        self.splitter.addWidget(scroll_area)
-        self.splitter.setStretchFactor(0, 2)
-        self.splitter.setStretchFactor(1, 3)
-
-        main_layout = QHBoxLayout(self)
-        main_layout.setSpacing(10)
-        main_layout.setContentsMargins(5, 5, 5, 5)
-        main_layout.addWidget(self.splitter)
         # render form fields from yaml
         self._dut_groups: dict[str, QWidget] = {}
         self._other_groups: dict[str, QWidget] = {}
         self.render_all_fields()
         self._initialize_script_config_groups()
         self._build_wizard_pages()
-        self._set_available_pages(["dut"])
+        # initialise case tree using src/test as root (non-fatal on failure)
+        try:
+            base = Path(self._get_application_base())
+            test_root = base / "test"
+            if test_root.exists():
+                self._init_case_tree(test_root)
+        except Exception:
+            pass
         self._refresh_script_section_states()
         self.stack.currentChanged.connect(self._on_page_changed)
         self._request_rebalance_for_panels()
@@ -334,62 +298,6 @@ class CaseConfigPage(CardWidget):
         self._run_buttons.append(button)
         return button
 
-    def _create_step_view(self, labels: Sequence[str]) -> QWidget:
-        """
-        Execute the create step view routine.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        labels = list(labels)
-        if not labels:
-            labels = [self._page_label_map["dut"]]
-        if StepView is not None and USE_QFLUENT_STEP_VIEW:
-            try:
-                step_view = StepView(self)
-                configured = False
-                for attr in ("setSteps", "setStepList", "setStepTextList"):
-                    if hasattr(step_view, attr):
-                        try:
-                            getattr(step_view, attr)(labels)
-                            configured = True
-                            break
-                        except Exception as exc:
-                            logging.debug("StepView.%s failed: %s", attr, exc)
-                if not configured and hasattr(step_view, "addStep"):
-                    add_step = getattr(step_view, "addStep")
-                    for label in labels:
-                        try:
-                            add_step(label)
-                        except TypeError:
-                            add_step(label, label)
-                for attr in (
-                        "setStepNumberVisible",
-                        "setNumberVisible",
-                        "setIndexVisible",
-                        "setShowNumber",
-                        "setDisplayIndex",
-                ):
-                    if hasattr(step_view, attr):
-                        try:
-                            getattr(step_view, attr)(False)
-                        except Exception as exc:
-                            logging.debug("StepView.%s failed: %s", attr, exc)
-                for attr in ("setStepClickable", "setStepsClickable", "setAllClickable"):
-                    if hasattr(step_view, attr):
-                        try:
-                            getattr(step_view, attr)(True)
-                        except Exception as exc:
-                            logging.debug("StepView.%s failed: %s", attr, exc)
-                self._attach_step_navigation(step_view)
-                _apply_step_font(step_view)
-                return step_view
-            except Exception as exc:  # pragma: no cover - 动态环境差异
-                logging.debug("Failed to initialize StepView: %s", exc)
-        fallback = _StepSwitcher(labels, self)
-        fallback.stepActivated.connect(self._on_step_activated)
-        return fallback
-
     def _update_step_indicator(self, index: int) -> None:
         """
         Update the  step indicator to reflect current data.
@@ -397,21 +305,7 @@ class CaseConfigPage(CardWidget):
         This method encapsulates the logic necessary to perform its function.
         Refer to the implementation for details on parameters and return values.
         """
-        view = getattr(self, "step_view_widget", None)
-        if view is None:
-            return
-        for attr in ("setCurrentIndex", "setCurrentStep", "setCurrentRow", "setCurrent"):
-            if hasattr(view, attr):
-                try:
-                    getattr(view, attr)(index)
-                    return
-                except Exception as exc:
-                    logging.debug("StepView %s failed: %s", attr, exc)
-        if hasattr(view, "set_current_index"):
-            try:
-                view.set_current_index(index)
-            except Exception as exc:
-                logging.debug("Fallback step indicator failed: %s", exc)
+        update_step_indicator(self, index)
 
     def _attach_step_navigation(self, view: QWidget) -> None:
         """
@@ -652,32 +546,6 @@ class CaseConfigPage(CardWidget):
             return []
         return ports
 
-    def _refresh_step_view(self, page_keys: Sequence[str]) -> None:
-        """
-        Refresh the  step view to ensure the UI is up to date.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        labels = [self._page_label_map.get(key, key.title()) for key in page_keys]
-        if not labels:
-            labels = [self._page_label_map["dut"]]
-        new_view = self._create_step_view(labels)
-        old_view = getattr(self, "step_view_widget", None)
-        layout = getattr(self, "_right_layout", None)
-        if layout is not None:
-            if old_view is not None:
-                index = layout.indexOf(old_view)
-                if index < 0:
-                    index = 0
-                layout.insertWidget(index, new_view)
-                layout.removeWidget(old_view)
-                old_view.setParent(None)
-            else:
-                layout.insertWidget(0, new_view)
-        self.step_view_widget = new_view
-        self.step_view_widget.setVisible(len(page_keys) > 1)
-
     def _set_available_pages(self, page_keys: Sequence[str]) -> None:
         """
         Set the available pages property on the instance.
@@ -695,28 +563,10 @@ class CaseConfigPage(CardWidget):
             normalized.insert(0, "dut")
         if normalized == getattr(self, "_current_page_keys", []):
             return
-        current_widget = self.stack.currentWidget() if self.stack.count() else None
-        current_key: str | None = None
-        if current_widget is not None:
-            for key, widget in self._page_widgets.items():
-                if widget is current_widget:
-                    current_key = key
-                    break
-        while self.stack.count():
-            widget = self.stack.widget(0)
-            self.stack.removeWidget(widget)
-        for key in normalized:
-            self.stack.addWidget(self._page_widgets[key])
+        # Record logical state for rules/business logic.
         self._current_page_keys = normalized
-        self._refresh_step_view(normalized)
-        target_index = 0
-        if current_key in normalized:
-            target_index = normalized.index(current_key)
-        self.stack.setCurrentIndex(target_index)
-        self._update_step_indicator(target_index)
-        if hasattr(self, "step_view_widget") and self.step_view_widget is not None:
-            self.step_view_widget.setVisible(len(self._current_page_keys) > 1)
-        self._update_navigation_state()
+        # Delegate actual UI wiring to the view.
+        self.view.set_available_pages(normalized)
 
     def _determine_pages_for_case(self, case_path: str, info: EditableInfo) -> list[str]:
 
@@ -960,687 +810,155 @@ class CaseConfigPage(CardWidget):
         _set_combo(self._script_field_key(case_key, "str", "port"), str_cfg.get("port"))
         _set_combo(self._script_field_key(case_key, "str", "mode"), str_cfg.get("mode"))
 
-        for checkbox, controls in entry.section_controls.values():
-            self._set_section_controls_state(controls, checkbox.isChecked())
-
-    @staticmethod
-    def _set_section_controls_state(controls: Sequence[QWidget], enabled: bool) -> None:
-        """
-        Set the section controls state property on the instance.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        for widget in controls:
-            widget.setEnabled(enabled)
-
     def _refresh_script_section_states(self) -> None:
         """
-        Refresh the  script section states to ensure the UI is up to date.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
+        Refresh script section state using the rule engine.
         """
-        for entry in self._script_groups.values():
-            for checkbox, controls in entry.section_controls.values():
-                self._set_section_controls_state(controls, checkbox.isEnabled() and checkbox.isChecked())
+        self._apply_config_ui_rules()
 
     def _bind_script_section(self, checkbox: QCheckBox, controls: Sequence[QWidget]) -> None:
         """
-        Execute the bind script section routine.
+        Bind a script-level section checkbox to rule evaluation.
 
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
+        The actual enable/disable behaviour for the controls is defined in
+        CONFIG_UI_RULES (see R14* rules for test_str).  This helper simply
+        re-evaluates the rules whenever the checkbox toggles.
         """
 
-        def _apply(checked: bool) -> None:
-            """
-            Execute the apply routine.
-
-            This method encapsulates the logic necessary to perform its function.
-            Refer to the implementation for details on parameters and return values.
-            """
-            self._set_section_controls_state(controls, checked)
+        def _apply(_checked: bool) -> None:
+            self._apply_config_ui_rules()
 
         checkbox.toggled.connect(_apply)
-        _apply(checkbox.isChecked())
+        # Ensure initial state honours the rules as well.
+        self._apply_config_ui_rules()
 
-    def _create_test_swtich_wifi_config_entry(
+    def _create_test_swtich_wifi_config_entry_from_schema(
             self,
             case_key: str,
             case_path: str,
             data: Mapping[str, Any],
     ) -> ScriptConfigEntry:
         """
-        Execute the create test switch wifi config entry routine.
+        Build ScriptConfigEntry for ``test_switch_wifi`` using widgets created
+        by the YAML/schema builder.
 
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
+        No new groups are created here; the builder is responsible for the
+        visual layout. This helper only wires logical field keys so that
+        rules and config loading can operate uniformly.
         """
-        group = QGroupBox("test_switch_wifi.py Stability", self)
-        apply_theme(group)
-        apply_groupbox_style(group)
-        layout = QVBoxLayout(group)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(8)
-
-        intro = QLabel(
-            "Configure Wi-Fi BSS targets for test_switch_wifi."
-            " Select router CSV to reuse predefined entries or maintain manual list.",
-            group,
-        )
-        intro.setWordWrap(True)
-        layout.addWidget(intro)
-
-        use_router_checkbox = QCheckBox("Use router configuration", group)
-        use_router_checkbox.setChecked(bool(data.get(SWITCH_WIFI_USE_ROUTER_FIELD)))
-        layout.addWidget(use_router_checkbox)
-
-        router_box = QGroupBox("Router CSV", group)
-        apply_theme(router_box)
-        apply_groupbox_style(router_box)
-        router_layout = QVBoxLayout(router_box)
-        router_layout.setContentsMargins(8, 8, 8, 8)
-        router_layout.setSpacing(6)
-
-        router_combo = ComboBox(router_box)
-        router_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        router_combo.setProperty("switch_wifi_include_placeholder", False)
-        router_layout.addWidget(router_combo)
-
-        router_selector = ComboBox(router_box)
-        router_selector.addItems(router_list.keys())
-        router_selector.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        router_layout.addWidget(router_selector)
-
-        router_preview = SwitchWifiCsvPreview(router_box)
-        router_layout.addWidget(router_preview)
-
-        manual_box = QGroupBox("Manual entries", group)
-        apply_theme(manual_box)
-        apply_groupbox_style(manual_box)
-        manual_layout = QVBoxLayout(manual_box)
-        manual_layout.setContentsMargins(8, 8, 8, 8)
-        manual_layout.setSpacing(6)
-
-        manual_editor = SwitchWifiManualEditor(manual_box)
-        manual_entries = (
-            data.get(SWITCH_WIFI_MANUAL_ENTRIES_FIELD)
-            if isinstance(data, Mapping)
-            else None
-        )
-        if isinstance(manual_entries, Sequence) and not isinstance(manual_entries, (str, bytes)):
-            manual_editor.set_entries(manual_entries)
-        else:
-            manual_editor.set_entries(None)
-        manual_layout.addWidget(manual_editor)
-
-        layout.addWidget(router_box)
-        layout.addWidget(manual_box)
-        layout.addStretch(1)
-
-        router_path = self._resolve_csv_config_path(
-            data.get(SWITCH_WIFI_ROUTER_CSV_FIELD)
-        )
-        self._populate_csv_combo(router_combo, router_path, include_placeholder=False)
-        placeholder_index = router_combo.findData("")
-        if placeholder_index >= 0 and router_combo.count() > 1:
-            router_combo.removeItem(placeholder_index)
-        self._register_switch_wifi_csv_combo(router_combo)
-        self._update_switch_wifi_preview(router_preview, router_path)
-
-        primary_router_combo = getattr(self, "router_name_combo", None)
-        if isinstance(primary_router_combo, ComboBox):
-            with QSignalBlocker(router_selector):
-                router_selector.setCurrentText(primary_router_combo.currentText())
-        else:
-            router_cfg = self.config.get("router") if isinstance(self.config, Mapping) else {}
-            if isinstance(router_cfg, Mapping):
-                default_router = str(router_cfg.get("name", ""))
-                if default_router:
-                    with QSignalBlocker(router_selector):
-                        router_selector.setCurrentText(default_router)
-
-        def _sync_router_selector(name: str) -> None:
-            """Keep the router selector aligned with the primary router combo."""
-            with QSignalBlocker(router_selector):
-                router_selector.setCurrentText(name)
-
-        if isinstance(primary_router_combo, ComboBox):
-            primary_router_combo.currentTextChanged.connect(_sync_router_selector)
-
-        def _on_router_model_selected(name: str) -> None:
-            """Propagate router model changes back to the main router combo."""
-            base_combo = getattr(self, "router_name_combo", None)
-            if isinstance(base_combo, ComboBox):
-                with QSignalBlocker(base_combo):
-                    base_combo.setCurrentText(name)
-                try:
-                    self.on_router_changed(name)
-                except Exception as exc:  # pragma: no cover - defensive log only
-                    logging.debug("router selector sync failed: %s", exc)
-
-        router_selector.currentTextChanged.connect(_on_router_model_selected)
+        section_id = f"cases.{case_key}"
+        group = self._other_groups.get(section_id)
+        if group is None:
+            group = QWidget(self)
 
         widgets: dict[str, QWidget] = {}
-        widgets[
-            self._script_field_key(case_key, SWITCH_WIFI_USE_ROUTER_FIELD)
-        ] = use_router_checkbox
-        widgets[
-            self._script_field_key(case_key, SWITCH_WIFI_ROUTER_CSV_FIELD)
-        ] = router_combo
-        widgets[
-            self._script_field_key(case_key, SWITCH_WIFI_MANUAL_ENTRIES_FIELD)
-        ] = manual_editor
 
+        def _bind_field(field: str) -> QWidget | None:
+            script_key = self._script_field_key(case_key, field)
+            widget = self.field_widgets.get(script_key)
+            if widget is None:
+                raw_key = f"{section_id}.{field}"
+                widget = self.field_widgets.get(raw_key)
+                if widget is not None:
+                    self.field_widgets[script_key] = widget
+            if widget is not None:
+                widgets[script_key] = widget
+            return widget
+
+        _bind_field(SWITCH_WIFI_USE_ROUTER_FIELD)
+        _bind_field(SWITCH_WIFI_ROUTER_CSV_FIELD)
+        _bind_field(SWITCH_WIFI_MANUAL_ENTRIES_FIELD)
+
+        field_keys = set(widgets.keys())
         section_controls: dict[str, tuple[QCheckBox, Sequence[QWidget]]] = {}
 
-        router_mode_state: dict[str, bool] = {"suppress_open": True}
-
-        def _current_csv_selection() -> str | None:
-            """
-            Execute the current csv selection routine.
-
-            This method encapsulates the logic necessary to perform its function.
-            Refer to the implementation for details on parameters and return values.
-            """
-            data_value = router_combo.currentData()
-            if isinstance(data_value, str) and data_value:
-                return data_value
-            text_value = router_combo.currentText()
-            return text_value if isinstance(text_value, str) and text_value else None
-
-        def _sync_case_csv(path: str | None = None, *, emit: bool = True) -> bool:
-            target = path if path is not None else _current_csv_selection()
-            changed = self._set_selected_csv(target, sync_combo=False)
-            if changed and emit:
-                self.csvFileChanged.emit(self.selected_csv_path or "")
-            return changed
-
-        def _apply_mode(checked: bool) -> None:
-            """
-            Execute the apply mode routine.
-
-            This method encapsulates the logic necessary to perform its function.
-            Refer to the implementation for details on parameters and return values.
-            """
-            router_box.setVisible(checked)
-            manual_box.setVisible(not checked)
-            manual_editor.setEnabled(not checked)
-            self._router_config_active = checked
-            if checked:
-                router_selector.setEnabled(True)
-                _sync_case_csv(path=_current_csv_selection(), emit=True)
-            else:
-                router_selector.setEnabled(False)
-                cleared = self._set_selected_csv(None, sync_combo=False)
-                if cleared:
-                    self.csvFileChanged.emit("")
-            self._update_switch_wifi_preview(router_preview, _current_csv_selection())
-            self._request_rebalance_for_panels(self._stability_panel)
-            self._update_rvr_nav_button()
-
-        def _on_csv_changed() -> None:
-            """
-            Handle the csv changed event triggered by user interaction.
-
-            This method encapsulates the logic necessary to perform its function.
-            Refer to the implementation for details on parameters and return values.
-            """
-            selection = _current_csv_selection()
-            self._update_switch_wifi_preview(router_preview, selection)
-            if use_router_checkbox.isChecked():
-                _sync_case_csv(path=selection, emit=True)
-
-        router_combo.currentIndexChanged.connect(lambda _index: _on_csv_changed())
-        use_router_checkbox.toggled.connect(_apply_mode)
-        router_selector.setEnabled(use_router_checkbox.isChecked())
-
-        router_selector.setEnabled(use_router_checkbox.isChecked())
-
-        entry = ScriptConfigEntry(
+        return ScriptConfigEntry(
             group=group,
             widgets=widgets,
-            field_keys=set(widgets.keys()),
+            field_keys=field_keys,
             section_controls=section_controls,
             case_key=case_key,
             case_path=case_path,
-            extras={
-                "router_preview": router_preview,
-                "router_combo": router_combo,
-                "apply_mode": _apply_mode,
-                "router_box": router_box,
-                "manual_box": manual_box,
-                "manual_editor": manual_editor,
-                "router_selector": router_selector,
-                "sync_router_csv": _sync_case_csv,
-                "use_router_checkbox": use_router_checkbox,
-            },
         )
 
-        _apply_mode(use_router_checkbox.isChecked())
-
-        return entry
-
-    def _create_test_str_config_entry(
+    def _create_test_str_config_entry_from_schema(
             self,
             case_key: str,
             case_path: str,
             data: Mapping[str, Any],
     ) -> ScriptConfigEntry:
         """
-        Execute the create test str config entry routine.
+        Build ScriptConfigEntry for ``test_str`` using widgets created by the
+        YAML/schema builder.
 
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
+        All AC/STR fields are referenced via ``stability.cases.test_str.*``
+        keys (see ui_rules R14/R15). This helper binds those widgets into a
+        ScriptConfigEntry and ensures rule evaluation runs when the relevant
+        checkboxes or relay-type combos change.
         """
-        group = QGroupBox("test_str.py Stability", self)
-        apply_theme(group)
-        apply_groupbox_style(group)
-        layout = QVBoxLayout(group)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(8)
-
-        intro = QLabel("Configure AC/STR cycling parameters for test_str.py.", group)
-        intro.setWordWrap(True)
-        layout.addWidget(intro)
+        section_id = f"cases.{case_key}"
+        group = self._other_groups.get(section_id)
+        if group is None:
+            group = QWidget(self)
 
         widgets: dict[str, QWidget] = {}
+
+        def _bind_field(*parts: str) -> QWidget | None:
+            script_key = self._script_field_key(case_key, *parts)
+            widget = self.field_widgets.get(script_key)
+            if widget is None:
+                raw_key = f"{section_id}." + ".".join(parts)
+                widget = self.field_widgets.get(raw_key)
+                if widget is not None:
+                    self.field_widgets[script_key] = widget
+            if widget is not None:
+                widgets[script_key] = widget
+            return widget
+
+        # AC fields
+        ac_checkbox = _bind_field("ac", "enabled")
+        ac_on = _bind_field("ac", "on_duration")
+        ac_off = _bind_field("ac", "off_duration")
+        ac_port = _bind_field("ac", "port")
+        ac_mode = _bind_field("ac", "mode")
+        ac_relay_type = _bind_field("ac", "relay_type")
+        ac_relay_params = _bind_field("ac", "relay_params")
+
+        # STR fields
+        str_checkbox = _bind_field("str", "enabled")
+        str_on = _bind_field("str", "on_duration")
+        str_off = _bind_field("str", "off_duration")
+        str_port = _bind_field("str", "port")
+        str_mode = _bind_field("str", "mode")
+        str_relay_type = _bind_field("str", "relay_type")
+        str_relay_params = _bind_field("str", "relay_params")
+
         section_controls: dict[str, tuple[QCheckBox, Sequence[QWidget]]] = {}
 
-        def _build_port_combo(parent: QWidget) -> ComboBox:
-            """
-            Execute the build port combo routine.
+        # Bind AC/STR checkboxes so rule engine re-evaluates section state.
+        ac_controls: list[QWidget] = [
+            w for w in (ac_on, ac_off, ac_port, ac_mode, ac_relay_type, ac_relay_params) if w is not None
+        ]
+        if isinstance(ac_checkbox, QCheckBox):
+            self._bind_script_section(ac_checkbox, ac_controls)
+            section_controls["ac"] = (ac_checkbox, tuple(ac_controls))
 
-            This method encapsulates the logic necessary to perform its function.
-            Refer to the implementation for details on parameters and return values.
-            """
-            combo = ComboBox(parent)
-            combo.setMinimumWidth(220)
-            combo.addItem("Select port", "")
+        str_controls: list[Widget] = [
+            w for w in (str_on, str_off, str_port, str_mode, str_relay_type, str_relay_params) if w is not None
+        ]
+        if isinstance(str_checkbox, QCheckBox):
+            self._bind_script_section(str_checkbox, str_controls)
+            section_controls["str"] = (str_checkbox, tuple(str_controls))
 
-            def _refresh_ports(preserve_current: bool = True) -> None:
-                """Reload available serial ports while optionally preserving selection."""
-                current_value = ""
-                if preserve_current:
-                    data = combo.currentData()
-                    if isinstance(data, str):
-                        current_value = data
-                combo.blockSignals(True)
-                try:
-                    combo.clear()
-                    combo.addItem("Select port", "")
-                    for device, label in self._list_serial_ports():
-                        combo.addItem(label, device)
-                    if current_value:
-                        index = combo.findData(current_value)
-                        if index < 0:
-                            combo.addItem(current_value, current_value)
-                            index = combo.findData(current_value)
-                        combo.setCurrentIndex(index if index >= 0 else 0)
-                    else:
-                        combo.setCurrentIndex(0)
-                finally:
-                    combo.blockSignals(False)
+        # Ensure relay-type changes also trigger rule evaluation (R15a/b).
+        from qfluentwidgets import ComboBox  # local import to avoid cycles
 
-            combo.refresh_ports = _refresh_ports  # type: ignore[attr-defined]
-            _refresh_ports(preserve_current=False)
+        def _connect_relay_type(widget: QWidget | None) -> None:
+            if isinstance(widget, ComboBox):
+                widget.currentIndexChanged.connect(lambda *_: self._apply_config_ui_rules())
 
-            original_show_popup = getattr(combo, "showPopup", None)
-            if callable(original_show_popup):
-
-                def _show_popup() -> None:
-                    """Refresh port list whenever the dropdown is opened."""
-                    try:
-                        _refresh_ports()
-                    finally:
-                        original_show_popup()
-
-                combo.showPopup = _show_popup  # type: ignore[method-assign]
-            else:
-
-                class _PortPopupEventFilter(QObject):
-                    """Event filter ensuring USB ports refresh before combo opens."""
-
-                    def eventFilter(self, obj: QObject, event: QEvent) -> bool:  # type: ignore[override]
-                        """
-                        Filter events for child widgets and emit signals when appropriate.
-
-                        This method encapsulates the logic necessary to perform its function.
-                        Refer to the implementation for details on parameters and return values.
-                        """
-                        if event.type() == QEvent.MouseButtonPress:
-                            _refresh_ports()
-                        return False
-
-                popup_filter = _PortPopupEventFilter(combo)
-                combo._port_popup_filter = popup_filter  # type: ignore[attr-defined]
-                combo.installEventFilter(popup_filter)
-            return combo
-
-        def _set_port_default(combo: ComboBox, value: str) -> None:
-            """
-            Set the port default property on the instance.
-
-            This method encapsulates the logic necessary to perform its function.
-            Refer to the implementation for details on parameters and return values.
-            """
-            value = (value or "").strip()
-            refresh_ports = getattr(combo, "refresh_ports", None)
-            if callable(refresh_ports):
-                refresh_ports(preserve_current=False)
-            if not value:
-                combo.setCurrentIndex(0 if combo.count() else -1)
-                return
-            index = combo.findData(value)
-            if index < 0:
-                combo.addItem(value, value)
-                index = combo.findData(value)
-            combo.setCurrentIndex(index if index >= 0 else 0)
-
-        def _set_mode_default(combo: ComboBox, value: str) -> None:
-            """
-            Set the mode default property on the instance.
-
-            This method encapsulates the logic necessary to perform its function.
-            Refer to the implementation for details on parameters and return values.
-            """
-            target = (value or "NO").strip().upper() or "NO"
-            # ComboBoxBase.findText only supports the text argument, so we perform
-            # an explicit case-insensitive match to keep the previous behavior.
-            index = next(
-                (i for i in range(combo.count()) if combo.itemText(i).strip().upper() == target),
-                -1,
-            )
-            if index < 0:
-                combo.addItem(target)
-                index = next(
-                    (i for i in range(combo.count()) if combo.itemText(i).strip().upper() == target),
-                    -1,
-                )
-            combo.setCurrentIndex(index if index >= 0 else 0)
-
-        def _set_relay_type_default(combo: ComboBox, value: str) -> None:
-            """Select the relay type option matching the stored value."""
-
-            target = (value or "usb_relay").strip()
-            if not target:
-                target = "usb_relay"
-            normalized = target.lower()
-            relay_display_map = {
-                "usb_relay": "USB Relay",
-                "gwgj-xc3012": "GWGJ-XC3012",
-            }
-            display_text = relay_display_map.get(normalized, target)
-            # Remove empty placeholder entries that have no visible effect.
-            for index in range(combo.count() - 1, -1, -1):
-                if not combo.itemText(index).strip() and combo.itemData(index) is None:
-                    combo.removeItem(index)
-            index = next(
-                (
-                    i
-                    for i in range(combo.count())
-                    if isinstance(combo.itemData(i), str)
-                    and combo.itemData(i).strip().lower() == normalized
-                ),
-                -1,
-            )
-            if index < 0:
-                index = next(
-                    (i for i in range(combo.count()) if combo.itemText(i).strip().lower() == display_text.lower()),
-                    -1,
-                )
-            if index < 0 and target:
-                combo.addItem(display_text, target)
-                index = next(
-                    (
-                        i
-                        for i in range(combo.count())
-                        if isinstance(combo.itemData(i), str)
-                        and combo.itemData(i).strip().lower() == normalized
-                    ),
-                    combo.count() - 1,
-                )
-            combo.setCurrentIndex(index if index >= 0 else 0)
-
-        def _configure_relay_controls(
-            checkbox: QCheckBox,
-            combo: ComboBox,
-            usb_widgets: Sequence[QWidget],
-            snmp_widgets: Sequence[QWidget],
-        ) -> None:
-            """Toggle USB/SNMP specific widgets based on the selected relay type."""
-
-            def _apply(*_args: object) -> None:
-                data_value = combo.currentData()
-                relay_value = data_value if isinstance(data_value, str) else combo.currentText()
-                key = (relay_value or "").strip().lower().replace(" ", "_")
-                is_usb = key in {"usb_relay"}
-                section_enabled = checkbox.isChecked()
-                for widget in usb_widgets:
-                    widget.setEnabled(section_enabled and is_usb)
-                for widget in snmp_widgets:
-                    widget.setEnabled(section_enabled and not is_usb)
-
-            combo.currentIndexChanged.connect(_apply)
-            checkbox.toggled.connect(_apply)
-            _apply()
-
-        ac_checkbox = QCheckBox("Enable AC cycle", group)
-        layout.addWidget(ac_checkbox)
-
-        ac_grid = QGridLayout()
-        ac_grid.setContentsMargins(24, 0, 0, 0)
-        ac_grid.setHorizontalSpacing(12)
-        ac_grid.setVerticalSpacing(6)
-
-        ac_on_label = QLabel("AC on duration (s)", group)
-        ac_on_spin = QSpinBox(group)
-        ac_on_spin.setRange(0, 24 * 60 * 60)
-        ac_on_spin.setSuffix(" s")
-
-        ac_off_label = QLabel("AC off duration (s)", group)
-        ac_off_spin = QSpinBox(group)
-        ac_off_spin.setRange(0, 24 * 60 * 60)
-        ac_off_spin.setSuffix(" s")
-
-        ac_port_label = QLabel("USB relay port", group)
-        ac_port_combo = _build_port_combo(group)
-
-        ac_mode_label = QLabel("Wiring mode", group)
-        ac_mode_combo = ComboBox(group)
-        ac_mode_combo.setMinimumWidth(160)
-        ac_mode_combo.addItems(["NO", "NC"])
-
-        ac_relay_type_label = QLabel("Relay type", group)
-        ac_relay_type_combo = ComboBox(group)
-        ac_relay_type_combo.setMinimumWidth(200)
-        ac_relay_type_combo.addItem("USB Relay", "usb_relay")
-        ac_relay_type_combo.addItem("GWGJ-XC3012", "GWGJ-XC3012")
-
-        ac_params_label = QLabel("Relay params (ip,port)", group)
-        ac_params_edit = LineEdit(group)
-        ac_params_edit.setPlaceholderText("192.168.0.10,4")
-
-        ac_grid.addWidget(ac_on_label, 0, 0)
-        ac_grid.addWidget(ac_on_spin, 0, 1)
-        ac_grid.addWidget(ac_off_label, 1, 0)
-        ac_grid.addWidget(ac_off_spin, 1, 1)
-        ac_grid.addWidget(ac_port_label, 2, 0)
-        ac_grid.addWidget(ac_port_combo, 2, 1)
-        ac_grid.addWidget(ac_mode_label, 3, 0)
-        ac_grid.addWidget(ac_mode_combo, 3, 1)
-        ac_grid.addWidget(ac_relay_type_label, 4, 0)
-        ac_grid.addWidget(ac_relay_type_combo, 4, 1)
-        ac_grid.addWidget(ac_params_label, 5, 0)
-        ac_grid.addWidget(ac_params_edit, 5, 1)
-        layout.addLayout(ac_grid)
-
-        self._bind_script_section(
-            ac_checkbox,
-            (
-                ac_on_spin,
-                ac_off_spin,
-                ac_port_combo,
-                ac_mode_combo,
-                ac_relay_type_combo,
-                ac_params_edit,
-            ),
-        )
-        section_controls["ac"] = (
-            ac_checkbox,
-            (
-                ac_on_spin,
-                ac_off_spin,
-                ac_port_combo,
-                ac_mode_combo,
-                ac_relay_type_combo,
-                ac_params_edit,
-            ),
-        )
-
-        str_checkbox = QCheckBox("Enable STR cycle", group)
-        layout.addWidget(str_checkbox)
-
-        str_grid = QGridLayout()
-        str_grid.setContentsMargins(24, 0, 0, 0)
-        str_grid.setHorizontalSpacing(12)
-        str_grid.setVerticalSpacing(6)
-
-        str_on_label = QLabel("STR on duration (s)", group)
-        str_on_spin = QSpinBox(group)
-        str_on_spin.setRange(0, 24 * 60 * 60)
-        str_on_spin.setSuffix(" s")
-
-        str_off_label = QLabel("STR off duration (s)", group)
-        str_off_spin = QSpinBox(group)
-        str_off_spin.setRange(0, 24 * 60 * 60)
-        str_off_spin.setSuffix(" s")
-
-        str_relay_type_label = QLabel("Relay type", group)
-        str_relay_type_combo = ComboBox(group)
-        str_relay_type_combo.setMinimumWidth(200)
-        str_relay_type_combo.addItem("USB Relay", "usb_relay")
-        str_relay_type_combo.addItem("GWGJ-XC3012", "GWGJ-XC3012")
-
-        str_port_label = QLabel("USB relay port", group)
-        str_port_combo = _build_port_combo(group)
-
-        str_mode_label = QLabel("Wiring mode", group)
-        str_mode_combo = ComboBox(group)
-        str_mode_combo.setMinimumWidth(160)
-        str_mode_combo.addItems(["NO", "NC"])
-
-        str_params_label = QLabel("Relay params (ip,port)", group)
-        str_params_edit = LineEdit(group)
-        str_params_edit.setPlaceholderText("192.168.0.10,4")
-
-        str_grid.addWidget(str_on_label, 0, 0)
-        str_grid.addWidget(str_on_spin, 0, 1)
-        str_grid.addWidget(str_off_label, 1, 0)
-        str_grid.addWidget(str_off_spin, 1, 1)
-        str_grid.addWidget(str_relay_type_label, 2, 0)
-        str_grid.addWidget(str_relay_type_combo, 2, 1)
-        str_grid.addWidget(str_port_label, 3, 0)
-        str_grid.addWidget(str_port_combo, 3, 1)
-        str_grid.addWidget(str_mode_label, 4, 0)
-        str_grid.addWidget(str_mode_combo, 4, 1)
-        str_grid.addWidget(str_params_label, 5, 0)
-        str_grid.addWidget(str_params_edit, 5, 1)
-        layout.addLayout(str_grid)
-
-        self._bind_script_section(
-            str_checkbox,
-            (
-                str_on_spin,
-                str_off_spin,
-                str_port_combo,
-                str_mode_combo,
-                str_relay_type_combo,
-                str_params_edit,
-            ),
-        )
-        section_controls["str"] = (
-            str_checkbox,
-            (
-                str_on_spin,
-                str_off_spin,
-                str_port_combo,
-                str_mode_combo,
-                str_relay_type_combo,
-                str_params_edit,
-            ),
-        )
-
-        layout.addStretch(1)
-
-        ac_cfg = data.get("ac", {})
-        str_cfg = data.get("str", {})
-
-        ac_checkbox.setChecked(bool(ac_cfg.get("enabled")))
-        ac_on_spin.setValue(int(ac_cfg.get("on_duration") or 0))
-        ac_off_spin.setValue(int(ac_cfg.get("off_duration") or 0))
-        ac_port = str(ac_cfg.get("port", "") or "").strip()
-        ac_mode = str(ac_cfg.get("mode", "") or "").strip().upper() or "NO"
-        ac_type = str(ac_cfg.get("relay_type", "usb_relay") or "usb_relay").strip()
-        ac_params = ac_cfg.get("relay_params")
-        if isinstance(ac_params, (list, tuple)):
-            ac_params_text = ", ".join(str(item) for item in ac_params if str(item).strip())
-        elif isinstance(ac_params, str):
-            ac_params_text = ac_params
-        else:
-            ac_params_text = ""
-        _set_port_default(ac_port_combo, ac_port)
-        _set_mode_default(ac_mode_combo, ac_mode)
-        _set_relay_type_default(ac_relay_type_combo, ac_type)
-        ac_params_edit.setText(ac_params_text)
-
-        str_checkbox.setChecked(bool(str_cfg.get("enabled")))
-        str_on_spin.setValue(int(str_cfg.get("on_duration") or 0))
-        str_off_spin.setValue(int(str_cfg.get("off_duration") or 0))
-        str_port = str(str_cfg.get("port", "") or "").strip()
-        str_mode = str(str_cfg.get("mode", "") or "").strip().upper() or "NO"
-        str_type = str(str_cfg.get("relay_type", "usb_relay") or "usb_relay").strip()
-        str_params = str_cfg.get("relay_params")
-        if isinstance(str_params, (list, tuple)):
-            str_params_text = ", ".join(str(item) for item in str_params if str(item).strip())
-        elif isinstance(str_params, str):
-            str_params_text = str_params
-        else:
-            str_params_text = ""
-        _set_port_default(str_port_combo, str_port)
-        _set_mode_default(str_mode_combo, str_mode)
-        _set_relay_type_default(str_relay_type_combo, str_type)
-        str_params_edit.setText(str_params_text)
-
-        _configure_relay_controls(
-            ac_checkbox,
-            ac_relay_type_combo,
-            (ac_port_label, ac_port_combo, ac_mode_label, ac_mode_combo),
-            (ac_params_label, ac_params_edit),
-        )
-        _configure_relay_controls(
-            str_checkbox,
-            str_relay_type_combo,
-            (str_port_label, str_port_combo, str_mode_label, str_mode_combo),
-            (str_params_label, str_params_edit),
-        )
-
-        widgets[self._script_field_key(case_key, "ac", "enabled")] = ac_checkbox
-        widgets[self._script_field_key(case_key, "ac", "on_duration")] = ac_on_spin
-        widgets[self._script_field_key(case_key, "ac", "off_duration")] = ac_off_spin
-        widgets[self._script_field_key(case_key, "ac", "port")] = ac_port_combo
-        widgets[self._script_field_key(case_key, "ac", "mode")] = ac_mode_combo
-        widgets[self._script_field_key(case_key, "ac", "relay_type")] = ac_relay_type_combo
-        widgets[self._script_field_key(case_key, "ac", "relay_params")] = ac_params_edit
-
-        widgets[self._script_field_key(case_key, "str", "enabled")] = str_checkbox
-        widgets[self._script_field_key(case_key, "str", "on_duration")] = str_on_spin
-        widgets[self._script_field_key(case_key, "str", "off_duration")] = str_off_spin
-        widgets[self._script_field_key(case_key, "str", "port")] = str_port_combo
-        widgets[self._script_field_key(case_key, "str", "mode")] = str_mode_combo
-        widgets[self._script_field_key(case_key, "str", "relay_type")] = str_relay_type_combo
-        widgets[self._script_field_key(case_key, "str", "relay_params")] = str_params_edit
+        _connect_relay_type(ac_relay_type)
+        _connect_relay_type(str_relay_type)
 
         field_keys = set(widgets.keys())
 
@@ -1795,10 +1113,15 @@ class CaseConfigPage(CardWidget):
         """Apply enable/disable/show/hide effects to widgets based on a rule."""
         if not effects:
             return
+        editable_fields = getattr(getattr(self, "_last_editable_info", None), "fields", None)
 
         def _set_enabled(key: str, enabled: bool) -> None:
             widget = self.field_widgets.get(key)
             if widget is None:
+                return
+            if enabled and isinstance(editable_fields, set) and editable_fields and key not in editable_fields:
+                # Do not re-enable fields that are not editable for the
+                # current case according to EditableInfo.
                 return
             if widget.isEnabled() == enabled:
                 return
@@ -1897,6 +1220,45 @@ class CaseConfigPage(CardWidget):
                 effects_to_apply.append(base_effects)
             for eff in effects_to_apply:
                 self._apply_field_effects(eff)
+
+        # Sidebar state can also depend on case type (e.g. enabling the
+        # RvR Wi-Fi navigation entry for performance cases).
+        self._apply_sidebar_rules()
+
+    def _apply_sidebar_rules(self) -> None:
+        """Evaluate sidebar rules that depend on the active case."""
+        main_window = self.window()
+        if not main_window:
+            return
+        try:
+            rules: dict[str, RuleSpec] = SIDEBAR_RULES
+        except Exception:
+            return
+
+        # Currently only S11_case_button_for_performance is defined.
+        spec = rules.get("S11_case_button_for_performance")
+        if not spec:
+            return
+        sidebar_key = spec.get("trigger_sidebar_key") or "case"
+        sidebar_enabled = self._eval_case_type_flag(
+            spec.get("trigger_case_type") or ""
+        )
+
+        # Resolve the nav button for the logical "case" page.
+        btn = None
+        sidebar_map = getattr(main_window, "sidebar_nav_buttons", None)
+        if isinstance(sidebar_map, dict):
+            btn = sidebar_map.get(sidebar_key)
+        if btn is None:
+            btn = getattr(main_window, "rvr_nav_button", None)
+        if btn is None:
+            return
+        try:
+            if sip.isdeleted(btn):
+                return
+        except Exception:
+            pass
+        btn.setEnabled(bool(sidebar_enabled))
 
     @staticmethod
     def _is_dut_key(key: str) -> bool:
@@ -2481,10 +1843,20 @@ class CaseConfigPage(CardWidget):
         Refer to the implementation for details on parameters and return values.
         """
         if hasattr(self, "csv_combo"):
-            self._set_selected_csv(self.selected_csv_path, sync_combo=True)
-            self.csv_combo.setEnabled(bool(self._enable_rvr_wifi))
+            # Keep selection and UI state in sync using dedicated helpers.
+            self._reset_second_page_model_state()
+            self._reset_second_page_ui_state()
         else:
             self._set_selected_csv(None, sync_combo=False)
+
+    def _reset_second_page_model_state(self) -> None:
+        """Reset second-page model state (CSV selection) after a run."""
+        self._set_selected_csv(self.selected_csv_path, sync_combo=True)
+
+    def _reset_second_page_ui_state(self) -> None:
+        """Reset second-page UI state (CSV combo enablement) after a run."""
+        if hasattr(self, "csv_combo"):
+            self.csv_combo.setEnabled(bool(self._enable_rvr_wifi))
 
     def _reset_wizard_after_run(self) -> None:
         """
@@ -2537,8 +1909,8 @@ class CaseConfigPage(CardWidget):
 
     def _is_performance_case(self, abs_case_path) -> bool:
         """
-        判断 abs_case_path 是否位于 test/performance 目录（任何层级都算）。
-        不依赖工程根路径，只看路径片段。
+        Determine whether abs_case_path is under the test/performance directory at any level.
+        Does not rely on project root path; only checks path segments.
         """
         logging.debug("Checking performance case path: %s", abs_case_path)
         if not abs_case_path:
@@ -2547,7 +1919,7 @@ class CaseConfigPage(CardWidget):
         try:
             from pathlib import Path
             p = Path(abs_case_path).resolve()
-            # 检查父链中是否出现 .../test/performance
+            # check whether any parent directory is .../test/performance
             for node in (p, *p.parents):
                 if node.name == "performance" and node.parent.name == "test":
                     logging.debug("_is_performance_case: True")
@@ -2602,7 +1974,7 @@ class CaseConfigPage(CardWidget):
         self.case_tree.setModel(self.proxy_model)
         self.case_tree.setRootIndex(self.proxy_model.mapFromSource(root_index))
 
-        # 隐藏非名称列
+        # hide non-name columns
         self.case_tree.header().hide()
         for col in range(1, self.fs_model.columnCount()):
             self.case_tree.hideColumn(col)
@@ -2616,11 +1988,11 @@ class CaseConfigPage(CardWidget):
         self.config_proxy.save_config()
 
     def _get_application_base(self) -> Path:
-        """获取应用根路径"""
+        """Get application root path."""
         return Path(get_src_base()).resolve()
 
     def _resolve_case_path(self, path: str | Path) -> Path:
-        """将相对用例路径转换为绝对路径"""
+        """Convert relative case path to absolute path."""
         if not path:
             return Path()
         p = Path(path)
@@ -2665,34 +2037,40 @@ class CaseConfigPage(CardWidget):
                 self.connect_type_combo.setCurrentIndex(0)
 
     def on_connect_type_changed(self, display_text):
-        """切换连接方式时，仅展示对应参数组"""
+        """Switch connect type and apply both UI state and system mapping."""
         type_str = self._normalize_connect_type_label(display_text)
-        self.adb_group.setVisible(type_str == "Android")
-        self.telnet_group.setVisible(type_str == "Linux")
+        self._apply_connect_type_ui_state(type_str)
         self._update_android_system_for_connect_type(type_str)
         self._request_rebalance_for_panels(self._dut_panel)
+        # Re-apply rules that depend on connect_type.type and android_system.*.
+        self._apply_config_ui_rules()
+
+    def _apply_connect_type_ui_state(self, connect_type: str) -> None:
+        """Handle pure UI state when connect type changes."""
+        # Show only the relevant parameter group.
+        if hasattr(self, "adb_group"):
+            self.adb_group.setVisible(connect_type == "Android")
+        if hasattr(self, "telnet_group"):
+            self.telnet_group.setVisible(connect_type == "Linux")
+        # Android/system version visibility is always on; enabled/disabled state
+        # is driven by CONFIG_UI_RULES (see R04_android_system_visibility).
+        if not hasattr(self, "android_version_combo") or not hasattr(self, "kernel_version_combo"):
+            return
+        self.android_version_label.setVisible(True)
+        self.android_version_combo.setVisible(True)
+        self.kernel_version_label.setVisible(True)
+        self.kernel_version_combo.setVisible(True)
 
     def _update_android_system_for_connect_type(self, connect_type: str) -> None:
-        """
-        Update the  android system for connect type to reflect current data.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
+        """Handle non-visual Android system mapping for the given connect type."""
         if not hasattr(self, "android_version_combo") or not hasattr(self, "kernel_version_combo"):
             return
         is_adb = connect_type == "Android"
-        # Android version selectors are only shown for ADB connections.
-        self.android_version_label.setVisible(is_adb)
-        self.android_version_combo.setVisible(is_adb)
-        # Kernel selector is always visible but toggles between auto-fill and manual modes.
-        self.kernel_version_label.setVisible(True)
-        self.kernel_version_combo.setVisible(True)
         if is_adb:
-            self.kernel_version_combo.setEnabled(False)
+            # For Android, kernel is mapped from the selected Android version.
             self._apply_android_kernel_mapping()
         else:
-            self.kernel_version_combo.setEnabled(True)
+            # For non-Android, leave kernel editable but clear empty selections.
             if not self.kernel_version_combo.currentText().strip():
                 self.kernel_version_combo.setCurrentIndex(-1)
 
@@ -2750,36 +2128,31 @@ class CaseConfigPage(CardWidget):
         """
         if not hasattr(self, "third_party_wait_edit"):
             return
-        if allow_wait_edit is None:
-            checkbox = getattr(self, "third_party_checkbox", None)
-            allow_wait_edit = checkbox.isEnabled() if isinstance(checkbox, QCheckBox) else True
-        enable_wait = bool(checked and allow_wait_edit)
-        self.third_party_wait_edit.setEnabled(enable_wait)
-        if hasattr(self, "third_party_wait_label"):
-            self.third_party_wait_label.setEnabled(enable_wait)
+        # Let the rule engine drive wait_seconds enable/disable based on
+        # connect_type.third_party.enabled and editable fields.
+        self._apply_config_ui_rules()
 
     def on_rf_model_changed(self, model_str):
         """
-        切换rf_solution.model时，仅展示当前选项参数
-        现在只有RS232Board5，如果有别的model，添加隐藏/显示逻辑
+        Adjust visibility when rf_solution.model changes.
+        Currently only RS232Board5; add show/hide logic for other models.
         """
-        # 当前只有RS232Board5，后续有其它model可以加if-else
-        if hasattr(self, "xin_group"):
-            self.xin_group.setVisible(model_str == "RS232Board5")
-        if hasattr(self, "rc4_group"):
-            self.rc4_group.setVisible(model_str == "RC4DAT-8G-95")
-        if hasattr(self, "rack_group"):
-            self.rack_group.setVisible(model_str == "RADIORACK-4-220")
-        if hasattr(self, "lda_group"):
-            self.lda_group.setVisible(model_str == "LDA-908V-8")
+        self._apply_rf_model_ui_state(model_str)
         self._request_rebalance_for_panels(self._execution_panel)
 
-    # 添加到类里：响应 Tool 下拉，切换子参数可见性
+    def _apply_rf_model_ui_state(self, model_str: str) -> None:
+        """Handle pure UI visibility for RF solution parameter groups."""
+        apply_rf_model_ui_state(self, model_str)
+
+    # handle Tool dropdown to toggle sub-parameter visibility
     def on_rvr_tool_changed(self, tool: str):
-        """选择 iperf / ixchariot 时，动态显示对应子参数"""
-        self.rvr_iperf_group.setVisible(tool == "iperf")
-        self.rvr_ix_group.setVisible(tool == "ixchariot")
+        """Dynamically show corresponding sub-parameters when selecting iperf or ixchariot."""
+        self._apply_rvr_tool_ui_state(tool)
         self._request_rebalance_for_panels(self._execution_panel)
+
+    def _apply_rvr_tool_ui_state(self, tool: str) -> None:
+        """Handle pure UI visibility for RvR tool-specific parameter groups."""
+        apply_rvr_tool_ui_state(self, tool)
 
     def on_serial_enabled_changed(self, text: str):
         """
@@ -2788,8 +2161,14 @@ class CaseConfigPage(CardWidget):
         This method encapsulates the logic necessary to perform its function.
         Refer to the implementation for details on parameters and return values.
         """
-        self.serial_cfg_group.setVisible(text == "True")
+        self._apply_serial_enabled_ui_state(text)
         self._request_rebalance_for_panels(self._dut_panel)
+        # Rule R03 controls serial_port.port/baud enabled state.
+        self._apply_config_ui_rules()
+
+    def _apply_serial_enabled_ui_state(self, text: str) -> None:
+        """Handle pure UI visibility for serial config group."""
+        apply_serial_enabled_ui_state(self, text)
 
     def on_router_changed(self, name: str):
         """
@@ -2946,18 +2325,11 @@ class CaseConfigPage(CardWidget):
         return "default"
 
     def _build_registered_sections(self) -> set[str]:
-        """Instantiate registered sections and build their widgets."""
-        case_type = self._active_case_type()
-        tags: set[str] = set()
-        sections = build_sections(self, case_type, tags)
-        self._section_context = SectionContext(case_type, tags)
-        self._section_instances = {section.section_id: section for section in sections}
-        for section in sections:
-            section.build(self.config)
-        return set(self._section_instances.keys())
+        """Deprecated: section-based layout has been removed; kept for compatibility."""
+        return set()
 
     def render_all_fields(self):
-        """自动渲染配置字段，支持 LineEdit / ComboBox（可扩展 Checkbox）。"""
+        """Automatically render config fields; supports LineEdit / ComboBox (can be extended for Checkbox)."""
         self._dut_groups.clear()
         self._other_groups.clear()
         defaults_for_dut = {
@@ -2995,39 +2367,21 @@ class CaseConfigPage(CardWidget):
         self.config["stability"] = self._normalize_stability_settings(
             self.config.get("stability")
         )
+        # Sections-based layout has been disabled; handled_section_ids is always empty.
         handled_section_ids = self._build_registered_sections()
-        for key, value in self.config.items():
-            if key in handled_section_ids or key == "stability":
-                continue
-            if key in ["csv_path", TOOL_SECTION_KEY]:
-                continue
-            group, vbox = build_groupbox(key)
-            edit = LineEdit(self)
-            edit.setText(str(value) if value is not None else "")
-            vbox.addWidget(edit)
-            self._register_group(key, group, self._is_dut_key(key))
-            self.field_widgets[key] = edit
-            # Register a generic logical identifier for these fallback fields.
-            self._register_config_control(
-                "dut" if self._is_dut_key(key) else "execution",
-                key,
-                key,
-                edit,
-            )
 
-        self._build_duration_group()
+        # ------------------------------------------------------------------
+        # New path: build groups from YAML UI schemas via the view builder.
+        # ------------------------------------------------------------------
+        dut_schema = load_ui_schema("dut")
+        build_groups_from_schema(self, self.config, dut_schema, panel_key="dut")
 
-    def _build_network_group(self, value: Mapping[str, Any] | None) -> None:
-        """Create the router configuration group via the proxy helper."""
-        _proxy_build_network_group(self, value)
+        exec_schema = load_ui_schema("execution")
+        build_groups_from_schema(self, self.config, exec_schema, panel_key="execution")
 
-    def _build_traffic_group(self, value: Mapping[str, Any] | None) -> None:
-        """Create serial/traffic controls via the proxy helper."""
-        _proxy_build_traffic_group(self, value)
-
-    def _build_duration_group(self) -> None:
-        """Attach duration/checkpoint groups using the proxy helpers."""
-        _proxy_build_duration_group(self)
+        stability_cfg = self.config.get("stability") or {}
+        stab_schema = load_ui_schema("stability")
+        build_groups_from_schema(self, stability_cfg, stab_schema, panel_key="stability")
 
 
     def _ensure_turntable_inputs_exclusive(self, source: str | None) -> None:
@@ -3068,26 +2422,11 @@ class CaseConfigPage(CardWidget):
         This method encapsulates the logic necessary to perform its function.
         Refer to the implementation for details on parameters and return values.
         """
-        if not hasattr(self, "turntable_ip_edit") or not hasattr(
-                self, "turntable_ip_label"
-        ):
-            return
-        requires_ip = model == TURN_TABLE_MODEL_OTHER
-        self.turntable_ip_label.setVisible(requires_ip)
-        self.turntable_ip_edit.setVisible(requires_ip)
-        self.turntable_ip_edit.setEnabled(requires_ip)
+        self._apply_turntable_model_ui_state(model)
 
-    def _build_duration_control_group(
-            self, data: Mapping[str, Any] | None
-    ) -> QGroupBox:
-        """Construct the duration control group via the proxy helper."""
-        return _proxy_build_duration_control_group(self, data)
-
-    def _build_check_point_group(
-            self, data: Mapping[str, Any] | None
-    ) -> QGroupBox:
-        """Construct the checkpoint selection group via the proxy helper."""
-        return _proxy_build_check_point_group(self, data)
+    def _apply_turntable_model_ui_state(self, model: str) -> None:
+        """Handle pure UI visibility/enabled state for turntable IP controls."""
+        apply_turntable_model_ui_state(self, model)
 
     def _compose_stability_groups(
             self, active_entry: ScriptConfigEntry | None
@@ -3136,14 +2475,14 @@ class CaseConfigPage(CardWidget):
 
     def populate_case_tree(self, root_dir):
         """
-        遍历 test 目录，只将 test_ 开头的 .py 文件作为节点加入树结构。
-        其它 py 文件不显示。
+        Traverse the test directory and only add .py files starting with test_ as tree nodes.
+        Other .py files are not shown.
         """
         from PyQt5.QtGui import QStandardItemModel, QStandardItem
         model = QStandardItemModel()
-        model.setHorizontalHeaderLabels(['Pls select test case '])  # 可选，设置表头显示
+        model.setHorizontalHeaderLabels(['Pls select test case '])  # optional: set header label
 
-        # 正确设置根节点为 'test' 或实际目录名
+        # set root item text to 'test' or actual directory name
         root_item = QStandardItem(os.path.basename(root_dir))
         root_item.setData(root_dir)
 
@@ -3172,16 +2511,14 @@ class CaseConfigPage(CardWidget):
         add_items(root_item, root_dir)
         model.appendRow(root_item)
         self.case_tree.setModel(model)
-        # 展开根节点
+        # expand root node
         self.case_tree.expand(model.index(0, 0))
 
     def on_case_tree_clicked(self, proxy_idx):
-        """
-        proxy_idx: 用户在界面点击到的索引（始终是代理模型的）
-        """
+        """Handle clicks in the case tree using the proxy model index."""
         model = self.case_tree.model()
 
-        # —— 用源索引只负责取真实文件路径 ——
+        # use the source index only to fetch the real file path
         source_idx = (
             model.mapToSource(proxy_idx)
             if isinstance(model, QSortFilterProxyModel) else proxy_idx
@@ -3194,7 +2531,7 @@ class CaseConfigPage(CardWidget):
             display_path = path
         logging.debug("on_case_tree_clicked path=%s display=%s", path, display_path)
         logging.debug("on_case_tree_clicked is_performance=%s", self._is_performance_case(path))
-        # ---------- 目录：只负责展开/折叠 ----------
+        # directory nodes: only responsible for expand/collapse
         if os.path.isdir(path):
             if self.case_tree.isExpanded(proxy_idx):
                 self.case_tree.collapse(proxy_idx)
@@ -3203,7 +2540,7 @@ class CaseConfigPage(CardWidget):
             self.set_fields_editable(set())
             return
 
-        # ---------- 非 test_*.py 直接禁用 ----------
+        # disable non test_*.py entries directly
         if not (os.path.isfile(path)
                 and os.path.basename(path).startswith("test_")
                 and path.endswith(".py")):
@@ -3213,14 +2550,14 @@ class CaseConfigPage(CardWidget):
         normalized_display = Path(display_path).as_posix() if display_path else ""
         self._update_test_case_display(normalized_display)
 
-        # ---------- 有效用例 ----------
+        # valid test case
         if self._refreshing:
             self._pending_path = path
             return
         self.get_editable_fields(path)
 
     def _compute_editable_info(self, case_path) -> EditableInfo:
-        """根据用例名与路径返回可编辑字段以及相关 UI 使能状态"""
+        """Return editable fields and related UI enable state based on case name and path."""
         basename = os.path.basename(case_path)
         logging.debug("testcase name %s", basename)
         logging.debug("_compute_editable_info case_path=%s basename=%s", case_path, basename)
@@ -3237,7 +2574,7 @@ class CaseConfigPage(CardWidget):
             "rvr.throughput_threshold",
         }
         info = EditableInfo()
-        # 永远让 connect_type 可编辑
+        # always keep connect_type editable
         info.fields |= {
             "connect_type.type",
             "connect_type.Android.device",
@@ -3291,7 +2628,7 @@ class CaseConfigPage(CardWidget):
         entry = self._script_groups.get(case_key)
         if entry is not None:
             info.fields |= entry.field_keys
-        # 如果你需要所有字段都可编辑，直接 return EditableInfo(set(self.field_widgets.keys()), True, True)
+        # if you need all fields editable, simply return EditableInfo(set(self.field_widgets.keys()), True, True)
         return info
 
     def _apply_editable_info(self, info: EditableInfo | None) -> None:
@@ -3311,21 +2648,42 @@ class CaseConfigPage(CardWidget):
             enable_rvr_wifi = info.enable_rvr_wifi
         snapshot = EditableInfo(fields=fields, enable_csv=enable_csv, enable_rvr_wifi=enable_rvr_wifi)
         self._last_editable_info = snapshot
-        self.set_fields_editable(snapshot.fields)
+        # First update internal model flags and config.
+        self._apply_editable_model_state(snapshot)
+        # Then update visual state and fire rule-based UI.
+        self._apply_editable_ui_state(snapshot)
+
+    def _apply_editable_model_state(self, snapshot: EditableInfo) -> None:
+        """Update internal flags and CSV selection from EditableInfo (no direct UI)."""
         self._enable_rvr_wifi = snapshot.enable_rvr_wifi
         if not snapshot.enable_rvr_wifi:
             self._router_config_active = False
+        # CSV selection is part of persisted state; keep it in sync even when
+        # the combo widget is not present.
         if hasattr(self, "csv_combo"):
             if snapshot.enable_csv:
-                self.csv_combo.setEnabled(True)
+                # Keep current selection in sync with the combo.
                 self._set_selected_csv(self.selected_csv_path, sync_combo=True)
             else:
-                # self._set_selected_csv(None, sync_combo=True)
-                self.csv_combo.setEnabled(False)
+                # Historical behaviour kept CSV selection but disabled the combo;
+                # leave the stored path untouched here.
+                pass
         else:
             if not snapshot.enable_csv:
+                # No CSV combo available; clear stored selection when CSV is disabled.
                 self._set_selected_csv(None, sync_combo=False)
+
+    def _apply_editable_ui_state(self, snapshot: EditableInfo) -> None:
+        """Apply UI-related changes for EditableInfo (widgets only)."""
+        # Field-level editable flags are handled via the rule engine and this helper.
+        self.set_fields_editable(snapshot.fields)
+        if hasattr(self, "csv_combo"):
+            # CSV combo enable/disable is a pure UI concern here.
+            self.csv_combo.setEnabled(bool(snapshot.enable_csv))
+        # Sidebar button and rule-driven UI depend on updated flags.
         self._update_rvr_nav_button()
+        # Re-apply UI rules whenever editable fields or CSV/RvR flags change.
+        self._apply_config_ui_rules()
 
     def _restore_editable_state(self) -> None:
         """
@@ -3337,17 +2695,16 @@ class CaseConfigPage(CardWidget):
         self._apply_editable_info(self._last_editable_info)
 
     def get_editable_fields(self, case_path) -> EditableInfo:
-        """选中用例后控制字段可编辑性并返回相关信息"""
+        """Control field editability after selecting a test case and return related info."""
         logging.debug("get_editable_fields case_path=%s", case_path)
         if self._refreshing:
-            # 极少见：递归进入，直接丢弃
+            # extremely rare: recursive entry; discard it
             logging.debug("get_editable_fields: refreshing, return empty")
             return EditableInfo()
 
-        # ---------- 进入刷新 ----------
+        # begin refresh
         self._refreshing = True
-        self.case_tree.setEnabled(False)  # 锁定用例树
-        self.setUpdatesEnabled(False)  # 暂停全局重绘
+        self._set_refresh_ui_locked(True)
 
         try:
             self._update_script_config_ui(case_path)
@@ -3358,10 +2715,11 @@ class CaseConfigPage(CardWidget):
             self._apply_editable_info(info)
             page_keys = self._determine_pages_for_case(case_path, info)
             self._set_available_pages(page_keys)
+            # Re-evaluate rules now that page keys (panels) are final.
+            self._apply_config_ui_rules()
         finally:
-            # ---------- 刷新结束 ----------
-            self.setUpdatesEnabled(True)
-            self.case_tree.setEnabled(True)
+            # refresh finished
+            self._set_refresh_ui_locked(False)
             self._refreshing = False
 
         main_window = self.window()
@@ -3371,15 +2729,21 @@ class CaseConfigPage(CardWidget):
             logging.debug("get_editable_fields: after switch to case_config_page")
         if not hasattr(self, "csv_combo"):
             logging.debug("csv_combo disabled")
-        # 若用户在刷新过程中又点了别的用例，延迟 0 ms 处理它
+        # if user clicks another test case during refresh, handle it with a 0 ms delay
         if self._pending_path:
             path = self._pending_path
             self._pending_path = None
             QTimer.singleShot(0, lambda: self.get_editable_fields(path))
         return info
 
+    def _set_refresh_ui_locked(self, locked: bool) -> None:
+        """Lock/unlock tree and global updates while editable info is recomputed."""
+        if hasattr(self, "case_tree"):
+            self.case_tree.setEnabled(not locked)
+        self.setUpdatesEnabled(not locked)
+
     def set_fields_editable(self, editable_fields: set[str]) -> None:
-        """批量更新字段的可编辑状态；DUT 区域始终保持可操作"""
+        """Batch update field editability; DUT area always remains interactive."""
         self.setUpdatesEnabled(False)
         try:
             always_enabled_roots = {"debug"}
@@ -3407,18 +2771,16 @@ class CaseConfigPage(CardWidget):
     def lock_for_running(self, locked: bool) -> None:
 
         """Enable or disable widgets while a test run is active."""
-        self.case_tree.setEnabled(not locked)
+        self._apply_run_lock_model_state(locked)
+        self._apply_run_lock_ui_state(locked)
+
+    def _apply_run_lock_model_state(self, locked: bool) -> None:
+        """Update internal run-lock flag without touching widgets directly."""
         self._run_locked = locked
-        self._sync_run_buttons_enabled()
-        if locked:
-            for w in self.field_widgets.values():
-                w.setEnabled(False)
-            if hasattr(self, "csv_combo"):
-                self.csv_combo.setEnabled(False)
-        else:
-            self._restore_editable_state()
-        if not locked:
-            self._update_navigation_state()
+
+    def _apply_run_lock_ui_state(self, locked: bool) -> None:
+        """Apply UI changes when a test run is (un)locked."""
+        apply_run_lock_ui_state(self, locked)
 
     def on_csv_activated(self, index: int) -> None:
 
@@ -3432,7 +2794,7 @@ class CaseConfigPage(CardWidget):
         if index < 0:
             self._set_selected_csv(None, sync_combo=False)
             return
-        # 明确使用 UserRole 获取数据，避免在不同 Qt 版本下默认角色不一致
+        # explicitly use UserRole to get data to avoid inconsistent defaults across Qt versions
         data = self.csv_combo.itemData(index)
         logging.debug("on_csv_changed index=%s data=%s", index, data)
         new_path = self._normalize_csv_path(data)

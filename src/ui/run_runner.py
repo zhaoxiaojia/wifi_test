@@ -13,7 +13,7 @@ from pathlib import Path
 from PyQt5.QtCore import QThread, pyqtSignal
 
 from src.util.constants import Paths
-from .theme import STYLE_BASE, TEXT_COLOR
+from src.ui.view.theme import STYLE_BASE, TEXT_COLOR
 from .run_worker import _pytest_worker
 
 

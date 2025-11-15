@@ -1,0 +1,101 @@
+panels:
+  stability:
+    sections:
+      - id: duration_control
+        label: "Duration Control"
+        fields:
+          - key: duration_control.loop
+            widget: int
+            label: "Loop count"
+            minimum: 0
+          - key: duration_control.duration_hours
+            widget: int
+            label: "Duration (hours)"
+            minimum: 0
+          - key: duration_control.exitfirst
+            widget: checkbox
+            label: "Stop immediately on failure (exitfirst)"
+          - key: duration_control.retry_limit
+            widget: int
+            label: "Retry count"
+            minimum: 0
+
+      - id: check_point
+        label: "Check Point"
+        fields:
+          - key: check_point.ping
+            widget: checkbox
+            label: "Ping after each step"
+          - key: check_point.ping_targets
+            widget: line_edit
+            label: "Ping targets"
+            placeholder: "192.168.50.1,www.example.com"
+
+      - id: cases.test_str
+        label: "test_str Stability Case"
+        fields:
+          - key: cases.test_str.ac.enabled
+            widget: checkbox
+            label: "Enable AC cycle"
+          - key: cases.test_str.ac.on_duration
+            widget: int
+            label: "AC on duration (s)"
+            minimum: 0
+          - key: cases.test_str.ac.off_duration
+            widget: int
+            label: "AC off duration (s)"
+            minimum: 0
+          - key: cases.test_str.ac.port
+            widget: combo_box
+            label: "AC USB relay port"
+          - key: cases.test_str.ac.mode
+            widget: combo_box
+            label: "AC wiring mode"
+            choices: ["NO", "NC"]
+          - key: cases.test_str.ac.relay_type
+            widget: combo_box
+            label: "AC relay type"
+            choices: ["usb_relay", "GWGJ-XC3012"]
+          - key: cases.test_str.ac.relay_params
+            widget: line_edit
+            label: "AC relay params (ip,port)"
+
+          - key: cases.test_str.str.enabled
+            widget: checkbox
+            label: "Enable STR cycle"
+          - key: cases.test_str.str.on_duration
+            widget: int
+            label: "STR on duration (s)"
+            minimum: 0
+          - key: cases.test_str.str.off_duration
+            widget: int
+            label: "STR off duration (s)"
+            minimum: 0
+          - key: cases.test_str.str.port
+            widget: combo_box
+            label: "STR USB relay port"
+          - key: cases.test_str.str.mode
+            widget: combo_box
+            label: "STR wiring mode"
+            choices: ["NO", "NC"]
+          - key: cases.test_str.str.relay_type
+            widget: combo_box
+            label: "STR relay type"
+            choices: ["usb_relay", "GWGJ-XC3012"]
+          - key: cases.test_str.str.relay_params
+            widget: line_edit
+            label: "STR relay params (ip,port)"
+
+      - id: cases.test_switch_wifi
+        label: "test_switch_wifi Stability Case"
+        fields:
+          - key: cases.test_switch_wifi.use_router
+            widget: checkbox
+            label: "Use router configuration"
+          - key: cases.test_switch_wifi.router_csv
+            widget: line_edit
+            label: "Router CSV path"
+          - key: cases.test_switch_wifi.manual_entries
+            widget: custom
+            label: "Manual entries"
+

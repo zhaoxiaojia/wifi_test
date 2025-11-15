@@ -17,7 +17,6 @@ router_list = {
     'asusax86u': Asusax86uControl,
     'asusax88u': Asusax88uControl,
     'asusax88upro': Asusax88uProControl,
-
     'xiaomibe7000': XiaomiBe7000Control,
     'xiaomiax3600': Xiaomiax3600Control,
 }
