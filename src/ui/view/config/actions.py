@@ -84,7 +84,28 @@ def handle_config_event(page: Any, event: str, **payload: Any) -> None:
         return
 
     if event == "case_clicked":
+        # User selected a test case in the tree.
         case_path = payload.get("case_path") or ""
+        display_path = payload.get("display_path") or ""
+
+        # Keep a lightweight reference to the current case path so that
+        # future "init" passes can re-apply editable fields.
+        if case_path:
+            setattr(page, "_current_case_path", case_path)
+
+        # Update "Selected Test Case" text if such a field exists.
+        field_widgets = getattr(page, "field_widgets", {}) or {}
+        text_case = field_widgets.get("text_case")
+        if text_case is not None and hasattr(text_case, "setText"):
+            try:
+                text_case.setText(display_path or case_path)
+            except Exception:
+                pass
+        elif hasattr(page, "_update_test_case_display"):
+            # Backwards-compatible fallback for legacy controllers.
+            page._update_test_case_display(display_path or case_path)
+
+        # Re-compute editable info + page availability.
         if hasattr(page, "get_editable_fields"):
             page.get_editable_fields(case_path)
         return
@@ -101,14 +122,11 @@ def handle_config_event(page: Any, event: str, **payload: Any) -> None:
 
     if event == "serial_status_changed":
         text = str(payload.get("text", ""))
-        # Reuse existing serial helper behaviour by simulating a status change.
-        field_widgets = getattr(page, "field_widgets", {}) or {}
-        serial_status = field_widgets.get("serial_port.status")
-        if isinstance(serial_status, QCheckBox):
-            apply_serial_enabled_ui_state(page, text)
-            if hasattr(page, "_request_rebalance_for_panels") and hasattr(page, "_dut_panel"):
-                page._request_rebalance_for_panels(page._dut_panel)
-            apply_config_ui_rules(page)
+        # Apply serial UI + rules regardless of the underlying widget type.
+        apply_serial_enabled_ui_state(page, text)
+        if hasattr(page, "_request_rebalance_for_panels") and hasattr(page, "_dut_panel"):
+            page._request_rebalance_for_panels(page._dut_panel)
+        apply_config_ui_rules(page)
         return
 
     if event == "rf_model_changed":
@@ -160,6 +178,7 @@ def handle_config_event(page: Any, event: str, **payload: Any) -> None:
 
     if event == "csv_index_changed":
         index = int(payload.get("index", -1))
+        force = bool(payload.get("force", False))
         csv_combo = getattr(page, "csv_combo", None)
         if csv_combo is None:
             return
@@ -174,7 +193,7 @@ def handle_config_event(page: Any, event: str, **payload: Any) -> None:
         normalizer = getattr(page, "_normalize_csv_path", None)
         new_path = normalizer(data) if callable(normalizer) else data
         current = getattr(page, "selected_csv_path", None)
-        if new_path == current:
+        if not force and new_path == current:
             return
         if hasattr(page, "_set_selected_csv"):
             page._set_selected_csv(new_path, sync_combo=False)
@@ -570,7 +589,7 @@ def apply_field_effects(page: Any, effects: FieldEffect) -> None:
                     ct_val = page._normalize_connect_type_label(ct_val)
         except Exception:
             ct_val = ""
-    return ct_val
+        return ct_val
 
     def _set_enabled(key: str, enabled: bool) -> None:
         widget = field_widgets.get(key)
@@ -1032,19 +1051,29 @@ def init_connect_type_actions(page: Any) -> None:
         setattr(page, "connect_type_combo", connect_combo)
         if hasattr(connect_combo, "currentTextChanged"):
             connect_combo.currentTextChanged.connect(
-                lambda text: handle_connect_type_changed(page, text)
+                lambda text: handle_config_event(page, "connect_type_changed", text=str(text))
             )
         elif hasattr(connect_combo, "currentIndexChanged"):
             connect_combo.currentIndexChanged.connect(
-                lambda _idx: handle_connect_type_changed(page, connect_combo.currentText())
+                lambda _idx: handle_config_event(
+                    page,
+                    "connect_type_changed",
+                    text=connect_combo.currentText(),
+                )
             )
-        # Apply initial UI/logic state once.
-        handle_connect_type_changed(page, connect_combo.currentText())
+        # Apply initial UI/logic state once via unified dispatcher.
+        handle_config_event(page, "connect_type_changed", text=connect_combo.currentText())
 
     # Wire Third‑party checkbox -> centralized handler.
     if isinstance(third_checkbox, QCheckBox):
         setattr(page, "third_party_checkbox", third_checkbox)
-        third_checkbox.toggled.connect(lambda checked: handle_third_party_toggled(page, checked))
+        third_checkbox.toggled.connect(
+            lambda checked: handle_config_event(
+                page,
+                "third_party_toggled",
+                checked=bool(checked),
+            )
+        )
 
     # Track Wait seconds editor.
     if third_wait is not None:
@@ -1071,7 +1100,11 @@ def _bind_serial_actions(page: Any) -> None:
     # Checkbox-based status.
     if isinstance(serial_status, QCheckBox):
         def _on_serial_toggled(checked: bool) -> None:
-            _apply_serial("True" if checked else "False")
+            handle_config_event(
+                page,
+                "serial_status_changed",
+                text="True" if checked else "False",
+            )
 
         serial_status.toggled.connect(_on_serial_toggled)
         _on_serial_toggled(serial_status.isChecked())
@@ -1080,44 +1113,54 @@ def _bind_serial_actions(page: Any) -> None:
     # Combo-based status (fallback for older UIs).
     if hasattr(serial_status, "currentTextChanged"):
         def _on_serial_changed(text: str) -> None:
-            _apply_serial(str(text))
+            handle_config_event(
+                page,
+                "serial_status_changed",
+                text=str(text),
+            )
 
         serial_status.currentTextChanged.connect(_on_serial_changed)
         _on_serial_changed(serial_status.currentText())
 
 
 def _bind_rf_rvr_actions(page: Any) -> None:
-    """Wire RF / RvR related combos to UI helpers and layout refresh."""
+    """Wire RF / RvR related combos to the unified dispatcher."""
     field_widgets = getattr(page, "field_widgets", {}) or {}
 
     rf_model = field_widgets.get("rf_solution.model")
     rvr_tool = field_widgets.get("rvr.tool") or field_widgets.get("rvr.tool_name")
 
     if rf_model is not None and hasattr(rf_model, "currentTextChanged"):
-        def _on_rf_model_changed(text: str) -> None:
-            apply_rf_model_ui_state(page, text)
-            if hasattr(page, "_request_rebalance_for_panels") and hasattr(page, "_execution_panel"):
-                page._request_rebalance_for_panels(page._execution_panel)
-
-        rf_model.currentTextChanged.connect(_on_rf_model_changed)
+        rf_model.currentTextChanged.connect(
+            lambda text: handle_config_event(
+                page,
+                "rf_model_changed",
+                model_text=str(text),
+            )
+        )
         # Apply initial RF model visibility based on the preloaded value so
         # that only the active model's fields are shown on first load.
         try:
-            _on_rf_model_changed(rf_model.currentText())
+            handle_config_event(
+                page,
+                "rf_model_changed",
+                model_text=rf_model.currentText(),
+            )
         except Exception:
             logging.debug("Failed to apply initial RF model UI state", exc_info=True)
 
     if rvr_tool is not None and hasattr(rvr_tool, "currentTextChanged"):
-        def _on_rvr_tool_changed(text: str) -> None:
-            apply_rvr_tool_ui_state(page, text)
-            if hasattr(page, "_request_rebalance_for_panels") and hasattr(page, "_execution_panel"):
-                page._request_rebalance_for_panels(page._execution_panel)
-
-        rvr_tool.currentTextChanged.connect(_on_rvr_tool_changed)
+        rvr_tool.currentTextChanged.connect(
+            lambda text: handle_config_event(
+                page,
+                "rvr_tool_changed",
+                tool_text=str(text),
+            )
+        )
 
 
 def _bind_router_actions(page: Any) -> None:
-    """Wire router selection and address edits to router model + CSV refresh."""
+    """Wire router selection and address edits to the unified dispatcher."""
     field_widgets = getattr(page, "field_widgets", {}) or {}
 
     router_name = field_widgets.get("router.name")
@@ -1125,38 +1168,23 @@ def _bind_router_actions(page: Any) -> None:
 
     # Router name combo -> update router object + address widget + routerInfoChanged.
     if router_name is not None and hasattr(router_name, "currentTextChanged"):
-        def _on_router_changed(name: str) -> None:
-            from src.tools.router_tool.router_factory import get_router  # local import to avoid cycles
-
-            cfg = getattr(page, "config", {}) or {}
-            router_cfg = cfg.get("router", {}) if isinstance(cfg, dict) else {}
-            addr = router_cfg.get("address") if router_cfg.get("name") == name else None
-            router_obj = get_router(name, addr)
-            setattr(page, "router_obj", router_obj)
-
-            if router_addr is not None and hasattr(router_addr, "setText"):
-                try:
-                    router_addr.setText(router_obj.address)
-                except Exception:
-                    pass
-
-            signal = getattr(page, "routerInfoChanged", None)
-            if signal is not None and hasattr(signal, "emit"):
-                signal.emit()
-
-        router_name.currentTextChanged.connect(_on_router_changed)
+        router_name.currentTextChanged.connect(
+            lambda name: handle_config_event(
+                page,
+                "router_name_changed",
+                name=str(name),
+            )
+        )
 
     # Router address edit -> keep router_obj.address + signal in sync.
     if router_addr is not None and hasattr(router_addr, "textChanged"):
-        def _on_router_addr_changed(text: str) -> None:
-            router_obj = getattr(page, "router_obj", None)
-            if router_obj is not None:
-                router_obj.address = text
-            signal = getattr(page, "routerInfoChanged", None)
-            if signal is not None and hasattr(signal, "emit"):
-                signal.emit()
-
-        router_addr.textChanged.connect(_on_router_addr_changed)
+        router_addr.textChanged.connect(
+            lambda text: handle_config_event(
+                page,
+                "router_address_changed",
+                address=str(text),
+            )
+        )
 
 
 def _bind_case_tree_actions(page: Any) -> None:
@@ -1222,7 +1250,7 @@ def _bind_case_tree_actions(page: Any) -> None:
 
 
 def _bind_csv_actions(page: Any) -> None:
-    """Wire main CSV combo to selection-change handler + signal."""
+    """Wire main CSV combo to the unified dispatcher."""
     csv_combo = getattr(page, "csv_combo", None)
     if csv_combo is None:
         return
@@ -1230,36 +1258,82 @@ def _bind_csv_actions(page: Any) -> None:
     if hasattr(csv_combo, "activated"):
         def _on_csv_activated(index: int) -> None:
             logging.debug("on_csv_activated index=%s", index)
-            _on_csv_changed(index, force=True)
+            handle_config_event(
+                page,
+                "csv_index_changed",
+                index=index,
+                force=True,
+            )
 
         csv_combo.activated.connect(_on_csv_activated)
 
-    def _on_csv_changed(index: int, force: bool = False) -> None:
-        if index < 0:
-            if hasattr(page, "_set_selected_csv"):
-                page._set_selected_csv(None, sync_combo=False)
-            return
-        if not hasattr(csv_combo, "itemData"):
-            return
-        data = csv_combo.itemData(index)
-        logging.debug("on_csv_changed index=%s data=%s", index, data)
-        normalizer = getattr(page, "_normalize_csv_path", None)
-        new_path = normalizer(data) if callable(normalizer) else data
-        current = getattr(page, "selected_csv_path", None)
-        if not force and new_path == current:
-            return
-        if hasattr(page, "_set_selected_csv"):
-            page._set_selected_csv(new_path, sync_combo=False)
-        setattr(page, "selected_csv_path", new_path)
-        logging.debug("selected_csv_path=%s", new_path)
-        signal = getattr(page, "csvFileChanged", None)
-        if signal is not None and hasattr(signal, "emit"):
-            signal.emit(new_path or "")
-
     if hasattr(csv_combo, "currentIndexChanged"):
         csv_combo.currentIndexChanged.connect(
-            lambda idx: _on_csv_changed(idx, force=False)
+            lambda idx: handle_config_event(
+                page,
+                "csv_index_changed",
+                index=idx,
+                force=False,
+            )
         )
+
+
+def _bind_case_tree_actions(page: Any) -> None:
+    """Wire case tree click to the unified config dispatcher."""
+    tree = getattr(page, "case_tree", None)
+    if tree is None or not hasattr(tree, "clicked"):
+        return
+
+    def _on_case_tree_clicked(proxy_idx) -> None:
+        model = tree.model()
+        if model is None:
+            return
+        if isinstance(model, QSortFilterProxyModel):
+            source_idx = model.mapToSource(proxy_idx)
+        else:
+            source_idx = proxy_idx
+        fs_model = getattr(page, "fs_model", None)
+        if fs_model is None or not hasattr(fs_model, "filePath"):
+            return
+        path = fs_model.filePath(source_idx)
+        try:
+            base = getattr(page, "_get_application_base")()
+        except Exception:
+            base = None
+        try:
+            display_path = os.path.relpath(path, base) if base is not None else path
+        except Exception:
+            display_path = path
+        logging.debug("on_case_tree_clicked path=%s display=%s", path, display_path)
+
+        if os.path.isdir(path):
+            if tree.isExpanded(proxy_idx):
+                tree.collapse(proxy_idx)
+            else:
+                tree.expand(proxy_idx)
+            if hasattr(page, "set_fields_editable"):
+                page.set_fields_editable(set())
+            return
+
+        if not (os.path.isfile(path)
+                and os.path.basename(path).startswith("test_")
+                and path.endswith(".py")):
+            if hasattr(page, "set_fields_editable"):
+                page.set_fields_editable(set())
+            return
+
+        from pathlib import Path as _Path
+
+        normalized_display = _Path(display_path).as_posix() if display_path else ""
+
+        handle_config_event(
+            page,
+            "case_clicked",
+            case_path=path,
+            display_path=normalized_display,
+        )
+
+    tree.clicked.connect(_on_case_tree_clicked)
 
 
 def _bind_run_actions(page: Any) -> None:
