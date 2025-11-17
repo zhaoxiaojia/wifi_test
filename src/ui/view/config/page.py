@@ -22,6 +22,7 @@ from src.ui.view.common import (
     STEP_LABEL_SPACING,
     USE_QFLUENT_STEP_VIEW,
     _apply_step_font,
+    _StepSwitcher,
 )
 from src.ui.view.theme import (
     CASE_TREE_FONT_SIZE_PX,
@@ -135,17 +136,8 @@ class ConfigView(CardWidget):
                 return view
             except Exception:
                 pass
-        # Fallback: simple label-based step view
-        container = QWidget(self)
-        layout = QHBoxLayout(container)
-        layout.setContentsMargins(PAGE_CONTENT_MARGIN, PAGE_CONTENT_MARGIN, PAGE_CONTENT_MARGIN, 0)
-        layout.setSpacing(STEP_LABEL_SPACING)
-        for text in labels:
-            label = QLabel(text, container)
-            _apply_step_font(label)
-            layout.addWidget(label)
-        layout.addStretch(1)
-        return container
+        # Fallback: use the lightweight _StepSwitcher with themed labels.
+        return _StepSwitcher(labels, self)
 
     def _create_run_button(self, parent: QWidget) -> PushButton:
         """Create a Run button for a wizard page (UI only)."""

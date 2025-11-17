@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import copy
 import os
@@ -126,6 +126,10 @@ from src.ui.view.config.actions import (
     update_fpga_hidden_fields,
     apply_connect_type_ui_state,
     apply_third_party_ui_state,
+    handle_third_party_toggled_with_permission,
+    apply_field_effects,
+    apply_config_ui_rules,
+    compute_editable_info,
 )
 from .config_proxy import ConfigProxy
 from .view.builder import load_ui_schema, build_groups_from_schema
@@ -255,6 +259,8 @@ class CaseConfigPage(CardWidget):
         refresh_config_page_controls(self)
         self._initialize_script_config_groups()
         self._build_wizard_pages()
+        # Attach step navigation to the current step view widget.
+        self._attach_step_navigation(self.step_view_widget)
         # initialise case tree using src/test as root (non-fatal on failure)
         try:
             base = Path(self._get_application_base())
@@ -270,7 +276,6 @@ class CaseConfigPage(CardWidget):
         self.routerInfoChanged.connect(self._update_csv_options)
         self._update_csv_options()
         # connect signals AFTER UI ready
-        self.case_tree.clicked.connect(self.on_case_tree_clicked)
         self.case_tree.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         QTimer.singleShot(0, lambda: self.get_editable_fields(""))
 
@@ -298,7 +303,6 @@ class CaseConfigPage(CardWidget):
         if hasattr(button, "setUseStateEffect"):
             button.setUseStateEffect(True)
         button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        button.clicked.connect(self.on_run)
         self._run_buttons.append(button)
         return button
 
@@ -518,12 +522,22 @@ class CaseConfigPage(CardWidget):
 
     def _compose_other_groups(self) -> list[QWidget]:
         """
-        Execute the compose other groups routine.
+        Combine non-DUT groups for the Execution Settings panel.
 
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
+        Only generic execution groups (turntable / RF / RvR / debug ...)
+        should appear here. Stability-only groups such as Duration Control,
+        Check Point and per-script stability case groups belong to the
+        Stability Settings panel and are filtered out.
         """
-        return list(self._other_groups.values())
+        groups: list[QWidget] = []
+        for key, group in self._other_groups.items():
+            # Skip stability panel sections which are rendered separately.
+            if key in {"duration_control", "check_point"}:
+                continue
+            if key.startswith("cases."):
+                continue
+            groups.append(group)
+        return groups
 
     def _list_serial_ports(self) -> list[tuple[str, str]]:
         """
@@ -571,6 +585,9 @@ class CaseConfigPage(CardWidget):
         self._current_page_keys = normalized
         # Delegate actual UI wiring to the view.
         self.view.set_available_pages(normalized)
+        # Step view widget may be recreated; re-attach navigation to the new widget.
+        self.step_view_widget = self.view.step_view_widget
+        self._attach_step_navigation(self.step_view_widget)
 
     def _determine_pages_for_case(self, case_path: str, info: EditableInfo) -> list[str]:
 
@@ -818,7 +835,7 @@ class CaseConfigPage(CardWidget):
         """
         Refresh script section state using the rule engine.
         """
-        self._apply_config_ui_rules()
+        apply_config_ui_rules(self)
 
     def _bind_script_section(self, checkbox: QCheckBox, controls: Sequence[QWidget]) -> None:
         """
@@ -830,11 +847,11 @@ class CaseConfigPage(CardWidget):
         """
 
         def _apply(_checked: bool) -> None:
-            self._apply_config_ui_rules()
+            apply_config_ui_rules(self)
 
         checkbox.toggled.connect(_apply)
         # Ensure initial state honours the rules as well.
-        self._apply_config_ui_rules()
+        apply_config_ui_rules(self)
 
     def _create_test_swtich_wifi_config_entry_from_schema(
             self,
@@ -959,7 +976,7 @@ class CaseConfigPage(CardWidget):
 
         def _connect_relay_type(widget: QWidget | None) -> None:
             if isinstance(widget, ComboBox):
-                widget.currentIndexChanged.connect(lambda *_: self._apply_config_ui_rules())
+                widget.currentIndexChanged.connect(lambda *_: apply_config_ui_rules(self))
 
         _connect_relay_type(ac_relay_type)
         _connect_relay_type(str_relay_type)
@@ -988,6 +1005,7 @@ class CaseConfigPage(CardWidget):
 
     def _register_group(self, key: str, group: QWidget, is_dut: bool) -> None:
         """
+        print("[DEBUG_REGISTER_GROUP] key=", key, "is_dut=", is_dut, "parent=", type(group.parent()).__name__ if group.parent() else None)
         Register a configuration group on the DUT or non‑DUT panel.
 
         This keeps two internal mappings (``_dut_groups`` and
@@ -1123,14 +1141,40 @@ class CaseConfigPage(CardWidget):
             widget = self.field_widgets.get(key)
             if widget is None:
                 return
+            # Kernel Version 的可编辑状态由 Control Type 决定：
+            # - Android: 始终禁用（值由 Android Version 映射）
+            # - Linux:   始终可编辑
+            if key == "system.kernel_version":
+                connect_type_val = ""
+                try:
+                    if hasattr(self, "_current_connect_type"):
+                        connect_type_val = self._current_connect_type() or ""
+                    elif hasattr(self, "connect_type_combo") and hasattr(self.connect_type_combo, "currentText"):
+                        connect_type_val = self.connect_type_combo.currentText().strip()
+                        if hasattr(self, "_normalize_connect_type_label"):
+                            connect_type_val = self._normalize_connect_type_label(connect_type_val)
+                except Exception:
+                    connect_type_val = ""
+                if connect_type_val == "Android":
+                    enabled = False
+                elif connect_type_val == "Linux":
+                    enabled = True
             if enabled and isinstance(editable_fields, set) and editable_fields and key not in editable_fields:
                 # Do not re-enable fields that are not editable for the
                 # current case according to EditableInfo.
                 return
-            if widget.isEnabled() == enabled:
+            before = widget.isEnabled()
+            if before == enabled:
+                if key == "system.kernel_version":
+                    print("[DEBUG_KERNEL_RULE] _set_enabled no-op key=", key, "enabled=", enabled, "current=", before)
                 return
+            if key == "system.kernel_version":
+                print("[DEBUG_KERNEL_RULE] _set_enabled key=", key, "enabled=", enabled, "before=", before)
             with QSignalBlocker(widget):
                 widget.setEnabled(enabled)
+            after = widget.isEnabled()
+            if key == "system.kernel_version":
+                print("[DEBUG_KERNEL_RULE] _set_enabled key=", key, "after=", after)
 
         def _set_visible(key: str, visible: bool) -> None:
             widget = self.field_widgets.get(key)
@@ -1184,50 +1228,6 @@ class CaseConfigPage(CardWidget):
             has_rvr = bool(getattr(self, "_enable_rvr_wifi", False) and getattr(self, "selected_csv_path", None))
             return bool(is_perf and has_rvr)
         return False
-
-    def _apply_config_ui_rules(self) -> None:
-        """Evaluate CONFIG_UI_RULES against current UI state.
-
-        This method is currently a pure helper and is not wired into
-        event handlers yet.  It can be called from slots or refresh
-        routines to drive widget enabled/visible state from the rules
-        defined in ``ui_rules.py``.
-        """
-        try:
-            rules: dict[str, RuleSpec] = CONFIG_UI_RULES
-        except Exception:
-            return
-        # Precompute script key once for rules that depend on a specific script.
-        case_path = getattr(self, "_current_case_path", "") or ""
-        script_key = self._script_case_key(case_path) if case_path else ""
-
-        for rule_id, spec in rules.items():
-            active = True
-            trigger_case_type = spec.get("trigger_case_type")
-            if trigger_case_type:
-                active = active and self._eval_case_type_flag(trigger_case_type)
-            trigger_script_key = spec.get("trigger_script_key")
-            if active and trigger_script_key:
-                active = active and (script_key == trigger_script_key)
-            trigger_field = spec.get("trigger_field")
-            value = None
-            if active and trigger_field:
-                value = self._get_field_value(trigger_field)
-            if not active:
-                continue
-            effects_to_apply: list[FieldEffect] = []
-            case_map = spec.get("cases") or {}
-            if trigger_field and case_map and value in case_map:
-                effects_to_apply.append(case_map[value])
-            base_effects = spec.get("effects")
-            if base_effects:
-                effects_to_apply.append(base_effects)
-            for eff in effects_to_apply:
-                self._apply_field_effects(eff)
-
-        # Sidebar state can also depend on case type (e.g. enabling the
-        # RvR Wi-Fi navigation entry for performance cases).
-        self._apply_sidebar_rules()
 
     def _apply_sidebar_rules(self) -> None:
         """Evaluate sidebar rules that depend on the active case."""
@@ -1423,48 +1423,6 @@ class CaseConfigPage(CardWidget):
             combo.setCurrentIndex(-1)
         if blocker is not None:
             del blocker
-
-    def on_fpga_customer_changed(self, customer: str) -> None:
-        """
-        Handle the fpga customer changed event triggered by user interaction.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        if not hasattr(self, "fpga_product_combo") or not hasattr(self, "fpga_project_combo"):
-            return
-        current_product = self.fpga_product_combo.currentText().strip().upper()
-        customer_upper = customer.strip().upper()
-        product_lines = WIFI_PRODUCT_PROJECT_MAP.get(customer_upper, {}) if customer_upper else {}
-        product_to_select = current_product if current_product in product_lines else None
-        self._refresh_fpga_product_lines(customer, product_to_select, block_signals=True)
-        selected_product = self.fpga_product_combo.currentText()
-        self.on_fpga_product_line_changed(selected_product)
-
-    def on_fpga_product_line_changed(self, product_line: str) -> None:
-        """
-        Handle the fpga product line changed event triggered by user interaction.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        if not hasattr(self, "fpga_project_combo"):
-            return
-        current_project = self.fpga_project_combo.currentText().strip().upper()
-        customer = self.fpga_customer_combo.currentText() if hasattr(self, "fpga_customer_combo") else ""
-        projects = WIFI_PRODUCT_PROJECT_MAP.get(customer.strip().upper(), {}).get(product_line.strip().upper(), {})
-        project_to_select = current_project if current_project in projects else None
-        self._refresh_fpga_projects(customer, product_line, project_to_select, block_signals=True)
-        update_fpga_hidden_fields(self)
-
-    def on_fpga_project_changed(self, project: str) -> None:
-        """
-        Handle the fpga project changed event triggered by user interaction.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        update_fpga_hidden_fields(self)
 
     def _sync_widgets_to_config(self) -> None:
         """
@@ -1850,24 +1808,6 @@ class CaseConfigPage(CardWidget):
         """
         self._sync_run_buttons_enabled()
 
-    def on_next_clicked(self) -> None:
-        """
-        Handle the next clicked event triggered by user interaction.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        self._navigate_to_index(self.stack.currentIndex() + 1)
-
-    def on_previous_clicked(self) -> None:
-        """
-        Handle the previous clicked event triggered by user interaction.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        self._navigate_to_index(self.stack.currentIndex() - 1)
-
     def _is_performance_case(self, abs_case_path) -> bool:
         """
         Determine whether abs_case_path is under the test/performance directory at any level.
@@ -1997,13 +1937,6 @@ class CaseConfigPage(CardWidget):
             elif self.connect_type_combo.count():
                 self.connect_type_combo.setCurrentIndex(0)
 
-    def on_connect_type_changed(self, display_text):
-        """Connect type 变更时的业务逻辑（kernel 映射 + 规则）."""
-        type_str = self._normalize_connect_type_label(display_text)
-        self._update_android_system_for_connect_type(type_str)
-        self._request_rebalance_for_panels(self._dut_panel)
-        self._apply_config_ui_rules()
-
 
     def _update_android_system_for_connect_type(self, connect_type: str) -> None:
         """Handle non-visual Android system mapping for the given connect type."""
@@ -2077,67 +2010,17 @@ class CaseConfigPage(CardWidget):
             enabled = enabled and bool(allow_wait_edit)
         apply_third_party_ui_state(self, enabled)
 
-    def on_rf_model_changed(self, model_str):
-        """
-        Adjust visibility when rf_solution.model changes.
-        Currently only RS232Board5; add show/hide logic for other models.
-        """
-        self._apply_rf_model_ui_state(model_str)
-        self._request_rebalance_for_panels(self._execution_panel)
-
     def _apply_rf_model_ui_state(self, model_str: str) -> None:
         """Handle pure UI visibility for RF solution parameter groups."""
         apply_rf_model_ui_state(self, model_str)
-
-    # handle Tool dropdown to toggle sub-parameter visibility
-    def on_rvr_tool_changed(self, tool: str):
-        """Dynamically show corresponding sub-parameters when selecting iperf or ixchariot."""
-        self._apply_rvr_tool_ui_state(tool)
-        self._request_rebalance_for_panels(self._execution_panel)
 
     def _apply_rvr_tool_ui_state(self, tool: str) -> None:
         """Handle pure UI visibility for RvR tool-specific parameter groups."""
         apply_rvr_tool_ui_state(self, tool)
 
-    def on_serial_enabled_changed(self, text: str):
-        """
-        Handle the serial enabled changed event triggered by user interaction.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        self._apply_serial_enabled_ui_state(text)
-        self._request_rebalance_for_panels(self._dut_panel)
-        # Rule R03 controls serial_port.port/baud enabled state.
-        self._apply_config_ui_rules()
-
     def _apply_serial_enabled_ui_state(self, text: str) -> None:
         """Handle pure UI visibility for serial config group."""
         apply_serial_enabled_ui_state(self, text)
-
-    def on_router_changed(self, name: str):
-        """
-        Handle the router changed event triggered by user interaction.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        cfg = self.config.get("router", {})
-        addr = cfg.get("address") if cfg.get("name") == name else None
-        self.router_obj = get_router(name, addr)
-        self.router_addr_edit.setText(self.router_obj.address)
-        self.routerInfoChanged.emit()
-
-    def on_router_address_changed(self, text: str) -> None:
-        """
-        Handle the router address changed event triggered by user interaction.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        if self.router_obj is not None:
-            self.router_obj.address = text
-        self.routerInfoChanged.emit()
 
     def _register_switch_wifi_csv_combo(self, combo: ComboBox) -> None:
         """Delegate CSV combo registration to the RvR Wi-Fi proxy."""
@@ -2403,122 +2286,11 @@ class CaseConfigPage(CardWidget):
         # expand root node
         self.case_tree.expand(model.index(0, 0))
 
-    def on_case_tree_clicked(self, proxy_idx):
-        """Handle clicks in the case tree using the proxy model index."""
-        model = self.case_tree.model()
-
-        # use the source index only to fetch the real file path
-        source_idx = (
-            model.mapToSource(proxy_idx)
-            if isinstance(model, QSortFilterProxyModel) else proxy_idx
-        )
-        path = self.fs_model.filePath(source_idx)
-        base = Path(self._get_application_base())
-        try:
-            display_path = os.path.relpath(path, base)
-        except ValueError:
-            display_path = path
-        logging.debug("on_case_tree_clicked path=%s display=%s", path, display_path)
-        logging.debug("on_case_tree_clicked is_performance=%s", self._is_performance_case(path))
-        # directory nodes: only responsible for expand/collapse
-        if os.path.isdir(path):
-            if self.case_tree.isExpanded(proxy_idx):
-                self.case_tree.collapse(proxy_idx)
-            else:
-                self.case_tree.expand(proxy_idx)
-            self.set_fields_editable(set())
-            return
-
-        # disable non test_*.py entries directly
-        if not (os.path.isfile(path)
-                and os.path.basename(path).startswith("test_")
-                and path.endswith(".py")):
-            self.set_fields_editable(set())
-            return
-
-        normalized_display = Path(display_path).as_posix() if display_path else ""
-        self._update_test_case_display(normalized_display)
-
         # valid test case
         if self._refreshing:
             self._pending_path = path
             return
         self.get_editable_fields(path)
-
-    def _compute_editable_info(self, case_path) -> EditableInfo:
-        """Return editable fields and related UI enable state based on case name and path."""
-        basename = os.path.basename(case_path)
-        logging.debug("testcase name %s", basename)
-        logging.debug("_compute_editable_info case_path=%s basename=%s", case_path, basename)
-        peak_keys = {
-            "rvr",
-            "rvr.tool",
-            "rvr.iperf.path",
-            "rvr.iperf.server_cmd",
-            "rvr.iperf.client_cmd",
-            "rvr.ixchariot.path",
-            "rvr.repeat",
-        }
-        rvr_keys = peak_keys | {
-            "rvr.throughput_threshold",
-        }
-        info = EditableInfo()
-        # always keep connect_type editable
-        info.fields |= {
-            "connect_type.type",
-            "connect_type.Android.device",
-            "connect_type.Linux.ip",
-            "connect_type.Linux.wildcard",
-            "connect_type.third_party.enabled",
-            "connect_type.third_party.wait_seconds",
-            "router.name",
-            "router.address",
-            "serial_port.status",
-            "serial_port.port",
-            "serial_port.baud",
-            "fpga.product_line",
-            "fpga.project",
-        }
-        if basename == "test_wifi_peak_throughput.py":
-            info.fields |= peak_keys
-        if self._is_performance_case(case_path):
-            info.fields |= rvr_keys
-            info.enable_csv = True
-            info.enable_rvr_wifi = True
-        if "rvo" in basename:
-            info.fields |= {
-                f"{TURN_TABLE_SECTION_KEY}.{TURN_TABLE_FIELD_MODEL}",
-                f"{TURN_TABLE_SECTION_KEY}.{TURN_TABLE_FIELD_IP_ADDRESS}",
-                f"{TURN_TABLE_SECTION_KEY}.{TURN_TABLE_FIELD_STEP}",
-                f"{TURN_TABLE_SECTION_KEY}.{TURN_TABLE_FIELD_STATIC_DB}",
-                f"{TURN_TABLE_SECTION_KEY}.{TURN_TABLE_FIELD_TARGET_RSSI}",
-            }
-        if "rvr" in basename:
-            info.fields |= {
-                "rf_solution.step",
-                "rf_solution.model",
-                "rf_solution.RC4DAT-8G-95.idVendor",
-                "rf_solution.RC4DAT-8G-95.idProduct",
-                "rf_solution.RC4DAT-8G-95.ip_address",
-                "rf_solution.RADIORACK-4-220.ip_address",
-                "rf_solution.LDA-908V-8.ip_address",
-                "rf_solution.LDA-908V-8.channels",
-            }
-        if self._is_stability_case(case_path):
-            info.fields |= {
-                "stability.duration_control.loop",
-                "stability.duration_control.duration_hours",
-                "stability.duration_control.exitfirst",
-                "stability.duration_control.retry_limit",
-                "stability.check_point.ping",
-                "stability.check_point.ping_targets",
-            }
-        case_key = self._script_case_key(case_path)
-        entry = self._script_groups.get(case_key)
-        if entry is not None:
-            info.fields |= entry.field_keys
-        # if you need all fields editable, simply return EditableInfo(set(self.field_widgets.keys()), True, True)
-        return info
 
     def _apply_editable_info(self, info: EditableInfo | None) -> None:
         """
@@ -2572,7 +2344,7 @@ class CaseConfigPage(CardWidget):
         # Sidebar button and rule-driven UI depend on updated flags.
         self._update_rvr_nav_button()
         # Re-apply UI rules whenever editable fields or CSV/RvR flags change.
-        self._apply_config_ui_rules()
+        apply_config_ui_rules(self)
 
     def _restore_editable_state(self) -> None:
         """
@@ -2597,7 +2369,7 @@ class CaseConfigPage(CardWidget):
 
         try:
             self._update_script_config_ui(case_path)
-            info = self._compute_editable_info(case_path)
+            info = compute_editable_info(self, case_path)
             logging.debug("get_editable_fields enable_csv=%s", info.enable_csv)
             if info.enable_csv and not hasattr(self, "csv_combo"):
                 info.enable_csv = False
@@ -2605,7 +2377,7 @@ class CaseConfigPage(CardWidget):
             page_keys = self._determine_pages_for_case(case_path, info)
             self._set_available_pages(page_keys)
             # Re-evaluate rules now that page keys (panels) are final.
-            self._apply_config_ui_rules()
+            apply_config_ui_rules(self)
         finally:
             # refresh finished
             self._set_refresh_ui_locked(False)
@@ -2648,10 +2420,14 @@ class CaseConfigPage(CardWidget):
                     widget.setEnabled(desired)
             if hasattr(self, "third_party_checkbox") and hasattr(self, "third_party_wait_edit"):
                 allow_wait = (
-                        "connect_type.third_party.enabled" in editable_fields
-                        and "connect_type.third_party.wait_seconds" in editable_fields
+                    "connect_type.third_party.enabled" in editable_fields
+                    and "connect_type.third_party.wait_seconds" in editable_fields
                 )
-                self.on_third_party_toggled(self.third_party_checkbox.isChecked(), allow_wait)
+                handle_third_party_toggled_with_permission(
+                    self,
+                    self.third_party_checkbox.isChecked(),
+                    allow_wait,
+                )
             self._refresh_script_section_states()
         finally:
             self.setUpdatesEnabled(True)
@@ -2670,29 +2446,3 @@ class CaseConfigPage(CardWidget):
     def _apply_run_lock_ui_state(self, locked: bool) -> None:
         """Apply UI changes when a test run is (un)locked."""
         apply_run_lock_ui_state(self, locked)
-
-    def on_csv_activated(self, index: int) -> None:
-
-        """Reload CSV data even if the same entry is activated again."""
-        logging.debug("on_csv_activated index=%s", index)
-        self.on_csv_changed(index, force=True)
-
-    def on_csv_changed(self, index: int, force: bool = False) -> None:
-
-        """Store the selected CSV path and emit a change signal."""
-        if index < 0:
-            self._set_selected_csv(None, sync_combo=False)
-            return
-        # explicitly use UserRole to get data to avoid inconsistent defaults across Qt versions
-        data = self.csv_combo.itemData(index)
-        logging.debug("on_csv_changed index=%s data=%s", index, data)
-        new_path = self._normalize_csv_path(data)
-        if not force and new_path == self.selected_csv_path:
-            return
-        self._set_selected_csv(new_path, sync_combo=False)
-        logging.debug("selected_csv_path=%s", self.selected_csv_path)
-        self.csvFileChanged.emit(self.selected_csv_path or "")
-
-    def on_run(self):
-        """Trigger the run workflow via the run proxy implementation."""
-        _proxy_on_run(self)

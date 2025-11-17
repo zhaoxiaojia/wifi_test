@@ -69,13 +69,13 @@ panels:
             widget: line_edit
             label: "IxChariot path"
           - key: rvr.repeat
-            widget: int
+            widget: line_edit
             label: "Repeat"
-            minimum: 0
+            placeholder: "0"
           - key: rvr.throughput_threshold
-            widget: int
+            widget: line_edit
             label: "Zero Point Threshold"
-            minimum: 0
+            placeholder: "0"
 
       - id: router
         label: "Router"
@@ -115,4 +115,3 @@ panels:
             widget: line_edit
             label: "CSV path"
             placeholder: "performance_test_csv/rvr_wifi_setup.csv"
-

@@ -296,8 +296,15 @@ class ConfigGroupPanel(QWidget):
             if group is not None and group.parent() is not None:
                 old_geometries[group] = group.geometry()
         entries: list[tuple[QWidget, int]] = []
+        initial_pass = not self._group_positions
         for group, weight_override in self._group_entries:
             if group is None:
+                continue
+            if not initial_pass and not group.isVisible():
+                # On the first layout pass groups may not yet be visible
+                # because the window has not been shown.  On subsequent
+                # passes we skip hidden groups so rule-driven visibility
+                # takes effect.
                 continue
             entries.append((group, self._measure_group_height(group, weight_override)))
         if not entries:
@@ -310,7 +317,6 @@ class ConfigGroupPanel(QWidget):
                 if widget is not None:
                     widget.setParent(None)
         self._col_weight = [0] * len(self._column_layouts)
-        initial_pass = not self._group_positions
         moved_groups: list[tuple[QWidget, QRect | None]] = []
         for group, height in entries:
             column_index = self._col_weight.index(min(self._col_weight))

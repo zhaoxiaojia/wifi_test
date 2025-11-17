@@ -170,7 +170,8 @@ def apply_theme(widget, recursive: bool = False) -> None:
             background:{BACKGROUND_COLOR};
             font-family:{FONT_FAMILY};
             font-size:{FONT_SIZE}pt;
-        }}{step_label_style}
+        }}
+        {step_label_style}
         """
     )
 
@@ -199,4 +200,3 @@ def apply_theme(widget, recursive: bool = False) -> None:
 def format_log_html(message: str) -> str:
     """Return a unified HTML-formatted log string using shared helpers."""
     return _style_format_log_html(message)
-

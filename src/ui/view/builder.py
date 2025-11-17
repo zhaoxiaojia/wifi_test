@@ -105,6 +105,15 @@ def _create_widget(page: Any, spec: FieldSpec, value: Any) -> QWidget:
         cb.setChecked(bool(value))
         return cb
     if wtype in {"int", "spin"}:
+        # Special-case: use a LineEdit for third-party wait seconds so that it
+        # follows the same styling/disabled appearance as other line-like controls.
+        if spec.key == "connect_type.third_party.wait_seconds":
+            edit = LineEdit(page)
+            if spec.placeholder:
+                edit.setPlaceholderText(spec.placeholder)
+            if value not in (None, ""):
+                edit.setText(str(value))
+            return edit
         spin = QSpinBox(page)
         if spec.minimum is not None:
             spin.setMinimum(spec.minimum)
@@ -120,6 +129,9 @@ def _create_widget(page: Any, spec: FieldSpec, value: Any) -> QWidget:
         # Prefer explicit choices from the schema; otherwise fall back to
         # centralised model options keyed by the field name.
         choices = spec.choices or get_field_choices(spec.key)
+        # 特例: RF Model 目前没有集中 choices 源，使用 test/performance 中的四个模型。
+        if spec.key == "rf_solution.model" and not choices:
+            choices = ["RADIORACK-4-220", "RC4DAT-8G-95", "RS232Board5", "LDA-908V-8"]
         if choices:
             for ch in choices:
                 combo.addItem(str(ch), str(ch))
@@ -152,12 +164,14 @@ def build_groups_from_schema(
     config: Mapping[str, Any],
     ui_schema: Mapping[str, Any],
     panel_key: str,
+    *,
+    parent: QWidget | None = None,
 ) -> None:
     """Build all sections for ``panel_key`` described in ``ui_schema``.
 
-    This does not arrange panels themselves; the caller is responsible
-    for adding the returned group boxes to the appropriate panel
-    widgets via ``_register_group``.
+    ``parent`` allows the caller (typically a view) to control which
+    widget owns the created group boxes.  When omitted, the groups are
+    parented to ``page`` for backwards compatibility.
     """
     panels = ui_schema.get("panels") or {}
     panel_spec = panels.get(panel_key) or {}
@@ -166,7 +180,8 @@ def build_groups_from_schema(
         section_id = section.get("id") or ""
         group_label = section.get("label") or section_id or "Section"
         fields = section.get("fields") or []
-        group = QGroupBox(group_label, page)
+        group_parent = parent if parent is not None else page
+        group = QGroupBox(group_label, group_parent)
         layout = QFormLayout(group)
         for field in fields:
             key = str(field.get("key") or "").strip()
@@ -211,12 +226,28 @@ def build_groups_from_schema(
             except Exception:
                 # During refactor we tolerate missing helpers; these can be wired later.
                 pass
+        # If the parent looks like a ConfigGroupPanel, let it manage
+        # the group layout directly so that the view layer owns all
+        # visual placement.
+        try:
+            if parent is not None and hasattr(parent, "add_group"):
+                # Defer actual rebalance; the panel can rebalance once
+                # after all groups have been added.
+                parent.add_group(group, defer=True)
+        except Exception:
+            pass
         try:
             # is_dut is True when panel_key == "dut"
             page._register_group(section_id or group_label, group, is_dut=(panel_key == "dut"))
         except Exception:
             # Caller can still manually place 'group' into a layout.
             pass
+    # Trigger a single rebalance for this panel if supported.
+    try:
+        if parent is not None and hasattr(parent, "request_rebalance"):
+            parent.request_rebalance()
+    except Exception:
+        pass
 
 
 __all__ = ["load_ui_schema", "build_groups_from_schema"]
