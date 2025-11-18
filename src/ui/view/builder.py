@@ -36,7 +36,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Dict, Mapping
-
 from PyQt5.QtWidgets import QCheckBox, QGroupBox, QVBoxLayout, QFormLayout, QSpinBox, QWidget, QLabel
 from qfluentwidgets import ComboBox, LineEdit
 

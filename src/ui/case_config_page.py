@@ -2339,8 +2339,9 @@ class CaseConfigPage(CardWidget):
         # Field-level editable flags are handled via the rule engine and this helper.
         self.set_fields_editable(snapshot.fields)
         if hasattr(self, "csv_combo"):
-            # CSV combo enable/disable is a pure UI concern here.
-            self.csv_combo.setEnabled(bool(snapshot.enable_csv))
+            # Performance CSV is treated as a global execution setting; keep
+            # the main CSV combo editable regardless of per-case flags.
+            self.csv_combo.setEnabled(True)
         # Sidebar button and rule-driven UI depend on updated flags.
         self._update_rvr_nav_button()
         # Re-apply UI rules whenever editable fields or CSV/RvR flags change.
@@ -2407,8 +2408,13 @@ class CaseConfigPage(CardWidget):
         """Batch update field editability; DUT area always remains interactive."""
         self.setUpdatesEnabled(False)
         try:
-            always_enabled_roots = {"debug"}
+            always_enabled_roots = {"debug", "csv_path"}
             for key, widget in self.field_widgets.items():
+                # IxChariot path 的可编辑性由 Execution Settings 中的
+                # rvr.tool 下拉（iperf / ixchariot）在 view 层控制，这里不再
+                # 覆盖它的 enabled 状态，避免和 apply_rvr_tool_ui_state 冲突。
+                if key == "rvr.ixchariot.path":
+                    continue
                 root_key = key.split(".", 1)[0]
                 if self._is_dut_key(root_key) or root_key in always_enabled_roots:
                     desired = True

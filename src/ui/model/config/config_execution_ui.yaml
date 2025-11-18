@@ -50,7 +50,7 @@ panels:
             label: "LDA-908V-8 Channels"
 
       - id: rvr
-        label: "RvR Config"
+        label: "Performance Config"
         fields:
           - key: rvr.tool
             widget: combo_box
@@ -112,6 +112,5 @@ panels:
         label: "Performance CSV"
         fields:
           - key: csv_path
-            widget: line_edit
-            label: "CSV path"
-            placeholder: "performance_test_csv/rvr_wifi_setup.csv"
+            widget: combo_box
+            label: "Select config csv file"

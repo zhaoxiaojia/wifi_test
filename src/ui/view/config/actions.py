@@ -138,6 +138,8 @@ def handle_config_event(page: Any, event: str, **payload: Any) -> None:
 
     if event == "rvr_tool_changed":
         tool_text = str(payload.get("tool_text", ""))
+        field_widgets = getattr(page, "field_widgets", {}) or {}
+        ix_path = field_widgets.get("rvr.ixchariot.path")
         apply_rvr_tool_ui_state(page, tool_text)
         if hasattr(page, "_request_rebalance_for_panels") and hasattr(page, "_execution_panel"):
             page._request_rebalance_for_panels(page._execution_panel)
@@ -294,10 +296,17 @@ def apply_rf_model_ui_state(page: Any, model_str: str) -> None:
 
 def apply_rvr_tool_ui_state(page: Any, tool: str) -> None:
     """Toggle RvR tool-specific parameter groups (iperf vs ixchariot)."""
+    normalized = (tool or "").strip().lower()
     if hasattr(page, "rvr_iperf_group"):
-        page.rvr_iperf_group.setVisible(tool == "iperf")
+        page.rvr_iperf_group.setVisible(normalized == "iperf")
     if hasattr(page, "rvr_ix_group"):
-        page.rvr_ix_group.setVisible(tool == "ixchariot")
+        page.rvr_ix_group.setVisible(normalized == "ixchariot")
+
+    # Only allow IxChariot path edit when ixchariot is selected.
+    field_widgets = getattr(page, "field_widgets", {}) or {}
+    ix_path = field_widgets.get("rvr.ixchariot.path")
+    if ix_path is not None and hasattr(ix_path, "setEnabled"):
+        ix_path.setEnabled(normalized == "ixchariot")
 
 
 def apply_serial_enabled_ui_state(page: Any, text: str) -> None:
@@ -420,6 +429,17 @@ def refresh_config_page_controls(page: Any) -> None:
     exec_schema = load_ui_schema("execution")
     exec_panel = getattr(page, "_execution_panel", None)
     build_groups_from_schema(page, config, exec_schema, panel_key="execution", parent=exec_panel)
+    # Bind main Performance CSV combo (Execution panel) and log RvR widgets.
+    field_widgets = getattr(page, "field_widgets", {}) or {}
+    csv_widget = field_widgets.get("csv_path")
+    if csv_widget is not None:
+        setattr(page, "csv_combo", csv_widget)
+    rvr_tool = field_widgets.get("rvr.tool") or field_widgets.get("rvr.tool_name")
+    ix_path = field_widgets.get("rvr.ixchariot.path")
+    try:
+        ix_enabled = ix_path.isEnabled() if ix_path is not None else None
+    except Exception:
+        ix_enabled = None
 
     stability_cfg = config.get("stability") or {}
     stab_schema = load_ui_schema("stability")
@@ -438,6 +458,7 @@ def refresh_config_page_controls(page: Any) -> None:
     init_connect_type_actions(page)
     init_system_version_actions(page)
     _bind_serial_actions(page)
+    _bind_turntable_actions(page)
     _bind_rf_rvr_actions(page)
     _bind_router_actions(page)
     _bind_case_tree_actions(page)
@@ -550,16 +571,6 @@ def compute_editable_info(page: Any, case_path: str) -> EditableInfo:
     has_turntable = any(k.startswith("Turntable.") for k in info.fields)
     has_rf = any(k.startswith("rf_solution.") for k in info.fields)
     has_rvr = any(k.startswith("rvr.") for k in info.fields)
-    print(
-        "[DEBUG_EXEC_EDITABLE] basename=",
-        basename,
-        "has_turntable=",
-        has_turntable,
-        "has_rf_solution=",
-        has_rf,
-        "has_rvr=",
-        has_rvr,
-    )
     return info
 
 
@@ -607,14 +618,6 @@ def apply_field_effects(page: Any, effects: FieldEffect) -> None:
         if enabled and isinstance(editable_fields, set) and editable_fields and key not in editable_fields:
             # Do not re-enable fields that are not editable for the
             # current case according to EditableInfo.
-            if key.startswith(("Turntable.", "rf_solution.", "rvr.")):
-                print(
-                    "[DEBUG_EXEC_ENABLE] skip key=",
-                    key,
-                    "enabled=",
-                    enabled,
-                    "not in editable_fields",
-                )
             return
         before = widget.isEnabled()
         if before == enabled:
@@ -622,15 +625,6 @@ def apply_field_effects(page: Any, effects: FieldEffect) -> None:
         with QSignalBlocker(widget):
             widget.setEnabled(enabled)
         after = widget.isEnabled()
-        if key.startswith(("Turntable.", "rf_solution.", "rvr.")):
-            print(
-                "[DEBUG_EXEC_ENABLE] apply key=",
-                key,
-                "from",
-                before,
-                "to",
-                after,
-            )
 
     def _set_visible(key: str, visible: bool) -> None:
         widget = field_widgets.get(key)
@@ -1157,6 +1151,45 @@ def _bind_rf_rvr_actions(page: Any) -> None:
                 tool_text=str(text),
             )
         )
+        # Apply initial tool selection (iperf / ixchariot) so that IxChariot
+        # path enabled/disabled state matches the combo value on first load.
+        try:
+            handle_config_event(
+                page,
+                "rvr_tool_changed",
+                tool_text=rvr_tool.currentText(),
+            )
+        except Exception:
+            logging.debug("Failed to apply initial RvR tool UI state", exc_info=True)
+
+
+def _bind_turntable_actions(page: Any) -> None:
+    """Wire Turntable model combo to pure UI state for its IP field."""
+    field_widgets = getattr(page, "field_widgets", {}) or {}
+
+    tt_model = field_widgets.get("Turntable.model")
+    tt_ip = field_widgets.get("Turntable.ip_address")
+
+    # Resolve and cache the IP LineEdit and its label so that the shared
+    # apply_turntable_model_ui_state helper can manipulate them.
+    if tt_ip is not None and hasattr(tt_ip, "parent"):
+        parent = tt_ip.parent()
+        layout = parent.layout() if parent is not None else None
+        label = layout.labelForField(tt_ip) if isinstance(layout, QFormLayout) else None
+        if label is not None:
+            setattr(page, "turntable_ip_edit", tt_ip)
+            setattr(page, "turntable_ip_label", label)
+
+    if tt_model is not None and hasattr(tt_model, "currentTextChanged"):
+        tt_model.currentTextChanged.connect(
+            lambda text: apply_turntable_model_ui_state(page, str(text))
+        )
+        # Apply initial model selection so that Turntable IP is only
+        # editable when the user chooses the "other" model.
+        try:
+            apply_turntable_model_ui_state(page, tt_model.currentText())
+        except Exception:
+            logging.debug("Failed to apply initial Turntable UI state", exc_info=True)
 
 
 def _bind_router_actions(page: Any) -> None:
