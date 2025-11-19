@@ -114,6 +114,26 @@ def handle_config_event(page: Any, event: str, **payload: Any) -> None:
         # Re-compute editable info + page availability.
         if hasattr(page, "get_editable_fields"):
             page.get_editable_fields(case_path)
+            # 当选择稳定性用例时，自动切换到 Stability 设置页；
+            # 性能用例则切到 Execution，方便用户查看配置。
+            config_ctl = getattr(page, "config_ctl", None)
+            view = getattr(page, "view", None)
+            if config_ctl is not None and view is not None and hasattr(view, "set_current_page"):
+                try:
+                    if config_ctl.is_stability_case(case_path):
+                        view.set_current_page("stability")
+                    elif config_ctl.is_performance_case(case_path):
+                        view.set_current_page("execution")
+                except Exception as exc:
+                    logging.debug("auto page switch failed: %s", exc)
+        return
+
+    if event == "settings_tab_clicked":
+        key = str(payload.get("key", "")).strip()
+        view = getattr(page, "view", None)
+        if view is None or not hasattr(view, "set_current_page"):
+            return
+        view.set_current_page(key)
         return
 
     if event == "connect_type_changed":
@@ -153,35 +173,16 @@ def handle_config_event(page: Any, event: str, **payload: Any) -> None:
 
     if event == "router_name_changed":
         name = str(payload.get("name", ""))
-        try:
-            from src.tools.router_tool.router_factory import get_router  # type: ignore
-        except Exception:
-            return
-        cfg = getattr(page, "config", {}) or {}
-        router_cfg = cfg.get("router", {}) if isinstance(cfg, dict) else {}
-        addr = router_cfg.get("address") if router_cfg.get("name") == name else None
-        router_obj = get_router(name, addr)
-        setattr(page, "router_obj", router_obj)
-        field_widgets = getattr(page, "field_widgets", {}) or {}
-        router_addr_widget = field_widgets.get("router.address")
-        if router_addr_widget is not None and hasattr(router_addr_widget, "setText"):
-            try:
-                router_addr_widget.setText(router_obj.address)
-            except Exception:
-                pass
-        signal = getattr(page, "routerInfoChanged", None)
-        if signal is not None and hasattr(signal, "emit"):
-            signal.emit()
+        config_ctl = getattr(page, "config_ctl", None)
+        if config_ctl is not None:
+            config_ctl.handle_router_name_changed(name)
         return
 
     if event == "router_address_changed":
         text = str(payload.get("address", ""))
-        router_obj = getattr(page, "router_obj", None)
-        if router_obj is not None:
-            router_obj.address = text
-        signal = getattr(page, "routerInfoChanged", None)
-        if signal is not None and hasattr(signal, "emit"):
-            signal.emit()
+        config_ctl = getattr(page, "config_ctl", None)
+        if config_ctl is not None:
+            config_ctl.handle_router_address_changed(text)
         return
 
     if event == "csv_index_changed":
@@ -240,25 +241,6 @@ def handle_config_event(page: Any, event: str, **payload: Any) -> None:
     # Unknown events are ignored to keep the dispatcher tolerant of future
     # extensions.
     logging.debug("handle_config_event: unknown event %r payload=%r", event, payload)
-
-
-def update_step_indicator(page: Any, index: int) -> None:
-    """Update the wizard step indicator to reflect the current page index."""
-    view = getattr(page, "step_view_widget", None)
-    if view is None:
-        return
-    for attr in ("setCurrentIndex", "setCurrentStep", "setCurrentRow", "setCurrent"):
-        if hasattr(view, attr):
-            try:
-                getattr(view, attr)(index)
-                return
-            except Exception:
-                continue
-    if hasattr(view, "set_current_index"):
-        try:
-            view.set_current_index(index)
-        except Exception:
-            pass
 
 
 def apply_rf_model_ui_state(page: Any, model_str: str) -> None:
@@ -437,19 +419,25 @@ def refresh_config_page_controls(page: Any) -> None:
     config["debug"] = _normalize_debug_section(config.get("debug"))
 
     # Normalise connect_type / fpga / stability sections via helpers on the page.
-    if hasattr(page, "_normalize_connect_type_section"):
-        config["connect_type"] = page._normalize_connect_type_section(config.get("connect_type"))
+    config_ctl = getattr(page, "config_ctl", None)
+
+    if config_ctl is not None:
+        config["connect_type"] = config_ctl.normalize_connect_type_section(
+            config.get("connect_type")
+        )
 
     linux_cfg = config.get("connect_type", {}).get("Linux")
     if isinstance(linux_cfg, dict) and "kernel_version" in linux_cfg:
         # For legacy configs, move Linux.kernel_version into system.kernel_version.
         config.setdefault("system", {})["kernel_version"] = linux_cfg.pop("kernel_version")
 
-    if hasattr(page, "_normalize_fpga_section"):
-        config["fpga"] = page._normalize_fpga_section(config.get("fpga"))
+    if config_ctl is not None:
+        config["fpga"] = config_ctl.normalize_fpga_section(config.get("fpga"))
 
-    if hasattr(page, "_normalize_stability_settings"):
-        config["stability"] = page._normalize_stability_settings(config.get("stability"))
+    if config_ctl is not None:
+        config["stability"] = config_ctl.normalize_stability_settings(
+            config.get("stability")
+        )
 
     # Build three panels from YAML schemas.  Parent all groups directly
     # to the corresponding ConfigGroupPanel so that layout is fully
@@ -658,7 +646,6 @@ def apply_field_effects(page: Any, effects: FieldEffect) -> None:
             return
         with QSignalBlocker(widget):
             widget.setEnabled(enabled)
-        after = widget.isEnabled()
 
     def _set_visible(key: str, visible: bool) -> None:
         widget = field_widgets.get(key)
@@ -767,8 +754,12 @@ def update_script_config_ui(page: Any, case_path: str) -> None:
             entry.group.setVisible(visible)
             changed = True
         if visible:
-            data = page._ensure_script_case_defaults(key, entry.case_path)
-            page._load_script_config_into_widgets(entry, data)
+            config_ctl = getattr(page, "config_ctl", None)
+            if config_ctl is not None:
+                data = config_ctl.ensure_script_case_defaults(key, entry.case_path)
+                config_ctl.load_script_config_into_widgets(entry, data)
+            else:
+                page._load_script_config_into_widgets(entry, {})
             active_entry = entry
             # 当切换到 test_switch_wifi Stability 脚本时，强制同步
             # use_router 复选框与 router_csv 的启用状态，避免之前
@@ -792,7 +783,8 @@ def update_script_config_ui(page: Any, case_path: str) -> None:
                     )
     if hasattr(page, "_stability_panel"):
         if active_entry is not None:
-            page._stability_panel.set_groups(page._compose_stability_groups(active_entry))
+            groups = page._compose_stability_groups(active_entry)
+            page._stability_panel.set_groups(groups)
         else:
             page._stability_panel.set_groups([])
         if hasattr(page, "_request_rebalance_for_panels"):
@@ -857,19 +849,11 @@ def init_system_version_actions(page: Any) -> None:
         def _on_version_changed(text: str) -> None:
             kernel = getattr(page, "kernel_version_combo", None)
             prev_enabled = kernel.isEnabled() if kernel is not None else None
-            print(
-                "[DEBUG_KERNEL_VERSION] before _on_android_version_changed: enabled=",
-                prev_enabled, "android_version=", text
-            )
             original_handler(text)
             if kernel is not None:
                 after_handler = kernel.isEnabled()
                 if prev_enabled is not None and after_handler != prev_enabled:
                     kernel.setEnabled(prev_enabled)
-                print(
-                    "[DEBUG_KERNEL_VERSION] after mapping: enabled=",
-                    kernel.isEnabled(), "android_version=", text
-                )
 
         try:
             version_widget.currentTextChanged.connect(_on_version_changed)
@@ -989,8 +973,9 @@ def update_fpga_hidden_fields(page: Any) -> None:
     project = (project_combo.currentText() or "").strip().upper()
 
     info: dict[str, Any] | None = None
-    if product and project and hasattr(page, "_guess_fpga_project"):
-        guessed_customer, guessed_product, guessed_project, guessed_info = page._guess_fpga_project(
+    config_ctl = getattr(page, "config_ctl", None)
+    if product and project and config_ctl is not None:
+        guessed_customer, guessed_product, guessed_project, guessed_info = config_ctl._guess_fpga_project(  # type: ignore[attr-defined]
             "",
             "",
             "",
@@ -1004,11 +989,11 @@ def update_fpga_hidden_fields(page: Any) -> None:
             project = guessed_project or project
             info = guessed_info
 
-    normalize_token = getattr(page, "_normalize_fpga_token", None)
+    config_ctl = getattr(page, "config_ctl", None)
 
     def _norm(value: Any) -> str:
-        if callable(normalize_token):
-            return normalize_token(value)
+        if config_ctl is not None:
+            return config_ctl.normalize_fpga_token(value)  # type: ignore[attr-defined]
         return str(value or "").strip().upper()
 
     if product and project and info:
@@ -1504,16 +1489,13 @@ def _bind_run_actions(page: Any) -> None:
     if not run_buttons:
         return
 
-    from src.ui.run_proxy import on_run as _proxy_on_run
-
     for btn in run_buttons:
         if not hasattr(btn, "clicked"):
             continue
-        btn.clicked.connect(lambda _checked=False, p=page: _proxy_on_run(p))
+        btn.clicked.connect(lambda _checked=False, p=page: p.on_run())
 
 
 __all__ = [
-    "update_step_indicator",
     "apply_rf_model_ui_state",
     "apply_rvr_tool_ui_state",
     "apply_serial_enabled_ui_state",

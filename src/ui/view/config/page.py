@@ -4,33 +4,42 @@ from __future__ import annotations
 
 from typing import Any, Sequence
 
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtWidgets import (
     QHBoxLayout,
     QSplitter,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
+    QSizePolicy,
     QLabel,
 )
-from qfluentwidgets import CardWidget, PushButton, ScrollArea
+from qfluentwidgets import CardWidget, PushButton, ScrollArea, FluentIcon
 
 from src.ui.view.common import (
     AnimatedTreeView,
     ConfigGroupPanel,
     PAGE_CONTENT_MARGIN,
-    STEP_LABEL_SPACING,
-    USE_QFLUENT_STEP_VIEW,
-    _apply_step_font,
-    _StepSwitcher,
 )
 from src.ui.view.theme import (
     CASE_TREE_FONT_SIZE_PX,
     apply_font_and_selection,
     apply_theme,
+    apply_settings_tab_label_style,
 )
 from src.ui.view.builder import build_groups_from_schema, load_ui_schema
-from src.ui.view.config.actions import init_fpga_dropdowns
+from src.ui.view.config.actions import init_fpga_dropdowns, handle_config_event
+
+
+class _ConfigTabLabel(QLabel):
+    """Clickable label used for DUT/Execution/Stability tabs."""
+
+    clicked = pyqtSignal()
+
+    def mousePressEvent(self, event) -> None:  # type: ignore[override]
+        if event.button() == Qt.LeftButton:
+            self.clicked.emit()
+        super().mousePressEvent(event)
 
 
 class ConfigView(CardWidget):
@@ -60,19 +69,40 @@ class ConfigView(CardWidget):
         right = QVBoxLayout(container)
         right.setContentsMargins(0, 0, 0, 0)
         right.setSpacing(10)
-        self._right_layout = right
 
         # Track which logical pages are currently available
         self._current_page_keys: list[str] = []
 
+        # Simple tab row for DUT / Execution / Stability
         self._page_label_map: dict[str, str] = {
-            "dut": "DUT Settings",
-            "execution": "Execution Settings",
-            "stability": "Stability Settings",
+            "dut": "DUT",
+            "execution": "Execution",
+            "stability": "Stability",
         }
-        self.step_view_widget = self._create_step_view([self._page_label_map["dut"]])
-        self.step_view_widget.setVisible(False)
-        right.addWidget(self.step_view_widget)
+        self._page_buttons: dict[str, _ConfigTabLabel] = {}
+        tabs_row = QHBoxLayout()
+        tabs_row.setContentsMargins(PAGE_CONTENT_MARGIN, PAGE_CONTENT_MARGIN, PAGE_CONTENT_MARGIN, 0)
+        tabs_row.setSpacing(8)
+        for key in ("dut", "execution", "stability"):
+            lbl = _ConfigTabLabel(self._page_label_map[key], self)
+            apply_settings_tab_label_style(lbl, active=(key == "dut"))
+
+            def _make_handler(page_key: str) -> Any:
+                def _handler() -> None:
+                    page = self.parent()
+                    # Climb parents until we reach the owning page (CaseConfigPage).
+                    while page is not None and not hasattr(page, "get_editable_fields"):
+                        page = page.parent()
+                    if page is not None:
+                        handle_config_event(page, "settings_tab_clicked", key=page_key)
+
+                return _handler
+
+            lbl.clicked.connect(_make_handler(key))
+            self._page_buttons[key] = lbl
+            tabs_row.addWidget(lbl)
+        tabs_row.addStretch(1)
+        right.addLayout(tabs_row)
 
         self.stack = QStackedWidget(self)
         right.addWidget(self.stack, 1)
@@ -83,12 +113,12 @@ class ConfigView(CardWidget):
             "stability": ConfigGroupPanel(self),
         }
         self._page_widgets: dict[str, QWidget] = {}
-        self._wizard_pages: list[QWidget] = []
         self._run_buttons: list[PushButton] = []
 
         for key in ("dut", "execution", "stability"):
             panel = self._page_panels[key]
             page = QWidget()
+            page.setObjectName(f"config_{key}_page")
             page_layout = QVBoxLayout(page)
             page_layout.setContentsMargins(
                 PAGE_CONTENT_MARGIN,
@@ -97,12 +127,12 @@ class ConfigView(CardWidget):
                 PAGE_CONTENT_MARGIN,
             )
             page_layout.setSpacing(PAGE_CONTENT_MARGIN)
-            page_layout.addWidget(panel)
-            page_layout.addStretch(1)
+            # 让设置区域占满垂直空间，Run 按钮贴底部。
+            page_layout.addWidget(panel, 1)
             run_btn = self._create_run_button(page)
-            page_layout.addWidget(run_btn)
+            # Run 按钮只占自身高度，宽度拉满。
+            page_layout.addWidget(run_btn, 0)
             self._page_widgets[key] = page
-            self._wizard_pages.append(page)
 
         # Initialise stack and step view with the default page selection.
         # This keeps all layout concerns inside the view layer.
@@ -118,30 +148,17 @@ class ConfigView(CardWidget):
         main_layout.setContentsMargins(5, 5, 5, 5)
         main_layout.addWidget(self.splitter)
 
-    # ------------------------------------------------------------------
-    # Step view helpers
-    # ------------------------------------------------------------------
-
-    def _create_step_view(self, labels: list[str]) -> QWidget:
-        """Create a simple step indicator widget for the wizard pages."""
-        if USE_QFLUENT_STEP_VIEW:
-            try:
-                from qfluentwidgets import StepView  # type: ignore
-
-                view = StepView(self)
-                for i, text in enumerate(labels):
-                    view.addStep(text, i == 0)
-                _apply_step_font(view)
-                view.setFixedHeight(STEP_LABEL_SPACING * 3)
-                return view
-            except Exception:
-                pass
-        # Fallback: use the lightweight _StepSwitcher with themed labels.
-        return _StepSwitcher(labels, self)
-
     def _create_run_button(self, parent: QWidget) -> PushButton:
-        """Create a Run button for a wizard page (UI only)."""
+        """Create a Run button for the page (UI only)."""
         button = PushButton("Run", parent)
+        button.setIcon(FluentIcon.PLAY)
+        if hasattr(button, "setUseRippleEffect"):
+            button.setUseRippleEffect(True)
+        if hasattr(button, "setUseStateEffect"):
+            button.setUseStateEffect(True)
+        # Let the button stretch horizontally so it visually anchors the page.
+        button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self._run_buttons.append(button)
         return button
 
     # Public API used by controllers
@@ -176,35 +193,36 @@ class ConfigView(CardWidget):
             self.stack.addWidget(self._page_widgets[key])
 
         self._current_page_keys = normalized
-        self.refresh_step_view(normalized)
+
+        # Update tab visibility based on available pages.
+        for key, lbl in self._page_buttons.items():
+            lbl.setVisible(key in normalized)
 
         # Preserve current page when possible.
         target_index = 0
         if current_key in normalized:
             target_index = normalized.index(current_key)
         self.stack.setCurrentIndex(target_index)
+        self._update_tab_checked(target_index)
 
-    def refresh_step_view(self, page_keys: Sequence[str]) -> None:
-        """Refresh the step indicator labels based on active page keys."""
-        labels = [self._page_label_map.get(key, key.title()) for key in page_keys]
-        if not labels:
-            labels = [self._page_label_map["dut"]]
-        new_view = self._create_step_view(list(labels))
-        old_view = getattr(self, "step_view_widget", None)
-        layout = getattr(self, "_right_layout", None)
-        if layout is not None:
-            if old_view is not None:
-                index = layout.indexOf(old_view)
-                if index < 0:
-                    index = 0
-                layout.insertWidget(index, new_view)
-                layout.removeWidget(old_view)
-                old_view.setParent(None)
-            else:
-                layout.insertWidget(0, new_view)
-        self.step_view_widget = new_view
-        # Step view is only useful when more than one page is available.
-        self.step_view_widget.setVisible(len(page_keys) > 1)
+    # ------------------------------------------------------------------
+    # Tab helpers
+    # ------------------------------------------------------------------
 
+    def _update_tab_checked(self, index: int) -> None:
+        """Update which tab button appears active."""
+        if not (0 <= index < len(self._current_page_keys)):
+            return
+        active_key = self._current_page_keys[index]
+        for key, lbl in self._page_buttons.items():
+            apply_settings_tab_label_style(lbl, active=(key == active_key))
+
+    def set_current_page(self, key: str) -> None:
+        """Public helper to switch to a logical page key."""
+        if key not in self._current_page_keys:
+            return
+        index = self._current_page_keys.index(key)
+        self.stack.setCurrentIndex(index)
+        self._update_tab_checked(index)
 
 __all__ = ["ConfigView"]

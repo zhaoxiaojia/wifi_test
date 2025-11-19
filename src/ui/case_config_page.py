@@ -121,7 +121,6 @@ from src.ui.view.config.actions import (
     apply_rvr_tool_ui_state,
     apply_serial_enabled_ui_state,
     apply_turntable_model_ui_state,
-    update_step_indicator,
     refresh_config_page_controls,
     update_fpga_hidden_fields,
     apply_connect_type_ui_state,
@@ -133,16 +132,14 @@ from src.ui.view.config.actions import (
     update_script_config_ui,
 )
 from src.ui.view.config.config_str import bind_script_section
-from .config_proxy import ConfigProxy
+from .controller.config_ctl import ConfigController
 from .view.builder import load_ui_schema, build_groups_from_schema
-from .run_proxy import on_run as _proxy_on_run
 from .rvrwifi_proxy import (
     _normalize_switch_wifi_manual_entries as _proxy_normalize_switch_wifi_manual_entries,
     _register_switch_wifi_csv_combo as _proxy_register_switch_wifi_csv_combo,
     _unregister_switch_wifi_csv_combo as _proxy_unregister_switch_wifi_csv_combo,
     _list_available_csv_files as _proxy_list_available_csv_files,
     _resolve_csv_config_path as _proxy_resolve_csv_config_path,
-    _load_csv_selection_from_config as _proxy_load_csv_selection_from_config,
     _update_csv_options as _proxy_update_csv_options,
     _capture_preselected_csv as _proxy_capture_preselected_csv,
     _normalize_csv_path as _proxy_normalize_csv_path,
@@ -187,6 +184,11 @@ class CaseConfigPage(CardWidget):
     routerInfoChanged = pyqtSignal()
     csvFileChanged = pyqtSignal(str)
 
+    def on_run(self) -> None:
+        """Entry point used by RunPage and other callers to start a run via controller."""
+        if getattr(self, "config_ctl", None) is not None:
+            self.config_ctl.on_run()
+
     def __init__(self, on_run_callback):
         """
         Initialize the class instance, set up initial state and construct UI widgets.
@@ -197,15 +199,12 @@ class CaseConfigPage(CardWidget):
         super().__init__()
         self.setObjectName("caseConfigPage")
         self.on_run_callback = on_run_callback
-        self.config_proxy = ConfigProxy(self)
         apply_theme(self)
         self.selected_csv_path: str | None = None
-        # Load the persisted tool configuration and restore CSV selection
-        self.config: dict = self._load_config()
-        self._config_tool_snapshot: dict[str, Any] = copy.deepcopy(
-            self.config.get(TOOL_SECTION_KEY, {})
-        )
-        self._load_csv_selection_from_config()
+        # Controller responsible for config lifecycle/normalisation.
+        self.config_ctl = ConfigController(self)
+        # Load the persisted tool configuration and restore CSV selection.
+        self.config: dict = self.config_ctl.load_initial_config()
         # Initialize transient state flags used by the UI during refreshes and selections
         self._refreshing = False
         self._pending_path: str | None = None
@@ -236,11 +235,9 @@ class CaseConfigPage(CardWidget):
         self.splitter = self.view.splitter
         self.case_tree = self.view.case_tree
         self.scroll_area = self.view.scroll_area
-        self.step_view_widget = self.view.step_view_widget
         self.stack = self.view.stack
         self._page_panels = self.view._page_panels
         self._page_widgets = self.view._page_widgets
-        self._wizard_pages = self.view._wizard_pages
         self._run_buttons = self.view._run_buttons
         self._dut_panel = self._page_panels["dut"]
         self._execution_panel = self._page_panels["execution"]
@@ -261,8 +258,6 @@ class CaseConfigPage(CardWidget):
         refresh_config_page_controls(self)
         self._initialize_script_config_groups()
         self._build_wizard_pages()
-        # Attach step navigation to the current step view widget.
-        self._attach_step_navigation(self.step_view_widget)
         # initialise case tree using src/test as root (non-fatal on failure)
         try:
             base = Path(self._get_application_base())
@@ -272,9 +267,7 @@ class CaseConfigPage(CardWidget):
         except Exception:
             pass
         self._refresh_script_section_states()
-        self.stack.currentChanged.connect(self._on_page_changed)
         self._request_rebalance_for_panels()
-        self._on_page_changed(self.stack.currentIndex())
         self.routerInfoChanged.connect(self._update_csv_options)
         self._update_csv_options()
         # connect signals AFTER UI ready
@@ -290,128 +283,6 @@ class CaseConfigPage(CardWidget):
         """
         super().resizeEvent(event)
         self.splitter.setSizes([int(self.width() * 0.2), int(self.width() * 0.8)])
-
-    def _create_run_button(self, parent: QWidget) -> PushButton:
-        """
-        Execute the create run button routine.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        button = PushButton("Run", parent)
-        button.setIcon(FluentIcon.PLAY)
-        if hasattr(button, "setUseRippleEffect"):
-            button.setUseRippleEffect(True)
-        if hasattr(button, "setUseStateEffect"):
-            button.setUseStateEffect(True)
-        button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self._run_buttons.append(button)
-        return button
-
-    def _update_step_indicator(self, index: int) -> None:
-        """
-        Update the  step indicator to reflect current data.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        update_step_indicator(self, index)
-
-    def _attach_step_navigation(self, view: QWidget) -> None:
-        """
-        Execute the attach step navigation routine.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        if isinstance(view, _StepSwitcher):
-            view.stepActivated.connect(self._on_step_activated)
-            return
-        handler_connected = False
-
-        def _handler(*args, **kwargs):
-            """
-            Execute the handler routine.
-
-            This method encapsulates the logic necessary to perform its function.
-            Refer to the implementation for details on parameters and return values.
-            """
-            index = self._coerce_step_index(*(args or []), *(kwargs.values()))
-            if index is not None:
-                self._on_step_activated(index)
-
-        for signal_name in (
-                "stepClicked",
-                "currentIndexChanged",
-                "currentChanged",
-                "currentRowChanged",
-                "clicked",
-                "activated",
-        ):
-            signal = getattr(view, signal_name, None)
-            if signal is None or not hasattr(signal, "connect"):
-                continue
-            try:
-                signal.connect(_handler)
-                handler_connected = True
-                break
-            except Exception as exc:
-                logging.debug("Failed to connect StepView.%s: %s", signal_name, exc)
-        if handler_connected:
-            return
-        for child in view.findChildren(QWidget):
-            if child is view:
-                continue
-            try:
-                self._attach_step_navigation(child)
-                handler_connected = True
-                break
-            except Exception as exc:
-                logging.debug("StepView child hookup failed: %s", exc)
-        if not handler_connected:
-            logging.debug("Step navigation hookup failed; relying on fallback behaviour")
-
-    def _on_step_activated(self, *args) -> None:
-        """
-        Handle the step activated event triggered by user interaction.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        index = self._coerce_step_index(*args)
-        if index is None:
-            return
-        self._navigate_to_index(index)
-
-    def _coerce_step_index(self, *args) -> Optional[int]:
-        """
-        Execute the coerce step index routine.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        for arg in args:
-            if isinstance(arg, int):
-                return arg
-            if isinstance(arg, (list, tuple)):
-                nested = self._coerce_step_index(*arg)
-                if nested is not None:
-                    return nested
-            if isinstance(arg, str) and arg.strip().isdigit():
-                return int(arg.strip())
-            if hasattr(arg, "row") and callable(getattr(arg, "row")):
-                row = arg.row()
-                if isinstance(row, int) and row >= 0:
-                    return row
-            if isinstance(arg, Mapping) and "index" in arg:
-                nested = self._coerce_step_index(arg["index"])
-                if nested is not None:
-                    return nested
-            if hasattr(arg, "index"):
-                idx = getattr(arg, "index")
-                if isinstance(idx, int):
-                    return idx
-        return None
 
     def _navigate_to_index(self, target_index: int) -> None:
         """
@@ -429,7 +300,8 @@ class CaseConfigPage(CardWidget):
         if current == 0 and target_index > current and not self._validate_first_page():
             self.stack.setCurrentIndex(0)
             return
-        self._sync_widgets_to_config()
+        if getattr(self, "config_ctl", None) is not None:
+            self.config_ctl.sync_widgets_to_config()
         self.stack.setCurrentIndex(target_index)
 
     def _sync_run_buttons_enabled(self) -> None:
@@ -439,67 +311,8 @@ class CaseConfigPage(CardWidget):
         This method encapsulates the logic necessary to perform its function.
         Refer to the implementation for details on parameters and return values.
         """
-        enabled = not self._run_locked
-        for btn in self._run_buttons:
-            btn.setEnabled(enabled)
-
-    def _info_bar_parent(self) -> QWidget:
-        """
-        Execute the info bar parent routine.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        parent = self.window()
-        if isinstance(parent, QWidget):
-            return parent
-        return self
-
-    def _show_info_bar(
-            self,
-            level: str,
-            title: str,
-            content: str,
-            **kwargs: Any,
-    ):
-        """
-        Execute the show info bar routine.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        bar_fn = getattr(InfoBar, level, None)
-        if not callable(bar_fn):
-            logging.debug("InfoBar level %s unavailable", level)
-            return None
-        info_parent = self._info_bar_parent()
-        params = {
-            "title": title,
-            "content": content,
-            "parent": info_parent,
-            "position": InfoBarPosition.TOP,
-        }
-        params.update(kwargs)
-        try:
-            bar = bar_fn(**params)
-        except Exception as exc:
-            logging.debug("InfoBar.%s failed: %s", level, exc)
-            return None
-        scroll = getattr(self, "scroll_area", None)
-        if scroll is not None:
-            try:
-                scrollbar = scroll.verticalScrollBar()
-                if scrollbar is not None:
-                    scrollbar.setValue(scrollbar.minimum())
-            except Exception as exc:
-                logging.debug("Failed to reset scroll position: %s", exc)
-        if hasattr(bar, "raise_"):
-            bar.raise_()
-        if hasattr(info_parent, "raise_"):
-            info_parent.raise_()
-        if hasattr(info_parent, "activateWindow"):
-            info_parent.activateWindow()
-        return bar
+        if getattr(self, "config_ctl", None) is not None:
+            self.config_ctl.sync_run_buttons_enabled()
 
     def _request_rebalance_for_panels(self, *panels: ConfigGroupPanel) -> None:
         """
@@ -581,55 +394,18 @@ class CaseConfigPage(CardWidget):
                 normalized.append(key)
         if "dut" not in normalized:
             normalized.insert(0, "dut")
-        if normalized == getattr(self, "_current_page_keys", []):
-            return
-        # Record logical state for rules/business logic.
+        # Record logical state for rules/business logic (always update).
         self._current_page_keys = normalized
-        # Delegate actual UI wiring to the view.
+        # Delegate page visibility to the view.
         self.view.set_available_pages(normalized)
-        # Step view widget may be recreated; re-attach navigation to the new widget.
-        self.step_view_widget = self.view.step_view_widget
-        self._attach_step_navigation(self.step_view_widget)
 
     def _determine_pages_for_case(self, case_path: str, info: EditableInfo) -> list[str]:
-
-        """
-        Execute the determine pages for case routine.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        if not case_path:
-            return ["dut"]
-        keys = ["dut"]
-        if self._is_performance_case(case_path) or info.enable_csv:
-            if "execution" not in keys:
-                keys.append("execution")
-        else:
-            case_key = self._script_case_key(case_path)
-            if case_key in self._script_groups:
-                keys.append("stability")
-        return keys
+        """Delegate page-key computation to the config controller."""
+        return self.config_ctl.determine_pages_for_case(case_path, info)
 
     def _script_case_key(self, case_path: str | Path) -> str:
-        """
-        Execute the script case key routine.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        if not case_path:
-            return ""
-        path_obj = case_path if isinstance(case_path, Path) else Path(case_path)
-        if path_obj.is_absolute():
-            try:
-                path_obj = path_obj.resolve().relative_to(self._get_application_base())
-            except ValueError:
-                path_obj = path_obj.resolve()
-        stem = path_obj.stem.lower()
-        if stem in SWITCH_WIFI_CASE_KEYS:
-            return SWITCH_WIFI_CASE_KEY
-        return stem
+        """Return the script key using controller helper so rules stay in sync."""
+        return self.config_ctl.script_case_key(case_path)
 
     def _script_field_key(self, case_key: str, *parts: str) -> str:
         """
@@ -653,7 +429,8 @@ class CaseConfigPage(CardWidget):
         self._script_groups.clear()
         for case_path, factory in self._script_config_factories.items():
             case_key = self._script_case_key(case_path)
-            entry_config = self._ensure_script_case_defaults(case_key, case_path)
+            # Ensure config defaults for this stability script via controller.
+            entry_config = self.config_ctl.ensure_script_case_defaults(case_key, case_path)
             entry = factory(case_key, case_path, entry_config)
             entry.group.setVisible(False)
             self._script_groups[case_key] = entry
@@ -664,10 +441,6 @@ class CaseConfigPage(CardWidget):
     def _normalize_switch_wifi_manual_entries(entries: Any) -> list[dict[str, str]]:
         """Proxy to normalise manual Wi-Fi entries for switch Wi-Fi cases."""
         return _proxy_normalize_switch_wifi_manual_entries(entries)
-
-    def _ensure_script_case_defaults(self, case_key: str, case_path: str) -> dict[str, Any]:
-        """Delegate stability case defaults to the config proxy."""
-        return self.config_proxy.ensure_script_case_defaults(case_key, case_path)
 
     def _load_script_config_into_widgets(
             self,
@@ -1014,7 +787,6 @@ class CaseConfigPage(CardWidget):
 
     def _register_group(self, key: str, group: QWidget, is_dut: bool) -> None:
         """
-        print("[DEBUG_REGISTER_GROUP] key=", key, "is_dut=", is_dut, "parent=", type(group.parent()).__name__ if group.parent() else None)
         Register a configuration group on the DUT or non‑DUT panel.
 
         This keeps two internal mappings (``_dut_groups`` and
@@ -1116,28 +888,9 @@ class CaseConfigPage(CardWidget):
     # ------------------------------------------------------------------
 
     def _get_field_value(self, field_key: str) -> Any:
-        """Return a Python value representing the current state of a field widget."""
-        widget = self.field_widgets.get(field_key)
-        if widget is None:
-            return None
-        # Basic widget types used by the config page
-        from qfluentwidgets import ComboBox, LineEdit, TextEdit  # local import to avoid cycles
-
-        if isinstance(widget, QCheckBox):
-            return widget.isChecked()
-        if isinstance(widget, ComboBox):
-            data = widget.currentData()
-            if data not in (None, ""):
-                return data
-            return widget.currentText()
-        if isinstance(widget, LineEdit):
-            return widget.text()
-        if isinstance(widget, TextEdit):
-            return widget.toPlainText()
-        if isinstance(widget, QSpinBox):
-            return widget.value()
-        if isinstance(widget, QDoubleSpinBox):
-            return float(widget.value())
+        """Delegate field value lookup to config controller."""
+        if getattr(self, "config_ctl", None) is not None:
+            return self.config_ctl.get_field_value(field_key)
         return None
 
     def _apply_field_effects(self, effects: FieldEffect) -> None:
@@ -1174,16 +927,9 @@ class CaseConfigPage(CardWidget):
                 return
             before = widget.isEnabled()
             if before == enabled:
-                if key == "system.kernel_version":
-                    print("[DEBUG_KERNEL_RULE] _set_enabled no-op key=", key, "enabled=", enabled, "current=", before)
                 return
-            if key == "system.kernel_version":
-                print("[DEBUG_KERNEL_RULE] _set_enabled key=", key, "enabled=", enabled, "before=", before)
             with QSignalBlocker(widget):
                 widget.setEnabled(enabled)
-            after = widget.isEnabled()
-            if key == "system.kernel_version":
-                print("[DEBUG_KERNEL_RULE] _set_enabled key=", key, "after=", after)
 
         def _set_visible(key: str, visible: bool) -> None:
             widget = self.field_widgets.get(key)
@@ -1203,75 +949,15 @@ class CaseConfigPage(CardWidget):
             _set_visible(key, False)
 
     def _eval_case_type_flag(self, flag: str) -> bool:
-        """Return True/False for high level case-type flags used by rules."""
-        if not flag:
-            return True
-        case_path = getattr(self, "_current_case_path", "") or ""
-        basename = os.path.basename(case_path) if case_path else ""
-        # Normalise absolute path for performance/stability checks
-        abs_path = case_path
-        try:
-            path_obj = Path(case_path)
-            if not path_obj.is_absolute():
-                abs_path = (Path(self._get_application_base()) / path_obj).as_posix()
-            else:
-                abs_path = path_obj.as_posix()
-        except Exception:
-            pass
-
-        if flag == "performance_or_enable_csv":
-            info = getattr(self, "_last_editable_info", None)
-            enable_csv = bool(getattr(info, "enable_csv", False))
-            return bool(self._is_performance_case(abs_path) or enable_csv)
-        if flag == "execution_panel_visible":
-            keys = getattr(self, "_current_page_keys", [])
-            return "execution" in keys
-        if flag == "stability_case":
-            return self._is_stability_case(abs_path or case_path)
-        if flag == "rvr_case":
-            return "rvr" in basename.lower()
-        if flag == "rvo_case":
-            return "rvo" in basename.lower()
-        if flag == "performance_case_with_rvr_wifi":
-            is_perf = self._is_performance_case(abs_path)
-            has_rvr = bool(getattr(self, "_enable_rvr_wifi", False) and getattr(self, "selected_csv_path", None))
-            return bool(is_perf and has_rvr)
-        return False
+        """Delegate case-type flag evaluation to config controller."""
+        if getattr(self, "config_ctl", None) is not None:
+            return self.config_ctl.eval_case_type_flag(flag)
+        return True
 
     def _apply_sidebar_rules(self) -> None:
-        """Evaluate sidebar rules that depend on the active case."""
-        main_window = self.window()
-        if not main_window:
-            return
-        try:
-            rules: dict[str, RuleSpec] = SIDEBAR_RULES
-        except Exception:
-            return
-
-        # Currently only S11_case_button_for_performance is defined.
-        spec = rules.get("S11_case_button_for_performance")
-        if not spec:
-            return
-        sidebar_key = spec.get("trigger_sidebar_key") or "case"
-        sidebar_enabled = self._eval_case_type_flag(
-            spec.get("trigger_case_type") or ""
-        )
-
-        # Resolve the nav button for the logical "case" page.
-        btn = None
-        sidebar_map = getattr(main_window, "sidebar_nav_buttons", None)
-        if isinstance(sidebar_map, dict):
-            btn = sidebar_map.get(sidebar_key)
-        if btn is None:
-            btn = getattr(main_window, "rvr_nav_button", None)
-        if btn is None:
-            return
-        try:
-            if sip.isdeleted(btn):
-                return
-        except Exception:
-            pass
-        btn.setEnabled(bool(sidebar_enabled))
+        """Delegate sidebar rules that depend on the active case to controller."""
+        if getattr(self, "config_ctl", None) is not None:
+            self.config_ctl.apply_sidebar_rules()
 
     @staticmethod
     def _is_dut_key(key: str) -> bool:
@@ -1290,81 +976,6 @@ class CaseConfigPage(CardWidget):
             "android_system",  # legacy
             "system",
         }
-
-    def _normalize_fpga_token(self, value: Any) -> str:
-        """Normalise FPGA identifier tokens via the config proxy."""
-        return self.config_proxy.normalize_fpga_token(value)
-
-    @staticmethod
-    def _split_legacy_fpga_value(raw: str) -> tuple[str, str]:
-        """
-        Execute the split legacy fpga value routine.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        parts = raw.split("_", 1)
-        wifi_module = parts[0] if parts and parts[0] else ""
-        interface = parts[1] if len(parts) > 1 and parts[1] else ""
-        return wifi_module.upper(), interface.upper()
-
-    def _guess_fpga_project(
-            self,
-            wifi_module: str,
-            interface: str,
-            main_chip: str = "",
-            *,
-            customer: str = "",
-            product_line: str = "",
-            project: str = "",
-    ) -> tuple[str, str, str, Optional[dict[str, str]]]:
-        """
-        Execute the guess fpga project routine.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        wifi_upper = wifi_module.strip().upper()
-        interface_upper = interface.strip().upper()
-        chip_upper = main_chip.strip().upper()
-        customer_upper = customer.strip().upper()
-        product_upper = product_line.strip().upper()
-        project_upper = project.strip().upper()
-        for customer_name, product_lines in WIFI_PRODUCT_PROJECT_MAP.items():
-            customer_name_upper = self._normalize_fpga_token(customer_name)
-            if customer_upper and customer_name_upper != customer_upper:
-                continue
-            for product_name, projects in product_lines.items():
-                product_name_upper = self._normalize_fpga_token(product_name)
-                if product_upper and product_name_upper != product_upper:
-                    continue
-                for project_name, info in projects.items():
-                    project_name_upper = self._normalize_fpga_token(project_name)
-                    if project_upper and project_name_upper != project_upper:
-                        continue
-                    info_wifi = self._normalize_fpga_token(info.get("wifi_module"))
-                    info_if = self._normalize_fpga_token(info.get("interface"))
-                    info_chip = self._normalize_fpga_token(info.get("main_chip"))
-                    if wifi_upper and info_wifi and info_wifi != wifi_upper:
-                        continue
-                    if interface_upper and info_if and info_if != interface_upper:
-                        continue
-                    if chip_upper and info_chip and info_chip != chip_upper:
-                        continue
-                    return customer_name, product_name, project_name, info
-        return "", "", "", None
-
-    def _normalize_fpga_section(self, raw_value: Any) -> dict[str, str]:
-        """Normalise FPGA configuration through the config proxy."""
-        return self.config_proxy.normalize_fpga_section(raw_value)
-
-    def _normalize_connect_type_section(self, raw_value: Any) -> dict[str, Any]:
-        """Normalise connect-type settings through the config proxy."""
-        return self.config_proxy.normalize_connect_type_section(raw_value)
-
-    def _normalize_stability_settings(self, raw_value: Any) -> dict[str, Any]:
-        """Normalize stability settings using the config proxy implementation."""
-        return self.config_proxy.normalize_stability_settings(raw_value)
 
     def _refresh_fpga_product_lines(
             self,
@@ -1557,7 +1168,6 @@ class CaseConfigPage(CardWidget):
             case_path = Path(display_path).as_posix()
             self._current_case_path = case_path
             self.config["text_case"] = case_path
-        self._update_step_indicator(self.stack.currentIndex())
 
         stability_cfg = self.config.get("stability")
         if isinstance(stability_cfg, dict):
@@ -1645,7 +1255,9 @@ class CaseConfigPage(CardWidget):
                     else self.fpga_project_combo
                 )
         if errors:
-            self._show_info_bar(
+            from src.ui.controller import show_info_bar
+            show_info_bar(
+                self,
                 "warning",
                 "Validation",
                 "\n".join(errors),
@@ -1659,210 +1271,18 @@ class CaseConfigPage(CardWidget):
         return True
 
     def _validate_test_str_requirements(self) -> bool:
-        """Ensure test_str stability settings require port/mode when AC/STR enabled."""
-        config = self.config if isinstance(self.config, dict) else {}
-        case_path = config.get("text_case", "")
-        case_key = self._script_case_key(case_path)
-        if case_key != "test_str":
-            return True
-
-        stability_cfg = config.get("stability") if isinstance(config, dict) else {}
-        cases_cfg = stability_cfg.get("cases") if isinstance(stability_cfg, dict) else {}
-        case_cfg = cases_cfg.get(case_key) if isinstance(cases_cfg, dict) else {}
-
-        errors: list[str] = []
-        focus_widget: QWidget | None = None
-
-        def _require(branch: str, label: str) -> None:
-            """
-            Execute the require routine.
-
-            This method encapsulates the logic necessary to perform its function.
-            Refer to the implementation for details on parameters and return values.
-            """
-            nonlocal focus_widget
-            branch_cfg = case_cfg.get(branch) if isinstance(case_cfg, dict) else {}
-            if not isinstance(branch_cfg, dict) or not branch_cfg.get("enabled"):
-                return
-            relay_type = str(branch_cfg.get("relay_type") or "usb_relay").strip() or "usb_relay"
-            relay_key = relay_type.lower()
-            if relay_key == "usb_relay":
-                port_value = str(branch_cfg.get("port") or "").strip()
-                mode_value = str(branch_cfg.get("mode") or "").strip()
-                if not port_value:
-                    errors.append(f"{label}: USB power relay port is required.")
-                    focus_widget = focus_widget or self.field_widgets.get(
-                        f"stability.cases.{case_key}.{branch}.port"
-                    )
-                if not mode_value:
-                    errors.append(f"{label}: Wiring mode is required.")
-                    focus_widget = focus_widget or self.field_widgets.get(
-                        f"stability.cases.{case_key}.{branch}.mode"
-                    )
-            elif relay_key == "gwgj-xc3012":
-                params = branch_cfg.get("relay_params")
-                if isinstance(params, (list, tuple)):
-                    items = list(params)
-                elif isinstance(params, str):
-                    items = [item.strip() for item in params.split(',') if item.strip()]
-                else:
-                    items = []
-                ip_value = str(items[0]).strip() if items else ""
-                port_value = None
-                if len(items) > 1:
-                    try:
-                        port_value = int(str(items[1]).strip())
-                    except (TypeError, ValueError):
-                        port_value = None
-                if not ip_value or port_value is None:
-                    errors.append(
-                        f"{label}: Relay params must include IP and port for GWGJ-XC3012."
-                    )
-                    focus_widget = focus_widget or self.field_widgets.get(
-                        f"stability.cases.{case_key}.{branch}.relay_params"
-                    )
-
-        _require("ac", "AC cycle")
-        _require("str", "STR cycle")
-        if not errors:
-            return True
-
-        current_keys = getattr(self, "_current_page_keys", [])
-        if isinstance(current_keys, list) and "stability" in current_keys:
-            try:
-                idx = current_keys.index("stability")
-            except ValueError:
-                idx = None
-            else:
-                self.stack.setCurrentIndex(idx)
-                self._update_step_indicator(idx)
-        if focus_widget is not None and focus_widget.isEnabled():
-            focus_widget.setFocus()
-            if hasattr(focus_widget, "showPopup"):
-                try:
-                    focus_widget.showPopup()  # type: ignore[call-arg]
-                except Exception:
-                    pass
-
-        message = "\n".join(errors)
-        try:
-            bar = self._show_info_bar(
-                "warning",
-                "Validation",
-                message,
-                duration=3200,
-            )
-            if bar is None:
-                raise RuntimeError("InfoBar unavailable")
-        except Exception:
-            try:
-                from PyQt5.QtWidgets import QMessageBox
-
-                QMessageBox.warning(self, "Validation", message)
-            except Exception:
-                logging.warning("Validation failed: %s", message)
-        return False
-
-    def _reset_second_page_inputs(self) -> None:
-        """
-        Execute the reset second page inputs routine.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        if hasattr(self, "csv_combo"):
-            # Keep selection and UI state in sync using dedicated helpers.
-            self._reset_second_page_model_state()
-            self._reset_second_page_ui_state()
-        else:
-            self._set_selected_csv(None, sync_combo=False)
-
-    def _reset_second_page_model_state(self) -> None:
-        """Reset second-page model state (CSV selection) after a run."""
-        self._set_selected_csv(self.selected_csv_path, sync_combo=True)
-
-    def _reset_second_page_ui_state(self) -> None:
-        """Reset second-page UI state (CSV combo enablement) after a run."""
-        if hasattr(self, "csv_combo"):
-            self.csv_combo.setEnabled(bool(self._enable_rvr_wifi))
-
-    def _reset_wizard_after_run(self) -> None:
-        """
-        Execute the reset wizard after run routine.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        self.stack.setCurrentIndex(0)
-        self._update_step_indicator(0)
-        self._update_navigation_state()
-        self._reset_second_page_inputs()
-
-    def _on_page_changed(self, index: int) -> None:
-        """
-        Handle the page changed event triggered by user interaction.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        self._update_step_indicator(index)
-        self._update_navigation_state()
-
-    def _update_navigation_state(self) -> None:
-        """
-        Update the  navigation state to reflect current data.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        self._sync_run_buttons_enabled()
+        """Delegate test_str stability validation to config controller."""
+        if getattr(self, "config_ctl", None) is not None:
+            return self.config_ctl.validate_test_str_requirements()
+        return True
 
     def _is_performance_case(self, abs_case_path) -> bool:
-        """
-        Determine whether abs_case_path is under the test/performance directory at any level.
-        Does not rely on project root path; only checks path segments.
-        """
-        logging.debug("Checking performance case path: %s", abs_case_path)
-        if not abs_case_path:
-            logging.debug("_is_performance_case: empty path -> False")
-            return False
-        try:
-            from pathlib import Path
-            p = Path(abs_case_path).resolve()
-            # check whether any parent directory is .../test/performance
-            for node in (p, *p.parents):
-                if node.name == "performance" and node.parent.name == "test":
-                    logging.debug("_is_performance_case: True")
-                    return True
-                logging.debug("_is_performance_case: False")
-            return False
-        except Exception as e:
-            logging.error("_is_performance_case exception: %s", e)
-            return False
+        """Delegate performance-case classification to config controller."""
+        return self.config_ctl.is_performance_case(abs_case_path)
 
     def _is_stability_case(self, case_path: str | Path) -> bool:
-        """Return True when the case resides under ``test/stability``."""
-
-        if not case_path:
-            return False
-        try:
-            path_obj = case_path if isinstance(case_path, Path) else Path(case_path)
-        except (TypeError, ValueError):
-            return False
-        try:
-            resolved = path_obj.resolve()
-        except OSError:
-            resolved = path_obj
-        candidates = [path_obj, resolved]
-        for candidate in candidates:
-            normalized = candidate.as_posix().replace("\\", "/")
-            segments = [seg.lower() for seg in normalized.split("/") if seg]
-            for idx in range(len(segments) - 1):
-                if segments[idx] == "test" and segments[idx + 1] == "stability":
-                    return True
-            if normalized.lower().startswith("test/stability/"):
-                return True
-        return False
+        """Delegate stability-case classification to config controller."""
+        return self.config_ctl.is_stability_case(case_path)
 
     def _init_case_tree(self, root_dir: Path) -> None:
         """
@@ -1889,25 +1309,9 @@ class CaseConfigPage(CardWidget):
         for col in range(1, self.fs_model.columnCount()):
             self.case_tree.hideColumn(col)
 
-    def _load_config(self) -> dict:
-        """Load configuration via the config proxy."""
-        return self.config_proxy.load_config()
-
-    def _save_config(self) -> None:
-        """Persist configuration changes via the config proxy."""
-        self.config_proxy.save_config()
-
     def _get_application_base(self) -> Path:
         """Get application root path."""
         return Path(get_src_base()).resolve()
-
-    def _resolve_case_path(self, path: str | Path) -> Path:
-        """Convert relative case path to absolute path."""
-        if not path:
-            return Path()
-        p = Path(path)
-        base = Path(self._get_application_base())
-        return str(p) if p.is_absolute() else str((base / p).resolve())
 
     def _normalize_connect_type_label(self, label: str) -> str:
         """
@@ -2044,36 +1448,32 @@ class CaseConfigPage(CardWidget):
         return _proxy_list_available_csv_files()
 
     def _resolve_csv_config_path(self, value: Any) -> str | None:
-        """Resolve persisted CSV paths via the RvR Wi-Fi proxy."""
-        return _proxy_resolve_csv_config_path(value)
-
-    def _load_csv_selection_from_config(self) -> None:
-        """Load CSV selections using the RvR Wi-Fi proxy helpers."""
-        _proxy_load_csv_selection_from_config(self)
+        """Resolve persisted CSV paths via the controller helper."""
+        return self.config_ctl.resolve_csv_config_path(value)
 
     def _update_csv_options(self) -> None:
-        """Refresh CSV drop-downs via the RvR Wi-Fi proxy."""
-        _proxy_update_csv_options(self)
+        """Refresh CSV drop-downs via the controller helper."""
+        self.config_ctl.update_csv_options()
 
     def _capture_preselected_csv(self) -> None:
-        """Cache CSV selections using the RvR Wi-Fi proxy helper."""
-        _proxy_capture_preselected_csv(self)
+        """Cache CSV selections using the controller helper."""
+        self.config_ctl.capture_preselected_csv()
 
     def _normalize_csv_path(self, path: Any) -> str | None:
-        """Normalise CSV paths via the RvR Wi-Fi proxy."""
-        return _proxy_normalize_csv_path(path)
+        """Normalise CSV paths via the controller helper."""
+        return self.config_ctl.normalize_csv_path(path)
 
     def _relativize_config_path(self, path: Any) -> str:
-        """Relativise CSV paths through the RvR Wi-Fi proxy."""
-        return _proxy_relativize_config_path(path)
+        """Relativise CSV paths through the controller helper."""
+        return self.config_ctl.relativize_config_path(path)
 
     def _find_csv_index(self, normalized_path: str | None, combo: ComboBox | None = None) -> int:
-        """Locate CSV indices using the RvR Wi-Fi proxy helper."""
-        return _proxy_find_csv_index(self, normalized_path, combo)
+        """Locate CSV indices using the controller helper."""
+        return self.config_ctl.find_csv_index(normalized_path, combo)
 
     def _set_selected_csv(self, path: str | None, *, sync_combo: bool = True) -> bool:
-        """Update CSV selection via the RvR Wi-Fi proxy implementation."""
-        return _proxy_set_selected_csv(self, path, sync_combo=sync_combo)
+        """Update CSV selection via the controller helper."""
+        return self.config_ctl.set_selected_csv(path, sync_combo=sync_combo)
 
     def _populate_csv_combo(
             self,
@@ -2082,37 +1482,32 @@ class CaseConfigPage(CardWidget):
             *,
             include_placeholder: bool = False,
     ) -> None:
-        """Populate CSV combos via the RvR Wi-Fi proxy helper."""
-        _proxy_populate_csv_combo(
-            self,
-            combo,
-            selected_path,
-            include_placeholder=include_placeholder,
-        )
+        """Populate CSV combos via the controller helper."""
+        self.config_ctl.populate_csv_combo(combo, selected_path, include_placeholder=include_placeholder)
 
     def _refresh_registered_csv_combos(self) -> None:
-        """Refresh CSV combo registrations via the RvR Wi-Fi proxy."""
-        _proxy_refresh_registered_csv_combos(self)
+        """Refresh CSV combo registrations via the controller helper."""
+        self.config_ctl.refresh_registered_csv_combos()
 
     def _load_switch_wifi_entries(self, csv_path: str | None) -> list[dict[str, str]]:
-        """Load Wi-Fi CSV rows through the RvR Wi-Fi proxy implementation."""
-        return _proxy_load_switch_wifi_entries(self, csv_path)
+        """Load Wi-Fi CSV rows through the controller helper."""
+        return self.config_ctl.load_switch_wifi_entries(csv_path)
 
     def _update_switch_wifi_preview(
             self,
             preview: SwitchWifiCsvPreview | None,
             csv_path: str | None,
     ) -> None:
-        """Update Wi-Fi preview widgets via the RvR Wi-Fi proxy."""
-        _proxy_update_switch_wifi_preview(self, preview, csv_path)
+        """Update Wi-Fi preview widgets via the controller helper."""
+        self.config_ctl.update_switch_wifi_preview(preview, csv_path)
 
     def _update_rvr_nav_button(self) -> None:
-        """Update the RVR navigation button using the proxy helper."""
-        _proxy_update_rvr_nav_button(self)
+        """Update the RVR navigation button using the controller helper."""
+        self.config_ctl.update_rvr_nav_button()
 
     def _open_rvr_wifi_config(self) -> None:
-        """Open the RVR Wi-Fi configuration page via the proxy helper."""
-        _proxy_open_rvr_wifi_config(self)
+        """Open the RVR Wi-Fi configuration page via the controller helper."""
+        self.config_ctl.open_rvr_wifi_config()
 
     def _case_path_to_display(self, case_path: str) -> str:
         """
@@ -2155,60 +1550,6 @@ class CaseConfigPage(CardWidget):
         if hasattr(self, 'test_case_edit'):
             self.test_case_edit.setText(self._case_path_to_display(normalized))
 
-    def _active_case_type(self) -> str:
-        """Return the current case type identifier used for section selection."""
-        if getattr(self, "_current_case_path", ""):
-            return self._script_case_key(self._current_case_path)
-        return "default"
-
-    def _build_registered_sections(self) -> set[str]:
-        """Deprecated: section-based layout has been removed; kept for compatibility."""
-        return set()
-
-    def _ensure_turntable_inputs_exclusive(self, source: str | None) -> None:
-        """
-        Execute the ensure turntable inputs exclusive routine.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        if not hasattr(self, "turntable_static_db_edit") or not hasattr(
-                self, "turntable_target_rssi_edit"
-        ):
-            return
-        static_text = self.turntable_static_db_edit.text().strip()
-        target_text = self.turntable_target_rssi_edit.text().strip()
-        if not static_text or not target_text:
-            return
-
-        if source == "target":
-            cleared = self.turntable_static_db_edit
-            focus_widget = self.turntable_target_rssi_edit
-        elif source == "static":
-            cleared = self.turntable_target_rssi_edit
-            focus_widget = self.turntable_static_db_edit
-        else:
-            cleared = self.turntable_target_rssi_edit
-            focus_widget = None
-
-        with QSignalBlocker(cleared):
-            cleared.clear()
-
-        self._show_turntable_conflict_warning(focus_widget)
-
-    def _on_turntable_model_changed(self, model: str) -> None:
-        """
-        Handle the turntable model changed event triggered by user interaction.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        self._apply_turntable_model_ui_state(model)
-
-    def _apply_turntable_model_ui_state(self, model: str) -> None:
-        """Handle pure UI visibility/enabled state for turntable IP controls."""
-        apply_turntable_model_ui_state(self, model)
-
     def _compose_stability_groups(
             self, active_entry: ScriptConfigEntry | None
     ) -> list[QWidget]:
@@ -2223,78 +1564,6 @@ class CaseConfigPage(CardWidget):
             groups.append(active_entry.group)
         return groups
 
-        self._show_turntable_conflict_warning(focus_widget)
-
-    def _show_turntable_conflict_warning(
-            self, focus_widget: QWidget | None
-    ) -> None:
-        """
-        Execute the show turntable conflict warning routine.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        if focus_widget is None or not focus_widget.hasFocus():
-            return
-        message = (
-            "Static dB and Target RSSI cannot be configured at the same time. "
-            "The other field has been cleared."
-        )
-        try:
-            bar = self._show_info_bar(
-                "warning",
-                "Configuration Conflict",
-                message,
-                duration=2600,
-            )
-            if bar is None:
-                raise RuntimeError("InfoBar unavailable")
-        except Exception:
-            from PyQt5.QtWidgets import QMessageBox
-
-            QMessageBox.warning(self, "Configuration Conflict", message)
-
-    def populate_case_tree(self, root_dir):
-        """
-        Traverse the test directory and only add .py files starting with test_ as tree nodes.
-        Other .py files are not shown.
-        """
-        from PyQt5.QtGui import QStandardItemModel, QStandardItem
-        model = QStandardItemModel()
-        model.setHorizontalHeaderLabels(['Pls select test case '])  # optional: set header label
-
-        # set root item text to 'test' or actual directory name
-        root_item = QStandardItem(os.path.basename(root_dir))
-        root_item.setData(root_dir)
-
-        def add_items(parent_item, dir_path):
-            """
-            Execute the add items routine.
-
-            This method encapsulates the logic necessary to perform its function.
-            Refer to the implementation for details on parameters and return values.
-            """
-            for fname in sorted(os.listdir(dir_path)):
-                logging.debug("fname %s", fname)
-                if fname == '__pycache__' or fname.startswith('.'):
-                    continue
-                path = os.path.join(dir_path, fname)
-                if os.path.isdir(path):
-                    dir_item = QStandardItem(fname)
-                    dir_item.setData(path)
-                    parent_item.appendRow(dir_item)
-                    add_items(dir_item, path)
-                elif os.path.isfile(path):
-                    file_item = QStandardItem(fname)
-                    file_item.setData(path)
-                    parent_item.appendRow(file_item)
-
-        add_items(root_item, root_dir)
-        model.appendRow(root_item)
-        self.case_tree.setModel(model)
-        # expand root node
-        self.case_tree.expand(model.index(0, 0))
-
         # valid test case
         if self._refreshing:
             self._pending_path = path
@@ -2308,53 +1577,18 @@ class CaseConfigPage(CardWidget):
         This method encapsulates the logic necessary to perform its function.
         Refer to the implementation for details on parameters and return values.
         """
-        if info is None:
-            fields: set[str] = set()
-            enable_csv = False
-            enable_rvr_wifi = False
-        else:
-            fields = set(info.fields)
-            enable_csv = info.enable_csv
-            enable_rvr_wifi = info.enable_rvr_wifi
-        snapshot = EditableInfo(fields=fields, enable_csv=enable_csv, enable_rvr_wifi=enable_rvr_wifi)
-        self._last_editable_info = snapshot
-        # First update internal model flags and config.
-        self._apply_editable_model_state(snapshot)
-        # Then update visual state and fire rule-based UI.
-        self._apply_editable_ui_state(snapshot)
+        if getattr(self, "config_ctl", None) is not None:
+            self.config_ctl.apply_editable_info(info)
 
     def _apply_editable_model_state(self, snapshot: EditableInfo) -> None:
-        """Update internal flags and CSV selection from EditableInfo (no direct UI)."""
-        self._enable_rvr_wifi = snapshot.enable_rvr_wifi
-        if not snapshot.enable_rvr_wifi:
-            self._router_config_active = False
-        # CSV selection is part of persisted state; keep it in sync even when
-        # the combo widget is not present.
-        if hasattr(self, "csv_combo"):
-            if snapshot.enable_csv:
-                # Keep current selection in sync with the combo.
-                self._set_selected_csv(self.selected_csv_path, sync_combo=True)
-            else:
-                # Historical behaviour kept CSV selection but disabled the combo;
-                # leave the stored path untouched here.
-                pass
-        else:
-            if not snapshot.enable_csv:
-                # No CSV combo available; clear stored selection when CSV is disabled.
-                self._set_selected_csv(None, sync_combo=False)
+        """Backward-compat shim: delegate to controller."""
+        if getattr(self, "config_ctl", None) is not None:
+            self.config_ctl._apply_editable_model_state(snapshot)
 
     def _apply_editable_ui_state(self, snapshot: EditableInfo) -> None:
-        """Apply UI-related changes for EditableInfo (widgets only)."""
-        # Field-level editable flags are handled via the rule engine and this helper.
-        self.set_fields_editable(snapshot.fields)
-        if hasattr(self, "csv_combo"):
-            # Performance CSV is treated as a global execution setting; keep
-            # the main CSV combo editable regardless of per-case flags.
-            self.csv_combo.setEnabled(True)
-        # Sidebar button and rule-driven UI depend on updated flags.
-        self._update_rvr_nav_button()
-        # Re-apply UI rules whenever editable fields or CSV/RvR flags change.
-        apply_config_ui_rules(self)
+        """Backward-compat shim: delegate to controller."""
+        if getattr(self, "config_ctl", None) is not None:
+            self.config_ctl._apply_editable_ui_state(snapshot)
 
     def _restore_editable_state(self) -> None:
         """
@@ -2363,49 +1597,14 @@ class CaseConfigPage(CardWidget):
         This method encapsulates the logic necessary to perform its function.
         Refer to the implementation for details on parameters and return values.
         """
-        self._apply_editable_info(self._last_editable_info)
+        if getattr(self, "config_ctl", None) is not None:
+            self.config_ctl.restore_editable_state()
 
     def get_editable_fields(self, case_path) -> EditableInfo:
         """Control field editability after selecting a test case and return related info."""
-        logging.debug("get_editable_fields case_path=%s", case_path)
-        if self._refreshing:
-            # extremely rare: recursive entry; discard it
-            logging.debug("get_editable_fields: refreshing, return empty")
-            return EditableInfo()
-
-        # begin refresh
-        self._refreshing = True
-        self._set_refresh_ui_locked(True)
-
-        try:
-            update_script_config_ui(self, case_path)
-            info = compute_editable_info(self, case_path)
-            logging.debug("get_editable_fields enable_csv=%s", info.enable_csv)
-            if info.enable_csv and not hasattr(self, "csv_combo"):
-                info.enable_csv = False
-            self._apply_editable_info(info)
-            page_keys = self._determine_pages_for_case(case_path, info)
-            self._set_available_pages(page_keys)
-            # Re-evaluate rules now that page keys (panels) are final.
-            apply_config_ui_rules(self)
-        finally:
-            # refresh finished
-            self._set_refresh_ui_locked(False)
-            self._refreshing = False
-
-        main_window = self.window()
-        if hasattr(main_window, "setCurrentIndex"):
-            logging.debug("get_editable_fields: before switch to case_config_page")
-            main_window.setCurrentIndex(main_window.case_config_page)
-            logging.debug("get_editable_fields: after switch to case_config_page")
-        if not hasattr(self, "csv_combo"):
-            logging.debug("csv_combo disabled")
-        # if user clicks another test case during refresh, handle it with a 0 ms delay
-        if self._pending_path:
-            path = self._pending_path
-            self._pending_path = None
-            QTimer.singleShot(0, lambda: self.get_editable_fields(path))
-        return info
+        if getattr(self, "config_ctl", None) is not None:
+            return self.config_ctl.get_editable_fields(str(case_path))
+        return EditableInfo()
 
     def _set_refresh_ui_locked(self, locked: bool) -> None:
         """Lock/unlock tree and global updates while editable info is recomputed."""
@@ -2451,13 +1650,5 @@ class CaseConfigPage(CardWidget):
     def lock_for_running(self, locked: bool) -> None:
 
         """Enable or disable widgets while a test run is active."""
-        self._apply_run_lock_model_state(locked)
-        self._apply_run_lock_ui_state(locked)
-
-    def _apply_run_lock_model_state(self, locked: bool) -> None:
-        """Update internal run-lock flag without touching widgets directly."""
-        self._run_locked = locked
-
-    def _apply_run_lock_ui_state(self, locked: bool) -> None:
-        """Apply UI changes when a test run is (un)locked."""
-        apply_run_lock_ui_state(self, locked)
+        if getattr(self, "config_ctl", None) is not None:
+            self.config_ctl.lock_for_running(locked)

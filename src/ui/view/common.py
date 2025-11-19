@@ -308,13 +308,8 @@ class ConfigGroupPanel(QWidget):
         for group, weight_override in self._group_entries:
             if group is None:
                 continue
-            if not initial_pass and not group.isVisible():
-                # On the first layout pass groups may not yet be visible
-                # because the window has not been shown.  On subsequent
-                # passes we skip hidden groups so rule-driven visibility
-                # takes effect.
-                continue
-            entries.append((group, self._measure_group_height(group, weight_override)))
+            h = self._measure_group_height(group, weight_override)
+            entries.append((group, h))
         if not entries:
             return
         entries.sort(key=lambda item: item[1], reverse=True)
@@ -333,6 +328,7 @@ class ConfigGroupPanel(QWidget):
             column_index = self._col_weight.index(min(self._col_weight))
             prev_col = self._group_positions.get(group)
             self._column_layouts[column_index].addWidget(group)
+            group.show()
             self._col_weight[column_index] += height
             self._group_positions[group] = column_index
             if (prev_col is None and not initial_pass) or (prev_col is not None and prev_col != column_index):

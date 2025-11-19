@@ -115,7 +115,12 @@ def _load_csv_selection_from_config(page: "CaseConfigPage") -> None:
     stored = None
     if isinstance(page.config, dict):
         stored = _resolve_csv_config_path(page.config.get("csv_path"))
-    page._set_selected_csv(stored, sync_combo=False)
+    # Use controller helper when available to avoid baking logic into the widget.
+    config_ctl = getattr(page, "config_ctl", None)
+    if config_ctl is not None:
+        config_ctl.set_selected_csv(stored, sync_combo=False)
+    else:
+        page._set_selected_csv(stored, sync_combo=False)
 
 
 def _update_csv_options(page: "CaseConfigPage") -> None:
@@ -138,7 +143,12 @@ def _capture_preselected_csv(page: "CaseConfigPage") -> None:
     if not normalized:
         normalized = page._normalize_csv_path(combo.itemText(index))
     if normalized:
-        page._set_selected_csv(normalized, sync_combo=False)
+        # Prefer controller helper when present.
+        config_ctl = getattr(page, "config_ctl", None)
+        if config_ctl is not None:
+            config_ctl.set_selected_csv(normalized, sync_combo=False)
+        else:
+            page._set_selected_csv(normalized, sync_combo=False)
 
 
 def _normalize_csv_path(path: Any) -> str | None:

@@ -37,7 +37,7 @@ HTML_STYLE: Annotated[str, "Default inline HTML style used by HTML-rendered widg
 )
 
 # Wizard / step label font size in pixels (e.g., 'DUT Settings' tabs).
-STEP_LABEL_FONT_PIXEL_SIZE: Annotated[int, "Pixel size for step labels shown on wizard-like pages"] = 22
+STEP_LABEL_FONT_PIXEL_SIZE: Annotated[int, "Pixel size for step labels shown on wizard-like pages"] = 24
 
 # Left-pane tree font size; base + 4 px for better readability.
 CASE_TREE_FONT_SIZE_PX: Annotated[int, "Pixel size for case tree items (derived from base FONT_SIZE)"] = FONT_SIZE + 4
@@ -70,9 +70,10 @@ SWITCH_WIFI_TABLE_SELECTION_FG: Annotated[
 # -----------------------------------------------------------------------------
 # Imports for Theming Helpers
 # -----------------------------------------------------------------------------
-from PyQt5.QtWidgets import QAbstractItemView, QWidget, QGroupBox
+from PyQt5.QtWidgets import QAbstractItemView, QWidget, QGroupBox, QLabel
 from PyQt5.QtGui import QFont, QPalette
 from PyQt5.QtCore import Qt
+from qfluentwidgets import PushButton
 from .style import (
     apply_font_and_selection as _style_apply_font_and_selection,
     format_log_html as _style_format_log_html,
@@ -200,3 +201,19 @@ def apply_theme(widget, recursive: bool = False) -> None:
 def format_log_html(message: str) -> str:
     """Return a unified HTML-formatted log string using shared helpers."""
     return _style_format_log_html(message)
+
+
+def apply_settings_tab_label_style(label: QLabel, *, active: bool = False) -> None:
+    """Apply unified style for DUT/Execution/Stability tab-like labels."""
+    font = label.font() or QFont(FONT_FAMILY)
+    font.setPixelSize(STEP_LABEL_FONT_PIXEL_SIZE)
+    label.setFont(font)
+    color = ACCENT_COLOR if active else TEXT_COLOR
+    stylesheet = f"""
+        QLabel {{
+            padding: 6px 16px;
+            color: {color};
+            font-size: {STEP_LABEL_FONT_PIXEL_SIZE}px;
+        }}
+        """
+    label.setStyleSheet(stylesheet)
