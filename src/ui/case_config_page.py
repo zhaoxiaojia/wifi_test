@@ -257,7 +257,6 @@ class CaseConfigPage(CardWidget):
         self._other_groups: dict[str, QWidget] = {}
         refresh_config_page_controls(self)
         self._initialize_script_config_groups()
-        self._build_wizard_pages()
         # initialise case tree using src/test as root (non-fatal on failure)
         try:
             base = Path(self._get_application_base())
@@ -267,7 +266,6 @@ class CaseConfigPage(CardWidget):
         except Exception:
             pass
         self._refresh_script_section_states()
-        self._request_rebalance_for_panels()
         self.routerInfoChanged.connect(self._update_csv_options)
         self._update_csv_options()
         # connect signals AFTER UI ready
@@ -313,46 +311,6 @@ class CaseConfigPage(CardWidget):
         """
         if getattr(self, "config_ctl", None) is not None:
             self.config_ctl.sync_run_buttons_enabled()
-
-    def _request_rebalance_for_panels(self, *panels: ConfigGroupPanel) -> None:
-        """
-        Execute the request rebalance for panels routine.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        targets = panels or self._config_panels
-        for panel in targets:
-            panel.request_rebalance()
-
-    def _build_wizard_pages(self) -> None:
-        """
-        Execute the build wizard pages routine.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        self._dut_panel.set_groups(list(self._dut_groups.values()))
-        self._execution_panel.set_groups(self._compose_other_groups())
-
-    def _compose_other_groups(self) -> list[QWidget]:
-        """
-        Combine non-DUT groups for the Execution Settings panel.
-
-        Only generic execution groups (turntable / RF / RvR / debug ...)
-        should appear here. Stability-only groups such as Duration Control,
-        Check Point and per-script stability case groups belong to the
-        Stability Settings panel and are filtered out.
-        """
-        groups: list[QWidget] = []
-        for key, group in self._other_groups.items():
-            # Skip stability panel sections which are rendered separately.
-            if key in {"duration_control", "check_point"}:
-                continue
-            if key.startswith("cases."):
-                continue
-            groups.append(group)
-        return groups
 
     def _list_serial_ports(self) -> list[tuple[str, str]]:
         """
@@ -435,7 +393,6 @@ class CaseConfigPage(CardWidget):
             entry.group.setVisible(False)
             self._script_groups[case_key] = entry
             self.field_widgets.update(entry.widgets)
-        self._stability_panel.set_groups(self._compose_stability_groups(None))
 
     @staticmethod
     def _normalize_switch_wifi_manual_entries(entries: Any) -> list[dict[str, str]]:
@@ -784,20 +741,6 @@ class CaseConfigPage(CardWidget):
             if case_key in self._script_groups:
                 keys.append("stability")
         return keys
-
-    def _register_group(self, key: str, group: QWidget, is_dut: bool) -> None:
-        """
-        Register a configuration group on the DUT or non‑DUT panel.
-
-        This keeps two internal mappings (``_dut_groups`` and
-        ``_other_groups``) used when re‑balancing panel layouts.  The
-        function itself does not create widgets; it simply stores
-        references passed in from section builders.
-        """
-        if is_dut:
-            self._dut_groups[key] = group
-        else:
-            self._other_groups[key] = group
 
     # ------------------------------------------------------------------
     # Logical control identifiers for the Config page
@@ -1549,20 +1492,6 @@ class CaseConfigPage(CardWidget):
         self._current_case_path = normalized
         if hasattr(self, 'test_case_edit'):
             self.test_case_edit.setText(self._case_path_to_display(normalized))
-
-    def _compose_stability_groups(
-            self, active_entry: ScriptConfigEntry | None
-    ) -> list[QWidget]:
-        """Combine public stability controls with the active script group."""
-
-        groups: list[QWidget] = []
-        if self._duration_control_group is not None:
-            groups.append(self._duration_control_group)
-        if self._check_point_group is not None:
-            groups.append(self._check_point_group)
-        if active_entry is not None:
-            groups.append(active_entry.group)
-        return groups
 
         # valid test case
         if self._refreshing:

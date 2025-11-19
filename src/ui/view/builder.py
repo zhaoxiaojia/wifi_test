@@ -1,47 +1,23 @@
-"""Schema‑driven UI builder helpers for views.
+"""Schema-driven UI builder helpers for config views.
 
 This module reads UI schema YAML files from ``src/ui/model/config``
 and constructs Qt widgets (group boxes + field controls) for a given
-page using a simple convention:
-
-- Schema files:
-    - config_dut_ui.yaml
-    - config_execution_ui.yaml
-    - config_stability_ui.yaml
-
-- Structure (example):
-
-    panels:
-      dut:
-        sections:
-          - id: connect_type
-            label: "Control Type"
-            fields:
-              - key: connect_type.type
-                widget: combo_box
-                label: "Control Type"
-
-The builder expects a ``page`` object with:
-
-- ``field_widgets: dict[str, QWidget]`` attribute
-- ``_register_group(section_id, group, is_dut: bool)`` method
-- ``_register_config_control(panel, group, field, widget)`` method
-
-This fits the current ``CaseConfigPage`` implementation and allows us
-to centralise YAML → UI construction logic while individual views keep
-control over high‑level layout and any fine‑grained tweaks.
+page using a simple convention. It is used by ConfigView/CaseConfigPage
+to render DUT / Execution / Stability panels from YAML.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Dict, Mapping
-from PyQt5.QtWidgets import QCheckBox, QGroupBox, QVBoxLayout, QFormLayout, QSpinBox, QWidget, QLabel
+
+from PyQt5.QtWidgets import QCheckBox, QGroupBox, QFormLayout, QSpinBox, QWidget, QLabel
 from qfluentwidgets import ComboBox, LineEdit
 
 from src.util.constants import get_model_config_base
 from src.ui.model.options import get_field_choices
 from src.ui.view.config.config_switch_wifi import SwitchWifiManualEditor
+
 import yaml
 
 
@@ -71,10 +47,7 @@ def _load_yaml_schema(filename: str) -> Dict[str, Any]:
 
 
 def load_ui_schema(section: str) -> Dict[str, Any]:
-    """Load the UI schema for the given high‑level section.
-
-    ``section`` is one of: ``dut``, ``execution``, ``stability``.
-    """
+    """Load the UI schema for the given high-level section."""
     mapping = {
         "dut": "config_dut_ui.yaml",
         "execution": "config_execution_ui.yaml",
@@ -87,7 +60,7 @@ def load_ui_schema(section: str) -> Dict[str, Any]:
 
 
 def _get_nested(config: Mapping[str, Any], dotted_key: str) -> Any:
-    """Return nested value from config using dotted key (best‑effort)."""
+    """Return nested value from config using dotted key (best-effort)."""
     parts = dotted_key.split(".")
     current: Any = config
     for part in parts:
@@ -100,13 +73,14 @@ def _get_nested(config: Mapping[str, Any], dotted_key: str) -> Any:
 def _create_widget(page: Any, spec: FieldSpec, value: Any) -> QWidget:
     """Create a Qt widget for a single field according to FieldSpec."""
     wtype = spec.widget
+
     if wtype == "checkbox":
         cb = QCheckBox(spec.label, page)
         cb.setChecked(bool(value))
         return cb
+
     if wtype in {"int", "spin"}:
-        # Special-case: use a LineEdit for third-party wait seconds so that it
-        # follows the same styling/disabled appearance as other line-like controls.
+        # For third-party wait seconds we use a LineEdit to match other edits.
         if spec.key == "connect_type.third_party.wait_seconds":
             edit = LineEdit(page)
             if spec.placeholder:
@@ -124,45 +98,40 @@ def _create_widget(page: Any, spec: FieldSpec, value: Any) -> QWidget:
         except Exception:
             spin.setValue(0)
         return spin
+
     if wtype == "custom":
-        # Special-case: test_switch_wifi stability Wi‑Fi list uses a dedicated
-        # table editor widget instead of a plain line edit.
-        if spec.key == "cases.test_switch_wifi.manual_entries":
+        # Stability switch-wifi manual editor uses a dedicated composite widget.
+        if spec.key == "stability.cases.switch_wifi.manual_entries" or spec.key.endswith(
+            ".switch_wifi.manual_entries"
+        ):
             return SwitchWifiManualEditor(page)
-        # Fallback: treat custom as a basic line_edit.
+
+    # Default: line edit or combo box.
+    if wtype == "line_edit":
         edit = LineEdit(page)
         if spec.placeholder:
             edit.setPlaceholderText(spec.placeholder)
         if value not in (None, ""):
             edit.setText(str(value))
         return edit
+
     if wtype == "combo_box":
         combo = ComboBox(page)
         # Prefer explicit choices from the schema; otherwise fall back to
         # centralised model options keyed by the field name.
         choices = spec.choices or get_field_choices(spec.key)
-        # 特例: RF Model 目前没有集中 choices 源，使用 test/performance 中的四个模型。
-        if spec.key == "rf_solution.model" and not choices:
-            choices = ["RADIORACK-4-220", "RC4DAT-8G-95", "RS232Board5", "LDA-908V-8"]
-        if choices:
-            for ch in choices:
-                combo.addItem(str(ch), str(ch))
-        elif value not in (None, ""):
-            # No explicit choices: at least expose the config value so the user
-            # sees a meaningful default.
-            combo.addItem(str(value), str(value))
+        for choice in choices or []:
+            combo.addItem(str(choice), str(choice))
         if value not in (None, ""):
-            combo.setCurrentText(str(value))
-        else:
-            # When no value is present in config, fall back to the first
-            # available choice (if any) so the user sees a sensible default.
-            combo.setCurrentIndex(0 if combo.count() else -1)
+            text = str(value)
+            idx = combo.findData(text)
+            if idx >= 0:
+                combo.setCurrentIndex(idx)
+            elif combo.count():
+                combo.setCurrentIndex(0)
         return combo
-    if wtype == "read_only_text":
-        label = QLabel(page)
-        label.setText(str(value) if value is not None else "")
-        return label
-    # default: line_edit
+
+    # Fallback: simple line edit.
     edit = LineEdit(page)
     if spec.placeholder:
         edit.setPlaceholderText(spec.placeholder)
@@ -179,22 +148,20 @@ def build_groups_from_schema(
     *,
     parent: QWidget | None = None,
 ) -> None:
-    """Build all sections for ``panel_key`` described in ``ui_schema``.
-
-    ``parent`` allows the caller (typically a view) to control which
-    widget owns the created group boxes.  When omitted, the groups are
-    parented to ``page`` for backwards compatibility.
-    """
+    """Build all sections for ``panel_key`` described in ``ui_schema``."""
     panels = ui_schema.get("panels") or {}
     panel_spec = panels.get(panel_key) or {}
     sections = panel_spec.get("sections") or []
+
     for section in sections:
-        section_id = section.get("id") or ""
-        group_label = section.get("label") or section_id or "Section"
+        section_id = str(section.get("id") or "")
+        group_label = str(section.get("label") or section_id or "Section")
         fields = section.get("fields") or []
+
         group_parent = parent if parent is not None else page
         group = QGroupBox(group_label, group_parent)
         layout = QFormLayout(group)
+
         for field in fields:
             key = str(field.get("key") or "").strip()
             if not key:
@@ -205,6 +172,7 @@ def build_groups_from_schema(
             minimum = field.get("minimum")
             maximum = field.get("maximum")
             choices = field.get("choices") or None
+
             spec = FieldSpec(
                 key=key,
                 widget=widget_type,
@@ -216,50 +184,55 @@ def build_groups_from_schema(
             )
             value = _get_nested(config, key)
             widget = _create_widget(page, spec, value)
-            # Add to layout
+
+            # Add to layout.
             if isinstance(widget, QCheckBox) and spec.widget == "checkbox":
                 layout.addRow(widget)
             else:
                 layout.addRow(QLabel(label_text, page), widget)
-            # Register widget in page.field_widgets and config_controls.
-            # For the stability panel, expose both bare and ``stability.``-prefixed
-            # keys so that rule specs can consistently reference
-            # ``stability.*`` fields.
-            logical_key = str(key).strip()
+
+            # Register widget in page.field_widgets.
+            logical_key = key
             page.field_widgets[logical_key] = widget
             if panel_key == "stability":
                 stability_key = f"stability.{logical_key}"
                 page.field_widgets[stability_key] = widget
-            # panel is determined by panel_key; group is section_id; field is last part
+
+            # Let CaseConfigPage keep its config_controls mapping when present.
             group_name = section_id or key.split(".")[0]
             field_name = key.split(".")[-1]
+            if hasattr(page, "_register_config_control"):
+                try:
+                    page._register_config_control(panel_key, group_name, field_name, widget)
+                except Exception:
+                    pass
+
+        # If the parent looks like a ConfigGroupPanel, let it manage layout.
+        if parent is not None and hasattr(parent, "add_group"):
             try:
-                page._register_config_control(panel_key, group_name, field_name, widget)
-            except Exception:
-                # During refactor we tolerate missing helpers; these can be wired later.
-                pass
-        # If the parent looks like a ConfigGroupPanel, let it manage
-        # the group layout directly so that the view layer owns all
-        # visual placement.
-        try:
-            if parent is not None and hasattr(parent, "add_group"):
-                # Defer actual rebalance; the panel can rebalance once
-                # after all groups have been added.
                 parent.add_group(group, defer=True)
-        except Exception:
-            pass
+            except Exception:
+                pass
+
+        # Record the group on the page so that higher-level layout helpers
+        # (e.g. stability common groups) can reference it later.
         try:
-            # is_dut is True when panel_key == "dut"
-            page._register_group(section_id or group_label, group, is_dut=(panel_key == "dut"))
+            if not hasattr(page, "_dut_groups"):
+                page._dut_groups = {}
+            if not hasattr(page, "_other_groups"):
+                page._other_groups = {}
+            target = page._dut_groups if panel_key == "dut" else page._other_groups
+            target[section_id or group_label] = group
         except Exception:
-            # Caller can still manually place 'group' into a layout.
             pass
+
     # Trigger a single rebalance for this panel if supported.
-    try:
-        if parent is not None and hasattr(parent, "request_rebalance"):
+    if parent is not None and hasattr(parent, "request_rebalance"):
+        try:
             parent.request_rebalance()
-    except Exception:
-        pass
+        except Exception:
+            pass
 
 
 __all__ = ["load_ui_schema", "build_groups_from_schema"]
+

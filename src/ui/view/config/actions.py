@@ -27,6 +27,16 @@ from src.ui.view.config.config_switch_wifi import (
 )
 
 
+def _rebalance_panel(panel: Any) -> None:
+    """Request a layout rebalance on a ConfigGroupPanel, if available."""
+    if panel is None or not hasattr(panel, "request_rebalance"):
+        return
+    try:
+        panel.request_rebalance()
+    except Exception:
+        logging.debug("Failed to rebalance config panel", exc_info=True)
+
+
 def handle_config_event(page: Any, event: str, **payload: Any) -> None:
     """Unified entry point for all Config-page UI events.
 
@@ -37,9 +47,10 @@ def handle_config_event(page: Any, event: str, **payload: Any) -> None:
     state changes share the same code paths.
     """
     event = str(event or "").strip()
+    config_ctl = getattr(page, "config_ctl", None)
 
     if event == "init":
-        # Initial UI pass – derive state purely from current widget values
+        # Initial UI pass �?derive state purely from current widget values
         # and config without forcing any particular ordering.
         try:
             case_path = getattr(page, "_current_case_path", "") or ""
@@ -114,9 +125,6 @@ def handle_config_event(page: Any, event: str, **payload: Any) -> None:
         # Re-compute editable info + page availability.
         if hasattr(page, "get_editable_fields"):
             page.get_editable_fields(case_path)
-            # 当选择稳定性用例时，自动切换到 Stability 设置页；
-            # 性能用例则切到 Execution，方便用户查看配置。
-            config_ctl = getattr(page, "config_ctl", None)
             view = getattr(page, "view", None)
             if config_ctl is not None and view is not None and hasattr(view, "set_current_page"):
                 try:
@@ -150,16 +158,16 @@ def handle_config_event(page: Any, event: str, **payload: Any) -> None:
         text = str(payload.get("text", ""))
         # Apply serial UI + rules regardless of the underlying widget type.
         apply_serial_enabled_ui_state(page, text)
-        if hasattr(page, "_request_rebalance_for_panels") and hasattr(page, "_dut_panel"):
-            page._request_rebalance_for_panels(page._dut_panel)
+        if hasattr(page, "_dut_panel"):
+            _rebalance_panel(page._dut_panel)
         apply_config_ui_rules(page)
         return
 
     if event == "rf_model_changed":
         model_text = str(payload.get("model_text", ""))
         apply_rf_model_ui_state(page, model_text)
-        if hasattr(page, "_request_rebalance_for_panels") and hasattr(page, "_execution_panel"):
-            page._request_rebalance_for_panels(page._execution_panel)
+        if hasattr(page, "_execution_panel"):
+            _rebalance_panel(page._execution_panel)
         return
 
     if event == "rvr_tool_changed":
@@ -167,20 +175,18 @@ def handle_config_event(page: Any, event: str, **payload: Any) -> None:
         field_widgets = getattr(page, "field_widgets", {}) or {}
         ix_path = field_widgets.get("rvr.ixchariot.path")
         apply_rvr_tool_ui_state(page, tool_text)
-        if hasattr(page, "_request_rebalance_for_panels") and hasattr(page, "_execution_panel"):
-            page._request_rebalance_for_panels(page._execution_panel)
+        if hasattr(page, "_execution_panel"):
+            _rebalance_panel(page._execution_panel)
         return
 
     if event == "router_name_changed":
         name = str(payload.get("name", ""))
-        config_ctl = getattr(page, "config_ctl", None)
         if config_ctl is not None:
             config_ctl.handle_router_name_changed(name)
         return
 
     if event == "router_address_changed":
         text = str(payload.get("address", ""))
-        config_ctl = getattr(page, "config_ctl", None)
         if config_ctl is not None:
             config_ctl.handle_router_address_changed(text)
         return
@@ -246,11 +252,14 @@ def handle_config_event(page: Any, event: str, **payload: Any) -> None:
 def apply_rf_model_ui_state(page: Any, model_str: str) -> None:
     """Toggle RF-solution parameter fields based on the selected model.
 
-    This replaces the旧基于 group 的实现，直接依赖 schema 生成的字段 key：
+    This replaces the legacy group-based implementation and relies directly
+    on schema-generated field keys, for example:
     - ``rf_solution.RC4DAT-8G-95.*``
     - ``rf_solution.RADIORACK-4-220.ip_address``
     - ``rf_solution.LDA-908V-8.*``
-    RS232Board5 作为“无需配置”的模型，只保留 RF Model 下拉本身，其余字段全部隐藏。
+
+    The ``RS232Board5`` model requires no extra configuration beyond the
+    RF Model combo itself, so all additional fields remain hidden.
     """
     field_widgets = getattr(page, "field_widgets", {}) or {}
 
@@ -260,7 +269,7 @@ def apply_rf_model_ui_state(page: Any, model_str: str) -> None:
             return
         if hasattr(w, "setVisible"):
             w.setVisible(visible)
-        # 同步隐藏 label（QFormLayout 场景下）
+        # Also hide the label in QFormLayout-based rows.
         try:
             parent = w.parent()
             from PyQt5.QtWidgets import QFormLayout  # type: ignore
@@ -276,7 +285,7 @@ def apply_rf_model_ui_state(page: Any, model_str: str) -> None:
 
     model_str = str(model_str or "").strip()
 
-    # 默认全部隐藏具体型号字段
+    # Hide all model-specific fields by default.
     for key in (
         "rf_solution.RC4DAT-8G-95.idVendor",
         "rf_solution.RC4DAT-8G-95.idProduct",
@@ -287,7 +296,7 @@ def apply_rf_model_ui_state(page: Any, model_str: str) -> None:
     ):
         _set_field_visible(key, False)
 
-    # RS232Board5：无需用户配置，维持默认 all hidden。
+    # RS232Board5: keep all model-specific fields hidden (no user config).
     if model_str == "RS232Board5":
         return
 
@@ -537,9 +546,7 @@ def compute_editable_info(page: Any, case_path: str) -> EditableInfo:
         info.fields |= rvr_keys
         info.enable_csv = True
         info.enable_rvr_wifi = True
-    # RvO cases: enable turntable related controls; 需求更新后，
-    # RvO 也需要 RF Solution 与 Turntable 同时可编辑。
-    if "rvo" in basename:
+    # RvO cases: enable turntable related controls; 需求更新后�?    # RvO 也需�?RF Solution �?Turntable 同时可编辑�?    if "rvo" in basename:
         info.fields |= {
             "Turntable.model",
             "Turntable.ip_address",
@@ -557,7 +564,7 @@ def compute_editable_info(page: Any, case_path: str) -> EditableInfo:
             "rf_solution.LDA-908V-8.ip_address",
             "rf_solution.LDA-908V-8.channels",
         }
-    # RvR cases: enable RF solution section（仅 RF Solution）.
+    # RvR cases: enable RF solution section（仅 RF Solution�?
     if "rvr" in basename:
         info.fields |= {
             "rf_solution.step",
@@ -628,10 +635,7 @@ def apply_field_effects(page: Any, effects: FieldEffect) -> None:
         widget = field_widgets.get(key)
         if widget is None:
             return
-        # Kernel Version 的可编辑状态由 Control Type 决定：
-        # - Android: 始终禁用（值由 Android Version 映射）
-        # - Linux:   始终可编辑
-        if key == "system.kernel_version":
+        # Kernel Version 的可编辑状态由 Control Type 决定�?        # - Android: 始终禁用（值由 Android Version 映射�?        # - Linux:   始终可编�?        if key == "system.kernel_version":
             connect_type_val = _current_connect_type_value()
             if connect_type_val == "Android":
                 enabled = False
@@ -738,10 +742,9 @@ def update_script_config_ui(page: Any, case_path: str) -> None:
             for entry in script_groups.values():
                 if entry.group.isVisible():
                     entry.group.setVisible(False)
-            if hasattr(page, "_stability_panel"):
-                page._stability_panel.set_groups([])
-                if hasattr(page, "_request_rebalance_for_panels"):
-                    page._request_rebalance_for_panels(page._stability_panel)
+        if hasattr(page, "_stability_panel"):
+            page._stability_panel.set_groups([])
+            _rebalance_panel(page._stability_panel)
         if hasattr(page, "_refresh_script_section_states"):
             page._refresh_script_section_states()
         return
@@ -761,9 +764,6 @@ def update_script_config_ui(page: Any, case_path: str) -> None:
             else:
                 page._load_script_config_into_widgets(entry, {})
             active_entry = entry
-            # 当切换到 test_switch_wifi Stability 脚本时，强制同步
-            # use_router 复选框与 router_csv 的启用状态，避免之前
-            # 初始化或规则评估后残留的 enabled 状态。
             if key == "test_switch_wifi":
                 field_widgets = getattr(page, "field_widgets", {}) or {}
                 use_router = (
@@ -783,12 +783,13 @@ def update_script_config_ui(page: Any, case_path: str) -> None:
                     )
     if hasattr(page, "_stability_panel"):
         if active_entry is not None:
-            groups = page._compose_stability_groups(active_entry)
+            from src.ui.view.config import compose_stability_groups
+
+            groups = compose_stability_groups(page, active_entry)
             page._stability_panel.set_groups(groups)
         else:
             page._stability_panel.set_groups([])
-        if hasattr(page, "_request_rebalance_for_panels"):
-            page._request_rebalance_for_panels(page._stability_panel)
+        _rebalance_panel(page._stability_panel)
     if hasattr(page, "_refresh_script_section_states"):
         page._refresh_script_section_states()
 
@@ -826,9 +827,9 @@ def init_system_version_actions(page: Any) -> None:
 
     The actual dependency (Android Version -> Kernel Version) is already
     implemented in ``CaseConfigPage._on_android_version_changed`` and
-    ``_apply_android_kernel_mapping``.  Here我们只负责把 schema 构建出来的
-    ``system.version`` / ``system.kernel_version`` 控件挂回到这些已有方法上，
-    不重新实现任何业务逻辑。
+    ``_apply_android_kernel_mapping``. This helper only reconnects the
+    schema-built ``system.version`` / ``system.kernel_version`` widgets
+    back to those legacy handlers without re-implementing business logic.
     """
     field_widgets = getattr(page, "field_widgets", {}) or {}
 
@@ -837,28 +838,30 @@ def init_system_version_actions(page: Any) -> None:
     if version_widget is None or kernel_widget is None:
         return
 
-    # 挂回旧代码依赖的属性名，保持 CaseConfigPage 里的实现不变。
+    # Expose widgets under legacy attribute names used by CaseConfigPage.
     setattr(page, "android_version_combo", version_widget)
     setattr(page, "kernel_version_combo", kernel_widget)
 
-    # 把 Android Version 的变化重新接回原来的 _on_android_version_changed，
-    # 但在调用前后保持 kernel combo 的 enabled 状态不变（是否可编辑仍由
-    # connect_type 和规则统一控制）。
-    original_handler = getattr(page, "_on_android_version_changed", None)
-    if callable(original_handler) and hasattr(version_widget, "currentTextChanged"):
-        def _on_version_changed(text: str) -> None:
-            kernel = getattr(page, "kernel_version_combo", None)
-            prev_enabled = kernel.isEnabled() if kernel is not None else None
-            original_handler(text)
-            if kernel is not None:
-                after_handler = kernel.isEnabled()
-                if prev_enabled is not None and after_handler != prev_enabled:
-                    kernel.setEnabled(prev_enabled)
+    # Reconnect Android Version combo to the original handler, but keep
+    # the kernel combo's enabled state controlled purely by connect_type
+    # and the rule engine (CONFIG_UI_RULES).
+    handler = getattr(page, "_on_android_version_changed", None)
+    if not (callable(handler) and hasattr(version_widget, "currentTextChanged")):
+        return
 
-        try:
-            version_widget.currentTextChanged.connect(_on_version_changed)
-        except Exception:
-            logging.debug("Failed to bind _on_android_version_changed wrapper", exc_info=True)
+    def _on_version_changed(text: str) -> None:
+        kernel = getattr(page, "kernel_version_combo", None)
+        prev_enabled = kernel.isEnabled() if kernel is not None else None
+        handler(text)
+        if kernel is not None:
+            after_handler = kernel.isEnabled()
+            if prev_enabled is not None and after_handler != prev_enabled:
+                kernel.setEnabled(prev_enabled)
+
+    try:
+        version_widget.currentTextChanged.connect(_on_version_changed)
+    except Exception:
+        logging.debug("Failed to bind _on_android_version_changed wrapper", exc_info=True)
 
 
 def init_fpga_dropdowns(view: Any) -> None:
@@ -1095,13 +1098,9 @@ def handle_connect_type_changed(page: Any, display_text: str) -> None:
         except Exception:
             logging.debug("Failed to update Android system for connect type", exc_info=True)
 
-    if hasattr(page, "_request_rebalance_for_panels") and hasattr(page, "_dut_panel"):
-        try:
-            page._request_rebalance_for_panels(page._dut_panel)
-        except Exception:
-            logging.debug("Failed to rebalance panels after connect type change", exc_info=True)
+    if hasattr(page, "_dut_panel"):
+        _rebalance_panel(page._dut_panel)
 
-    # 让规则引擎根据新的 connect_type 重新计算 enable/disable。
     try:
         apply_config_ui_rules(page)
     except Exception:
@@ -1130,8 +1129,7 @@ def handle_third_party_toggled(page: Any, checked: bool) -> None:
     """Central handler for Third‑party checkbox toggles (UI + rules)."""
     enabled = bool(checked)
     apply_third_party_ui_state(page, enabled)
-    # 重新跑一次规则，让 R02/R03 之类的效果生效。
-    apply_config_ui_rules(page)
+    # 重新跑一次规则，�?R02/R03 之类的效果生效�?    apply_config_ui_rules(page)
 
 
 def handle_third_party_toggled_with_permission(
@@ -1200,9 +1198,8 @@ def _bind_serial_actions(page: Any) -> None:
     def _apply_serial(text: str) -> None:
         """Shared helper to apply serial UI + rules."""
         apply_serial_enabled_ui_state(page, text)
-        if hasattr(page, "_request_rebalance_for_panels") and hasattr(page, "_dut_panel"):
-            page._request_rebalance_for_panels(page._dut_panel)
-        # 触发 R03，让 Port/Baud 的 enabled 状态根据 serial_port.status 更新。
+        if hasattr(page, "_dut_panel"):
+            _rebalance_panel(page._dut_panel)
         apply_config_ui_rules(page)
 
     # Checkbox-based status.
@@ -1389,8 +1386,7 @@ def _bind_case_tree_actions(page: Any) -> None:
         # 更新当前用例显示（右上角路径等）
         if hasattr(page, "_update_test_case_display"):
             page._update_test_case_display(normalized_display)
-        # 触发可编辑字段和页面集合的逻辑（包括 DUT / Execution / Stability 标签）
-        if hasattr(page, "get_editable_fields"):
+        # 触发可编辑字段和页面集合的逻辑（包�?DUT / Execution / Stability 标签�?        if hasattr(page, "get_editable_fields"):
             page.get_editable_fields(path)
 
     tree.clicked.connect(_on_case_tree_clicked)
