@@ -221,6 +221,7 @@ class ConfigGroupPanel(QWidget):
 
     def clear(self) -> None:
         """Remove all tracked groups from this panel."""
+        self.setUpdatesEnabled(False)
         self._group_entries.clear()
         self._group_positions.clear()
         self._col_weight = [0] * len(self._column_layouts)
@@ -229,7 +230,8 @@ class ConfigGroupPanel(QWidget):
                 item = column.takeAt(0)
                 widget = item.widget()
                 if widget is not None:
-                    widget.setParent(None)
+                    widget.hide()
+        self.setUpdatesEnabled(True)
 
     def add_group(self, group: QWidget | None, weight: int | None = None, defer: bool = False) -> None:
         """Add a group widget to the panel, optionally deferring layout."""
@@ -237,6 +239,8 @@ class ConfigGroupPanel(QWidget):
             return
         apply_theme(group)
         apply_groupbox_style(group)
+        # Ensure groups are visible when (re)added; clear() may have hidden them.
+        group.show()
         for idx, (existing, _) in enumerate(self._group_entries):
             if existing is group:
                 self._group_entries[idx] = (group, weight)
@@ -248,9 +252,13 @@ class ConfigGroupPanel(QWidget):
 
     def set_groups(self, groups: list[QWidget]) -> None:
         """Replace all groups with ``groups`` and rebalance layout."""
-        self.clear()
-        for group in groups:
-            self.add_group(group, defer=True)
+        self.setUpdatesEnabled(False)
+        try:
+            self.clear()
+            for group in groups:
+                self.add_group(group, defer=True)
+        finally:
+            self.setUpdatesEnabled(True)
         self.request_rebalance()
 
     def request_rebalance(self) -> None:
@@ -312,10 +320,13 @@ class ConfigGroupPanel(QWidget):
         entries.sort(key=lambda item: item[1], reverse=True)
         for layout in self._column_layouts:
             while layout.count():
+                # Take items out of layouts, but do not change the parent
+                # of the underlying widgets so that they never become
+                # standalone top-level windows.
                 item = layout.takeAt(0)
                 widget = item.widget()
                 if widget is not None:
-                    widget.setParent(None)
+                    widget.hide()
         self._col_weight = [0] * len(self._column_layouts)
         moved_groups: list[tuple[QWidget, QRect | None]] = []
         for group, height in entries:
