@@ -345,17 +345,33 @@ CONFIG_UI_RULES: Dict[str, RuleSpec] = {
         "cases": {
             True: {
                 "enable_fields": [
-                    "stability.cases.test_str.ac",
+                    "stability.cases.test_str.ac.on_duration",
+                    "stability.cases.test_str.ac.off_duration",
+                    "stability.cases.test_str.ac.relay_type",
+                    "stability.cases.test_str.ac.port",
+                    "stability.cases.test_str.ac.mode",
+                    "stability.cases.test_str.ac.relay_params",
                 ],
             },
             False: {
                 "disable_fields": [
-                    "stability.cases.test_str.ac",
+                    "stability.cases.test_str.ac.on_duration",
+                    "stability.cases.test_str.ac.off_duration",
+                    "stability.cases.test_str.ac.relay_type",
+                    "stability.cases.test_str.ac.port",
+                    "stability.cases.test_str.ac.mode",
+                    "stability.cases.test_str.ac.relay_params",
                 ],
             },
         },
         "related_fields": [
             "stability.cases.test_str.ac.enabled",
+            "stability.cases.test_str.ac.on_duration",
+            "stability.cases.test_str.ac.off_duration",
+            "stability.cases.test_str.ac.relay_type",
+            "stability.cases.test_str.ac.port",
+            "stability.cases.test_str.ac.mode",
+            "stability.cases.test_str.ac.relay_params",
         ],
     },
     "R14b_test_str_str_section_enabled": {
@@ -369,17 +385,33 @@ CONFIG_UI_RULES: Dict[str, RuleSpec] = {
         "cases": {
             True: {
                 "enable_fields": [
-                    "stability.cases.test_str.str",
+                    "stability.cases.test_str.str.on_duration",
+                    "stability.cases.test_str.str.off_duration",
+                    "stability.cases.test_str.str.relay_type",
+                    "stability.cases.test_str.str.port",
+                    "stability.cases.test_str.str.mode",
+                    "stability.cases.test_str.str.relay_params",
                 ],
             },
             False: {
                 "disable_fields": [
-                    "stability.cases.test_str.str",
+                    "stability.cases.test_str.str.on_duration",
+                    "stability.cases.test_str.str.off_duration",
+                    "stability.cases.test_str.str.relay_type",
+                    "stability.cases.test_str.str.port",
+                    "stability.cases.test_str.str.mode",
+                    "stability.cases.test_str.str.relay_params",
                 ],
             },
         },
         "related_fields": [
             "stability.cases.test_str.str.enabled",
+            "stability.cases.test_str.str.on_duration",
+            "stability.cases.test_str.str.off_duration",
+            "stability.cases.test_str.str.relay_type",
+            "stability.cases.test_str.str.port",
+            "stability.cases.test_str.str.mode",
+            "stability.cases.test_str.str.relay_params",
         ],
     },
 

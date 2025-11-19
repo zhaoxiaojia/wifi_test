@@ -1,11 +1,12 @@
-"""STR / RF-step specific widgets for the Config page."""
+"""STR / RF-step specific widgets and helpers for the Config page."""
 
 from __future__ import annotations
 
-from typing import Sequence
+from typing import Any, Sequence
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
+    QCheckBox,
     QGridLayout,
     QHBoxLayout,
     QLabel,
@@ -16,6 +17,8 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 from qfluentwidgets import LineEdit, PushButton
+
+from src.ui.view.config.actions import apply_config_ui_rules
 
 
 class RfStepSegmentsWidget(QWidget):
@@ -161,5 +164,26 @@ class RfStepSegmentsWidget(QWidget):
         return max(0, value)
 
 
-__all__ = ["RfStepSegmentsWidget"]
+def bind_script_section(page: Any, checkbox: QCheckBox, controls: Sequence[QWidget]) -> None:
+    """
+    Bind a script-level section checkbox to rule evaluation.
 
+    This is primarily used by the ``test_str`` stability configuration to
+    toggle AC / STR sections.  The concrete enable/disable behaviour for the
+    controls is defined in ``CONFIG_UI_RULES`` (rules R14/R15).  This helper
+    simply re-evaluates the rules whenever the checkbox toggles so that the
+    view logic stays outside the controller.
+    """
+
+    if not isinstance(checkbox, QCheckBox):
+        return
+
+    def _apply(_checked: bool) -> None:
+        apply_config_ui_rules(page)
+
+    checkbox.toggled.connect(_apply)
+    # Ensure initial state honours the rules as well.
+    apply_config_ui_rules(page)
+
+
+__all__ = ["RfStepSegmentsWidget", "bind_script_section"]

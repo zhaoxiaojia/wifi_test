@@ -1,7 +1,8 @@
-"""Switch Wi-Fi specific editor widgets for the Config page."""
+"""Switch Wi-Fi specific widgets and helpers for the Config page."""
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Mapping, Sequence
 
 from PyQt5.QtCore import Qt, QSignalBlocker
@@ -10,13 +11,13 @@ from PyQt5.QtWidgets import (
     QFormLayout,
     QHBoxLayout,
     QHeaderView,
-    QLabel,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
     QWidget,
+    QCheckBox,
 )
-from qfluentwidgets import ComboBox, LineEdit, PushButton
+from qfluentwidgets import ComboBox, LineEdit, PushButton, InfoBar, InfoBarPosition
 
 from src.util.constants import (
     AUTH_OPTIONS,
@@ -71,24 +72,27 @@ class SwitchWifiManualEditor(QWidget):
         )
         layout.addWidget(self.table)
 
-        form = QFormLayout()
-        form.setContentsMargins(0, 0, 0, 0)
-        form.setSpacing(6)
+        # Input rows: keep controls simple inside the editor itself.
+        # Outer layouts (e.g. CaseConfigPage) can decide whether to show
+        # labels in a separate column.
+        inputs_column = QVBoxLayout()
+        inputs_column.setContentsMargins(0, 0, 0, 0)
+        inputs_column.setSpacing(4)
 
         self.ssid_edit = LineEdit(self)
         self.ssid_edit.setPlaceholderText("SSID")
-        form.addRow("SSID", self.ssid_edit)
+        inputs_column.addWidget(self.ssid_edit)
 
         self.security_combo = ComboBox(self)
         self.security_combo.addItems(AUTH_OPTIONS)
         self.security_combo.setMinimumWidth(160)
-        form.addRow("Security", self.security_combo)
+        inputs_column.addWidget(self.security_combo)
 
         self.password_edit = LineEdit(self)
         self.password_edit.setPlaceholderText("Password (optional)")
-        form.addRow("Password", self.password_edit)
+        inputs_column.addWidget(self.password_edit)
 
-        layout.addLayout(form)
+        layout.addLayout(inputs_column)
 
         buttons_row = QHBoxLayout()
         buttons_row.setContentsMargins(0, 0, 0, 0)
@@ -139,6 +143,25 @@ class SwitchWifiManualEditor(QWidget):
         """Return a deep copy of current entries."""
         return [dict(e) for e in self._entries]
 
+    def serialize(self) -> list[dict[str, str]]:
+        """Return entries in a config-friendly format (SSID/security/password)."""
+        return self.entries()
+
+    def set_manual_editing_enabled(self, enabled: bool) -> None:
+        """Enable/disable manual editing controls while keeping table visible."""
+        for w in (
+            self.ssid_edit,
+            self.security_combo,
+            self.password_edit,
+            self.add_btn,
+            self.del_btn,
+        ):
+            w.setEnabled(bool(enabled))
+
+    def serialize(self) -> list[dict[str, str]]:
+        """Return entries in a config-friendly format (SSID/security/password)."""
+        return self.entries()
+
     # Internal helpers ---------------------------------------------------
 
     def _refresh_table(self) -> None:
@@ -187,13 +210,26 @@ class SwitchWifiManualEditor(QWidget):
             self._clear_form()
 
     def _on_add_entry(self) -> None:
-        entry = {
-            SWITCH_WIFI_ENTRY_SSID_FIELD: self.ssid_edit.text().strip(),
-            SWITCH_WIFI_ENTRY_SECURITY_FIELD: self.security_combo.currentText().strip(),
-            SWITCH_WIFI_ENTRY_PASSWORD_FIELD: self.password_edit.text(),
-        }
-        if not entry[SWITCH_WIFI_ENTRY_SSID_FIELD]:
+        ssid = self.ssid_edit.text().strip()
+        security = self.security_combo.currentText().strip()
+        password = self.password_edit.text()
+        if not ssid:
             return
+        # OPEN System 无需密码；其他安全模式必须提供密码。
+        if security != "Open System" and not password:
+            parent_widget = self.window() if isinstance(self.window(), QWidget) else self
+            InfoBar.error(
+                title="Wi-Fi list",
+                content="Password is required for the selected Security mode.",
+                parent=parent_widget,
+                position=InfoBarPosition.TOP,
+            )
+            return
+        entry = {
+            SWITCH_WIFI_ENTRY_SSID_FIELD: ssid,
+            SWITCH_WIFI_ENTRY_SECURITY_FIELD: security,
+            SWITCH_WIFI_ENTRY_PASSWORD_FIELD: password,
+        }
         self._entries.append(entry)
         self._refresh_table()
 
@@ -239,6 +275,20 @@ class SwitchWifiCsvPreview(QWidget):
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         layout.addWidget(self.table)
 
+    def update_entries(self, entries: Sequence[Mapping[str, Any]]) -> None:
+        """Convenience helper: render entries list as a 3-column table."""
+        headers = ["SSID", "Security Mode", "Password"]
+        rows: list[list[Any]] = []
+        for entry in entries or []:
+            rows.append(
+                [
+                    str(entry.get(SWITCH_WIFI_ENTRY_SSID_FIELD, "") or ""),
+                    str(entry.get(SWITCH_WIFI_ENTRY_SECURITY_FIELD, "") or ""),
+                    str(entry.get(SWITCH_WIFI_ENTRY_PASSWORD_FIELD, "") or ""),
+                ]
+            )
+        self.set_preview_rows(headers, rows)
+
     def set_preview_rows(self, headers: Sequence[str], rows: Sequence[Sequence[Any]], limit: int = 20) -> None:
         """Display up to ``limit`` rows from the CSV with the given headers."""
         self.table.clear()
@@ -256,5 +306,239 @@ class SwitchWifiCsvPreview(QWidget):
                 self.table.setItem(row_idx, col_idx, item)
 
 
-__all__ = ["SwitchWifiManualEditor", "SwitchWifiCsvPreview"]
+def sync_switch_wifi_on_csv_changed(page: Any, new_path: str | None) -> None:
+    """Sync switch_wifi UI when the global Execution CSV combo changes.
 
+    When the current stability script is ``test_switch_wifi`` and the
+    \"Use router configuration\" checkbox is checked, changes to the main
+    Execution CSV combo should also update the router CSV selector and the
+    Wi‑Fi list table so that the user always sees the SSID list for the
+    effective CSV.
+    """
+    if not new_path:
+        return
+    try:
+        case_path = getattr(page, "_current_case_path", "") or ""
+        script_key = (
+            page._script_case_key(case_path)
+            if case_path and hasattr(page, "_script_case_key")
+            else ""
+        )
+    except Exception:
+        script_key = ""
+    if script_key != "switch_wifi":
+        return
+
+    field_widgets = getattr(page, "field_widgets", {}) or {}
+    use_router = (
+        field_widgets.get("stability.cases.switch_wifi.use_router")
+        or field_widgets.get("cases.test_switch_wifi.use_router")
+    )
+    router_csv = (
+        field_widgets.get("stability.cases.switch_wifi.router_csv")
+        or field_widgets.get("cases.test_switch_wifi.router_csv")
+    )
+    wifi_list = (
+        field_widgets.get("stability.cases.switch_wifi.manual_entries")
+        or field_widgets.get("cases.test_switch_wifi.manual_entries")
+    )
+
+    is_router_mode = bool(isinstance(use_router, QCheckBox) and use_router.isChecked())
+    if not is_router_mode:
+        return
+
+    # 1) Try to keep the router_csv combo selection aligned with new_path.
+    if isinstance(router_csv, ComboBox):
+        finder = getattr(page, "_find_csv_index", None)
+        try:
+            idx = finder(new_path, router_csv) if callable(finder) else -1
+        except Exception:
+            idx = -1
+        if idx >= 0:
+            try:
+                with QSignalBlocker(router_csv):
+                    router_csv.setCurrentIndex(idx)
+            except Exception:
+                logging.debug("Failed to sync switch_wifi router_csv from Execution CSV change", exc_info=True)
+
+    # 2) Refresh the Wi‑Fi list table entries.
+    if isinstance(wifi_list, SwitchWifiManualEditor) and hasattr(page, "_load_switch_wifi_entries"):
+        try:
+            entries = page._load_switch_wifi_entries(new_path)
+        except Exception:
+            entries = []
+        wifi_list.set_entries(entries)
+
+
+def handle_switch_wifi_use_router_changed(page: Any, checked: bool) -> None:
+    """Handle toggling of the 'Use router configuration' checkbox for switch_wifi."""
+    field_widgets = getattr(page, "field_widgets", {}) or {}
+    use_router = (
+        field_widgets.get("stability.cases.switch_wifi.use_router")
+        or field_widgets.get("cases.test_switch_wifi.use_router")
+    )
+    router_csv = (
+        field_widgets.get("stability.cases.switch_wifi.router_csv")
+        or field_widgets.get("cases.test_switch_wifi.router_csv")
+    )
+    wifi_list = (
+        field_widgets.get("stability.cases.switch_wifi.manual_entries")
+        or field_widgets.get("cases.test_switch_wifi.manual_entries")
+    )
+
+    # 1) Enable/disable + show/hide router_csv combo based on the mode.
+    if router_csv is not None:
+        if hasattr(router_csv, "setEnabled"):
+            router_csv.setEnabled(bool(checked))
+        if hasattr(router_csv, "setVisible"):
+            router_csv.setVisible(bool(checked))
+
+    # 2) When router mode is enabled, load entries from the currently selected CSV.
+    if checked and router_csv is not None and hasattr(router_csv, "currentIndex"):
+        try:
+            idx = router_csv.currentIndex()
+        except Exception:
+            idx = -1
+        if idx >= 0 and hasattr(router_csv, "itemData"):
+            data = router_csv.itemData(idx)
+            csv_path = data if isinstance(data, str) and data else router_csv.currentText()
+            if hasattr(page, "_set_selected_csv"):
+                try:
+                    page._set_selected_csv(csv_path, sync_combo=True)
+                except Exception:
+                    logging.debug(
+                        "Failed to sync selected CSV for switch_wifi router mode",
+                        exc_info=True,
+                    )
+            signal = getattr(page, "csvFileChanged", None)
+            if signal is not None and hasattr(signal, "emit"):
+                try:
+                    signal.emit(csv_path or "")
+                except Exception:
+                    logging.debug(
+                        "Failed to emit csvFileChanged for switch_wifi router mode",
+                        exc_info=True,
+                    )
+            if isinstance(wifi_list, SwitchWifiManualEditor) and hasattr(page, "_load_switch_wifi_entries"):
+                entries = page._load_switch_wifi_entries(csv_path)
+                wifi_list.set_entries(entries)
+            if hasattr(page, "_update_rvr_nav_button"):
+                try:
+                    setattr(page, "_router_config_active", bool(csv_path))
+                    page._update_rvr_nav_button()
+                except Exception:
+                    logging.debug("Failed to update RVR nav button for switch_wifi", exc_info=True)
+
+
+def handle_switch_wifi_router_csv_changed(page: Any, index: int) -> None:
+    """Handle router CSV combo index change in the switch_wifi stability section."""
+    field_widgets = getattr(page, "field_widgets", {}) or {}
+    router_csv = (
+        field_widgets.get("stability.cases.switch_wifi.router_csv")
+        or field_widgets.get("cases.test_switch_wifi.router_csv")
+    )
+    wifi_list = (
+        field_widgets.get("stability.cases.switch_wifi.manual_entries")
+        or field_widgets.get("cases.test_switch_wifi.manual_entries")
+    )
+    use_router = (
+        field_widgets.get("stability.cases.switch_wifi.use_router")
+        or field_widgets.get("cases.test_switch_wifi.use_router")
+    )
+    is_router_mode = bool(isinstance(use_router, QCheckBox) and use_router.isChecked())
+    if not is_router_mode:
+        return
+    if router_csv is None or not hasattr(router_csv, "itemData"):
+        return
+    if index < 0:
+        return
+    data = router_csv.itemData(index)
+    csv_path = data if isinstance(data, str) and data else router_csv.currentText()
+
+    if hasattr(page, "_set_selected_csv"):
+        try:
+            page._set_selected_csv(csv_path, sync_combo=True)
+        except Exception:
+            logging.debug("Failed to sync selected_csv_path from switch_wifi router_csv", exc_info=True)
+    signal = getattr(page, "csvFileChanged", None)
+    if signal is not None and hasattr(signal, "emit"):
+        try:
+            signal.emit(csv_path or "")
+        except Exception:
+            logging.debug("Failed to emit csvFileChanged from switch_wifi", exc_info=True)
+
+    if isinstance(wifi_list, SwitchWifiManualEditor) and hasattr(page, "_load_switch_wifi_entries"):
+        entries = page._load_switch_wifi_entries(csv_path)
+        wifi_list.set_entries(entries)
+    if hasattr(page, "_update_rvr_nav_button"):
+        try:
+            setattr(page, "_router_config_active", bool(csv_path))
+            page._update_rvr_nav_button()
+        except Exception:
+            logging.debug("Failed to update RVR nav button for switch_wifi CSV change", exc_info=True)
+
+
+def init_switch_wifi_actions(page: Any) -> None:
+    """Wire test_switch_wifi Stability case controls to the unified dispatcher."""
+    field_widgets = getattr(page, "field_widgets", {}) or {}
+
+    use_router = (
+        field_widgets.get("stability.cases.switch_wifi.use_router")
+        or field_widgets.get("cases.test_switch_wifi.use_router")
+    )
+    router_csv = (
+        field_widgets.get("stability.cases.switch_wifi.router_csv")
+        or field_widgets.get("cases.test_switch_wifi.router_csv")
+    )
+    wifi_list = (
+        field_widgets.get("stability.cases.switch_wifi.manual_entries")
+        or field_widgets.get("cases.test_switch_wifi.manual_entries")
+    )
+
+    # Reuse Execution CSV behaviour for the router_csv combo:
+    # entries come from performance CSV directory, and we disable the
+    # \"Select config csv file\" placeholder for switch_wifi.
+    if isinstance(router_csv, ComboBox):
+        router_csv.setProperty("switch_wifi_include_placeholder", False)
+        if hasattr(page, "_refresh_registered_csv_combos"):
+            try:
+                page._refresh_registered_csv_combos()
+            except Exception:
+                logging.debug("refresh_registered_csv_combos failed for switch_wifi", exc_info=True)
+
+    # Hook up checkbox to dispatcher entrypoint.
+    if isinstance(use_router, QCheckBox):
+        def _on_use_router_toggled(checked: bool) -> None:
+            from src.ui.view.config.actions import handle_config_event  # local import to avoid cycles
+
+            handle_config_event(
+                page,
+                "switch_wifi_use_router_changed",
+                checked=bool(checked),
+            )
+
+        use_router.toggled.connect(_on_use_router_toggled)
+        _on_use_router_toggled(use_router.isChecked())
+
+    # Router CSV combo: when selection changes, update Wi‑Fi list from CSV.
+    if router_csv is not None and hasattr(router_csv, "currentIndexChanged"):
+        def _on_router_csv_index_changed(index: int) -> None:
+            from src.ui.view.config.actions import handle_config_event  # local import to avoid cycles
+
+            handle_config_event(
+                page,
+                "switch_wifi_router_csv_changed",
+                index=int(index),
+            )
+
+        router_csv.currentIndexChanged.connect(_on_router_csv_index_changed)
+
+
+__all__ = [
+    "SwitchWifiManualEditor",
+    "SwitchWifiCsvPreview",
+    "sync_switch_wifi_on_csv_changed",
+    "handle_switch_wifi_use_router_changed",
+    "handle_switch_wifi_router_csv_changed",
+    "init_switch_wifi_actions",
+]

@@ -114,7 +114,7 @@ from .view.common import (
     attach_view_to_page,
 )
 from .view.common import TestFileFilterModel, _StepSwitcher
-from .view.config import RfStepSegmentsWidget, SwitchWifiCsvPreview, SwitchWifiManualEditor
+from .view.config import RfStepSegmentsWidget, SwitchWifiManualEditor
 from src.ui.view.config.actions import (
     apply_rf_model_ui_state,
     apply_run_lock_ui_state,
@@ -130,7 +130,9 @@ from src.ui.view.config.actions import (
     apply_field_effects,
     apply_config_ui_rules,
     compute_editable_info,
+    update_script_config_ui,
 )
+from src.ui.view.config.config_str import bind_script_section
 from .config_proxy import ConfigProxy
 from .view.builder import load_ui_schema, build_groups_from_schema
 from .run_proxy import on_run as _proxy_on_run
@@ -667,45 +669,6 @@ class CaseConfigPage(CardWidget):
         """Delegate stability case defaults to the config proxy."""
         return self.config_proxy.ensure_script_case_defaults(case_key, case_path)
 
-    def _update_script_config_ui(self, case_path: str | Path) -> None:
-        """
-        Update the  script config ui to reflect current data.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        case_key = self._script_case_key(case_path)
-        changed = False
-        active_entry: ScriptConfigEntry | None = None
-        if case_key not in self._script_groups:
-            if self._active_script_case is not None:
-                self._active_script_case = None
-                for entry in self._script_groups.values():
-                    if entry.group.isVisible():
-                        entry.group.setVisible(False)
-                self._stability_panel.set_groups([])
-                self._request_rebalance_for_panels(self._stability_panel)
-            self._refresh_script_section_states()
-            return
-        if self._active_script_case != case_key:
-            self._active_script_case = case_key
-            changed = True
-        for key, entry in self._script_groups.items():
-            visible = key == case_key
-            if entry.group.isVisible() != visible:
-                entry.group.setVisible(visible)
-                changed = True
-            if visible:
-                data = self._ensure_script_case_defaults(key, entry.case_path)
-                self._load_script_config_into_widgets(entry, data)
-                active_entry = entry
-        if active_entry is not None:
-            self._stability_panel.set_groups(self._compose_stability_groups(active_entry))
-        else:
-            self._stability_panel.set_groups([])
-        self._request_rebalance_for_panels(self._stability_panel)
-        self._refresh_script_section_states()
-
     def _load_script_config_into_widgets(
             self,
             entry: ScriptConfigEntry,
@@ -740,27 +703,37 @@ class CaseConfigPage(CardWidget):
                 include_placeholder = router_combo.property("switch_wifi_include_placeholder")
                 use_placeholder = True if include_placeholder is None else bool(include_placeholder)
                 self._populate_csv_combo(router_combo, router_path, include_placeholder=use_placeholder)
+                try:
+                    self._set_selected_csv(router_path, sync_combo=True)
+                except Exception:
+                    logging.debug(
+                        "Failed to sync selected CSV for switch_wifi defaults",
+                        exc_info=True,
+                    )
+                signal = getattr(self, "csvFileChanged", None)
+                if signal is not None and hasattr(signal, "emit"):
+                    try:
+                        signal.emit(router_path or "")
+                    except Exception:
+                        logging.debug(
+                            "Failed to emit csvFileChanged for switch_wifi defaults",
+                            exc_info=True,
+                        )
+                # 保证 Execution Settings / RvR Wi‑Fi 使用的 CSV 选择
+                # 与 switch_wifi router_csv 的默认值保持一致，这样
+                # 初次打开时两个下拉框指向同一个文件。
+                try:
+                    self._set_selected_csv(router_path, sync_combo=True)
+                except Exception:
+                    logging.debug("Failed to sync selected_csv_path from switch_wifi defaults", exc_info=True)
             if isinstance(manual_widget, SwitchWifiManualEditor):
                 manual_entries = data.get(SWITCH_WIFI_MANUAL_ENTRIES_FIELD)
                 if isinstance(manual_entries, Sequence) and not isinstance(manual_entries, (str, bytes)):
                     manual_widget.set_entries(manual_entries)
                 else:
                     manual_widget.set_entries(None)
-            extras = entry.extras if isinstance(entry.extras, dict) else {}
-            preview: SwitchWifiCsvPreview | None = extras.get("router_preview")
-            self._update_switch_wifi_preview(preview, router_path)
-            sync_router_csv = extras.get("sync_router_csv")
-            if sync_router_csv is not None:
-                try:
-                    sync_router_csv(router_path, emit=use_router_value)
-                except Exception as exc:
-                    logging.debug("sync_router_csv failed: %s", exc)
-            apply_mode = extras.get("apply_mode")
-            if apply_mode is not None:
-                try:
-                    apply_mode(use_router_value)
-                except Exception as exc:
-                    logging.debug("apply_mode failed: %s", exc)
+            # router_preview / apply_mode are deprecated; preview is removed
+            # and router/manual mode is handled by view/actions layer.
             return
 
         ac_cfg = data.get("ac", {})
@@ -768,19 +741,24 @@ class CaseConfigPage(CardWidget):
 
         def _set_spin(key: str, raw_value: Any) -> None:
             """
-            Set the spin property on the instance.
+            Set a numeric duration field (AC/STR on/off) from stored value.
 
-            This method encapsulates the logic necessary to perform its function.
-            Refer to the implementation for details on parameters and return values.
+            Historically these were QSpinBox widgets; schema has been updated
+            to use line edits, so this helper now supports both QSpinBox and
+            LineEdit while keeping the numeric normalisation in one place.
             """
             widget = entry.widgets.get(key)
+            try:
+                value = int(raw_value)
+            except (TypeError, ValueError):
+                value = 0
+            value = max(0, value)
             if isinstance(widget, QSpinBox):
-                try:
-                    value = int(raw_value)
-                except (TypeError, ValueError):
-                    value = 0
                 with QSignalBlocker(widget):
-                    widget.setValue(max(0, value))
+                    widget.setValue(value)
+            elif isinstance(widget, LineEdit):
+                with QSignalBlocker(widget):
+                    widget.setText(str(value))
 
         def _set_checkbox(key: str, raw_value: Any) -> None:
             """
@@ -837,22 +815,6 @@ class CaseConfigPage(CardWidget):
         """
         apply_config_ui_rules(self)
 
-    def _bind_script_section(self, checkbox: QCheckBox, controls: Sequence[QWidget]) -> None:
-        """
-        Bind a script-level section checkbox to rule evaluation.
-
-        The actual enable/disable behaviour for the controls is defined in
-        CONFIG_UI_RULES (see R14* rules for test_str).  This helper simply
-        re-evaluates the rules whenever the checkbox toggles.
-        """
-
-        def _apply(_checked: bool) -> None:
-            apply_config_ui_rules(self)
-
-        checkbox.toggled.connect(_apply)
-        # Ensure initial state honours the rules as well.
-        apply_config_ui_rules(self)
-
     def _create_test_swtich_wifi_config_entry_from_schema(
             self,
             case_key: str,
@@ -886,9 +848,56 @@ class CaseConfigPage(CardWidget):
                 widgets[script_key] = widget
             return widget
 
-        _bind_field(SWITCH_WIFI_USE_ROUTER_FIELD)
-        _bind_field(SWITCH_WIFI_ROUTER_CSV_FIELD)
-        _bind_field(SWITCH_WIFI_MANUAL_ENTRIES_FIELD)
+        use_router_widget = _bind_field(SWITCH_WIFI_USE_ROUTER_FIELD)
+        router_widget = _bind_field(SWITCH_WIFI_ROUTER_CSV_FIELD)
+        manual_widget = _bind_field(SWITCH_WIFI_MANUAL_ENTRIES_FIELD)
+
+        # When the schema provides a widget for manual entries, replace that
+        # single field with the dedicated SwitchWifiManualEditor and fan out
+        # its controls into separate form rows so that the layout matches
+        # other fields (label on the left, editor on the right).
+        if isinstance(manual_widget, QWidget):
+            parent = manual_widget.parent() or group
+            layout = parent.layout()
+            try:
+                if isinstance(layout, QFormLayout):
+                    label = layout.labelForField(manual_widget)
+                    row = layout.getWidgetPosition(manual_widget)[0]
+                    layout.removeWidget(manual_widget)
+                    manual_widget.setParent(None)
+
+                    editor = SwitchWifiManualEditor(parent)
+                    widgets[self._script_field_key(case_key, SWITCH_WIFI_MANUAL_ENTRIES_FIELD)] = editor
+                    manual_widget = editor
+
+                    # Row 1: Wi‑Fi list table.
+                    wifi_label = label or QLabel("Wi-Fi list", parent)
+                    layout.insertRow(row, wifi_label, editor.table)
+                    row += 1
+                    # Row 2: SSID field.
+                    layout.insertRow(row, QLabel("SSID", parent), editor.ssid_edit)
+                    row += 1
+                    # Row 3: Security combo.
+                    layout.insertRow(row, QLabel("Security", parent), editor.security_combo)
+                    row += 1
+                    # Row 4: Password field.
+                    layout.insertRow(row, QLabel("Password", parent), editor.password_edit)
+                    row += 1
+                    # Row 5: Add/Remove buttons (no label).
+                    buttons_container = QWidget(parent)
+                    buttons_layout = QHBoxLayout(buttons_container)
+                    buttons_layout.setContentsMargins(0, 0, 0, 0)
+                    buttons_layout.setSpacing(8)
+                    buttons_layout.addWidget(editor.add_btn)
+                    buttons_layout.addWidget(editor.del_btn)
+                    buttons_layout.addStretch(1)
+                    layout.insertRow(row, QLabel("", parent), buttons_container)
+            except Exception:
+                pass
+
+        # Treat router_csv as a CSV combo driven by the shared RvR Wi-Fi proxy.
+        if isinstance(router_widget, ComboBox):
+            self._register_switch_wifi_csv_combo(router_widget)
 
         field_keys = set(widgets.keys())
         section_controls: dict[str, tuple[QCheckBox, Sequence[QWidget]]] = {}
@@ -961,14 +970,14 @@ class CaseConfigPage(CardWidget):
             w for w in (ac_on, ac_off, ac_port, ac_mode, ac_relay_type, ac_relay_params) if w is not None
         ]
         if isinstance(ac_checkbox, QCheckBox):
-            self._bind_script_section(ac_checkbox, ac_controls)
+            bind_script_section(self, ac_checkbox, ac_controls)
             section_controls["ac"] = (ac_checkbox, tuple(ac_controls))
 
-        str_controls: list[Widget] = [
+        str_controls: list[QWidget] = [
             w for w in (str_on, str_off, str_port, str_mode, str_relay_type, str_relay_params) if w is not None
         ]
         if isinstance(str_checkbox, QCheckBox):
-            self._bind_script_section(str_checkbox, str_controls)
+            bind_script_section(self, str_checkbox, str_controls)
             section_controls["str"] = (str_checkbox, tuple(str_controls))
 
         # Ensure relay-type changes also trigger rule evaluation (R15a/b).
@@ -2369,7 +2378,7 @@ class CaseConfigPage(CardWidget):
         self._set_refresh_ui_locked(True)
 
         try:
-            self._update_script_config_ui(case_path)
+            update_script_config_ui(self, case_path)
             info = compute_editable_info(self, case_path)
             logging.debug("get_editable_fields enable_csv=%s", info.enable_csv)
             if info.enable_csv and not hasattr(self, "csv_combo"):

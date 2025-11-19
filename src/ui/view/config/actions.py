@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any
+from typing import Any, Sequence
 
 from PyQt5.QtCore import QSortFilterProxyModel, QSignalBlocker
 from PyQt5.QtWidgets import QWidget, QCheckBox, QFormLayout, QLabel
@@ -19,6 +19,12 @@ from src.util.constants import TURN_TABLE_MODEL_OTHER, WIFI_PRODUCT_PROJECT_MAP
 from src.ui.model.rules import FieldEffect, RuleSpec, CONFIG_UI_RULES
 from src.ui.view.builder import build_groups_from_schema, load_ui_schema
 from src.ui.view.common import EditableInfo
+from src.ui.view.config.config_switch_wifi import (
+    sync_switch_wifi_on_csv_changed,
+    handle_switch_wifi_use_router_changed,
+    handle_switch_wifi_router_csv_changed,
+    init_switch_wifi_actions,
+)
 
 
 def handle_config_event(page: Any, event: str, **payload: Any) -> None:
@@ -203,6 +209,32 @@ def handle_config_event(page: Any, event: str, **payload: Any) -> None:
         signal = getattr(page, "csvFileChanged", None)
         if signal is not None and hasattr(signal, "emit"):
             signal.emit(new_path or "")
+
+        sync_switch_wifi_on_csv_changed(page, new_path)
+        return
+
+    if event == "switch_wifi_use_router_changed":
+        checked = bool(payload.get("checked", False))
+        handle_switch_wifi_use_router_changed(page, checked)
+        return
+
+    if event == "switch_wifi_router_csv_changed":
+        index = int(payload.get("index", -1))
+        handle_switch_wifi_router_csv_changed(page, index)
+        return
+
+    if event in {
+        "stability_exitfirst_changed",
+        "stability_ping_changed",
+        "stability_script_section_toggled",
+        "stability_relay_type_changed",
+        "switch_wifi_use_router_changed",
+        "switch_wifi_router_csv_changed",
+    }:
+        # Stability Settings: test_str / test_switch_wifi duration & relay rules.
+        # All concrete enable/disable logic lives in CONFIG_UI_RULES (R14–R18);
+        # here we simply re-evaluate rules based on updated widget states.
+        apply_config_ui_rules(page)
         return
 
     # Unknown events are ignored to keep the dispatcher tolerant of future
@@ -453,10 +485,12 @@ def refresh_config_page_controls(page: Any) -> None:
     except Exception:
         logging.debug("Failed to initialise stability common groups", exc_info=True)
 
-    # Wire FPGA dropdowns + Control Type / Third‑party wiring.
+    # Wire FPGA dropdowns + Control Type / Third‑party / Stability wiring.
     init_fpga_dropdowns(page)
     init_connect_type_actions(page)
     init_system_version_actions(page)
+    init_stability_actions(page)
+    init_switch_wifi_actions(page)
     _bind_serial_actions(page)
     _bind_turntable_actions(page)
     _bind_rf_rvr_actions(page)
@@ -698,6 +732,101 @@ def apply_config_ui_rules(page: Any) -> None:
             effects_to_apply.append(base_effects)
         for eff in effects_to_apply:
             apply_field_effects(page, eff)
+
+
+def update_script_config_ui(page: Any, case_path: str) -> None:
+    """Update Stability script config UI to reflect the active test case.
+
+    This helper moves the view-related logic for stability script sections
+    out of ``CaseConfigPage`` so that the controller only delegates the
+    operation while the view layer coordinates group visibility and layout.
+    """
+    case_key = page._script_case_key(case_path)
+    changed = False
+    active_entry = None
+    script_groups = getattr(page, "_script_groups", {})
+    if case_key not in script_groups:
+        if getattr(page, "_active_script_case", None) is not None:
+            page._active_script_case = None
+            for entry in script_groups.values():
+                if entry.group.isVisible():
+                    entry.group.setVisible(False)
+            if hasattr(page, "_stability_panel"):
+                page._stability_panel.set_groups([])
+                if hasattr(page, "_request_rebalance_for_panels"):
+                    page._request_rebalance_for_panels(page._stability_panel)
+        if hasattr(page, "_refresh_script_section_states"):
+            page._refresh_script_section_states()
+        return
+    if getattr(page, "_active_script_case", None) != case_key:
+        page._active_script_case = case_key
+        changed = True
+    for key, entry in script_groups.items():
+        visible = key == case_key
+        if entry.group.isVisible() != visible:
+            entry.group.setVisible(visible)
+            changed = True
+        if visible:
+            data = page._ensure_script_case_defaults(key, entry.case_path)
+            page._load_script_config_into_widgets(entry, data)
+            active_entry = entry
+            # 当切换到 test_switch_wifi Stability 脚本时，强制同步
+            # use_router 复选框与 router_csv 的启用状态，避免之前
+            # 初始化或规则评估后残留的 enabled 状态。
+            if key == "test_switch_wifi":
+                field_widgets = getattr(page, "field_widgets", {}) or {}
+                use_router = (
+                    field_widgets.get("stability.cases.switch_wifi.use_router")
+                    or field_widgets.get("cases.test_switch_wifi.use_router")
+                )
+                router_csv = (
+                    field_widgets.get("stability.cases.switch_wifi.router_csv")
+                    or field_widgets.get("cases.test_switch_wifi.router_csv")
+                )
+                if isinstance(use_router, QCheckBox) and router_csv is not None:
+                    checked = use_router.isChecked()
+                    handle_config_event(
+                        page,
+                        "switch_wifi_use_router_changed",
+                        checked=bool(checked),
+                    )
+    if hasattr(page, "_stability_panel"):
+        if active_entry is not None:
+            page._stability_panel.set_groups(page._compose_stability_groups(active_entry))
+        else:
+            page._stability_panel.set_groups([])
+        if hasattr(page, "_request_rebalance_for_panels"):
+            page._request_rebalance_for_panels(page._stability_panel)
+    if hasattr(page, "_refresh_script_section_states"):
+        page._refresh_script_section_states()
+
+def init_stability_actions(page: Any) -> None:
+    """Wire Stability panel checkboxes to rule evaluation for Duration/Checkpoint."""
+    field_widgets = getattr(page, "field_widgets", {}) or {}
+
+    exitfirst = field_widgets.get("stability.duration_control.exitfirst") or field_widgets.get(
+        "duration_control.exitfirst"
+    )
+    ping = field_widgets.get("stability.check_point.ping") or field_widgets.get("check_point.ping")
+
+    from PyQt5.QtWidgets import QCheckBox  # local import to avoid cycles
+
+    if isinstance(exitfirst, QCheckBox):
+        exitfirst.toggled.connect(
+            lambda checked: handle_config_event(
+                page,
+                "stability_exitfirst_changed",
+                checked=bool(checked),
+            )
+        )
+    if isinstance(ping, QCheckBox):
+        ping.toggled.connect(
+            lambda checked: handle_config_event(
+                page,
+                "stability_ping_changed",
+                checked=bool(checked),
+            )
+        )
 
 
 def init_system_version_actions(page: Any) -> None:
@@ -1400,4 +1529,5 @@ __all__ = [
     "handle_connect_type_changed",
     "handle_third_party_toggled",
     "handle_third_party_toggled_with_permission",
+    "update_script_config_ui",
 ]

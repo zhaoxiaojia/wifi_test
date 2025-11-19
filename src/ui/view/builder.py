@@ -41,6 +41,7 @@ from qfluentwidgets import ComboBox, LineEdit
 
 from src.util.constants import get_model_config_base
 from src.ui.model.options import get_field_choices
+from src.ui.view.config.config_switch_wifi import SwitchWifiManualEditor
 import yaml
 
 
@@ -123,6 +124,18 @@ def _create_widget(page: Any, spec: FieldSpec, value: Any) -> QWidget:
         except Exception:
             spin.setValue(0)
         return spin
+    if wtype == "custom":
+        # Special-case: test_switch_wifi stability Wi‑Fi list uses a dedicated
+        # table editor widget instead of a plain line edit.
+        if spec.key == "cases.test_switch_wifi.manual_entries":
+            return SwitchWifiManualEditor(page)
+        # Fallback: treat custom as a basic line_edit.
+        edit = LineEdit(page)
+        if spec.placeholder:
+            edit.setPlaceholderText(spec.placeholder)
+        if value not in (None, ""):
+            edit.setText(str(value))
+        return edit
     if wtype == "combo_box":
         combo = ComboBox(page)
         # Prefer explicit choices from the schema; otherwise fall back to
