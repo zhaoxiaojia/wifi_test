@@ -34,6 +34,42 @@ from src.ui.view.theme import (
 )
 
 
+def normalize_switch_wifi_manual_entries(entries: Any) -> list[dict[str, str]]:
+    """Normalise manual Wi-Fi entries for switch Wi-Fi stability tests."""
+    normalized: list[dict[str, str]] = []
+    if isinstance(entries, Sequence) and not isinstance(entries, (str, bytes)):
+        for item in entries:
+            if not isinstance(item, Mapping):
+                continue
+            ssid = (
+                str(item.get(SWITCH_WIFI_ENTRY_SSID_FIELD, "") or "")
+                .strip()
+            )
+            mode = (
+                str(
+                    item.get(
+                        SWITCH_WIFI_ENTRY_SECURITY_FIELD,
+                        AUTH_OPTIONS[0],
+                    )
+                    or AUTH_OPTIONS[0]
+                )
+                .strip()
+            )
+            if mode not in AUTH_OPTIONS:
+                mode = AUTH_OPTIONS[0]
+            password = str(
+                item.get(SWITCH_WIFI_ENTRY_PASSWORD_FIELD, "") or ""
+            )
+            normalized.append(
+                {
+                    SWITCH_WIFI_ENTRY_SSID_FIELD: ssid,
+                    SWITCH_WIFI_ENTRY_SECURITY_FIELD: mode,
+                    SWITCH_WIFI_ENTRY_PASSWORD_FIELD: password,
+                }
+            )
+    return normalized
+
+
 class SwitchWifiManualEditor(QWidget):
     """
     Editor widget for maintaining a list of Wi‑Fi network credentials that can
@@ -347,11 +383,12 @@ def sync_switch_wifi_on_csv_changed(page: Any, new_path: str | None) -> None:
     if not is_router_mode:
         return
 
+    config_ctl = getattr(page, "config_ctl", None)
     # 1) Try to keep the router_csv combo selection aligned with new_path.
-    if isinstance(router_csv, ComboBox):
-        finder = getattr(page, "_find_csv_index", None)
+    if isinstance(router_csv, ComboBox) and config_ctl is not None:
         try:
-            idx = finder(new_path, router_csv) if callable(finder) else -1
+            normalized = config_ctl.normalize_csv_path(new_path)
+            idx = config_ctl.find_csv_index(normalized, router_csv)
         except Exception:
             idx = -1
         if idx >= 0:
@@ -359,12 +396,15 @@ def sync_switch_wifi_on_csv_changed(page: Any, new_path: str | None) -> None:
                 with QSignalBlocker(router_csv):
                     router_csv.setCurrentIndex(idx)
             except Exception:
-                logging.debug("Failed to sync switch_wifi router_csv from Execution CSV change", exc_info=True)
+                logging.debug(
+                    "Failed to sync switch_wifi router_csv from Execution CSV change",
+                    exc_info=True,
+                )
 
     # 2) Refresh the Wi‑Fi list table entries.
-    if isinstance(wifi_list, SwitchWifiManualEditor) and hasattr(page, "_load_switch_wifi_entries"):
+    if isinstance(wifi_list, SwitchWifiManualEditor) and config_ctl is not None:
         try:
-            entries = page._load_switch_wifi_entries(new_path)
+            entries = config_ctl.load_switch_wifi_entries(new_path)
         except Exception:
             entries = []
         wifi_list.set_entries(entries)
@@ -402,9 +442,10 @@ def handle_switch_wifi_use_router_changed(page: Any, checked: bool) -> None:
         if idx >= 0 and hasattr(router_csv, "itemData"):
             data = router_csv.itemData(idx)
             csv_path = data if isinstance(data, str) and data else router_csv.currentText()
-            if hasattr(page, "_set_selected_csv"):
+            config_ctl = getattr(page, "config_ctl", None)
+            if config_ctl is not None:
                 try:
-                    page._set_selected_csv(csv_path, sync_combo=True)
+                    config_ctl.set_selected_csv(csv_path, sync_combo=True)
                 except Exception:
                     logging.debug(
                         "Failed to sync selected CSV for switch_wifi router mode",
@@ -419,13 +460,14 @@ def handle_switch_wifi_use_router_changed(page: Any, checked: bool) -> None:
                         "Failed to emit csvFileChanged for switch_wifi router mode",
                         exc_info=True,
                     )
-            if isinstance(wifi_list, SwitchWifiManualEditor) and hasattr(page, "_load_switch_wifi_entries"):
-                entries = page._load_switch_wifi_entries(csv_path)
+            if isinstance(wifi_list, SwitchWifiManualEditor) and config_ctl is not None:
+                entries = config_ctl.load_switch_wifi_entries(csv_path)
                 wifi_list.set_entries(entries)
-            if hasattr(page, "_update_rvr_nav_button"):
+            config_ctl = getattr(page, "config_ctl", None)
+            if config_ctl is not None:
                 try:
                     setattr(page, "_router_config_active", bool(csv_path))
-                    page._update_rvr_nav_button()
+                    config_ctl.update_rvr_nav_button()
                 except Exception:
                     logging.debug("Failed to update RVR nav button for switch_wifi", exc_info=True)
 
@@ -455,9 +497,10 @@ def handle_switch_wifi_router_csv_changed(page: Any, index: int) -> None:
     data = router_csv.itemData(index)
     csv_path = data if isinstance(data, str) and data else router_csv.currentText()
 
-    if hasattr(page, "_set_selected_csv"):
+    config_ctl = getattr(page, "config_ctl", None)
+    if config_ctl is not None:
         try:
-            page._set_selected_csv(csv_path, sync_combo=True)
+            config_ctl.set_selected_csv(csv_path, sync_combo=True)
         except Exception:
             logging.debug("Failed to sync selected_csv_path from switch_wifi router_csv", exc_info=True)
     signal = getattr(page, "csvFileChanged", None)
@@ -467,13 +510,13 @@ def handle_switch_wifi_router_csv_changed(page: Any, index: int) -> None:
         except Exception:
             logging.debug("Failed to emit csvFileChanged from switch_wifi", exc_info=True)
 
-    if isinstance(wifi_list, SwitchWifiManualEditor) and hasattr(page, "_load_switch_wifi_entries"):
-        entries = page._load_switch_wifi_entries(csv_path)
+    if isinstance(wifi_list, SwitchWifiManualEditor) and config_ctl is not None:
+        entries = config_ctl.load_switch_wifi_entries(csv_path)
         wifi_list.set_entries(entries)
-    if hasattr(page, "_update_rvr_nav_button"):
+    if config_ctl is not None:
         try:
             setattr(page, "_router_config_active", bool(csv_path))
-            page._update_rvr_nav_button()
+            config_ctl.update_rvr_nav_button()
         except Exception:
             logging.debug("Failed to update RVR nav button for switch_wifi CSV change", exc_info=True)
 
@@ -500,9 +543,10 @@ def init_switch_wifi_actions(page: Any) -> None:
     # \"Select config csv file\" placeholder for switch_wifi.
     if isinstance(router_csv, ComboBox):
         router_csv.setProperty("switch_wifi_include_placeholder", False)
-        if hasattr(page, "_refresh_registered_csv_combos"):
+        config_ctl = getattr(page, "config_ctl", None)
+        if config_ctl is not None:
             try:
-                page._refresh_registered_csv_combos()
+                config_ctl.refresh_registered_csv_combos()
             except Exception:
                 logging.debug("refresh_registered_csv_combos failed for switch_wifi", exc_info=True)
 

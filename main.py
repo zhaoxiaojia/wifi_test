@@ -1106,7 +1106,8 @@ class MainWindow(FluentWindow):
         -------
         None
         """
-        self.case_config_page.lock_for_running(True)
+        if hasattr(self.case_config_page, "config_ctl"):
+            self.case_config_page.config_ctl.lock_for_running(True)
         if getattr(self, "rvr_wifi_config_page", None):
             self.rvr_wifi_config_page.set_readonly(True)
         try:
@@ -1114,7 +1115,8 @@ class MainWindow(FluentWindow):
         except Exception as e:
             logging.error("on_run failed: %s", e, exc_info=True)
             QMessageBox.critical(self, "Error", f"Unable to run: {e}")
-            self.case_config_page.lock_for_running(False)
+            if hasattr(self.case_config_page, "config_ctl"):
+                self.case_config_page.config_ctl.lock_for_running(False)
             if getattr(self, "rvr_wifi_config_page", None):
                 self.rvr_wifi_config_page.set_readonly(False)
             if self._run_nav_button and not sip.isdeleted(self._run_nav_button):
@@ -1147,14 +1149,19 @@ class MainWindow(FluentWindow):
         if runner:
 
             def _on_runner_finished():
-                self.case_config_page.lock_for_running(False)
+                if hasattr(self.case_config_page, "config_ctl"):
+                    self.case_config_page.config_ctl.lock_for_running(False)
                 if getattr(self, "rvr_wifi_config_page", None):
                     self.rvr_wifi_config_page.set_readonly(False)
                 if self.rvr_nav_button and not sip.isdeleted(self.rvr_nav_button):
-                    is_perf = self.case_config_page._is_performance_case(
-                        getattr(self.run_page, "case_path", "")
+                    case_path = getattr(self.run_page, "case_path", "")
+                    config_ctl = getattr(self.case_config_page, "config_ctl", None)
+                    is_perf = (
+                        config_ctl.is_performance_case(case_path)
+                        if config_ctl is not None
+                        else False
                     )
-                    self.rvr_nav_button.setEnabled(is_perf)
+                    self.rvr_nav_button.setEnabled(bool(is_perf))
 
             self._runner_finished_slot = _on_runner_finished
             runner.finished.connect(self._runner_finished_slot)
@@ -1195,19 +1202,25 @@ class MainWindow(FluentWindow):
         """
         self.setCurrentIndex(self.case_config_page)
         QCoreApplication.processEvents()
-        self.case_config_page.lock_for_running(False)
+        if hasattr(self.case_config_page, "config_ctl"):
+            self.case_config_page.config_ctl.lock_for_running(False)
         if getattr(self, "rvr_wifi_config_page", None):
             self.rvr_wifi_config_page.set_readonly(False)
         if self._run_nav_button and not sip.isdeleted(self._run_nav_button):
             self._run_nav_button.setEnabled(False)
-        self.case_config_page.lock_for_running(False)
+        if hasattr(self, "rvr_wifi_config_page", "set_readonly"):
+            self.rvr_wifi_config_page.set_readonly(False)
         if hasattr(self.rvr_wifi_config_page, "set_readonly"):
             self.rvr_wifi_config_page.set_readonly(False)
         if self.rvr_nav_button and not sip.isdeleted(self.rvr_nav_button):
-            is_perf = self.case_config_page._is_performance_case(
-                getattr(self.run_page, "case_path", "")
+            case_path = getattr(self.run_page, "case_path", "")
+            config_ctl = getattr(self.case_config_page, "config_ctl", None)
+            is_perf = (
+                config_ctl.is_performance_case(case_path)
+                if config_ctl is not None
+                else False
             )
-            self.rvr_nav_button.setEnabled(is_perf)
+            self.rvr_nav_button.setEnabled(bool(is_perf))
         logging.info("Switched to CaseConfigPage")
 
     # --- Reports ---

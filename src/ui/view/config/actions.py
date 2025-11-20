@@ -131,6 +131,19 @@ def on_android_version_changed(page: Any, version: str) -> None:
         logging.debug("on_android_version_changed failed", exc_info=True)
 
 
+def set_refresh_ui_locked(page: Any, locked: bool) -> None:
+    """Lock/unlock tree and global updates while editable info is recomputed."""
+    if hasattr(page, "case_tree"):
+        try:
+            page.case_tree.setEnabled(not locked)
+        except Exception:
+            logging.debug("set_refresh_ui_locked: failed to toggle case_tree", exc_info=True)
+    try:
+        page.setUpdatesEnabled(not locked)
+    except Exception:
+        logging.debug("set_refresh_ui_locked: failed to toggle updates", exc_info=True)
+
+
 
 def _rebalance_panel(panel: Any) -> None:
     """Request a layout rebalance on a ConfigGroupPanel, if available."""
@@ -224,22 +237,17 @@ def handle_config_event(page: Any, event: str, **payload: Any) -> None:
             except Exception:
                 pass
         else:
-            # Use centralized display updater if available, fallback to
-            # legacy page method for backward compatibility.
+            # Use centralized display updater for the selected test case.
             try:
                 update_test_case_display(page, display_path or case_path)
             except Exception:
-                if hasattr(page, "_update_test_case_display"):
-                    try:
-                        page._update_test_case_display(display_path or case_path)
-                    except Exception:
-                        pass
+                logging.debug("update_test_case_display failed in case_clicked", exc_info=True)
 
         # Re-compute editable info + page availability.
-        if hasattr(page, "get_editable_fields"):
-            page.get_editable_fields(case_path)
-            view = getattr(page, "view", None)
-            if config_ctl is not None and view is not None and hasattr(view, "set_current_page"):
+        view = getattr(page, "view", None)
+        if config_ctl is not None:
+            config_ctl.get_editable_fields(case_path)
+            if view is not None and hasattr(view, "set_current_page"):
                 try:
                     if config_ctl.is_stability_case(case_path):
                         view.set_current_page("stability")
@@ -307,24 +315,23 @@ def handle_config_event(page: Any, event: str, **payload: Any) -> None:
     if event == "csv_index_changed":
         index = int(payload.get("index", -1))
         force = bool(payload.get("force", False))
+        if config_ctl is None:
+            return
         csv_combo = getattr(page, "csv_combo", None)
         if csv_combo is None:
             return
         if index < 0:
-            if hasattr(page, "_set_selected_csv"):
-                page._set_selected_csv(None, sync_combo=False)
+            config_ctl.set_selected_csv(None, sync_combo=False)
             return
         if not hasattr(csv_combo, "itemData"):
             return
         data = csv_combo.itemData(index)
         logging.debug("handle_config_event csv_index_changed index=%s data=%s", index, data)
-        normalizer = getattr(page, "_normalize_csv_path", None)
-        new_path = normalizer(data) if callable(normalizer) else data
+        new_path = config_ctl.normalize_csv_path(data)
         current = getattr(page, "selected_csv_path", None)
         if not force and new_path == current:
             return
-        if hasattr(page, "_set_selected_csv"):
-            page._set_selected_csv(new_path, sync_combo=False)
+        config_ctl.set_selected_csv(new_path, sync_combo=False)
         setattr(page, "selected_csv_path", new_path)
         signal = getattr(page, "csvFileChanged", None)
         if signal is not None and hasattr(signal, "emit"):
@@ -453,18 +460,30 @@ def apply_rvr_tool_ui_state(page: Any, tool: str) -> None:
 
 def apply_serial_enabled_ui_state(page: Any, text: str) -> None:
     """Show/hide the serial config group when serial is enabled/disabled."""
-    if hasattr(page, "serial_cfg_group"):
-        page.serial_cfg_group.setVisible(text == "True")
+      if hasattr(page, "serial_cfg_group"):
+          page.serial_cfg_group.setVisible(text == "True")
 
 
-def apply_turntable_model_ui_state(page: Any, model: str) -> None:
+  def apply_turntable_model_ui_state(page: Any, model: str) -> None:
     """Toggle visibility/enabled state for turntable IP controls."""
     if not hasattr(page, "turntable_ip_edit") or not hasattr(page, "turntable_ip_label"):
         return
     requires_ip = model == TURN_TABLE_MODEL_OTHER
     page.turntable_ip_label.setVisible(requires_ip)
     page.turntable_ip_edit.setVisible(requires_ip)
-    page.turntable_ip_edit.setEnabled(requires_ip)
+          page.turntable_ip_edit.setEnabled(requires_ip)
+
+
+def set_fields_editable(page: Any, fields: set[str]) -> None:
+    """Enable or disable config widgets based on the given editable field keys."""
+    widgets = getattr(page, "field_widgets", {}) or {}
+    for key, widget in widgets.items():
+        try:
+            enabled = key in fields
+            if hasattr(widget, "setEnabled"):
+                widget.setEnabled(enabled)
+        except Exception:
+            logging.debug("set_fields_editable failed for key=%s", key, exc_info=True)
 
 
 def apply_run_lock_ui_state(page: Any, locked: bool) -> None:
@@ -472,9 +491,10 @@ def apply_run_lock_ui_state(page: Any, locked: bool) -> None:
     if hasattr(page, "case_tree"):
         page.case_tree.setEnabled(not locked)
     # Sync run button enabled state via controller helper if available.
-    if hasattr(page, "_sync_run_buttons_enabled"):
+    config_ctl = getattr(page, "config_ctl", None)
+    if config_ctl is not None and hasattr(config_ctl, "sync_run_buttons_enabled"):
         try:
-            page._sync_run_buttons_enabled()
+            config_ctl.sync_run_buttons_enabled()
         except Exception:
             pass
     if locked:
@@ -492,9 +512,9 @@ def apply_run_lock_ui_state(page: Any, locked: bool) -> None:
                 pass
     else:
         # Restore editable state and navigation when unlocking.
-        if hasattr(page, "_restore_editable_state"):
+        if hasattr(page, "config_ctl") and hasattr(page.config_ctl, "restore_editable_state"):
             try:
-                page._restore_editable_state()
+                page.config_ctl.restore_editable_state()
             except Exception:
                 pass
         if hasattr(page, "_update_navigation_state"):
@@ -657,11 +677,13 @@ def compute_editable_info(page: Any, case_path: str) -> EditableInfo:
         "fpga.product_line",
         "fpga.project",
     }
+    config_ctl = getattr(page, "config_ctl", None)
+
     # Peak throughput case: limited RvR controls.
     if basename == "test_wifi_peak_throughput.py":
         info.fields |= peak_keys
     # All performance cases share full RvR config and CSV enablement.
-    if hasattr(page, "_is_performance_case") and page._is_performance_case(case_path):
+    if config_ctl is not None and config_ctl.is_performance_case(case_path):
         info.fields |= rvr_keys
         info.enable_csv = True
         info.enable_rvr_wifi = True
@@ -696,7 +718,7 @@ def compute_editable_info(page: Any, case_path: str) -> EditableInfo:
             "rf_solution.LDA-908V-8.channels",
         }
     # Stability cases: enable Duration Control & Check Point base fields.
-    if hasattr(page, "_is_stability_case") and page._is_stability_case(case_path):
+    if config_ctl is not None and config_ctl.is_stability_case(case_path):
         info.fields |= {
             "stability.duration_control.loop",
             "stability.duration_control.duration_hours",
@@ -803,14 +825,14 @@ def apply_config_ui_rules(page: Any) -> None:
     field_widgets = getattr(page, "field_widgets", {}) or {}
     editable_fields = getattr(getattr(page, "_last_editable_info", None), "fields", None)
 
-    # Precompute script key once for rules that depend on a specific script.
-    case_path = getattr(page, "_current_case_path", "") or ""
-    script_key = ""
-    if case_path and hasattr(page, "_script_case_key"):
-        try:
-            script_key = page._script_case_key(case_path)
-        except Exception:
-            script_key = ""
+      # Precompute script key once for rules that depend on a specific script.
+      case_path = getattr(page, "_current_case_path", "") or ""
+      script_key = ""
+      if case_path and config_ctl is not None and hasattr(config_ctl, "script_case_key"):
+          try:
+              script_key = config_ctl.script_case_key(case_path)
+          except Exception:
+              script_key = ""
 
     for rule_id, spec in rules.items():
         active = True
@@ -850,7 +872,9 @@ def update_script_config_ui(page: Any, case_path: str) -> None:
     out of ``CaseConfigPage`` so that the controller only delegates the
     operation while the view layer coordinates group visibility and layout.
     """
-    case_key = page._script_case_key(case_path)
+    if config_ctl is None or not hasattr(config_ctl, "script_case_key"):
+        return
+    case_key = config_ctl.script_case_key(case_path)
     changed = False
     active_entry = None
     script_groups = getattr(page, "_script_groups", {})
@@ -1467,78 +1491,6 @@ def _bind_router_actions(page: Any) -> None:
         )
 
 
-def _bind_case_tree_actions(page: Any) -> None:
-    """Wire case tree click to controller handler that updates selected case."""
-    tree = getattr(page, "case_tree", None)
-    if tree is None or not hasattr(tree, "clicked"):
-        return
-
-    def _on_case_tree_clicked(proxy_idx) -> None:
-        model = tree.model()
-        if model is None:
-            return
-        if isinstance(model, QSortFilterProxyModel):
-            source_idx = model.mapToSource(proxy_idx)
-        else:
-            source_idx = proxy_idx
-        fs_model = getattr(page, "fs_model", None)
-        if fs_model is None or not hasattr(fs_model, "filePath"):
-            return
-        path = fs_model.filePath(source_idx)
-        try:
-            config_ctl = getattr(page, "config_ctl", None)
-            if config_ctl is not None:
-                base = config_ctl.get_application_base()
-            else:
-                base = getattr(page, "_get_application_base")()
-        except Exception:
-            base = None
-        try:
-            display_path = os.path.relpath(path, base) if base is not None else path
-        except Exception:
-            display_path = path
-        logging.debug("on_case_tree_clicked path=%s display=%s", path, display_path)
-        try:
-            is_perf = getattr(page, "_is_performance_case")(path)
-        except Exception:
-            is_perf = False
-        logging.debug("on_case_tree_clicked is_performance=%s", is_perf)
-
-        if os.path.isdir(path):
-            if tree.isExpanded(proxy_idx):
-                tree.collapse(proxy_idx)
-            else:
-                tree.expand(proxy_idx)
-            if hasattr(page, "set_fields_editable"):
-                page.set_fields_editable(set())
-            return
-
-        if not (os.path.isfile(path)
-                and os.path.basename(path).startswith("test_")
-                and path.endswith(".py")):
-            if hasattr(page, "set_fields_editable"):
-                page.set_fields_editable(set())
-            return
-
-        from pathlib import Path as _Path
-
-        normalized_display = _Path(display_path).as_posix() if display_path else ""
-        # 更新当前用例显示（右上角路径等）
-        # 更新当前用例显示（右上角路径等）
-        try:
-            update_test_case_display(page, normalized_display)
-        except Exception:
-            if hasattr(page, "_update_test_case_display"):
-                try:
-                    page._update_test_case_display(normalized_display)
-                except Exception:
-                    pass
-        # 触发可编辑字段和页面集合的逻辑（包�?DUT / Execution / Stability 标签�?        if hasattr(page, "get_editable_fields"):
-            page.get_editable_fields(path)
-
-    tree.clicked.connect(_on_case_tree_clicked)
-
-
 def _bind_csv_actions(page: Any) -> None:
     """Wire main CSV combo to the unified dispatcher."""
     csv_combo = getattr(page, "csv_combo", None)
@@ -1586,12 +1538,9 @@ def _bind_case_tree_actions(page: Any) -> None:
         if fs_model is None or not hasattr(fs_model, "filePath"):
             return
         path = fs_model.filePath(source_idx)
+        config_ctl = getattr(page, "config_ctl", None)
         try:
-            config_ctl = getattr(page, "config_ctl", None)
-            if config_ctl is not None:
-                base = config_ctl.get_application_base()
-            else:
-                base = getattr(page, "_get_application_base")()
+            base = config_ctl.get_application_base() if config_ctl is not None else None
         except Exception:
             base = None
         try:
@@ -1605,15 +1554,13 @@ def _bind_case_tree_actions(page: Any) -> None:
                 tree.collapse(proxy_idx)
             else:
                 tree.expand(proxy_idx)
-            if hasattr(page, "set_fields_editable"):
-                page.set_fields_editable(set())
+            set_fields_editable(page, set())
             return
 
         if not (os.path.isfile(path)
                 and os.path.basename(path).startswith("test_")
                 and path.endswith(".py")):
-            if hasattr(page, "set_fields_editable"):
-                page.set_fields_editable(set())
+            set_fields_editable(page, set())
             return
 
         from pathlib import Path as _Path
@@ -1636,10 +1583,16 @@ def _bind_run_actions(page: Any) -> None:
     if not run_buttons:
         return
 
+    config_ctl = getattr(page, "config_ctl", None)
+
     for btn in run_buttons:
         if not hasattr(btn, "clicked"):
             continue
-        btn.clicked.connect(lambda _checked=False, p=page: p.on_run())
+        if config_ctl is not None and hasattr(config_ctl, "on_run"):
+            btn.clicked.connect(lambda _checked=False, ctl=config_ctl: ctl.on_run())
+        elif hasattr(page, "on_run"):
+            # Backward-compatibility for older pages/tests.
+            btn.clicked.connect(lambda _checked=False, p=page: p.on_run())
 
 
 __all__ = [

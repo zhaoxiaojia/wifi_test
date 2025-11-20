@@ -10,7 +10,7 @@ from PyQt5.QtCore import QTimer, QSignalBlocker,QSortFilterProxyModel
 from PyQt5.QtWidgets import QCheckBox, QSpinBox, QDoubleSpinBox
 from qfluentwidgets import InfoBar, InfoBarPosition, ComboBox, LineEdit
 
-from src.ui.view.config.actions import compute_editable_info
+from src.ui.view.config.actions import compute_editable_info, apply_config_ui_rules
 from src.ui.view.common import EditableInfo
 from src.tools.config_loader import load_config, save_config
 from src import display_to_case_path
@@ -56,6 +56,7 @@ from src.ui.rvrwifi_proxy import (
 )
 from src.ui.view.common import ScriptConfigEntry, TestFileFilterModel
 from src.ui.view.config import RfStepSegmentsWidget, SwitchWifiManualEditor
+from src.ui.view.config.config_switch_wifi import normalize_switch_wifi_manual_entries
 from src.ui.view.config.config_str import script_field_key
 from src.ui.controller import show_info_bar
 
@@ -242,7 +243,7 @@ class ConfigController:
             router_csv = entry.get(SWITCH_WIFI_ROUTER_CSV_FIELD)
             entry[SWITCH_WIFI_ROUTER_CSV_FIELD] = str(router_csv or "").strip()
             manual_entries = entry.get(SWITCH_WIFI_MANUAL_ENTRIES_FIELD)
-            entry[SWITCH_WIFI_MANUAL_ENTRIES_FIELD] = page._normalize_switch_wifi_manual_entries(  # type: ignore[attr-defined]
+            entry[SWITCH_WIFI_MANUAL_ENTRIES_FIELD] = normalize_switch_wifi_manual_entries(
                 manual_entries
             )
             cases_section[case_key] = entry
@@ -1049,6 +1050,99 @@ class ConfigController:
                 focus_widget.selectAll()
         return False
 
+    def validate_first_page(self) -> bool:
+        """Validate DUT page before running or navigating to subsequent pages."""
+        from src.ui.view.config.actions import current_connect_type  # local import
+
+        page = self.page
+        errors: list[str] = []
+        connect_type = ""
+        focus_widget = None
+        if hasattr(page, "connect_type_combo"):
+            connect_type = current_connect_type(page)
+            if not connect_type:
+                errors.append("Connect type is required.")
+                focus_widget = focus_widget or getattr(page, "connect_type_combo", None)
+            elif connect_type == "Android" and hasattr(page, "adb_device_edit"):
+                if not page.adb_device_edit.text().strip():
+                    errors.append("ADB device is required.")
+                    focus_widget = focus_widget or page.adb_device_edit
+            elif connect_type == "Linux" and hasattr(page, "telnet_ip_edit"):
+                if not page.telnet_ip_edit.text().strip():
+                    errors.append("Linux IP is required.")
+                    focus_widget = focus_widget or page.telnet_ip_edit
+                kernel_text = ""
+                if hasattr(page, "kernel_version_combo"):
+                    kernel_text = page.kernel_version_combo.currentText().strip()
+                if not kernel_text:
+                    errors.append("Kernel version is required for Linux access.")
+                    focus_widget = focus_widget or getattr(page, "kernel_version_combo", None)
+            if (
+                hasattr(page, "third_party_checkbox")
+                and page.third_party_checkbox.isChecked()
+            ):
+                wait_text = (
+                    page.third_party_wait_edit.text().strip()
+                    if hasattr(page, "third_party_wait_edit")
+                    else ""
+                )
+                if not wait_text or not wait_text.isdigit() or int(wait_text) <= 0:
+                    errors.append("Third-party wait time must be a positive integer.")
+                    if hasattr(page, "third_party_wait_edit"):
+                        focus_widget = focus_widget or page.third_party_wait_edit
+        else:
+            errors.append("Connect type widget missing.")
+
+        if (
+            hasattr(page, "android_version_combo")
+            and connect_type == "Android"
+            and not page.android_version_combo.currentText().strip()
+        ):
+            errors.append("Android version is required.")
+            focus_widget = focus_widget or getattr(page, "android_version_combo", None)
+
+        fpga_valid = (
+            hasattr(page, "fpga_customer_combo")
+            and hasattr(page, "fpga_product_combo")
+            and hasattr(page, "fpga_project_combo")
+        )
+        customer_text = (
+            page.fpga_customer_combo.currentText().strip() if fpga_valid else ""
+        )
+        product_text = (
+            page.fpga_product_combo.currentText().strip() if fpga_valid else ""
+        )
+        project_text = (
+            page.fpga_project_combo.currentText().strip() if fpga_valid else ""
+        )
+        if not fpga_valid or not customer_text or not product_text or not project_text:
+            errors.append(
+                "Wi-Fi chipset customer, product line and project are required."
+            )
+            if fpga_valid:
+                focus_widget = focus_widget or (
+                    page.fpga_customer_combo
+                    if not customer_text
+                    else page.fpga_product_combo
+                    if not product_text
+                    else page.fpga_project_combo
+                )
+
+        if errors:
+            show_info_bar(
+                page,
+                "warning",
+                "Validation",
+                "\n".join(errors),
+                duration=3000,
+            )
+            if focus_widget is not None:
+                focus_widget.setFocus()
+                if hasattr(focus_widget, "selectAll"):
+                    focus_widget.selectAll()
+            return False
+        return True
+
     # ------------------------------------------------------------------
     # Case classification / page selection
     # ------------------------------------------------------------------
@@ -1256,9 +1350,9 @@ class ConfigController:
             enable_rvr_wifi=enable_rvr_wifi,
         )
         page._last_editable_info = snapshot
-        self._apply_editable_model_state(snapshot)
-        self._apply_editable_ui_state(snapshot)
-        apply_config_ui_rules(page)
+          self._apply_editable_model_state(snapshot)
+          self._apply_editable_ui_state(snapshot)
+          apply_config_ui_rules(page)
 
     def _apply_editable_model_state(self, snapshot: "EditableInfo") -> None:
         """Update internal flags and CSV selection from EditableInfo (no direct UI)."""
@@ -1266,12 +1360,12 @@ class ConfigController:
         page._enable_rvr_wifi = snapshot.enable_rvr_wifi
         if not snapshot.enable_rvr_wifi:
             page._router_config_active = False
-        if hasattr(page, "csv_combo"):
-            if snapshot.enable_csv:
-                page._set_selected_csv(page.selected_csv_path, sync_combo=True)
+        if snapshot.enable_csv:
+            # Ensure selected CSV is applied and combo synced when CSV is enabled.
+            self.set_selected_csv(getattr(page, "selected_csv_path", None), sync_combo=True)
         else:
-            if not snapshot.enable_csv:
-                page._set_selected_csv(None, sync_combo=False)
+            # Clear CSV selection when CSV usage is disabled.
+            self.set_selected_csv(None, sync_combo=False)
 
     def _apply_editable_ui_state(self, snapshot: "EditableInfo") -> None:
         """Apply UI-related changes for EditableInfo (widgets only)."""
@@ -1279,7 +1373,7 @@ class ConfigController:
         page.set_fields_editable(snapshot.fields)
         if hasattr(page, "csv_combo"):
             page.csv_combo.setEnabled(True)
-        page._update_rvr_nav_button()
+        self.update_rvr_nav_button()
 
     def restore_editable_state(self) -> None:
         """Re-apply last EditableInfo snapshot."""
@@ -1298,21 +1392,25 @@ class ConfigController:
             logging.debug("get_editable_fields: refreshing, return empty")
             return EditableInfoType()
 
-        page._refreshing = True
-        page._set_refresh_ui_locked(True)
+          page._refreshing = True
+        from src.ui.view.config.actions import set_refresh_ui_locked, set_fields_editable
+
+        set_refresh_ui_locked(page, True)
 
         try:
             update_script_config_ui(page, case_path)
-            info = compute_editable_info(page, case_path)
-            logging.debug("get_editable_fields enable_csv=%s", info.enable_csv)
-            if info.enable_csv and not hasattr(page, "csv_combo"):
-                info.enable_csv = False
-            self.apply_editable_info(info)
-            page_keys = self.determine_pages_for_case(case_path, info)
-            page._set_available_pages(page_keys)
-            apply_config_ui_rules(page)
-        finally:
-            page._set_refresh_ui_locked(False)
+              info = compute_editable_info(page, case_path)
+              logging.debug("get_editable_fields enable_csv=%s", info.enable_csv)
+              if info.enable_csv and not hasattr(page, "csv_combo"):
+                  info.enable_csv = False
+              self.apply_editable_info(info)
+              page_keys = self.determine_pages_for_case(case_path, info)
+              from src.ui.view.config.actions import set_available_pages
+
+              set_available_pages(page, page_keys)
+              apply_config_ui_rules(page)
+          finally:
+            set_refresh_ui_locked(page, False)
             page._refreshing = False
 
         main_window = page.window()
@@ -1391,13 +1489,13 @@ class ConfigController:
         from PyQt5.QtWidgets import QMessageBox  # local import
 
         page = self.page
-        if not page._validate_first_page():
+        if not self.validate_first_page():
             page.stack.setCurrentIndex(0)
             return
 
         # Reload config to latest on-disk state, then sync widgets -> config.
         page.config = self.load_initial_config()
-        page._capture_preselected_csv()
+        self.capture_preselected_csv()
         self.sync_widgets_to_config()
         if not self.validate_test_str_requirements():
             return

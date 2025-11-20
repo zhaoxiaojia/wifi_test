@@ -142,22 +142,6 @@ from .controller.config_ctl import ConfigController
 from .view.builder import load_ui_schema, build_groups_from_schema
 from .rvrwifi_proxy import (
     _normalize_switch_wifi_manual_entries as _proxy_normalize_switch_wifi_manual_entries,
-    _register_switch_wifi_csv_combo as _proxy_register_switch_wifi_csv_combo,
-    _unregister_switch_wifi_csv_combo as _proxy_unregister_switch_wifi_csv_combo,
-    _list_available_csv_files as _proxy_list_available_csv_files,
-    _resolve_csv_config_path as _proxy_resolve_csv_config_path,
-    _update_csv_options as _proxy_update_csv_options,
-    _capture_preselected_csv as _proxy_capture_preselected_csv,
-    _normalize_csv_path as _proxy_normalize_csv_path,
-    _relativize_config_path as _proxy_relativize_config_path,
-    _find_csv_index as _proxy_find_csv_index,
-    _set_selected_csv as _proxy_set_selected_csv,
-    _populate_csv_combo as _proxy_populate_csv_combo,
-    _refresh_registered_csv_combos as _proxy_refresh_registered_csv_combos,
-    _load_switch_wifi_entries as _proxy_load_switch_wifi_entries,
-    _update_switch_wifi_preview as _proxy_update_switch_wifi_preview,
-    _update_rvr_nav_button as _proxy_update_rvr_nav_button,
-    _open_rvr_wifi_config as _proxy_open_rvr_wifi_config,
 )
 from src.ui.view.theme import (
     apply_theme,
@@ -195,11 +179,6 @@ class CaseConfigPage(CardWidget):
     routerInfoChanged = pyqtSignal()
     csvFileChanged = pyqtSignal(str)
 
-    def on_run(self) -> None:
-        """Entry point used by RunPage and other callers to start a run via controller."""
-        if getattr(self, "config_ctl", None) is not None:
-            self.config_ctl.on_run()
-
     def __init__(self, on_run_callback):
         """
         Initialize the class instance, set up initial state and construct UI widgets.
@@ -233,6 +212,10 @@ class CaseConfigPage(CardWidget):
         self._current_case_path: str = ""
         self._last_editable_info: EditableInfo | None = None
         self._switch_wifi_csv_combos: list[ComboBox] = []
+        # Expose a small helper so view/config glue can register switch‑Wi‑Fi
+        # router CSV combos without depending on legacy private methods.
+        from src.ui.view.config import register_switch_wifi_csv_combo as _reg_sw_csv
+        self.register_switch_wifi_csv_combo = lambda combo: _reg_sw_csv(self, combo)
 
         # Delegate view construction to ConfigView for layout/structure.
         from .view.config import ConfigView
@@ -264,7 +247,6 @@ class CaseConfigPage(CardWidget):
         self._script_groups: dict[str, ScriptConfigEntry] = {}
         self._active_script_case: str | None = None
         self._config_panels = tuple(self._page_panels[key] for key in ("dut", "execution", "stability"))
-        self._sync_run_buttons_enabled()
         # render form fields from yaml（委托给 view/config/actions.refresh_config_page_controls）
         self._dut_groups: dict[str, QWidget] = {}
         self._other_groups: dict[str, QWidget] = {}
@@ -279,11 +261,11 @@ class CaseConfigPage(CardWidget):
         except Exception:
             pass
         self._refresh_script_section_states()
-        self.routerInfoChanged.connect(self._update_csv_options)
-        self._update_csv_options()
+        self.routerInfoChanged.connect(self.config_ctl.update_csv_options)
+        self.config_ctl.update_csv_options()
         # connect signals AFTER UI ready
         self.case_tree.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        QTimer.singleShot(0, lambda: self.get_editable_fields(""))
+        QTimer.singleShot(0, lambda: self.config_ctl.get_editable_fields(""))
 
     def resizeEvent(self, event):
         """
@@ -308,9 +290,11 @@ class CaseConfigPage(CardWidget):
         current = self.stack.currentIndex()
         if target_index == current:
             return
-        if current == 0 and target_index > current and not self._validate_first_page():
-            self.stack.setCurrentIndex(0)
-            return
+        if current == 0 and target_index > current:
+            if getattr(self, "config_ctl", None) is not None:
+                if not self.config_ctl.validate_first_page():
+                    self.stack.setCurrentIndex(0)
+                    return
         if getattr(self, "config_ctl", None) is not None:
             self.config_ctl.sync_widgets_to_config()
         self.stack.setCurrentIndex(target_index)
@@ -410,15 +394,19 @@ class CaseConfigPage(CardWidget):
             use_router_value = bool(data.get(SWITCH_WIFI_USE_ROUTER_FIELD))
             if isinstance(use_router_widget, QCheckBox):
                 use_router_widget.setChecked(use_router_value)
-            router_path = self._resolve_csv_config_path(
+            router_path = self.config_ctl.resolve_csv_config_path(
                 data.get(SWITCH_WIFI_ROUTER_CSV_FIELD)
             )
             if isinstance(router_combo, ComboBox):
                 include_placeholder = router_combo.property("switch_wifi_include_placeholder")
                 use_placeholder = True if include_placeholder is None else bool(include_placeholder)
-                self._populate_csv_combo(router_combo, router_path, include_placeholder=use_placeholder)
+                self.config_ctl.populate_csv_combo(
+                    router_combo,
+                    router_path,
+                    include_placeholder=use_placeholder,
+                )
                 try:
-                    self._set_selected_csv(router_path, sync_combo=True)
+                    self.config_ctl.set_selected_csv(router_path, sync_combo=True)
                 except Exception:
                     logging.debug(
                         "Failed to sync selected CSV for switch_wifi defaults",
@@ -436,10 +424,6 @@ class CaseConfigPage(CardWidget):
                 # 保证 Execution Settings / RvR Wi‑Fi 使用的 CSV 选择
                 # 与 switch_wifi router_csv 的默认值保持一致，这样
                 # 初次打开时两个下拉框指向同一个文件。
-                try:
-                    self._set_selected_csv(router_path, sync_combo=True)
-                except Exception:
-                    logging.debug("Failed to sync selected_csv_path from switch_wifi defaults", exc_info=True)
             if isinstance(manual_widget, SwitchWifiManualEditor):
                 manual_entries = data.get(SWITCH_WIFI_MANUAL_ENTRIES_FIELD)
                 if isinstance(manual_entries, Sequence) and not isinstance(manual_entries, (str, bytes)):
@@ -529,762 +513,21 @@ class CaseConfigPage(CardWidget):
         """
         apply_config_ui_rules(self)
 
-    def _create_test_swtich_wifi_config_entry_from_schema(
-            self,
-            case_key: str,
-            case_path: str,
-            data: Mapping[str, Any],
-    ) -> ScriptConfigEntry:
-        """
-        Build ScriptConfigEntry for ``test_switch_wifi`` using widgets created
-        by the YAML/schema builder.
-
-        No new groups are created here; the builder is responsible for the
-        visual layout. This helper only wires logical field keys so that
-        rules and config loading can operate uniformly.
-        """
-        section_id = f"cases.{case_key}"
-        group = self._other_groups.get(section_id)
-        if group is None:
-            group = QWidget(self)
-
-        widgets: dict[str, QWidget] = {}
-
-        def _bind_field(field: str) -> QWidget | None:
-            script_key = script_field_key(case_key, field)
-            widget = self.field_widgets.get(script_key)
-            if widget is None:
-                raw_key = f"{section_id}.{field}"
-                widget = self.field_widgets.get(raw_key)
-                if widget is not None:
-                    self.field_widgets[script_key] = widget
-            if widget is not None:
-                widgets[script_key] = widget
-            return widget
-
-        use_router_widget = _bind_field(SWITCH_WIFI_USE_ROUTER_FIELD)
-        router_widget = _bind_field(SWITCH_WIFI_ROUTER_CSV_FIELD)
-        manual_widget = _bind_field(SWITCH_WIFI_MANUAL_ENTRIES_FIELD)
-
-        # When the schema provides a widget for manual entries, replace that
-        # single field with the dedicated SwitchWifiManualEditor and fan out
-        # its controls into separate form rows so that the layout matches
-        # other fields (label on the left, editor on the right).
-        if isinstance(manual_widget, QWidget):
-            parent = manual_widget.parent() or group
-            layout = parent.layout()
-            try:
-                if isinstance(layout, QFormLayout):
-                    label = layout.labelForField(manual_widget)
-                    row = layout.getWidgetPosition(manual_widget)[0]
-                    layout.removeWidget(manual_widget)
-                    manual_widget.setParent(None)
-
-                    editor = SwitchWifiManualEditor(parent)
-                    widgets[script_field_key(case_key, SWITCH_WIFI_MANUAL_ENTRIES_FIELD)] = editor
-                    manual_widget = editor
-
-                    # Row 1: Wi‑Fi list table.
-                    wifi_label = label or QLabel("Wi-Fi list", parent)
-                    layout.insertRow(row, wifi_label, editor.table)
-                    row += 1
-                    # Row 2: SSID field.
-                    layout.insertRow(row, QLabel("SSID", parent), editor.ssid_edit)
-                    row += 1
-                    # Row 3: Security combo.
-                    layout.insertRow(row, QLabel("Security", parent), editor.security_combo)
-                    row += 1
-                    # Row 4: Password field.
-                    layout.insertRow(row, QLabel("Password", parent), editor.password_edit)
-                    row += 1
-                    # Row 5: Add/Remove buttons (no label).
-                    buttons_container = QWidget(parent)
-                    buttons_layout = QHBoxLayout(buttons_container)
-                    buttons_layout.setContentsMargins(0, 0, 0, 0)
-                    buttons_layout.setSpacing(8)
-                    buttons_layout.addWidget(editor.add_btn)
-                    buttons_layout.addWidget(editor.del_btn)
-                    buttons_layout.addStretch(1)
-                    layout.insertRow(row, QLabel("", parent), buttons_container)
-            except Exception:
-                pass
-
-        # Treat router_csv as a CSV combo driven by the shared RvR Wi-Fi proxy.
-        if isinstance(router_widget, ComboBox):
-            self._register_switch_wifi_csv_combo(router_widget)
-
-        field_keys = set(widgets.keys())
-        section_controls: dict[str, tuple[QCheckBox, Sequence[QWidget]]] = {}
-
-        return ScriptConfigEntry(
-            group=group,
-            widgets=widgets,
-            field_keys=field_keys,
-            section_controls=section_controls,
-            case_key=case_key,
-            case_path=case_path,
-        )
-
-    def _create_test_str_config_entry_from_schema(
-            self,
-            case_key: str,
-            case_path: str,
-            data: Mapping[str, Any],
-    ) -> ScriptConfigEntry:
-        """
-        Build ScriptConfigEntry for ``test_str`` using widgets created by the
-        YAML/schema builder.
-
-        All AC/STR fields are referenced via ``stability.cases.test_str.*``
-        keys (see ui_rules R14/R15). This helper binds those widgets into a
-        ScriptConfigEntry and ensures rule evaluation runs when the relevant
-        checkboxes or relay-type combos change.
-        """
-        section_id = f"cases.{case_key}"
-        group = self._other_groups.get(section_id)
-        if group is None:
-            group = QWidget(self)
-
-        widgets: dict[str, QWidget] = {}
-
-        def _bind_field(*parts: str) -> QWidget | None:
-            script_key = script_field_key(case_key, *parts)
-            widget = self.field_widgets.get(script_key)
-            if widget is None:
-                raw_key = f"{section_id}." + ".".join(parts)
-                widget = self.field_widgets.get(raw_key)
-                if widget is not None:
-                    self.field_widgets[script_key] = widget
-            if widget is not None:
-                widgets[script_key] = widget
-            return widget
-
-        # AC fields
-        ac_checkbox = _bind_field("ac", "enabled")
-        ac_on = _bind_field("ac", "on_duration")
-        ac_off = _bind_field("ac", "off_duration")
-        ac_port = _bind_field("ac", "port")
-        ac_mode = _bind_field("ac", "mode")
-        ac_relay_type = _bind_field("ac", "relay_type")
-        ac_relay_params = _bind_field("ac", "relay_params")
-
-        # STR fields
-        str_checkbox = _bind_field("str", "enabled")
-        str_on = _bind_field("str", "on_duration")
-        str_off = _bind_field("str", "off_duration")
-        str_port = _bind_field("str", "port")
-        str_mode = _bind_field("str", "mode")
-        str_relay_type = _bind_field("str", "relay_type")
-        str_relay_params = _bind_field("str", "relay_params")
-
-        section_controls: dict[str, tuple[QCheckBox, Sequence[QWidget]]] = {}
-
-        # Bind AC/STR checkboxes so rule engine re-evaluates section state.
-        ac_controls: list[QWidget] = [
-            w for w in (ac_on, ac_off, ac_port, ac_mode, ac_relay_type, ac_relay_params) if w is not None
-        ]
-        if isinstance(ac_checkbox, QCheckBox):
-            bind_script_section(self, ac_checkbox, ac_controls)
-            section_controls["ac"] = (ac_checkbox, tuple(ac_controls))
-
-        str_controls: list[QWidget] = [
-            w for w in (str_on, str_off, str_port, str_mode, str_relay_type, str_relay_params) if w is not None
-        ]
-        if isinstance(str_checkbox, QCheckBox):
-            bind_script_section(self, str_checkbox, str_controls)
-            section_controls["str"] = (str_checkbox, tuple(str_controls))
-
-        # Ensure relay-type changes also trigger rule evaluation (R15a/b).
-        from qfluentwidgets import ComboBox  # local import to avoid cycles
-
-        def _connect_relay_type(widget: QWidget | None) -> None:
-            if isinstance(widget, ComboBox):
-                widget.currentIndexChanged.connect(lambda *_: apply_config_ui_rules(self))
-
-        _connect_relay_type(ac_relay_type)
-        _connect_relay_type(str_relay_type)
-
-        field_keys = set(widgets.keys())
-
-        return ScriptConfigEntry(
-            group=group,
-            widgets=widgets,
-            field_keys=field_keys,
-            section_controls=section_controls,
-            case_key=case_key,
-            case_path=case_path,
-        )
-
-        if not case_path:
-            return ["dut"]
-        keys = ["dut"]
-        if self._is_performance_case(case_path) or info.enable_csv:
-            keys.append("execution")
-        else:
-            case_key = self._script_case_key(case_path)
-            if case_key in self._script_groups:
-                keys.append("stability")
-        return keys
-
-    # ------------------------------------------------------------------
-    # Logical control identifiers for the Config page
-    # ------------------------------------------------------------------
-
-    def _register_config_control_from_section(
-            self,
-            section_id: str,
-            panel: str,
-            field_key: str,
-            widget: QWidget,
-    ) -> None:
-        """Helper used by section classes to register logical control IDs.
-
-        ``field_key`` is typically a dotted path such as
-        ``\"android_system.version\"``.  The first component is treated as
-        the group name, the last component as the field name.
-        """
-        if not field_key:
-            return
-        parts = str(field_key).split(".")
-        group = parts[0] if parts else (section_id or "")
-        field = parts[-1] if parts else (section_id or field_key)
-        self._register_config_control(panel or "main", group, field, widget)
-
-    @staticmethod
-    def _is_dut_key(key: str) -> bool:
-        """
-        Execute the is dut key routine.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        return key in {
-            "connect_type",
-            "fpga",
-            "serial_port",
-            "software_info",
-            "hardware_info",
-            "android_system",  # legacy
-            "system",
-        }
-
-    def _refresh_fpga_product_lines(
-            self,
-            customer: str,
-            product_to_select: Optional[str] = None,
-            *,
-            block_signals: bool = False,
-    ) -> None:
-        """
-        Refresh the  fpga product lines to ensure the UI is up to date.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        if not hasattr(self, "fpga_product_combo"):
-            return
-        combo = self.fpga_product_combo
-        blocker = QSignalBlocker(combo) if block_signals else None
-        customer_upper = customer.strip().upper()
-        product_lines = WIFI_PRODUCT_PROJECT_MAP.get(customer_upper, {}) if customer_upper else {}
-        combo.clear()
-        for product_name in product_lines.keys():
-            combo.addItem(product_name)
-        if product_to_select and product_to_select in product_lines:
-            combo.setCurrentText(product_to_select)
-        else:
-            combo.setCurrentIndex(-1)
-        if blocker is not None:
-            del blocker
-
-    def _refresh_fpga_projects(
-            self,
-            customer: str,
-            product_line: str,
-            project_to_select: Optional[str] = None,
-            *,
-            block_signals: bool = False,
-    ) -> None:
-        """
-        Refresh the  fpga projects to ensure the UI is up to date.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        if not hasattr(self, "fpga_project_combo"):
-            return
-        combo = self.fpga_project_combo
-        blocker = QSignalBlocker(combo) if block_signals else None
-        customer_upper = customer.strip().upper()
-        product_upper = product_line.strip().upper()
-        projects = {}
-        if customer_upper:
-            projects = WIFI_PRODUCT_PROJECT_MAP.get(customer_upper, {}).get(product_upper, {})
-        elif product_upper:
-            for product_lines in WIFI_PRODUCT_PROJECT_MAP.values():
-                if product_upper in product_lines:
-                    projects = product_lines.get(product_upper, {})
-                    break
-        combo.clear()
-        for project_name in projects.keys():
-            combo.addItem(project_name)
-        if project_to_select and project_to_select in projects:
-            combo.setCurrentText(project_to_select)
-        else:
-            combo.setCurrentIndex(-1)
-        if blocker is not None:
-            del blocker
-
-    def _sync_widgets_to_config(self) -> None:
-        """
-        Execute the sync widgets to config routine.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        if not isinstance(self.config, dict):
-            self.config = {}
-        if hasattr(self, "_config_tool_snapshot"):
-            self.config[TOOL_SECTION_KEY] = copy.deepcopy(
-                self._config_tool_snapshot
-            )
-        for key, widget in self.field_widgets.items():
-            parts = key.split('.')
-            ref = self.config
-            for part in parts[:-1]:
-                child = ref.get(part)
-                if not isinstance(child, dict):
-                    child = {}
-                    ref[part] = child
-                ref = child
-            leaf = parts[-1]
-            if isinstance(widget, LineEdit):
-                val = widget.text()
-                if key == "connect_type.third_party.wait_seconds":
-                    val = val.strip()
-                    ref[leaf] = int(val) if val else 0
-                    continue
-                if key == "rf_solution.step":
-                    ref[leaf] = val.strip()
-                    continue
-                if key == f"{TURN_TABLE_SECTION_KEY}.{TURN_TABLE_FIELD_STEP}":
-                    ref[leaf] = val.strip()
-                    continue
-                if key == f"{TURN_TABLE_SECTION_KEY}.{TURN_TABLE_FIELD_STATIC_DB}":
-                    ref[leaf] = val.strip()
-                    continue
-                if key == f"{TURN_TABLE_SECTION_KEY}.{TURN_TABLE_FIELD_TARGET_RSSI}":
-                    ref[leaf] = val.strip()
-                    continue
-                if key == f"{TURN_TABLE_SECTION_KEY}.{TURN_TABLE_FIELD_IP_ADDRESS}":
-                    ref[leaf] = val.strip()
-                    continue
-                if leaf == "relay_params":
-                    items = [item.strip() for item in val.split(',') if item.strip()]
-                    normalized = []
-                    for item in items:
-                        normalized.append(int(item) if item.isdigit() else item)
-                    ref[leaf] = normalized
-                    continue
-                old_val = ref.get(leaf)
-                if isinstance(old_val, list):
-                    items = [x.strip() for x in val.split(',') if x.strip()]
-                    if all(i.isdigit() for i in items):
-                        ref[leaf] = [int(i) for i in items]
-                    else:
-                        ref[leaf] = items
-                else:
-                    val = val.strip()
-                    if len(parts) >= 2 and parts[-2] == "router" and leaf.startswith("passwd") and not val:
-                        ref[leaf] = ""
-                    else:
-                        ref[leaf] = val
-            elif isinstance(widget, RfStepSegmentsWidget):
-                ref[leaf] = widget.serialize()
-            elif isinstance(widget, SwitchWifiManualEditor):
-                ref[leaf] = widget.serialize()
-            elif isinstance(widget, ComboBox):
-                data = widget.currentData()
-                if data not in (None, "", widget.currentText()):
-                    value = data
-                else:
-                    text = widget.currentText().strip()
-                    if text.lower() == 'select port':
-                        text = ''
-                    value = True if text == 'True' else False if text == 'False' else text
-                if key == script_field_key(
-                        SWITCH_WIFI_CASE_KEY, SWITCH_WIFI_ROUTER_CSV_FIELD
-                ):
-                    value = self._relativize_config_path(value)
-                ref[leaf] = value
-            elif isinstance(widget, QSpinBox):
-                ref[leaf] = widget.value()
-            elif isinstance(widget, QDoubleSpinBox):
-                ref[leaf] = float(widget.value())
-            elif isinstance(widget, QCheckBox):
-                ref[leaf] = widget.isChecked()
-        if hasattr(self, "_fpga_details"):
-            self.config["fpga"] = dict(self._fpga_details)
-        base = Path(self.config_ctl.get_application_base())
-        case_display = self.field_widgets.get("text_case")
-        display_text = case_display.text().strip() if isinstance(case_display, LineEdit) else ""
-        storage_path = self._current_case_path or display_to_case_path(display_text)
-        case_path = Path(storage_path).as_posix() if storage_path else ""
-        self._current_case_path = case_path
-        if case_path:
-            abs_case_path = (base / case_path).resolve().as_posix()
-        else:
-            abs_case_path = ""
-        self.config["text_case"] = case_path
-        if self.selected_csv_path:
-            base_cfg = get_config_base()
-            try:
-                rel_csv = os.path.relpath(Path(self.selected_csv_path).resolve(), base_cfg)
-            except ValueError:
-                rel_csv = Path(self.selected_csv_path).resolve().as_posix()
-            self.config["csv_path"] = Path(rel_csv).as_posix()
-        else:
-            self.config.pop("csv_path", None)
-        proxy_idx = self.case_tree.currentIndex()
-        model = self.case_tree.model()
-        src_idx = (
-            model.mapToSource(proxy_idx)
-            if isinstance(model, QSortFilterProxyModel)
-            else proxy_idx
-        )
-        selected_path = self.fs_model.filePath(src_idx)
-        if os.path.isfile(selected_path) and selected_path.endswith(".py"):
-            abs_path = Path(selected_path).resolve()
-            display_path = os.path.relpath(abs_path, base)
-            case_path = Path(display_path).as_posix()
-            self._current_case_path = case_path
-            self.config["text_case"] = case_path
-
-        stability_cfg = self.config.get("stability")
-        if isinstance(stability_cfg, dict):
-            duration_cfg = stability_cfg.get("duration_control")
-            if isinstance(duration_cfg, dict):
-                loop_value = duration_cfg.get("loop")
-                if not isinstance(loop_value, int) or loop_value <= 0:
-                    duration_cfg["loop"] = None
-                duration_value = duration_cfg.get("duration_hours")
-                try:
-                    duration_float = float(duration_value)
-                except (TypeError, ValueError):
-                    duration_float = 0.0
-                duration_cfg["duration_hours"] = duration_float if duration_float > 0 else None
-                duration_cfg["exitfirst"] = bool(duration_cfg.get("exitfirst"))
-                try:
-                    retry_int = int(duration_cfg.get("retry_limit") or 0)
-                except (TypeError, ValueError):
-                    retry_int = 0
-                duration_cfg["retry_limit"] = max(0, retry_int)
-            checkpoint_cfg = stability_cfg.get("check_point")
-            if isinstance(checkpoint_cfg, dict):
-                checkpoint_cfg["ping"] = bool(checkpoint_cfg.get("ping"))
-                checkpoint_cfg["ping_targets"] = str(
-                    checkpoint_cfg.get("ping_targets", "") or ""
-                ).strip()
-
-    def _validate_first_page(self) -> bool:
-        """
-        Execute the validate first page routine.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        errors: list[str] = []
-        connect_type = ""
-        focus_widget: QWidget | None = None
-        if hasattr(self, "connect_type_combo"):
-            connect_type = current_connect_type(self)
-            if not connect_type:
-                errors.append("Connect type is required.")
-                focus_widget = focus_widget or self.connect_type_combo
-            elif connect_type == "Android" and hasattr(self, "adb_device_edit"):
-                if not self.adb_device_edit.text().strip():
-                    errors.append("ADB device is required.")
-                    focus_widget = focus_widget or self.adb_device_edit
-            elif connect_type == "Linux" and hasattr(self, "telnet_ip_edit"):
-                if not self.telnet_ip_edit.text().strip():
-                    errors.append("Linux IP is required.")
-                    focus_widget = focus_widget or self.telnet_ip_edit
-                kernel_text = ""
-                if hasattr(self, "kernel_version_combo"):
-                    kernel_text = self.kernel_version_combo.currentText().strip()
-                if not kernel_text:
-                    errors.append("Kernel version is required for Linux access.")
-                    focus_widget = focus_widget or getattr(self, "kernel_version_combo", None)
-            if hasattr(self, "third_party_checkbox") and self.third_party_checkbox.isChecked():
-                wait_text = self.third_party_wait_edit.text().strip() if hasattr(self, "third_party_wait_edit") else ""
-                if not wait_text or not wait_text.isdigit() or int(wait_text) <= 0:
-                    errors.append("Third-party wait time must be a positive integer.")
-                    if hasattr(self, "third_party_wait_edit"):
-                        focus_widget = focus_widget or self.third_party_wait_edit
-        else:
-            errors.append("Connect type widget missing.")
-        if hasattr(self,
-                   "android_version_combo") and connect_type == "Android" and not self.android_version_combo.currentText().strip():
-            errors.append("Android version is required.")
-            focus_widget = focus_widget or self.android_version_combo
-        fpga_valid = (
-                hasattr(self, "fpga_customer_combo")
-                and hasattr(self, "fpga_product_combo")
-                and hasattr(self, "fpga_project_combo")
-        )
-        customer_text = self.fpga_customer_combo.currentText().strip() if fpga_valid else ""
-        product_text = self.fpga_product_combo.currentText().strip() if fpga_valid else ""
-        project_text = self.fpga_project_combo.currentText().strip() if fpga_valid else ""
-        if not fpga_valid or not customer_text or not product_text or not project_text:
-            errors.append("Wi-Fi chipset customer, product line and project are required.")
-            if fpga_valid:
-                focus_widget = focus_widget or (
-                    self.fpga_customer_combo
-                    if not customer_text
-                    else self.fpga_product_combo
-                    if not product_text
-                    else self.fpga_project_combo
-                )
-        if errors:
-            from src.ui.controller import show_info_bar
-            show_info_bar(
-                self,
-                "warning",
-                "Validation",
-                "\n".join(errors),
-                duration=3000,
-            )
-            if focus_widget is not None:
-                focus_widget.setFocus()
-                if hasattr(focus_widget, "selectAll"):
-                    focus_widget.selectAll()
-            return False
-        return True
-
-    def _validate_test_str_requirements(self) -> bool:
-        """Delegate test_str stability validation to config controller."""
-        if getattr(self, "config_ctl", None) is not None:
-            return self.config_ctl.validate_test_str_requirements()
-        return True
-
-    def _is_performance_case(self, abs_case_path) -> bool:
-        """Delegate performance-case classification to config controller."""
-        return self.config_ctl.is_performance_case(abs_case_path)
-
-    def _is_stability_case(self, case_path: str | Path) -> bool:
-        """Delegate stability-case classification to config controller."""
-        return self.config_ctl.is_stability_case(case_path)
-
-    def _init_case_tree(self, root_dir: Path) -> None:
-        """Delegate case-tree initialisation to the controller."""
-        if getattr(self, "config_ctl", None) is not None:
-            try:
-                self.config_ctl.init_case_tree(root_dir)
-            except Exception:
-                # Preserve previous non-fatal behaviour on failure
-                logging.debug("config_ctl.init_case_tree failed", exc_info=True)
-
-    def _get_application_base(self) -> Path:
-        """Return application root path, prefer controller-provided base."""
-        if getattr(self, "config_ctl", None) is not None and hasattr(self.config_ctl, "get_application_base"):
-            try:
-                return Path(self.config_ctl.get_application_base())
-            except Exception:
-                logging.debug("config_ctl.get_application_base failed", exc_info=True)
-        return Path(get_src_base()).resolve()
-
-    # Connect-type / Android system helpers moved to
-    # `src.ui.view.config.actions`. Use the centralized helpers there.
-
-    def _apply_rf_model_ui_state(self, model_str: str) -> None:
-        """Handle pure UI visibility for RF solution parameter groups."""
-        apply_rf_model_ui_state(self, model_str)
-
-    def _apply_rvr_tool_ui_state(self, tool: str) -> None:
-        """Handle pure UI visibility for RvR tool-specific parameter groups."""
-        apply_rvr_tool_ui_state(self, tool)
-
-    def _apply_serial_enabled_ui_state(self, text: str) -> None:
-        """Handle pure UI visibility for serial config group."""
-        apply_serial_enabled_ui_state(self, text)
-
-    def _register_switch_wifi_csv_combo(self, combo: ComboBox) -> None:
-        """Delegate CSV combo registration to the RvR Wi-Fi proxy."""
-        _proxy_register_switch_wifi_csv_combo(self, combo)
-
-    def _unregister_switch_wifi_csv_combo(self, combo: ComboBox) -> None:
-        """Delegate CSV combo unregistration to the RvR Wi-Fi proxy."""
-        _proxy_unregister_switch_wifi_csv_combo(self, combo)
-
-    def _list_available_csv_files(self) -> list[tuple[str, str]]:
-        """List CSV files using the RvR Wi-Fi proxy helper."""
-        return _proxy_list_available_csv_files()
-
-    def _resolve_csv_config_path(self, value: Any) -> str | None:
-        """Resolve persisted CSV paths via the controller helper."""
-        return self.config_ctl.resolve_csv_config_path(value)
-
-    def _update_csv_options(self) -> None:
-        """Refresh CSV drop-downs via the controller helper."""
-        self.config_ctl.update_csv_options()
-
-    def _capture_preselected_csv(self) -> None:
-        """Cache CSV selections using the controller helper."""
-        self.config_ctl.capture_preselected_csv()
-
-    def _normalize_csv_path(self, path: Any) -> str | None:
-        """Normalise CSV paths via the controller helper."""
-        return self.config_ctl.normalize_csv_path(path)
-
-    def _relativize_config_path(self, path: Any) -> str:
-        """Relativise CSV paths through the controller helper."""
-        return self.config_ctl.relativize_config_path(path)
-
-    def _find_csv_index(self, normalized_path: str | None, combo: ComboBox | None = None) -> int:
-        """Locate CSV indices using the controller helper."""
-        return self.config_ctl.find_csv_index(normalized_path, combo)
-
-    def _set_selected_csv(self, path: str | None, *, sync_combo: bool = True) -> bool:
-        """Update CSV selection via the controller helper."""
-        return self.config_ctl.set_selected_csv(path, sync_combo=sync_combo)
-
-    def _populate_csv_combo(
-            self,
-            combo: ComboBox,
-            selected_path: str | None,
-            *,
-            include_placeholder: bool = False,
-    ) -> None:
-        """Populate CSV combos via the controller helper."""
-        self.config_ctl.populate_csv_combo(combo, selected_path, include_placeholder=include_placeholder)
-
-    def _refresh_registered_csv_combos(self) -> None:
-        """Refresh CSV combo registrations via the controller helper."""
-        self.config_ctl.refresh_registered_csv_combos()
-
-    def _load_switch_wifi_entries(self, csv_path: str | None) -> list[dict[str, str]]:
-        """Load Wi-Fi CSV rows through the controller helper."""
-        return self.config_ctl.load_switch_wifi_entries(csv_path)
-
-    def _update_switch_wifi_preview(
-            self,
-            preview: SwitchWifiCsvPreview | None,
-            csv_path: str | None,
-    ) -> None:
-        """Update Wi-Fi preview widgets via the controller helper."""
-        self.config_ctl.update_switch_wifi_preview(preview, csv_path)
-
-    def _update_rvr_nav_button(self) -> None:
-        """Update the RVR navigation button using the controller helper."""
-        self.config_ctl.update_rvr_nav_button()
-
-    def _open_rvr_wifi_config(self) -> None:
-        """Open the RVR Wi-Fi configuration page via the controller helper."""
-        self.config_ctl.open_rvr_wifi_config()
-
-    def _case_path_to_display(self, case_path: str) -> str:
-        """Delegate conversion of storage path -> display path to shared helper."""
-        try:
-            return case_path_to_display(case_path)
-        except Exception:
-            logging.debug("case_path_to_display failed", exc_info=True)
-            return ""
-
-    def _display_to_case_path(self, display_path: str) -> str:
-        """Delegate conversion of display path -> storage path to shared helper."""
-        try:
-            return display_to_case_path(display_path)
-        except Exception:
-            logging.debug("display_to_case_path failed", exc_info=True)
-            return ""
-
-    def _update_test_case_display(self, storage_path: str) -> None:
-        """Delegate UI update for the selected test case to shared helper."""
-        try:
-            update_test_case_display(self, storage_path)
-        except Exception:
-            logging.debug("update_test_case_display failed", exc_info=True)
-
-    def _apply_editable_info(self, info: EditableInfo | None) -> None:
-        """
-        Execute the apply editable info routine.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        if getattr(self, "config_ctl", None) is not None:
-            self.config_ctl.apply_editable_info(info)
-
-    def _apply_editable_model_state(self, snapshot: EditableInfo) -> None:
-        """Backward-compat shim: delegate to controller."""
-        if getattr(self, "config_ctl", None) is not None:
-            self.config_ctl._apply_editable_model_state(snapshot)
-
-    def _apply_editable_ui_state(self, snapshot: EditableInfo) -> None:
-        """Backward-compat shim: delegate to controller."""
-        if getattr(self, "config_ctl", None) is not None:
-            self.config_ctl._apply_editable_ui_state(snapshot)
-
-    def _restore_editable_state(self) -> None:
-        """
-        Execute the restore editable state routine.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        if getattr(self, "config_ctl", None) is not None:
-            self.config_ctl.restore_editable_state()
-
-    def get_editable_fields(self, case_path) -> EditableInfo:
-        """Control field editability after selecting a test case and return related info."""
-        if getattr(self, "config_ctl", None) is not None:
-            return self.config_ctl.get_editable_fields(str(case_path))
-        return EditableInfo()
-
     def _set_refresh_ui_locked(self, locked: bool) -> None:
         """Lock/unlock tree and global updates while editable info is recomputed."""
         if hasattr(self, "case_tree"):
             self.case_tree.setEnabled(not locked)
         self.setUpdatesEnabled(not locked)
 
-    def set_fields_editable(self, editable_fields: set[str]) -> None:
-        """Batch update field editability; DUT area always remains interactive."""
-        self.setUpdatesEnabled(False)
-        try:
-            always_enabled_roots = {"debug", "csv_path"}
-            for key, widget in self.field_widgets.items():
-                # IxChariot path 的可编辑性由 Execution Settings 中的
-                # rvr.tool 下拉（iperf / ixchariot）在 view 层控制，这里不再
-                # 覆盖它的 enabled 状态，避免和 apply_rvr_tool_ui_state 冲突。
-                if key == "rvr.ixchariot.path":
-                    continue
-                root_key = key.split(".", 1)[0]
-                if self._is_dut_key(root_key) or root_key in always_enabled_roots:
-                    desired = True
-                else:
-                    desired = key in editable_fields
-                if widget.isEnabled() == desired:
-                    continue
-                with QSignalBlocker(widget):
-                    widget.setEnabled(desired)
-            if hasattr(self, "third_party_checkbox") and hasattr(self, "third_party_wait_edit"):
-                allow_wait = (
-                    "connect_type.third_party.enabled" in editable_fields
-                    and "connect_type.third_party.wait_seconds" in editable_fields
-                )
-                handle_third_party_toggled_with_permission(
-                    self,
-                    self.third_party_checkbox.isChecked(),
-                    allow_wait,
-                )
-            self._refresh_script_section_states()
-        finally:
-            self.setUpdatesEnabled(True)
-            self.update()
+    def set_fields_editable(self, fields: set[str]) -> None:
+        """Enable or disable config widgets based on the given editable field keys."""
+        widgets = getattr(self, "field_widgets", {}) or {}
+        for key, widget in widgets.items():
+            try:
+                enabled = key in fields
+                if hasattr(widget, "setEnabled"):
+                    widget.setEnabled(enabled)
+            except Exception:
+                logging.debug("set_fields_editable failed for key=%s", key, exc_info=True)
 
-    def lock_for_running(self, locked: bool) -> None:
-
-        """Enable or disable widgets while a test run is active."""
-        if getattr(self, "config_ctl", None) is not None:
-            self.config_ctl.lock_for_running(locked)
-
+    # Removed stub method lock_for_running - call config_ctl directly

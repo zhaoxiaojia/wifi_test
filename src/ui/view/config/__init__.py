@@ -11,11 +11,16 @@ from __future__ import annotations
 from typing import Any
 
 from PyQt5.QtWidgets import QWidget, QGroupBox
+from qfluentwidgets import ComboBox
 
 from .page import ConfigView
 from .config_switch_wifi import SwitchWifiManualEditor, SwitchWifiCsvPreview
 from .config_str import RfStepSegmentsWidget
 from src.ui.view.common import ConfigGroupPanel, ScriptConfigEntry
+from src.ui.rvrwifi_proxy import (
+    _register_switch_wifi_csv_combo,
+    _unregister_switch_wifi_csv_combo,
+)
 
 
 def init_stability_common_groups(page: Any) -> None:
@@ -55,6 +60,16 @@ def compose_stability_groups(page: Any, active_entry: ScriptConfigEntry | None) 
     return groups
 
 
+def register_switch_wifi_csv_combo(page: Any, combo: ComboBox) -> None:
+    """Register a switch‑Wi‑Fi router CSV combo with the shared RvR proxy."""
+    _register_switch_wifi_csv_combo(page, combo)
+
+
+def unregister_switch_wifi_csv_combo(page: Any, combo: ComboBox) -> None:
+    """Unregister a switch‑Wi‑Fi router CSV combo from the shared RvR proxy."""
+    _unregister_switch_wifi_csv_combo(page, combo)
+
+
 __all__ = [
     "ConfigView",
     "SwitchWifiManualEditor",
@@ -62,4 +77,6 @@ __all__ = [
     "RfStepSegmentsWidget",
     "init_stability_common_groups",
     "compose_stability_groups",
+    "register_switch_wifi_csv_combo",
+    "unregister_switch_wifi_csv_combo",
 ]

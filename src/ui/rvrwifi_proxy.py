@@ -8,52 +8,10 @@ from typing import TYPE_CHECKING, Any, Mapping, Sequence
 from PyQt5.QtCore import QObject, QSignalBlocker
 from qfluentwidgets import ComboBox
 
-from src.util.constants import (
-    AUTH_OPTIONS,
-    SWITCH_WIFI_ENTRY_PASSWORD_FIELD,
-    SWITCH_WIFI_ENTRY_SECURITY_FIELD,
-    SWITCH_WIFI_ENTRY_SSID_FIELD,
-    get_config_base,
-)
+from src.util.constants import get_config_base
 
 if TYPE_CHECKING:  # pragma: no cover - circular import guard
     from .case_config_page import CaseConfigPage
-
-
-def _normalize_switch_wifi_manual_entries(entries: Any) -> list[dict[str, str]]:
-    """Normalise manual Wi-Fi entries for switch Wi-Fi stability tests."""
-    normalized: list[dict[str, str]] = []
-    if isinstance(entries, Sequence) and not isinstance(entries, (str, bytes)):
-        for item in entries:
-            if not isinstance(item, Mapping):
-                continue
-            ssid = (
-                str(item.get(SWITCH_WIFI_ENTRY_SSID_FIELD, "") or "")
-                .strip()
-            )
-            mode = (
-                str(
-                    item.get(
-                        SWITCH_WIFI_ENTRY_SECURITY_FIELD,
-                        AUTH_OPTIONS[0],
-                    )
-                    or AUTH_OPTIONS[0]
-                )
-                .strip()
-            )
-            if mode not in AUTH_OPTIONS:
-                mode = AUTH_OPTIONS[0]
-            password = str(
-                item.get(SWITCH_WIFI_ENTRY_PASSWORD_FIELD, "") or ""
-            )
-            normalized.append(
-                {
-                    SWITCH_WIFI_ENTRY_SSID_FIELD: ssid,
-                    SWITCH_WIFI_ENTRY_SECURITY_FIELD: mode,
-                    SWITCH_WIFI_ENTRY_PASSWORD_FIELD: password,
-                }
-            )
-    return normalized
 
 
 def _register_switch_wifi_csv_combo(page: "CaseConfigPage", combo: ComboBox) -> None:
@@ -120,14 +78,14 @@ def _load_csv_selection_from_config(page: "CaseConfigPage") -> None:
     if config_ctl is not None:
         config_ctl.set_selected_csv(stored, sync_combo=False)
     else:
-        page._set_selected_csv(stored, sync_combo=False)
+        _set_selected_csv(page, stored, sync_combo=False)
 
 
 def _update_csv_options(page: "CaseConfigPage") -> None:
     """Refresh CSV drop-downs to reflect router availability."""
     if hasattr(page, "csv_combo"):
-        page._populate_csv_combo(page.csv_combo, page.selected_csv_path)
-    page._refresh_registered_csv_combos()
+        _populate_csv_combo(page, page.csv_combo, page.selected_csv_path)
+    _refresh_registered_csv_combos(page)
 
 
 def _capture_preselected_csv(page: "CaseConfigPage") -> None:
@@ -139,16 +97,16 @@ def _capture_preselected_csv(page: "CaseConfigPage") -> None:
     if index < 0:
         return
     data = combo.itemData(index)
-    normalized = page._normalize_csv_path(data) if data else None
+    normalized = _normalize_csv_path(data) if data else None
     if not normalized:
-        normalized = page._normalize_csv_path(combo.itemText(index))
+        normalized = _normalize_csv_path(combo.itemText(index))
     if normalized:
         # Prefer controller helper when present.
         config_ctl = getattr(page, "config_ctl", None)
         if config_ctl is not None:
             config_ctl.set_selected_csv(normalized, sync_combo=False)
         else:
-            page._set_selected_csv(normalized, sync_combo=False)
+            _set_selected_csv(page, normalized, sync_combo=False)
 
 
 def _normalize_csv_path(path: Any) -> str | None:
@@ -190,7 +148,7 @@ def _find_csv_index(
         data = target_combo.itemData(idx)
         if not data:
             continue
-        candidate = page._normalize_csv_path(data)
+        candidate = _normalize_csv_path(data)
         if candidate == normalized_path:
             return idx
     return -1
@@ -200,18 +158,18 @@ def _set_selected_csv(
     page: "CaseConfigPage", path: str | None, *, sync_combo: bool = True
 ) -> bool:
     """Update cached CSV selection and optionally sync the combo box."""
-    normalized = page._normalize_csv_path(path)
+    normalized = _normalize_csv_path(path)
     changed = normalized != page.selected_csv_path
     page.selected_csv_path = normalized
     if sync_combo and hasattr(page, "csv_combo"):
         index = -1
         if normalized:
-            index = page._find_csv_index(normalized, page.csv_combo)
+            index = _find_csv_index(page, normalized, page.csv_combo)
         if index < 0 and page.csv_combo.count():
             index = 0
         with QSignalBlocker(page.csv_combo):
             page.csv_combo.setCurrentIndex(index)
-    page._update_rvr_nav_button()
+    _update_rvr_nav_button(page)
     return changed
 
 
@@ -224,7 +182,7 @@ def _populate_csv_combo(
 ) -> None:
     """Populate a combo box with available CSV files."""
     entries = _list_available_csv_files()
-    normalized_selected = page._normalize_csv_path(selected_path)
+    normalized_selected = _normalize_csv_path(selected_path)
     with QSignalBlocker(combo):
         combo.clear()
         if include_placeholder:
@@ -235,7 +193,7 @@ def _populate_csv_combo(
             combo.setItemData(idx, path)
         index = -1
         if normalized_selected:
-            index = page._find_csv_index(normalized_selected, combo)
+            index = _find_csv_index(page, normalized_selected, combo)
             if index < 0:
                 combo.addItem(Path(normalized_selected).name)
                 idx = combo.count() - 1
@@ -261,14 +219,14 @@ def _refresh_registered_csv_combos(page: "CaseConfigPage") -> None:
         selected = data if isinstance(data, str) and data else combo.currentText()
         include_placeholder = combo.property("switch_wifi_include_placeholder")
         use_placeholder = True if include_placeholder is None else bool(include_placeholder)
-        page._populate_csv_combo(combo, selected, include_placeholder=use_placeholder)
+        _populate_csv_combo(page, combo, selected, include_placeholder=use_placeholder)
 
 
 def _load_switch_wifi_entries(
     page: "CaseConfigPage", csv_path: str | None
 ) -> list[dict[str, str]]:
     """Load switch Wi-Fi entries from a CSV file."""
-    normalized = page._normalize_csv_path(csv_path)
+    normalized = _normalize_csv_path(csv_path)
     if not normalized:
         return []
     entries: list[dict[str, str]] = []
@@ -313,7 +271,7 @@ def _update_switch_wifi_preview(
     """Update preview widgets when CSV selections change."""
     if preview is None:
         return
-    entries = page._load_switch_wifi_entries(csv_path)
+    entries = _load_switch_wifi_entries(page, csv_path)
     preview.update_entries(entries)
 
 

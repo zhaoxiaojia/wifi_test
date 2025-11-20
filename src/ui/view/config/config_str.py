@@ -277,7 +277,8 @@ def create_test_switch_wifi_config_entry_from_schema(
 
     # Treat router_csv as a CSV combo driven by the shared RvR Wi-Fi proxy.
     if isinstance(router_widget, ComboBox):
-        register_csv = getattr(page, "_register_switch_wifi_csv_combo", None)
+        # Defer to page helper or global view helper for CSV registration.
+        register_csv = getattr(page, "register_switch_wifi_csv_combo", None)
         if callable(register_csv):
             register_csv(router_widget)
 

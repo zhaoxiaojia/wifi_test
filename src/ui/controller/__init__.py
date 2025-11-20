@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, List, Tuple
 
 from PyQt5.QtWidgets import QWidget
 from qfluentwidgets import InfoBar, InfoBarPosition
@@ -66,5 +66,26 @@ def show_info_bar(
     return bar
 
 
-__all__ = ["info_bar_parent", "show_info_bar"]
+def list_serial_ports() -> List[Tuple[str, str]]:
+    """Enumerate available serial ports as (device, label) pairs."""
+    ports: List[Tuple[str, str]] = []
+    try:
+        from serial.tools import list_ports  # type: ignore
+    except Exception:
+        logging.debug("serial.tools.list_ports unavailable", exc_info=True)
+        return ports
 
+    try:
+        for info in list_ports.comports():
+            label = info.device
+            description = getattr(info, "description", "") or ""
+            if description and description != info.device:
+                label = f"{info.device} ({description})"
+            ports.append((info.device, label))
+    except Exception as exc:
+        logging.debug("Failed to enumerate serial ports: %s", exc)
+        return []
+    return ports
+
+
+__all__ = ["info_bar_parent", "show_info_bar", "list_serial_ports"]

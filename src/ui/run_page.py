@@ -631,8 +631,11 @@ class RunPage(CardWidget):
         """
         """Trigger configuration page run logic, keeping consistent with config page button."""
         cfg_page = getattr(self.main_window, "case_config_page", None)
+        config_ctl = None
         if cfg_page and not sip.isdeleted(cfg_page):
-            cfg_page.on_run()
+            config_ctl = getattr(cfg_page, "config_ctl", None)
+        if config_ctl is not None and hasattr(config_ctl, "on_run"):
+            config_ctl.on_run()
         else:
             # fall back to directly running current case
             self.run_case()
