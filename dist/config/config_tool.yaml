@@ -1,8 +1,0 @@
-host_os:
-  user: amlogic
-  password: Linux2024
-mysql:
-  host: 10.58.37.239
-  user: FAE-QA
-  passwd: 12345678
-  database: wifi_test
