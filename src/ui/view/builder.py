@@ -8,6 +8,8 @@ to render DUT / Execution / Stability panels from YAML.
 
 from __future__ import annotations
 
+import logging
+import re
 from dataclasses import dataclass
 from typing import Any, Dict, Mapping
 
@@ -68,6 +70,63 @@ def _get_nested(config: Mapping[str, Any], dotted_key: str) -> Any:
             return None
         current = current.get(part)
     return current
+
+
+def _normalize_control_token(value: str) -> str:
+    """Normalise a token for use in config_controls IDs."""
+    text = (str(value) or "").strip().lower()
+    text = re.sub(r"[^0-9a-z]+", "_", text)
+    return text.strip("_") or "x"
+
+
+def _widget_suffix(widget: QWidget) -> str:
+    """Return a short type suffix for ``widget`` (text/combo/check/spin/...)."""
+    if isinstance(widget, ComboBox):
+        return "combo"
+    if isinstance(widget, LineEdit):
+        return "text"
+    if isinstance(widget, QCheckBox):
+        return "check"
+    if isinstance(widget, QSpinBox):
+        return "spin"
+    return "widget"
+
+
+def _register_config_control(
+    page: Any,
+    panel: str,
+    group: str,
+    field: str,
+    widget: QWidget,
+) -> None:
+    """Store a logical identifier for a Config page control on ``page``.
+
+    The identifier follows the pattern ``config_panel_group_field_type``
+    where each token is normalised to lower case and uses underscores
+    instead of spaces or punctuation. The mapping is stored on
+    ``page.config_controls`` when present and ignored otherwise.
+    """
+    controls = getattr(page, "config_controls", None)
+    if controls is None:
+        return
+
+    panel_token = _normalize_control_token(panel or "main")
+    group_token = _normalize_control_token(group or panel or "group")
+    field_token = _normalize_control_token(field or group or "field")
+    suffix = _widget_suffix(widget)
+    control_id = f"config_{panel_token}_{group_token}_{field_token}_{suffix}"
+
+    existing = controls.get(control_id)
+    if existing is widget:
+        return
+    if existing is not None and existing is not widget:
+        logging.debug(
+            "Config builder: control id collision for %s (old=%r new=%r)",
+            control_id,
+            existing,
+            widget,
+        )
+    controls[control_id] = widget
 
 
 def _create_widget(page: Any, spec: FieldSpec, value: Any) -> QWidget:
@@ -198,14 +257,14 @@ def build_groups_from_schema(
                 stability_key = f"stability.{logical_key}"
                 page.field_widgets[stability_key] = widget
 
-            # Let CaseConfigPage keep its config_controls mapping when present.
+            # Maintain config_controls mapping on the page when present.
             group_name = section_id or key.split(".")[0]
             field_name = key.split(".")[-1]
-            if hasattr(page, "_register_config_control"):
-                try:
-                    page._register_config_control(panel_key, group_name, field_name, widget)
-                except Exception:
-                    pass
+            try:
+                _register_config_control(page, panel_key, group_name, field_name, widget)
+            except Exception:
+                # Keep builder resilient; config_controls is optional.
+                pass
 
         # If the parent looks like a ConfigGroupPanel, let it manage layout.
         if parent is not None and hasattr(parent, "add_group"):
@@ -235,4 +294,3 @@ def build_groups_from_schema(
 
 
 __all__ = ["load_ui_schema", "build_groups_from_schema"]
-

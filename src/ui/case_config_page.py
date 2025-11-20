@@ -131,7 +131,13 @@ from src.ui.view.config.actions import (
     compute_editable_info,
     update_script_config_ui,
 )
-from src.ui.view.config.config_str import bind_script_section
+from src.ui.view.config.config_str import (
+    bind_script_section,
+    script_field_key,
+    create_test_str_config_entry_from_schema,
+    create_test_switch_wifi_config_entry_from_schema,
+    initialize_script_config_groups,
+)
 from .controller.config_ctl import ConfigController
 from .view.builder import load_ui_schema, build_groups_from_schema
 from .rvrwifi_proxy import (
@@ -244,9 +250,11 @@ class CaseConfigPage(CardWidget):
         self._stability_panel = self._page_panels["stability"]
         # Track logical pages from the controller perspective (used by rules/business logic).
         self._current_page_keys: list[str] = ["dut"]
-        self._script_config_factories: dict[str, Callable[[str, str, Mapping[str, Any]], ScriptConfigEntry]] = {
-            "test/stability/test_str.py": self._create_test_str_config_entry_from_schema,
-            "test/stability/test_switch_wifi.py": self._create_test_swtich_wifi_config_entry_from_schema,
+        self._script_config_factories: dict[
+            str, Callable[[Any, str, str, Mapping[str, Any]], ScriptConfigEntry]
+        ] = {
+            "test/stability/test_str.py": create_test_str_config_entry_from_schema,
+            "test/stability/test_switch_wifi.py": create_test_switch_wifi_config_entry_from_schema,
         }
         self._script_groups: dict[str, ScriptConfigEntry] = {}
         self._active_script_case: str | None = None
@@ -256,7 +264,7 @@ class CaseConfigPage(CardWidget):
         self._dut_groups: dict[str, QWidget] = {}
         self._other_groups: dict[str, QWidget] = {}
         refresh_config_page_controls(self)
-        self._initialize_script_config_groups()
+        initialize_script_config_groups(self)
         # initialise case tree using src/test as root (non-fatal on failure)
         try:
             base = Path(self._get_application_base())
@@ -365,35 +373,6 @@ class CaseConfigPage(CardWidget):
         """Return the script key using controller helper so rules stay in sync."""
         return self.config_ctl.script_case_key(case_path)
 
-    def _script_field_key(self, case_key: str, *parts: str) -> str:
-        """
-        Execute the script field key routine.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        suffix = ".".join(parts)
-        return f"stability.cases.{case_key}.{suffix}"
-
-    def _initialize_script_config_groups(self) -> None:
-        """
-        Execute the initialize script config groups routine.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        stability_cfg = self.config.setdefault("stability", {})
-        stability_cfg.setdefault("cases", {})
-        self._script_groups.clear()
-        for case_path, factory in self._script_config_factories.items():
-            case_key = self._script_case_key(case_path)
-            # Ensure config defaults for this stability script via controller.
-            entry_config = self.config_ctl.ensure_script_case_defaults(case_key, case_path)
-            entry = factory(case_key, case_path, entry_config)
-            entry.group.setVisible(False)
-            self._script_groups[case_key] = entry
-            self.field_widgets.update(entry.widgets)
-
     @staticmethod
     def _normalize_switch_wifi_manual_entries(entries: Any) -> list[dict[str, str]]:
         """Proxy to normalise manual Wi-Fi entries for switch Wi-Fi cases."""
@@ -415,13 +394,13 @@ class CaseConfigPage(CardWidget):
 
         if case_key == SWITCH_WIFI_CASE_KEY:
             use_router_widget = entry.widgets.get(
-                self._script_field_key(case_key, SWITCH_WIFI_USE_ROUTER_FIELD)
+                script_field_key(case_key, SWITCH_WIFI_USE_ROUTER_FIELD)
             )
             router_combo = entry.widgets.get(
-                self._script_field_key(case_key, SWITCH_WIFI_ROUTER_CSV_FIELD)
+                script_field_key(case_key, SWITCH_WIFI_ROUTER_CSV_FIELD)
             )
             manual_widget = entry.widgets.get(
-                self._script_field_key(case_key, SWITCH_WIFI_MANUAL_ENTRIES_FIELD)
+                script_field_key(case_key, SWITCH_WIFI_MANUAL_ENTRIES_FIELD)
             )
             use_router_value = bool(data.get(SWITCH_WIFI_USE_ROUTER_FIELD))
             if isinstance(use_router_widget, QCheckBox):
@@ -527,17 +506,17 @@ class CaseConfigPage(CardWidget):
                 else:
                     widget.setCurrentIndex(0 if widget.count() else -1)
 
-        _set_checkbox(self._script_field_key(case_key, "ac", "enabled"), ac_cfg.get("enabled"))
-        _set_spin(self._script_field_key(case_key, "ac", "on_duration"), ac_cfg.get("on_duration"))
-        _set_spin(self._script_field_key(case_key, "ac", "off_duration"), ac_cfg.get("off_duration"))
-        _set_combo(self._script_field_key(case_key, "ac", "port"), ac_cfg.get("port"))
-        _set_combo(self._script_field_key(case_key, "ac", "mode"), ac_cfg.get("mode"))
+        _set_checkbox(script_field_key(case_key, "ac", "enabled"), ac_cfg.get("enabled"))
+        _set_spin(script_field_key(case_key, "ac", "on_duration"), ac_cfg.get("on_duration"))
+        _set_spin(script_field_key(case_key, "ac", "off_duration"), ac_cfg.get("off_duration"))
+        _set_combo(script_field_key(case_key, "ac", "port"), ac_cfg.get("port"))
+        _set_combo(script_field_key(case_key, "ac", "mode"), ac_cfg.get("mode"))
 
-        _set_checkbox(self._script_field_key(case_key, "str", "enabled"), str_cfg.get("enabled"))
-        _set_spin(self._script_field_key(case_key, "str", "on_duration"), str_cfg.get("on_duration"))
-        _set_spin(self._script_field_key(case_key, "str", "off_duration"), str_cfg.get("off_duration"))
-        _set_combo(self._script_field_key(case_key, "str", "port"), str_cfg.get("port"))
-        _set_combo(self._script_field_key(case_key, "str", "mode"), str_cfg.get("mode"))
+        _set_checkbox(script_field_key(case_key, "str", "enabled"), str_cfg.get("enabled"))
+        _set_spin(script_field_key(case_key, "str", "on_duration"), str_cfg.get("on_duration"))
+        _set_spin(script_field_key(case_key, "str", "off_duration"), str_cfg.get("off_duration"))
+        _set_combo(script_field_key(case_key, "str", "port"), str_cfg.get("port"))
+        _set_combo(script_field_key(case_key, "str", "mode"), str_cfg.get("mode"))
 
     def _refresh_script_section_states(self) -> None:
         """
@@ -567,7 +546,7 @@ class CaseConfigPage(CardWidget):
         widgets: dict[str, QWidget] = {}
 
         def _bind_field(field: str) -> QWidget | None:
-            script_key = self._script_field_key(case_key, field)
+            script_key = script_field_key(case_key, field)
             widget = self.field_widgets.get(script_key)
             if widget is None:
                 raw_key = f"{section_id}.{field}"
@@ -597,7 +576,7 @@ class CaseConfigPage(CardWidget):
                     manual_widget.setParent(None)
 
                     editor = SwitchWifiManualEditor(parent)
-                    widgets[self._script_field_key(case_key, SWITCH_WIFI_MANUAL_ENTRIES_FIELD)] = editor
+                    widgets[script_field_key(case_key, SWITCH_WIFI_MANUAL_ENTRIES_FIELD)] = editor
                     manual_widget = editor
 
                     # Row 1: Wi‑Fi list table.
@@ -664,7 +643,7 @@ class CaseConfigPage(CardWidget):
         widgets: dict[str, QWidget] = {}
 
         def _bind_field(*parts: str) -> QWidget | None:
-            script_key = self._script_field_key(case_key, *parts)
+            script_key = script_field_key(case_key, *parts)
             widget = self.field_widgets.get(script_key)
             if widget is None:
                 raw_key = f"{section_id}." + ".".join(parts)
@@ -746,66 +725,6 @@ class CaseConfigPage(CardWidget):
     # Logical control identifiers for the Config page
     # ------------------------------------------------------------------
 
-    @staticmethod
-    def _normalize_control_token(value: str) -> str:
-        """Return a lower‑case identifier token derived from ``value``."""
-        text = (value or "").strip().lower()
-        # Only allow [a‑z0‑9_]; collapse other characters into underscores.
-        text = re.sub(r"[^0-9a-z]+", "_", text)
-        return text.strip("_") or "x"
-
-    def _widget_suffix(self, widget: QWidget) -> str:
-        """Return a short type suffix for ``widget`` (text/combo/check/btn/...)."""
-        if isinstance(widget, ComboBox):
-            return "combo"
-        if isinstance(widget, (LineEdit, TextEdit)):
-            return "text"
-        if isinstance(widget, QCheckBox):
-            return "check"
-        if isinstance(widget, (QSpinBox, QDoubleSpinBox)):
-            return "spin"
-        if isinstance(widget, QTableWidget):
-            return "table"
-        if isinstance(widget, QListWidget):
-            return "list"
-        if isinstance(widget, QGroupBox):
-            return "group"
-        if isinstance(widget, PushButton):
-            return "btn"
-        return "widget"
-
-    def _register_config_control(
-        self,
-        panel: str,
-        group: str,
-        field: str,
-        widget: QWidget,
-    ) -> None:
-        """Store a logical identifier for a Config page control.
-
-        The identifier follows the pattern ``config_panel_group_field_type``
-        where each token is normalised to lower case and uses underscores
-        instead of spaces or punctuation.  This mapping is intended for
-        higher‑level schema/automation code and does not affect existing
-        field lookups.
-        """
-        panel_token = self._normalize_control_token(panel or "main")
-        group_token = self._normalize_control_token(group or panel or "group")
-        field_token = self._normalize_control_token(field or group or "field")
-        suffix = self._widget_suffix(widget)
-        control_id = f"config_{panel_token}_{group_token}_{field_token}_{suffix}"
-        existing = self.config_controls.get(control_id)
-        if existing is widget:
-            return
-        if existing is not None and existing is not widget:
-            logging.debug(
-                "CaseConfigPage: control id collision for %s (old=%r new=%r)",
-                control_id,
-                existing,
-                widget,
-            )
-        self.config_controls[control_id] = widget
-
     def _register_config_control_from_section(
             self,
             section_id: str,
@@ -825,82 +744,6 @@ class CaseConfigPage(CardWidget):
         group = parts[0] if parts else (section_id or "")
         field = parts[-1] if parts else (section_id or field_key)
         self._register_config_control(panel or "main", group, field, widget)
-
-    # ------------------------------------------------------------------
-    # Rule evaluation helpers (for CONFIG_UI_RULES)
-    # ------------------------------------------------------------------
-
-    def _get_field_value(self, field_key: str) -> Any:
-        """Delegate field value lookup to config controller."""
-        if getattr(self, "config_ctl", None) is not None:
-            return self.config_ctl.get_field_value(field_key)
-        return None
-
-    def _apply_field_effects(self, effects: FieldEffect) -> None:
-        """Apply enable/disable/show/hide effects to widgets based on a rule."""
-        if not effects:
-            return
-        editable_fields = getattr(getattr(self, "_last_editable_info", None), "fields", None)
-
-        def _set_enabled(key: str, enabled: bool) -> None:
-            widget = self.field_widgets.get(key)
-            if widget is None:
-                return
-            # Kernel Version 的可编辑状态由 Control Type 决定：
-            # - Android: 始终禁用（值由 Android Version 映射）
-            # - Linux:   始终可编辑
-            if key == "system.kernel_version":
-                connect_type_val = ""
-                try:
-                    if hasattr(self, "_current_connect_type"):
-                        connect_type_val = self._current_connect_type() or ""
-                    elif hasattr(self, "connect_type_combo") and hasattr(self.connect_type_combo, "currentText"):
-                        connect_type_val = self.connect_type_combo.currentText().strip()
-                        if hasattr(self, "_normalize_connect_type_label"):
-                            connect_type_val = self._normalize_connect_type_label(connect_type_val)
-                except Exception:
-                    connect_type_val = ""
-                if connect_type_val == "Android":
-                    enabled = False
-                elif connect_type_val == "Linux":
-                    enabled = True
-            if enabled and isinstance(editable_fields, set) and editable_fields and key not in editable_fields:
-                # Do not re-enable fields that are not editable for the
-                # current case according to EditableInfo.
-                return
-            before = widget.isEnabled()
-            if before == enabled:
-                return
-            with QSignalBlocker(widget):
-                widget.setEnabled(enabled)
-
-        def _set_visible(key: str, visible: bool) -> None:
-            widget = self.field_widgets.get(key)
-            if widget is None:
-                return
-            if widget.isVisible() == visible:
-                return
-            widget.setVisible(visible)
-
-        for key in effects.get("enable_fields", []) or []:
-            _set_enabled(key, True)
-        for key in effects.get("disable_fields", []) or []:
-            _set_enabled(key, False)
-        for key in effects.get("show_fields", []) or []:
-            _set_visible(key, True)
-        for key in effects.get("hide_fields", []) or []:
-            _set_visible(key, False)
-
-    def _eval_case_type_flag(self, flag: str) -> bool:
-        """Delegate case-type flag evaluation to config controller."""
-        if getattr(self, "config_ctl", None) is not None:
-            return self.config_ctl.eval_case_type_flag(flag)
-        return True
-
-    def _apply_sidebar_rules(self) -> None:
-        """Delegate sidebar rules that depend on the active case to controller."""
-        if getattr(self, "config_ctl", None) is not None:
-            self.config_ctl.apply_sidebar_rules()
 
     @staticmethod
     def _is_dut_key(key: str) -> bool:
@@ -1064,7 +907,7 @@ class CaseConfigPage(CardWidget):
                     if text.lower() == 'select port':
                         text = ''
                     value = True if text == 'True' else False if text == 'False' else text
-                if key == self._script_field_key(
+                if key == script_field_key(
                         SWITCH_WIFI_CASE_KEY, SWITCH_WIFI_ROUTER_CSV_FIELD
                 ):
                     value = self._relativize_config_path(value)

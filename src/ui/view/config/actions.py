@@ -603,19 +603,26 @@ def compute_editable_info(page: Any, case_path: str) -> EditableInfo:
     return info
 
 
-def apply_field_effects(page: Any, effects: FieldEffect) -> None:
+def apply_field_effects(
+    page: Any,
+    effects: FieldEffect,
+    field_widgets: dict[str, Any] | None = None,
+    editable_fields: set[str] | None = None,
+) -> None:
     """Apply enable/disable/show/hide rule effects to a config page.
 
     This helper lives in the view layer (actions) but works against a generic
-    ``page`` object that exposes ``field_widgets`` and ``_last_editable_info``.
-    It replaces the old ``CaseConfigPage._apply_field_effects`` implementation.
+    ``page`` object. It replaces the old ``CaseConfigPage._apply_field_effects``
+    implementation.
     """
     if not effects:
         return
 
-    field_widgets = getattr(page, "field_widgets", {}) or {}
-    editable_info = getattr(page, "_last_editable_info", None)
-    editable_fields = getattr(editable_info, "fields", None)
+    if field_widgets is None:
+        field_widgets = getattr(page, "field_widgets", {}) or {}
+    if editable_fields is None:
+        editable_info = getattr(page, "_last_editable_info", None)
+        editable_fields = getattr(editable_info, "fields", None)
 
     def _current_connect_type_value() -> str:
         """Best-effort current connect type label (Android/Linux/...)."""
@@ -672,18 +679,17 @@ def apply_field_effects(page: Any, effects: FieldEffect) -> None:
 def apply_config_ui_rules(page: Any) -> None:
     """Evaluate CONFIG_UI_RULES against current UI state for the given page.
 
-    This function centralises rule evaluation for the Config page.  It expects
-    ``page`` to expose:
-    - ``field_widgets: dict[str, QWidget]``
-    - ``_last_editable_info`` with ``fields`` attribute (EditableInfo)
-    - ``_current_case_path`` and ``_script_case_key`` (optional)
-    - ``_eval_case_type_flag(flag: str) -> bool``
-    - ``_get_field_value(field_key: str) -> Any``
+    This function centralises rule evaluation for the Config page.
     """
     try:
         rules: dict[str, RuleSpec] = CONFIG_UI_RULES
     except Exception:
         return
+
+    # Basic state used by rules.
+    config_ctl = getattr(page, "config_ctl", None)
+    field_widgets = getattr(page, "field_widgets", {}) or {}
+    editable_fields = getattr(getattr(page, "_last_editable_info", None), "fields", None)
 
     # Precompute script key once for rules that depend on a specific script.
     case_path = getattr(page, "_current_case_path", "") or ""
@@ -697,9 +703,9 @@ def apply_config_ui_rules(page: Any) -> None:
     for rule_id, spec in rules.items():
         active = True
         trigger_case_type = spec.get("trigger_case_type")
-        if trigger_case_type and hasattr(page, "_eval_case_type_flag"):
+        if trigger_case_type and config_ctl is not None:
             try:
-                active = active and page._eval_case_type_flag(trigger_case_type)
+                active = active and config_ctl.eval_case_type_flag(trigger_case_type)
             except Exception:
                 active = False
         trigger_script_key = spec.get("trigger_script_key")
@@ -707,9 +713,9 @@ def apply_config_ui_rules(page: Any) -> None:
             active = active and (script_key == trigger_script_key)
         trigger_field = spec.get("trigger_field")
         value = None
-        if active and trigger_field and hasattr(page, "_get_field_value"):
+        if active and trigger_field and config_ctl is not None:
             try:
-                value = page._get_field_value(trigger_field)
+                value = config_ctl.get_field_value(trigger_field)
             except Exception:
                 value = None
         if not active:
@@ -722,7 +728,7 @@ def apply_config_ui_rules(page: Any) -> None:
         if base_effects:
             effects_to_apply.append(base_effects)
         for eff in effects_to_apply:
-            apply_field_effects(page, eff)
+            apply_field_effects(page, eff, field_widgets, editable_fields)
 
 
 def update_script_config_ui(page: Any, case_path: str) -> None:

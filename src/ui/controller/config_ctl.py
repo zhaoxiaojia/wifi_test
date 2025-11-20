@@ -54,6 +54,7 @@ from src.ui.rvrwifi_proxy import (
 )
 from src.ui.view.common import ScriptConfigEntry
 from src.ui.view.config import RfStepSegmentsWidget, SwitchWifiManualEditor
+from src.ui.view.config.config_str import script_field_key
 from src.ui.controller import show_info_bar
 
 if TYPE_CHECKING:  # pragma: no cover - circular import guard
@@ -669,13 +670,13 @@ class ConfigController:
 
         if case_key == SWITCH_WIFI_CASE_KEY:
             use_router_widget = entry.widgets.get(
-                page._script_field_key(case_key, SWITCH_WIFI_USE_ROUTER_FIELD)
+                script_field_key(case_key, SWITCH_WIFI_USE_ROUTER_FIELD)
             )
             router_combo = entry.widgets.get(
-                page._script_field_key(case_key, SWITCH_WIFI_ROUTER_CSV_FIELD)
+                script_field_key(case_key, SWITCH_WIFI_ROUTER_CSV_FIELD)
             )
             manual_widget = entry.widgets.get(
-                page._script_field_key(case_key, SWITCH_WIFI_MANUAL_ENTRIES_FIELD)
+                script_field_key(case_key, SWITCH_WIFI_MANUAL_ENTRIES_FIELD)
             )
             use_router_value = bool(data.get(SWITCH_WIFI_USE_ROUTER_FIELD))
             if isinstance(use_router_widget, QCheckBox):
@@ -766,17 +767,17 @@ class ConfigController:
                 else:
                     widget.setCurrentIndex(0 if widget.count() else -1)
 
-        _set_checkbox(page._script_field_key(case_key, "ac", "enabled"), ac_cfg.get("enabled"))
-        _set_spin(page._script_field_key(case_key, "ac", "on_duration"), ac_cfg.get("on_duration"))
-        _set_spin(page._script_field_key(case_key, "ac", "off_duration"), ac_cfg.get("off_duration"))
-        _set_combo(page._script_field_key(case_key, "ac", "port"), ac_cfg.get("port"))
-        _set_combo(page._script_field_key(case_key, "ac", "mode"), ac_cfg.get("mode"))
+        _set_checkbox(script_field_key(case_key, "ac", "enabled"), ac_cfg.get("enabled"))
+        _set_spin(script_field_key(case_key, "ac", "on_duration"), ac_cfg.get("on_duration"))
+        _set_spin(script_field_key(case_key, "ac", "off_duration"), ac_cfg.get("off_duration"))
+        _set_combo(script_field_key(case_key, "ac", "port"), ac_cfg.get("port"))
+        _set_combo(script_field_key(case_key, "ac", "mode"), ac_cfg.get("mode"))
 
-        _set_checkbox(page._script_field_key(case_key, "str", "enabled"), str_cfg.get("enabled"))
-        _set_spin(page._script_field_key(case_key, "str", "on_duration"), str_cfg.get("on_duration"))
-        _set_spin(page._script_field_key(case_key, "str", "off_duration"), str_cfg.get("off_duration"))
-        _set_combo(page._script_field_key(case_key, "str", "port"), str_cfg.get("port"))
-        _set_combo(page._script_field_key(case_key, "str", "mode"), str_cfg.get("mode"))
+        _set_checkbox(script_field_key(case_key, "str", "enabled"), str_cfg.get("enabled"))
+        _set_spin(script_field_key(case_key, "str", "on_duration"), str_cfg.get("on_duration"))
+        _set_spin(script_field_key(case_key, "str", "off_duration"), str_cfg.get("off_duration"))
+        _set_combo(script_field_key(case_key, "str", "port"), str_cfg.get("port"))
+        _set_combo(script_field_key(case_key, "str", "mode"), str_cfg.get("mode"))
 
     def sync_widgets_to_config(self) -> None:
         """Read all widgets into page.config, including stability settings."""
@@ -851,7 +852,7 @@ class ConfigController:
                     if text.lower() == "select port":
                         text = ""
                     value = True if text == "True" else False if text == "False" else text
-                if key == page._script_field_key(
+                if key == script_field_key(
                     SWITCH_WIFI_CASE_KEY, SWITCH_WIFI_ROUTER_CSV_FIELD
                 ):
                     value = self.relativize_config_path(value)
