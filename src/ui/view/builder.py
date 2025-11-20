@@ -16,7 +16,7 @@ from typing import Any, Dict, Mapping
 from PyQt5.QtWidgets import QCheckBox, QGroupBox, QFormLayout, QSpinBox, QWidget, QLabel
 from qfluentwidgets import ComboBox, LineEdit
 
-from src.util.constants import get_model_config_base
+from src.util.constants import get_model_config_base, TURN_TABLE_MODEL_RS232
 from src.ui.model.options import get_field_choices
 from src.ui.view.config.config_switch_wifi import SwitchWifiManualEditor
 
@@ -231,6 +231,28 @@ def build_groups_from_schema(
             minimum = field.get("minimum")
             maximum = field.get("maximum")
             choices = field.get("choices") or None
+
+            # Special-case RF Solution model: when the schema and central
+            # options do not provide explicit choices, derive them from the
+            # rf_solution section of the current config so that existing
+            # behaviour (model list driven by config) is preserved.
+            if not choices and key == "rf_solution.model":
+                try:
+                    rf_cfg = config.get("rf_solution") if isinstance(config, dict) else None
+                    if isinstance(rf_cfg, Mapping):
+                        derived = [
+                            str(model_key)
+                            for model_key in rf_cfg.keys()
+                            if model_key not in {"model", "step"}
+                        ]
+                        # Historically RS232Board5 has been a valid RF model
+                        # even though it has no dedicated rf_solution section.
+                        if TURN_TABLE_MODEL_RS232 not in derived:
+                            derived.append(TURN_TABLE_MODEL_RS232)
+                        if derived:
+                            choices = sorted(derived)
+                except Exception:
+                    logging.debug("Failed to derive rf_solution.model choices from config", exc_info=True)
 
             spec = FieldSpec(
                 key=key,

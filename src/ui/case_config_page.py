@@ -114,7 +114,7 @@ from .view.common import (
     attach_view_to_page,
 )
 from .view.common import TestFileFilterModel, _StepSwitcher
-from .view.config import RfStepSegmentsWidget, SwitchWifiManualEditor
+from .view.config import RfStepSegmentsWidget, SwitchWifiManualEditor, SwitchWifiCsvPreview
 from src.ui.view.config.actions import (
     apply_rf_model_ui_state,
     apply_run_lock_ui_state,
@@ -171,6 +171,11 @@ from src.ui.view.theme import (
     SWITCH_WIFI_TABLE_SELECTION_FG,
 )
 from .model.rules import CONFIG_UI_RULES, FieldEffect, RuleSpec, SIDEBAR_RULES
+from src import display_to_case_path, case_path_to_display, update_test_case_display
+from src.ui.view.config.actions import (
+    current_connect_type,
+    handle_third_party_toggled_with_permission,
+)
 
 
 class CaseConfigPage(CardWidget):
@@ -267,10 +272,10 @@ class CaseConfigPage(CardWidget):
         initialize_script_config_groups(self)
         # initialise case tree using src/test as root (non-fatal on failure)
         try:
-            base = Path(self._get_application_base())
+            base = Path(self.config_ctl.get_application_base())
             test_root = base / "test"
             if test_root.exists():
-                self._init_case_tree(test_root)
+                self.config_ctl.init_case_tree(test_root)
         except Exception:
             pass
         self._refresh_script_section_states()
@@ -920,10 +925,10 @@ class CaseConfigPage(CardWidget):
                 ref[leaf] = widget.isChecked()
         if hasattr(self, "_fpga_details"):
             self.config["fpga"] = dict(self._fpga_details)
-        base = Path(self._get_application_base())
+        base = Path(self.config_ctl.get_application_base())
         case_display = self.field_widgets.get("text_case")
         display_text = case_display.text().strip() if isinstance(case_display, LineEdit) else ""
-        storage_path = self._current_case_path or self._display_to_case_path(display_text)
+        storage_path = self._current_case_path or display_to_case_path(display_text)
         case_path = Path(storage_path).as_posix() if storage_path else ""
         self._current_case_path = case_path
         if case_path:
@@ -992,7 +997,7 @@ class CaseConfigPage(CardWidget):
         connect_type = ""
         focus_widget: QWidget | None = None
         if hasattr(self, "connect_type_combo"):
-            connect_type = self._current_connect_type()
+            connect_type = current_connect_type(self)
             if not connect_type:
                 errors.append("Connect type is required.")
                 focus_widget = focus_widget or self.connect_type_combo
@@ -1071,143 +1076,25 @@ class CaseConfigPage(CardWidget):
         return self.config_ctl.is_stability_case(case_path)
 
     def _init_case_tree(self, root_dir: Path) -> None:
-        """
-        Execute the init case tree routine.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        self.fs_model = QFileSystemModel(self.case_tree)
-        root_index = self.fs_model.setRootPath(str(root_dir))  # ← use return value
-        self.fs_model.setNameFilters(["test_*.py"])
-        # show directories regardless of filter
-        self.fs_model.setNameFilterDisables(True)
-        self.fs_model.setFilter(
-            QDir.Filter.AllDirs | QDir.Filter.NoDotAndDotDot | QDir.Filter.Files
-        )
-        self.proxy_model = TestFileFilterModel()
-        self.proxy_model.setSourceModel(self.fs_model)
-        self.case_tree.setModel(self.proxy_model)
-        self.case_tree.setRootIndex(self.proxy_model.mapFromSource(root_index))
-
-        # hide non-name columns
-        self.case_tree.header().hide()
-        for col in range(1, self.fs_model.columnCount()):
-            self.case_tree.hideColumn(col)
+        """Delegate case-tree initialisation to the controller."""
+        if getattr(self, "config_ctl", None) is not None:
+            try:
+                self.config_ctl.init_case_tree(root_dir)
+            except Exception:
+                # Preserve previous non-fatal behaviour on failure
+                logging.debug("config_ctl.init_case_tree failed", exc_info=True)
 
     def _get_application_base(self) -> Path:
-        """Get application root path."""
+        """Return application root path, prefer controller-provided base."""
+        if getattr(self, "config_ctl", None) is not None and hasattr(self.config_ctl, "get_application_base"):
+            try:
+                return Path(self.config_ctl.get_application_base())
+            except Exception:
+                logging.debug("config_ctl.get_application_base failed", exc_info=True)
         return Path(get_src_base()).resolve()
 
-    def _normalize_connect_type_label(self, label: str) -> str:
-        """
-        Execute the normalize connect type label routine.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        text = (label or "").strip()
-        lowered = text.lower()
-        if lowered in {"android", "adb"}:
-            return "Android"
-        if lowered in {"linux", "telnet"}:
-            return "Linux"
-        return text
-
-    def _current_connect_type(self) -> str:
-        """Return the persisted identifier for the selected connect type."""
-        if not hasattr(self, "connect_type_combo"):
-            return ""
-        data = self.connect_type_combo.currentData()
-        if isinstance(data, str) and data.strip():
-            return data.strip()
-        text = self.connect_type_combo.currentText()
-        return self._normalize_connect_type_label(text) if isinstance(text, str) else ""
-
-    def _set_connect_type_combo_selection(self, type_value: str) -> None:
-        """Select the combo entry matching the stored connect type identifier."""
-        if not hasattr(self, "connect_type_combo"):
-            return
-        target_value = self._normalize_connect_type_label(type_value)
-        with QSignalBlocker(self.connect_type_combo):
-            index = self.connect_type_combo.findData(target_value)
-            if index >= 0:
-                self.connect_type_combo.setCurrentIndex(index)
-            elif self.connect_type_combo.count():
-                self.connect_type_combo.setCurrentIndex(0)
-
-
-    def _update_android_system_for_connect_type(self, connect_type: str) -> None:
-        """Handle non-visual Android system mapping for the given connect type."""
-        if not hasattr(self, "android_version_combo") or not hasattr(self, "kernel_version_combo"):
-            return
-        is_adb = connect_type == "Android"
-        if is_adb:
-            # For Android, kernel is mapped from the selected Android version.
-            self._apply_android_kernel_mapping()
-        else:
-            # For non-Android, leave kernel editable but clear empty selections.
-            if not self.kernel_version_combo.currentText().strip():
-                self.kernel_version_combo.setCurrentIndex(-1)
-
-    def _on_android_version_changed(self, version: str) -> None:
-        """
-        Handle the android version changed event triggered by user interaction.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        if not hasattr(self, "connect_type_combo"):
-            return
-        if self._current_connect_type() == "Android":
-            self._apply_android_kernel_mapping()
-
-    def _apply_android_kernel_mapping(self) -> None:
-        """
-        Execute the apply android kernel mapping routine.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        if not hasattr(self, "android_version_combo") or not hasattr(self, "kernel_version_combo"):
-            return
-        version = self.android_version_combo.currentText().strip()
-        kernel = ANDROID_KERNEL_MAP.get(version, "")
-        if kernel:
-            self._ensure_kernel_option(kernel)
-            self.kernel_version_combo.setCurrentText(kernel)
-        else:
-            self.kernel_version_combo.setCurrentIndex(-1)
-
-    def _ensure_kernel_option(self, kernel: str) -> None:
-        """
-        Execute the ensure kernel option routine.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        if not kernel or not hasattr(self, "kernel_version_combo"):
-            return
-        combo = self.kernel_version_combo
-        existing = {combo.itemText(i) for i in range(combo.count())}
-        if kernel not in existing:
-            combo.addItem(kernel)
-        if kernel not in self._kernel_versions:
-            self._kernel_versions.append(kernel)
-
-    def on_third_party_toggled(self, checked: bool, allow_wait_edit: bool | None = None) -> None:
-        """
-        Handle the third party toggled event triggered by user interaction.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        # allow_wait_edit 表示规则层是否允许该字段可编辑;
-        # 最终是否 enable 由 (checked and allow_wait_edit) 共同决定.
-        enabled = bool(checked)
-        if allow_wait_edit is not None:
-            enabled = enabled and bool(allow_wait_edit)
-        apply_third_party_ui_state(self, enabled)
+    # Connect-type / Android system helpers moved to
+    # `src.ui.view.config.actions`. Use the centralized helpers there.
 
     def _apply_rf_model_ui_state(self, model_str: str) -> None:
         """Handle pure UI visibility for RF solution parameter groups."""
@@ -1296,51 +1183,27 @@ class CaseConfigPage(CardWidget):
         self.config_ctl.open_rvr_wifi_config()
 
     def _case_path_to_display(self, case_path: str) -> str:
-        """
-        Execute the case path to display routine.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        if not case_path:
+        """Delegate conversion of storage path -> display path to shared helper."""
+        try:
+            return case_path_to_display(case_path)
+        except Exception:
+            logging.debug("case_path_to_display failed", exc_info=True)
             return ""
-        normalized = Path(case_path).as_posix()
-        return normalized[5:] if normalized.startswith("test/") else normalized
 
     def _display_to_case_path(self, display_path: str) -> str:
-        """
-        Execute the display to case path routine.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        if not display_path:
+        """Delegate conversion of display path -> storage path to shared helper."""
+        try:
+            return display_to_case_path(display_path)
+        except Exception:
+            logging.debug("display_to_case_path failed", exc_info=True)
             return ""
-        normalized = display_path.replace('\\', '/')
-        if normalized.startswith('./'):
-            normalized = normalized[2:]
-        path_obj = Path(normalized)
-        if path_obj.is_absolute() or normalized.startswith('../'):
-            return path_obj.as_posix()
-        return normalized if normalized.startswith("test/") else f"test/{normalized}"
 
     def _update_test_case_display(self, storage_path: str) -> None:
-        """
-        Update the  test case display to reflect current data.
-
-        This method encapsulates the logic necessary to perform its function.
-        Refer to the implementation for details on parameters and return values.
-        """
-        normalized = Path(storage_path).as_posix() if storage_path else ""
-        self._current_case_path = normalized
-        if hasattr(self, 'test_case_edit'):
-            self.test_case_edit.setText(self._case_path_to_display(normalized))
-
-        # valid test case
-        if self._refreshing:
-            self._pending_path = path
-            return
-        self.get_editable_fields(path)
+        """Delegate UI update for the selected test case to shared helper."""
+        try:
+            update_test_case_display(self, storage_path)
+        except Exception:
+            logging.debug("update_test_case_display failed", exc_info=True)
 
     def _apply_editable_info(self, info: EditableInfo | None) -> None:
         """
@@ -1424,3 +1287,4 @@ class CaseConfigPage(CardWidget):
         """Enable or disable widgets while a test run is active."""
         if getattr(self, "config_ctl", None) is not None:
             self.config_ctl.lock_for_running(locked)
+

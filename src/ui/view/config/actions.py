@@ -15,7 +15,11 @@ from typing import Any, Sequence
 from PyQt5.QtCore import QSortFilterProxyModel, QSignalBlocker
 from PyQt5.QtWidgets import QWidget, QCheckBox, QFormLayout, QLabel
 
-from src.util.constants import TURN_TABLE_MODEL_OTHER, WIFI_PRODUCT_PROJECT_MAP
+from src.util.constants import (
+    TURN_TABLE_MODEL_OTHER,
+    WIFI_PRODUCT_PROJECT_MAP,
+    ANDROID_KERNEL_MAP,
+)
 from src.ui.model.rules import FieldEffect, RuleSpec, CONFIG_UI_RULES
 from src.ui.view.builder import build_groups_from_schema, load_ui_schema
 from src.ui.view.common import EditableInfo
@@ -25,6 +29,107 @@ from src.ui.view.config.config_switch_wifi import (
     handle_switch_wifi_router_csv_changed,
     init_switch_wifi_actions,
 )
+from src import display_to_case_path, case_path_to_display, update_test_case_display
+
+
+# --- Connect-type / Android system helpers (migrated from CaseConfigPage) ---
+def normalize_connect_type_label(label: str) -> str:
+    text = (label or "").strip()
+    lowered = text.lower()
+    if lowered in {"android", "adb"}:
+        return "Android"
+    if lowered in {"linux", "telnet"}:
+        return "Linux"
+    return text
+
+
+def current_connect_type(page: Any) -> str:
+    """Return the canonical connect type for the given page (best-effort)."""
+    try:
+        # Prefer an existing page-provided helper for backward-compat.
+        if hasattr(page, "_current_connect_type"):
+            return page._current_connect_type() or ""
+        if not hasattr(page, "connect_type_combo"):
+            return ""
+        data = page.connect_type_combo.currentData()
+        if isinstance(data, str) and data.strip():
+            return data.strip()
+        text = page.connect_type_combo.currentText()
+        return normalize_connect_type_label(text) if isinstance(text, str) else ""
+    except Exception:
+        return ""
+
+
+def set_connect_type_combo_selection(page: Any, type_value: str) -> None:
+    if not hasattr(page, "connect_type_combo"):
+        return
+    target_value = normalize_connect_type_label(type_value)
+    try:
+        with QSignalBlocker(page.connect_type_combo):
+            index = page.connect_type_combo.findData(target_value)
+            if index >= 0:
+                page.connect_type_combo.setCurrentIndex(index)
+            elif page.connect_type_combo.count():
+                page.connect_type_combo.setCurrentIndex(0)
+    except Exception:
+        logging.debug("set_connect_type_combo_selection failed", exc_info=True)
+
+
+def _ensure_kernel_option(page: Any, kernel: str) -> None:
+    if not kernel or not hasattr(page, "kernel_version_combo"):
+        return
+    try:
+        combo = page.kernel_version_combo
+        existing = {combo.itemText(i) for i in range(combo.count())}
+        if kernel not in existing:
+            combo.addItem(kernel)
+        if not hasattr(page, "_kernel_versions"):
+            try:
+                page._kernel_versions = []
+            except Exception:
+                page._kernel_versions = []
+        if kernel not in page._kernel_versions:
+            page._kernel_versions.append(kernel)
+    except Exception:
+        logging.debug("_ensure_kernel_option failed", exc_info=True)
+
+
+def apply_android_kernel_mapping(page: Any) -> None:
+    if not hasattr(page, "android_version_combo") or not hasattr(page, "kernel_version_combo"):
+        return
+    try:
+        version = page.android_version_combo.currentText().strip()
+        kernel = ANDROID_KERNEL_MAP.get(version, "")
+        if kernel:
+            _ensure_kernel_option(page, kernel)
+            page.kernel_version_combo.setCurrentText(kernel)
+        else:
+            page.kernel_version_combo.setCurrentIndex(-1)
+    except Exception:
+        logging.debug("apply_android_kernel_mapping failed", exc_info=True)
+
+
+def update_android_system_for_connect_type(page: Any, connect_type: str) -> None:
+    if not hasattr(page, "android_version_combo") or not hasattr(page, "kernel_version_combo"):
+        return
+    try:
+        is_adb = connect_type == "Android"
+        if is_adb:
+            apply_android_kernel_mapping(page)
+        else:
+            if not page.kernel_version_combo.currentText().strip():
+                page.kernel_version_combo.setCurrentIndex(-1)
+    except Exception:
+        logging.debug("update_android_system_for_connect_type failed", exc_info=True)
+
+
+def on_android_version_changed(page: Any, version: str) -> None:
+    try:
+        if current_connect_type(page) == "Android":
+            apply_android_kernel_mapping(page)
+    except Exception:
+        logging.debug("on_android_version_changed failed", exc_info=True)
+
 
 
 def _rebalance_panel(panel: Any) -> None:
@@ -46,7 +151,7 @@ def handle_config_event(page: Any, event: str, **payload: Any) -> None:
     calls the existing action helpers so that init-time and user-driven
     state changes share the same code paths.
     """
-    event = str(event or "").strip()
+    event = str(event or "").strip() if event is not None else ""
     config_ctl = getattr(page, "config_ctl", None)
 
     if event == "init":
@@ -118,9 +223,17 @@ def handle_config_event(page: Any, event: str, **payload: Any) -> None:
                 text_case.setText(display_path or case_path)
             except Exception:
                 pass
-        elif hasattr(page, "_update_test_case_display"):
-            # Backwards-compatible fallback for legacy controllers.
-            page._update_test_case_display(display_path or case_path)
+        else:
+            # Use centralized display updater if available, fallback to
+            # legacy page method for backward compatibility.
+            try:
+                update_test_case_display(page, display_path or case_path)
+            except Exception:
+                if hasattr(page, "_update_test_case_display"):
+                    try:
+                        page._update_test_case_display(display_path or case_path)
+                    except Exception:
+                        pass
 
         # Re-compute editable info + page availability.
         if hasattr(page, "get_editable_fields"):
@@ -284,6 +397,12 @@ def apply_rf_model_ui_state(page: Any, model_str: str) -> None:
             pass
 
     model_str = str(model_str or "").strip()
+
+    # DEBUG PRINT: trace RF model UI invocation (remove after debugging)
+    try:
+        print(f"[DEBUG][RF_UI] apply_rf_model_ui_state called model_str={model_str} page={getattr(page,'objectName',lambda:None)()}" )
+    except Exception:
+        print(f"[DEBUG][RF_UI] apply_rf_model_ui_state called model_str={model_str}")
 
     # Hide all model-specific fields by default.
     for key in (
@@ -626,17 +745,10 @@ def apply_field_effects(
 
     def _current_connect_type_value() -> str:
         """Best-effort current connect type label (Android/Linux/...)."""
-        ct_val = ""
         try:
-            if hasattr(page, "_current_connect_type"):
-                ct_val = page._current_connect_type() or ""
-            elif hasattr(page, "connect_type_combo") and hasattr(page.connect_type_combo, "currentText"):
-                ct_val = page.connect_type_combo.currentText().strip()
-                if hasattr(page, "_normalize_connect_type_label"):
-                    ct_val = page._normalize_connect_type_label(ct_val)
+            return current_connect_type(page)
         except Exception:
-            ct_val = ""
-        return ct_val
+            return ""
 
     def _set_enabled(key: str, enabled: bool) -> None:
         widget = field_widgets.get(key)
@@ -852,13 +964,17 @@ def init_system_version_actions(page: Any) -> None:
     # the kernel combo's enabled state controlled purely by connect_type
     # and the rule engine (CONFIG_UI_RULES).
     handler = getattr(page, "_on_android_version_changed", None)
-    if not (callable(handler) and hasattr(version_widget, "currentTextChanged")):
-        return
+    if not callable(handler):
+        # Fall back to centralized helper if the page does not provide one.
+        handler = lambda text: on_android_version_changed(page, text)
 
     def _on_version_changed(text: str) -> None:
         kernel = getattr(page, "kernel_version_combo", None)
         prev_enabled = kernel.isEnabled() if kernel is not None else None
-        handler(text)
+        try:
+            handler(text)
+        except Exception:
+            logging.debug("handler for android version changed failed", exc_info=True)
         if kernel is not None:
             after_handler = kernel.isEnabled()
             if prev_enabled is not None and after_handler != prev_enabled:
@@ -1090,19 +1206,16 @@ def apply_third_party_ui_state(page: Any, enabled: bool) -> None:
 def handle_connect_type_changed(page: Any, display_text: str) -> None:
     """Central handler for Control Type changes (UI + business rules)."""
     text = str(display_text or "")
-    normalized = text
-    if hasattr(page, "_normalize_connect_type_label"):
-        normalized = page._normalize_connect_type_label(text)
+    normalized = normalize_connect_type_label(text)
 
     # 1) UI: only flip Android / Linux specific controls.
     apply_connect_type_ui_state(page, normalized)
 
     # 2) Business logic: Android system mapping + panel layout + rules.
-    if hasattr(page, "_update_android_system_for_connect_type"):
-        try:
-            page._update_android_system_for_connect_type(normalized)
-        except Exception:
-            logging.debug("Failed to update Android system for connect type", exc_info=True)
+    try:
+        update_android_system_for_connect_type(page, normalized)
+    except Exception:
+        logging.debug("Failed to update Android system for connect type", exc_info=True)
 
     if hasattr(page, "_dut_panel"):
         _rebalance_panel(page._dut_panel)
@@ -1237,21 +1350,38 @@ def _bind_serial_actions(page: Any) -> None:
 def _bind_rf_rvr_actions(page: Any) -> None:
     """Wire RF / RvR related combos to the unified dispatcher."""
     field_widgets = getattr(page, "field_widgets", {}) or {}
+    # DEBUG PRINT: show field widget keys when binding RF/RvR actions
+    try:
+        print(f"[DEBUG][RF_UI] _bind_rf_rvr_actions: keys={list(field_widgets.keys())[:30]} (len={len(field_widgets)})")
+    except Exception:
+        pass
 
     rf_model = field_widgets.get("rf_solution.model")
     rvr_tool = field_widgets.get("rvr.tool") or field_widgets.get("rvr.tool_name")
 
     if rf_model is not None and hasattr(rf_model, "currentTextChanged"):
-        rf_model.currentTextChanged.connect(
-            lambda text: handle_config_event(
+        def _on_rf_model_changed(text: str) -> None:
+            # DEBUG PRINT: RF model changed event (remove after debugging)
+            try:
+                print(f"[DEBUG][RF_UI] rf_model.currentTextChanged -> '{text}'")
+            except Exception:
+                pass
+            handle_config_event(
                 page,
                 "rf_model_changed",
                 model_text=str(text),
             )
-        )
+
+        rf_model.currentTextChanged.connect(_on_rf_model_changed)
         # Apply initial RF model visibility based on the preloaded value so
         # that only the active model's fields are shown on first load.
         try:
+            # DEBUG PRINT: initial RF model apply (remove after debugging)
+            try:
+                cnt = rf_model.count() if hasattr(rf_model, 'count') else 'N/A'
+                print(f"[DEBUG][RF_UI] initial rf_model currentText='{rf_model.currentText()}' count={cnt}")
+            except Exception:
+                pass
             handle_config_event(
                 page,
                 "rf_model_changed",
@@ -1356,7 +1486,11 @@ def _bind_case_tree_actions(page: Any) -> None:
             return
         path = fs_model.filePath(source_idx)
         try:
-            base = getattr(page, "_get_application_base")()
+            config_ctl = getattr(page, "config_ctl", None)
+            if config_ctl is not None:
+                base = config_ctl.get_application_base()
+            else:
+                base = getattr(page, "_get_application_base")()
         except Exception:
             base = None
         try:
@@ -1390,8 +1524,15 @@ def _bind_case_tree_actions(page: Any) -> None:
 
         normalized_display = _Path(display_path).as_posix() if display_path else ""
         # 更新当前用例显示（右上角路径等）
-        if hasattr(page, "_update_test_case_display"):
-            page._update_test_case_display(normalized_display)
+        # 更新当前用例显示（右上角路径等）
+        try:
+            update_test_case_display(page, normalized_display)
+        except Exception:
+            if hasattr(page, "_update_test_case_display"):
+                try:
+                    page._update_test_case_display(normalized_display)
+                except Exception:
+                    pass
         # 触发可编辑字段和页面集合的逻辑（包�?DUT / Execution / Stability 标签�?        if hasattr(page, "get_editable_fields"):
             page.get_editable_fields(path)
 
@@ -1446,7 +1587,11 @@ def _bind_case_tree_actions(page: Any) -> None:
             return
         path = fs_model.filePath(source_idx)
         try:
-            base = getattr(page, "_get_application_base")()
+            config_ctl = getattr(page, "config_ctl", None)
+            if config_ctl is not None:
+                base = config_ctl.get_application_base()
+            else:
+                base = getattr(page, "_get_application_base")()
         except Exception:
             base = None
         try:

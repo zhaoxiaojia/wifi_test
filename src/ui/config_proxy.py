@@ -40,7 +40,8 @@ class ConfigProxy:
         try:
             config = load_config(refresh=True) or {}
 
-            app_base = page._get_application_base()
+            # Delegate application base lookup to controller
+            app_base = page.config_ctl.get_application_base() if hasattr(page, 'config_ctl') else None
             changed = False
             path = config.get("text_case", "")
             if path:

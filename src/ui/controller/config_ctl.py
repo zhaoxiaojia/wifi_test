@@ -13,6 +13,7 @@ from qfluentwidgets import InfoBar, InfoBarPosition, ComboBox, LineEdit
 from src.ui.view.config.actions import compute_editable_info
 from src.ui.view.common import EditableInfo
 from src.tools.config_loader import load_config, save_config
+from src import display_to_case_path
 from src.util.constants import (
     SWITCH_WIFI_CASE_ALIASES,
     SWITCH_WIFI_CASE_KEY,
@@ -35,6 +36,7 @@ from src.util.constants import (
     TURN_TABLE_MODEL_RS232,
     TURN_TABLE_MODEL_OTHER,
     get_config_base,
+    get_src_base,
 )
 from src.ui.rvrwifi_proxy import (
     _load_csv_selection_from_config as _proxy_load_csv_selection_from_config,
@@ -52,7 +54,7 @@ from src.ui.rvrwifi_proxy import (
     _update_rvr_nav_button as _proxy_update_rvr_nav_button,
     _open_rvr_wifi_config as _proxy_open_rvr_wifi_config,
 )
-from src.ui.view.common import ScriptConfigEntry
+from src.ui.view.common import ScriptConfigEntry, TestFileFilterModel
 from src.ui.view.config import RfStepSegmentsWidget, SwitchWifiManualEditor
 from src.ui.view.config.config_str import script_field_key
 from src.ui.controller import show_info_bar
@@ -74,6 +76,42 @@ class ConfigController:
     def __init__(self, page: "CaseConfigPage") -> None:
         self.page = page
 
+    def get_application_base(self) -> Path:
+        """Return the application source base path (was CaseConfigPage._get_application_base)."""
+        return Path(get_src_base()).resolve()
+
+    def init_case_tree(self, root_dir: Path) -> None:
+        """Initialize the case tree model + proxy (migrated from CaseConfigPage).
+
+        This constructs a QFileSystemModel rooted at `root_dir` and attaches a
+        TestFileFilterModel proxy so that only test_*.py files (and directories)
+        are visible. The tree widget on the page is configured accordingly.
+        """
+        page = self.page
+        try:
+            from PyQt5.QtWidgets import QFileSystemModel
+        except Exception:
+            return
+        # create/replace models on the page
+        page.fs_model = QFileSystemModel(page.case_tree)
+        root_index = page.fs_model.setRootPath(str(root_dir))
+        page.fs_model.setNameFilters(["test_*.py"])
+        page.fs_model.setNameFilterDisables(True)
+        from PyQt5.QtCore import QDir
+
+        page.fs_model.setFilter(QDir.Filter.AllDirs | QDir.Filter.NoDotAndDotDot | QDir.Filter.Files)
+        page.proxy_model = TestFileFilterModel()
+        page.proxy_model.setSourceModel(page.fs_model)
+        page.case_tree.setModel(page.proxy_model)
+        page.case_tree.setRootIndex(page.proxy_model.mapFromSource(root_index))
+        # hide non-name columns
+        try:
+            page.case_tree.header().hide()
+            for col in range(1, page.fs_model.columnCount()):
+                page.case_tree.hideColumn(col)
+        except Exception:
+            pass
+
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
@@ -90,7 +128,7 @@ class ConfigController:
         try:
             config = load_config(refresh=True) or {}
 
-            app_base = page._get_application_base()
+            app_base = self.get_application_base()
             changed = False
             path = config.get("text_case", "")
             if path:
@@ -865,10 +903,10 @@ class ConfigController:
                 ref[leaf] = widget.isChecked()
         if hasattr(page, "_fpga_details"):
             page.config["fpga"] = dict(page._fpga_details)
-        base = Path(page._get_application_base())
+        base = Path(self.get_application_base())
         case_display = page.field_widgets.get("text_case")
         display_text = case_display.text().strip() if isinstance(case_display, LineEdit) else ""
-        storage_path = page._current_case_path or page._display_to_case_path(display_text)
+        storage_path = page._current_case_path or display_to_case_path(display_text)
         case_path = Path(storage_path).as_posix() if storage_path else ""
         page._current_case_path = case_path
         if case_path:
@@ -1133,7 +1171,7 @@ class ConfigController:
         try:
             path_obj = Path(case_path)
             if not path_obj.is_absolute():
-                abs_path = (Path(page._get_application_base()) / path_obj).as_posix()
+                abs_path = (Path(self.get_application_base()) / path_obj).as_posix()
             else:
                 abs_path = path_obj.as_posix()
         except Exception:
@@ -1373,7 +1411,7 @@ class ConfigController:
             page.config,
         )
 
-        base = Path(page._get_application_base())
+        base = Path(self.get_application_base())
         case_path = page.config.get("text_case", "")
         abs_case_path = (base / case_path).resolve().as_posix() if case_path else ""
 
