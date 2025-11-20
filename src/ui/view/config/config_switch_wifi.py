@@ -355,11 +355,11 @@ def sync_switch_wifi_on_csv_changed(page: Any, new_path: str | None) -> None:
         return
     try:
         case_path = getattr(page, "_current_case_path", "") or ""
-        script_key = (
-            page._script_case_key(case_path)
-            if case_path and hasattr(page, "_script_case_key")
-            else ""
-        )
+        config_ctl = getattr(page, "config_ctl", None)
+        if case_path and config_ctl is not None and hasattr(config_ctl, "script_case_key"):
+            script_key = config_ctl.script_case_key(case_path)
+        else:
+            script_key = ""
     except Exception:
         script_key = ""
     if script_key != "switch_wifi":

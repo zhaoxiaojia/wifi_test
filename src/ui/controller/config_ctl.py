@@ -549,6 +549,8 @@ class ConfigController:
                 )
                 if normalized_name == SWITCH_WIFI_CASE_KEY:
                     manual_entries = case_value.get(SWITCH_WIFI_MANUAL_ENTRIES_FIELD)
+                    from src.ui.view.config.config_switch_wifi import normalize_switch_wifi_manual_entries
+
                     cases[SWITCH_WIFI_CASE_KEY] = {
                         SWITCH_WIFI_USE_ROUTER_FIELD: bool(
                             case_value.get(SWITCH_WIFI_USE_ROUTER_FIELD)
@@ -556,7 +558,7 @@ class ConfigController:
                         SWITCH_WIFI_ROUTER_CSV_FIELD: str(
                             case_value.get(SWITCH_WIFI_ROUTER_CSV_FIELD, "") or ""
                         ).strip(),
-                        SWITCH_WIFI_MANUAL_ENTRIES_FIELD: page._normalize_switch_wifi_manual_entries(  # type: ignore[attr-defined]
+                        SWITCH_WIFI_MANUAL_ENTRIES_FIELD: normalize_switch_wifi_manual_entries(
                             manual_entries
                         ),
                     }
@@ -703,120 +705,16 @@ class ConfigController:
         Handles both ``test_switch_wifi`` (router/manual Wi-Fi list) and
         ``test_str`` AC/STR timing + relay controls.
         """
-        page = self.page
-        data = data or {}
-        case_key = entry.case_key
+        # Delegate to the view-layer helper so the UI-side implementation
+        # lives with other visual logic. Keep this thin wrapper to avoid
+        # breaking callers that expect the controller API.
+        try:
+            from src.ui.view.config.actions import load_script_config_into_widgets as _view_load
 
-        if case_key == SWITCH_WIFI_CASE_KEY:
-            use_router_widget = entry.widgets.get(
-                script_field_key(case_key, SWITCH_WIFI_USE_ROUTER_FIELD)
-            )
-            router_combo = entry.widgets.get(
-                script_field_key(case_key, SWITCH_WIFI_ROUTER_CSV_FIELD)
-            )
-            manual_widget = entry.widgets.get(
-                script_field_key(case_key, SWITCH_WIFI_MANUAL_ENTRIES_FIELD)
-            )
-            use_router_value = bool(data.get(SWITCH_WIFI_USE_ROUTER_FIELD))
-            if isinstance(use_router_widget, QCheckBox):
-                use_router_widget.setChecked(use_router_value)
-            router_path = self.resolve_csv_config_path(
-                data.get(SWITCH_WIFI_ROUTER_CSV_FIELD)
-            )
-            if isinstance(router_combo, ComboBox):
-                include_placeholder = router_combo.property("switch_wifi_include_placeholder")
-                use_placeholder = True if include_placeholder is None else bool(include_placeholder)
-                self.populate_csv_combo(router_combo, router_path, include_placeholder=use_placeholder)
-                try:
-                    self.set_selected_csv(router_path, sync_combo=True)
-                except Exception:
-                    logging.debug(
-                        "Failed to sync selected CSV for switch_wifi defaults",
-                        exc_info=True,
-                    )
-                signal = getattr(page, "csvFileChanged", None)
-                if signal is not None and hasattr(signal, "emit"):
-                    try:
-                        signal.emit(router_path or "")
-                    except Exception:
-                        logging.debug(
-                            "Failed to emit csvFileChanged for switch_wifi defaults",
-                            exc_info=True,
-                        )
-                # Ensure Execution Settings / RvR Wi‑Fi CSV matches the
-                # switch_wifi router_csv default so both combos point to
-                # the same file when first opened.
-                try:
-                    self.set_selected_csv(router_path, sync_combo=True)
-                except Exception:
-                    logging.debug(
-                        "Failed to sync selected_csv_path from switch_wifi defaults",
-                        exc_info=True,
-                    )
-            if isinstance(manual_widget, SwitchWifiManualEditor):
-                manual_entries = data.get(SWITCH_WIFI_MANUAL_ENTRIES_FIELD)
-                if isinstance(manual_entries, Sequence) and not isinstance(manual_entries, (str, bytes)):
-                    manual_widget.set_entries(manual_entries)
-                else:
-                    manual_widget.set_entries(None)
-            # router_preview / apply_mode are deprecated; preview is removed
-            # and router/manual mode is handled by view/actions layer.
+            _view_load(self.page, entry, data)
             return
-
-        ac_cfg = data.get("ac", {})
-        str_cfg = data.get("str", {})
-
-        def _set_spin(key: str, raw_value: Any) -> None:
-            """Set a numeric duration field (AC/STR on/off) from stored value."""
-            widget = entry.widgets.get(key)
-            try:
-                value = int(raw_value)
-            except (TypeError, ValueError):
-                value = 0
-            value = max(0, value)
-            if isinstance(widget, QSpinBox):
-                with QSignalBlocker(widget):
-                    widget.setValue(value)
-            elif isinstance(widget, LineEdit):
-                with QSignalBlocker(widget):
-                    widget.setText(str(value))
-
-        def _set_checkbox(key: str, raw_value: Any) -> None:
-            widget = entry.widgets.get(key)
-            if isinstance(widget, QCheckBox):
-                widget.setChecked(bool(raw_value))
-
-        def _set_combo(key: str, raw_value: Any) -> None:
-            widget = entry.widgets.get(key)
-            if not isinstance(widget, ComboBox):
-                return
-            value = str(raw_value or "").strip()
-            with QSignalBlocker(widget):
-                if value:
-                    index = widget.findData(value)
-                    if index < 0:
-                        index = next(
-                            (i for i in range(widget.count()) if widget.itemText(i) == value),
-                            -1,
-                        )
-                    if index < 0:
-                        widget.addItem(value, value)
-                        index = widget.findData(value)
-                    widget.setCurrentIndex(index if index >= 0 else max(widget.count() - 1, 0))
-                else:
-                    widget.setCurrentIndex(0 if widget.count() else -1)
-
-        _set_checkbox(script_field_key(case_key, "ac", "enabled"), ac_cfg.get("enabled"))
-        _set_spin(script_field_key(case_key, "ac", "on_duration"), ac_cfg.get("on_duration"))
-        _set_spin(script_field_key(case_key, "ac", "off_duration"), ac_cfg.get("off_duration"))
-        _set_combo(script_field_key(case_key, "ac", "port"), ac_cfg.get("port"))
-        _set_combo(script_field_key(case_key, "ac", "mode"), ac_cfg.get("mode"))
-
-        _set_checkbox(script_field_key(case_key, "str", "enabled"), str_cfg.get("enabled"))
-        _set_spin(script_field_key(case_key, "str", "on_duration"), str_cfg.get("on_duration"))
-        _set_spin(script_field_key(case_key, "str", "off_duration"), str_cfg.get("off_duration"))
-        _set_combo(script_field_key(case_key, "str", "port"), str_cfg.get("port"))
-        _set_combo(script_field_key(case_key, "str", "mode"), str_cfg.get("mode"))
+        except Exception:
+            logging.debug("Controller fallback to view-layer loader failed", exc_info=True)
 
     def sync_widgets_to_config(self) -> None:
         """Read all widgets into page.config, including stability settings."""
@@ -970,7 +868,7 @@ class ConfigController:
         page = self.page
         config = page.config if isinstance(page.config, dict) else {}
         case_path = config.get("text_case", "")
-        case_key = page._script_case_key(case_path)
+        case_key = self.script_case_key(case_path)
         if case_key != "test_str":
             return True
 
@@ -1350,9 +1248,9 @@ class ConfigController:
             enable_rvr_wifi=enable_rvr_wifi,
         )
         page._last_editable_info = snapshot
-          self._apply_editable_model_state(snapshot)
-          self._apply_editable_ui_state(snapshot)
-          apply_config_ui_rules(page)
+        self._apply_editable_model_state(snapshot)
+        self._apply_editable_ui_state(snapshot)
+        apply_config_ui_rules(page)
 
     def _apply_editable_model_state(self, snapshot: "EditableInfo") -> None:
         """Update internal flags and CSV selection from EditableInfo (no direct UI)."""
@@ -1369,8 +1267,10 @@ class ConfigController:
 
     def _apply_editable_ui_state(self, snapshot: "EditableInfo") -> None:
         """Apply UI-related changes for EditableInfo (widgets only)."""
+        from src.ui.view.config.actions import set_fields_editable  # local import
+
         page = self.page
-        page.set_fields_editable(snapshot.fields)
+        set_fields_editable(page, snapshot.fields)
         if hasattr(page, "csv_combo"):
             page.csv_combo.setEnabled(True)
         self.update_rvr_nav_button()
@@ -1392,24 +1292,24 @@ class ConfigController:
             logging.debug("get_editable_fields: refreshing, return empty")
             return EditableInfoType()
 
-          page._refreshing = True
+        page._refreshing = True
         from src.ui.view.config.actions import set_refresh_ui_locked, set_fields_editable
 
         set_refresh_ui_locked(page, True)
 
         try:
             update_script_config_ui(page, case_path)
-              info = compute_editable_info(page, case_path)
-              logging.debug("get_editable_fields enable_csv=%s", info.enable_csv)
-              if info.enable_csv and not hasattr(page, "csv_combo"):
-                  info.enable_csv = False
-              self.apply_editable_info(info)
-              page_keys = self.determine_pages_for_case(case_path, info)
-              from src.ui.view.config.actions import set_available_pages
+            info = compute_editable_info(page, case_path)
+            logging.debug("get_editable_fields enable_csv=%s", info.enable_csv)
+            if info.enable_csv and not hasattr(page, "csv_combo"):
+                info.enable_csv = False
+            self.apply_editable_info(info)
+            page_keys = self.determine_pages_for_case(case_path, info)
+            from src.ui.view.config.actions import set_available_pages
 
-              set_available_pages(page, page_keys)
-              apply_config_ui_rules(page)
-          finally:
+            set_available_pages(page, page_keys)
+            apply_config_ui_rules(page)
+        finally:
             set_refresh_ui_locked(page, False)
             page._refreshing = False
 

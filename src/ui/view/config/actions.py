@@ -10,10 +10,11 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any, Sequence
+from typing import Any, Sequence, Mapping
 
 from PyQt5.QtCore import QSortFilterProxyModel, QSignalBlocker
-from PyQt5.QtWidgets import QWidget, QCheckBox, QFormLayout, QLabel
+from PyQt5.QtWidgets import QWidget, QCheckBox, QFormLayout, QLabel, QSpinBox, QDoubleSpinBox
+from qfluentwidgets import LineEdit, ComboBox
 
 from src.util.constants import (
     TURN_TABLE_MODEL_OTHER,
@@ -460,18 +461,18 @@ def apply_rvr_tool_ui_state(page: Any, tool: str) -> None:
 
 def apply_serial_enabled_ui_state(page: Any, text: str) -> None:
     """Show/hide the serial config group when serial is enabled/disabled."""
-      if hasattr(page, "serial_cfg_group"):
-          page.serial_cfg_group.setVisible(text == "True")
+    if hasattr(page, "serial_cfg_group"):
+        page.serial_cfg_group.setVisible(text == "True")
 
 
-  def apply_turntable_model_ui_state(page: Any, model: str) -> None:
+def apply_turntable_model_ui_state(page: Any, model: str) -> None:
     """Toggle visibility/enabled state for turntable IP controls."""
     if not hasattr(page, "turntable_ip_edit") or not hasattr(page, "turntable_ip_label"):
         return
     requires_ip = model == TURN_TABLE_MODEL_OTHER
     page.turntable_ip_label.setVisible(requires_ip)
     page.turntable_ip_edit.setVisible(requires_ip)
-          page.turntable_ip_edit.setEnabled(requires_ip)
+    page.turntable_ip_edit.setEnabled(requires_ip)
 
 
 def set_fields_editable(page: Any, fields: set[str]) -> None:
@@ -776,7 +777,7 @@ def apply_field_effects(
         widget = field_widgets.get(key)
         if widget is None:
             return
-        # Kernel Version 的可编辑状态由 Control Type 决定�?        # - Android: 始终禁用（值由 Android Version 映射�?        # - Linux:   始终可编�?        if key == "system.kernel_version":
+        if key == "system.kernel_version":
             connect_type_val = _current_connect_type_value()
             if connect_type_val == "Android":
                 enabled = False
@@ -825,14 +826,14 @@ def apply_config_ui_rules(page: Any) -> None:
     field_widgets = getattr(page, "field_widgets", {}) or {}
     editable_fields = getattr(getattr(page, "_last_editable_info", None), "fields", None)
 
-      # Precompute script key once for rules that depend on a specific script.
-      case_path = getattr(page, "_current_case_path", "") or ""
-      script_key = ""
-      if case_path and config_ctl is not None and hasattr(config_ctl, "script_case_key"):
-          try:
-              script_key = config_ctl.script_case_key(case_path)
-          except Exception:
-              script_key = ""
+    # Precompute script key once for rules that depend on a specific script.
+    case_path = getattr(page, "_current_case_path", "") or ""
+    script_key = ""
+    if case_path and config_ctl is not None and hasattr(config_ctl, "script_case_key"):
+        try:
+            script_key = config_ctl.script_case_key(case_path)
+        except Exception:
+            script_key = ""
 
     for rule_id, spec in rules.items():
         active = True
@@ -902,9 +903,24 @@ def update_script_config_ui(page: Any, case_path: str) -> None:
             config_ctl = getattr(page, "config_ctl", None)
             if config_ctl is not None:
                 data = config_ctl.ensure_script_case_defaults(key, entry.case_path)
-                config_ctl.load_script_config_into_widgets(entry, data)
+                # Delegate actual widget population to the view-layer helper
+                try:
+                    from src.ui.view.config.actions import load_script_config_into_widgets as _view_load
+
+                    _view_load(page, entry, data)
+                except Exception:
+                    try:
+                        config_ctl.load_script_config_into_widgets(entry, data)
+                    except Exception:
+                        logging.debug("Failed to load script config into widgets", exc_info=True)
             else:
-                page._load_script_config_into_widgets(entry, {})
+                # Fallback to page-level implementation if present
+                loader = getattr(page, "_load_script_config_into_widgets", None)
+                if callable(loader):
+                    try:
+                        loader(entry, {})
+                    except Exception:
+                        logging.debug("Fallback page loader failed", exc_info=True)
             active_entry = entry
             if key == "test_switch_wifi":
                 field_widgets = getattr(page, "field_widgets", {}) or {}
@@ -932,8 +948,150 @@ def update_script_config_ui(page: Any, case_path: str) -> None:
         else:
             page._stability_panel.set_groups([])
         _rebalance_panel(page._stability_panel)
-    if hasattr(page, "_refresh_script_section_states"):
-        page._refresh_script_section_states()
+
+    # 最终刷新一遍规则，让脚本区的显隐/可编辑状态与当前选择保持一致
+    apply_config_ui_rules(page)
+
+
+def load_script_config_into_widgets(page: Any, entry: Any, data: Mapping[str, Any] | None) -> None:
+    """Populate stability script widgets from stored config data.
+
+    This is the view-layer implementation of the old widget population
+    logic. It intentionally operates on the `page` and `entry` objects and
+    uses controller helpers for CSV path resolution/selection where needed.
+    """
+    from src.ui.view.config.config_str import script_field_key
+    from src.ui.view.config.config_switch_wifi import SwitchWifiManualEditor
+    from src.ui.view.config import RfStepSegmentsWidget
+    from src.util.constants import (
+        SWITCH_WIFI_CASE_KEY,
+        SWITCH_WIFI_USE_ROUTER_FIELD,
+        SWITCH_WIFI_ROUTER_CSV_FIELD,
+        SWITCH_WIFI_MANUAL_ENTRIES_FIELD,
+    )
+
+    data = data or {}
+    case_key = entry.case_key
+
+    # Special handling for switch_wifi group
+    if case_key == SWITCH_WIFI_CASE_KEY:
+        use_router_widget = entry.widgets.get(script_field_key(case_key, SWITCH_WIFI_USE_ROUTER_FIELD))
+        router_combo = entry.widgets.get(script_field_key(case_key, SWITCH_WIFI_ROUTER_CSV_FIELD))
+        manual_widget = entry.widgets.get(script_field_key(case_key, SWITCH_WIFI_MANUAL_ENTRIES_FIELD))
+        use_router_value = bool(data.get(SWITCH_WIFI_USE_ROUTER_FIELD))
+        try:
+            if isinstance(use_router_widget, QCheckBox):
+                use_router_widget.setChecked(use_router_value)
+        except Exception:
+            logging.debug("Failed to set switch_wifi use_router widget", exc_info=True)
+
+        router_path = None
+        try:
+            ctl = getattr(page, "config_ctl", None)
+            if ctl is not None:
+                router_path = ctl.resolve_csv_config_path(data.get(SWITCH_WIFI_ROUTER_CSV_FIELD))
+        except Exception:
+            router_path = None
+
+        try:
+            if isinstance(router_combo, ComboBox):
+                include_placeholder = router_combo.property("switch_wifi_include_placeholder")
+                use_placeholder = True if include_placeholder is None else bool(include_placeholder)
+                ctl = getattr(page, "config_ctl", None)
+                if ctl is not None:
+                    ctl.populate_csv_combo(router_combo, router_path, include_placeholder=use_placeholder)
+                    try:
+                        ctl.set_selected_csv(router_path, sync_combo=True)
+                    except Exception:
+                        logging.debug("Failed to sync selected CSV for switch_wifi defaults", exc_info=True)
+                signal = getattr(page, "csvFileChanged", None)
+                if signal is not None and hasattr(signal, "emit"):
+                    try:
+                        signal.emit(router_path or "")
+                    except Exception:
+                        logging.debug("Failed to emit csvFileChanged for switch_wifi defaults", exc_info=True)
+        except Exception:
+            logging.debug("Failed to populate switch_wifi router combo", exc_info=True)
+
+        try:
+            if isinstance(manual_widget, SwitchWifiManualEditor):
+                manual_entries = data.get(SWITCH_WIFI_MANUAL_ENTRIES_FIELD)
+                if isinstance(manual_entries, Sequence) and not isinstance(manual_entries, (str, bytes)):
+                    manual_widget.set_entries(manual_entries)
+                else:
+                    manual_widget.set_entries(None)
+        except Exception:
+            logging.debug("Failed to set switch_wifi manual entries", exc_info=True)
+        return
+
+    ac_cfg = data.get("ac", {})
+    str_cfg = data.get("str", {})
+
+    def _set_spin(key: str, raw_value: Any) -> None:
+        widget = entry.widgets.get(key)
+        try:
+            value = int(raw_value)
+        except (TypeError, ValueError):
+            value = 0
+        value = max(0, value)
+        try:
+            if isinstance(widget, QSpinBox):
+                with QSignalBlocker(widget):
+                    widget.setValue(value)
+            elif isinstance(widget, LineEdit):
+                with QSignalBlocker(widget):
+                    widget.setText(str(value))
+        except Exception:
+            logging.debug("_set_spin failed for %s", key, exc_info=True)
+
+    def _set_checkbox(key: str, raw_value: Any) -> None:
+        widget = entry.widgets.get(key)
+        try:
+            if isinstance(widget, QCheckBox):
+                widget.setChecked(bool(raw_value))
+        except Exception:
+            logging.debug("_set_checkbox failed for %s", key, exc_info=True)
+
+    def _set_combo(key: str, raw_value: Any) -> None:
+        widget = entry.widgets.get(key)
+        if not isinstance(widget, ComboBox):
+            return
+        value = str(raw_value or "").strip()
+        try:
+            with QSignalBlocker(widget):
+                if value:
+                    index = widget.findData(value)
+                    if index < 0:
+                        index = next((i for i in range(widget.count()) if widget.itemText(i) == value), -1)
+                    if index < 0:
+                        widget.addItem(value, value)
+                        index = widget.findData(value)
+                    widget.setCurrentIndex(index if index >= 0 else max(widget.count() - 1, 0))
+                else:
+                    widget.setCurrentIndex(0 if widget.count() else -1)
+        except Exception:
+            logging.debug("_set_combo failed for %s", key, exc_info=True)
+
+    _set_checkbox(script_field_key(case_key, "ac", "enabled"), ac_cfg.get("enabled"))
+    _set_spin(script_field_key(case_key, "ac", "on_duration"), ac_cfg.get("on_duration"))
+    _set_spin(script_field_key(case_key, "ac", "off_duration"), ac_cfg.get("off_duration"))
+    _set_combo(script_field_key(case_key, "ac", "port"), ac_cfg.get("port"))
+    _set_combo(script_field_key(case_key, "ac", "mode"), ac_cfg.get("mode"))
+
+    _set_checkbox(script_field_key(case_key, "str", "enabled"), str_cfg.get("enabled"))
+    _set_spin(script_field_key(case_key, "str", "on_duration"), str_cfg.get("on_duration"))
+    _set_spin(script_field_key(case_key, "str", "off_duration"), str_cfg.get("off_duration"))
+    _set_combo(script_field_key(case_key, "str", "port"), str_cfg.get("port"))
+    _set_combo(script_field_key(case_key, "str", "mode"), str_cfg.get("mode"))
+
+    # Additional widget types
+    try:
+        rf_widget = getattr(entry, "widgets", {}).get(script_field_key(case_key, "rf_solution.step"))
+        if isinstance(rf_widget, RfStepSegmentsWidget):
+            # RfStepSegmentsWidget expects .set_entries / similar API; use serialize logic elsewhere
+            pass
+    except Exception:
+        pass
 
 def init_stability_actions(page: Any) -> None:
     """Wire Stability panel checkboxes to rule evaluation for Duration/Checkpoint."""
@@ -1588,11 +1746,12 @@ def _bind_run_actions(page: Any) -> None:
     for btn in run_buttons:
         if not hasattr(btn, "clicked"):
             continue
+        # Prefer controller run handler; fall back to page.config_ctl when
+        # controller reference is present on the page (legacy compatibility).
         if config_ctl is not None and hasattr(config_ctl, "on_run"):
             btn.clicked.connect(lambda _checked=False, ctl=config_ctl: ctl.on_run())
-        elif hasattr(page, "on_run"):
-            # Backward-compatibility for older pages/tests.
-            btn.clicked.connect(lambda _checked=False, p=page: p.on_run())
+        elif hasattr(page, "config_ctl") and getattr(page, "config_ctl") is not None and hasattr(page.config_ctl, "on_run"):
+            btn.clicked.connect(lambda _checked=False, ctl=page.config_ctl: ctl.on_run())
 
 
 __all__ = [

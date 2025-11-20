@@ -394,6 +394,32 @@ def attach_view_to_page(
     layout.addWidget(view)
 
 
+def navigate_to_index(page: Any, target_index: int) -> None:
+    """Navigate the page stack to `target_index` with validation.
+
+    This helper centralises the logic previously implemented on
+    `CaseConfigPage._navigate_to_index` so controllers or views can
+    reuse it without depending on the full page class.
+    """
+    stack = getattr(page, "stack", None)
+    if stack is None or stack.count() == 0:
+        return
+    target_index = max(0, min(target_index, stack.count() - 1))
+    current = stack.currentIndex()
+    if target_index == current:
+        return
+    if current == 0 and target_index > current:
+        config_ctl = getattr(page, "config_ctl", None)
+        if config_ctl is not None:
+            if not config_ctl.validate_first_page():
+                stack.setCurrentIndex(0)
+                return
+    config_ctl = getattr(page, "config_ctl", None)
+    if config_ctl is not None:
+        config_ctl.sync_widgets_to_config()
+    stack.setCurrentIndex(target_index)
+
+
 def animate_progress_fill(
     fill_frame: QFrame,
     container: QFrame,

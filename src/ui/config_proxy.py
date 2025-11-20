@@ -146,7 +146,7 @@ class ConfigProxy:
             manual_entries = entry.get(SWITCH_WIFI_MANUAL_ENTRIES_FIELD)
             entry[
                 SWITCH_WIFI_MANUAL_ENTRIES_FIELD
-            ] = page._normalize_switch_wifi_manual_entries(manual_entries)
+            ] = normalize_switch_wifi_manual_entries(manual_entries)
             cases_section[case_key] = entry
             for legacy_key in SWITCH_WIFI_CASE_ALIASES:
                 if legacy_key in cases_section:

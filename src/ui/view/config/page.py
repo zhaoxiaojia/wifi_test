@@ -1,11 +1,13 @@
-"""View module for the Config sidebar page (DUT/Execution/Stability)."""
+"""View + page implementation for the Config sidebar (DUT/Execution/Stability)."""
 
 from __future__ import annotations
 
-from typing import Any, Sequence
+from pathlib import Path
+from typing import Any, Callable, Mapping, Sequence
 
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import Qt, QTimer, pyqtSignal
 from PyQt5.QtWidgets import (
+    QGroupBox,
     QHBoxLayout,
     QSplitter,
     QStackedWidget,
@@ -14,11 +16,14 @@ from PyQt5.QtWidgets import (
     QSizePolicy,
     QLabel,
 )
-from qfluentwidgets import CardWidget, PushButton, ScrollArea, FluentIcon
+from qfluentwidgets import CardWidget, ComboBox, PushButton, ScrollArea, FluentIcon
 
+from src.ui.controller.config_ctl import ConfigController
 from src.ui.view.common import (
     AnimatedTreeView,
     ConfigGroupPanel,
+    EditableInfo,
+    ScriptConfigEntry,
     PAGE_CONTENT_MARGIN,
 )
 from src.ui.view.theme import (
@@ -27,8 +32,21 @@ from src.ui.view.theme import (
     apply_theme,
     apply_settings_tab_label_style,
 )
-from src.ui.view.builder import build_groups_from_schema, load_ui_schema
-from src.ui.view.config.actions import init_fpga_dropdowns, handle_config_event
+from src.ui.view.config.actions import (
+    handle_config_event,
+    init_fpga_dropdowns,
+    refresh_config_page_controls,
+)
+from src.ui.view.config.config_str import (
+    create_test_str_config_entry_from_schema,
+    create_test_switch_wifi_config_entry_from_schema,
+    initialize_script_config_groups,
+)
+from src.util.constants import (
+    DEFAULT_ANDROID_VERSION_CHOICES,
+    DEFAULT_KERNEL_VERSION_CHOICES,
+)
+from src.tools.router_tool.router_factory import router_list, get_router
 
 
 class _ConfigTabLabel(QLabel):
@@ -59,7 +77,7 @@ class ConfigView(CardWidget):
         apply_font_and_selection(self.case_tree, size_px=CASE_TREE_FONT_SIZE_PX)
         self.splitter.addWidget(self.case_tree)
 
-        # Right: scroll area with step view + stacked pages
+        # Right: scroll area with stacked pages
         scroll_area = ScrollArea(self)
         scroll_area.setWidgetResizable(True)
         scroll_area.setContentsMargins(0, 0, 0, 0)
@@ -90,8 +108,8 @@ class ConfigView(CardWidget):
             def _make_handler(page_key: str) -> Any:
                 def _handler() -> None:
                     page = self.parent()
-                    # Climb parents until we reach the owning page (CaseConfigPage).
-                    while page is not None and not hasattr(page, "get_editable_fields"):
+                    # Climb parents until we reach an object with a controller.
+                    while page is not None and not hasattr(page, "config_ctl"):
                         page = page.parent()
                     if page is not None:
                         handle_config_event(page, "settings_tab_clicked", key=page_key)
@@ -127,15 +145,12 @@ class ConfigView(CardWidget):
                 PAGE_CONTENT_MARGIN,
             )
             page_layout.setSpacing(PAGE_CONTENT_MARGIN)
-            # 让设置区域占满垂直空间，Run 按钮贴底部。
             page_layout.addWidget(panel, 1)
             run_btn = self._create_run_button(page)
-            # Run 按钮只占自身高度，宽度拉满。
             page_layout.addWidget(run_btn, 0)
             self._page_widgets[key] = page
 
         # Initialise stack and step view with the default page selection.
-        # This keeps all layout concerns inside the view layer.
         self.set_available_pages(["dut"])
 
         scroll_area.setWidget(container)
@@ -156,7 +171,6 @@ class ConfigView(CardWidget):
             button.setUseRippleEffect(True)
         if hasattr(button, "setUseStateEffect"):
             button.setUseStateEffect(True)
-        # Let the button stretch horizontally so it visually anchors the page.
         button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self._run_buttons.append(button)
         return button
@@ -225,4 +239,122 @@ class ConfigView(CardWidget):
         self.stack.setCurrentIndex(index)
         self._update_tab_checked(index)
 
-__all__ = ["ConfigView"]
+
+class CaseConfigPage(ConfigView):
+    """Controller+view wrapper for the Config page.
+
+    This merges the previous :class:`CaseConfigPage` implementation from
+    ``src.ui.case_config_page`` with :class:`ConfigView` so that the page
+    can be used directly without a separate wrapper module.
+    """
+
+    routerInfoChanged = pyqtSignal()
+    csvFileChanged = pyqtSignal(str)
+
+    def __init__(self, on_run_callback) -> None:
+        super().__init__(parent=None)
+        self.setObjectName("caseConfigPage")
+        self.on_run_callback = on_run_callback
+
+        # Controller responsible for config lifecycle/normalisation.
+        self.config_ctl = ConfigController(self)
+
+        # Load the persisted tool configuration and restore CSV selection.
+        self.config: dict[str, Any] = self.config_ctl.load_initial_config()
+
+        # Transient state flags used during refreshes and selections.
+        self.selected_csv_path: str | None = None
+        self._refreshing = False
+        self._pending_path: str | None = None
+
+        # Mapping from config field keys (e.g. "android_system.version") to widgets.
+        self.field_widgets: dict[str, QWidget] = {}
+
+        # Mapping from logical UI identifiers (config_panel_group_field_type) to widgets.
+        self.config_controls: dict[str, QWidget] = {}
+
+        self._duration_control_group: QGroupBox | None = None
+        self._check_point_group: QGroupBox | None = None
+
+        self.router_obj: Any | None = None
+        self._enable_rvr_wifi: bool = False
+        self._router_config_active: bool = False
+        self._run_locked: bool = False
+        self._locked_fields: set[str] | None = None
+        self._current_case_path: str = ""
+        self._last_editable_info: EditableInfo | None = None
+
+        # Switch‑Wi‑Fi CSV combo management.
+        self._switch_wifi_csv_combos: list[ComboBox] = []
+        from src.ui.rvrwifi_proxy import _register_switch_wifi_csv_combo as _reg_sw_csv
+
+        self.register_switch_wifi_csv_combo = lambda combo: _reg_sw_csv(self, combo)
+
+        # Track Android/kernel version options.
+        self._android_versions = list(DEFAULT_ANDROID_VERSION_CHOICES)
+        self._kernel_versions = list(DEFAULT_KERNEL_VERSION_CHOICES)
+
+        # Logical page tracking from the controller perspective.
+        self._current_page_keys = ["dut"]
+
+        self._script_config_factories: dict[
+            str, Callable[[Any, str, str, Mapping[str, Any]], ScriptConfigEntry]
+        ] = {
+            "test/stability/test_str.py": create_test_str_config_entry_from_schema,
+            "test/stability/test_switch_wifi.py": create_test_switch_wifi_config_entry_from_schema,
+        }
+        self._script_groups: dict[str, ScriptConfigEntry] = {}
+        self._active_script_case: str | None = None
+
+        self._config_panels = tuple(self._page_panels[key] for key in ("dut", "execution", "stability"))
+
+        # Containers for groups discovered from the YAML schema.
+        self._dut_groups: dict[str, QWidget] = {}
+        self._other_groups: dict[str, QWidget] = {}
+
+        # Render form fields from YAML and initialise script groups.
+        refresh_config_page_controls(self)
+        initialize_script_config_groups(self)
+
+        # Initialise case tree using src/test as root (non-fatal on failure).
+        try:
+            base = Path(self.config_ctl.get_application_base())
+            test_root = base / "test"
+            if test_root.exists():
+                self.config_ctl.init_case_tree(test_root)
+        except Exception:
+            pass
+
+        # Apply initial UI rules/state.
+        try:
+            from src.ui.view.config.actions import apply_config_ui_rules
+
+            apply_config_ui_rules(self)
+        except Exception:
+            pass
+
+        # CSV/router updates.
+        self.routerInfoChanged.connect(self.config_ctl.update_csv_options)
+        self.config_ctl.update_csv_options()
+
+        # Connect signals after UI ready.
+        self.case_tree.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        QTimer.singleShot(0, lambda: self.config_ctl.get_editable_fields(""))
+
+    # ------------------------------------------------------------------
+    # Helpers used by controller / actions
+    # ------------------------------------------------------------------
+
+    def _determine_pages_for_case(self, case_path: str, info: EditableInfo) -> list[str]:
+        """Delegate page-key computation to the config controller."""
+        return self.config_ctl.determine_pages_for_case(case_path, info)
+
+    def set_fields_editable(self, fields: set[str]) -> None:
+        """Enable or disable config widgets based on the given editable field keys."""
+        from src.ui.view.config.actions import set_fields_editable as _set_fields
+
+        _set_fields(self, fields)
+
+
+__all__ = ["ConfigView", "CaseConfigPage"]
+

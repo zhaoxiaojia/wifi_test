@@ -385,7 +385,11 @@ def initialize_script_config_groups(page: Any) -> None:
 
     factories = getattr(page, "_script_config_factories", {}) or {}
     for case_path, factory in factories.items():
-        case_key = page._script_case_key(case_path)
+        config_ctl = getattr(page, "config_ctl", None)
+        if config_ctl is not None and hasattr(config_ctl, "script_case_key"):
+            case_key = config_ctl.script_case_key(case_path)
+        else:
+            case_key = ""
         entry_config = page.config_ctl.ensure_script_case_defaults(case_key, case_path)
         entry = factory(page, case_key, case_path, entry_config)
         entry.group.setVisible(False)
