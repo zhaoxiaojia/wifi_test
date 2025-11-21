@@ -5,7 +5,15 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
-from PyQt5.QtCore import Qt, QTimer, pyqtSignal
+from PyQt5.QtCore import (
+    Qt,
+    QTimer,
+    pyqtSignal,
+    QPropertyAnimation,
+    QParallelAnimationGroup,
+    QObject,
+    pyqtProperty,
+)
 from PyQt5.QtWidgets import (
     QGroupBox,
     QHBoxLayout,
@@ -16,16 +24,10 @@ from PyQt5.QtWidgets import (
     QSizePolicy,
     QLabel,
 )
-from qfluentwidgets import CardWidget, ComboBox, PushButton, ScrollArea, FluentIcon
+from qfluentwidgets import CardWidget, ComboBox, PushButton, ScrollArea, FluentIcon, TreeView
 
 from src.ui.controller.config_ctl import ConfigController
-from src.ui.view.common import (
-    AnimatedTreeView,
-    ConfigGroupPanel,
-    EditableInfo,
-    ScriptConfigEntry,
-    PAGE_CONTENT_MARGIN,
-)
+from src.ui.view.common import ConfigGroupPanel, EditableInfo, ScriptConfigEntry, PAGE_CONTENT_MARGIN
 from src.ui.view.theme import (
     CASE_TREE_FONT_SIZE_PX,
     apply_font_and_selection,
@@ -47,6 +49,88 @@ from src.util.constants import (
     DEFAULT_KERNEL_VERSION_CHOICES,
 )
 from src.tools.router_tool.router_factory import router_list, get_router
+from src.ui.controller.case_ctl import _register_switch_wifi_csv_combo as _reg_sw_csv
+
+
+class _RowHeightWrapper(QObject):
+    """
+    Helper object that bridges a single index's row height to a Qt property.
+
+    The wrapper allows using :class:`QPropertyAnimation` on a per-index basis.
+    It stores and retrieves heights in the parent tree's private height map
+    (``tree._row_heights``), then triggers geometry updates on change.
+    """
+
+    def __init__(self, tree: "AnimatedTreeView", index) -> None:
+        super().__init__(tree)
+        self._tree = tree
+        self._index = index
+
+    def _set_height(self, height: int) -> None:
+        self._tree._row_heights[self._index] = height
+        self._tree.updateGeometries()
+
+    def _get_height(self) -> int:
+        return self._tree._row_heights.get(self._index, 0)
+
+    #: Qt property used by QPropertyAnimation.
+    height = pyqtProperty(int, fset=_set_height, fget=_get_height)
+
+
+class AnimatedTreeView(TreeView):
+    """
+    A TreeView with expand animation for child rows.
+
+    Behavior
+    --------
+    - When expanding an index, the control pre-expands the node (so children
+      exist), then animates each direct child's row height from 0 to its native
+      size hint using a parallel animation group.
+    - While the animation runs, :meth:`indexRowSizeHint` serves the temporary
+      heights from ``_row_heights`` so the viewport progressively reveals rows.
+    - After the animation finishes, temporary overrides are cleared, updates are
+      re-enabled, and the viewport is repainted once.
+    """
+
+    ANIMATION_DURATION = 180  # ms
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self._row_heights: dict[object, int] = {}
+
+    def indexRowSizeHint(self, index):  # noqa: N802 (Qt naming convention)
+        """Return row height for ``index`` honoring active animations."""
+        return self._row_heights.get(index, super().indexRowSizeHint(index))
+
+    def setExpanded(self, index, expand):  # noqa: D401, N802
+        """Reimplemented to animate child rows on expand."""
+        model = self.model()
+        if expand and model is not None:
+            self.setUpdatesEnabled(False)
+            super().setExpanded(index, expand)
+            group = QParallelAnimationGroup(self)
+            for row in range(model.rowCount(index)):
+                child = model.index(row, 0, index)
+                target = super().indexRowSizeHint(child)
+                self._row_heights[child] = 0
+                wrapper = _RowHeightWrapper(self, child)
+                anim = QPropertyAnimation(wrapper, b"height", self)
+                anim.setDuration(self.ANIMATION_DURATION)
+                anim.setStartValue(0)
+                anim.setEndValue(target)
+                group.addAnimation(anim)
+
+            def _on_finished() -> None:
+                for row in range(model.rowCount(index)):
+                    child = model.index(row, 0, index)
+                    self._row_heights.pop(child, None)
+                self.setUpdatesEnabled(True)
+                self.viewport().update()
+
+            group.finished.connect(_on_finished)
+            group.start(QPropertyAnimation.DeleteWhenStopped)
+        else:
+            super().setExpanded(index, expand)
 
 
 class _ConfigTabLabel(QLabel):
@@ -286,8 +370,6 @@ class CaseConfigPage(ConfigView):
 
         # Switch‑Wi‑Fi CSV combo management.
         self._switch_wifi_csv_combos: list[ComboBox] = []
-        from src.ui.rvrwifi_proxy import _register_switch_wifi_csv_combo as _reg_sw_csv
-
         self.register_switch_wifi_csv_combo = lambda combo: _reg_sw_csv(self, combo)
 
         # Track Android/kernel version options.
@@ -357,4 +439,3 @@ class CaseConfigPage(ConfigView):
 
 
 __all__ = ["ConfigView", "CaseConfigPage"]
-

@@ -7,7 +7,8 @@ This module contains the *pure UI* layout for the report browser:
   or a set of RVR/RVO charts in a ``QTabWidget``.
 
 All business logic (file system scanning, tailing, chart rendering) lives in
-``report_page.py`` which composes this view and wires signals/slots.
+``src.ui.controller.report_ctl`` which operates on this view and wires
+signals/slots.
 """
 
 from __future__ import annotations

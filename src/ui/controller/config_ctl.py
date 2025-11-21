@@ -12,7 +12,7 @@ from qfluentwidgets import InfoBar, InfoBarPosition, ComboBox, LineEdit
 
 from src.ui.view.config.actions import compute_editable_info, apply_config_ui_rules
 from src.ui.view.common import EditableInfo
-from src.tools.config_loader import load_config, save_config
+from src.ui import load_page_config, save_page_config
 from src import display_to_case_path
 from src.util.constants import (
     SWITCH_WIFI_CASE_ALIASES,
@@ -38,7 +38,7 @@ from src.util.constants import (
     get_config_base,
     get_src_base,
 )
-from src.ui.rvrwifi_proxy import (
+from src.ui.controller.case_ctl import (
     _load_csv_selection_from_config as _proxy_load_csv_selection_from_config,
     _resolve_csv_config_path as _proxy_resolve_csv_config_path,
     _update_csv_options as _proxy_update_csv_options,
@@ -60,6 +60,8 @@ from src.ui.view.config.config_switch_wifi import normalize_switch_wifi_manual_e
 from src.ui.view.config.config_str import script_field_key
 from src.ui.controller import show_info_bar
 
+if TYPE_CHECKING:  # pragma: no cover - circular import guard
+    from src.ui.view.case import RvrWifiConfigPage as CaseConfigPage
 
 
 class ConfigController:
@@ -67,16 +69,20 @@ class ConfigController:
     Controller responsible for configuration lifecycle and normalisation
     for the Config page.
 
+    This keeps all config I/O and structural cleanup out of the Qt widget
+    class so that CaseConfigPage can focus on wiring UI and delegating
+    business logic.
     """
 
-    def __init__(self, page: "") -> None:
+    def __init__(self, page: "CaseConfigPage") -> None:
         self.page = page
 
     def get_application_base(self) -> Path:
+        """Return the application source base path (was CaseConfigPage._get_application_base)."""
         return Path(get_src_base()).resolve()
 
     def init_case_tree(self, root_dir: Path) -> None:
-        """Initialize the case tree model + proxy .
+        """Initialize the case tree model + proxy (migrated from CaseConfigPage).
 
         This constructs a QFileSystemModel rooted at `root_dir` and attaches a
         TestFileFilterModel proxy so that only test_*.py files (and directories)
@@ -120,60 +126,7 @@ class ConfigController:
         - Restores CSV selection into page.selected_csv_path if supported
         """
         page = self.page
-        try:
-            config = load_config(refresh=True) or {}
-
-            app_base = self.get_application_base()
-            changed = False
-            path = config.get("text_case", "")
-            if path:
-                abs_path = Path(path)
-                if not abs_path.is_absolute():
-                    abs_path = app_base / abs_path
-                abs_path = abs_path.resolve()
-                if abs_path.exists():
-                    try:
-                        rel_path = abs_path.relative_to(app_base)
-                    except ValueError:
-                        config["text_case"] = ""
-                        changed = True
-                    else:
-                        rel_str = rel_path.as_posix()
-                        if rel_str != path:
-                            config["text_case"] = rel_str
-                            changed = True
-                else:
-                    config["text_case"] = ""
-                    changed = True
-            else:
-                config["text_case"] = ""
-
-            if changed:
-                try:
-                    save_config(config)
-                except Exception as exc:  # pragma: no cover - UI only feedback
-                    logging.error("Failed to normalize and persist config: %s", exc)
-                    QTimer.singleShot(
-                        0,
-                        lambda exc=exc: InfoBar.error(
-                            title="Error",
-                            content=f"Failed to write config: {exc}",
-                            parent=page,
-                            position=InfoBarPosition.TOP,
-                        ),
-                    )
-            page.config = config
-        except Exception as exc:  # pragma: no cover - UI only feedback
-            QTimer.singleShot(
-                0,
-                lambda exc=exc: InfoBar.error(
-                    title="Error",
-                    content=f"Failed to load config : {exc}",
-                    parent=page,
-                    position=InfoBarPosition.TOP,
-                ),
-            )
-            page.config = {}
+        page.config = load_page_config(page)
 
         # Capture snapshot for tool section and restore CSV selection.
         snapshot = copy.deepcopy(page.config.get(TOOL_SECTION_KEY, {}))
@@ -190,25 +143,10 @@ class ConfigController:
         """Persist the active configuration and refresh cached state."""
         page = self.page
         logging.debug("[save] data=%s", page.config)
-        try:
-            save_config(page.config)
-            logging.info("Configuration saved")
-            refreshed = self.load_initial_config()
-            if hasattr(page, "_config_tool_snapshot"):
-                page._config_tool_snapshot = copy.deepcopy(
-                    refreshed.get(TOOL_SECTION_KEY, {})
-                )
-            logging.info("Configuration saved")
-        except Exception as exc:  # pragma: no cover - UI only feedback
-            logging.error("[save] failed: %s", exc)
-            QTimer.singleShot(
-                0,
-                lambda exc=exc: InfoBar.error(
-                    title="Error",
-                    content=f"Failed to save config: {exc}",
-                    parent=page,
-                    position=InfoBarPosition.TOP,
-                ),
+        refreshed = save_page_config(page)
+        if hasattr(page, "_config_tool_snapshot"):
+            page._config_tool_snapshot = copy.deepcopy(
+                refreshed.get(TOOL_SECTION_KEY, {})
             )
 
     # ------------------------------------------------------------------

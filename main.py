@@ -39,15 +39,14 @@ from PyQt5.QtWidgets import (
 import sip
 from qfluentwidgets import FluentIcon, FluentWindow, NavigationItemPosition
 from src.ui import SIDEBAR_PAGE_LABELS, SIDEBAR_PAGE_KEYS
-from src.ui.rvr_wifi_config import RvrWifiConfigPage
-from src.ui.run import RunPage
-from src.ui.report_page import ReportPage
-from src.ui.about_page import AboutPage
-from src.ui.company_login import (
-    CompanyLoginPage,
-    get_configured_ldap_server,
-    ldap_authenticate,
-)
+from src.ui.view.case import RvrWifiConfigPage
+from src.ui.view.run import RunPage
+from src.ui.view.report import ReportView
+from src.ui.view.about import AboutView
+from src.ui.view.account import CompanyLoginPage
+from src.ui.controller.about_ctl import AboutController
+from src.ui.controller.report_ctl import ReportController
+from src.ui.controller.account_ctl import get_configured_ldap_server, ldap_authenticate
 from qfluentwidgets import setTheme, Theme
 from PyQt5.QtGui import QGuiApplication, QFont
 from PyQt5.QtCore import (
@@ -164,7 +163,8 @@ class MainWindow(FluentWindow):
         # Ensure run page starts empty
         self.run_page.reset()
         # Report page (disabled until report_dir created)
-        self.report_page = ReportPage(self)
+        self.report_view = ReportView(self)
+        self.report_ctl = ReportController(self.report_view)
 
         # Navigation buttons
         # Logical sidebar keys (top -> bottom): account, config, case, run, report, about
@@ -208,7 +208,7 @@ class MainWindow(FluentWindow):
         # Report browser
         self.report_nav_button = self._create_sidebar_button(
             "report",
-            self.report_page,
+            self.report_view,
             FluentIcon.DOCUMENT,
             position=NavigationItemPosition.BOTTOM,
         )
@@ -216,7 +216,9 @@ class MainWindow(FluentWindow):
 
         self.last_report_dir = None
 
-        self.about_page = AboutPage(self)
+        self.about_page = AboutView(self)
+        # Attach behaviour from the controller (migrated from the old AboutPage)
+        AboutController(self.about_page)
         self.about_nav_button = self._create_sidebar_button(
             "about",
             self.about_page,
@@ -1182,6 +1184,7 @@ class MainWindow(FluentWindow):
         None
         """
         self.setCurrentIndex(self.rvr_wifi_config_page)
+        logging.info("Switched to CaseConfigPage")
 
     def stop_run_and_show_case_config(self):
         """Abort a running test and return to the case configuration page.
@@ -1220,6 +1223,7 @@ class MainWindow(FluentWindow):
                 else False
             )
             self.rvr_nav_button.setEnabled(bool(is_perf))
+        logging.info("Switched to CaseConfigPage")
 
     # --- Reports ---
     def enable_report_page(self, report_dir: str) -> None:
@@ -1244,10 +1248,10 @@ class MainWindow(FluentWindow):
         """
         try:
             self.last_report_dir = str(Path(report_dir).resolve())
-            if hasattr(self, "report_page") and self.report_page:
+            if hasattr(self, "report_ctl") and self.report_ctl:
                 case_path = getattr(self.run_page, "case_path", "")
-                self.report_page.set_case_context(case_path or None)
-                self.report_page.set_report_dir(self.last_report_dir)
+                self.report_ctl.set_case_context(case_path or None)
+                self.report_ctl.set_report_dir(self.last_report_dir)
             if hasattr(self, "report_nav_button") and self.report_nav_button and not sip.isdeleted(self.report_nav_button):
                 self.report_nav_button.setEnabled(True)
                 self.report_nav_button.setVisible(True)

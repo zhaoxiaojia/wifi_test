@@ -17,7 +17,7 @@ from .page import ConfigView
 from .config_switch_wifi import SwitchWifiManualEditor, SwitchWifiCsvPreview
 from .config_str import RfStepSegmentsWidget
 from src.ui.view.common import ConfigGroupPanel, ScriptConfigEntry
-from src.ui.rvrwifi_proxy import (
+from src.ui.controller.case_ctl import (
     _register_switch_wifi_csv_combo,
     _unregister_switch_wifi_csv_combo,
 )
