@@ -360,10 +360,6 @@ class ConfigView(CardWidget):
         sizes = self.splitter.sizes()
         span = max(sum(sizes), 1)
         ratio = sizes[0] / span
-        print(
-            f"[ConfigView] resize init splitter sizes request=30/70 "
-            f"actual={sizes} ratio_left={ratio:.3f}"
-        )
         self._splitter_initialized = True
 
 

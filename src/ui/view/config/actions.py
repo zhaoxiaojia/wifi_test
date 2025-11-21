@@ -400,12 +400,6 @@ def apply_rf_model_ui_state(page: Any, model_str: str) -> None:
 
     model_str = str(model_str or "").strip()
 
-    # DEBUG PRINT: trace RF model UI invocation (remove after debugging)
-    try:
-        print(f"[DEBUG][RF_UI] apply_rf_model_ui_state called model_str={model_str} page={getattr(page,'objectName',lambda:None)()}" )
-    except Exception:
-        print(f"[DEBUG][RF_UI] apply_rf_model_ui_state called model_str={model_str}")
-
     # Hide all model-specific fields by default.
     for key in (
         "rf_solution.RC4DAT-8G-95.idVendor",
