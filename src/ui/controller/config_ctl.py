@@ -60,8 +60,6 @@ from src.ui.view.config.config_switch_wifi import normalize_switch_wifi_manual_e
 from src.ui.view.config.config_str import script_field_key
 from src.ui.controller import show_info_bar
 
-if TYPE_CHECKING:  # pragma: no cover - circular import guard
-    from src.ui.case_config_page import CaseConfigPage
 
 
 class ConfigController:
@@ -69,20 +67,16 @@ class ConfigController:
     Controller responsible for configuration lifecycle and normalisation
     for the Config page.
 
-    This keeps all config I/O and structural cleanup out of the Qt widget
-    class so that CaseConfigPage can focus on wiring UI and delegating
-    business logic.
     """
 
-    def __init__(self, page: "CaseConfigPage") -> None:
+    def __init__(self, page: "") -> None:
         self.page = page
 
     def get_application_base(self) -> Path:
-        """Return the application source base path (was CaseConfigPage._get_application_base)."""
         return Path(get_src_base()).resolve()
 
     def init_case_tree(self, root_dir: Path) -> None:
-        """Initialize the case tree model + proxy (migrated from CaseConfigPage).
+        """Initialize the case tree model + proxy .
 
         This constructs a QFileSystemModel rooted at `root_dir` and attaches a
         TestFileFilterModel proxy so that only test_*.py files (and directories)
@@ -1315,9 +1309,9 @@ class ConfigController:
 
         main_window = page.window()
         if hasattr(main_window, "setCurrentIndex"):
-            logging.debug("get_editable_fields: before switch to case_config_page")
-            main_window.setCurrentIndex(main_window.case_config_page)
-            logging.debug("get_editable_fields: after switch to case_config_page")
+            logging.debug("get_editable_fields: before switch to rvr_wifi_config_page")
+            main_window.setCurrentIndex(main_window.rvr_wifi_config_page)
+            logging.debug("get_editable_fields: after switch to rvr_wifi_config_page")
         if not hasattr(page, "csv_combo"):
             logging.debug("csv_combo disabled")
         if page._pending_path:

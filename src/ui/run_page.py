@@ -630,7 +630,7 @@ class RunPage(CardWidget):
         This docstring was auto-generated; refine as needed to match real behavior.
         """
         """Trigger configuration page run logic, keeping consistent with config page button."""
-        cfg_page = getattr(self.main_window, "case_config_page", None)
+        cfg_page = getattr(self.main_window, "rvr_wifi_config_page", None)
         config_ctl = None
         if cfg_page and not sip.isdeleted(cfg_page):
             config_ctl = getattr(cfg_page, "config_ctl", None)

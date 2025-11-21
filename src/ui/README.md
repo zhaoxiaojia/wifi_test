@@ -9,7 +9,6 @@ At a high level:
 - **View** lives under `src/ui/view/` and is responsible for all widget
   creation, layouts and visual effects.
 - **Controller / Logic** lives in the existing page classes (e.g.
-  `CaseConfigPage`, `RunPage`, `ReportPage`), which wire views to models,
   apply rules, and handle IO.
 
 This document focuses on the **View** layer.
@@ -29,7 +28,7 @@ The current rules for view implementation are:
      - `view/report.py` → `ReportView`
      - `view/about.py` → `AboutView`
 
-   - The page class (`CompanyLoginPage`, `CaseConfigPage`, `RvrWifiConfigPage`,
+   - The page class (`CompanyLoginPage`, `RvrWifiConfigPage`,
      `RunPage`, `ReportPage`, `AboutPage`) composes its view in `__init__`,
      but does **not** build layouts or widgets directly. It only:
 
@@ -56,12 +55,6 @@ The current rules for view implementation are:
      build_groups_from_schema(page, config, dut_schema, panel_key="dut")
      ```
 
-   - `CaseConfigPage` now only:
-
-     - Normalises config data (e.g. `connect_type`, `fpga`, `stability`).
-     - Calls the builder for each panel (`dut`, `execution`, `stability`).
-     - Maps widgets into `field_widgets`/`config_controls`.
-     - Applies `model.rules.CONFIG_UI_RULES` to enable/disable/show/hide fields.
 
    - Script-specific stability sections (e.g. `test_str`, `test_switch_wifi`)
      are also described in `config_stability_ui.yaml` as fields under
@@ -84,11 +77,6 @@ The current rules for view implementation are:
 
 4. **Controllers must not hand-craft config UI**
 
-   - `CaseConfigPage` and other controllers **must not**:
-
-     - Create `QGroupBox` instances for config fields.
-     - Manually build form layouts for config sections.
-     - Add/remove config widgets from layouts.
 
    - If a new config field needs to appear in the UI:
 

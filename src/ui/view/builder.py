@@ -2,7 +2,7 @@
 
 This module reads UI schema YAML files from ``src/ui/model/config``
 and constructs Qt widgets (group boxes + field controls) for a given
-page using a simple convention. It is used by ConfigView/CaseConfigPage
+
 to render DUT / Execution / Stability panels from YAML.
 """
 

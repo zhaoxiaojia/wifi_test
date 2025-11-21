@@ -28,10 +28,6 @@ from src.ui.view.theme import apply_theme, apply_font_and_selection
 from .view.common import attach_view_to_page
 from .view.case import CaseView, WifiTableWidget
 
-from typing import TYPE_CHECKING
-if TYPE_CHECKING:
-    from .windows_case_config import CaseConfigPage
-
 
 class RvrWifiConfigPage(CardWidget):
     """RVR Wi-Fi test parameter configuration page.
@@ -44,11 +40,11 @@ class RvrWifiConfigPage(CardWidget):
 
     External deps:
         - src.util.constants provides Paths/AUTH_OPTIONS.
-        - get_router() provides a router object capability table.
+        - get_router() provides a router object capability.
         - qfluentwidgets handles UI components and InfoBar.
     """
 
-    def __init__(self, case_config_page: "CaseConfigPage"):
+    def __init__(self):
         """Initialize the config page, build the form and table, load router/CSV, and connect signals.
 
         Notes:
@@ -57,16 +53,9 @@ class RvrWifiConfigPage(CardWidget):
         super().__init__()
         # Object name is used for styling/debugging only
         self.setObjectName("rvrWifiConfigPage")
-        self.case_config_page = case_config_page
 
-        combo = getattr(self.case_config_page, "router_name_combo", None)
-        router_name = combo.currentText().lower() if combo is not None else ""
-        self.csv_path = self._compute_csv_path(router_name)
-
-        addr_edit = getattr(self.case_config_page, "router_addr_edit", None)
-        addr = addr_edit.text() if addr_edit is not None else None
-
-        self.router, self.router_name = self._load_router(router_name, addr)
+        self.csv_path = self._compute_csv_path()
+        self.router, self.router_name = self._load_router()
         self.headers, self.rows = self._load_csv()
 
         # Guard flag to avoid signal recursion
@@ -128,15 +117,7 @@ class RvrWifiConfigPage(CardWidget):
         # Logical control map for the case (RVR Wi-Fi) page remains unchanged.
         self.case_controls = self.view.case_controls
 
-        # Listen to signals from the main Case config page
-        self.case_config_page.routerInfoChanged.connect(self.reload_router)
-        self.case_config_page.csvFileChanged.connect(self.on_csv_file_changed)
-
-    def _get_base_dir(self) -> Path:
-        """Return the project base directory (Paths.BASE_DIR)."""
-        return Path(Paths.BASE_DIR)
-
-    def _compute_csv_path(self, router_name: str) -> Path:
+    def _compute_csv_path(self) -> Path:
         """Compute CSV path for the given router name.
 
         Notes:
@@ -260,13 +241,13 @@ class RvrWifiConfigPage(CardWidget):
         Logs:
             - Errors are logged.
         """
-        combo = getattr(self.case_config_page, "router_name_combo", None)
-        name = combo.currentText().lower() if combo is not None else self.router_name
-        self.csv_path = self._compute_csv_path(name)
+        # Read router configuration from persisted settings instead of
+        # attempting to reach back into the legacy `case_config_page`
+        # UI. The controller's `_load_router` reads the stored config
+        # (and optional address) so reuse it here.
         try:
-            addr_edit = getattr(self.case_config_page, "router_addr_edit", None)
-            addr = addr_edit.text() if addr_edit is not None else None
-            (self.router, self.router_name) = self._load_router(name, addr)
+            (self.router, self.router_name) = self._load_router()
+            self.csv_path = self._compute_csv_path(self.router_name)
         except Exception as e:
             logging.error("reload router failed: %s", e)
             return

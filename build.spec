@@ -48,7 +48,6 @@ a = Analysis(
         'selenium.webdriver.support.ui.WebDriverWait',
         'selenium.webdriver.chrome',
         *requirements,
-        'src.ui.windows_case_config',
         'src.ui.run',
 
     ],

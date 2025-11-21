@@ -109,7 +109,6 @@ class SwitchWifiManualEditor(QWidget):
         layout.addWidget(self.table)
 
         # Input rows: keep controls simple inside the editor itself.
-        # Outer layouts (e.g. CaseConfigPage) can decide whether to show
         # labels in a separate column.
         inputs_column = QVBoxLayout()
         inputs_column.setContentsMargins(0, 0, 0, 0)

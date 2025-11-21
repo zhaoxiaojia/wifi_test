@@ -397,9 +397,6 @@ def attach_view_to_page(
 def navigate_to_index(page: Any, target_index: int) -> None:
     """Navigate the page stack to `target_index` with validation.
 
-    This helper centralises the logic previously implemented on
-    `CaseConfigPage._navigate_to_index` so controllers or views can
-    reuse it without depending on the full page class.
     """
     stack = getattr(page, "stack", None)
     if stack is None or stack.count() == 0:

@@ -10,11 +10,9 @@ from qfluentwidgets import ComboBox
 
 from src.util.constants import get_config_base
 
-if TYPE_CHECKING:  # pragma: no cover - circular import guard
-    from .case_config_page import CaseConfigPage
 
 
-def _register_switch_wifi_csv_combo(page: "CaseConfigPage", combo: ComboBox) -> None:
+def _register_switch_wifi_csv_combo(page: "", combo: ComboBox) -> None:
     """Track CSV combos so selections stay in sync across the UI."""
     if combo in page._switch_wifi_csv_combos:
         return
@@ -29,7 +27,7 @@ def _register_switch_wifi_csv_combo(page: "CaseConfigPage", combo: ComboBox) -> 
     combo.destroyed.connect(_cleanup)  # type: ignore[arg-type]
 
 
-def _unregister_switch_wifi_csv_combo(page: "CaseConfigPage", combo: ComboBox) -> None:
+def _unregister_switch_wifi_csv_combo(page: "", combo: ComboBox) -> None:
     """Stop tracking a CSV combo when it is removed."""
     try:
         page._switch_wifi_csv_combos.remove(combo)
@@ -68,7 +66,7 @@ def _resolve_csv_config_path(value: Any) -> str | None:
     return str(candidate)
 
 
-def _load_csv_selection_from_config(page: "CaseConfigPage") -> None:
+def _load_csv_selection_from_config(page: "") -> None:
     """Initialise the cached CSV selection from stored configuration."""
     stored = None
     if isinstance(page.config, dict):
@@ -81,14 +79,14 @@ def _load_csv_selection_from_config(page: "CaseConfigPage") -> None:
         _set_selected_csv(page, stored, sync_combo=False)
 
 
-def _update_csv_options(page: "CaseConfigPage") -> None:
+def _update_csv_options(page: "") -> None:
     """Refresh CSV drop-downs to reflect router availability."""
     if hasattr(page, "csv_combo"):
         _populate_csv_combo(page, page.csv_combo, page.selected_csv_path)
     _refresh_registered_csv_combos(page)
 
 
-def _capture_preselected_csv(page: "CaseConfigPage") -> None:
+def _capture_preselected_csv(page: "") -> None:
     """Cache the combo selection when no CSV has been recorded yet."""
     combo = getattr(page, "csv_combo", None)
     if combo is None or page.selected_csv_path:
@@ -136,7 +134,7 @@ def _relativize_config_path(path: Any) -> str:
 
 
 def _find_csv_index(
-    page: "CaseConfigPage", normalized_path: str | None, combo: ComboBox | None = None
+    page: "", normalized_path: str | None, combo: ComboBox | None = None
 ) -> int:
     """Return the combo index for a normalized CSV path."""
     if not normalized_path:
@@ -155,7 +153,7 @@ def _find_csv_index(
 
 
 def _set_selected_csv(
-    page: "CaseConfigPage", path: str | None, *, sync_combo: bool = True
+    page: "", path: str | None, *, sync_combo: bool = True
 ) -> bool:
     """Update cached CSV selection and optionally sync the combo box."""
     normalized = _normalize_csv_path(path)
@@ -174,7 +172,7 @@ def _set_selected_csv(
 
 
 def _populate_csv_combo(
-    page: "CaseConfigPage",
+    page: "",
     combo: ComboBox,
     selected_path: str | None,
     *,
@@ -206,7 +204,7 @@ def _populate_csv_combo(
         combo.setCurrentIndex(index)
 
 
-def _refresh_registered_csv_combos(page: "CaseConfigPage") -> None:
+def _refresh_registered_csv_combos(page: "") -> None:
     """Refresh registered CSV combos to ensure the UI is up to date."""
     for combo in list(page._switch_wifi_csv_combos):
         if combo is None:
@@ -223,7 +221,7 @@ def _refresh_registered_csv_combos(page: "CaseConfigPage") -> None:
 
 
 def _load_switch_wifi_entries(
-    page: "CaseConfigPage", csv_path: str | None
+    page: "", csv_path: str | None
 ) -> list[dict[str, str]]:
     """Load switch Wi-Fi entries from a CSV file."""
     normalized = _normalize_csv_path(csv_path)
@@ -264,7 +262,7 @@ def _load_switch_wifi_entries(
 
 
 def _update_switch_wifi_preview(
-    page: "CaseConfigPage",
+    page: "",
     preview,
     csv_path: str | None,
 ) -> None:
@@ -275,7 +273,7 @@ def _update_switch_wifi_preview(
     preview.update_entries(entries)
 
 
-def _update_rvr_nav_button(page: "CaseConfigPage") -> None:
+def _update_rvr_nav_button(page: "") -> None:
     """Enable or disable the RVR navigation button based on CSV state."""
     main_window = page.window()
     if hasattr(main_window, "rvr_nav_button"):

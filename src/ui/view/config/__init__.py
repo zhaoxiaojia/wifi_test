@@ -45,8 +45,6 @@ def init_stability_common_groups(page: Any) -> None:
 def compose_stability_groups(page: Any, active_entry: ScriptConfigEntry | None) -> list[QGroupBox]:
     """Combine shared stability controls with the active script group.
 
-    This mirrors the previous CaseConfigPage._compose_stability_groups logic
-    but lives in the view layer so that controllers do not own layout details.
     """
     groups: list[QGroupBox] = []
     duration_group = getattr(page, "_duration_control_group", None)

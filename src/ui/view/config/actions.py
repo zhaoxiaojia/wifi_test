@@ -1,9 +1,5 @@
 """UI action helpers for the Config page.
 
-These functions live in the *view* layer and encapsulate pure UI behaviour
-for CaseConfigPage and ConfigView (show/hide groups, enable/disable fields,
-update step indicators, etc.).  Controllers should delegate visual tweaks
-to these helpers instead of hard-coding widget manipulation.
 """
 
 from __future__ import annotations
@@ -32,8 +28,6 @@ from src.ui.view.config.config_switch_wifi import (
 )
 from src import display_to_case_path, case_path_to_display, update_test_case_display
 
-
-# --- Connect-type / Android system helpers (migrated from CaseConfigPage) ---
 def normalize_connect_type_label(label: str) -> str:
     text = (label or "").strip()
     lowered = text.lower()
@@ -640,8 +634,6 @@ def refresh_config_page_controls(page: Any) -> None:
 def compute_editable_info(page: Any, case_path: str) -> EditableInfo:
     """Return editable fields and related UI enable state based on case name and path.
 
-    This is a view-layer helper extracted from ``CaseConfigPage._compute_editable_info``
-    so that Execution/DUT/Stability enable rules no longer live in the controller.
     """
     import os  # local import to avoid polluting module namespace
 
@@ -753,9 +745,6 @@ def apply_field_effects(
 ) -> None:
     """Apply enable/disable/show/hide rule effects to a config page.
 
-    This helper lives in the view layer (actions) but works against a generic
-    ``page`` object. It replaces the old ``CaseConfigPage._apply_field_effects``
-    implementation.
     """
     if not effects:
         return
@@ -869,9 +858,6 @@ def apply_config_ui_rules(page: Any) -> None:
 def update_script_config_ui(page: Any, case_path: str) -> None:
     """Update Stability script config UI to reflect the active test case.
 
-    This helper moves the view-related logic for stability script sections
-    out of ``CaseConfigPage`` so that the controller only delegates the
-    operation while the view layer coordinates group visibility and layout.
     """
     if config_ctl is None or not hasattr(config_ctl, "script_case_key"):
         return
@@ -1125,11 +1111,6 @@ def init_stability_actions(page: Any) -> None:
 def init_system_version_actions(page: Any) -> None:
     """Wire Android/System version combo to existing mapping logic.
 
-    The actual dependency (Android Version -> Kernel Version) is already
-    implemented in ``CaseConfigPage._on_android_version_changed`` and
-    ``_apply_android_kernel_mapping``. This helper only reconnects the
-    schema-built ``system.version`` / ``system.kernel_version`` widgets
-    back to those legacy handlers without re-implementing business logic.
     """
     field_widgets = getattr(page, "field_widgets", {}) or {}
 
@@ -1138,7 +1119,6 @@ def init_system_version_actions(page: Any) -> None:
     if version_widget is None or kernel_widget is None:
         return
 
-    # Expose widgets under legacy attribute names used by CaseConfigPage.
     setattr(page, "android_version_combo", version_widget)
     setattr(page, "kernel_version_combo", kernel_widget)
 

@@ -5,13 +5,13 @@ Declarative UI interaction rules for the Config page and sidebar.
 
 This module lives in the **model** layer (``src/ui/model``) so that
 all rules describing UI state and relationships are kept separate from
-view and controller code.  Controllers such as ``CaseConfigPage`` and
+view and controller code.  Controllers such as  and
 ``MainWindow`` consume these rules to drive widget state instead of
 hard‑coding if/else logic.
 
 Conventions
 -----------
-- Field names use keys from ``CaseConfigPage.field_widgets``, for example
+- Field names use keys from  for example
   ``"connect_type.type"`` or ``"stability.duration_control.exitfirst"``.
 - Sidebar items use logical keys:
   ``"account"|"config"|"case"|"run"|"report"|"about"``.

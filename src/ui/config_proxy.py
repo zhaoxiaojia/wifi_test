@@ -24,14 +24,12 @@ from src.util.constants import (
 )
 from src.ui.view.config.config_switch_wifi import normalize_switch_wifi_manual_entries
 
-if TYPE_CHECKING:  # pragma: no cover - circular import guard
-    from .case_config_page import CaseConfigPage
 
 
 class ConfigProxy:
     """Encapsulate configuration lifecycle operations for the case page."""
 
-    def __init__(self, page: "CaseConfigPage") -> None:
+    def __init__(self, page:None) -> None:
         """Store the owning page for subsequent configuration work."""
         self.page = page
 
@@ -429,28 +427,28 @@ class ConfigProxy:
 
         cases_cfg = source.get("cases")
         cases: dict[str, dict[str, Any]] = {}
-          if isinstance(cases_cfg, Mapping):
-              for name, case_value in cases_cfg.items():
-                  if not isinstance(case_value, Mapping):
-                      continue
-                  normalized_name = (
-                      SWITCH_WIFI_CASE_KEY
-                      if name in SWITCH_WIFI_CASE_KEYS
-                      else name
-                  )
-                  if normalized_name == SWITCH_WIFI_CASE_KEY:
-                      manual_entries = case_value.get(SWITCH_WIFI_MANUAL_ENTRIES_FIELD)
-                      cases[SWITCH_WIFI_CASE_KEY] = {
-                          SWITCH_WIFI_USE_ROUTER_FIELD: bool(
-                              case_value.get(SWITCH_WIFI_USE_ROUTER_FIELD)
-                          ),
-                          SWITCH_WIFI_ROUTER_CSV_FIELD: str(
-                              case_value.get(SWITCH_WIFI_ROUTER_CSV_FIELD, "") or ""
-                          ).strip(),
-                          SWITCH_WIFI_MANUAL_ENTRIES_FIELD: normalize_switch_wifi_manual_entries(
-                              manual_entries
-                          ),
-                      }
+        if isinstance(cases_cfg, Mapping):
+            for name, case_value in cases_cfg.items():
+                if not isinstance(case_value, Mapping):
+                    continue
+                normalized_name = (
+                    SWITCH_WIFI_CASE_KEY
+                    if name in SWITCH_WIFI_CASE_KEYS
+                    else name
+                )
+                if normalized_name == SWITCH_WIFI_CASE_KEY:
+                    manual_entries = case_value.get(SWITCH_WIFI_MANUAL_ENTRIES_FIELD)
+                    cases[SWITCH_WIFI_CASE_KEY] = {
+                        SWITCH_WIFI_USE_ROUTER_FIELD: bool(
+                            case_value.get(SWITCH_WIFI_USE_ROUTER_FIELD)
+                        ),
+                        SWITCH_WIFI_ROUTER_CSV_FIELD: str(
+                            case_value.get(SWITCH_WIFI_ROUTER_CSV_FIELD, "") or ""
+                        ).strip(),
+                        SWITCH_WIFI_MANUAL_ENTRIES_FIELD: normalize_switch_wifi_manual_entries(
+                            manual_entries
+                        ),
+                    }
                 else:
                     cases[normalized_name] = {
                         "ac": _normalize_cycle(case_value.get("ac")),
