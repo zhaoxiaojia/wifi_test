@@ -9,6 +9,10 @@ This module contains the view layer for the Run page:
 
 from __future__ import annotations
 
+from pathlib import Path
+from contextlib import suppress
+import logging
+
 from PyQt5.QtCore import QEvent, Qt, QTimer, QEasingCurve
 from PyQt5.QtGui import QTextCursor
 from PyQt5.QtWidgets import QApplication, QFrame, QHBoxLayout, QLabel, QTextEdit, QVBoxLayout

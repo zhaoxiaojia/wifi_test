@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 from contextlib import ExitStack, suppress
+import csv
 from pathlib import Path
 from typing import Any
 
@@ -184,7 +185,10 @@ class RvrWifiConfigPage(CardWidget):
         self.passwd_edit.textChanged.connect(self._update_current_row)
         self.ssid_edit.textChanged.connect(self._update_current_row)
 
-        self.refresh_table()
+        if self.rows:
+            self.refresh_table()
+        else:
+            self.reset_form()
 
     # --- router / CSV helpers -------------------------------------------------
 
@@ -322,6 +326,29 @@ class RvrWifiConfigPage(CardWidget):
         if no_password:
             self.passwd_edit.clear()
 
+    def _update_current_row(self) -> None:
+        if self._loading:
+            return
+        row_index = self.table.currentRow()
+        if not (0 <= row_index < len(self.rows)):
+            return
+        row = self.rows[row_index]
+        row["band"] = self.band_combo.currentText().strip()
+        row["wireless_mode"] = self.wireless_combo.currentText().strip()
+        row["channel"] = self.channel_combo.currentText().strip()
+        row["bandwidth"] = self.bandwidth_combo.currentText().strip()
+        row["security_mode"] = self.auth_combo.currentText().strip()
+        row["password"] = self.passwd_edit.text()
+        row["ssid"] = self.ssid_edit.text()
+        for c, h in enumerate(self.headers):
+            if h not in row:
+                continue
+            item = self.table.item(row_index, c + 1)
+            if item is None:
+                item = QTableWidgetItem()
+                self.table.setItem(row_index, c + 1, item)
+            item.setText(row[h])
+
     def refresh_table(self) -> None:
         self.table.clear()
         self.table.setRowCount(len(self.rows))
@@ -341,6 +368,20 @@ class RvrWifiConfigPage(CardWidget):
 
         self.table.clearSelection()
         self._load_row_to_form(ensure_checked=True)
+
+    def _update_tx_rx(self) -> None:
+        if self._loading:
+            return
+        row_index = self.table.currentRow()
+        if not (0 <= row_index < len(self.rows)):
+            return
+        row = self.rows[row_index]
+        row["tx"] = "1" if self.tx_check.isChecked() else "0"
+        row["rx"] = "1" if self.rx_check.isChecked() else "0"
+        item = self.table.item(row_index, 0)
+        if item is not None and item.flags() & Qt.ItemIsUserCheckable:
+            checked = row.get("tx") == "1" or row.get("rx") == "1"
+            item.setCheckState(Qt.Checked if checked else Qt.Unchecked)
 
     def _sync_rows(self) -> None:
         self._collect_table_data()

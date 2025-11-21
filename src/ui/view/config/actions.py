@@ -800,6 +800,12 @@ def apply_field_effects(
         _set_visible(key, False)
 
 
+def set_available_pages(page: Any, page_keys: list[str]) -> None:
+    """Delegate logical page selection to the Config page implementation."""
+    if hasattr(page, "set_available_pages"):
+        page.set_available_pages(page_keys)
+
+
 def apply_config_ui_rules(page: Any) -> None:
     """Evaluate CONFIG_UI_RULES against current UI state for the given page.
 
@@ -859,6 +865,7 @@ def update_script_config_ui(page: Any, case_path: str) -> None:
     """Update Stability script config UI to reflect the active test case.
 
     """
+    config_ctl = getattr(page, "config_ctl", None)
     if config_ctl is None or not hasattr(config_ctl, "script_case_key"):
         return
     case_key = config_ctl.script_case_key(case_path)
@@ -1513,10 +1520,6 @@ def _bind_rf_rvr_actions(page: Any) -> None:
     """Wire RF / RvR related combos to the unified dispatcher."""
     field_widgets = getattr(page, "field_widgets", {}) or {}
     # DEBUG PRINT: show field widget keys when binding RF/RvR actions
-    try:
-        print(f"[DEBUG][RF_UI] _bind_rf_rvr_actions: keys={list(field_widgets.keys())[:30]} (len={len(field_widgets)})")
-    except Exception:
-        pass
 
     rf_model = field_widgets.get("rf_solution.model")
     rvr_tool = field_widgets.get("rvr.tool") or field_widgets.get("rvr.tool_name")
@@ -1524,10 +1527,6 @@ def _bind_rf_rvr_actions(page: Any) -> None:
     if rf_model is not None and hasattr(rf_model, "currentTextChanged"):
         def _on_rf_model_changed(text: str) -> None:
             # DEBUG PRINT: RF model changed event (remove after debugging)
-            try:
-                print(f"[DEBUG][RF_UI] rf_model.currentTextChanged -> '{text}'")
-            except Exception:
-                pass
             handle_config_event(
                 page,
                 "rf_model_changed",
@@ -1541,7 +1540,6 @@ def _bind_rf_rvr_actions(page: Any) -> None:
             # DEBUG PRINT: initial RF model apply (remove after debugging)
             try:
                 cnt = rf_model.count() if hasattr(rf_model, 'count') else 'N/A'
-                print(f"[DEBUG][RF_UI] initial rf_model currentText='{rf_model.currentText()}' count={cnt}")
             except Exception:
                 pass
             handle_config_event(

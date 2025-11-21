@@ -191,10 +191,11 @@ class ConfigView(CardWidget):
 
             def _make_handler(page_key: str) -> Any:
                 def _handler() -> None:
-                    page = self.parent()
-                    # Climb parents until we reach an object with a controller.
+                    # Find the owning config page that holds the controller.
+                    page = self
                     while page is not None and not hasattr(page, "config_ctl"):
                         page = page.parent()
+                    # Basic debug output to help analyse tab behaviour.
                     if page is not None:
                         handle_config_event(page, "settings_tab_clicked", key=page_key)
 
@@ -214,6 +215,13 @@ class ConfigView(CardWidget):
             "execution": ConfigGroupPanel(self),
             "stability": ConfigGroupPanel(self),
         }
+        # Backward-compatible attributes expected by existing actions/helpers.
+        # These aliases allow refresh_config_page_controls (and related helpers)
+        # to treat the three panels as dedicated attributes while the view
+        # internally tracks them in a dictionary.
+        self._dut_panel = self._page_panels["dut"]
+        self._execution_panel = self._page_panels["execution"]
+        self._stability_panel = self._page_panels["stability"]
         self._page_widgets: dict[str, QWidget] = {}
         self._run_buttons: list[PushButton] = []
 
@@ -239,8 +247,12 @@ class ConfigView(CardWidget):
 
         scroll_area.setWidget(container)
         self.splitter.addWidget(scroll_area)
-        self.splitter.setStretchFactor(0, 2)
-        self.splitter.setStretchFactor(1, 3)
+        # Keep tree (left) : form (right) width ratio close to 3:7.
+        self.splitter.setStretchFactor(0, 3)
+        self.splitter.setStretchFactor(1, 7)
+
+        # Flag used by resizeEvent to apply an initial 3:7 ratio once.
+        self._splitter_initialized = False
 
         main_layout = QHBoxLayout(self)
         main_layout.setSpacing(10)
@@ -323,6 +335,37 @@ class ConfigView(CardWidget):
         self.stack.setCurrentIndex(index)
         self._update_tab_checked(index)
 
+    # ------------------------------------------------------------------
+    # Size handling
+    # ------------------------------------------------------------------
+
+    def resizeEvent(self, event) -> None:  # noqa: D401  (Qt override)
+        """Reimplemented to apply an initial tree/form ratio once.
+
+        Qt's splitter layout can override :meth:`setSizes` during the
+        first layout pass. To keep behaviour consistent with the legacy
+        implementation (approximately 3:7 for tree vs. config form),
+        this override applies a 30%/70% split the first time the view
+        receives a resize event, then lets user resizing take over.
+        """
+        super().resizeEvent(event)
+        if getattr(self, "_splitter_initialized", False):
+            return
+        if not hasattr(self, "splitter") or self.splitter.count() < 2:
+            return
+        total = max(self.splitter.width(), 10)
+        left = max(int(total * 0.25), 1)
+        right = max(total - left, 1)
+        self.splitter.setSizes([left, right])
+        sizes = self.splitter.sizes()
+        span = max(sum(sizes), 1)
+        ratio = sizes[0] / span
+        print(
+            f"[ConfigView] resize init splitter sizes request=30/70 "
+            f"actual={sizes} ratio_left={ratio:.3f}"
+        )
+        self._splitter_initialized = True
+
 
 class CaseConfigPage(ConfigView):
     """Controller+view wrapper for the Config page.
@@ -339,6 +382,10 @@ class CaseConfigPage(ConfigView):
         super().__init__(parent=None)
         self.setObjectName("caseConfigPage")
         self.on_run_callback = on_run_callback
+
+        # Backward-compatible attribute: older helpers expect a page.view
+        # pointing at the ConfigView instance used for tab switching.
+        self.view = self
 
         # Controller responsible for config lifecycle/normalisation.
         self.config_ctl = ConfigController(self)

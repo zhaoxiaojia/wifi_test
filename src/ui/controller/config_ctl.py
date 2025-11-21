@@ -55,13 +55,15 @@ from src.ui.controller.case_ctl import (
     _open_rvr_wifi_config as _proxy_open_rvr_wifi_config,
 )
 from src.ui.view.common import ScriptConfigEntry, TestFileFilterModel
-from src.ui.view.config import RfStepSegmentsWidget, SwitchWifiManualEditor
-from src.ui.view.config.config_switch_wifi import normalize_switch_wifi_manual_entries
-from src.ui.view.config.config_str import script_field_key
+from src.ui.view.config.config_switch_wifi import (
+    normalize_switch_wifi_manual_entries,
+    SwitchWifiManualEditor,
+)
+from src.ui.view.config.config_str import script_field_key, RfStepSegmentsWidget
 from src.ui.controller import show_info_bar
 
 if TYPE_CHECKING:  # pragma: no cover - circular import guard
-    from src.ui.view.case import RvrWifiConfigPage as CaseConfigPage
+    from src.ui.view.config.page import CaseConfigPage
 
 
 class ConfigController:
@@ -1245,11 +1247,6 @@ class ConfigController:
             set_refresh_ui_locked(page, False)
             page._refreshing = False
 
-        main_window = page.window()
-        if hasattr(main_window, "setCurrentIndex"):
-            logging.debug("get_editable_fields: before switch to rvr_wifi_config_page")
-            main_window.setCurrentIndex(main_window.rvr_wifi_config_page)
-            logging.debug("get_editable_fields: after switch to rvr_wifi_config_page")
         if not hasattr(page, "csv_combo"):
             logging.debug("csv_combo disabled")
         if page._pending_path:
