@@ -280,16 +280,22 @@ def handle_config_event(page: Any, event: str, **payload: Any) -> None:
 
         # Update "Selected Test Case" text if such a field exists.
         field_widgets = getattr(page, "field_widgets", {}) or {}
-        text_case = field_widgets.get("text_case")
-        if text_case is not None and hasattr(text_case, "setText"):
-            try:
-                text_case.setText(display_path or case_path)
-            except Exception:
-                pass
-        else:
+        updated_widgets: set[int] = set()
+        text_value = display_path or case_path
+        for key, widget in field_widgets.items():
+            if key == "text_case" or key.endswith(".text_case"):
+                if widget is None or id(widget) in updated_widgets:
+                    continue
+                if hasattr(widget, "setText"):
+                    try:
+                        widget.setText(text_value)
+                        updated_widgets.add(id(widget))
+                    except Exception:
+                        continue
+        if not updated_widgets:
             # Use centralized display updater for the selected test case.
             try:
-                update_test_case_display(page, display_path or case_path)
+                update_test_case_display(page, text_value)
             except Exception:
                 logging.debug("update_test_case_display failed in case_clicked", exc_info=True)
 

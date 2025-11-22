@@ -66,6 +66,4 @@ cases:
     use_router: false
     router_csv: C:\Users\SH171300-1522\PycharmProjects\wifi_test\config\performance_test_csv\rvr_wifi_setup.csv
     manual_entries:
-    - '[{''ssid'': ''SH-AP-052-2g-xts'''
-    - '''security_mode'': ''Open System'''
-    - '''password'': ''''}]'
+    - '[]'

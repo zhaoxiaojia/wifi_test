@@ -312,7 +312,14 @@ class ConfigGroupPanel(QWidget):
             entries.append((group, h))
         if not entries:
             return
-        entries.sort(key=lambda item: item[1], reverse=True)
+        # On the very first pass, sort by height so that the initial
+        # layout balances column heights. On subsequent passes, keep
+        # the original group order and only adjust within-column
+        # layout so that groups no longer jump between columns when
+        # their height changes (for example, when fields are hidden
+        # by rules).
+        if initial_pass:
+            entries.sort(key=lambda item: item[1], reverse=True)
         for layout in self._column_layouts:
             while layout.count():
                 # Take items out of layouts, but do not change the parent
@@ -325,13 +332,23 @@ class ConfigGroupPanel(QWidget):
         self._col_weight = [0] * len(self._column_layouts)
         moved_groups: list[tuple[QWidget, QRect | None]] = []
         for group, height in entries:
-            column_index = self._col_weight.index(min(self._col_weight))
             prev_col = self._group_positions.get(group)
+            if initial_pass or prev_col is None:
+                # First-time assignment (or brand new group added later):
+                # place into the currently lightest column.
+                column_index = self._col_weight.index(min(self._col_weight))
+            else:
+                # Subsequent passes for existing groups: keep them in
+                # their original column to avoid disruptive reflows.
+                column_index = prev_col
             self._column_layouts[column_index].addWidget(group)
             group.show()
             self._col_weight[column_index] += height
             self._group_positions[group] = column_index
-            if (prev_col is None and not initial_pass) or (prev_col is not None and prev_col != column_index):
+            # Only animate when an existing group actually changes
+            # columns (which now only happens for structural changes
+            # such as panel rebuilds).
+            if prev_col is not None and prev_col != column_index:
                 moved_groups.append((group, old_geometries.get(group)))
         self.updateGeometry()
         if moved_groups:

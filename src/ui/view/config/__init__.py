@@ -47,12 +47,20 @@ def compose_stability_groups(page: Any, active_entry: ScriptConfigEntry | None) 
 
     """
     groups: list[QGroupBox] = []
+    # Shared Duration / Check Point groups.
     duration_group = getattr(page, "_duration_control_group", None)
     if isinstance(duration_group, QGroupBox):
         groups.append(duration_group)
     check_point_group = getattr(page, "_check_point_group", None)
     if isinstance(check_point_group, QGroupBox):
         groups.append(check_point_group)
+    # Optional \"Selected Test Case\" group defined in the stability UI schema.
+    other_groups = getattr(page, "_other_groups", None)
+    if isinstance(other_groups, dict):
+        selected_group = other_groups.get("stability_text_case")
+        if isinstance(selected_group, QGroupBox):
+            groups.append(selected_group)
+    # Active script-specific group (e.g. test_str / test_switch_wifi).
     if isinstance(active_entry, ScriptConfigEntry) and isinstance(active_entry.group, QGroupBox):
         groups.append(active_entry.group)
     return groups

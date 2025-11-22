@@ -28,3 +28,4 @@ cases:
     use_router: false
     router_csv: performance_test_csv/rvr_wifi_setup.csv
     manual_entries: []
+text_case: ''

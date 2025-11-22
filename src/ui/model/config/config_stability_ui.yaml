@@ -17,6 +17,13 @@ panels:
             widget: line_edit
             label: "Retry count"
 
+      - id: stability_text_case
+        label: "Selected Test Case"
+        fields:
+          - key: text_case
+            widget: read_only_text
+            label: "Test case"
+
       - id: check_point
         label: "Check Point"
         fields:

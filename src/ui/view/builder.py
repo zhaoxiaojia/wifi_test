@@ -158,6 +158,17 @@ def _create_widget(page: Any, spec: FieldSpec, value: Any) -> QWidget:
             spin.setValue(0)
         return spin
 
+    if wtype == "read_only_text":
+        # Read-only text display, used for "Selected Test Case" groups.
+        edit = LineEdit(page)
+        edit.setReadOnly(True)
+        # Also disable the control so it appears greyed-out and
+        # clearly non-editable; the value is driven by the case tree.
+        edit.setEnabled(False)
+        if value not in (None, ""):
+            edit.setText(str(value))
+        return edit
+
     if wtype == "custom":
         # Stability switch-wifi manual editor uses a dedicated composite widget.
         if spec.key == "stability.cases.switch_wifi.manual_entries" or spec.key.endswith(

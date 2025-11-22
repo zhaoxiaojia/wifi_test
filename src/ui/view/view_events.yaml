@@ -1,0 +1,81 @@
+config:
+  events:
+    # Control Type combo: updates connect-type related UI and rules.
+    - id: connect_type_type
+      field: "connect_type.type"
+      trigger: "text"
+      event: "connect_type_changed"
+      payload:
+        text: "text"
+      initial: true
+
+    # Third-party checkbox: toggles wait_seconds behaviour via rules.
+    - id: connect_type_third_party_enabled
+      field: "connect_type.third_party.enabled"
+      trigger: "toggled"
+      event: "third_party_toggled"
+      payload:
+        checked: "checked"
+      initial: true
+
+    # Serial Port status checkbox.
+    - id: serial_port_status
+      field: "serial_port.status"
+      trigger: "toggled"
+      event: "serial_status_changed"
+      payload:
+        text: "bool_text"
+      initial: true
+
+    # RF model selection.
+    - id: rf_solution_model
+      field: "rf_solution.model"
+      trigger: "text"
+      event: "rf_model_changed"
+      payload:
+        model_text: "text"
+      initial: true
+
+    # RvR tool selection.
+    - id: rvr_tool
+      field: "rvr.tool"
+      trigger: "text"
+      event: "rvr_tool_changed"
+      payload:
+        tool_text: "text"
+      initial: true
+
+    # Router name and address.
+    - id: router_name
+      field: "router.name"
+      trigger: "text"
+      event: "router_name_changed"
+      payload:
+        name: "text"
+      initial: true
+
+    - id: router_address
+      field: "router.address"
+      trigger: "text"
+      event: "router_address_changed"
+      payload:
+        address: "text"
+      initial: false
+
+    # Stability: Duration / Check Point base controls.
+    - id: stability_exitfirst
+      field: "duration_control.exitfirst"
+      trigger: "toggled"
+      event: "stability_exitfirst_changed"
+      payload:
+        checked: "checked"
+      initial: true
+
+    - id: stability_ping
+      field: "check_point.ping"
+      trigger: "toggled"
+      event: "stability_ping_changed"
+      payload:
+        checked: "checked"
+      initial: true
+
