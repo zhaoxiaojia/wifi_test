@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Callable, Mapping, Sequence
+from typing import Any, Callable, Mapping, Sequence, Dict, List
 
 from PyQt5.QtCore import (
     Qt,
@@ -38,6 +38,7 @@ from src.ui.view.config.actions import (
     handle_config_event,
     init_fpga_dropdowns,
     refresh_config_page_controls,
+    apply_ui,
 )
 from src.ui.view.config.config_str import (
     create_test_str_config_entry_from_schema,
@@ -408,7 +409,9 @@ class CaseConfigPage(ConfigView):
         self._router_config_active: bool = False
         self._run_locked: bool = False
         self._locked_fields: set[str] | None = None
-        self._current_case_path: str = ""
+        # Preserve any _current_case_path set by the controller during
+        # load_initial_config; default to empty string otherwise.
+        self._current_case_path: str = getattr(self, "_current_case_path", "")
         self._last_editable_info: EditableInfo | None = None
 
         # Switch‑Wi‑Fi CSV combo management.
@@ -441,6 +444,20 @@ class CaseConfigPage(ConfigView):
         refresh_config_page_controls(self)
         initialize_script_config_groups(self)
 
+        # ------------------------------------------------------------------
+        # Simple rules integration
+        #
+        # Build a field map that maps dotted field identifiers to widgets.
+        # This map is used by the simple rule engine (see src/ui/model/rules.py)
+        # to look up widgets and apply actions such as show/hide and enable/disable.
+        # The field_widgets dictionary is populated by refresh_config_page_controls.
+        self._field_map = getattr(self, "field_widgets", {}) or {}
+
+        # Connect triggers for custom simple rules.  Only a subset of fields
+        # currently participate in the simple rule engine, so connections are
+        # registered conditionally.  See _connect_simple_rules for details.
+        self._connect_simple_rules()
+
         # Initialise case tree using src/test as root (non-fatal on failure).
         try:
             base = Path(self.config_ctl.get_application_base())
@@ -450,11 +467,11 @@ class CaseConfigPage(ConfigView):
         except Exception:
             pass
 
-        # Apply initial UI rules/state.
+        # Apply initial UI rules/state via the unified rule engine.
         try:
-            from src.ui.view.config.actions import apply_config_ui_rules
+            from src.ui.model.rules import evaluate_all_rules
 
-            apply_config_ui_rules(self)
+            evaluate_all_rules(self, None)
         except Exception:
             pass
 
@@ -464,7 +481,10 @@ class CaseConfigPage(ConfigView):
 
         # Connect signals after UI ready.
         self.case_tree.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        QTimer.singleShot(0, lambda: self.config_ctl.get_editable_fields(""))
+        QTimer.singleShot(
+            0,
+            lambda: apply_ui(self, getattr(self, "_current_case_path", "") or ""),
+        )
 
     # ------------------------------------------------------------------
     # Helpers used by controller / actions
@@ -479,6 +499,212 @@ class CaseConfigPage(ConfigView):
         from src.ui.view.config.actions import set_fields_editable as _set_fields
 
         _set_fields(self, fields)
+
+    # ------------------------------------------------------------------
+    # Simple rule integration methods
+    # ------------------------------------------------------------------
+
+    def _connect_simple_rules(self) -> None:
+        """
+        Wire up field change signals to the simple rule engine.
+
+        The simple rule system defined in :mod:`src.ui.model.rules` needs
+        to know when certain fields change in order to evaluate and apply
+        dynamic UI effects.  This helper inspects the custom rule registry
+        and connects the appropriate Qt signals for each trigger field.
+
+        For each rule in ``CUSTOM_SIMPLE_UI_RULES``, this method looks up
+        the corresponding widget in ``self._field_map``.  Depending on the
+        widget type, it connects a change signal to ``self.on_field_changed``
+        with the rule's trigger field name.  This ensures that when a user
+        changes the field in the UI, the simple rule engine is invoked.
+        """
+        try:
+            from src.ui.model.rules import CUSTOM_SIMPLE_UI_RULES  # type: ignore
+        except Exception:
+            CUSTOM_SIMPLE_UI_RULES = []  # type: ignore
+        for rule in CUSTOM_SIMPLE_UI_RULES:
+            field_id = getattr(rule, "trigger_field", None)
+            if not field_id:
+                continue
+            widget = self._field_map.get(field_id)
+            if widget is None:
+                continue
+            try:
+                # Combo boxes emit currentTextChanged when the selection changes.
+                if hasattr(widget, "currentTextChanged"):
+                    widget.currentTextChanged.connect(
+                        lambda value, fid=field_id: self.on_field_changed(fid, value)
+                    )
+                # Checkboxes emit toggled when the checked state changes.
+                elif hasattr(widget, "toggled"):
+                    widget.toggled.connect(
+                        lambda value, fid=field_id: self.on_field_changed(fid, value)
+                    )
+                # Line edits emit textChanged for free‑form input.
+                elif hasattr(widget, "textChanged"):
+                    widget.textChanged.connect(
+                        lambda value, fid=field_id: self.on_field_changed(fid, value)
+                    )
+            except Exception:
+                # Ignore connection errors; missing signals simply mean the rule
+                # cannot be triggered automatically.
+                continue
+        # Evaluate simple rules for current values on initialisation.
+        # In particular, rules that depend on default configuration values
+        # should apply their effects immediately so the UI reflects the
+        # current config state.
+        for rule in CUSTOM_SIMPLE_UI_RULES:
+            fid = getattr(rule, "trigger_field", None)
+            if fid and fid in self._field_map:
+                widget = self._field_map[fid]
+                # Determine the current value for the field based on widget type.
+                try:
+                    if hasattr(widget, "isChecked"):
+                        current_value = bool(widget.isChecked())
+                    elif hasattr(widget, "currentText"):
+                        current_value = str(widget.currentText())
+                    elif hasattr(widget, "text"):
+                        current_value = str(widget.text())
+                    else:
+                        current_value = None
+                    self.on_field_changed(fid, current_value)
+                except Exception:
+                    continue
+
+    def on_field_changed(self, field_id: str, value: Any) -> None:
+        """
+        Respond to a change in a field value by evaluating all UI rules.
+
+        This delegates to :func:`evaluate_all_rules` in the rules module so
+        that all simple per-field rules are applied through a single entry
+        point.
+        """
+        try:
+            from src.ui.model.rules import evaluate_all_rules  # type: ignore
+        except Exception:
+            return
+        evaluate_all_rules(self, field_id)
+
+    def _collect_values(self) -> Dict[str, Any]:
+        """
+        Return a mapping of all field identifiers to their current values.
+
+        This helper inspects every widget in ``self._field_map`` and extracts
+        its current value based on common widget APIs.  Checkboxes yield
+        boolean values, combo boxes and other widgets yield their current
+        textual representation, and line edits return their plain text.
+        """
+        values: Dict[str, Any] = {}
+        for key, widget in (self._field_map or {}).items():
+            try:
+                # QCheckBox has isChecked
+                if hasattr(widget, "isChecked"):
+                    values[key] = bool(widget.isChecked())
+                # QSpinBox / QDoubleSpinBox have value() but treat as numeric
+                elif hasattr(widget, "value") and not hasattr(widget, "currentText"):
+                    values[key] = widget.value()
+                # ComboBox (and similar) have currentText
+                elif hasattr(widget, "currentText"):
+                    values[key] = str(widget.currentText())
+                # LineEdit (and similar) have text
+                elif hasattr(widget, "text"):
+                    values[key] = str(widget.text())
+            except Exception:
+                values[key] = None
+        return values
+
+    # ------------------------------------------------------------------
+    # UIAdapter methods for simple rule engine
+    # ------------------------------------------------------------------
+    def _get_field_widget(self, field_id: str) -> QWidget | None:
+        """Return the widget associated with a dotted field identifier."""
+        return (self._field_map or {}).get(field_id)
+
+    def show(self, field_id: str) -> None:  # noqa: D401 (UIAdapter)
+        widget = self._get_field_widget(field_id)
+        if widget is None:
+            return
+        try:
+            widget.setVisible(True)
+            # Also show the label when the widget lives in a QFormLayout row.
+            parent = widget.parent()
+            from PyQt5.QtWidgets import QFormLayout  # type: ignore
+
+            if hasattr(parent, "layout"):
+                layout = parent.layout()
+                if isinstance(layout, QFormLayout):
+                    label = layout.labelForField(widget)
+                    if label is not None and hasattr(label, "setVisible"):
+                        label.setVisible(True)
+        except Exception:
+            pass
+
+    def hide(self, field_id: str) -> None:  # noqa: D401 (UIAdapter)
+        widget = self._get_field_widget(field_id)
+        if widget is None:
+            return
+        try:
+            widget.setVisible(False)
+            # Also hide the label when the widget lives in a QFormLayout row.
+            parent = widget.parent()
+            from PyQt5.QtWidgets import QFormLayout  # type: ignore
+
+            if hasattr(parent, "layout"):
+                layout = parent.layout()
+                if isinstance(layout, QFormLayout):
+                    label = layout.labelForField(widget)
+                    if label is not None and hasattr(label, "setVisible"):
+                        label.setVisible(False)
+        except Exception:
+            pass
+
+    def enable(self, field_id: str) -> None:  # noqa: D401 (UIAdapter)
+        widget = self._get_field_widget(field_id)
+        if widget is None:
+            return
+        try:
+            widget.setEnabled(True)
+        except Exception:
+            pass
+
+    def disable(self, field_id: str) -> None:  # noqa: D401 (UIAdapter)
+        widget = self._get_field_widget(field_id)
+        if widget is None:
+            return
+        try:
+            widget.setEnabled(False)
+        except Exception:
+            pass
+
+    def set_value(self, field_id: str, value: Any) -> None:  # noqa: D401 (UIAdapter)
+        widget = self._get_field_widget(field_id)
+        if widget is None:
+            return
+        try:
+            # Checkboxes: expect a boolean
+            if hasattr(widget, "setChecked") and isinstance(value, (bool, type(None))):
+                widget.setChecked(bool(value))
+                return
+            # Spin boxes: numeric
+            if hasattr(widget, "setValue") and isinstance(value, (int, float)):
+                widget.setValue(value)
+                return
+            # Combo boxes: select by text
+            if hasattr(widget, "setCurrentText"):
+                widget.setCurrentText(str(value) if value is not None else "")
+                return
+            # Line edits: set plain text
+            if hasattr(widget, "setText"):
+                widget.setText(str(value) if value is not None else "")
+                return
+        except Exception:
+            pass
+
+    # Note: `set_options` was removed. The rule engine will update combo
+    # widgets directly via a fallback when the adapter does not implement
+    # `set_options`, preventing import cycles and centralising option
+    # population in rules.
 
 
 __all__ = ["ConfigView", "CaseConfigPage"]

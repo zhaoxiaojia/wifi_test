@@ -6,11 +6,11 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Mapping, Optional,Sequence
 
-from PyQt5.QtCore import QTimer, QSignalBlocker,QSortFilterProxyModel
+from PyQt5.QtCore import QSignalBlocker, QSortFilterProxyModel
 from PyQt5.QtWidgets import QCheckBox, QSpinBox, QDoubleSpinBox
 from qfluentwidgets import InfoBar, InfoBarPosition, ComboBox, LineEdit
 
-from src.ui.view.config.actions import compute_editable_info, apply_config_ui_rules
+from src.ui.model.rules import evaluate_all_rules
 from src.ui.view.common import EditableInfo
 from src.ui import load_page_config, save_page_config
 from src import display_to_case_path
@@ -129,6 +129,20 @@ class ConfigController:
         """
         page = self.page
         page.config = load_page_config(page)
+        # Initialise current testcase path from persisted config (if any) so
+        # that testcase-scoped rules can apply immediately on startup.
+        try:
+            text_case = str(page.config.get("text_case", "") or "").strip()
+        except Exception:
+            text_case = ""
+        if text_case:
+            try:
+                base = Path(self.get_application_base())
+                abs_path = (base / text_case).resolve()
+                setattr(page, "_current_case_path", abs_path.as_posix())
+            except Exception:
+                # Leave _current_case_path unchanged on failure.
+                pass
 
         # Capture snapshot for tool section and restore CSV selection.
         snapshot = copy.deepcopy(page.config.get(TOOL_SECTION_KEY, {}))
@@ -1164,9 +1178,13 @@ class ConfigController:
         btn.setEnabled(bool(sidebar_enabled))
 
     def apply_editable_info(self, info: "EditableInfo | None") -> None:
-        """Apply EditableInfo to model flags and UI."""
-        from src.ui.view.config.actions import apply_config_ui_rules  # local import
+        """Apply EditableInfo to model flags and non-rule UI.
 
+        This helper updates internal flags (CSV / RvR Wi-Fi) and basic UI
+        such as CSV combo enabled state.  Field-level enabled/visible state
+        is controlled exclusively by the simple rule engine so this method
+        no longer calls ``set_fields_editable``.
+        """
         page = self.page
         if info is None:
             fields: set[str] = set()
@@ -1184,7 +1202,6 @@ class ConfigController:
         page._last_editable_info = snapshot
         self._apply_editable_model_state(snapshot)
         self._apply_editable_ui_state(snapshot)
-        apply_config_ui_rules(page)
 
     def _apply_editable_model_state(self, snapshot: "EditableInfo") -> None:
         """Update internal flags and CSV selection from EditableInfo (no direct UI)."""
@@ -1200,11 +1217,8 @@ class ConfigController:
             self.set_selected_csv(None, sync_combo=False)
 
     def _apply_editable_ui_state(self, snapshot: "EditableInfo") -> None:
-        """Apply UI-related changes for EditableInfo (widgets only)."""
-        from src.ui.view.config.actions import set_fields_editable  # local import
-
+        """Apply UI-related changes for EditableInfo (non field-level widgets)."""
         page = self.page
-        set_fields_editable(page, snapshot.fields)
         if hasattr(page, "csv_combo"):
             page.csv_combo.setEnabled(True)
         self.update_rvr_nav_button()
@@ -1214,46 +1228,6 @@ class ConfigController:
         page = self.page
         info = getattr(page, "_last_editable_info", None)
         self.apply_editable_info(info)
-
-    def get_editable_fields(self, case_path: str) -> "EditableInfo":
-        """Control field editability after selecting a test case and return related info."""
-        from src.ui.view.config.actions import apply_config_ui_rules, update_script_config_ui
-        from src.ui.view.common import EditableInfo as EditableInfoType
-
-        page = self.page
-        logging.debug("get_editable_fields case_path=%s", case_path)
-        if page._refreshing:
-            logging.debug("get_editable_fields: refreshing, return empty")
-            return EditableInfoType()
-
-        page._refreshing = True
-        from src.ui.view.config.actions import set_refresh_ui_locked, set_fields_editable
-
-        set_refresh_ui_locked(page, True)
-
-        try:
-            update_script_config_ui(page, case_path)
-            info = compute_editable_info(page, case_path)
-            logging.debug("get_editable_fields enable_csv=%s", info.enable_csv)
-            if info.enable_csv and not hasattr(page, "csv_combo"):
-                info.enable_csv = False
-            self.apply_editable_info(info)
-            page_keys = self.determine_pages_for_case(case_path, info)
-            from src.ui.view.config.actions import set_available_pages
-
-            set_available_pages(page, page_keys)
-            apply_config_ui_rules(page)
-        finally:
-            set_refresh_ui_locked(page, False)
-            page._refreshing = False
-
-        if not hasattr(page, "csv_combo"):
-            logging.debug("csv_combo disabled")
-        if page._pending_path:
-            path = page._pending_path
-            page._pending_path = None
-            QTimer.singleShot(0, lambda: self.get_editable_fields(path))
-        return info
 
     # ------------------------------------------------------------------
     # Second-page (Execution) reset helpers

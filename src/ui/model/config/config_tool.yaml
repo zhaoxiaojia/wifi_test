@@ -6,4 +6,3 @@ mysql:
   user: FAE-QA
   passwd: 12345678
   database: wifi_test
-

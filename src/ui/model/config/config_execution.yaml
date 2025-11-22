@@ -14,7 +14,7 @@ rf_solution:
   LDA-908V-8:
     ip_address: 192.168.5.200
     channels: '1'
-  model: RC4DAT-8G-95
+  model: LDA-908V-8
   step: 0,75:3
 rvr:
   iperf:
@@ -26,20 +26,21 @@ rvr:
   repeat: '0'
   throughput_threshold: '0'
   tool: iperf
+  enable_wpa3: false
 router:
-  name: asusax88u
-  address: 192.168.5.1
-text_case: test/stability/test_switch_wifi.py
+  name: asusax86u
+  address: 192.168.50.1
+text_case: test/performance/test_wifi_peak_throughput.py
 debug:
   database_mode: true
   skip_router: false
   skip_corner_rf: false
 csv_path: performance_test_csv/rvr_wifi_setup.csv
 duration_control:
-  loop: 3
-  duration_hours: null
+  loop: ''
+  duration_hours: ''
   exitfirst: true
-  retry_limit: 2
+  retry_limit: '2'
 check_point:
   ping: true
   ping_targets: 192.168.1.1
@@ -47,25 +48,24 @@ cases:
   test_str:
     ac:
       enabled: false
-      on_duration: 5
-      off_duration: 5
-      relay_type: usb_relay
-      relay_params: []
-      port: ''
-      mode: NC
-    str:
-      enabled: true
-      on_duration: 15
-      off_duration: 15
+      on_duration: '5'
+      off_duration: '5'
       relay_type: usb_relay
       relay_params: []
       port: ''
       mode: 'NO'
+    str:
+      enabled: true
+      on_duration: '15'
+      off_duration: '15'
+      relay_type: usb_relay
+      relay_params: []
+      port: COM14 (蓝牙链接上的标准串行 (COM14))
+      mode: 'NO'
   test_switch_wifi:
     use_router: false
-    router_csv: performance_test_csv/rvr_wifi_setup_demo.csv
+    router_csv: C:\Users\SH171300-1522\PycharmProjects\wifi_test\config\performance_test_csv\rvr_wifi_setup.csv
     manual_entries:
-    - ssid: SH-AP-052-2g-xts
-      security_mode: Open System
-      password: ''
-
+    - '[{''ssid'': ''SH-AP-052-2g-xts'''
+    - '''security_mode'': ''Open System'''
+    - '''password'': ''''}]'

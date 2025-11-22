@@ -1,18 +1,17 @@
+# UI Architecture and Config Flow (MVC + Rules)
 
-# UI Architecture (MVC)
-
-All new UI work in this package must follow the **Model / View / Controller**
-structure described here. Before adding or changing any UI code, **read this
-document first**.
+All new UI work under `src/ui` must follow the **Model / View / Controller**
+structure described here. Before you touch any UI code, **read this file
+first**.
 
 The goals are:
 
-- Clear separation of data description (Model), widgets/layout (View), and
-  behaviour / I/O (Controller).
-- Consistent development flow for new features.
-- Simple, predictable layering so code is easy to reason about and reuse.
-
-The rules below apply to all UI modules in `src/ui`.
+- Keep data description (Model), widgets/layout (View), and behaviour/I/O
+  (Controller) clearly separated.
+- Drive as much UI behaviour as possible from **YAML + rules**, not ad‑hoc
+  Python in the view layer.
+- Make the signal/slot wiring predictable so future changes are easy to
+  reason about.
 
 ---
 
@@ -23,166 +22,279 @@ The rules below apply to all UI modules in `src/ui`.
 - Location: `src/ui/model/`
 - Purpose: describe *what* can be configured and how fields are grouped.
 - Typical files:
-  - `config_dut_ui.yaml`
-  - `config_execution_ui.yaml`
-  - `config_stability_ui.yaml`
-- Additional configuration lives under `src/util/constants.py` and other
-  non-UI modules (e.g. router maps, debug flags).
+  - `config_dut.yaml`, `config_execution.yaml`, `config_stability.yaml`  
+    (persisted config values)
+  - `config_dut_ui.yaml`, `config_execution_ui.yaml`, `config_stability_ui.yaml`  
+    (UI schema: panels/sections/fields)
+  - `options.py` (dynamic choice lists for comboboxes)
+  - `rules.py` (declarative UI rules and helpers)
 
-Model files must not contain any Qt code or UI layout logic.
+Model modules must not contain any Qt widget or layout code. They are pure
+data and rule definitions.
 
 ### 1.2 View
 
 - Location: `src/ui/view/`
-- Purpose: create widgets, layouts and visual effects. No business logic,
-  no I/O, no direct pytest calls.
-- Typical modules:
-  - `view/account.py` – `AccountView`, `CompanyLoginPage`
+- Purpose: build widgets, layouts, and visual effects. No business logic, no
+  I/O, no direct pytest calls.
+- Important modules for the Config page:
   - `view/config/page.py` – `ConfigView`, `CaseConfigPage`
-  - `view/case.py` – `CaseView`, `RvrWifiConfigPage`
-  - `view/run.py` – `RunView`, `RunPage`
-  - `view/report.py` – `ReportView`
-  - `view/about.py` – `AboutView`
-  - `view/common.py` – shared widgets, animations, helpers
-  - `view/builder.py` – schema-driven Config UI builder
+  - `view/builder.py` – schema‑driven widget builder
+  - `view/config/actions.py` – wiring helpers and complex view glue
+  - `view/common.py` – shared widgets, `EditableInfo`, animations
 
-Each page has one primary view module that owns its visual skeleton. When a
-“page” class exists (e.g. `RunPage`, `CompanyLoginPage`), it also lives in
-the view package and is responsible for:
+Other pages (`account.py`, `run.py`, `case.py`, `report.py`, `about.py`,
+`main_window.py`) follow the same pattern: the view owns geometry and
+appearance only.
 
-- Composing the pure view (e.g. `RunView`) via `attach_view_to_page(...)`.
-- Wiring signals/slots **inside the page** (e.g. button clicks, timers).
-- Delegating non-trivial logic and I/O to the controller layer.
+Views must not:
 
-Views may use animations and styling helpers from `view/common.py` and
-`view/theme.py`, but must not:
-
-- Read or write config files directly.
-- Talk to routers, databases, pytest, or external tools.
-- Perform heavy computation or multi-process/multi-thread orchestration.
+- Read or write config files.
+- Talk to routers, databases, pytest, or other external tools.
+- Perform heavy computation or spawn workers directly.
 
 ### 1.3 Controller
 
 - Location: `src/ui/controller/`
-- Purpose: own all non-trivial behaviour and I/O for UI pages.
-- Typical modules:
-  - `controller/account_ctl.py` – LDAP helpers and login worker
+- Purpose: own non‑trivial behaviour and I/O for each page.
+- Important modules:
   - `controller/config_ctl.py` – Config lifecycle, case tree, stability helpers
   - `controller/case_ctl.py` – RvR Wi‑Fi CSV helpers and switch‑Wi‑Fi plumbing
-  - `controller/run_ctl.py` – pytest orchestration, run workers and logging
-  - `controller/report_ctl.py` – report directory scanning and chart rendering
-  - `controller/about_ctl.py` – About page actions and metadata wiring
+  - `controller/run_ctl.py` – pytest orchestration and logging
+  - `controller/report_ctl.py` – report discovery and plotting
+  - `controller/account_ctl.py`, `controller/about_ctl.py` – login/about
 
-Controllers operate on **view instances** passed in from the caller. They
-may:
+Controllers operate on view instances passed from the caller. They may:
 
-- Read and write YAML / JSON / CSV / logs.
-- Call pytest, router tools, or other business modules.
-- Connect signals from view widgets to slots implemented in the controller.
-- Update the view via its public attributes and helper methods.
+- Load and save YAML/JSON/CSV/log files.
+- Call pytest or router tools.
+- Connect view signals to controller slots.
+- Push data back into the view via its public API.
 
-Controllers must not:
-
-- Instantiate top-level windows or perform application‑wide navigation
-  (that is owned by `main.py`).
-- Create their own ad-hoc layouts or widgets; always use the view layer.
+Controllers must not create their own ad‑hoc layouts or windows.
 
 ---
 
-## 2. Config Page Flow (YAML → UI → Behaviour)
+## 2. Config Page End‑to‑End Flow
 
-Most configuration-related development follows the pipeline below:
+This section describes the **exact pipeline** for the Config page (DUT,
+Execution, Stability) from YAML to widgets to rule‑driven behaviour.
 
-1. **Describe fields in YAML**  
-   - Add or update entries in `src/ui/model/config/config_*_ui.yaml`.  
-   - Use the existing structure under `dut`, `execution`, `stability`, and
-     `stability.cases.*` for script-specific sections.
+### 2.1 Config YAML (values)
 
-2. **Generate widgets via the builder**  
-   - The builder in `src/ui/view/builder.py` is the **only place** that
-     creates `QGroupBox`es and field widgets for the Config page. Example:
+Persisted configuration is stored under `src/ui/model/config/`:
 
-     ```python
-     from src.ui.view.builder import load_ui_schema, build_groups_from_schema
+- `config_dut.yaml`
+- `config_execution.yaml`
+- `config_stability.yaml`
+- `config_tool.yaml`
 
-     dut_schema = load_ui_schema("dut")
-     build_groups_from_schema(page, config, dut_schema, panel_key="dut")
-     ```
+Loading and saving is handled by helpers in `src/ui/__init__.py` and
+`ConfigController`:
 
-   - The builder populates:
-     - `page._page_panels[...]` with `ConfigGroupPanel` containers.
-     - `page.field_widgets[...]` mapping field keys to widgets.
+- `ConfigController.load_initial_config()`
+  - Calls `load_page_config(page)` to populate `page.config`.
+  - Normalises sections (connect_type / fpga / stability).
+- `ConfigController.save_config()`
+  - Collects current values from the view and writes YAML back to disk.
 
-3. **UI rules and actions**  
-   - Visual rules and small UI reactions live in
-     `src/ui/view/config/actions.py`. Examples:
-     - Enabling/disabling widgets by field key.
-     - Showing script-specific group boxes.
-     - Responding to simple value changes in the Config UI.
+### 2.2 UI schema YAML (layout)
 
-4. **Controller behaviour**  
-   - Non-trivial behaviour lives in `ConfigController`
-     (`src/ui/controller/config_ctl.py`):
-     - Loading/saving the combined config via `load_page_config` /
-       `save_page_config` (from `src/ui/__init__.py`).
-     - Computing editable fields per case.
-     - Normalising stability and FPGA sections.
-     - Managing the case tree.
-   - Shared helpers for RvR Wi‑Fi CSV / switch‑Wi‑Fi live in
-     `src/ui/controller/case_ctl.py` and are called from the controller
-     and/or view.
+The *structure* of the Config page is described in:
 
-5. **Main window wiring**  
-   - `main.py` composes high‑level pages (Account, Config, Run, Report,
-     About) and attaches controllers where needed:
-     - `AboutController(self.about_page)`
-     - `ReportController(self.report_view)`
-     - `ConfigController(self.caseConfigPage)` (via `CaseConfigPage`)
+- `config_dut_ui.yaml`
+- `config_execution_ui.yaml`
+- `config_stability_ui.yaml`
 
-If you need a new Config field, **do not** hand‑craft widgets in controllers.
-Always extend the YAML schema and let the builder create the view.
+Each schema file defines:
+
+- `panels.dut.sections[].fields[]`
+- `panels.execution.sections[].fields[]`
+- `panels.stability.sections[].fields[]`
+
+Fields specify:
+
+- `key`: dotted config key (e.g. `connect_type.type`)
+- `widget`: widget type (`line_edit`, `combo_box`, `checkbox`, `spin`, `custom`)
+- `label`: user‑visible label
+- `placeholder`, `minimum`, `maximum`, `choices`: extra hints
+
+The **schema never contains Qt code**. It only describes layout and field
+metadata.
+
+### 2.3 Builder (schema → widgets)
+
+The builder in `src/ui/view/builder.py` is the only place that turns schema
+into widgets:
+
+- `load_ui_schema(section: str)`
+  - Chooses `config_dut_ui.yaml`, `config_execution_ui.yaml` or
+    `config_stability_ui.yaml` and loads it.
+- `build_groups_from_schema(page, config, ui_schema, panel_key, parent)`
+  - For each section in the schema:
+    - Creates a `QGroupBox` and `QFormLayout`.
+    - For each field, creates the appropriate widget (`LineEdit`, `ComboBox`,
+      `QCheckBox`, `QSpinBox`, `SwitchWifiManualEditor`, etc.).
+    - Uses `get_field_choices(field_key)` from `options.py` when the schema
+      does not specify static `choices`.
+    - Populates initial widget values from `config`.
+    - Registers the widget in `page.field_widgets[field_key]`.
+    - Optionally registers a logical ID in `page.config_controls`.
+
+`CaseConfigPage.__init__` calls `refresh_config_page_controls(self)`
+(`actions.py`), which:
+
+1. Normalises `page.config` via `ConfigController` helpers.
+2. Loads and builds the DUT / Execution / Stability panels using the builder.
+3. Sets `page.field_widgets` on the page.
+
+At this point we have **all widgets created and mapped by field key**, but
+no dynamic behaviour yet.
+
+### 2.4 Rule model (`rules.py`)
+
+`src/ui/model/rules.py` centralises all declarative UI rules and helpers:
+
+- `CUSTOM_SIMPLE_UI_RULES: list[SimpleRuleSpec]`
+  - New per‑field rules expressed as:
+    ```python
+    SimpleRuleSpec(
+        trigger_field="rvr.tool",
+        effects=[SimpleFieldEffect(...), ...],
+    )
+    ```
+  - Drive attribute changes such as show/hide/enable/disable/set_value and
+    set_options for individual fields.
+- `compute_editable_info(page, case_path) -> EditableInfo`
+  - Computes which fields are editable for a given test case (performance,
+    RvR, RvO, stability, script‑specific cases).
+  - Used by `ConfigController.get_editable_fields`.
+- `apply_rules(trigger_field, values, ui_adapter)`
+  - Executes all matching `SimpleRuleSpec` entries on a **UIAdapter** object
+    (the view implements `show/hide/enable/disable/set_value/set_options`).
+- `evaluate_all_rules(page, trigger_field=None)`
+  - Unified entry point:
+    - Collects current field values from widgets.
+    - If `trigger_field` is provided, evaluates `CUSTOM_SIMPLE_UI_RULES`
+      only for that field via `apply_rules`.
+    - If `trigger_field` is `None`, evaluates rules for all trigger fields
+      using the current values.
+
+All rule interpretation now lives in `rules.py`; the view layer only calls
+these functions.
+
+### 2.5 View wiring (`CaseConfigPage`)
+
+`src/ui/view/config/page.py` owns the Config page view:
+
+- After building the panels, it sets:
+  - `self.field_widgets` (from the builder)
+  - `self._field_map` (alias used by rules)
+  - `self.config_ctl = ConfigController(self)`
+  - `self._last_editable_info: EditableInfo | None`
+- `_connect_simple_rules()`:
+  - Imports `CUSTOM_SIMPLE_UI_RULES` from `rules.py`.
+  - For each `SimpleRuleSpec.trigger_field`, finds the widget in
+    `self._field_map` and connects an appropriate Qt signal to
+    `self.on_field_changed(field_id, value)`:
+    - `currentTextChanged` for combos
+    - `toggled` for checkboxes
+    - `textChanged` for line edits
+  - Immediately evaluates each rule once using the current widget value so
+    the initial UI state matches the underlying config.
+- `on_field_changed(field_id, value)`:
+  - Delegates to `evaluate_all_rules(self, field_id)`.
+  - This applies the relevant `SimpleRuleSpec` entries for that field.
+- UIAdapter methods (`show`, `hide`, `enable`, `disable`, `set_value`,
+  `set_options`):
+  - Implement the interface expected by `apply_rules`.
+  - Work with `QFormLayout` to hide/show labels together with fields.
+
+### 2.6 Actions layer (`actions.py`)
+
+`src/ui/view/config/actions.py` provides **wiring helpers** and complex view
+glue. It does *not* contain new low‑level show/hide/enable/disable logic;
+that is handled by rules.
+
+Key responsibilities:
+
+- `refresh_config_page_controls(page)`:
+  - Normalises `page.config` (connect_type / fpga / stability sections).
+  - Invokes the builder for each panel (`dut`, `execution`, `stability`).
+  - Binds common actions:
+    - `init_fpga_dropdowns`, `init_connect_type_actions`,
+      `init_system_version_actions`, `init_stability_actions`,
+      `init_switch_wifi_actions`, `_bind_turntable_actions`,
+      `_bind_case_tree_actions`, `_bind_csv_actions`, `_bind_run_actions`.
+    - Calls `bind_view_events(page, "config", handle_config_event)` so that
+      simple field events (connect type, third-party, serial, RF model, RvR
+      tool, router name/address, basic stability toggles) are wired via the
+      declarative event table defined in `src/ui/model/view_events.yaml`.
+  - `handle_config_event(page, event, **payload)`:
+    - Single dispatcher for Config events (case clicked, connect type changed,
+      serial status changed, RF model change, RvR tool change, CSV selection,
+      stability toggles, etc.). Most field events are declared in the view
+      event table and routed here via `bind_view_events`.
+  - For `"case_clicked"`:
+    - Updates the selected test case display.
+    - Calls `config_ctl.get_editable_fields(case_path)` to compute an
+      `EditableInfo` snapshot via `rules.compute_editable_info`.
+    - Optionally switches to the Execution or Stability tab.
+    - Calls `evaluate_all_rules(page, None)` to re‑apply case‑type rules.
+- Stability script helpers:
+  - `update_script_config_ui`, `load_script_config_into_widgets` handle
+    script‑specific layouts (e.g. `test_str`, `test_switch_wifi`) and call
+    `apply_config_ui_rules`/`evaluate_all_rules` after updates.
+- Run lock helpers:
+  - `apply_run_lock_ui_state` disables all field widgets during a run and
+    restores them afterwards using the controller.
+
+In summary, **actions.py wires Qt signals to controllers and to
+`evaluate_all_rules`**, and hosts complex view‑only behaviour that is hard
+to express as a simple field rule.
+
+### 2.7 Controller interaction
+
+`ConfigController` (`src/ui/controller/config_ctl.py`) uses the rule model
+and view wiring as follows:
+
+- `get_editable_fields(case_path) -> EditableInfo`:
+  - Calls `compute_editable_info(self.page, case_path)` from `rules.py`.
+  - Applies the result to internal flags and to the view
+    (`set_fields_editable` + `_last_editable_info`).
+- `apply_editable_info(info)`:
+  - Stores the snapshot on the page, then calls `evaluate_all_rules` so that
+    rule‑based enable/disable respects the new editable set.
+
+The controller never pokes individual widget attributes directly; it passes
+through the rule + adapter layers.
 
 ---
 
-## 3. Typical Development Workflows
+## 3. Typical Development Workflow (Config Page)
 
-### 3.1 Adding a new config field
+When you add or change behaviour on the Config page, follow this order:
 
-1. Update the appropriate `config_*_ui.yaml` under `src/ui/model/config`.
-2. Ensure the builder is invoked for the panel (`dut`, `execution`,
-   `stability`) via `view/builder.py`.
-3. Use `page.field_widgets[...]` in `view/config/actions.py` or the
-   relevant controller to read/write values or apply rules.
-4. Persist new values through `ConfigController.save_config()` only.
-
-### 3.2 Adding a new sidebar page
-
-1. **Model (optional)**  
-   - If the page is driven by structured config, add a model module or
-     extend existing YAML under `src/ui/model/` or `src/util/constants.py`.
-
-2. **View**  
-   - Create `src/ui/view/<page>.py` with:
-     - A pure view class (e.g. `FooView`) that builds the layout.
-     - A thin page class (e.g. `FooPage`) that:
-       - Composes the view with `attach_view_to_page(...)`.
-       - Exposes a small surface area for the controller and `main.py`.
-
-3. **Controller**  
-   - Add `src/ui/controller/<page>_ctl.py` with a controller class that:
-     - Accepts the view/page in its constructor.
-     - Connects signals and implements all non-trivial behaviour and I/O.
-
-4. **Main window**  
-   - Import and instantiate the view/page and controller in `main.py`.
-   - Attach the page to the FluentWindow navigation via `_create_sidebar_button(...)`.
-
-### 3.3 Extending RvR Wi‑Fi case behaviour
-
-- UI-only changes (labels, layout, new buttons):
-  - Update `CaseView` / `RvrWifiConfigPage` in `src/ui/view/case.py`.
-- CSV discovery, path normalisation, switch‑Wi‑Fi preview:
-  - Extend helpers in `src/ui/controller/case_ctl.py`.
+1. **Update model / schema**  
+   - Add fields to `config_*_ui.yaml` under `src/ui/model/config/`.  
+   - If needed, extend `options.py` to provide dynamic `choices` lists.
+2. **Let the builder create widgets**  
+   - Ensure `refresh_config_page_controls` calls
+     `build_groups_from_schema` for the relevant panel.
+   - Access widgets via `page.field_widgets["section.key"]` if necessary.
+3. **Describe behaviour in rules**  
+   - Prefer `CUSTOM_SIMPLE_UI_RULES` with `SimpleRuleSpec` for
+     show/hide/enable/disable/set_value/set_options behaviour.
+   - For case‑type behaviour (performance / stability / RvR / RvO), extend
+     `CUSTOM_SIMPLE_UI_RULES` or adjust `evaluate_all_rules` as needed.
+4. **Wire signals, not logic, in actions**  
+   - Use `handle_config_event` and the `_bind_*_actions` helpers to connect
+     widgets to controller methods and to `evaluate_all_rules`.
+   - Avoid adding new `if/else` chains in actions for simple attribute
+     changes; push those into `rules.py` instead.
+5. **Keep controllers focused on I/O and orchestration**  
+   - Let controllers call `compute_editable_info`, `evaluate_all_rules`,
+     and view helpers instead of mutating widgets directly.
 
 ---
 
@@ -193,63 +305,61 @@ These rules apply to all new code in `src/ui`:
 ### 4.1 Language
 
 - **Do not use Chinese** in identifiers, comments, or log messages.
-- User‑visible strings must be English or loaded from resources intended for
-  localisation (if added in the future).
+- User‑visible strings must be English or loaded from a dedicated resource
+  layer (if added in the future).
 
 ### 4.2 Layering and Encapsulation
 
-- Respect the MVC layers:
-  - Model: no Qt, no UI.
-  - View: widgets and visuals only; minimal logic; no heavy I/O.
-  - Controller: I/O, long‑running work, cross‑module orchestration.
+- Respect MVC boundaries:
+  - Model: configuration, options, rules; no Qt.
+  - View: widgets/layout/animations; minimal logic; no heavy I/O.
+  - Controller: I/O, long‑running work, orchestration.
 - When you encapsulate logic, decide clearly:
   - Which layer it belongs to.
   - Which modules are allowed to call it.
-- Do not bypass the layering by calling deep controller helpers from random
-  modules. Instead, expose small, explicit controller methods or higher‑level
-  helpers in the appropriate module.
+- Do not bypass the layering by reaching into deep controller internals from
+  random modules. Expose small, explicit methods instead.
 
 ### 4.3 Defensive Programming
 
 Avoid “defensive by default” patterns that make code hard to follow:
 
 - Do **not** wrap large blocks in broad `try/except Exception` just to
-  silence errors. Catch specific exceptions where necessary and log them.
-- Avoid `getattr(obj, "attr", None)` as the primary way to discover state.
-  Prefer explicit attributes and clear types. Use `TYPE_CHECKING` and type
-  hints instead of runtime guessing.
-- Do not use `hasattr(...)` / `getattr(...)` chains to probe for behaviour
-  that a layer is not supposed to support. Instead, refactor the API so the
-  caller passes what it needs.
+  silence errors. Catch specific exceptions and log them.
+- Avoid `getattr(obj, "attr", None)` as the default way to discover state.
+  Prefer explicit attributes and type hints.
+- Do not chain `hasattr`/`getattr` to probe behaviour that a layer should
+  not even know about. Refactor the API instead.
 
-It is acceptable to use `with suppress(...)` or small `try/except` blocks
-for shutdown/cleanup paths where failures are non‑critical and explicitly
-documented.
+Small, targeted `try/except` blocks or `contextlib.suppress` are acceptable
+for shutdown/cleanup paths where failures are expected and harmless.
 
 ### 4.4 General Style
 
-- Keep controller methods focused and testable. If a method grows beyond a
-  clear responsibility, split it.
+- Keep controller methods focused and testable; split when responsibilities
+  grow too large.
 - Use explicit names for pages and views (`RunView`, `RunPage`,
   `RvrWifiConfigPage`, `ReportView`, etc.).
-+- Reuse helpers from `view/common.py` and controllers instead of copying
-  logic.
-- Keep logging messages short, in English, and relevant to the action.
+- Reuse helpers from `view/common.py`, `rules.py`, and controllers instead
+  of copying logic.
+- Keep logging messages short, English, and relevant.
 
 ---
 
-## 5. Before You Start Coding
+## 5. Checklist Before Coding
 
 For any new UI work, follow this checklist **in order**:
 
-1. Read this `src/ui/README.md` to refresh the architecture.
-2. Identify which layer(s) your change touches: Model, View, Controller.
+1. Read this `src/ui/README.md` to refresh the architecture and config flow.
+2. Decide which layer(s) your change touches: Model, View, Controller.
 3. Update or add YAML / model entries if needed.
 4. Extend or create view modules under `src/ui/view/`.
 5. Add or update controller modules under `src/ui/controller/`.
-6. Wire the page/controller into `main.py` only at the top level.
-7. Verify that layering is respected and that no new defensive patterns
-   (broad `try/except`, heavy `getattr`, etc.) are introduced.
+6. Use the builder and rule engine instead of hand‑crafting widgets or
+   enable/disable logic.
+7. Wire the page/controller into `main.py` only at the top level.
+8. Re‑check that no new defensive patterns (broad `try/except`,
+   heavy `getattr`, etc.) were introduced.
 
 Following this process keeps the UI predictable and maintainable as the
-application grows.
+application grows.*** End Patch```】【。assistanturetat to=functions.apply_patch(serializers={"json": true}) ***!

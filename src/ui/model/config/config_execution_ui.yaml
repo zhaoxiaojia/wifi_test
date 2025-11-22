@@ -77,6 +77,13 @@ panels:
             label: "Zero Point Threshold"
             placeholder: "0"
 
+          # New configuration option: enable WPA3-related tests. When checked, the test
+          # runner will include WPA3 cases during execution. The option defaults
+          # to false and is only meaningful for certain data generators.
+          - key: rvr.enable_wpa3
+            widget: checkbox
+            label: "Enable WPA3 tests"
+
       - id: router
         label: "Router"
         fields:

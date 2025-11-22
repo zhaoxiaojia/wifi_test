@@ -20,7 +20,7 @@ from PyQt5.QtWidgets import (
 from qfluentwidgets import ComboBox, LineEdit, PushButton
 
 from src.ui.view.common import ScriptConfigEntry
-from src.ui.view.config.actions import apply_config_ui_rules
+from src.ui.model.rules import evaluate_all_rules
 from src.ui.view.config.config_switch_wifi import SwitchWifiManualEditor
 from src.util.constants import (
     SWITCH_WIFI_MANUAL_ENTRIES_FIELD,
@@ -178,20 +178,26 @@ def bind_script_section(page: Any, checkbox: QCheckBox, controls: Sequence[QWidg
 
     This is primarily used by the ``test_str`` stability configuration to
     toggle AC / STR sections.  The concrete enable/disable behaviour for the
-    controls is defined in ``CONFIG_UI_RULES`` (rules R14/R15).  This helper
-    simply re-evaluates the rules whenever the checkbox toggles so that the
-    view logic stays outside the controller.
+    controls is expressed as ``SimpleRuleSpec`` entries in ``rules.py``.
+    This helper simply re-evaluates the rules whenever the checkbox toggles
+    so that the view logic stays outside the controller.
     """
 
     if not isinstance(checkbox, QCheckBox):
         return
 
     def _apply(_checked: bool) -> None:
-        apply_config_ui_rules(page)
+        try:
+            evaluate_all_rules(page, None)
+        except Exception:
+            pass
 
     checkbox.toggled.connect(_apply)
     # Ensure initial state honours the rules as well.
-    apply_config_ui_rules(page)
+    try:
+        evaluate_all_rules(page, None)
+    except Exception:
+        pass
 
 
 def script_field_key(case_key: str, *parts: str) -> str:
@@ -360,7 +366,9 @@ def create_test_str_config_entry_from_schema(
     # Ensure relay-type changes also trigger rule evaluation (R15a/b).
     def _connect_relay_type(widget: QWidget | None) -> None:
         if isinstance(widget, ComboBox):
-            widget.currentIndexChanged.connect(lambda *_: apply_config_ui_rules(page))
+            widget.currentIndexChanged.connect(
+                lambda *_: evaluate_all_rules(page, None)
+            )
 
     _connect_relay_type(ac_relay_type)
     _connect_relay_type(str_relay_type)

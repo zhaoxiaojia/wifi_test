@@ -8,18 +8,14 @@ import logging
 import os
 from typing import Any, Sequence, Mapping
 
-from PyQt5.QtCore import QSortFilterProxyModel, QSignalBlocker
+from PyQt5.QtCore import QSortFilterProxyModel, QSignalBlocker, QTimer
 from PyQt5.QtWidgets import QWidget, QCheckBox, QFormLayout, QLabel, QSpinBox, QDoubleSpinBox
 from qfluentwidgets import LineEdit, ComboBox
 
-from src.util.constants import (
-    TURN_TABLE_MODEL_OTHER,
-    WIFI_PRODUCT_PROJECT_MAP,
-    ANDROID_KERNEL_MAP,
-)
-from src.ui.model.rules import FieldEffect, RuleSpec, CONFIG_UI_RULES
+from src.util.constants import WIFI_PRODUCT_PROJECT_MAP, ANDROID_KERNEL_MAP
+from src.ui.model.rules import normalize_connect_type_label, current_connect_type, evaluate_all_rules
 from src.ui.view.builder import build_groups_from_schema, load_ui_schema
-from src.ui.view.common import EditableInfo
+from src.ui.view import bind_view_events
 from src.ui.view.config.config_switch_wifi import (
     sync_switch_wifi_on_csv_changed,
     handle_switch_wifi_use_router_changed,
@@ -27,32 +23,6 @@ from src.ui.view.config.config_switch_wifi import (
     init_switch_wifi_actions,
 )
 from src import display_to_case_path, case_path_to_display, update_test_case_display
-
-def normalize_connect_type_label(label: str) -> str:
-    text = (label or "").strip()
-    lowered = text.lower()
-    if lowered in {"android", "adb"}:
-        return "Android"
-    if lowered in {"linux", "telnet"}:
-        return "Linux"
-    return text
-
-
-def current_connect_type(page: Any) -> str:
-    """Return the canonical connect type for the given page (best-effort)."""
-    try:
-        # Prefer an existing page-provided helper for backward-compat.
-        if hasattr(page, "_current_connect_type"):
-            return page._current_connect_type() or ""
-        if not hasattr(page, "connect_type_combo"):
-            return ""
-        data = page.connect_type_combo.currentData()
-        if isinstance(data, str) and data.strip():
-            return data.strip()
-        text = page.connect_type_combo.currentText()
-        return normalize_connect_type_label(text) if isinstance(text, str) else ""
-    except Exception:
-        return ""
 
 
 def set_connect_type_combo_selection(page: Any, type_value: str) -> None:
@@ -139,6 +109,92 @@ def set_refresh_ui_locked(page: Any, locked: bool) -> None:
         logging.debug("set_refresh_ui_locked: failed to toggle updates", exc_info=True)
 
 
+def apply_ui(page: Any, case_path: str) -> None:
+    """Recompute case-scoped UI state and apply testcase + simple rules.
+
+    This replaces the legacy ``ConfigController.get_editable_fields`` method.
+    It computes the testcase-specific editable surface, updates controller
+    flags (CSV / RvR Wi-Fi), builds ``CUSTOM_TESTCASE_UI_RULES`` and finally
+    evaluates the combined rule set so that field-level attributes are driven
+    exclusively by the simple rule engine.
+    """
+    config_ctl = getattr(page, "config_ctl", None)
+
+    if getattr(page, "_refreshing", False):
+        return
+
+    page._refreshing = True
+    set_refresh_ui_locked(page, True)
+
+    try:
+        # Script-specific stability UI (test_str / switch_wifi, etc.).
+        try:
+            update_script_config_ui(page, case_path)
+        except Exception:
+            logging.debug("apply_ui: update_script_config_ui failed", exc_info=True)
+
+        # Controller-side model flags (CSV / RvR Wi-Fi) are still derived
+        # from testcase type, but field-level enabled/visible state is
+        # driven solely by the rule engine.
+        from src.ui.view.common import EditableInfo as EditableInfoTypeInner
+
+        info = EditableInfoTypeInner()
+        # Enable CSV/RvR Wi-Fi for performance cases.
+        if config_ctl is not None:
+            try:
+                if hasattr(config_ctl, "is_performance_case") and config_ctl.is_performance_case(case_path):
+                    info.enable_csv = True
+                    info.enable_rvr_wifi = True
+            except Exception:
+                logging.debug("apply_ui: is_performance_case failed", exc_info=True)
+
+        if info.enable_csv and not hasattr(page, "csv_combo"):
+            info.enable_csv = False
+
+        if config_ctl is not None:
+            try:
+                config_ctl.apply_editable_info(info)
+            except Exception:
+                logging.debug("apply_ui: apply_editable_info failed", exc_info=True)
+
+        # Determine which logical pages should be visible.
+        page_keys = getattr(page, "_current_page_keys", ["dut"])
+        if config_ctl is not None:
+            try:
+                page_keys = config_ctl.determine_pages_for_case(case_path, info)
+            except Exception:
+                logging.debug("apply_ui: determine_pages_for_case failed", exc_info=True)
+
+        try:
+            from src.ui.view.config.actions import set_available_pages as _set_available_pages
+
+            _set_available_pages(page, page_keys)
+        except Exception:
+            logging.debug("apply_ui: set_available_pages failed", exc_info=True)
+
+        # Evaluate rules once: testcase-scoped rules in CUSTOM_TESTCASE_UI_RULES
+        # and global simple rules in CUSTOM_SIMPLE_UI_RULES.
+        try:
+            evaluate_all_rules(page, "testcase.selection")
+            # After testcase-scoped rules have established the editable
+            # surface, run a full pass of simple rules so that Control
+            # Type, Serial Port and other field-level behaviours are
+            # applied based on the initial widget values.
+            evaluate_all_rules(page, None)
+        except Exception:
+            logging.exception("apply_ui: failed to evaluate rules for testcase", exc_info=True)
+    finally:
+        set_refresh_ui_locked(page, False)
+        page._refreshing = False
+
+    if not hasattr(page, "csv_combo"):
+        logging.debug("apply_ui: csv_combo disabled")
+    if getattr(page, "_pending_path", None):
+        path = page._pending_path
+        page._pending_path = None
+        QTimer.singleShot(0, lambda: apply_ui(page, path))
+
+
 
 def _rebalance_panel(panel: Any) -> None:
     """Request a layout rebalance on a ConfigGroupPanel, if available."""
@@ -163,14 +219,13 @@ def handle_config_event(page: Any, event: str, **payload: Any) -> None:
     config_ctl = getattr(page, "config_ctl", None)
 
     if event == "init":
-        # Initial UI pass �?derive state purely from current widget values
-        # and config without forcing any particular ordering.
+        # Initial UI pass: derive state from current config and widget values
+        # and apply testcase + simple rules once.
         try:
             case_path = getattr(page, "_current_case_path", "") or ""
         except Exception:
             case_path = ""
-        if case_path and hasattr(page, "get_editable_fields"):
-            page.get_editable_fields(case_path)
+        apply_ui(page, case_path)
         # Apply connect type related UI if we have a combo bound.
         ct_combo = getattr(page, "connect_type_combo", None)
         if ct_combo is not None and hasattr(ct_combo, "currentText"):
@@ -238,10 +293,10 @@ def handle_config_event(page: Any, event: str, **payload: Any) -> None:
             except Exception:
                 logging.debug("update_test_case_display failed in case_clicked", exc_info=True)
 
-        # Re-compute editable info + page availability.
+        # Re-compute testcase-specific UI and apply rules.
         view = getattr(page, "view", None)
         if config_ctl is not None:
-            config_ctl.get_editable_fields(case_path)
+            apply_ui(page, case_path)
             if view is not None and hasattr(view, "set_current_page"):
                 try:
                     if config_ctl.is_stability_case(case_path):
@@ -276,20 +331,22 @@ def handle_config_event(page: Any, event: str, **payload: Any) -> None:
         apply_serial_enabled_ui_state(page, text)
         if hasattr(page, "_dut_panel"):
             _rebalance_panel(page._dut_panel)
-        apply_config_ui_rules(page)
+        try:
+            evaluate_all_rules(page, "serial_port.status")
+        except Exception:
+            pass
         return
 
     if event == "rf_model_changed":
-        model_text = str(payload.get("model_text", ""))
-        apply_rf_model_ui_state(page, model_text)
+        # RF model changes are now handled by the simple rule engine.
+        # The event is kept only to allow panel rebalancing when the set of
+        # visible RF fields changes.
         if hasattr(page, "_execution_panel"):
             _rebalance_panel(page._execution_panel)
         return
 
     if event == "rvr_tool_changed":
         tool_text = str(payload.get("tool_text", ""))
-        field_widgets = getattr(page, "field_widgets", {}) or {}
-        ix_path = field_widgets.get("rvr.ixchariot.path")
         apply_rvr_tool_ui_state(page, tool_text)
         if hasattr(page, "_execution_panel"):
             _rebalance_panel(page._execution_panel)
@@ -353,10 +410,14 @@ def handle_config_event(page: Any, event: str, **payload: Any) -> None:
         "switch_wifi_use_router_changed",
         "switch_wifi_router_csv_changed",
     }:
-        # Stability Settings: test_str / test_switch_wifi duration & relay rules.
-        # All concrete enable/disable logic lives in CONFIG_UI_RULES (R14–R18);
-        # here we simply re-evaluate rules based on updated widget states.
-        apply_config_ui_rules(page)
+        # Stability Settings: test_str / test_switch_wifi duration & relay
+        # rules. All concrete enable/disable behaviour is defined via simple
+        # rules in CUSTOM_SIMPLE_UI_RULES; here we re-evaluate them based on
+        # updated widget states.
+        try:
+            evaluate_all_rules(page, None)
+        except Exception:
+            pass
         return
 
     # Unknown events are ignored to keep the dispatcher tolerant of future
@@ -364,103 +425,26 @@ def handle_config_event(page: Any, event: str, **payload: Any) -> None:
     logging.debug("handle_config_event: unknown event %r payload=%r", event, payload)
 
 
-def apply_rf_model_ui_state(page: Any, model_str: str) -> None:
-    """Toggle RF-solution parameter fields based on the selected model.
-
-    This replaces the legacy group-based implementation and relies directly
-    on schema-generated field keys, for example:
-    - ``rf_solution.RC4DAT-8G-95.*``
-    - ``rf_solution.RADIORACK-4-220.ip_address``
-    - ``rf_solution.LDA-908V-8.*``
-
-    The ``RS232Board5`` model requires no extra configuration beyond the
-    RF Model combo itself, so all additional fields remain hidden.
-    """
-    field_widgets = getattr(page, "field_widgets", {}) or {}
-
-    def _set_field_visible(key: str, visible: bool) -> None:
-        w = field_widgets.get(key)
-        if w is None:
-            return
-        if hasattr(w, "setVisible"):
-            w.setVisible(visible)
-        # Also hide the label in QFormLayout-based rows.
-        try:
-            parent = w.parent()
-            from PyQt5.QtWidgets import QFormLayout  # type: ignore
-
-            if hasattr(parent, "layout"):
-                layout = parent.layout()
-                if isinstance(layout, QFormLayout):
-                    label = layout.labelForField(w)
-                    if label is not None and hasattr(label, "setVisible"):
-                        label.setVisible(visible)
-        except Exception:
-            pass
-
-    model_str = str(model_str or "").strip()
-
-    # Hide all model-specific fields by default.
-    for key in (
-        "rf_solution.RC4DAT-8G-95.idVendor",
-        "rf_solution.RC4DAT-8G-95.idProduct",
-        "rf_solution.RC4DAT-8G-95.ip_address",
-        "rf_solution.RADIORACK-4-220.ip_address",
-        "rf_solution.LDA-908V-8.ip_address",
-        "rf_solution.LDA-908V-8.channels",
-    ):
-        _set_field_visible(key, False)
-
-    # RS232Board5: keep all model-specific fields hidden (no user config).
-    if model_str == "RS232Board5":
-        return
-
-    if model_str == "RC4DAT-8G-95":
-        for key in (
-            "rf_solution.RC4DAT-8G-95.idVendor",
-            "rf_solution.RC4DAT-8G-95.idProduct",
-            "rf_solution.RC4DAT-8G-95.ip_address",
-        ):
-            _set_field_visible(key, True)
-    elif model_str == "RADIORACK-4-220":
-        _set_field_visible("rf_solution.RADIORACK-4-220.ip_address", True)
-    elif model_str == "LDA-908V-8":
-        for key in (
-            "rf_solution.LDA-908V-8.ip_address",
-            "rf_solution.LDA-908V-8.channels",
-        ):
-            _set_field_visible(key, True)
-
-
 def apply_rvr_tool_ui_state(page: Any, tool: str) -> None:
-    """Toggle RvR tool-specific parameter groups (iperf vs ixchariot)."""
-    normalized = (tool or "").strip().lower()
-    if hasattr(page, "rvr_iperf_group"):
-        page.rvr_iperf_group.setVisible(normalized == "iperf")
-    if hasattr(page, "rvr_ix_group"):
-        page.rvr_ix_group.setVisible(normalized == "ixchariot")
+    """Placeholder for RvR tool-specific UI hooks.
 
-    # Only allow IxChariot path edit when ixchariot is selected.
-    field_widgets = getattr(page, "field_widgets", {}) or {}
-    ix_path = field_widgets.get("rvr.ixchariot.path")
-    if ix_path is not None and hasattr(ix_path, "setEnabled"):
-        ix_path.setEnabled(normalized == "ixchariot")
+    All field-level attribute changes (enable/disable/show/hide) are now
+    handled declaratively via the rules engine.  This function intentionally
+    performs no direct widget mutation so that Execution-related behaviour
+    lives entirely in the model layer.
+    """
+    _ = page, tool
 
 
 def apply_serial_enabled_ui_state(page: Any, text: str) -> None:
-    """Show/hide the serial config group when serial is enabled/disabled."""
-    if hasattr(page, "serial_cfg_group"):
-        page.serial_cfg_group.setVisible(text == "True")
+    """Serial UI hook placeholder.
 
-
-def apply_turntable_model_ui_state(page: Any, model: str) -> None:
-    """Toggle visibility/enabled state for turntable IP controls."""
-    if not hasattr(page, "turntable_ip_edit") or not hasattr(page, "turntable_ip_label"):
-        return
-    requires_ip = model == TURN_TABLE_MODEL_OTHER
-    page.turntable_ip_label.setVisible(requires_ip)
-    page.turntable_ip_edit.setVisible(requires_ip)
-    page.turntable_ip_edit.setEnabled(requires_ip)
+    The enabled/disabled state of Serial Port fields is governed by the
+    simple rule engine in ``rules.py``.  This helper no longer changes widget
+    attributes directly; it is kept only to preserve the call surface used by
+    older wiring code.
+    """
+    _ = page, text
 
 
 def set_fields_editable(page: Any, fields: set[str]) -> None:
@@ -506,6 +490,15 @@ def apply_run_lock_ui_state(page: Any, locked: bool) -> None:
                 page.config_ctl.restore_editable_state()
             except Exception:
                 pass
+        # Re-apply rules so field-level state is restored based on the
+        # current testcase and widget values rather than the lock state.
+        try:
+            evaluate_all_rules(page, None)
+        except Exception:
+            logging.debug(
+                "apply_run_lock_ui_state: evaluate_all_rules failed on unlock",
+                exc_info=True,
+            )
         if hasattr(page, "_update_navigation_state"):
             try:
                 page._update_navigation_state()
@@ -616,182 +609,18 @@ def refresh_config_page_controls(page: Any) -> None:
     init_system_version_actions(page)
     init_stability_actions(page)
     init_switch_wifi_actions(page)
-    _bind_serial_actions(page)
+    # Serial / RF / RvR / router field wiring is now driven by the
+    # declarative view-event table via ``bind_view_events``.
     _bind_turntable_actions(page)
-    _bind_rf_rvr_actions(page)
-    _bind_router_actions(page)
     _bind_case_tree_actions(page)
     _bind_csv_actions(page)
     _bind_run_actions(page)
 
-
-def compute_editable_info(page: Any, case_path: str) -> EditableInfo:
-    """Return editable fields and related UI enable state based on case name and path.
-
-    """
-    import os  # local import to avoid polluting module namespace
-
-    basename = os.path.basename(case_path)
-    logging.debug("testcase name %s", basename)
-    logging.debug("compute_editable_info case_path=%s basename=%s", case_path, basename)
-
-    peak_keys = {
-        "rvr",
-        "rvr.tool",
-        "rvr.iperf.path",
-        "rvr.iperf.server_cmd",
-        "rvr.iperf.client_cmd",
-        "rvr.ixchariot.path",
-        "rvr.repeat",
-    }
-    rvr_keys = peak_keys | {
-        "rvr.throughput_threshold",
-    }
-    info = EditableInfo()
-    # always keep connect_type / router / serial / fpga selection editable
-    info.fields |= {
-        "connect_type.type",
-        "connect_type.Android.device",
-        "connect_type.Linux.ip",
-        "connect_type.Linux.wildcard",
-        "connect_type.third_party.enabled",
-        "connect_type.third_party.wait_seconds",
-        "router.name",
-        "router.address",
-        "serial_port.status",
-        "serial_port.port",
-        "serial_port.baud",
-        "fpga.product_line",
-        "fpga.project",
-    }
-    config_ctl = getattr(page, "config_ctl", None)
-
-    # Peak throughput case: limited RvR controls.
-    if basename == "test_wifi_peak_throughput.py":
-        info.fields |= peak_keys
-    # All performance cases share full RvR config and CSV enablement.
-    if config_ctl is not None and config_ctl.is_performance_case(case_path):
-        info.fields |= rvr_keys
-        info.enable_csv = True
-        info.enable_rvr_wifi = True
-    # RvO cases: enable turntable related controls; 需求更新后�?    # RvO 也需�?RF Solution �?Turntable 同时可编辑�?    if "rvo" in basename:
-        info.fields |= {
-            "Turntable.model",
-            "Turntable.ip_address",
-            "Turntable.step",
-            "Turntable.static_db",
-            "Turntable.target_rssi",
-        }
-        info.fields |= {
-            "rf_solution.step",
-            "rf_solution.model",
-            "rf_solution.RC4DAT-8G-95.idVendor",
-            "rf_solution.RC4DAT-8G-95.idProduct",
-            "rf_solution.RC4DAT-8G-95.ip_address",
-            "rf_solution.RADIORACK-4-220.ip_address",
-            "rf_solution.LDA-908V-8.ip_address",
-            "rf_solution.LDA-908V-8.channels",
-        }
-    # RvR cases: enable RF solution section（仅 RF Solution�?
-    if "rvr" in basename:
-        info.fields |= {
-            "rf_solution.step",
-            "rf_solution.model",
-            "rf_solution.RC4DAT-8G-95.idVendor",
-            "rf_solution.RC4DAT-8G-95.idProduct",
-            "rf_solution.RC4DAT-8G-95.ip_address",
-            "rf_solution.RADIORACK-4-220.ip_address",
-            "rf_solution.LDA-908V-8.ip_address",
-            "rf_solution.LDA-908V-8.channels",
-        }
-    # Stability cases: enable Duration Control & Check Point base fields.
-    if config_ctl is not None and config_ctl.is_stability_case(case_path):
-        info.fields |= {
-            "stability.duration_control.loop",
-            "stability.duration_control.duration_hours",
-            "stability.duration_control.exitfirst",
-            "stability.duration_control.retry_limit",
-            "stability.check_point.ping",
-            "stability.check_point.ping_targets",
-        }
-    # Script-specific stability fields.
-    if hasattr(page, "_script_case_key") and hasattr(page, "_script_groups"):
-        try:
-            case_key = page._script_case_key(case_path)
-        except Exception:
-            case_key = ""
-        entry = page._script_groups.get(case_key) if case_key else None
-        if entry is not None and getattr(entry, "field_keys", None):
-            info.fields |= set(entry.field_keys)
-
-    # Debug print for analysing Execution enable rules (easy to remove later).
-    has_turntable = any(k.startswith("Turntable.") for k in info.fields)
-    has_rf = any(k.startswith("rf_solution.") for k in info.fields)
-    has_rvr = any(k.startswith("rvr.") for k in info.fields)
-    return info
-
-
-def apply_field_effects(
-    page: Any,
-    effects: FieldEffect,
-    field_widgets: dict[str, Any] | None = None,
-    editable_fields: set[str] | None = None,
-) -> None:
-    """Apply enable/disable/show/hide rule effects to a config page.
-
-    """
-    if not effects:
-        return
-
-    if field_widgets is None:
-        field_widgets = getattr(page, "field_widgets", {}) or {}
-    if editable_fields is None:
-        editable_info = getattr(page, "_last_editable_info", None)
-        editable_fields = getattr(editable_info, "fields", None)
-
-    def _current_connect_type_value() -> str:
-        """Best-effort current connect type label (Android/Linux/...)."""
-        try:
-            return current_connect_type(page)
-        except Exception:
-            return ""
-
-    def _set_enabled(key: str, enabled: bool) -> None:
-        widget = field_widgets.get(key)
-        if widget is None:
-            return
-        if key == "system.kernel_version":
-            connect_type_val = _current_connect_type_value()
-            if connect_type_val == "Android":
-                enabled = False
-            elif connect_type_val == "Linux":
-                enabled = True
-        if enabled and isinstance(editable_fields, set) and editable_fields and key not in editable_fields:
-            # Do not re-enable fields that are not editable for the
-            # current case according to EditableInfo.
-            return
-        before = widget.isEnabled()
-        if before == enabled:
-            return
-        with QSignalBlocker(widget):
-            widget.setEnabled(enabled)
-
-    def _set_visible(key: str, visible: bool) -> None:
-        widget = field_widgets.get(key)
-        if widget is None:
-            return
-        if widget.isVisible() == visible:
-            return
-        widget.setVisible(visible)
-
-    for key in effects.get("enable_fields", []) or []:
-        _set_enabled(key, True)
-    for key in effects.get("disable_fields", []) or []:
-        _set_enabled(key, False)
-    for key in effects.get("show_fields", []) or []:
-        _set_visible(key, True)
-    for key in effects.get("hide_fields", []) or []:
-        _set_visible(key, False)
+    # Bind declarative view events for the Config page.
+    try:
+        bind_view_events(page, "config", handle_config_event)
+    except Exception:
+        logging.debug("bind_view_events(config) failed", exc_info=True)
 
 
 def set_available_pages(page: Any, page_keys: list[str]) -> None:
@@ -801,58 +630,16 @@ def set_available_pages(page: Any, page_keys: list[str]) -> None:
 
 
 def apply_config_ui_rules(page: Any) -> None:
-    """Evaluate CONFIG_UI_RULES against current UI state for the given page.
+    """Compatibility wrapper around the unified rule engine.
 
-    This function centralises rule evaluation for the Config page.
+    New code should call ``evaluate_all_rules(page, None)`` directly.  This
+    helper exists to keep older call sites working while all behaviour is
+    migrated onto the simple-rule engine.
     """
     try:
-        rules: dict[str, RuleSpec] = CONFIG_UI_RULES
+        evaluate_all_rules(page, None)
     except Exception:
-        return
-
-    # Basic state used by rules.
-    config_ctl = getattr(page, "config_ctl", None)
-    field_widgets = getattr(page, "field_widgets", {}) or {}
-    editable_fields = getattr(getattr(page, "_last_editable_info", None), "fields", None)
-
-    # Precompute script key once for rules that depend on a specific script.
-    case_path = getattr(page, "_current_case_path", "") or ""
-    script_key = ""
-    if case_path and config_ctl is not None and hasattr(config_ctl, "script_case_key"):
-        try:
-            script_key = config_ctl.script_case_key(case_path)
-        except Exception:
-            script_key = ""
-
-    for rule_id, spec in rules.items():
-        active = True
-        trigger_case_type = spec.get("trigger_case_type")
-        if trigger_case_type and config_ctl is not None:
-            try:
-                active = active and config_ctl.eval_case_type_flag(trigger_case_type)
-            except Exception:
-                active = False
-        trigger_script_key = spec.get("trigger_script_key")
-        if active and trigger_script_key:
-            active = active and (script_key == trigger_script_key)
-        trigger_field = spec.get("trigger_field")
-        value = None
-        if active and trigger_field and config_ctl is not None:
-            try:
-                value = config_ctl.get_field_value(trigger_field)
-            except Exception:
-                value = None
-        if not active:
-            continue
-        effects_to_apply: list[FieldEffect] = []
-        case_map = spec.get("cases") or {}
-        if trigger_field and case_map and value in case_map:
-            effects_to_apply.append(case_map[value])
-        base_effects = spec.get("effects")
-        if base_effects:
-            effects_to_apply.append(base_effects)
-        for eff in effects_to_apply:
-            apply_field_effects(page, eff, field_widgets, editable_fields)
+        pass
 
 
 def update_script_config_ui(page: Any, case_path: str) -> None:
@@ -1081,38 +868,12 @@ def load_script_config_into_widgets(page: Any, entry: Any, data: Mapping[str, An
         pass
 
 def init_stability_actions(page: Any) -> None:
-    """Wire Stability panel checkboxes to rule evaluation for Duration/Checkpoint."""
-    field_widgets = getattr(page, "field_widgets", {}) or {}
-
-    exitfirst = field_widgets.get("stability.duration_control.exitfirst") or field_widgets.get(
-        "duration_control.exitfirst"
-    )
-    ping = field_widgets.get("stability.check_point.ping") or field_widgets.get("check_point.ping")
-
-    from PyQt5.QtWidgets import QCheckBox  # local import to avoid cycles
-
-    if isinstance(exitfirst, QCheckBox):
-        exitfirst.toggled.connect(
-            lambda checked: handle_config_event(
-                page,
-                "stability_exitfirst_changed",
-                checked=bool(checked),
-            )
-        )
-    if isinstance(ping, QCheckBox):
-        ping.toggled.connect(
-            lambda checked: handle_config_event(
-                page,
-                "stability_ping_changed",
-                checked=bool(checked),
-            )
-        )
+    """Stability Duration/Checkpoint wiring is handled by the view-event table."""
+    _ = page
 
 
 def init_system_version_actions(page: Any) -> None:
-    """Wire Android/System version combo to existing mapping logic.
-
-    """
+    """Wire Android/System version combo to existing mapping logic."""
     field_widgets = getattr(page, "field_widgets", {}) or {}
 
     version_widget = field_widgets.get("system.version")
@@ -1125,7 +886,7 @@ def init_system_version_actions(page: Any) -> None:
 
     # Reconnect Android Version combo to the original handler, but keep
     # the kernel combo's enabled state controlled purely by connect_type
-    # and the rule engine (CONFIG_UI_RULES).
+    # and the rule engine.
     handler = getattr(page, "_on_android_version_changed", None)
     if not callable(handler):
         # Fall back to centralized helper if the page does not provide one.
@@ -1320,50 +1081,14 @@ def update_fpga_hidden_fields(page: Any) -> None:
 
 
 def apply_connect_type_ui_state(page: Any, connect_type: str) -> None:
-    """Toggle connect-type related controls based on selected Control Type.
+    """Control-type UI hook placeholder.
 
-    - Android: disable Linux IP, enable Android Device.
-    - Linux:   enable Linux IP, disable Android Device.
-    System section is handled by rules / higher-level helpers.
+    All field-level attribute changes (Android vs Linux device/IP fields and
+    related system widgets) are expressed via the simple rule engine in
+    ``rules.py``.  This helper no longer mutates widget attributes directly
+    so that the DUT section stays purely rule-driven.
     """
-    # Backwards-compatible group visibility.
-    if hasattr(page, "adb_group"):
-        page.adb_group.setVisible(connect_type == "Android")
-    if hasattr(page, "telnet_group"):
-        page.telnet_group.setVisible(connect_type == "Linux")
-
-    field_widgets = getattr(page, "field_widgets", {}) or {}
-
-    android_device = field_widgets.get("connect_type.Android.device")
-    linux_ip = field_widgets.get("connect_type.Linux.ip")
-
-    is_android = connect_type == "Android"
-    is_linux = connect_type == "Linux"
-
-    if android_device is not None and hasattr(android_device, "setEnabled"):
-        android_device.setEnabled(is_android)
-    if linux_ip is not None and hasattr(linux_ip, "setEnabled"):
-        linux_ip.setEnabled(is_linux)
-
-
-def apply_third_party_ui_state(page: Any, enabled: bool) -> None:
-    """Toggle editability of the 'third_party.wait_seconds' field."""
-    field_widgets = getattr(page, "field_widgets", {}) or {}
-    wait_widget = field_widgets.get("connect_type.third_party.wait_seconds")
-    if wait_widget is None:
-        # Fallback to legacy attribute name.
-        wait_widget = getattr(page, "third_party_wait_edit", None)
-    if wait_widget is None or not hasattr(wait_widget, "setEnabled"):
-        return
-    wait_widget.setEnabled(bool(enabled))
-
-    # Also grey-out or restore the associated label, if we can find it.
-    parent = wait_widget.parent()
-    layout = parent.layout() if parent is not None else None
-    if isinstance(layout, QFormLayout):
-        label = layout.labelForField(wait_widget)
-        if isinstance(label, QLabel):
-            label.setEnabled(bool(enabled))
+    _ = page, connect_type
 
 
 def handle_connect_type_changed(page: Any, display_text: str) -> None:
@@ -1384,46 +1109,26 @@ def handle_connect_type_changed(page: Any, display_text: str) -> None:
         _rebalance_panel(page._dut_panel)
 
     try:
-        apply_config_ui_rules(page)
+        evaluate_all_rules(page, "connect_type.type")
     except Exception:
-        logging.debug("Failed to apply config UI rules after connect type change", exc_info=True)
+        logging.debug("Failed to evaluate rules after connect type change", exc_info=True)
 
-    # 3) System section fallback: show/hide version / kernel widgets.
-    field_widgets = getattr(page, "field_widgets", {}) or {}
-    version_widget = field_widgets.get("system.version")
-    kernel_widget = field_widgets.get("system.kernel_version")
-    is_android = normalized == "Android"
-
-    if version_widget is not None:
-        if hasattr(version_widget, "setVisible"):
-            version_widget.setVisible(is_android)
-        if hasattr(version_widget, "setEnabled"):
-            version_widget.setEnabled(is_android)
-
-    if kernel_widget is not None:
-        if hasattr(kernel_widget, "setVisible"):
-            kernel_widget.setVisible(True)
-        if hasattr(kernel_widget, "isEnabled") and hasattr(kernel_widget, "setEnabled"):
-            kernel_widget.setEnabled(not is_android)
+    # 3) System section fallback removed: version and kernel widgets are now
+    # controlled solely via declarative rules.  By centralising
+    # visibility/enabled state in the rule engine, we avoid duplicating
+    # logic here and in controller code.  When the connect type changes,
+    # the rule engine will react accordingly.
 
 
 def handle_third_party_toggled(page: Any, checked: bool) -> None:
     """Central handler for Third‑party checkbox toggles (UI + rules)."""
-    enabled = bool(checked)
-    apply_third_party_ui_state(page, enabled)
-    # 重新跑一次规则，�?R02/R03 之类的效果生效�?    apply_config_ui_rules(page)
-
-
-def handle_third_party_toggled_with_permission(
-    page: Any,
-    checked: bool,
-    allow_wait_edit: bool | None,
-) -> None:
-    """Third‑party handler that honours rule engine's edit-permission flag."""
-    enabled = bool(checked)
-    if allow_wait_edit is not None:
-        enabled = enabled and bool(allow_wait_edit)
-    apply_third_party_ui_state(page, enabled)
+    # Delegate enabling/disabling of wait_seconds to the rule engine.  The
+    # rule evaluation is handled by ``evaluate_all_rules`` using the
+    # ``connect_type.third_party.enabled`` trigger field.
+    try:
+        evaluate_all_rules(page, "connect_type.third_party.enabled")
+    except Exception:
+        logging.debug("Failed to evaluate rules after third-party toggle", exc_info=True)
 
 
 def init_connect_type_actions(page: Any) -> None:
@@ -1434,191 +1139,40 @@ def init_connect_type_actions(page: Any) -> None:
     third_checkbox = field_widgets.get("connect_type.third_party.enabled")
     third_wait = field_widgets.get("connect_type.third_party.wait_seconds")
 
-    # Wire Control Type combo -> centralized handler.
+    # Store references for other helpers (rules + controller).  Actual signal
+    # wiring for connect_type / third-party is driven by the view-event table.
     if connect_combo is not None:
         setattr(page, "connect_type_combo", connect_combo)
-        if hasattr(connect_combo, "currentTextChanged"):
-            connect_combo.currentTextChanged.connect(
-                lambda text: handle_config_event(page, "connect_type_changed", text=str(text))
-            )
-        elif hasattr(connect_combo, "currentIndexChanged"):
-            connect_combo.currentIndexChanged.connect(
-                lambda _idx: handle_config_event(
-                    page,
-                    "connect_type_changed",
-                    text=connect_combo.currentText(),
-                )
-            )
-        # Apply initial UI/logic state once via unified dispatcher.
-        handle_config_event(page, "connect_type_changed", text=connect_combo.currentText())
-
-    # Wire Third‑party checkbox -> centralized handler.
     if isinstance(third_checkbox, QCheckBox):
         setattr(page, "third_party_checkbox", third_checkbox)
-        third_checkbox.toggled.connect(
-            lambda checked: handle_config_event(
-                page,
-                "third_party_toggled",
-                checked=bool(checked),
-            )
-        )
-
-    # Track Wait seconds editor.
     if third_wait is not None:
         setattr(page, "third_party_wait_edit", third_wait)
-        if isinstance(third_checkbox, QCheckBox):
-            apply_third_party_ui_state(page, third_checkbox.isChecked())
 
 
 def _bind_serial_actions(page: Any) -> None:
-    """Wire serial enabled combo to pure-UI + rule handlers."""
-    field_widgets = getattr(page, "field_widgets", {}) or {}
-    serial_status = field_widgets.get("serial_port.status")
-    if serial_status is None:
-        return
-
-    def _apply_serial(text: str) -> None:
-        """Shared helper to apply serial UI + rules."""
-        apply_serial_enabled_ui_state(page, text)
-        if hasattr(page, "_dut_panel"):
-            _rebalance_panel(page._dut_panel)
-        apply_config_ui_rules(page)
-
-    # Checkbox-based status.
-    if isinstance(serial_status, QCheckBox):
-        def _on_serial_toggled(checked: bool) -> None:
-            handle_config_event(
-                page,
-                "serial_status_changed",
-                text="True" if checked else "False",
-            )
-
-        serial_status.toggled.connect(_on_serial_toggled)
-        _on_serial_toggled(serial_status.isChecked())
-        return
-
-    # Combo-based status (fallback for older UIs).
-    if hasattr(serial_status, "currentTextChanged"):
-        def _on_serial_changed(text: str) -> None:
-            handle_config_event(
-                page,
-                "serial_status_changed",
-                text=str(text),
-            )
-
-        serial_status.currentTextChanged.connect(_on_serial_changed)
-        _on_serial_changed(serial_status.currentText())
+    """Serial wiring is handled by the view-event table."""
+    _ = page
 
 
 def _bind_rf_rvr_actions(page: Any) -> None:
-    """Wire RF / RvR related combos to the unified dispatcher."""
-    field_widgets = getattr(page, "field_widgets", {}) or {}
-    # DEBUG PRINT: show field widget keys when binding RF/RvR actions
-
-    rf_model = field_widgets.get("rf_solution.model")
-    rvr_tool = field_widgets.get("rvr.tool") or field_widgets.get("rvr.tool_name")
-
-    if rf_model is not None and hasattr(rf_model, "currentTextChanged"):
-        def _on_rf_model_changed(text: str) -> None:
-            # DEBUG PRINT: RF model changed event (remove after debugging)
-            handle_config_event(
-                page,
-                "rf_model_changed",
-                model_text=str(text),
-            )
-
-        rf_model.currentTextChanged.connect(_on_rf_model_changed)
-        # Apply initial RF model visibility based on the preloaded value so
-        # that only the active model's fields are shown on first load.
-        try:
-            # DEBUG PRINT: initial RF model apply (remove after debugging)
-            try:
-                cnt = rf_model.count() if hasattr(rf_model, 'count') else 'N/A'
-            except Exception:
-                pass
-            handle_config_event(
-                page,
-                "rf_model_changed",
-                model_text=rf_model.currentText(),
-            )
-        except Exception:
-            logging.debug("Failed to apply initial RF model UI state", exc_info=True)
-
-    if rvr_tool is not None and hasattr(rvr_tool, "currentTextChanged"):
-        rvr_tool.currentTextChanged.connect(
-            lambda text: handle_config_event(
-                page,
-                "rvr_tool_changed",
-                tool_text=str(text),
-            )
-        )
-        # Apply initial tool selection (iperf / ixchariot) so that IxChariot
-        # path enabled/disabled state matches the combo value on first load.
-        try:
-            handle_config_event(
-                page,
-                "rvr_tool_changed",
-                tool_text=rvr_tool.currentText(),
-            )
-        except Exception:
-            logging.debug("Failed to apply initial RvR tool UI state", exc_info=True)
+    """RF / RvR wiring is handled by the view-event table."""
+    _ = page
 
 
 def _bind_turntable_actions(page: Any) -> None:
-    """Wire Turntable model combo to pure UI state for its IP field."""
-    field_widgets = getattr(page, "field_widgets", {}) or {}
+    """Turntable field behaviour is driven by the simple rule engine.
 
-    tt_model = field_widgets.get("Turntable.model")
-    tt_ip = field_widgets.get("Turntable.ip_address")
-
-    # Resolve and cache the IP LineEdit and its label so that the shared
-    # apply_turntable_model_ui_state helper can manipulate them.
-    if tt_ip is not None and hasattr(tt_ip, "parent"):
-        parent = tt_ip.parent()
-        layout = parent.layout() if parent is not None else None
-        label = layout.labelForField(tt_ip) if isinstance(layout, QFormLayout) else None
-        if label is not None:
-            setattr(page, "turntable_ip_edit", tt_ip)
-            setattr(page, "turntable_ip_label", label)
-
-    if tt_model is not None and hasattr(tt_model, "currentTextChanged"):
-        tt_model.currentTextChanged.connect(
-            lambda text: apply_turntable_model_ui_state(page, str(text))
-        )
-        # Apply initial model selection so that Turntable IP is only
-        # editable when the user chooses the "other" model.
-        try:
-            apply_turntable_model_ui_state(page, tt_model.currentText())
-        except Exception:
-            logging.debug("Failed to apply initial Turntable UI state", exc_info=True)
+    The generic simple-rule wiring in :class:`CaseConfigPage` connects the
+    ``Turntable.model`` combo to the rule engine, so no extra per-field
+    wiring is required here.  This function is kept as a placeholder to
+    avoid breaking the refresh pipeline.
+    """
+    return
 
 
 def _bind_router_actions(page: Any) -> None:
-    """Wire router selection and address edits to the unified dispatcher."""
-    field_widgets = getattr(page, "field_widgets", {}) or {}
-
-    router_name = field_widgets.get("router.name")
-    router_addr = field_widgets.get("router.address")
-
-    # Router name combo -> update router object + address widget + routerInfoChanged.
-    if router_name is not None and hasattr(router_name, "currentTextChanged"):
-        router_name.currentTextChanged.connect(
-            lambda name: handle_config_event(
-                page,
-                "router_name_changed",
-                name=str(name),
-            )
-        )
-
-    # Router address edit -> keep router_obj.address + signal in sync.
-    if router_addr is not None and hasattr(router_addr, "textChanged"):
-        router_addr.textChanged.connect(
-            lambda text: handle_config_event(
-                page,
-                "router_address_changed",
-                address=str(text),
-            )
-        )
+    """Router wiring is handled by the view-event table."""
+    _ = page
 
 
 def _bind_csv_actions(page: Any) -> None:
@@ -1727,10 +1281,9 @@ def _bind_run_actions(page: Any) -> None:
 
 
 __all__ = [
-    "apply_rf_model_ui_state",
     "apply_rvr_tool_ui_state",
+    "apply_ui",
     "apply_serial_enabled_ui_state",
-    "apply_turntable_model_ui_state",
     "apply_run_lock_ui_state",
     "refresh_config_page_controls",
     "init_fpga_dropdowns",
@@ -1738,9 +1291,7 @@ __all__ = [
     "refresh_fpga_projects",
     "update_fpga_hidden_fields",
     "apply_connect_type_ui_state",
-    "apply_third_party_ui_state",
     "handle_connect_type_changed",
     "handle_third_party_toggled",
-    "handle_third_party_toggled_with_permission",
     "update_script_config_ui",
 ]
