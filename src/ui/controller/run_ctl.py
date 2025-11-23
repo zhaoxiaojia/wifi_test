@@ -378,9 +378,12 @@ def _init_worker_env(
         f"--resultpath={report_dir}",
         case_path,
     ]
-    plan = load_stability_plan()
-    pytest_args = _apply_exitfirst_flags(pytest_args, plan)
+
+    # Only apply stability retry/exit-first flags for stability cases.
     is_stability_case = is_stability_case_path(case_path)
+    plan = load_stability_plan() if is_stability_case else None
+    pytest_args = _apply_exitfirst_flags(pytest_args, plan)
+
     return _WorkerContext(
         case_path=case_path,
         queue=q,

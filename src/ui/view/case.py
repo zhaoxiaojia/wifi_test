@@ -269,6 +269,20 @@ class RvrWifiConfigPage(CardWidget):
         self.headers, self.rows = self._load_csv()
         self.refresh_table()
 
+    def _save_csv(self) -> None:
+        """Persist current rows back to the CSV file."""
+        if not self.csv_path:
+            return
+        try:
+            fieldnames = list(self.headers)
+            with open(self.csv_path, "w", newline="", encoding="utf-8") as handle:
+                writer = csv.DictWriter(handle, fieldnames=fieldnames)
+                writer.writeheader()
+                for row in self.rows:
+                    writer.writerow({h: row.get(h, "") for h in fieldnames})
+        except Exception:
+            logging.exception("Failed to save Wi-Fi CSV to %s", self.csv_path)
+
     def reload_router(self) -> None:
         try:
             (self.router, self.router_name) = self._load_router()
@@ -362,6 +376,7 @@ class RvrWifiConfigPage(CardWidget):
                 item = QTableWidgetItem()
                 self.table.setItem(row_index, c + 1, item)
             item.setText(row[h])
+        self._save_csv()
 
     def refresh_table(self) -> None:
         self.table.clear()
@@ -402,6 +417,19 @@ class RvrWifiConfigPage(CardWidget):
         if item is not None and item.flags() & Qt.ItemIsUserCheckable:
             checked = row.get("tx") == "1" or row.get("rx") == "1"
             item.setCheckState(Qt.Checked if checked else Qt.Unchecked)
+        for key in ("tx", "rx"):
+            if key not in row:
+                continue
+            try:
+                col = self.headers.index(key)
+            except ValueError:
+                continue
+            cell = self.table.item(row_index, col + 1)
+            if cell is None:
+                cell = QTableWidgetItem()
+                self.table.setItem(row_index, col + 1, cell)
+            cell.setText(row[key])
+        self._save_csv()
 
     def _sync_rows(self) -> None:
         self._collect_table_data()
@@ -471,17 +499,18 @@ class RvrWifiConfigPage(CardWidget):
                     item.setCheckState(Qt.Checked)
 
             with ExitStack() as stack:
-                for w in (
-                    self.band_combo,
-                    self.wireless_combo,
-                    self.channel_combo,
+                  for w in (
+                      self.band_combo,
+                      self.wireless_combo,
+                      self.channel_combo,
                     self.bandwidth_combo,
                     self.auth_combo,
-                    self.passwd_edit,
-                    self.ssid_edit,
-                ):
-                    stack.enter_context(QSignalBlocker(w))
-                self._update_band_options(band)
+                      self.passwd_edit,
+                      self.ssid_edit,
+                  ):
+                      stack.enter_context(QSignalBlocker(w))
+                  self._update_band_options(band)
+                  self.band_combo.setCurrentText(band)
 
             with QSignalBlocker(self.wireless_combo):
                 self.wireless_combo.setCurrentText(data.get("wireless_mode", ""))

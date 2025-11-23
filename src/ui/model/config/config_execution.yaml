@@ -10,12 +10,12 @@ rf_solution:
   RC4DAT-8G-95:
     idProduct: '35'
     idVendor: '8398'
-    ip_address: 192.168.56.75
+    ip_address: 192.168.1.101
   LDA-908V-8:
     ip_address: 192.168.5.200
     channels: '1'
   model: RC4DAT-8G-95
-  step: 0,75:1
+  step: 0,10:5
 rvr:
   iperf:
     path: ''
@@ -25,7 +25,7 @@ rvr:
     path: D:/Program Files (x86)/Ixia/IxChariot
   repeat: '0'
   throughput_threshold: '0'
-  tool: ixchariot
+  tool: iperf
   enable_wpa3: false
 router:
   name: xiaomibe7000
@@ -66,3 +66,4 @@ cases:
     router_csv: C:\Users\SH171300-1522\PycharmProjects\wifi_test\config\performance_test_csv\rvr_wifi_setup.csv
     manual_entries:
     - '[]'
+csv_path: performance_test_csv/rvr_wifi_setup_demo.csv
