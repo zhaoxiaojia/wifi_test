@@ -122,6 +122,18 @@ class MainWindow(FluentWindow):
             self.caseConfigPage.csvFileChanged.connect(
                 self.rvr_wifi_config_page.on_csv_file_changed
             )
+            # Also apply any CSV selection that was restored from the
+            # persisted config on startup so that the Case page content
+            # matches the Execution panel combo before the user edits it.
+            initial_csv = getattr(self.caseConfigPage, "selected_csv_path", None)
+            if initial_csv:
+                try:
+                    self.rvr_wifi_config_page.on_csv_file_changed(initial_csv)
+                except Exception:
+                    logging.debug(
+                        "Failed to apply initial CSV to RvrWifiConfigPage",
+                        exc_info=True,
+                    )
         except Exception:
             logging.debug(
                 "Failed to connect csvFileChanged to RvrWifiConfigPage",

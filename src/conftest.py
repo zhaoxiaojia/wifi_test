@@ -93,7 +93,7 @@ def _maybe_generate_project_report() -> None:
     Conditionally generate a Wi‑Fi performance Excel report at session end.
 
     Behavior:
-        - Only runs when pytest.config['fpga']['customer'] is 'XIAOMI' (case‑insensitive).
+        - Only runs when pytest.config['project']['customer'] is 'XIAOMI' (case‑insensitive).
         - If a single Wi‑Fi test type was selected (RVR/RVO/PERFORMANCE), force the
           report to that type for clearer labeling.
         - Writes the report file to `pytest.testResult.logdir` with a timestamped name.
@@ -102,7 +102,7 @@ def _maybe_generate_project_report() -> None:
         Logs success/failure and exceptions; never raises to the caller.
     """
     config = getattr(pytest, "config", {}) or {}
-    fpga_cfg = config.get("fpga") or {}
+    fpga_cfg = config.get("project") or {}
     customer = str(fpga_cfg.get("customer", "")).strip().upper()
     if customer != "XIAOMI":
         return
@@ -177,7 +177,7 @@ def pytest_sessionstart(session):
     pytest.config = load_config(refresh=True) or {}
 
     # Connection type setup
-    pytest.chip_info = pytest.config.get('fpga')
+    pytest.chip_info = pytest.config.get('project')
     connect_cfg = pytest.config.get('connect_type') or {}
     connect_type_value = connect_cfg.get('type', 'Android')
     if isinstance(connect_type_value, str):

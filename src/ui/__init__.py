@@ -82,7 +82,6 @@ def load_page_config(page: QWidget) -> dict[str, Any]:
     """
     try:
         config = load_config(refresh=True) or {}
-
         app_base = Path(get_src_base()).resolve()
         changed = False
         path = config.get("text_case", "")

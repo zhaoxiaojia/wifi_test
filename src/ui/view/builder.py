@@ -19,6 +19,7 @@ from qfluentwidgets import ComboBox, LineEdit
 from src.util.constants import get_model_config_base, TURN_TABLE_MODEL_RS232
 from src.ui.model.options import get_field_choices
 from src.ui.view.config.config_switch_wifi import SwitchWifiManualEditor
+from src.ui.view.common import RfStepSegmentsWidget
 
 import yaml
 
@@ -175,6 +176,16 @@ def _create_widget(page: Any, spec: FieldSpec, value: Any) -> QWidget:
             ".switch_wifi.manual_entries"
         ):
             return SwitchWifiManualEditor(page)
+        # RF Solution step editor uses a dedicated composite widget that
+        # manages start/stop/step segments with Add/Del controls.
+        if spec.key == "rf_solution.step":
+            widget = RfStepSegmentsWidget(page)
+            try:
+                widget.load_from_raw(value)
+            except Exception:
+                # Fall back to default empty segments on parse failure.
+                pass
+            return widget
 
     # Default: line edit or combo box.
     if wtype == "line_edit":
@@ -194,7 +205,13 @@ def _create_widget(page: Any, spec: FieldSpec, value: Any) -> QWidget:
             combo.addItem(str(choice), str(choice))
         if value not in (None, ""):
             text = str(value)
+            # Prefer userData matches when available; fall back to a
+            # text-based lookup so that persisted values such as
+            # "Android 11" or "RS232Board5" are restored correctly even
+            # when ComboBox.findData does not recognise the string.
             idx = combo.findData(text)
+            if idx < 0:
+                idx = combo.findText(text)
             if idx >= 0:
                 combo.setCurrentIndex(idx)
             elif combo.count():
@@ -285,7 +302,13 @@ def build_groups_from_schema(
 
             # Register widget in page.field_widgets.
             logical_key = key
-            page.field_widgets[logical_key] = widget
+            # For the Stability panel we want the "Selected Test Case"
+            # widget to use a stability-qualified key only, so that the
+            # Execution panel's ``text_case`` field remains the canonical
+            # mapping for load/save logic. Other stability fields keep the
+            # plain key for rule lookups.
+            if not (panel_key == "stability" and logical_key == "text_case"):
+                page.field_widgets[logical_key] = widget
             if panel_key == "stability":
                 stability_key = f"stability.{logical_key}"
                 page.field_widgets[stability_key] = widget

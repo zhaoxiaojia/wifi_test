@@ -14,6 +14,7 @@ from qfluentwidgets import LineEdit, ComboBox
 
 from src.util.constants import WIFI_PRODUCT_PROJECT_MAP, ANDROID_KERNEL_MAP
 from src.ui.model.rules import normalize_connect_type_label, current_connect_type, evaluate_all_rules
+from src.ui.model.autosave import autosave_config
 from src.ui.view.builder import build_groups_from_schema, load_ui_schema
 from src.ui.view import bind_view_events
 from src.ui.view.config.config_switch_wifi import (
@@ -206,6 +207,111 @@ def _rebalance_panel(panel: Any) -> None:
         logging.debug("Failed to rebalance config panel", exc_info=True)
 
 
+def _bind_autosave_field_events(page: Any) -> None:
+    """Wire generic field-change signals to the autosave decorator entry.
+
+    This helper connects common widget signals (textChanged, toggled,
+    valueChanged, currentIndexChanged) for all widgets registered in
+    ``page.field_widgets`` to the unified :func:`handle_config_event`
+    dispatcher using a lightweight ``field_changed`` event.  The actual
+    persistence work is performed by the :func:`autosave_config`
+    decorator in ``src.ui.model.autosave``.
+
+    Only edits that occur while the page is *not* in a refresh pass
+    (``page._refreshing``) will trigger autosave, so rule-driven
+    programmatic updates do not cause redundant writes.
+    """
+    if getattr(page, "_autosave_bound", False):
+        return
+    setattr(page, "_autosave_bound", True)
+
+    field_widgets = getattr(page, "field_widgets", {}) or {}
+
+    # Local imports avoid hard dependencies at module import time.
+    try:
+        from src.ui.view.common import RfStepSegmentsWidget
+    except Exception:  # pragma: no cover - defensive: widget not available
+        RfStepSegmentsWidget = None  # type: ignore[assignment]
+    try:
+        from src.ui.view.config.config_switch_wifi import SwitchWifiManualEditor
+    except Exception:  # pragma: no cover - defensive
+        SwitchWifiManualEditor = None  # type: ignore[assignment]
+
+    for field_key, widget in field_widgets.items():
+        if widget is None:
+            continue
+
+        def _make_handler(key: str):
+            def _on_changed(*_args: Any) -> None:
+                # Skip autosave while the page is performing a refresh so
+                # that rule-driven widget updates do not cause spurious
+                # config writes.
+                if getattr(page, "_refreshing", False):
+                    return
+                handle_config_event(page, "field_changed", field=key)
+
+            return _on_changed
+
+        handler = _make_handler(field_key)
+
+        # Custom composite widgets: wire their internal edits/buttons.
+        if RfStepSegmentsWidget is not None and isinstance(widget, RfStepSegmentsWidget):
+            for attr in ("start_edit", "stop_edit", "step_edit"):
+                edit = getattr(widget, attr, None)
+                if edit is not None and hasattr(edit, "textChanged"):
+                    edit.textChanged.connect(handler)
+            for attr in ("add_btn", "del_btn"):
+                btn = getattr(widget, attr, None)
+                if btn is not None and hasattr(btn, "clicked"):
+                    btn.clicked.connect(handler)
+            seg_list = getattr(widget, "segment_list", None)
+            if seg_list is not None and hasattr(seg_list, "currentRowChanged"):
+                seg_list.currentRowChanged.connect(handler)
+            continue
+
+        # QFluent ComboBox: connect both index and text change signals so
+        # autosave is triggered regardless of which signal the widget emits.
+        try:
+            from qfluentwidgets import ComboBox as FluentComboBox  # type: ignore
+        except Exception:  # pragma: no cover - defensive
+            FluentComboBox = None  # type: ignore[assignment]
+        if FluentComboBox is not None and isinstance(widget, FluentComboBox):
+            if hasattr(widget, "currentIndexChanged"):
+                widget.currentIndexChanged.connect(handler)
+            if hasattr(widget, "currentTextChanged"):
+                widget.currentTextChanged.connect(handler)
+            continue
+
+        if SwitchWifiManualEditor is not None and isinstance(widget, SwitchWifiManualEditor):
+            for attr in ("ssid_edit", "password_edit"):
+                edit = getattr(widget, attr, None)
+                if edit is not None and hasattr(edit, "textChanged"):
+                    edit.textChanged.connect(handler)
+            combo = getattr(widget, "security_combo", None)
+            if combo is not None and hasattr(combo, "currentIndexChanged"):
+                combo.currentIndexChanged.connect(handler)
+            for attr in ("add_btn", "del_btn"):
+                btn = getattr(widget, attr, None)
+                if btn is not None and hasattr(btn, "clicked"):
+                    btn.clicked.connect(handler)
+            continue
+
+        # Standard widgets: prefer high-level change notifications.
+        if hasattr(widget, "toggled"):
+            widget.toggled.connect(handler)
+            continue
+        if hasattr(widget, "currentIndexChanged"):
+            widget.currentIndexChanged.connect(handler)
+            continue
+        if hasattr(widget, "valueChanged") and not hasattr(widget, "currentText"):
+            widget.valueChanged.connect(handler)
+            continue
+        if hasattr(widget, "textChanged"):
+            widget.textChanged.connect(handler)
+            continue
+
+
+@autosave_config
 def handle_config_event(page: Any, event: str, **payload: Any) -> None:
     """Unified entry point for all Config-page UI events.
 
@@ -408,6 +514,11 @@ def handle_config_event(page: Any, event: str, **payload: Any) -> None:
         handle_switch_wifi_router_csv_changed(page, index)
         return
 
+    if event == "field_changed":
+        # Generic field-change events are used purely to drive the
+        # autosave decorator; no additional view behaviour is required.
+        return
+
     if event in {
         "stability_exitfirst_changed",
         "stability_ping_changed",
@@ -568,7 +679,7 @@ def refresh_config_page_controls(page: Any) -> None:
         config.setdefault("system", {})["kernel_version"] = linux_cfg.pop("kernel_version")
 
     if config_ctl is not None:
-        config["fpga"] = config_ctl.normalize_fpga_section(config.get("fpga"))
+        config["project"] = config_ctl.normalize_project_section(config.get("project"))
 
     if config_ctl is not None:
         config["stability"] = config_ctl.normalize_stability_settings(
@@ -627,6 +738,10 @@ def refresh_config_page_controls(page: Any) -> None:
         bind_view_events(page, "config", handle_config_event)
     except Exception:
         logging.debug("bind_view_events(config) failed", exc_info=True)
+
+    # Finally, attach generic autosave wiring so that any widget edit on
+    # the Config page is persisted via the unified decorator-based flow.
+    _bind_autosave_field_events(page)
 
 
 def set_available_pages(page: Any, page_keys: list[str]) -> None:
@@ -926,15 +1041,15 @@ def init_fpga_dropdowns(view: Any) -> None:
 
     for key, widget in field_widgets.items():
         logical = str(key).strip().lower()
-        if not logical.startswith("fpga."):
+        if not logical.startswith("project."):
             continue
         if not hasattr(widget, "currentTextChanged"):
             continue
-        if logical == "fpga.customer":
+        if logical == "project.customer":
             customer_combo = widget
-        elif logical == "fpga.product_line":
+        elif logical == "project.product_line":
             product_combo = widget
-        elif logical == "fpga.project":
+        elif logical == "project.project":
             project_combo = widget
 
     if not (customer_combo and product_combo and project_combo):
@@ -967,11 +1082,25 @@ def init_fpga_dropdowns(view: Any) -> None:
     product_combo.currentTextChanged.connect(_on_product_changed)
     project_combo.currentTextChanged.connect(_on_project_changed)
 
-    # Initial population based on current selections.
-    initial_customer = customer_combo.currentText()
-    refresh_fpga_product_lines(view, initial_customer)
-    initial_product = product_combo.currentText()
-    refresh_fpga_projects(view, initial_customer, initial_product)
+    # Initial population based on persisted project configuration so that
+    # the first display matches YAML values.
+    config = getattr(view, "config", {}) or {}
+    project_cfg = config.get("project") or {}
+
+    target_customer = str(project_cfg.get("customer") or customer_combo.currentText() or "").strip()
+    if target_customer:
+        customer_combo.setCurrentText(target_customer)
+    refresh_fpga_product_lines(view, target_customer)
+
+    target_product = str(project_cfg.get("product_line") or product_combo.currentText() or "").strip()
+    if target_product:
+        product_combo.setCurrentText(target_product)
+    refresh_fpga_projects(view, target_customer, target_product)
+
+    target_project = str(project_cfg.get("project") or project_combo.currentText() or "").strip()
+    if target_project:
+        project_combo.setCurrentText(target_project)
+
     update_fpga_hidden_fields(view)
 
     setattr(view, "_fpga_dropdowns_wired", True)
@@ -1030,7 +1159,7 @@ def update_fpga_hidden_fields(page: Any) -> None:
     info: dict[str, Any] | None = None
     config_ctl = getattr(page, "config_ctl", None)
     if product and project and config_ctl is not None:
-        guessed_customer, guessed_product, guessed_project, guessed_info = config_ctl._guess_fpga_project(  # type: ignore[attr-defined]
+        guessed_customer, guessed_product, guessed_project, guessed_info = config_ctl._find_project_in_map(  # type: ignore[attr-defined]
             "",
             "",
             "",
@@ -1073,13 +1202,13 @@ def update_fpga_hidden_fields(page: Any) -> None:
     setattr(page, "_fpga_details", normalized)
     config = getattr(page, "config", None)
     if isinstance(config, dict):
-        config["fpga"] = dict(normalized)
+        config["project"] = dict(normalized)
 
     field_widgets = getattr(page, "field_widgets", {}) or {}
     for key, field_key in (
-        ("main_chip", "fpga.main_chip"),
-        ("wifi_module", "fpga.wifi_module"),
-        ("interface", "fpga.interface"),
+        ("main_chip", "project.main_chip"),
+        ("wifi_module", "project.wifi_module"),
+        ("interface", "project.interface"),
     ):
         widget = field_widgets.get(field_key)
         if widget is not None and hasattr(widget, "setText"):

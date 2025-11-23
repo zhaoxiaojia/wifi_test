@@ -388,10 +388,14 @@ class CaseConfigPage(ConfigView):
         self.config_ctl = ConfigController(self)
 
         # Load the persisted tool configuration and restore CSV selection.
+        # load_initial_config populates ``self.config`` and, when possible,
+        # initialises ``self.selected_csv_path`` from the stored csv_path.
         self.config: dict[str, Any] = self.config_ctl.load_initial_config()
 
         # Transient state flags used during refreshes and selections.
-        self.selected_csv_path: str | None = None
+        # Do not clobber selected_csv_path here so that any value restored
+        # from config remains available for initial combo population.
+        self.selected_csv_path: str | None = getattr(self, "selected_csv_path", None)
         self._refreshing = False
         self._pending_path: str | None = None
 

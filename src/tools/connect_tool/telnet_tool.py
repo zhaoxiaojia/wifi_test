@@ -97,7 +97,7 @@ class FastNegotiationTelnetClient(TelnetClient):
             This method does not return a value.
         """
         super().begin_negotiation()
-        self._complete_negotiation_if_ready()
+        _complete_negotiation_if_ready(self)
 
     def data_received(self, data):  # noqa: D401 reuse base class documentation
         """
@@ -116,7 +116,7 @@ class FastNegotiationTelnetClient(TelnetClient):
             Description of the return value.
         """
         super().data_received(data)
-        self._complete_negotiation_if_ready()
+        _complete_negotiation_if_ready(self)
 
     def check_negotiation(self, final=False):  # noqa: D401 reuse base class documentation
         """
@@ -134,7 +134,7 @@ class FastNegotiationTelnetClient(TelnetClient):
         Any
             Description of the return value.
         """
-        if self._negotiation_settled(final):
+        if _negotiation_settled(self, final):
             """
             Data received.
     
@@ -200,6 +200,16 @@ def _complete_negotiation_if_ready(self):
             self._tasks.remove(check_later)
 
     self._waiter_connected.set_result(weakref.proxy(self))
+
+
+# Attach helper functions as methods on the fast client so that
+# attribute lookups used by telnetlib3 callbacks succeed even when
+# the underlying TelnetClient implementation does not provide these
+# helpers natively.
+FastNegotiationTelnetClient._negotiation_settled = _negotiation_settled  # type: ignore[attr-defined]
+FastNegotiationTelnetClient._complete_negotiation_if_ready = (  # type: ignore[attr-defined]
+    _complete_negotiation_if_ready
+)
 
 
 class telnet_tool(dut):

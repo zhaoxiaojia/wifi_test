@@ -104,7 +104,8 @@ DUT_CONFIG_FILENAME: Final[str] = "config_dut.yaml"
 EXECUTION_CONFIG_FILENAME: Final[str] = "config_execution.yaml"
 DUT_SECTION_KEYS: Final[frozenset[str]] = frozenset({
     "connect_type",
-    "fpga",
+    # Project / Wi‑Fi chipset configuration (formerly "fpga").
+    "project",
     "serial_port",
     "software_info",
     "hardware_info",
@@ -114,6 +115,9 @@ DUT_SECTION_KEYS: Final[frozenset[str]] = frozenset({
 })
 CONFIG_KEY_ALIASES: Final[dict[str, str]] = {
     "dut": "connect_type",
+    # Backwards‑compatibility: legacy top-level "fpga" section is now
+    # normalised as "project" in the merged config.
+    "fpga": "project",
 }
 TOOL_SECTION_KEY: Final[str] = "tool"
 TOOL_CONFIG_FILENAME: Final[str] = "config_tool.yaml"

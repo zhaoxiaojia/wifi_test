@@ -287,8 +287,6 @@ class RvrWifiConfigPage(CardWidget):
         if not path:
             return
         logging.debug("CSV file changed: %s", path)
-        # DEBUG_PRINT: verify Case page CSV wiring during refactor
-        print("[DEBUG:CasePage] on_csv_file_changed path =", path)
         self.csv_path = Path(path).resolve()
         logging.debug("Resolved CSV path: %s", self.csv_path)
         self.reload_csv()

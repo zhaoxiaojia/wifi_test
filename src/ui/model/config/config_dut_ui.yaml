@@ -55,25 +55,25 @@ panels:
             minimum: 1
             maximum: 999999
 
-      - id: fpga
+      - id: project
         label: "Project"
         fields:
-          - key: fpga.customer
+          - key: project.customer
             widget: combo_box
             label: "Customer"
-          - key: fpga.product_line
+          - key: project.product_line
             widget: combo_box
             label: "Product Line"
-          - key: fpga.project
+          - key: project.project
             widget: combo_box
             label: "Project"
-          - key: fpga.main_chip
+          - key: project.main_chip
             widget: line_edit
             label: "Main Chip"
-          - key: fpga.wifi_module
+          - key: project.wifi_module
             widget: line_edit
             label: "Wi-Fi Module"
-          - key: fpga.interface
+          - key: project.interface
             widget: line_edit
             label: "Interface"
 

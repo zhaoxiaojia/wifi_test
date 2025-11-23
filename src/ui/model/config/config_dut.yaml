@@ -10,18 +10,19 @@ connect_type:
   Android:
     device: '69512800000000611'
   Linux:
-    ip: 192.168.56.12
+    ip: 192.168.1.102
+    wildcard: ''
   third_party:
     enabled: false
     wait_seconds: 45
   type: Android
-fpga:
+project:
   customer: XIAOMI
-  product_line: TV
-  project: Blueplanet
-  main_chip: T963D4
-  wifi_module: W2
-  interface: USB
+  product_line: OTT
+  project: OB7
+  main_chip: S805X3
+  wifi_module: W1U
+  interface: SDIO
 serial_port:
   baud: '9600'
   port: COM14 (蓝牙链接上的标准串行 (COM14))

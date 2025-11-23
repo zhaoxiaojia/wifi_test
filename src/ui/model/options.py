@@ -72,8 +72,9 @@ _FIELD_CHOICE_SOURCES: dict[str, Callable[[], Sequence[str]]] = {
     "Turntable.model": _turntable_model_choices,
     # Router selection
     "router.name": _router_name_choices,
-    # FPGA customer selection (product line / project remain driven by WIFI_PRODUCT_PROJECT_MAP)
-    "fpga.customer": _fpga_customer_choices,
+    # Project / Wi-Fi chipset customer selection (product line / project
+    # remain driven by WIFI_PRODUCT_PROJECT_MAP).
+    "project.customer": _fpga_customer_choices,
 }
 
 

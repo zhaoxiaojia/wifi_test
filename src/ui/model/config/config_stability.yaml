@@ -12,20 +12,20 @@ cases:
       enabled: false
       on_duration: '5'
       off_duration: '5'
-      relay_type: usb_relay
-      relay_params: []
       port: ''
       mode: 'NO'
-    str:
-      enabled: true
-      on_duration: '15'
-      off_duration: '15'
       relay_type: usb_relay
       relay_params: []
+    str:
+      enabled: true
+      on_duration: '14'
+      off_duration: '15'
       port: COM14 (蓝牙链接上的标准串行 (COM14))
       mode: 'NO'
+      relay_type: usb_relay
+      relay_params: []
   test_switch_wifi:
     use_router: false
     router_csv: performance_test_csv/rvr_wifi_setup.csv
     manual_entries: []
-text_case: ''
+text_case: test/performance/test_wifi_rvr.py

@@ -54,12 +54,12 @@ from src.ui.controller.case_ctl import (
     _update_rvr_nav_button as _proxy_update_rvr_nav_button,
     _open_rvr_wifi_config as _proxy_open_rvr_wifi_config,
 )
-from src.ui.view.common import ScriptConfigEntry, TestFileFilterModel
+from src.ui.view.common import ScriptConfigEntry, TestFileFilterModel, RfStepSegmentsWidget
 from src.ui.view.config.config_switch_wifi import (
     normalize_switch_wifi_manual_entries,
     SwitchWifiManualEditor,
 )
-from src.ui.view.config.config_str import script_field_key, RfStepSegmentsWidget
+from src.ui.view.config.config_str import script_field_key
 from src.ui.controller import show_info_bar
 
 if TYPE_CHECKING:  # pragma: no cover - circular import guard
@@ -235,7 +235,7 @@ class ConfigController:
         interface = parts[1] if len(parts) > 1 and parts[1] else ""
         return wifi_module.upper(), interface.upper()
 
-    def _guess_fpga_project(
+    def _find_project_in_map(
         self,
         wifi_module: str,
         interface: str,
@@ -245,7 +245,7 @@ class ConfigController:
         product_line: str = "",
         project: str = "",
     ) -> tuple[str, str, str, Optional[dict[str, str]]]:
-        """Match FPGA selections against known customer/product/project data."""
+        """Resolve project metadata from WIFI_PRODUCT_PROJECT_MAP."""
         wifi_upper = wifi_module.strip().upper()
         interface_upper = interface.strip().upper()
         chip_upper = main_chip.strip().upper()
@@ -276,8 +276,14 @@ class ConfigController:
                     return customer_name, product_name, project_name, info
         return "", "", "", None
 
-    def normalize_fpga_section(self, raw_value: Any) -> dict[str, str]:
-        """Normalise FPGA configuration into structured token fields."""
+    def normalize_project_section(self, raw_value: Any) -> dict[str, str]:
+        """Normalise project configuration into structured token fields.
+
+        The persisted source of truth is the (customer, product_line,
+        project) triple chosen by the user.  ``wifi_module``,
+        ``interface`` and ``main_chip`` are derived from
+        :data:`WIFI_PRODUCT_PROJECT_MAP` when a matching entry exists.
+        """
         normalized = {
             "customer": "",
             "product_line": "",
@@ -290,45 +296,35 @@ class ConfigController:
             customer = self.normalize_fpga_token(raw_value.get("customer"))
             product_line = self.normalize_fpga_token(raw_value.get("product_line"))
             project = self.normalize_fpga_token(raw_value.get("project"))
-            main_chip = self.normalize_fpga_token(raw_value.get("main_chip"))
-            wifi_module = raw_value.get("wifi_module") or raw_value.get("series") or ""
-            interface = raw_value.get("interface") or ""
             normalized.update(
                 {
                     "customer": customer,
                     "product_line": product_line,
                     "project": project,
-                    "main_chip": main_chip,
-                    "wifi_module": self.normalize_fpga_token(wifi_module),
-                    "interface": self.normalize_fpga_token(interface),
                 }
             )
-            guessed_customer, guessed_product, guessed_project, info = self._guess_fpga_project(
-                normalized["wifi_module"],
-                normalized["interface"],
-                main_chip,
+            # Derive details from the project triple when possible; do not
+            # overwrite the triple itself so YAML remains the source of truth.
+            _, _, _, info = self._find_project_in_map(
+                "",
+                "",
+                "",
                 customer=customer,
                 product_line=product_line,
                 project=project,
             )
-            if guessed_customer:
-                normalized["customer"] = guessed_customer
-            if guessed_product:
-                normalized["product_line"] = guessed_product
-            if guessed_project:
-                normalized["project"] = guessed_project
             if info:
-                if not normalized["main_chip"]:
-                    normalized["main_chip"] = self.normalize_fpga_token(info.get("main_chip"))
-                if not normalized["wifi_module"]:
-                    normalized["wifi_module"] = self.normalize_fpga_token(info.get("wifi_module"))
-                if not normalized["interface"]:
-                    normalized["interface"] = self.normalize_fpga_token(info.get("interface"))
+                normalized["main_chip"] = self.normalize_fpga_token(info.get("main_chip"))
+                normalized["wifi_module"] = self.normalize_fpga_token(info.get("wifi_module"))
+                normalized["interface"] = self.normalize_fpga_token(info.get("interface"))
         elif isinstance(raw_value, str):
+            # Legacy string format: attempt to resolve project triple from
+            # encoded wifi_module/interface and derive details accordingly.
             wifi_module, interface = self._split_legacy_fpga_value(raw_value)
-            normalized["wifi_module"] = wifi_module
-            normalized["interface"] = interface
-            customer, product, project, info = self._guess_fpga_project(wifi_module, interface)
+            customer, product, project, info = self._find_project_in_map(
+                wifi_module,
+                interface,
+            )
             if customer:
                 normalized["customer"] = customer
             if product:
@@ -749,7 +745,7 @@ class ConfigController:
             elif isinstance(widget, QCheckBox):
                 ref[leaf] = widget.isChecked()
         if hasattr(page, "_fpga_details"):
-            page.config["fpga"] = dict(page._fpga_details)
+            page.config["project"] = dict(page._fpga_details)
         base = Path(self.get_application_base())
         case_display = page.field_widgets.get("text_case")
         display_text = case_display.text().strip() if isinstance(case_display, LineEdit) else ""

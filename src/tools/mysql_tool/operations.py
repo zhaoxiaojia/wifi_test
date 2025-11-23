@@ -869,19 +869,7 @@ def _normalize_upper_token(value: Any) -> Optional[str]:
 
 
 def _split_fpga(value: Any) -> tuple[Optional[str], Optional[str]]:
-    """
-    Split fpga.
-
-    Parameters
-    ----------
-    value : Any
-        Value to sanitize, normalize, or convert.
-
-    Returns
-    -------
-    tuple[Optional[str], Optional[str]]
-        A value of type ``tuple[Optional[str], Optional[str]]``.
-    """
+    """Split project/fpga configuration into wifi_module and interface."""
     if isinstance(value, Mapping):
         module_value = value.get("wifi_module", value.get("series"))
         interface_value = value.get("interface")
@@ -1036,7 +1024,7 @@ def _build_dut_payload(config: Mapping[str, Any]) -> Dict[str, Any]:
     android = _extract_first(config, "android_system") or _extract_first(config, "android")
     connect_section = _extract_first(config, "connect_type")
     connect = connect_section if isinstance(connect_section, Mapping) else {}
-    wifi_details = _resolve_wifi_product_details(config.get("fpga"))
+    wifi_details = _resolve_wifi_product_details(config.get("project"))
     connect_type_value = _normalize_str_token(connect.get("type"))
     normalized_connect_type = _normalize_lower_token(connect_type_value)
     if normalized_connect_type in {"android", "adb"}:

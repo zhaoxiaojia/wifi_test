@@ -748,7 +748,7 @@ CUSTOM_TESTCASE_UI_RULES.append(
     SimpleRuleSpec(
         trigger_field="testcase.selection",
         effects=[
-            # Always-editable DUT fields: connect_type / router / serial / fpga / system.
+            # Always-editable DUT fields: connect_type / router / serial / project / system.
             SimpleFieldEffect(
                 target_field="connect_type.type",
                 action="enable",
@@ -780,17 +780,17 @@ CUSTOM_TESTCASE_UI_RULES.append(
                 condition=lambda values: True,
             ),
             SimpleFieldEffect(
-                target_field="fpga.customer",
+                target_field="project.customer",
                 action="enable",
                 condition=lambda values: True,
             ),
             SimpleFieldEffect(
-                target_field="fpga.product_line",
+                target_field="project.product_line",
                 action="enable",
                 condition=lambda values: True,
             ),
             SimpleFieldEffect(
-                target_field="fpga.project",
+                target_field="project.project",
                 action="enable",
                 condition=lambda values: True,
             ),
@@ -884,17 +884,17 @@ CUSTOM_TESTCASE_UI_RULES.append(
                 condition=lambda values: True,
             ),
             SimpleFieldEffect(
-                target_field="fpga.main_chip",
+                target_field="project.main_chip",
                 action="disable",
                 condition=lambda values: True,
             ),
             SimpleFieldEffect(
-                target_field="fpga.wifi_module",
+                target_field="project.wifi_module",
                 action="disable",
                 condition=lambda values: True,
             ),
             SimpleFieldEffect(
-                target_field="fpga.interface",
+                target_field="project.interface",
                 action="disable",
                 condition=lambda values: True,
             ),

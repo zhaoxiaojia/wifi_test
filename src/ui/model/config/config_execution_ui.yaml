@@ -27,6 +27,9 @@ panels:
       - id: rf_solution
         label: "RF Solution"
         fields:
+          - key: rf_solution.step
+            widget: custom
+            label: "Step"
           - key: rf_solution.model
             widget: combo_box
             label: "RF Model"
