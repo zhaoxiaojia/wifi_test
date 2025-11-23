@@ -190,6 +190,20 @@ class RvrWifiConfigPage(CardWidget):
         else:
             self.reset_form()
 
+        # By default the Case page should not show any case-specific
+        # content until a suitable test case (e.g. Performance/RvR)
+        # has been selected by the Config page.
+        self.view.setVisible(False)
+
+    def set_case_content_visible(self, visible: bool) -> None:
+        """Show or hide the RvR Wi-Fi UI for the current case."""
+        try:
+            self.view.setVisible(bool(visible))
+        except Exception:
+            # Best-effort guard – avoid breaking navigation if the
+            # widget hierarchy has been torn down.
+            logging.debug("set_case_content_visible failed", exc_info=True)
+
     # --- router / CSV helpers -------------------------------------------------
 
     def _compute_csv_path(self, router_name: str | None = None) -> Path:
@@ -273,6 +287,8 @@ class RvrWifiConfigPage(CardWidget):
         if not path:
             return
         logging.debug("CSV file changed: %s", path)
+        # DEBUG_PRINT: verify Case page CSV wiring during refactor
+        print("[DEBUG:CasePage] on_csv_file_changed path =", path)
         self.csv_path = Path(path).resolve()
         logging.debug("Resolved CSV path: %s", self.csv_path)
         self.reload_csv()
@@ -367,6 +383,12 @@ class RvrWifiConfigPage(CardWidget):
                 self.table.setItem(r, c + 1, item)
 
         self.table.clearSelection()
+        if self.rows:
+            # Ensure there is a valid current row so that the form
+            # controls can be initialised from the first CSV entry.
+            # Without this, currentRow() may be -1 and the combo boxes
+            # (wireless/channel/bandwidth) stay empty.
+            self.table.setCurrentCell(0, 0)
         self._load_row_to_form(ensure_checked=True)
 
     def _update_tx_rx(self) -> None:

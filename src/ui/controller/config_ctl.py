@@ -1221,7 +1221,23 @@ class ConfigController:
         page = self.page
         if hasattr(page, "csv_combo"):
             page.csv_combo.setEnabled(True)
+        # Keep the RvR navigation button state in sync with CSV/router
+        # configuration, but do not disable the Case button for
+        # non‑performance cases – the Case page itself decides what
+        # content to show for the active testcase.
         self.update_rvr_nav_button()
+
+        # Drive the Case page content from the current EditableInfo:
+        # when RvR Wi‑Fi is enabled for the selected testcase, show the
+        # RvrWifiConfigPage UI; otherwise keep the Case page empty.
+        main_window = page.window()
+        if main_window is not None:
+            rvr_page = getattr(main_window, "rvr_wifi_config_page", None)
+            if rvr_page is not None and hasattr(rvr_page, "set_case_content_visible"):
+                try:
+                    rvr_page.set_case_content_visible(bool(snapshot.enable_rvr_wifi))
+                except Exception:
+                    logging.debug("Failed to update case-page visibility", exc_info=True)
 
     def restore_editable_state(self) -> None:
         """Re-apply last EditableInfo snapshot."""

@@ -12,11 +12,13 @@ from __future__ import annotations
 from pathlib import Path
 from contextlib import suppress
 import logging
+import json
 
 from PyQt5.QtCore import QEvent, Qt, QTimer, QEasingCurve
 from PyQt5.QtGui import QTextCursor
 from PyQt5.QtWidgets import QApplication, QFrame, QHBoxLayout, QLabel, QTextEdit, QVBoxLayout
 from qfluentwidgets import CardWidget, PushButton, StrongBodyLabel
+from PyQt5 import sip
 
 from src.util.constants import get_src_base
 from src.ui.controller.run_ctl import CaseRunner

@@ -283,12 +283,20 @@ def _update_switch_wifi_preview(
 
 
 def _update_rvr_nav_button(page: "CaseConfigPage") -> None:
-    """Enable or disable the RVR navigation button based on CSV state."""
+    """Ensure the RVR navigation button is available.
+
+    The Case button itself stays enabled once the user is logged in;
+    CSV/router state only affects what the Case page shows, not whether
+    the sidebar entry is clickable.
+    """
     main_window = page.window()
     if hasattr(main_window, "rvr_nav_button"):
-        allow_case = bool(getattr(page, "_enable_rvr_wifi", False) and page.selected_csv_path)
-        router_mode = bool(getattr(page, "_router_config_active", False) and page.selected_csv_path)
-        main_window.rvr_nav_button.setEnabled(allow_case or router_mode)
+        btn = getattr(main_window, "rvr_nav_button", None)
+        if btn is not None:
+            try:
+                btn.setEnabled(True)
+            except Exception:
+                logging.debug("Failed to enable RVR nav button", exc_info=True)
 
 
 def _open_rvr_wifi_config(page: "CaseConfigPage") -> None:
@@ -320,4 +328,3 @@ __all__ = [
     "_update_rvr_nav_button",
     "_open_rvr_wifi_config",
 ]
-

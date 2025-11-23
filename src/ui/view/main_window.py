@@ -115,6 +115,18 @@ class MainWindow(FluentWindow):
 
         self.caseConfigPage = CaseConfigPage(self.on_run)
         self.rvr_wifi_config_page = RvrWifiConfigPage()
+
+        # Keep RvR Wi‑Fi Case page in sync with the selected CSV from
+        # the Config page.
+        try:
+            self.caseConfigPage.csvFileChanged.connect(
+                self.rvr_wifi_config_page.on_csv_file_changed
+            )
+        except Exception:
+            logging.debug(
+                "Failed to connect csvFileChanged to RvrWifiConfigPage",
+                exc_info=True,
+            )
         self.run_page = RunPage("", parent=self)
         # Ensure run page starts empty
         self.run_page.reset()
@@ -208,6 +220,10 @@ class MainWindow(FluentWindow):
             self.sidebar_nav_buttons["about"]: True,
         }
         self._nav_logged_in_states = dict(self._nav_logged_out_states)
+        # After login, the Case button should be enabled by default;
+        # the Case page itself decides what, if anything, to show for
+        # the current testcase.
+        self._nav_logged_in_states[self.sidebar_nav_buttons["case"]] = True
         self._apply_nav_enabled(self._nav_logged_out_states)
         self.setCurrentIndex(self.caseConfigPage)
 
@@ -686,15 +702,6 @@ class MainWindow(FluentWindow):
                     self.rvr_wifi_config_page.config_ctl.lock_for_running(False)
                 if getattr(self, "rvr_wifi_config_page", None):
                     self.rvr_wifi_config_page.set_readonly(False)
-                if self.rvr_nav_button and not sip.isdeleted(self.rvr_nav_button):
-                    case_path_local = getattr(self.run_page, "case_path", "")
-                    config_ctl = getattr(self.rvr_wifi_config_page, "config_ctl", None)
-                    is_perf = (
-                        config_ctl.is_performance_case(case_path_local)
-                        if config_ctl is not None
-                        else False
-                    )
-                    self.rvr_nav_button.setEnabled(bool(is_perf))
 
             self._runner_finished_slot = _on_runner_finished
             runner.finished.connect(self._runner_finished_slot)
@@ -726,15 +733,6 @@ class MainWindow(FluentWindow):
             self.rvr_wifi_config_page.set_readonly(False)
         if hasattr(self.rvr_wifi_config_page, "set_readonly"):
             self.rvr_wifi_config_page.set_readonly(False)
-        if self.rvr_nav_button and not sip.isdeleted(self.rvr_nav_button):
-            case_path = getattr(self.run_page, "case_path", "")
-            config_ctl = getattr(self.rvr_wifi_config_page, "config_ctl", None)
-            is_perf = (
-                config_ctl.is_performance_case(case_path)
-                if config_ctl is not None
-                else False
-            )
-            self.rvr_nav_button.setEnabled(bool(is_perf))
         logging.info("Switched to CaseConfigPage")
 
     def enable_report_page(self, report_dir: str) -> None:

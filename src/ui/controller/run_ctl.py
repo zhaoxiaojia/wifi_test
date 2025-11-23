@@ -304,6 +304,54 @@ class CaseRunner(QThread):
         messages.append(payload)
         return messages
 
+    def _prepare_python_log_path(self) -> str | None:
+        """Return a writable python.log path for the worker process."""
+        try:
+            base_dir = Path(Paths.BASE_DIR) / "report" / "python_logs"
+            base_dir.mkdir(parents=True, exist_ok=True)
+            temp_dir = Path(tempfile.mkdtemp(prefix="python_log_", dir=str(base_dir)))
+            return str(temp_dir / "python.log")
+        except Exception as exc:
+            logging.warning("Failed to create python log path: %s", exc)
+            return None
+
+    def _try_copy_python_log(self) -> list[str]:
+        """Copy python.log into the report directory once the process finishes."""
+        messages: list[str] = []
+        if self._python_log_copied or not self._python_log_path:
+            return messages
+        if self._proc and self._proc.is_alive():
+            return messages
+        src = Path(self._python_log_path)
+        if not src.exists():
+            self._python_log_copied = True
+            return messages
+        target_dir = Path(self._report_dir) if self._report_dir else Path(Paths.BASE_DIR) / "report"
+        try:
+            target_dir.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            self._python_log_copied = True
+            return messages
+        target = target_dir / "python.log"
+        if target.exists():
+            import datetime
+
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+            target = target_dir / f"python_{timestamp}.log"
+        try:
+            shutil.copy2(src, target)
+        except Exception as exc:
+            messages.append(
+                f"<b style='{STYLE_BASE} color:red;'>Failed to copy python.log: {exc}</b>"
+            )
+            self._python_log_copied = True
+            return messages
+        self._python_log_copied = True
+        messages.append(
+            f"<span style='{STYLE_BASE} color:{TEXT_COLOR};'>Python log saved to {target}</span>"
+        )
+        return messages
+
 
 def _init_worker_env(
     case_path: str, q: multiprocessing.Queue, log_file_path_str: str | None
@@ -516,54 +564,6 @@ class _WorkerContext:
         self.is_stability_case = is_stability_case
         self.plan = plan
         self.log_session = log_session
-
-    def _prepare_python_log_path(self) -> str | None:
-        """Return a writable python.log path for the worker process."""
-        try:
-            base_dir = Path(Paths.BASE_DIR) / "report" / "python_logs"
-            base_dir.mkdir(parents=True, exist_ok=True)
-            temp_dir = Path(tempfile.mkdtemp(prefix="python_log_", dir=str(base_dir)))
-            return str(temp_dir / "python.log")
-        except Exception as exc:
-            logging.warning("Failed to create python log path: %s", exc)
-            return None
-
-    def _try_copy_python_log(self) -> list[str]:
-        """Copy python.log into the report directory once the process finishes."""
-        messages: list[str] = []
-        if self._python_log_copied or not self._python_log_path:
-            return messages
-        if self._proc and self._proc.is_alive():
-            return messages
-        src = Path(self._python_log_path)
-        if not src.exists():
-            self._python_log_copied = True
-            return messages
-        target_dir = Path(self._report_dir) if self._report_dir else Path(Paths.BASE_DIR) / "report"
-        try:
-            target_dir.mkdir(parents=True, exist_ok=True)
-        except Exception:
-            self._python_log_copied = True
-            return messages
-        target = target_dir / "python.log"
-        if target.exists():
-            import datetime
-
-            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-            target = target_dir / f"python_{timestamp}.log"
-        try:
-            shutil.copy2(src, target)
-        except Exception as exc:
-            messages.append(
-                f"<b style='{STYLE_BASE} color:red;'>Failed to copy python.log: {exc}</b>"
-            )
-            self._python_log_copied = True
-            return messages
-        self._python_log_copied = True
-        messages.append(
-            f"<span style='{STYLE_BASE} color:{TEXT_COLOR};'>Python log saved to {target}</span>"
-        )
-        return messages
 
 
 __all__ = ["reset_wizard_after_run", "LiveLogWriter", "CaseRunner"]
