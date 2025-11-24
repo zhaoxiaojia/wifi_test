@@ -723,6 +723,11 @@ class ConfigController:
             elif isinstance(widget, RfStepSegmentsWidget):
                 ref[leaf] = widget.serialize()
             elif isinstance(widget, SwitchWifiConfigPage):
+                # When router CSV preview is active, do not overwrite the
+                # persisted manual_entries with the preview list from CSV.
+                # Only commit entries when router-config preview is inactive.
+                if getattr(page, "_router_config_active", False):
+                    continue
                 ref[leaf] = widget.serialize()
             elif isinstance(widget, ComboBox):
                 data_val = widget.currentData()

@@ -1,4 +1,4 @@
-"""Switch Wi-Fi specific widgets and helpers for the Config page."""
+﻿"""Switch Wi-Fi specific widgets and helpers for the Config page."""
 
 from __future__ import annotations
 
@@ -114,8 +114,7 @@ class SwitchWifiConfigPage(QWidget):
         super().showEvent(event)
         parent = self.parentWidget()
         layout = parent.layout() if parent else None
-        # 保留简单的父布局调整逻辑，不再输出详细调试信息。
-        _ = layout  # silence linters
+        # 淇濈暀绠€鍗曠殑鐖跺竷灞€璋冩暣閫昏緫锛屼笉鍐嶈緭鍑鸿缁嗚皟璇曚俊鎭€?        _ = layout  # silence linters
 
     # ------------------------------------------------------------------
     # Public API
@@ -250,14 +249,39 @@ def sync_switch_wifi_on_csv_changed(page: Any, new_path: str | None) -> None:
             entries = config_ctl.load_switch_wifi_entries(new_path)
         except Exception:
             entries = []
+        print("[DEBUG switch_wifi] sync_on_csv_changed show entries from CSV len=", len(entries or []))
+        # 仅刷新展示，不写回配置，避免覆盖 YAML。
         wifi_list.set_entries(entries)
+    use_router, router_csv, wifi_list = _resolve_switch_wifi_widgets(page)
+    is_router_mode = bool(isinstance(use_router, QCheckBox) and use_router.isChecked())
+    if not is_router_mode:
+        return
+
+    config_ctl = getattr(page, "config_ctl", None)
+    if isinstance(router_csv, ComboBox) and config_ctl is not None:
         try:
-            config_ctl.sync_switch_wifi_manual_entries_from_csv(new_path)
+            normalized = config_ctl.normalize_csv_path(new_path)
+            idx = config_ctl.find_csv_index(normalized, router_csv)
         except Exception:
-            logging.debug(
-                "Failed to sync switch_wifi manual_entries from Execution CSV change",
-                exc_info=True,
-            )
+            idx = -1
+        if idx >= 0:
+            try:
+                with QSignalBlocker(router_csv):
+                    router_csv.setCurrentIndex(idx)
+            except Exception:
+                logging.debug(
+                    "Failed to sync switch_wifi router_csv from Execution CSV change",
+                    exc_info=True,
+                )
+
+    if isinstance(wifi_list, SwitchWifiConfigPage) and config_ctl is not None:
+        try:
+            entries = config_ctl.load_switch_wifi_entries(new_path)
+        except Exception:
+            entries = []
+        print("[DEBUG switch_wifi] sync_on_csv_changed show entries from CSV len=", len(entries or []))
+        # 仅刷新展示，不写回配置，避免覆盖 YAML。
+        wifi_list.set_entries(entries)
 
 
 def handle_switch_wifi_use_router_changed(page: Any, checked: bool) -> None:
@@ -271,6 +295,7 @@ def handle_switch_wifi_use_router_changed(page: Any, checked: bool) -> None:
             router_csv.setVisible(bool(checked))
 
     config_ctl = getattr(page, "config_ctl", None)
+    csv_path: str | None = None
 
     if checked and router_csv is not None and hasattr(router_csv, "currentIndex"):
         try:
@@ -297,28 +322,23 @@ def handle_switch_wifi_use_router_changed(page: Any, checked: bool) -> None:
                         "Failed to emit csvFileChanged for switch_wifi router mode",
                         exc_info=True,
                     )
-            # Router 模式下，列表显示 CSV 内容，同时把 manual_entries 与之同步。
+            # Router 模式下仅展示 CSV 内容，不写回配置。
             if isinstance(wifi_list, SwitchWifiConfigPage) and config_ctl is not None:
                 try:
                     entries = config_ctl.load_switch_wifi_entries(csv_path)
                 except Exception:
                     entries = []
+                print("[DEBUG switch_wifi] use_router=True show CSV entries len=", len(entries or []))
                 wifi_list.set_entries(entries)
-                try:
-                    config_ctl.sync_switch_wifi_manual_entries_from_csv(csv_path)
-                except Exception:
-                    logging.debug(
-                        "Failed to sync switch_wifi manual_entries from router CSV",
-                        exc_info=True,
-                    )
     else:
-        # 非 router 模式时，列表回退到稳定性配置中的 manual_entries。
+        # 退出 router 模式时，列表回退到稳定性配置中的 manual_entries。
         if isinstance(wifi_list, SwitchWifiConfigPage):
             cfg = getattr(page, "config", {}) or {}
             stability = cfg.get("stability", {}) if isinstance(cfg, dict) else {}
             cases = stability.get("cases", {}) if isinstance(stability, dict) else {}
             case_cfg = cases.get("test_switch_wifi", {}) if isinstance(cases, dict) else {}
             entries = case_cfg.get(SWITCH_WIFI_MANUAL_ENTRIES_FIELD, [])
+            print("[DEBUG switch_wifi] use_router=False restore YAML entries len=", len(entries or []))
             wifi_list.set_entries(entries)
     if config_ctl is not None:
         try:
@@ -355,15 +375,13 @@ def handle_switch_wifi_router_csv_changed(page: Any, index: int) -> None:
             logging.debug("Failed to emit csvFileChanged from switch_wifi", exc_info=True)
 
     if isinstance(wifi_list, SwitchWifiConfigPage) and config_ctl is not None:
-        entries = config_ctl.load_switch_wifi_entries(csv_path)
-        wifi_list.set_entries(entries)
         try:
-            config_ctl.sync_switch_wifi_manual_entries_from_csv(csv_path)
+            entries = config_ctl.load_switch_wifi_entries(new_path)
         except Exception:
-            logging.debug(
-                "Failed to sync switch_wifi manual_entries from CSV change",
-                exc_info=True,
-            )
+            entries = []
+        print("[DEBUG switch_wifi] sync_on_csv_changed show entries from CSV len=", len(entries or []))
+        # 仅刷新展示，不写回配置，避免覆盖 YAML。
+        wifi_list.set_entries(entries)
     if config_ctl is not None:
         try:
             setattr(page, "_router_config_active", bool(csv_path))
@@ -420,3 +438,7 @@ __all__ = [
     "handle_switch_wifi_router_csv_changed",
     "init_switch_wifi_actions",
 ]
+
+
+
+
