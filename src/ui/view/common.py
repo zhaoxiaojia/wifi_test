@@ -208,17 +208,20 @@ class ConfigGroupPanel(QWidget):
     content changes and the panel will adjust spacing accordingly.
     """
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(self, parent: QWidget | None = None, *, columns: int = 3) -> None:
         super().__init__(parent)
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(GROUP_ROW_SPACING)
         self._column_layouts: list[QVBoxLayout] = []
-        for _ in range(3):
+        columns = max(1, int(columns))
+        for index in range(columns):
             column = QVBoxLayout()
             column.setSpacing(GROUP_COLUMN_SPACING)
             column.setAlignment(Qt.AlignTop)
-            layout.addLayout(column, 1)
+            # 为稳定性页预留更宽的左侧列：当列数为 2 时，将第 0 列权重设为 2。
+            stretch = 2 if columns == 2 and index == 0 else 1
+            layout.addLayout(column, stretch)
             self._column_layouts.append(column)
         self._group_entries: list[tuple[QWidget, int | None]] = []
         self._group_positions: dict[QWidget, int] = {}
@@ -243,6 +246,10 @@ class ConfigGroupPanel(QWidget):
         """Add a group widget to the panel, optionally deferring layout."""
         if group is None:
             return
+        try:
+            _title = group.title()
+        except Exception:
+            _title = "<no-title>"
         apply_theme(group)
         apply_groupbox_style(group)
         # Ensure groups are visible when (re)added; clear() may have hidden them.
@@ -258,6 +265,42 @@ class ConfigGroupPanel(QWidget):
 
     def set_groups(self, groups: list[QWidget]) -> None:
         """Replace all groups with ``groups`` and rebalance layout."""
+        # 对于两列布局（当前用于 Stability 页），我们希望严格控制：
+        # 第一个分组永远在左列，其余分组都在右列，避免自动“平衡高度”导致脚本组乱跳。
+        if len(self._column_layouts) == 2:
+            try:
+                titles = [g.title() for g in groups if hasattr(g, "title")]
+            except Exception:
+                titles = ["<error>"]
+            self.setUpdatesEnabled(False)
+            try:
+                # 清空现有列布局，但保留 group 的父子关系。
+                for column in self._column_layouts:
+                    while column.count():
+                        item = column.takeAt(0)
+                        widget = item.widget()
+                        if widget is not None:
+                            widget.hide()
+                self._group_entries = []
+                self._group_positions.clear()
+                self._col_weight = [0] * len(self._column_layouts)
+                # 按顺序记录 entries，并固定列号：index 0 -> 左列，其他 -> 右列。
+                for idx, group in enumerate(groups):
+                    if group is None:
+                        continue
+                    column_index = 0 if idx == 0 else 1
+                    self._column_layouts[column_index].addWidget(group)
+                    group.show()
+                    # 用 height=1 占位即可，后续不再依赖高度平衡。
+                    self._group_entries.append((group, 1))
+                    self._group_positions[group] = column_index
+                    self._col_weight[column_index] += 1
+                self.updateGeometry()
+            finally:
+                self.setUpdatesEnabled(True)
+            return
+
+        # 其它布局（如 DUT / Execution）仍使用通用的平衡算法。
         self.setUpdatesEnabled(False)
         try:
             self.clear()
@@ -318,12 +361,34 @@ class ConfigGroupPanel(QWidget):
             entries.append((group, h))
         if not entries:
             return
-        # On the very first pass, sort by height so that the initial
-        # layout balances column heights. On subsequent passes, keep
-        # the original group order and only adjust within-column
-        # layout so that groups no longer jump between columns when
-        # their height changes (for example, when fields are hidden
-        # by rules).
+        try:
+            _titles = [(g.title() if hasattr(g, "title") else "<no-title>", h) for g, h in entries]
+        except Exception:
+            _titles = ["<error>"]
+        # 特殊处理：稳定性页目前只有两列，逻辑上希望“第一个 group 在左列，其余 group 在右列”，
+        # 避免脚本组和共用组在列间来回跳动。这里直接按顺序分配列，忽略高度平衡。
+        if len(self._column_layouts) == 2:
+            for layout in self._column_layouts:
+                while layout.count():
+                    item = layout.takeAt(0)
+                    widget = item.widget()
+                    if widget is not None:
+                        widget.hide()
+            self._col_weight = [0] * len(self._column_layouts)
+            self._group_positions.clear()
+            for idx, (group, height) in enumerate(entries):
+                column_index = 0 if idx == 0 else 1
+                self._column_layouts[column_index].addWidget(group)
+                group.show()
+                self._col_weight[column_index] += height
+                self._group_positions[group] = column_index
+                try:
+                    title = group.title()
+                except Exception:
+                    title = "<no-title>"
+            self.updateGeometry()
+            return
+        # 默认：三列布局仍按高度平衡。
         if initial_pass:
             entries.sort(key=lambda item: item[1], reverse=True)
         for layout in self._column_layouts:

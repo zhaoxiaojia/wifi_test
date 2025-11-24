@@ -57,7 +57,7 @@ from src.ui.controller.case_ctl import (
 from src.ui.view.common import ScriptConfigEntry, TestFileFilterModel, RfStepSegmentsWidget
 from src.ui.view.config.config_switch_wifi import (
     normalize_switch_wifi_manual_entries,
-    SwitchWifiManualEditor,
+    SwitchWifiConfigPage,
 )
 from src.ui.view.config.config_str import script_field_key
 from src.ui.controller import show_info_bar
@@ -722,7 +722,7 @@ class ConfigController:
                         ref[leaf] = val
             elif isinstance(widget, RfStepSegmentsWidget):
                 ref[leaf] = widget.serialize()
-            elif isinstance(widget, SwitchWifiManualEditor):
+            elif isinstance(widget, SwitchWifiConfigPage):
                 ref[leaf] = widget.serialize()
             elif isinstance(widget, ComboBox):
                 data_val = widget.currentData()

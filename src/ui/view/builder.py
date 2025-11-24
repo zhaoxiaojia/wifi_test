@@ -18,7 +18,6 @@ from qfluentwidgets import ComboBox, LineEdit
 
 from src.util.constants import get_model_config_base, TURN_TABLE_MODEL_RS232
 from src.ui.model.options import get_field_choices
-from src.ui.view.config.config_switch_wifi import SwitchWifiManualEditor
 from src.ui.view.common import RfStepSegmentsWidget
 
 import yaml
@@ -171,11 +170,6 @@ def _create_widget(page: Any, spec: FieldSpec, value: Any) -> QWidget:
         return edit
 
     if wtype == "custom":
-        # Stability switch-wifi manual editor uses a dedicated composite widget.
-        if spec.key == "stability.cases.switch_wifi.manual_entries" or spec.key.endswith(
-            ".switch_wifi.manual_entries"
-        ):
-            return SwitchWifiManualEditor(page)
         # RF Solution step editor uses a dedicated composite widget that
         # manages start/stop/step segments with Add/Del controls.
         if spec.key == "rf_solution.step":
@@ -323,7 +317,11 @@ def build_groups_from_schema(
                 pass
 
         # If the parent looks like a ConfigGroupPanel, let it manage layout.
-        if parent is not None and hasattr(parent, "add_group"):
+        # For Stability "cases.*" sections, defer adding to the panel; these
+        # script groups are composed later (compose_stability_groups) to avoid
+        # all scripts being laid out at startup.
+        skip_panel_add = panel_key == "stability" and section_id.startswith("cases.")
+        if parent is not None and hasattr(parent, "add_group") and not skip_panel_add:
             try:
                 parent.add_group(group, defer=True)
             except Exception:

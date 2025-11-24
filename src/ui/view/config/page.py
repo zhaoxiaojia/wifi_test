@@ -40,8 +40,8 @@ from src.ui.view.config.actions import (
     refresh_config_page_controls,
     apply_ui,
 )
-from src.ui.view.config.config_str import (
-    create_test_str_config_entry_from_schema,
+from src.ui.view.config.config_str import create_test_str_config_entry_from_schema
+from src.ui.view.config import (
     create_test_switch_wifi_config_entry_from_schema,
     initialize_script_config_groups,
 )
@@ -214,7 +214,9 @@ class ConfigView(CardWidget):
         self._page_panels: dict[str, ConfigGroupPanel] = {
             "dut": ConfigGroupPanel(self),
             "execution": ConfigGroupPanel(self),
-            "stability": ConfigGroupPanel(self),
+            # 稳定性页使用两列布局：左侧给脚本用例（如 test_switch_wifi）更多空间，
+            # 右侧堆叠 Duration / Check Point / Selected Test Case。
+            "stability": ConfigGroupPanel(self, columns=2),
         }
         # Backward-compatible attributes expected by existing actions/helpers.
         # These aliases allow refresh_config_page_controls (and related helpers)

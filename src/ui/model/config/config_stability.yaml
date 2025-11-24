@@ -1,10 +1,10 @@
 duration_control:
   loop: null
   duration_hours: null
-  exitfirst: true
+  exitfirst: false
   retry_limit: 2
 check_point:
-  ping: true
+  ping: false
   ping_targets: 192.168.1.1
 cases:
   test_str:
@@ -27,5 +27,95 @@ cases:
   test_switch_wifi:
     use_router: false
     router_csv: performance_test_csv/rvr_wifi_setup.csv
-    manual_entries: []
-text_case: ''
+    manual_entries:
+    - ssid: coco_5g
+      security_mode: Open System
+      password: ''
+    - ssid: coco_5g
+      security_mode: Open System
+      password: ''
+    - ssid: coco_5g
+      security_mode: Open System
+      password: ''
+    - ssid: coco_5g
+      security_mode: Open System
+      password: ''
+    - ssid: coco_5g
+      security_mode: Open System
+      password: ''
+    - ssid: coco_5g
+      security_mode: Open System
+      password: ''
+    - ssid: coco_5g
+      security_mode: Open System
+      password: ''
+    - ssid: coco_5g
+      security_mode: Open System
+      password: ''
+    - ssid: coco_5g
+      security_mode: Open System
+      password: ''
+    - ssid: coco_5g
+      security_mode: Open System
+      password: ''
+    - ssid: coco_5g
+      security_mode: Open System
+      password: ''
+    - ssid: coco_5g
+      security_mode: Open System
+      password: ''
+    - ssid: coco_5g
+      security_mode: Open System
+      password: ''
+    - ssid: coco_5g
+      security_mode: Open System
+      password: ''
+    - ssid: coco_5g
+      security_mode: Open System
+      password: ''
+    - ssid: coco_5g
+      security_mode: Open System
+      password: ''
+    - ssid: coco_5g
+      security_mode: Open System
+      password: ''
+    - ssid: coco_5g
+      security_mode: Open System
+      password: ''
+    - ssid: coco_2g
+      security_mode: Open System
+      password: ''
+    - ssid: coco_2g
+      security_mode: Open System
+      password: ''
+    - ssid: coco_2g
+      security_mode: Open System
+      password: ''
+    - ssid: coco_2g
+      security_mode: Open System
+      password: ''
+    - ssid: coco_2g
+      security_mode: Open System
+      password: ''
+    - ssid: coco_2g
+      security_mode: Open System
+      password: ''
+    - ssid: coco_2g
+      security_mode: Open System
+      password: ''
+    - ssid: coco_2g
+      security_mode: Open System
+      password: ''
+    - ssid: coco_2g
+      security_mode: Open System
+      password: ''
+    - ssid: coco_2g
+      security_mode: Open System
+      password: ''
+    - ssid: coco_2g
+      security_mode: Open System
+      password: ''
+    - ssid: coco_2g
+      security_mode: Open System
+      password: ''
+text_case: test/stability/test_switch_wifi.py

@@ -3,10 +3,12 @@
 """
 Common UI helpers and exports for the wifi_test application.
 
-This module also defines logical identifiers and label mappings for the
-sidebar pages.  These identifiers are used as stable, code-friendly keys
-(`account`, `config`, `case`, `run`, `report`, `about`) while
-``SIDEBAR_PAGE_LABELS`` records the human‑readable text shown in the UI.
+This module defines logical identifiers and label mappings for the
+sidebar pages and provides convenience wrappers for loading/saving the
+global YAML configuration used by the UI pages.
+
+It also re-exports a small set of shared view-layer widgets so callers
+can import them from ``src.ui`` without reaching into subpackages.
 """
 
 from __future__ import annotations
@@ -16,7 +18,7 @@ from pathlib import Path
 import logging
 
 from PyQt5.QtCore import QTimer
-from PyQt5.QtWidgets import QGroupBox, QLayout, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QWidget
 from qfluentwidgets import InfoBar, InfoBarPosition
 
 from src.tools.config_loader import load_config, save_config
@@ -29,15 +31,16 @@ __all__ = [
     "save_config",
     "load_page_config",
     "save_page_config",
+    "FormListPage",
+    "CasePage",
+    "RouterConfigForm",
 ]
+
 
 # ---------------------------------------------------------------------------
 # Sidebar page identifiers and labels
 # ---------------------------------------------------------------------------
 
-# Logical sidebar page identifiers from top to bottom.  These are the
-# canonical, code‑level names that other modules should use when referring
-# to a top‑level page hosted in the FluentWindow navigation bar.
 SIDEBAR_PAGE_KEYS: Tuple[str, ...] = (
     "account",
     "config",
@@ -47,22 +50,12 @@ SIDEBAR_PAGE_KEYS: Tuple[str, ...] = (
     "about",
 )
 
-# Mapping from internal page keys to the text (and optional sub‑text)
-# presented in the navigation bar.  Keeping this centralised makes it easy
-# to adjust wording for end users without touching the rest of the UI
-# wiring.
 SIDEBAR_PAGE_LABELS: Dict[str, Tuple[str, Optional[str]]] = {
-    # Account / sign‑in area
     "account": ("Login", None),
-    # Main configuration for test cases
     "config": ("Config Setup", "Case Config"),
-    # RVR Wi‑Fi / scenario‑level configuration
     "case": ("RVR Scenario Config", "RVR Wi-Fi Config"),
-    # Test execution
     "run": ("Test", None),
-    # Report browser
     "report": ("Reports", None),
-    # About / help
     "about": ("About", None),
 }
 
@@ -71,11 +64,10 @@ def load_page_config(page: QWidget) -> dict[str, Any]:
     """
     Load configuration data for a UI page and normalise paths.
 
-    This is a UI-friendly wrapper around :func:`load_config` that:
-    - refreshes the cached YAML content from disk
-    - normalises the ``text_case`` path relative to the source base
-    - persists the normalised config back to disk when it changes
-    - shows an InfoBar on errors
+    - Refreshes the cached YAML content from disk.
+    - Normalises ``text_case`` relative to the source base.
+    - Persists the normalised config back to disk when it changes.
+    - Shows an InfoBar on errors.
 
     The resulting configuration dictionary is stored on ``page.config``
     and also returned.
@@ -141,8 +133,8 @@ def save_page_config(page: QWidget) -> dict[str, Any]:
     """
     Persist the active configuration for a UI page and reload it.
 
-    This function wraps :func:`save_config` and :func:`load_page_config`
-    with logging and InfoBar-based error reporting.
+    This wraps :func:`save_config` and :func:`load_page_config` with
+    logging and InfoBar-based error reporting.
     """
     data = getattr(page, "config", None)
     logging.debug("[save] data=%s", data)
@@ -164,3 +156,9 @@ def save_page_config(page: QWidget) -> dict[str, Any]:
             ),
         )
         return getattr(page, "config", {}) or {}
+
+
+# Re-export shared view widgets so callers can use ``src.ui`` as a stable
+# entry point without depending on the view package structure.
+from src.ui.view import FormListPage, CasePage, RouterConfigForm  # noqa: E402,F401
+

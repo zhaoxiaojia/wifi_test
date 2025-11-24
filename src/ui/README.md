@@ -4,14 +4,14 @@ All new UI work under `src/ui` must follow the **Model / View / Controller**
 structure described here. Before you touch any UI code, **read this file
 first**.
 
-The goals are:
+Goals:
 
 - Keep data description (Model), widgets/layout (View), and behaviour/I/O
   (Controller) clearly separated.
 - Drive as much UI behaviour as possible from **YAML + rules**, not ad‑hoc
   Python in the view layer.
-- Make the signal/slot wiring predictable so future changes are easy to
-  reason about.
+- Make signal/slot wiring predictable so future changes are easy to reason
+  about.
 
 ---
 
@@ -22,9 +22,9 @@ The goals are:
 - Location: `src/ui/model/`
 - Purpose: describe *what* can be configured and how fields are grouped.
 - Typical files:
-  - `config_dut.yaml`, `config_execution.yaml`, `config_stability.yaml`  
+  - `config_dut.yaml`, `config_execution.yaml`, `config_stability.yaml`
     (persisted config values)
-  - `config_dut_ui.yaml`, `config_execution_ui.yaml`, `config_stability_ui.yaml`  
+  - `config_dut_ui.yaml`, `config_execution_ui.yaml`, `config_stability_ui.yaml`
     (UI schema: panels/sections/fields)
   - `options.py` (dynamic choice lists for comboboxes)
   - `rules.py` (declarative UI rules and helpers)
@@ -41,7 +41,7 @@ data and rule definitions.
   - `view/config/page.py` – `ConfigView`, `CaseConfigPage`
   - `view/builder.py` – schema‑driven widget builder
   - `view/config/actions.py` – wiring helpers and complex view glue
-  - `view/common.py` – shared widgets, `EditableInfo`, animations
+  - `view/common.py` – shared widgets (`EditableInfo`, `RfStepSegmentsWidget`, etc.).
 
 Other pages (`account.py`, `run.py`, `case.py`, `report.py`, `about.py`,
 `main_window.py`) follow the same pattern: the view owns geometry and
@@ -58,11 +58,11 @@ Views must not:
 - Location: `src/ui/controller/`
 - Purpose: own non‑trivial behaviour and I/O for each page.
 - Important modules:
-  - `controller/config_ctl.py` – Config lifecycle, case tree, stability helpers
-  - `controller/case_ctl.py` – RvR Wi‑Fi CSV helpers and switch‑Wi‑Fi plumbing
-  - `controller/run_ctl.py` – pytest orchestration and logging
-  - `controller/report_ctl.py` – report discovery and plotting
-  - `controller/account_ctl.py`, `controller/about_ctl.py` – login/about
+  - `controller/config_ctl.py` – Config lifecycle, case tree, stability helpers.
+  - `controller/case_ctl.py` – RvR Wi‑Fi CSV helpers and switch‑Wi‑Fi plumbing.
+  - `controller/run_ctl.py` – pytest orchestration and logging.
+  - `controller/report_ctl.py` – report discovery and plotting.
+  - `controller/account_ctl.py`, `controller/about_ctl.py` – login/about.
 
 Controllers operate on view instances passed from the caller. They may:
 
@@ -94,9 +94,10 @@ Loading and saving is handled by helpers in `src/ui/__init__.py` and
 
 - `ConfigController.load_initial_config()`
   - Calls `load_page_config(page)` to populate `page.config`.
-  - Normalises sections (connect_type / fpga / stability).
+  - Normalises sections (connect_type / project / stability).
 - `ConfigController.save_config()`
-  - Collects current values from the view and writes YAML back to disk.
+  - Collects current values from the view (`sync_widgets_to_config`) and
+    writes YAML back to disk.
 
 ### 2.2 UI schema YAML (layout)
 
@@ -106,7 +107,7 @@ The *structure* of the Config page is described in:
 - `config_execution_ui.yaml`
 - `config_stability_ui.yaml`
 
-Each schema file defines:
+Each schema file defines panels and sections:
 
 - `panels.dut.sections[].fields[]`
 - `panels.execution.sections[].fields[]`
@@ -114,10 +115,10 @@ Each schema file defines:
 
 Fields specify:
 
-- `key`: dotted config key (e.g. `connect_type.type`)
-- `widget`: widget type (`line_edit`, `combo_box`, `checkbox`, `spin`, `custom`)
-- `label`: user‑visible label
-- `placeholder`, `minimum`, `maximum`, `choices`: extra hints
+- `key`: dotted config key (e.g. `connect_type.type`).
+- `widget`: widget type (`line_edit`, `combo_box`, `checkbox`, `spin`, `custom`).
+- `label`: user‑visible label.
+- `placeholder`, `minimum`, `maximum`, `choices`: extra hints.
 
 The **schema never contains Qt code**. It only describes layout and field
 metadata.
@@ -127,127 +128,51 @@ metadata.
 The builder in `src/ui/view/builder.py` is the only place that turns schema
 into widgets:
 
-- `load_ui_schema(section: str)`
-  - Chooses `config_dut_ui.yaml`, `config_execution_ui.yaml` or
-    `config_stability_ui.yaml` and loads it.
-- `build_groups_from_schema(page, config, ui_schema, panel_key, parent)`
-  - For each section in the schema:
+- `load_ui_schema(section: str)` chooses the appropriate UI schema file.
+- `build_groups_from_schema(page, config, ui_schema, panel_key, parent)`:
+  - For each section:
     - Creates a `QGroupBox` and `QFormLayout`.
     - For each field, creates the appropriate widget (`LineEdit`, `ComboBox`,
       `QCheckBox`, `QSpinBox`, `SwitchWifiManualEditor`, etc.).
     - Uses `get_field_choices(field_key)` from `options.py` when the schema
       does not specify static `choices`.
     - Populates initial widget values from `config`.
-    - Registers the widget in `page.field_widgets[field_key]`.
-    - Optionally registers a logical ID in `page.config_controls`.
+    - Registers widgets into `page.field_widgets[key]` for later use.
 
-`CaseConfigPage.__init__` calls `refresh_config_page_controls(self)`
-(`actions.py`), which:
+### 2.4 Options (dynamic choices)
 
-1. Normalises `page.config` via `ConfigController` helpers.
-2. Loads and builds the DUT / Execution / Stability panels using the builder.
-3. Sets `page.field_widgets` on the page.
+`src/ui/model/options.py` centralises combobox choices and complex option
+sources. The builder or rules use:
 
-At this point we have **all widgets created and mapped by field key**, but
-no dynamic behaviour yet.
+- `get_field_choices(field_key)` – return choices for a given `field_key`.
+- Helper functions for project/customer/product lines, RF models, etc.
 
-### 2.4 Rule model (`rules.py`)
+If a field’s choices depend on other config values, put that logic here.
 
-`src/ui/model/rules.py` centralises all declarative UI rules and helpers:
+### 2.5 Rules (behaviour)
 
-- `CUSTOM_SIMPLE_UI_RULES: list[SimpleRuleSpec]`
-  - New per‑field rules expressed as:
-    ```python
-    SimpleRuleSpec(
-        trigger_field="rvr.tool",
-        effects=[SimpleFieldEffect(...), ...],
-    )
-    ```
-  - Drive attribute changes such as show/hide/enable/disable/set_value and
-    set_options for individual fields.
-- `compute_editable_info(page, case_path) -> EditableInfo`
-  - Computes which fields are editable for a given test case (performance,
-    RvR, RvO, stability, script‑specific cases).
-  - Used by `ConfigController.get_editable_fields`.
-- `apply_rules(trigger_field, values, ui_adapter)`
-  - Executes all matching `SimpleRuleSpec` entries on a **UIAdapter** object
-    (the view implements `show/hide/enable/disable/set_value/set_options`).
-- `evaluate_all_rules(page, trigger_field=None)`
-  - Unified entry point:
-    - Collects current field values from widgets.
-    - If `trigger_field` is provided, evaluates `CUSTOM_SIMPLE_UI_RULES`
-      only for that field via `apply_rules`.
-    - If `trigger_field` is `None`, evaluates rules for all trigger fields
-      using the current values.
+`src/ui/model/rules.py` contains the rule engine:
 
-All rule interpretation now lives in `rules.py`; the view layer only calls
-these functions.
+- `CUSTOM_SIMPLE_UI_RULES` – declarative rules for enabling/disabling/
+  hiding fields, setting values, etc.
+- `compute_editable_info(page, case_path) -> EditableInfo` – computes which
+  sections/fields are editable for a given `text_case`.
+- `evaluate_all_rules(page, controller)` – recompute derived UI state after
+  field changes.
 
-### 2.5 View wiring (`CaseConfigPage`)
+Rules operate on generic *field adapters* (see `view/common.py`) rather
+than raw Qt widgets, so they are easy to test and extend.
 
-`src/ui/view/config/page.py` owns the Config page view:
+### 2.6 Actions (signal wiring)
 
-- After building the panels, it sets:
-  - `self.field_widgets` (from the builder)
-  - `self._field_map` (alias used by rules)
-  - `self.config_ctl = ConfigController(self)`
-  - `self._last_editable_info: EditableInfo | None`
-- `_connect_simple_rules()`:
-  - Imports `CUSTOM_SIMPLE_UI_RULES` from `rules.py`.
-  - For each `SimpleRuleSpec.trigger_field`, finds the widget in
-    `self._field_map` and connects an appropriate Qt signal to
-    `self.on_field_changed(field_id, value)`:
-    - `currentTextChanged` for combos
-    - `toggled` for checkboxes
-    - `textChanged` for line edits
-  - Immediately evaluates each rule once using the current widget value so
-    the initial UI state matches the underlying config.
-- `on_field_changed(field_id, value)`:
-  - Delegates to `evaluate_all_rules(self, field_id)`.
-  - This applies the relevant `SimpleRuleSpec` entries for that field.
-- UIAdapter methods (`show`, `hide`, `enable`, `disable`, `set_value`,
-  `set_options`):
-  - Implement the interface expected by `apply_rules`.
-  - Work with `QFormLayout` to hide/show labels together with fields.
+`src/ui/view/config/actions.py` is where widgets are connected to the
+controller and rule engine. Typical responsibilities:
 
-### 2.6 Actions layer (`actions.py`)
-
-`src/ui/view/config/actions.py` provides **wiring helpers** and complex view
-glue. It does *not* contain new low‑level show/hide/enable/disable logic;
-that is handled by rules.
-
-Key responsibilities:
-
-- `refresh_config_page_controls(page)`:
-  - Normalises `page.config` (connect_type / fpga / stability sections).
-  - Invokes the builder for each panel (`dut`, `execution`, `stability`).
-  - Binds common actions:
-    - `init_fpga_dropdowns`, `init_connect_type_actions`,
-      `init_system_version_actions`, `init_stability_actions`,
-      `init_switch_wifi_actions`, `_bind_turntable_actions`,
-      `_bind_case_tree_actions`, `_bind_csv_actions`, `_bind_run_actions`.
-    - Calls `bind_view_events(page, "config", handle_config_event)` so that
-      simple field events (connect type, third-party, serial, RF model, RvR
-      tool, router name/address, basic stability toggles) are wired via the
-      declarative event table defined in `src/ui/model/view_events.yaml`.
-  - `handle_config_event(page, event, **payload)`:
-    - Single dispatcher for Config events (case clicked, connect type changed,
-      serial status changed, RF model change, RvR tool change, CSV selection,
-      stability toggles, etc.). Most field events are declared in the view
-      event table and routed here via `bind_view_events`.
-  - For `"case_clicked"`:
-    - Updates the selected test case display.
-    - Calls `config_ctl.get_editable_fields(case_path)` to compute an
-      `EditableInfo` snapshot via `rules.compute_editable_info`.
-    - Optionally switches to the Execution or Stability tab.
-    - Calls `evaluate_all_rules(page, None)` to re‑apply case‑type rules.
-- Stability script helpers:
-  - `update_script_config_ui`, `load_script_config_into_widgets` handle
-    script‑specific layouts (e.g. `test_str`, `test_switch_wifi`) and call
-    `apply_config_ui_rules`/`evaluate_all_rules` after updates.
-- Run lock helpers:
-  - `apply_run_lock_ui_state` disables all field widgets during a run and
-    restores them afterwards using the controller.
+- Bind field change signals (`toggled`, `currentIndexChanged`, etc.) to
+  `handle_config_event(page, event, **payload)`.
+- Use `autosave_config` (see `src/ui/model/autosave.py`) to auto‑save YAML
+  when certain events occur (`field_changed`, `csv_index_changed`, etc.).
+- Apply rule evaluation after relevant events.
 
 In summary, **actions.py wires Qt signals to controllers and to
 `evaluate_all_rules`**, and hosts complex view‑only behaviour that is hard
@@ -260,8 +185,7 @@ and view wiring as follows:
 
 - `get_editable_fields(case_path) -> EditableInfo`:
   - Calls `compute_editable_info(self.page, case_path)` from `rules.py`.
-  - Applies the result to internal flags and to the view
-    (`set_fields_editable` + `_last_editable_info`).
+  - Applies the result to internal flags and to the view.
 - `apply_editable_info(info)`:
   - Stores the snapshot on the page, then calls `evaluate_all_rules` so that
     rule‑based enable/disable respects the new editable set.
@@ -362,4 +286,91 @@ For any new UI work, follow this checklist **in order**:
    heavy `getattr`, etc.) were introduced.
 
 Following this process keeps the UI predictable and maintainable as the
-application grows.*** End Patch```】【。assistanturetat to=functions.apply_patch(serializers={"json": true}) ***!
+application grows.
+
+---
+
+## 6. Developing New Test Cases (end‑to‑end)
+
+This section explains how a *pytest test module* fits into the MVC
+architecture and which pieces you normally touch when adding a new case.
+
+### 6.1 High‑level data flow
+
+For performance / RVR / RVO style tests the pipeline is:
+
+1. **Execution config YAML** (`src/ui/model/config/config_execution.yaml`)
+   - Stores `text_case` (test module path) and `csv_path` (per‑scenario CSV).
+2. **Config Execution panel** (View + Controller + Rules)
+   - `config_execution_ui.yaml` describes the “Selected Test Case”, RF
+     Solution, RVR section, etc.
+   - `ConfigController` loads/saves `config_execution.yaml` and auto‑saves
+     on every field change (see `autosave.py` and the bindings in
+     `view/config/actions.py`).
+3. **Case page** (RVR Wi‑Fi CSV editor)
+   - `RvrWifiConfigPage` renders the CSV rows as a form + table and keeps
+     its internal `rows` list in sync with the table; any change in the
+     form updates the table and writes back to CSV.
+   - `case_ctl.py` keeps `csv_path` in sync between Config and Case pages
+     and exposes helpers for other CSV‑driven case UIs.
+4. **Run page / pytest**
+   - `RunController` reads the latest config (including `text_case` and
+     `csv_path`), builds a pytest command line and spawns a worker process.
+   - The test module (`src/test/...`) imports `load_config()` or
+     `get_testdata()` to read YAML/CSV and execute the real test steps.
+
+### 6.2 Steps for a new performance / RVR‑like test
+
+When you add a new test that follows the same pattern (Config → optional
+CSV → pytest), use this checklist:
+
+1. **Create the pytest module**
+   - Place it under `src/test/performance/` or `src/test/stability/`.
+   - Reuse helpers from `src/test/performance/__init__.py` where possible
+     (`init_router`, `init_rf`, `scenario_group`, `wait_connect`, etc.).
+   - If the test is CSV‑driven, either:
+     - reuse the `Router` namedtuple + `get_testdata()` (same CSV schema as
+       RvR), or
+     - implement a dedicated CSV loader in the test package.
+2. **Expose the test from Execution config**
+   - In `config_execution.yaml`, set a default for `text_case` (e.g.
+     `test/performance/test_wifi_<name>.py` relative to `src/test`).
+   - The “Selected Test Case” group in `config_execution_ui.yaml` already
+     maps to `text_case`, so the file‑dialog selection and auto‑save logic
+     will just work.
+3. **Decide whether the Case page needs content**
+   - If the test uses the **same CSV schema** as RvR, reuse
+     `RvrWifiConfigPage`:
+       - `ConfigController._apply_editable_ui_state` calls
+         `set_case_content_visible(enable_rvr_wifi)` so that the RvR Wi‑Fi
+         page is only shown for cases that enable this feature via rules.
+       - In `rules.py` / `CUSTOM_SIMPLE_UI_RULES`, set
+         `enable_rvr_wifi=True` for the relevant `text_case` values.
+   - If the test needs a *different* per‑scenario editor:
+       - Create a new view under `src/ui/view/` (similar to
+         `RvrWifiConfigPage`) and keep it UI‑only.
+       - Add a small controller helper in `case_ctl.py` if you reuse CSV
+         discovery or combo synchronisation.
+       - Extend `MainWindow` to host the new Case page and expose a
+         `set_case_content_visible(...)` method on it.
+       - In `ConfigController._apply_editable_ui_state`, call the new Case
+         page when rules indicate that this test type is active.
+4. **Wire autosave / config usage**
+   - For Execution / DUT / Stability panels, continue to rely on the
+     central autosave decorator in `src/ui/model/autosave.py` instead of
+     hand‑calling `save_config` from random slots.
+   - For CSV‑driven Case pages, keep auto‑save inside the page:
+       - Update the in‑memory `rows` list when widgets change.
+       - Write back to CSV through a single helper (like
+         `RvrWifiConfigPage._save_csv()`).
+   - In the pytest module, read only from YAML/CSV (never from Qt widgets)
+     so tests stay decoupled from the UI.
+5. **Classify the test for reporting**
+   - If the new case should be treated as RVR/RVO/PERFORMANCE in reports,
+     update the detection logic in `src/conftest.py` (see
+     `pytest_collection_finish`) so that `pytest.selected_test_types`
+     contains the correct labels.
+   - For project‑style reports, ensure the test’s CSV layout matches the
+     expectations of `src/tools/reporting/project_report.py` or extend it
+     accordingly.
+

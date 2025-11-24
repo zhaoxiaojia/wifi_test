@@ -97,6 +97,3 @@ panels:
           - key: cases.test_switch_wifi.router_csv
             widget: combo_box
             label: "Select config csv file"
-          - key: cases.test_switch_wifi.manual_entries
-            widget: custom
-            label: "Wi-Fi list"

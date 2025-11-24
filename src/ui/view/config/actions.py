@@ -232,10 +232,6 @@ def _bind_autosave_field_events(page: Any) -> None:
         from src.ui.view.common import RfStepSegmentsWidget
     except Exception:  # pragma: no cover - defensive: widget not available
         RfStepSegmentsWidget = None  # type: ignore[assignment]
-    try:
-        from src.ui.view.config.config_switch_wifi import SwitchWifiManualEditor
-    except Exception:  # pragma: no cover - defensive
-        SwitchWifiManualEditor = None  # type: ignore[assignment]
 
     for field_key, widget in field_widgets.items():
         if widget is None:
@@ -280,20 +276,6 @@ def _bind_autosave_field_events(page: Any) -> None:
                 widget.currentIndexChanged.connect(handler)
             if hasattr(widget, "currentTextChanged"):
                 widget.currentTextChanged.connect(handler)
-            continue
-
-        if SwitchWifiManualEditor is not None and isinstance(widget, SwitchWifiManualEditor):
-            for attr in ("ssid_edit", "password_edit"):
-                edit = getattr(widget, attr, None)
-                if edit is not None and hasattr(edit, "textChanged"):
-                    edit.textChanged.connect(handler)
-            combo = getattr(widget, "security_combo", None)
-            if combo is not None and hasattr(combo, "currentIndexChanged"):
-                combo.currentIndexChanged.connect(handler)
-            for attr in ("add_btn", "del_btn"):
-                btn = getattr(widget, attr, None)
-                if btn is not None and hasattr(btn, "clicked"):
-                    btn.clicked.connect(handler)
             continue
 
         # Standard widgets: prefer high-level change notifications.
@@ -790,59 +772,72 @@ def update_script_config_ui(page: Any, case_path: str) -> None:
         page._active_script_case = case_key
         changed = True
     for key, entry in script_groups.items():
-        visible = key == case_key
-        if entry.group.isVisible() != visible:
-            entry.group.setVisible(visible)
-            changed = True
-        if visible:
-            config_ctl = getattr(page, "config_ctl", None)
-            if config_ctl is not None:
-                data = config_ctl.ensure_script_case_defaults(key, entry.case_path)
-                # Delegate actual widget population to the view-layer helper
-                try:
-                    from src.ui.view.config.actions import load_script_config_into_widgets as _view_load
+        try:
+            visible = key == case_key
+            if entry.group.isVisible() != visible:
+                entry.group.setVisible(visible)
+                changed = True
+            if visible:
+                config_ctl = getattr(page, "config_ctl", None)
+                if config_ctl is not None:
+                    data = config_ctl.ensure_script_case_defaults(key, entry.case_path)
+                    # Delegate actual widget population to the view-layer helper
+                    try:
+                        from src.ui.view.config.actions import load_script_config_into_widgets as _view_load
 
-                    _view_load(page, entry, data)
-                except Exception:
-                    try:
-                        config_ctl.load_script_config_into_widgets(entry, data)
+                        _view_load(page, entry, data)
                     except Exception:
-                        logging.debug("Failed to load script config into widgets", exc_info=True)
-            else:
-                # Fallback to page-level implementation if present
-                loader = getattr(page, "_load_script_config_into_widgets", None)
-                if callable(loader):
-                    try:
-                        loader(entry, {})
-                    except Exception:
-                        logging.debug("Fallback page loader failed", exc_info=True)
-            active_entry = entry
-            if key == "test_switch_wifi":
-                field_widgets = getattr(page, "field_widgets", {}) or {}
-                use_router = (
-                    field_widgets.get("stability.cases.switch_wifi.use_router")
-                    or field_widgets.get("cases.test_switch_wifi.use_router")
-                )
-                router_csv = (
-                    field_widgets.get("stability.cases.switch_wifi.router_csv")
-                    or field_widgets.get("cases.test_switch_wifi.router_csv")
-                )
-                if isinstance(use_router, QCheckBox) and router_csv is not None:
-                    checked = use_router.isChecked()
-                    handle_config_event(
-                        page,
-                        "switch_wifi_use_router_changed",
-                        checked=bool(checked),
+                        try:
+                            config_ctl.load_script_config_into_widgets(entry, data)
+                        except Exception:
+                            logging.debug("Failed to load script config into widgets", exc_info=True)
+                else:
+                    # Fallback to page-level implementation if present
+                    loader = getattr(page, "_load_script_config_into_widgets", None)
+                    if callable(loader):
+                        try:
+                            loader(entry, {})
+                        except Exception:
+                            logging.debug("Fallback page loader failed", exc_info=True)
+                active_entry = entry
+                if key == "test_switch_wifi":
+                    field_widgets = getattr(page, "field_widgets", {}) or {}
+                    use_router = (
+                        field_widgets.get("stability.cases.switch_wifi.use_router")
+                        or field_widgets.get("cases.test_switch_wifi.use_router")
                     )
-    if hasattr(page, "_stability_panel"):
-        if active_entry is not None:
-            from src.ui.view.config import compose_stability_groups
+                    router_csv = (
+                        field_widgets.get("stability.cases.switch_wifi.router_csv")
+                        or field_widgets.get("cases.test_switch_wifi.router_csv")
+                    )
+                    if isinstance(use_router, QCheckBox) and router_csv is not None:
+                        checked = use_router.isChecked()
+                        handle_config_event(
+                            page,
+                            "switch_wifi_use_router_changed",
+                            checked=bool(checked),
+                        )
+        except Exception as exc:
+            import traceback
 
-            groups = compose_stability_groups(page, active_entry)
-            page._stability_panel.set_groups(groups)
-        else:
-            page._stability_panel.set_groups([])
-        _rebalance_panel(page._stability_panel)
+            traceback.print_exc()
+    has_panel = hasattr(page, "_stability_panel")
+    try:
+        if has_panel:
+            if active_entry is not None:
+                from src.ui.view.config import compose_stability_groups
+
+                groups = compose_stability_groups(page, active_entry)
+                page._stability_panel.set_groups(groups)
+                try:
+                    titles = [g.title() for g in groups]
+                except Exception:
+                    titles = ["<error>"]
+            else:
+                page._stability_panel.set_groups([])
+            _rebalance_panel(page._stability_panel)
+    except Exception as exc:
+        logging.info("[DEBUG layout] stability_panel exception", repr(exc))
 
     # 最终刷新一遍规则，让脚本区的显隐/可编辑状态与当前选择保持一致
     apply_config_ui_rules(page)
@@ -855,8 +850,8 @@ def load_script_config_into_widgets(page: Any, entry: Any, data: Mapping[str, An
     logic. It intentionally operates on the `page` and `entry` objects and
     uses controller helpers for CSV path resolution/selection where needed.
     """
-    from src.ui.view.config.config_str import script_field_key
-    from src.ui.view.config.config_switch_wifi import SwitchWifiManualEditor
+    from src.ui.view.config import script_field_key
+    from src.ui.view.config.config_switch_wifi import SwitchWifiConfigPage
     from src.ui.view.config import RfStepSegmentsWidget
     from src.util.constants import (
         SWITCH_WIFI_CASE_KEY,
@@ -909,14 +904,11 @@ def load_script_config_into_widgets(page: Any, entry: Any, data: Mapping[str, An
             logging.debug("Failed to populate switch_wifi router combo", exc_info=True)
 
         try:
-            if isinstance(manual_widget, SwitchWifiManualEditor):
+            if isinstance(manual_widget, SwitchWifiConfigPage):
                 manual_entries = data.get(SWITCH_WIFI_MANUAL_ENTRIES_FIELD)
-                if isinstance(manual_entries, Sequence) and not isinstance(manual_entries, (str, bytes)):
-                    manual_widget.set_entries(manual_entries)
-                else:
-                    manual_widget.set_entries(None)
+                manual_widget.set_entries(manual_entries if manual_entries is not None else [])
         except Exception:
-            logging.debug("Failed to set switch_wifi manual entries", exc_info=True)
+            logging.debug("Failed to initialise switch_wifi manual entries editor", exc_info=True)
         return
 
     ac_cfg = data.get("ac", {})

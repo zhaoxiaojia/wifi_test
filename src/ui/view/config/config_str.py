@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Mapping, Sequence
 
+import logging
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
     QCheckBox,
@@ -17,12 +18,6 @@ from qfluentwidgets import ComboBox, LineEdit, PushButton
 
 from src.ui.view.common import ScriptConfigEntry
 from src.ui.model.rules import evaluate_all_rules
-from src.ui.view.config.config_switch_wifi import SwitchWifiManualEditor
-from src.util.constants import (
-    SWITCH_WIFI_MANUAL_ENTRIES_FIELD,
-    SWITCH_WIFI_ROUTER_CSV_FIELD,
-    SWITCH_WIFI_USE_ROUTER_FIELD,
-)
 
 
 def bind_script_section(page: Any, checkbox: QCheckBox, controls: Sequence[QWidget]) -> None:
@@ -57,101 +52,6 @@ def script_field_key(case_key: str, *parts: str) -> str:
     """Return the canonical dotted key used for stability script fields."""
     suffix = ".".join(parts)
     return f"stability.cases.{case_key}.{suffix}"
-
-
-def create_test_switch_wifi_config_entry_from_schema(
-    page: Any,
-    case_key: str,
-    case_path: str,
-    data: Mapping[str, Any],
-) -> ScriptConfigEntry:
-    """Build ScriptConfigEntry for ``test_switch_wifi`` using builder widgets."""
-
-    section_id = f"cases.{case_key}"
-    group = getattr(page, "_other_groups", {}).get(section_id)
-    if group is None:
-        group = QWidget(page)
-
-    widgets: dict[str, QWidget] = {}
-
-    def _bind_field(field: str) -> QWidget | None:
-        key = script_field_key(case_key, field)
-        widget = page.field_widgets.get(key)
-        if widget is None:
-            raw_key = f"{section_id}.{field}"
-            widget = page.field_widgets.get(raw_key)
-            if widget is not None:
-                page.field_widgets[key] = widget
-        if widget is not None:
-            widgets[key] = widget
-        return widget
-
-    use_router_widget = _bind_field(SWITCH_WIFI_USE_ROUTER_FIELD)
-    router_widget = _bind_field(SWITCH_WIFI_ROUTER_CSV_FIELD)
-    manual_widget = _bind_field(SWITCH_WIFI_MANUAL_ENTRIES_FIELD)
-
-    # When the schema provides a widget for manual entries, replace that
-    # single field with the dedicated SwitchWifiManualEditor and fan out
-    # its controls into separate form rows so that the layout matches
-    # other fields (label on the left, editor on the right).
-    if isinstance(manual_widget, QWidget):
-        parent = manual_widget.parent() or group
-        layout = parent.layout()
-        try:
-            if isinstance(layout, QFormLayout):
-                label = layout.labelForField(manual_widget)
-                row = layout.getWidgetPosition(manual_widget)[0]
-                layout.removeWidget(manual_widget)
-                manual_widget.setParent(None)
-
-                editor = SwitchWifiManualEditor(parent)
-                widgets[script_field_key(case_key, SWITCH_WIFI_MANUAL_ENTRIES_FIELD)] = editor
-                manual_widget = editor
-
-                # Row 1: Wi-Fi list table.
-                wifi_label = label or QLabel("Wi-Fi list", parent)
-                layout.insertRow(row, wifi_label, editor.table)
-                row += 1
-                # Row 2: SSID field.
-                layout.insertRow(row, QLabel("SSID", parent), editor.ssid_edit)
-                row += 1
-                # Row 3: Security combo.
-                layout.insertRow(row, QLabel("Security", parent), editor.security_combo)
-                row += 1
-                # Row 4: Password field.
-                layout.insertRow(row, QLabel("Password", parent), editor.password_edit)
-                row += 1
-                # Row 5: Add/Remove buttons (no label).
-                buttons_container = QWidget(parent)
-                buttons_layout = QHBoxLayout(buttons_container)
-                buttons_layout.setContentsMargins(0, 0, 0, 0)
-                buttons_layout.setSpacing(8)
-                buttons_layout.addWidget(editor.add_btn)
-                buttons_layout.addWidget(editor.del_btn)
-                buttons_layout.addStretch(1)
-                layout.insertRow(row, QLabel("", parent), buttons_container)
-        except Exception:
-            # Layout tweaks are best-effort; fall back to schema layout on error.
-            pass
-
-    # Treat router_csv as a CSV combo driven by the shared RvR Wi-Fi proxy.
-    if isinstance(router_widget, ComboBox):
-        # Defer to page helper or global view helper for CSV registration.
-        register_csv = getattr(page, "register_switch_wifi_csv_combo", None)
-        if callable(register_csv):
-            register_csv(router_widget)
-
-    field_keys = set(widgets.keys())
-    section_controls: dict[str, tuple[QCheckBox, Sequence[QWidget]]] = {}
-
-    return ScriptConfigEntry(
-        group=group,
-        widgets=widgets,
-        field_keys=field_keys,
-        section_controls=section_controls,
-        case_key=case_key,
-        case_path=case_path,
-    )
 
 
 def create_test_str_config_entry_from_schema(
@@ -238,30 +138,8 @@ def create_test_str_config_entry_from_schema(
     )
 
 
-def initialize_script_config_groups(page: Any) -> None:
-    """Initialise all stability ScriptConfigEntry objects for the given page."""
-    stability_cfg = page.config.setdefault("stability", {})
-    stability_cfg.setdefault("cases", {})
-    page._script_groups.clear()
-
-    factories = getattr(page, "_script_config_factories", {}) or {}
-    for case_path, factory in factories.items():
-        config_ctl = getattr(page, "config_ctl", None)
-        if config_ctl is not None and hasattr(config_ctl, "script_case_key"):
-            case_key = config_ctl.script_case_key(case_path)
-        else:
-            case_key = ""
-        entry_config = page.config_ctl.ensure_script_case_defaults(case_key, case_path)
-        entry = factory(page, case_key, case_path, entry_config)
-        entry.group.setVisible(False)
-        page._script_groups[case_key] = entry
-        page.field_widgets.update(entry.widgets)
-
-
 __all__ = [
     "bind_script_section",
     "script_field_key",
-    "create_test_switch_wifi_config_entry_from_schema",
     "create_test_str_config_entry_from_schema",
-    "initialize_script_config_groups",
 ]
