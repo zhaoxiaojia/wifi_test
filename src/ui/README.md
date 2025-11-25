@@ -133,7 +133,7 @@ into widgets:
   - For each section:
     - Creates a `QGroupBox` and `QFormLayout`.
     - For each field, creates the appropriate widget (`LineEdit`, `ComboBox`,
-      `QCheckBox`, `QSpinBox`, `SwitchWifiManualEditor`, etc.).
+      `QCheckBox`, `QSpinBox`, `SwitchWifiConfigPage`, etc.).
     - Uses `get_field_choices(field_key)` from `options.py` when the schema
       does not specify static `choices`.
     - Populates initial widget values from `config`.
@@ -373,4 +373,3 @@ CSV → pytest), use this checklist:
    - For project‑style reports, ensure the test’s CSV layout matches the
      expectations of `src/tools/reporting/project_report.py` or extend it
      accordingly.
-

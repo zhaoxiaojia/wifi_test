@@ -53,9 +53,9 @@ class SwitchWifiConfigPage(QWidget):
         super().__init__(parent)
         _apply_theme(self, recursive=True)
         self.setObjectName("switchWifiConfigPage")
-        size_policy = QSizePolicy(QSizePolicy.Expanding, QSizePolicy.MinimumExpanding)
+        # 水平填充父布局，高度依据 sizeHint，避免占满整列。
+        size_policy = QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.setSizePolicy(size_policy)
-        self.setMinimumHeight(260)
 
         self.headers: list[str] = [
             SWITCH_WIFI_ENTRY_SSID_FIELD,
@@ -101,13 +101,34 @@ class SwitchWifiConfigPage(QWidget):
     # ------------------------------------------------------------------
 
     def sizeHint(self) -> QSize:  # type: ignore[override]
+        """Constrain height so the Wi‑Fi list shows about 6–7 rows.
+
+        The underlying table仍然带垂直滚动条，多余行通过滚动查看，避免脚本区留白过多。
+        """
         base = super().sizeHint()
         width = base.width() if base.isValid() else 0
-        height = base.height() if base.isValid() else 0
         if width < 300:
             width = 400
-        if height < 200:
-            height = 260
+
+        # 估算列表高度：表头 + N 行 + 适当内边距
+        try:
+            table = self.list.table  # type: ignore[attr-defined]
+            vh = table.verticalHeader()
+            hh = table.horizontalHeader()
+            row_height = vh.defaultSectionSize() if vh is not None else 28
+            header_height = hh.height() if hh is not None else 24
+        except Exception:  # pragma: no cover - defensive
+            row_height = 28
+            header_height = 24
+        # 可见行数：1~7 行之间
+        visible_rows = len(getattr(self, "rows", []) or [])
+        if visible_rows <= 0:
+            visible_rows = 1
+        visible_rows = min(visible_rows, 7)
+        height = header_height + row_height * visible_rows + 32  # 额外留少量 padding
+        # 给一个下限，避免过于紧凑影响操作
+        if height < 180:
+            height = 180
         return QSize(width, height)
 
     def showEvent(self, event) -> None:  # type: ignore[override]
@@ -249,7 +270,6 @@ def sync_switch_wifi_on_csv_changed(page: Any, new_path: str | None) -> None:
             entries = config_ctl.load_switch_wifi_entries(new_path)
         except Exception:
             entries = []
-        print("[DEBUG switch_wifi] sync_on_csv_changed show entries from CSV len=", len(entries or []))
         # 仅刷新展示，不写回配置，避免覆盖 YAML。
         wifi_list.set_entries(entries)
     use_router, router_csv, wifi_list = _resolve_switch_wifi_widgets(page)
@@ -279,7 +299,6 @@ def sync_switch_wifi_on_csv_changed(page: Any, new_path: str | None) -> None:
             entries = config_ctl.load_switch_wifi_entries(new_path)
         except Exception:
             entries = []
-        print("[DEBUG switch_wifi] sync_on_csv_changed show entries from CSV len=", len(entries or []))
         # 仅刷新展示，不写回配置，避免覆盖 YAML。
         wifi_list.set_entries(entries)
 
@@ -328,7 +347,6 @@ def handle_switch_wifi_use_router_changed(page: Any, checked: bool) -> None:
                     entries = config_ctl.load_switch_wifi_entries(csv_path)
                 except Exception:
                     entries = []
-                print("[DEBUG switch_wifi] use_router=True show CSV entries len=", len(entries or []))
                 wifi_list.set_entries(entries)
     else:
         # 退出 router 模式时，列表回退到稳定性配置中的 manual_entries。
@@ -338,7 +356,6 @@ def handle_switch_wifi_use_router_changed(page: Any, checked: bool) -> None:
             cases = stability.get("cases", {}) if isinstance(stability, dict) else {}
             case_cfg = cases.get("test_switch_wifi", {}) if isinstance(cases, dict) else {}
             entries = case_cfg.get(SWITCH_WIFI_MANUAL_ENTRIES_FIELD, [])
-            print("[DEBUG switch_wifi] use_router=False restore YAML entries len=", len(entries or []))
             wifi_list.set_entries(entries)
     if config_ctl is not None:
         try:
@@ -379,7 +396,6 @@ def handle_switch_wifi_router_csv_changed(page: Any, index: int) -> None:
             entries = config_ctl.load_switch_wifi_entries(new_path)
         except Exception:
             entries = []
-        print("[DEBUG switch_wifi] sync_on_csv_changed show entries from CSV len=", len(entries or []))
         # 仅刷新展示，不写回配置，避免覆盖 YAML。
         wifi_list.set_entries(entries)
     if config_ctl is not None:
