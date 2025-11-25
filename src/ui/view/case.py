@@ -2,14 +2,14 @@
 
 This module now defines three widgets:
 
-* :class:`CasePage` – generic, read‑only CSV/list table with an optional
+* :class:`FormListPage` – generic, read‑only CSV/list table with an optional
   checkbox column that can be reused by other features (such as the
   switch‑Wi‑Fi stability editor).
 * :class:`RouterConfigForm` – left‑hand form used to edit a single Wi‑Fi
   row (band, channel, security, SSID, password, tx/rx flags).
 * :class:`RvrWifiConfigPage` – the actual Case page shown in the
   application, implemented as a composition of ``RouterConfigForm`` and
-  ``CasePage`` plus router/CSV persistence logic.
+  ``FormListPage`` plus router/CSV persistence logic.
 """
 
 from __future__ import annotations
@@ -37,7 +37,7 @@ from qfluentwidgets import CardWidget, ComboBox, LineEdit, PushButton, TableWidg
 from src.util.constants import AUTH_OPTIONS, OPEN_AUTH, Paths, RouterConst
 from src.tools.router_tool.router_factory import get_router
 from src.ui.view.theme import apply_theme, apply_font_and_selection
-from src.ui import CasePage, RouterConfigForm
+from src.ui.view import FormListPage, RouterConfigForm, FormListBinder
 
 
 class RvrWifiConfigPage(CardWidget):
@@ -71,14 +71,17 @@ class RvrWifiConfigPage(CardWidget):
         self.form = RouterConfigForm(self.router, parent=self._content)
         layout.addWidget(self.form, 2)
 
-        self.list = CasePage(self.headers, self.rows, parent=self._content, checkable=True)
+        self.list = FormListPage(self.headers, self.rows, parent=self._content, checkable=True)
         layout.addWidget(self.list, 5)
 
         # Wiring between form, list and persistence.
-        self.form.rowChanged.connect(self._on_form_row_changed)
-        self.form.addRequested.connect(self._on_form_add_requested)
-        self.form.deleteRequested.connect(self._on_form_delete_requested)
-        self.list.currentRowChanged.connect(self._on_list_row_changed)
+        self._binder = FormListBinder(
+            form=self.form,
+            list_widget=self.list,
+            rows=self.rows,
+            on_row_updated=self._on_row_updated,
+            on_rows_changed=self._on_rows_changed,
+        )
         self.list.checkToggled.connect(self._on_list_check_toggled)
         self.dataChanged.connect(self._save_csv)
 
@@ -201,11 +204,6 @@ class RvrWifiConfigPage(CardWidget):
 
     # --- form/list sync -------------------------------------------------------
 
-    def _on_list_row_changed(self, row_index: int) -> None:
-        if not (0 <= row_index < len(self.rows)):
-            return
-        self.form.load_row(self.rows[row_index])
-
     def _on_list_check_toggled(self, row_index: int, checked: bool) -> None:
         if not (0 <= row_index < len(self.rows)):
             return
@@ -214,38 +212,13 @@ class RvrWifiConfigPage(CardWidget):
         row["rx"] = "1" if checked else "0"
         self.dataChanged.emit()
 
-    def _on_form_row_changed(self, data: dict[str, str]) -> None:
-        row_index = self.list.current_row()
-        if not (0 <= row_index < len(self.rows)):
-            return
-        self.rows[row_index].update(data)
+    def _on_row_updated(self, index: int, row: dict[str, str]) -> None:
         # Keep checkbox in sync with tx/rx fields via the _checked flag.
-        checked = data.get("tx") == "1" or data.get("rx") == "1"
-        self.rows[row_index]["_checked"] = checked
-        # Let the FormListPage handle cell updates.
-        self.list.update_row(row_index, self.rows[row_index])
-        self.dataChanged.emit()
+        _ = index
+        checked = row.get("tx") == "1" or row.get("rx") == "1"
+        row["_checked"] = checked
 
-    def _on_form_add_requested(self, data: dict[str, str]) -> None:
-        self.rows.append(dict(data))
-        self.list.set_data(self.headers, self.rows)
-        new_index = len(self.rows) - 1
-        if new_index >= 0:
-            self.list.set_current_row(new_index)
-        self.dataChanged.emit()
-
-    def _on_form_delete_requested(self) -> None:
-        row_index = self.list.current_row()
-        if not (0 <= row_index < len(self.rows)):
-            return
-        del self.rows[row_index]
-        self.list.set_data(self.headers, self.rows)
-        if self.rows:
-            new_index = min(row_index, len(self.rows) - 1)
-            self.list.set_current_row(new_index)
-            self.form.load_row(self.rows[new_index])
-        else:
-            self.form.reset_form()
+    def _on_rows_changed(self, rows: list[dict[str, str]]) -> None:  # noqa: ARG002
         self.dataChanged.emit()
 
     # --- router / CSV helpers -------------------------------------------------

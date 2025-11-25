@@ -25,12 +25,12 @@ rvr:
     path: D:/Program Files (x86)/Ixia/IxChariot
   repeat: '0'
   throughput_threshold: '0'
-  tool: iperf
+  tool: ixchariot
   enable_wpa3: false
 router:
   name: xiaomibe7000
   address: 192.168.31.1
-text_case: test/stability/test_switch_wifi.py
+text_case: test/compatibility/test_compatibility.py
 debug:
   database_mode: false
   skip_router: true
@@ -54,18 +54,14 @@ cases:
       port: ''
       mode: 'NO'
     str:
-      enabled: true
+      enabled: false
       on_duration: '14'
       off_duration: '15'
       relay_type: usb_relay
       relay_params: []
-      port: COM14 (蓝牙链接上的标准串行 (COM14))
+      port: ''
       mode: 'NO'
   test_switch_wifi:
     use_router: false
     router_csv: C:\Users\SH171300-1522\PycharmProjects\wifi_test\config\performance_test_csv\rvr_wifi_setup.csv
-    manual_entries:
-    - ssid: coco_5g
-      security_mode: Open System
-      password: ''
-csv_path: performance_test_csv/rvr_wifi_setup.csv
+    manual_entries: []

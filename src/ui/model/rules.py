@@ -840,18 +840,23 @@ CUSTOM_TESTCASE_UI_RULES.append(
                 action="enable",
                 condition=lambda values: True,
             ),
-            SimpleFieldEffect(
-                target_field="debug.skip_corner_rf",
-                action="enable",
-                condition=lambda values: True,
-            ),
-            # `test_switch_wifi` router-mode checkbox should always be
-            # user-editable when the script group is visible.
-            SimpleFieldEffect(
-                target_field="stability.cases.test_switch_wifi.use_router",
-                action="enable",
-                condition=lambda values: True,
-            ),
+              SimpleFieldEffect(
+                  target_field="debug.skip_corner_rf",
+                  action="enable",
+                  condition=lambda values: True,
+              ),
+              # `test_switch_wifi` controls should always be user-editable
+              # when the script group is visible.
+              SimpleFieldEffect(
+                  target_field="stability.cases.test_switch_wifi.use_router",
+                  action="enable",
+                  condition=lambda values: True,
+              ),
+              SimpleFieldEffect(
+                  target_field="stability.cases.test_switch_wifi.manual_entries",
+                  action="enable",
+                  condition=lambda values: True,
+              ),
             # `test_str` AC/STR enable checkboxes should always be user-editable
             # when the group is visible; testcase rules must not lock them out.
             SimpleFieldEffect(
@@ -942,14 +947,39 @@ CUSTOM_TESTCASE_UI_RULES.append(
                     or values.get("testcase.is_performance")
                 ),
             ),
-            SimpleFieldEffect(
-                target_field="rvr.ixchariot.path",
-                action="enable",
-                condition=lambda values: bool(
-                    values.get("testcase.is_peak_throughput")
-                    or values.get("testcase.is_performance")
-                ),
-            ),
+              SimpleFieldEffect(
+                  target_field="rvr.ixchariot.path",
+                  action="enable",
+                  condition=lambda values: bool(
+                      values.get("testcase.is_peak_throughput")
+                      or values.get("testcase.is_performance")
+                  ),
+              ),
+              # ------------------------------------------------------------------
+              # Compatibility Settings fields.
+              # ------------------------------------------------------------------
+              # NIC selection and power‑relay configuration are only editable
+              # for compatibility testcases; keep them disabled otherwise.
+              SimpleFieldEffect(
+                  target_field="compatibility.nic",
+                  action="enable",
+                  condition=lambda values: bool(values.get("testcase.is_compatibility")),
+              ),
+              SimpleFieldEffect(
+                  target_field="compatibility.nic",
+                  action="disable",
+                  condition=lambda values: not bool(values.get("testcase.is_compatibility")),
+              ),
+              SimpleFieldEffect(
+                  target_field="compatibility.power_ctrl.relays",
+                  action="enable",
+                  condition=lambda values: bool(values.get("testcase.is_compatibility")),
+              ),
+              SimpleFieldEffect(
+                  target_field="compatibility.power_ctrl.relays",
+                  action="disable",
+                  condition=lambda values: not bool(values.get("testcase.is_compatibility")),
+              ),
             SimpleFieldEffect(
                 target_field="rvr.repeat",
                 action="enable",
@@ -1398,9 +1428,10 @@ def evaluate_all_rules(
     values["testcase.is_rvr"] = bool(basename and "rvr" in basename)
     values["testcase.is_peak_throughput"] = basename == "test_wifi_peak_throughput.py"
 
-    # Derive performance/stability flags via the controller when available.
+    # Derive performance/stability/compatibility flags via the controller when available.
     is_performance = False
     is_stability = False
+    is_compatibility = False
     config_ctl = getattr(page, "config_ctl", None)
     if config_ctl is not None:
         try:
@@ -1414,8 +1445,18 @@ def evaluate_all_rules(
         except Exception:
             logging.debug("evaluate_all_rules: is_stability_case failed", exc_info=True)
 
+    # Treat any testcase whose path contains a "compatibility" segment as a
+    # compatibility case.  This mirrors the folder-based Settings layout
+    # logic in the view/controller layer.
+    try:
+        norm_path = case_path.replace("\\", "/")
+        is_compatibility = bool("/compatibility/" in norm_path)
+    except Exception:
+        is_compatibility = False
+
     values["testcase.is_performance"] = is_performance
     values["testcase.is_stability"] = is_stability
+    values["testcase.is_compatibility"] = is_compatibility
     # Build combined ordered rule list(s): testcase-specific lists first,
     # followed by any extra lists and then the global rule list.  This
     # ordering lets testcase rules define the editable surface while

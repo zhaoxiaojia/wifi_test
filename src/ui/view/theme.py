@@ -204,7 +204,7 @@ def format_log_html(message: str) -> str:
 
 
 def apply_settings_tab_label_style(label: QLabel, *, active: bool = False) -> None:
-    """Apply unified style for DUT/Execution/Stability tab-like labels."""
+    """Apply unified style for DUT/Performance/Stability tab-like labels."""
     font = label.font() or QFont(FONT_FAMILY)
     font.setPixelSize(STEP_LABEL_FONT_PIXEL_SIZE)
     label.setFont(font)

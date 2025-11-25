@@ -18,11 +18,11 @@ connect_type:
   type: Linux
 project:
   customer: XIAOMI
-  product_line: OTT
-  project: OB7
-  main_chip: S805X3
-  wifi_module: W1U
-  interface: SDIO
+  product_line: TV
+  project: Blueplanet
+  main_chip: T963D4
+  wifi_module: W2
+  interface: USB
 serial_port:
   baud: '9600'
   port: COM14 (蓝牙链接上的标准串行 (COM14))

@@ -1,0 +1,9 @@
+panels:
+  compatibility:
+    sections:
+      - id: compatibility_settings
+        label: "Compatibility Settings"
+        fields:
+          - key: compatibility.nic
+            widget: combo_box
+            label: "Network interface"

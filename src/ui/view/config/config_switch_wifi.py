@@ -5,18 +5,19 @@ from __future__ import annotations
 import logging
 from typing import Any, Mapping, Sequence
 
-from PyQt5.QtCore import Qt, QSignalBlocker, QSize
+from PyQt5.QtCore import Qt, QSignalBlocker, QSize, pyqtSignal
 from PyQt5.QtWidgets import QCheckBox, QHBoxLayout, QVBoxLayout, QWidget, QSizePolicy
 from qfluentwidgets import ComboBox
 
 from src.util.constants import (
     AUTH_OPTIONS,
+    OPEN_AUTH,
     SWITCH_WIFI_ENTRY_PASSWORD_FIELD,
     SWITCH_WIFI_ENTRY_SECURITY_FIELD,
     SWITCH_WIFI_ENTRY_SSID_FIELD,
     SWITCH_WIFI_MANUAL_ENTRIES_FIELD,
 )
-from src.ui import FormListPage, RouterConfigForm
+from src.ui.view import FormListPage, RouterConfigForm, FormListBinder
 
 
 def normalize_switch_wifi_manual_entries(entries: Any) -> list[dict[str, str]]:
@@ -46,6 +47,11 @@ def normalize_switch_wifi_manual_entries(entries: Any) -> list[dict[str, str]]:
 
 class SwitchWifiConfigPage(QWidget):
     """In-memory Wi-Fi list editor for switch_wifi manual_entries."""
+
+    # Emitted whenever the underlying manual_entries list changes due to
+    # user actions (add/delete/edit). Controllers can hook this to trigger
+    # autosave without relying on internal widget details.
+    entriesChanged = pyqtSignal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         from src.ui.view.theme import apply_theme as _apply_theme  # local to avoid cycles
@@ -86,10 +92,16 @@ class SwitchWifiConfigPage(QWidget):
         layout.addWidget(self.list, 5)
 
         # Wire interactions.
-        self.form.rowChanged.connect(self._on_form_row_changed)
+        self._binder = FormListBinder(
+            form=self.form,
+            list_widget=self.list,
+            rows=self.rows,
+            on_rows_changed=lambda _rows: self.entriesChanged.emit(),
+            bind_add=False,
+            bind_delete=False,
+        )
         self.form.addRequested.connect(self._on_form_add_requested)
         self.form.deleteRequested.connect(self._on_form_delete_requested)
-        self.list.currentRowChanged.connect(self._on_list_row_changed)
 
         # Initialise form from first row when available.
         if self.rows:
@@ -163,37 +175,39 @@ class SwitchWifiConfigPage(QWidget):
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _on_list_row_changed(self, row_index: int) -> None:
-        if not (0 <= row_index < len(self.rows)):
-            return
-        self.form.load_row(self.rows[row_index])
-
-    def _on_form_row_changed(self, data: dict[str, str]) -> None:
-        row_index = self.list.current_row()
-        if not (0 <= row_index < len(self.rows)):
-            return
-        self.rows[row_index].update(
-            {
-                SWITCH_WIFI_ENTRY_SSID_FIELD: data.get("ssid", ""),
-                SWITCH_WIFI_ENTRY_SECURITY_FIELD: data.get("security_mode", ""),
-                SWITCH_WIFI_ENTRY_PASSWORD_FIELD: data.get("password", ""),
-            }
-        )
-        self.list.update_row(row_index, self.rows[row_index])
-
     def _on_form_add_requested(self, data: dict[str, str]) -> None:
         entry = {
             SWITCH_WIFI_ENTRY_SSID_FIELD: data.get("ssid", "").strip(),
             SWITCH_WIFI_ENTRY_SECURITY_FIELD: data.get("security_mode", "").strip(),
             SWITCH_WIFI_ENTRY_PASSWORD_FIELD: data.get("password", ""),
         }
-        if not entry[SWITCH_WIFI_ENTRY_SSID_FIELD]:
+        ssid = entry[SWITCH_WIFI_ENTRY_SSID_FIELD]
+        security = entry[SWITCH_WIFI_ENTRY_SECURITY_FIELD]
+        password = entry[SWITCH_WIFI_ENTRY_PASSWORD_FIELD]
+        if not ssid:
+            return
+        # For non-open security modes, require a non-empty password so that
+        # the configuration is usable. This mirrors the original behaviour
+        # that reminded users to provide a password when needed.
+        if security and security not in OPEN_AUTH and not password:
+            try:
+                from PyQt5.QtWidgets import QMessageBox
+
+                QMessageBox.warning(
+                    self,
+                    "Password required",
+                    "Please enter a password for the selected security mode.",
+                )
+            except Exception:
+                # Fall back to ignoring the row when message box cannot be shown.
+                pass
             return
         self.rows.append(entry)
         self.list.set_rows(self.rows)
         new_index = len(self.rows) - 1
         if new_index >= 0:
             self.list.set_current_row(new_index)
+        self.entriesChanged.emit()
 
     def _on_form_delete_requested(self) -> None:
         row_index = self.list.current_row()
@@ -207,6 +221,7 @@ class SwitchWifiConfigPage(QWidget):
             self.form.load_row(self.rows[new_index])
         else:
             self.form.reset_form()
+        self.entriesChanged.emit()
 
 
 def _resolve_switch_wifi_widgets(page: Any) -> tuple[Any, Any, Any]:
@@ -364,6 +379,8 @@ def handle_switch_wifi_use_router_changed(page: Any, checked: bool) -> None:
         except Exception:
             logging.debug("Failed to update RVR nav button for switch_wifi", exc_info=True)
 
+    # End of router toggle handling.
+
 
 def handle_switch_wifi_router_csv_changed(page: Any, index: int) -> None:
     """Handle router CSV combo index change in the switch_wifi stability section."""
@@ -454,7 +471,3 @@ __all__ = [
     "handle_switch_wifi_router_csv_changed",
     "init_switch_wifi_actions",
 ]
-
-
-
-

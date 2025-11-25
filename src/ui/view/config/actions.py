@@ -16,7 +16,7 @@ from src.util.constants import WIFI_PRODUCT_PROJECT_MAP, ANDROID_KERNEL_MAP
 from src.ui.model.rules import normalize_connect_type_label, current_connect_type, evaluate_all_rules
 from src.ui.model.autosave import autosave_config
 from src.ui.view.builder import build_groups_from_schema, load_ui_schema
-from src.ui.view import bind_view_events
+from src.ui.view import bind_view_events, determine_case_category
 from src.ui.view.config.config_switch_wifi import (
     sync_switch_wifi_on_csv_changed,
     handle_switch_wifi_use_router_changed,
@@ -232,6 +232,15 @@ def _bind_autosave_field_events(page: Any) -> None:
         from src.ui.view.common import RfStepSegmentsWidget
     except Exception:  # pragma: no cover - defensive: widget not available
         RfStepSegmentsWidget = None  # type: ignore[assignment]
+    try:
+        # Optional composite widget used by test_switch_wifi.
+        from src.ui.view.config.config_switch_wifi import SwitchWifiConfigPage
+    except Exception:  # pragma: no cover - optional widget
+        SwitchWifiConfigPage = None  # type: ignore[assignment]
+    try:
+        from src.ui.view.config.config_switch_wifi import SwitchWifiConfigPage
+    except Exception:  # pragma: no cover - optional widget
+        SwitchWifiConfigPage = None  # type: ignore[assignment]
 
     for field_key, widget in field_widgets.items():
         if widget is None:
@@ -263,6 +272,18 @@ def _bind_autosave_field_events(page: Any) -> None:
             seg_list = getattr(widget, "segment_list", None)
             if seg_list is not None and hasattr(seg_list, "currentRowChanged"):
                 seg_list.currentRowChanged.connect(handler)
+            continue
+        # SwitchWifiConfigPage: treat entriesChanged as a field-change event so
+        # that manual Wi‑Fi edits participate in autosave.
+        if SwitchWifiConfigPage is not None and isinstance(widget, SwitchWifiConfigPage):
+            if hasattr(widget, "entriesChanged"):
+                widget.entriesChanged.connect(handler)
+            continue
+        # SwitchWifiConfigPage: treat entriesChanged as a "field_changed"
+        # signal so that manual Wi-Fi edits participate in autosave.
+        if SwitchWifiConfigPage is not None and isinstance(widget, SwitchWifiConfigPage):
+            if hasattr(widget, "entriesChanged"):
+                widget.entriesChanged.connect(handler)
             continue
 
         # QFluent ComboBox: connect both index and text change signals so
@@ -365,6 +386,8 @@ def handle_config_event(page: Any, event: str, **payload: Any) -> None:
         # future "init" passes can re-apply editable fields.
         if case_path:
             setattr(page, "_current_case_path", case_path)
+        if display_path:
+            setattr(page, "_current_case_display_path", display_path)
 
         # Update "Selected Test Case" text if such a field exists.
         field_widgets = getattr(page, "field_widgets", {}) or {}
@@ -399,6 +422,16 @@ def handle_config_event(page: Any, event: str, **payload: Any) -> None:
                         view.set_current_page("execution")
                 except Exception as exc:
                     logging.debug("auto page switch failed: %s", exc)
+        # Compose DUT Settings according to the testcase category so that
+        # category-specific settings (such as Compatibility Settings) are
+        # only visible when relevant.
+        try:
+            from pathlib import Path as _Path
+
+            normalized_display = _Path(display_path).as_posix() if display_path else ""
+            apply_dut_settings_for_case(page, case_path=case_path, display_path=normalized_display)
+        except Exception:
+            logging.debug("case_clicked: apply_dut_settings_for_case failed", exc_info=True)
         return
 
     if event == "settings_tab_clicked":
@@ -499,6 +532,7 @@ def handle_config_event(page: Any, event: str, **payload: Any) -> None:
     if event == "field_changed":
         # Generic field-change events are used purely to drive the
         # autosave decorator; no additional view behaviour is required.
+        field = payload.get("field")
         return
 
     if event in {
@@ -549,6 +583,7 @@ def apply_serial_enabled_ui_state(page: Any, text: str) -> None:
 def set_fields_editable(page: Any, fields: set[str]) -> None:
     """Enable or disable config widgets based on the given editable field keys."""
     widgets = getattr(page, "field_widgets", {}) or {}
+
     for key, widget in widgets.items():
         try:
             enabled = key in fields
@@ -631,6 +666,11 @@ def refresh_config_page_controls(page: Any) -> None:
         else:
             config[key] = dict(existing)
 
+    # Ensure compatibility section exists with basic structure so that the
+    # Compatibility Settings panel can bind fields without special cases.
+    if "compatibility" not in config or not isinstance(config["compatibility"], dict):
+        config["compatibility"] = {}
+
     def _coerce_debug_flag(value: Any) -> bool:
         if isinstance(value, str):
             return value.strip().lower() in {"1", "true", "yes", "on"}
@@ -668,12 +708,83 @@ def refresh_config_page_controls(page: Any) -> None:
             config.get("stability")
         )
 
-    # Build three panels from YAML schemas.  Parent all groups directly
+    # Build panels from YAML schemas.  Parent all groups directly
     # to the corresponding ConfigGroupPanel so that layout is fully
     # owned by the view layer.
     dut_schema = load_ui_schema("dut")
     dut_panel = getattr(page, "_dut_panel", None)
     build_groups_from_schema(page, config, dut_schema, panel_key="dut", parent=dut_panel)
+
+    # Compatibility Settings live on their own panel so that they can
+    # behave as a dedicated Settings tab for compatibility testcases.
+    compat_schema = load_ui_schema("compatibility")
+    if compat_schema:
+        compat_panel = getattr(page, "_compatibility_panel", None)
+        build_groups_from_schema(page, config, compat_schema, panel_key="compatibility", parent=compat_panel)
+        # Enrich the Compatibility Settings group with a composite relay editor
+        # and populate NIC choices dynamically.
+        try:
+            from src.ui.view.config.config_compatibility import CompatibilityRelayEditor
+
+            other_groups = getattr(page, "_other_groups", {}) or {}
+            compat_group = other_groups.get("compatibility_settings")
+            if isinstance(compat_group, QWidget):
+                from PyQt5.QtWidgets import QFormLayout
+
+                layout = compat_group.layout()
+                if not isinstance(layout, QFormLayout):
+                    layout = QFormLayout(compat_group)
+                    compat_group.setLayout(layout)
+
+                # NIC combo comes from the UI schema (compatibility.nic).
+                field_widgets = getattr(page, "field_widgets", {}) or {}
+                nic_combo = field_widgets.get("compatibility.nic")
+
+                # Collect local NIC labels.
+                nic_labels: list[str] = []
+                try:
+                    import psutil  # type: ignore
+
+                    for name, addrs in psutil.net_if_addrs().items():
+                        # Skip loopback-only interfaces.
+                        has_non_loopback = any(
+                            getattr(addr, "address", "").strip() not in ("127.0.0.1", "")
+                            for addr in addrs
+                        )
+                        if has_non_loopback:
+                            nic_labels.append(str(name))
+                except Exception:
+                    nic_labels = []
+
+                if isinstance(nic_combo, ComboBox):
+                    current_value = getattr(page.config.get("compatibility", {}), "get", lambda _k, _d=None: None)(
+                        "nic", ""
+                    )
+                    nic_combo.clear()
+                    for label in nic_labels:
+                        nic_combo.addItem(label)
+                    if current_value:
+                        nic_combo.setCurrentText(str(current_value))
+
+                # Insert relay editor under the NIC row.
+                relay_editor = CompatibilityRelayEditor(compat_group)
+                layout.addRow("Power relays", relay_editor)
+
+                # Initialise from config if available.
+                compat_cfg = config.get("compatibility", {}) or {}
+                power_cfg = compat_cfg.get("power_ctrl", {}) or {}
+                relays = power_cfg.get("relays") or []
+                relay_editor.set_relays(relays)
+
+                # Expose for sync_widgets_to_config and autosave.
+                field_widgets["compatibility.power_ctrl.relays"] = relay_editor
+
+                def _on_relays_changed() -> None:
+                    handle_config_event(page, "field_changed", field="compatibility.power_ctrl.relays")
+
+                relay_editor.entriesChanged.connect(_on_relays_changed)
+        except Exception:
+            logging.debug("Failed to initialise Compatibility relay editor", exc_info=True)
 
     exec_schema = load_ui_schema("execution")
     exec_panel = getattr(page, "_execution_panel", None)
@@ -907,6 +1018,17 @@ def load_script_config_into_widgets(page: Any, entry: Any, data: Mapping[str, An
             if isinstance(manual_widget, SwitchWifiConfigPage):
                 manual_entries = data.get(SWITCH_WIFI_MANUAL_ENTRIES_FIELD)
                 manual_widget.set_entries(manual_entries if manual_entries is not None else [])
+                # Bind entriesChanged -> handle_config_event so that manual
+                # Wi‑Fi edits participate in the autosave flow.
+                if not getattr(manual_widget, "_entries_autosave_bound", False):
+                    def _on_entries_changed() -> None:
+                        handle_config_event(
+                            page,
+                            "field_changed",
+                            field=script_field_key(case_key, SWITCH_WIFI_MANUAL_ENTRIES_FIELD),
+                        )
+                    manual_widget.entriesChanged.connect(_on_entries_changed)
+                    setattr(manual_widget, "_entries_autosave_bound", True)
         except Exception:
             logging.debug("Failed to initialise switch_wifi manual entries editor", exc_info=True)
         return

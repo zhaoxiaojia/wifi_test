@@ -2,8 +2,8 @@
 
 This module reads UI schema YAML files from ``src/ui/model/config``
 and constructs Qt widgets (group boxes + field controls) for a given
-
-to render DUT / Execution / Stability panels from YAML.
+Config panel. It is used to render DUT / Performance / Stability
+panels from YAML.
 """
 
 from __future__ import annotations
@@ -52,8 +52,9 @@ def load_ui_schema(section: str) -> Dict[str, Any]:
     """Load the UI schema for the given high-level section."""
     mapping = {
         "dut": "config_dut_ui.yaml",
-        "execution": "config_execution_ui.yaml",
+        "execution": "config_performance_ui.yaml",
         "stability": "config_stability_ui.yaml",
+        "compatibility": "config_compatibility_ui.yaml",
     }
     filename = mapping.get(section)
     if not filename:

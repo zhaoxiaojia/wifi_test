@@ -99,9 +99,10 @@ _DEFAULT_METADATA = {
     "commit_author": "Unknown",
     "commit_date": "Unknown",
 }
+
 # Configuration file split/save constants
 DUT_CONFIG_FILENAME: Final[str] = "config_dut.yaml"
-EXECUTION_CONFIG_FILENAME: Final[str] = "config_execution.yaml"
+EXECUTION_CONFIG_FILENAME: Final[str] = "config_performance.yaml"
 DUT_SECTION_KEYS: Final[frozenset[str]] = frozenset({
     "connect_type",
     # Project / Wi‑Fi chipset configuration (formerly "fpga").
@@ -122,6 +123,7 @@ CONFIG_KEY_ALIASES: Final[dict[str, str]] = {
 TOOL_SECTION_KEY: Final[str] = "tool"
 TOOL_CONFIG_FILENAME: Final[str] = "config_tool.yaml"
 STABILITY_CONFIG_FILENAME: Final[str] = "config_stability.yaml"
+COMPATIBILITY_CONFIG_FILENAME: Final[str] = "config_compatibility.yaml"
 
 # UI theme defaults
 FONT_SIZE: Final[int] = 14
@@ -294,17 +296,31 @@ def _normalize_config_keys(data: Mapping[str, Any] | None) -> dict[str, Any]:
 
 def split_config_data(
     config: Mapping[str, Any] | None,
-) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]]:
-    """Split the full configuration into DUT, execution, stability, and tool sections."""
+) -> tuple[
+    dict[str, Any],
+    dict[str, Any],
+    dict[str, Any],
+    dict[str, Any],
+    dict[str, Any],
+]:
+    """Split the full configuration into DUT, execution, stability, compatibility, and tool sections."""
     normalised = _normalize_config_keys(config)
     dut_section: dict[str, Any] = {}
     execution_section: dict[str, Any] = {}
     stability_section: dict[str, Any] = {}
+    compatibility_section: dict[str, Any] = {}
     tool_section: dict[str, Any] = {}
     for key, value in normalised.items():
         if key == "stability":
             if isinstance(value, Mapping):
                 stability_section = copy.deepcopy(value)
+            continue
+        if key == "compatibility":
+            # Store compatibility settings in their own section file
+            # with a top-level ``compatibility`` key for readability.
+            compatibility_section = {"compatibility": copy.deepcopy(value)} if isinstance(
+                value, Mapping
+            ) else {}
             continue
         if key == TOOL_SECTION_KEY:
             if isinstance(value, Mapping):
@@ -314,19 +330,25 @@ def split_config_data(
             dut_section[key] = copy.deepcopy(value)
         else:
             execution_section[key] = copy.deepcopy(value)
-    return dut_section, execution_section, stability_section, tool_section
+    return dut_section, execution_section, stability_section, compatibility_section, tool_section
 
 
 def merge_config_sections(
     dut_section: Mapping[str, Any] | None,
     execution_section: Mapping[str, Any] | None,
     stability_section: Mapping[str, Any] | None = None,
+    compatibility_section: Mapping[str, Any] | None = None,
     tool_section: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Return a merged configuration mapping from DUT, execution, stability, and tool sections."""
+    """Return a merged configuration mapping from DUT, execution, stability, compatibility, and tool sections."""
     merged: dict[str, Any] = {}
     merged.update(_normalize_config_keys(execution_section))
     merged.update(_normalize_config_keys(dut_section))
+    # Compatibility settings live in their own config file but use the same
+    # top-level key as execution/dut sections, so we merge them after the
+    # other sections so they take precedence.
+    if isinstance(compatibility_section, Mapping):
+        merged.update(_normalize_config_keys(compatibility_section))
     if isinstance(stability_section, Mapping):
         merged["stability"] = copy.deepcopy(stability_section)
     else:
@@ -380,11 +402,19 @@ def _load_config_cached(base_dir: str) -> dict[str, Any]:
     execution_path = config_dir / EXECUTION_CONFIG_FILENAME
     stability_path = config_dir / STABILITY_CONFIG_FILENAME
     tool_path = config_dir / TOOL_CONFIG_FILENAME
+    compatibility_path = config_dir / COMPATIBILITY_CONFIG_FILENAME
     dut_section = _read_yaml_dict(dut_path)
     execution_section = _read_yaml_dict(execution_path)
     stability_section = _read_yaml_dict(stability_path)
     tool_section = _read_yaml_dict(tool_path)
-    return merge_config_sections(dut_section, execution_section, stability_section, tool_section)
+    compatibility_section = _read_yaml_dict(compatibility_path)
+    return merge_config_sections(
+        dut_section,
+        execution_section,
+        stability_section,
+        compatibility_section,
+        tool_section,
+    )
 
 
 def load_config(
@@ -460,20 +490,26 @@ def save_config_sections(
     dut_section: Mapping[str, Any] | None,
     execution_section: Mapping[str, Any] | None,
     stability_section: Mapping[str, Any] | None,
+    compatibility_section: Mapping[str, Any] | None,
     tool_section: Mapping[str, Any] | None,
     *,
     base_dir: str | os.PathLike[str] | None = None,
 ) -> None:
-    """Persist DUT, execution, stability, and tool configuration sections."""
+    """Persist DUT, execution, stability, compatibility, and tool configuration sections."""
     config_base = Path(base_dir) if base_dir is not None else get_model_config_base()
     dut_path = config_base / DUT_CONFIG_FILENAME
     execution_path = config_base / EXECUTION_CONFIG_FILENAME
     stability_path = config_base / STABILITY_CONFIG_FILENAME
+    compatibility_path = config_base / COMPATIBILITY_CONFIG_FILENAME
     tool_path = config_base / TOOL_CONFIG_FILENAME
     _write_yaml_dict(dut_path, _normalize_config_keys(dut_section))
     _write_yaml_dict(execution_path, _normalize_config_keys(execution_section))
     stability_payload = stability_section if isinstance(stability_section, Mapping) else {}
     _write_yaml_dict(stability_path, stability_payload)
+    compatibility_payload = (
+        compatibility_section if isinstance(compatibility_section, Mapping) else {}
+    )
+    _write_yaml_dict(compatibility_path, compatibility_payload)
     tool_payload = tool_section if isinstance(tool_section, Mapping) else {}
     _write_yaml_dict(tool_path, tool_payload)
 
@@ -484,11 +520,18 @@ def save_config(
     base_dir: str | os.PathLike[str] | None = None,
 ) -> None:
     """Persist the combined configuration dictionary."""
-    dut_section, execution_section, stability_section, tool_section = split_config_data(config)
+    (
+        dut_section,
+        execution_section,
+        stability_section,
+        compatibility_section,
+        tool_section,
+    ) = split_config_data(config)
     save_config_sections(
         dut_section,
         execution_section,
         stability_section,
+        compatibility_section,
         tool_section,
         base_dir=base_dir,
     )

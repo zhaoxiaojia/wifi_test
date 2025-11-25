@@ -59,6 +59,7 @@ from src.ui.view.config.config_switch_wifi import (
     normalize_switch_wifi_manual_entries,
     SwitchWifiConfigPage,
 )
+from src.ui.view.config.config_compatibility import CompatibilityRelayEditor
 from src.ui.view.config.config_str import script_field_key
 from src.ui.controller import show_info_bar
 
@@ -723,12 +724,33 @@ class ConfigController:
             elif isinstance(widget, RfStepSegmentsWidget):
                 ref[leaf] = widget.serialize()
             elif isinstance(widget, SwitchWifiConfigPage):
-                # When router CSV preview is active, do not overwrite the
-                # persisted manual_entries with the preview list from CSV.
-                # Only commit entries when router-config preview is inactive.
-                if getattr(page, "_router_config_active", False):
+                # Persist manual_entries for ``test_switch_wifi`` when the
+                # testcase is in manual mode. When the user enables router
+                # configuration (``use_router=True``), the list editor shows
+                # a CSV preview that must *not* be written back into the
+                # stability YAML; in that mode we skip serialization here.
+                try:
+                    from src.ui.view.config import script_field_key as _script_key
+                    from src.util.constants import (
+                        SWITCH_WIFI_CASE_KEY as _SW_CASE,
+                        SWITCH_WIFI_USE_ROUTER_FIELD as _SW_USE_ROUTER,
+                    )
+
+                    use_router_widget = page.field_widgets.get(
+                        _script_key(_SW_CASE, _SW_USE_ROUTER)
+                    )
+                except Exception:
+                    use_router_widget = None
+
+                is_router_mode = isinstance(use_router_widget, QCheckBox) and use_router_widget.isChecked()
+                if is_router_mode:
                     continue
                 ref[leaf] = widget.serialize()
+            elif isinstance(widget, CompatibilityRelayEditor):
+                # Persist compatibility.power_ctrl.relays from the composite
+                # editor used on the Compatibility Settings panel.
+                relays = widget.relays()
+                ref[leaf] = relays
             elif isinstance(widget, ComboBox):
                 data_val = widget.currentData()
                 if data_val not in (None, "", widget.currentText()):
@@ -1058,10 +1080,26 @@ class ConfigController:
         return stem
 
     def determine_pages_for_case(self, case_path: str, info: "EditableInfo") -> list[str]:
-        """Return which logical pages (dut/execution/stability) should be visible for the case."""
+        """Return which logical pages (dut/execution/stability/compatibility) are visible for the case."""
         if not case_path:
             return ["dut"]
+
         keys = ["dut"]
+
+        # Derive category primarily from the folder under ``test`` so that
+        # Settings tabs map to top-level test directories.
+        try:
+            from src.ui.view import determine_case_category  # local import to avoid cycles
+
+            category = determine_case_category(case_path=case_path, display_path=None)
+        except Exception:
+            category = None
+
+        if category == "compatibility":
+            if "compatibility" not in keys:
+                keys.append("compatibility")
+            return keys
+
         if self.is_performance_case(case_path) or getattr(info, "enable_csv", False):
             if "execution" not in keys:
                 keys.append("execution")

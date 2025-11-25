@@ -118,7 +118,7 @@ class AboutView(CardWidget):
         config_files_layout = QHBoxLayout()
         config_files_layout.setSpacing(6)
         self.config_file_buttons: list[PushButton] = []
-        for file_name in ("config_dut.yaml", "config_execution.yaml", "config_tool.yaml", "compatibility_dut.json"):
+        for file_name in ("config_dut.yaml", "config_performance.yaml", "config_tool.yaml", "compatibility_dut.json"):
             btn = PushButton(file_name, self.resources_card)
             btn.setFont(base_font)
             # Store the file name as a property for the controller to read.
@@ -181,4 +181,3 @@ class AboutView(CardWidget):
             "about_main_resources_compliance_label": self.compliance_label,
             "about_main_resources_hint_label": self.hint_label,
         }
-

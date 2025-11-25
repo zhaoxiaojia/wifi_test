@@ -32,7 +32,6 @@ __all__ = [
     "load_page_config",
     "save_page_config",
     "FormListPage",
-    "CasePage",
     "RouterConfigForm",
 ]
 
@@ -160,5 +159,4 @@ def save_page_config(page: QWidget) -> dict[str, Any]:
 
 # Re-export shared view widgets so callers can use ``src.ui`` as a stable
 # entry point without depending on the view package structure.
-from src.ui.view import FormListPage, CasePage, RouterConfigForm  # noqa: E402,F401
 

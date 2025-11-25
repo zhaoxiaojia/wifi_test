@@ -22,9 +22,9 @@ Goals:
 - Location: `src/ui/model/`
 - Purpose: describe *what* can be configured and how fields are grouped.
 - Typical files:
-  - `config_dut.yaml`, `config_execution.yaml`, `config_stability.yaml`
+  - `config_dut.yaml`, `config_performance.yaml`, `config_stability.yaml`
     (persisted config values)
-  - `config_dut_ui.yaml`, `config_execution_ui.yaml`, `config_stability_ui.yaml`
+  - `config_dut_ui.yaml`, `config_performance_ui.yaml`, `config_stability_ui.yaml`
     (UI schema: panels/sections/fields)
   - `options.py` (dynamic choice lists for comboboxes)
   - `rules.py` (declarative UI rules and helpers)
@@ -78,14 +78,14 @@ Controllers must not create their own ad‑hoc layouts or windows.
 ## 2. Config Page End‑to‑End Flow
 
 This section describes the **exact pipeline** for the Config page (DUT,
-Execution, Stability) from YAML to widgets to rule‑driven behaviour.
+Performance, Stability) from YAML to widgets to rule‑driven behaviour.
 
 ### 2.1 Config YAML (values)
 
 Persisted configuration is stored under `src/ui/model/config/`:
 
 - `config_dut.yaml`
-- `config_execution.yaml`
+- `config_performance.yaml`
 - `config_stability.yaml`
 - `config_tool.yaml`
 
@@ -104,7 +104,7 @@ Loading and saving is handled by helpers in `src/ui/__init__.py` and
 The *structure* of the Config page is described in:
 
 - `config_dut_ui.yaml`
-- `config_execution_ui.yaml`
+- `config_performance_ui.yaml`
 - `config_stability_ui.yaml`
 
 Each schema file defines panels and sections:
@@ -299,12 +299,12 @@ architecture and which pieces you normally touch when adding a new case.
 
 For performance / RVR / RVO style tests the pipeline is:
 
-1. **Execution config YAML** (`src/ui/model/config/config_execution.yaml`)
+1. **Performance config YAML** (`src/ui/model/config/config_performance.yaml`)
    - Stores `text_case` (test module path) and `csv_path` (per‑scenario CSV).
-2. **Config Execution panel** (View + Controller + Rules)
-   - `config_execution_ui.yaml` describes the “Selected Test Case”, RF
+2. **Config Performance panel** (View + Controller + Rules)
+   - `config_performance_ui.yaml` describes the “Selected Test Case”, RF
      Solution, RVR section, etc.
-   - `ConfigController` loads/saves `config_execution.yaml` and auto‑saves
+   - `ConfigController` loads/saves `config_performance.yaml` and auto‑saves
      on every field change (see `autosave.py` and the bindings in
      `view/config/actions.py`).
 3. **Case page** (RVR Wi‑Fi CSV editor)
@@ -332,10 +332,10 @@ CSV → pytest), use this checklist:
      - reuse the `Router` namedtuple + `get_testdata()` (same CSV schema as
        RvR), or
      - implement a dedicated CSV loader in the test package.
-2. **Expose the test from Execution config**
-   - In `config_execution.yaml`, set a default for `text_case` (e.g.
+2. **Expose the test from Performance config**
+   - In `config_performance.yaml`, set a default for `text_case` (e.g.
      `test/performance/test_wifi_<name>.py` relative to `src/test`).
-   - The “Selected Test Case” group in `config_execution_ui.yaml` already
+   - The “Selected Test Case” group in `config_performance_ui.yaml` already
      maps to `text_case`, so the file‑dialog selection and auto‑save logic
      will just work.
 3. **Decide whether the Case page needs content**
@@ -356,7 +356,7 @@ CSV → pytest), use this checklist:
        - In `ConfigController._apply_editable_ui_state`, call the new Case
          page when rules indicate that this test type is active.
 4. **Wire autosave / config usage**
-   - For Execution / DUT / Stability panels, continue to rely on the
+   - For Performance / DUT / Stability panels, continue to rely on the
      central autosave decorator in `src/ui/model/autosave.py` instead of
      hand‑calling `save_config` from random slots.
    - For CSV‑driven Case pages, keep auto‑save inside the page:

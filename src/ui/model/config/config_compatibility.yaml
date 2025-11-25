@@ -1,0 +1,11 @@
+compatibility:
+  power_ctrl:
+    relays:
+    - ip: 192.168.200.3
+      ports:
+      - 1
+      - 2
+      - 3
+      - 4
+  nic: 以太网
+  selected_routers: []

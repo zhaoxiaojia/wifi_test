@@ -1,4 +1,4 @@
-"""View + page implementation for the Config sidebar (DUT/Execution/Stability)."""
+"""View + page implementation for the Config sidebar (DUT/Performance/Stability)."""
 
 from __future__ import annotations
 
@@ -135,7 +135,7 @@ class AnimatedTreeView(TreeView):
 
 
 class _ConfigTabLabel(QLabel):
-    """Clickable label used for DUT/Execution/Stability tabs."""
+    """Clickable label used for DUT/Performance/Stability tabs."""
 
     clicked = pyqtSignal()
 
@@ -176,17 +176,18 @@ class ConfigView(CardWidget):
         # Track which logical pages are currently available
         self._current_page_keys: list[str] = []
 
-        # Simple tab row for DUT / Execution / Stability
+        # Simple tab row for DUT / Performance / Stability / Compatibility
         self._page_label_map: dict[str, str] = {
             "dut": "DUT",
-            "execution": "Execution",
+            "execution": "Performance",
             "stability": "Stability",
+            "compatibility": "Compatibility",
         }
         self._page_buttons: dict[str, _ConfigTabLabel] = {}
         tabs_row = QHBoxLayout()
         tabs_row.setContentsMargins(PAGE_CONTENT_MARGIN, PAGE_CONTENT_MARGIN, PAGE_CONTENT_MARGIN, 0)
         tabs_row.setSpacing(8)
-        for key in ("dut", "execution", "stability"):
+        for key in ("dut", "execution", "stability", "compatibility"):
             lbl = _ConfigTabLabel(self._page_label_map[key], self)
             apply_settings_tab_label_style(lbl, active=(key == "dut"))
 
@@ -220,15 +221,20 @@ class ConfigView(CardWidget):
         }
         # Backward-compatible attributes expected by existing actions/helpers.
         # These aliases allow refresh_config_page_controls (and related helpers)
-        # to treat the three panels as dedicated attributes while the view
-        # internally tracks them in a dictionary.
+        # to treat the panels as dedicated attributes while the view internally
+        # tracks them in a dictionary.
         self._dut_panel = self._page_panels["dut"]
         self._execution_panel = self._page_panels["execution"]
         self._stability_panel = self._page_panels["stability"]
+        # Additional panel used for folder-based Compatibility Settings.
+        # Use a two-column layout so that the Compatibility Settings group
+        # can occupy the wider left column, similar to Stability scripts.
+        self._page_panels["compatibility"] = ConfigGroupPanel(self, columns=2)
+        self._compatibility_panel = self._page_panels["compatibility"]
         self._page_widgets: dict[str, QWidget] = {}
         self._run_buttons: list[PushButton] = []
 
-        for key in ("dut", "execution", "stability"):
+        for key in ("dut", "execution", "stability", "compatibility"):
             panel = self._page_panels[key]
             page = QWidget()
             page.setObjectName(f"config_{key}_page")

@@ -8,13 +8,13 @@ from Qt signal/slot plumbing.
 
 from __future__ import annotations
 
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Dict, Iterable, Mapping, Sequence
 from contextlib import ExitStack
 
 import yaml
 
-from PyQt5.QtCore import Qt, QSignalBlocker, pyqtSignal
+from PyQt5.QtCore import Qt, QSignalBlocker, pyqtSignal, QObject
 from PyQt5.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
@@ -128,6 +128,38 @@ def bind_view_events(page: Any, view_key: str, event_handler: Any) -> None:
 
         if initial:
             handler()
+
+
+def _extract_category_from_parts(parts: Sequence[str]) -> str | None:
+    """Return the test category (folder under ``test``) from path parts."""
+    for index, part in enumerate(parts):
+        if part == "test" and index + 1 < len(parts):
+            return parts[index + 1].lower()
+    return None
+
+
+def determine_case_category(case_path: str | None = None, display_path: str | None = None) -> str | None:
+    """Best-effort category detection for a testcase path.
+
+    The category is defined as the first directory immediately under
+    ``test`` within the relative path, for example:
+
+    - ``src/test/stability/test_str.py`` -> ``stability``
+    - ``test/compatibility/test_compatibility.py`` -> ``compatibility``
+    """
+    candidate_paths: list[str] = []
+    if display_path:
+        candidate_paths.append(str(display_path))
+    if case_path:
+        candidate_paths.append(str(case_path))
+
+    for raw in candidate_paths:
+        normalized = raw.replace("\\", "/")
+        parts = PurePosixPath(normalized).parts
+        category = _extract_category_from_parts(parts)
+        if category:
+            return category
+    return None
 
 
 class FormListPage(CardWidget):
@@ -591,8 +623,129 @@ class RouterConfigForm(CardWidget):
         self.deleteRequested.emit()
 
 
+class FormListBinder(QObject):
+    """
+    Lightweight helper that keeps a form widget and a FormListPage
+    synchronised via a shared list of row dictionaries.
+
+    The binder assumes:
+
+    - ``form`` exposes ``rowChanged(dict)``, ``addRequested(dict)`` and
+      ``deleteRequested()`` signals plus a ``load_row(mapping)`` method.
+    - ``list_widget`` is a :class:`FormListPage` (or compatible) with
+      ``currentRowChanged(int)``, ``current_row()``, ``set_rows()`` and
+      ``update_row()`` helpers.
+
+    Callers supply the shared ``rows`` list and optional callbacks:
+
+    - ``on_row_updated(index, row)`` is invoked after a row is merged with
+      form data but before the list widget is refreshed, allowing callers
+      to adjust fields such as ``_checked`` flags.
+    - ``on_rows_changed(rows)`` runs after rows have been added/removed or
+      updated, so controllers can trigger persistence (CSV/YAML) or emit
+      higher-level signals.
+    """
+
+    def __init__(
+        self,
+        form: QObject,
+        list_widget: Any,
+        rows: list[dict[str, Any]],
+        *,
+        on_row_updated: Any | None = None,
+        on_rows_changed: Any | None = None,
+        bind_add: bool = True,
+        bind_delete: bool = True,
+    ) -> None:
+        super().__init__(form)
+        self._form = form
+        self._list = list_widget
+        self._rows = rows
+        self._on_row_updated = on_row_updated
+        self._on_rows_changed = on_rows_changed
+
+        # Selection changes: populate form from the active row.
+        if hasattr(self._list, "currentRowChanged"):
+            self._list.currentRowChanged.connect(self._on_list_row_changed)
+
+        # Form edits: merge into current row and refresh list.
+        if hasattr(self._form, "rowChanged"):
+            self._form.rowChanged.connect(self._on_form_row_changed)
+
+        # Optional add/delete wiring.
+        if bind_add and hasattr(self._form, "addRequested"):
+            self._form.addRequested.connect(self._on_form_add_requested)
+        if bind_delete and hasattr(self._form, "deleteRequested"):
+            self._form.deleteRequested.connect(self._on_form_delete_requested)
+
+    # ------------------------------------------------------------------
+    # Internal slots
+    # ------------------------------------------------------------------
+
+    def _on_list_row_changed(self, index: int) -> None:
+        if not (0 <= index < len(self._rows)):
+            return
+        row = self._rows[index]
+        load = getattr(self._form, "load_row", None)
+        if callable(load):
+            load(row)
+
+    def _current_index(self) -> int:
+        getter = getattr(self._list, "current_row", None)
+        if callable(getter):
+            try:
+                return int(getter())
+            except Exception:
+                return -1
+        return -1
+
+    def _on_form_row_changed(self, data: Mapping[str, Any]) -> None:
+        index = self._current_index()
+        if not (0 <= index < len(self._rows)):
+            return
+        row = dict(self._rows[index])
+        row.update(dict(data))
+        if callable(self._on_row_updated):
+            self._on_row_updated(index, row)
+        self._rows[index] = row
+        if hasattr(self._list, "update_row"):
+            self._list.update_row(index, row)
+        if callable(self._on_rows_changed):
+            self._on_rows_changed(self._rows)
+
+    def _on_form_add_requested(self, data: Mapping[str, Any]) -> None:
+        row = dict(data)
+        self._rows.append(row)
+        if hasattr(self._list, "set_rows"):
+            self._list.set_rows(self._rows)
+        # Move selection to the new row if helper is available.
+        setter = getattr(self._list, "set_current_row", None)
+        if callable(setter) and self._rows:
+            setter(len(self._rows) - 1)
+        if callable(self._on_rows_changed):
+            self._on_rows_changed(self._rows)
+
+    def _on_form_delete_requested(self) -> None:
+        index = self._current_index()
+        if not (0 <= index < len(self._rows)):
+            return
+        del self._rows[index]
+        if hasattr(self._list, "set_rows"):
+            self._list.set_rows(self._rows)
+        if self._rows:
+            setter = getattr(self._list, "set_current_row", None)
+            if callable(setter):
+                setter(min(index, len(self._rows) - 1))
+        if callable(self._on_rows_changed):
+            self._on_rows_changed(self._rows)
+
 # Backwards-compatible alias for existing imports.
-CasePage = FormListPage
 
 
-__all__ = ["bind_view_events", "FormListPage", "CasePage", "RouterConfigForm"]
+__all__ = [
+    "bind_view_events",
+    "FormListPage",
+    "RouterConfigForm",
+    "determine_case_category",
+    "FormListBinder",
+]

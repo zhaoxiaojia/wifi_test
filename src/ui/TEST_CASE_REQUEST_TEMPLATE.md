@@ -20,21 +20,21 @@ test case, copy this template and fill in the sections.
    - Target file under `src/test/...`, e.g.
      `src/test/performance/test_wifi_<name>.py`.
 4. **Expected input source**
-   - `YAML only` (Execution/DUT/Stability panels), or  
+   - `YAML only` (Performance/DUT/Stability panels), or  
    - `YAML + CSV` (per‑scenario rows, like RvR), or  
    - other (describe).
 
 ---
 
-## B. Execution page requirements (Config → Execution panel)
+## B. Performance page requirements (Config → Performance panel)
 
-This corresponds to the Execution panel described in `README.md` §2.1–2.3.
+This corresponds to the Performance panel described in `README.md` §2.1–2.3.
 
 1. **Selected Test Case**
    - Default `text_case` value (relative to `src/test`, e.g.
      `test/performance/test_wifi_<name>.py`).  
    - Does this case need any special validation before running?
-2. **New or changed fields in `config_execution.yaml`**
+2. **New or changed fields in `config_performance.yaml`**
    - For each field:
      - YAML key (e.g. `rvr.repeat`, `rf_solution.step`).
      - Widget type (`line_edit`, `combo_box`, `checkbox`, `spin`, etc.).
@@ -112,4 +112,3 @@ This helps connect YAML/CSV fields to the pytest implementation.
 3. **Anything else Codex should know**
    - Links to existing tests with similar behaviour.
    - Known pitfalls from previous versions.
-
