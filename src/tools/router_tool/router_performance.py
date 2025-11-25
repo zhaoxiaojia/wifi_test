@@ -17,7 +17,14 @@ from src.util.constants import RouterConst
 
 wifichip, interface = RouterConst.dut_wifichip.split('_')
 
-
+FPGA_CONFIG = {
+    'W1': {'mimo': '1X1', '2.4G': '11N', '5G': '11AC'},
+    'W1L': {'mimo': '1X1', '2.4G': '11N', '5G': '11AC'},
+    'W1U': {'mimo': '1X1', '2.4G': '11N', '5G': '11AC'},
+    'W2': {'mimo': '2X2', '2.4G': '11AX', '5G': '11AX'},
+    'W2U': {'mimo': '2X2', '2.4G': '11AX', '5G': '11AX'},
+    'W2L': {'mimo': '2X2', '2.4G': '11AX', '5G': '11AX'}
+}
 @dataclass
 class compatibility_router(json_mixin):
     """

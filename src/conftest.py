@@ -27,6 +27,7 @@ import csv  # noqa: F401  (kept for potential future CSV export)
 from src.tools.connect_tool.adb import adb
 from src.tools.connect_tool.serial_tool import serial_tool
 from src.tools.connect_tool.telnet_tool import telnet_tool
+from src.tools.connect_tool.local_os import LocalOS
 from src.tools.TestResult import TestResult
 from src.tools.config_loader import load_config
 from src.dut_control.roku_ctrl import roku_ctrl
@@ -172,7 +173,7 @@ def pytest_sessionstart(session):
         pytest.win_flag = True
     else:
         pytest.win_flag = False
-
+    pytest.host_os = LocalOS()
     # Load configuration (fresh)
     pytest.config = load_config(refresh=True) or {}
 
