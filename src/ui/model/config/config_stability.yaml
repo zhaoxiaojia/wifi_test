@@ -7,7 +7,7 @@ check_point:
   ping: false
   ping_targets: 192.168.1.1
 cases:
-  test_str:
+  test_switch_wifi_str:
     ac:
       enabled: false
       on_duration: '5'
@@ -17,15 +17,14 @@ cases:
       relay_type: usb_relay
       relay_params: []
     str:
-      enabled: false
+      enabled: true
       on_duration: '14'
       off_duration: '15'
       port: ''
       mode: 'NO'
       relay_type: usb_relay
       relay_params: []
-  test_switch_wifi:
     use_router: false
     router_csv: performance_test_csv/rvr_wifi_setup.csv
     manual_entries: []
-text_case: ''
+text_case: test/stability/test_switch_wifi_str.py

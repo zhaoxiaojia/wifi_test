@@ -12,7 +12,12 @@ from PyQt5.QtCore import QSortFilterProxyModel, QSignalBlocker, QTimer
 from PyQt5.QtWidgets import QWidget, QCheckBox, QFormLayout, QLabel, QSpinBox, QDoubleSpinBox
 from qfluentwidgets import LineEdit, ComboBox
 
-from src.util.constants import WIFI_PRODUCT_PROJECT_MAP, ANDROID_KERNEL_MAP
+from src.util.constants import (
+    WIFI_PRODUCT_PROJECT_MAP,
+    ANDROID_KERNEL_MAP,
+    SWITCH_WIFI_CASE_KEY,
+    SWITCH_WIFI_CASE_KEYS,
+)
 from src.ui.model.rules import normalize_connect_type_label, current_connect_type, evaluate_all_rules
 from src.ui.model.autosave import autosave_config
 from src.ui.view.builder import build_groups_from_schema, load_ui_schema
@@ -969,14 +974,18 @@ def update_script_config_ui(page: Any, case_path: str) -> None:
                         except Exception:
                             logging.debug("Fallback page loader failed", exc_info=True)
                 active_entry = entry
-                if key == "test_switch_wifi":
+                if key in SWITCH_WIFI_CASE_KEYS:
                     field_widgets = getattr(page, "field_widgets", {}) or {}
                     use_router = (
-                        field_widgets.get("stability.cases.switch_wifi.use_router")
+                        field_widgets.get(f"stability.cases.{SWITCH_WIFI_CASE_KEY}.use_router")
+                        or field_widgets.get(f"cases.{SWITCH_WIFI_CASE_KEY}.use_router")
+                        or field_widgets.get("stability.cases.switch_wifi.use_router")
                         or field_widgets.get("cases.test_switch_wifi.use_router")
                     )
                     router_csv = (
-                        field_widgets.get("stability.cases.switch_wifi.router_csv")
+                        field_widgets.get(f"stability.cases.{SWITCH_WIFI_CASE_KEY}.router_csv")
+                        or field_widgets.get(f"cases.{SWITCH_WIFI_CASE_KEY}.router_csv")
+                        or field_widgets.get("stability.cases.switch_wifi.router_csv")
                         or field_widgets.get("cases.test_switch_wifi.router_csv")
                     )
                     if isinstance(use_router, QCheckBox) and router_csv is not None:

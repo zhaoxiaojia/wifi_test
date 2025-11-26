@@ -162,9 +162,14 @@ AUTH_OPTIONS: Final[tuple[str, ...]] = (
 )
 OPEN_AUTH: Final[frozenset[str]] = frozenset({"Open System"})
 
-# ``test_switch_wifi`` case field names reused by UI and configuration helpers.
-SWITCH_WIFI_CASE_KEY: Final[str] = "test_switch_wifi"
-SWITCH_WIFI_CASE_ALIASES: Final[tuple[str, ...]] = ("test_swtich_wifi",)
+# ``test_switch_wifi`` / ``test_switch_wifi_str`` case field names reused by UI and configuration helpers.
+# Canonical key uses the merged stability script name; legacy aliases keep older
+# configs and test paths working transparently.
+SWITCH_WIFI_CASE_KEY: Final[str] = "test_switch_wifi_str"
+SWITCH_WIFI_CASE_ALIASES: Final[tuple[str, ...]] = (
+    "test_switch_wifi",
+    "test_swtich_wifi",
+)
 SWITCH_WIFI_CASE_KEYS: Final[frozenset[str]] = frozenset(
     (SWITCH_WIFI_CASE_KEY, *SWITCH_WIFI_CASE_ALIASES)
 )

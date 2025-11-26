@@ -40,9 +40,9 @@ from src.ui.view.config.actions import (
     refresh_config_page_controls,
     apply_ui,
 )
-from src.ui.view.config.config_str import create_test_str_config_entry_from_schema
 from src.ui.view.config import (
     create_test_switch_wifi_config_entry_from_schema,
+    create_test_switch_wifi_str_config_entry_from_schema,
     initialize_script_config_groups,
 )
 from src.util.constants import (
@@ -440,7 +440,9 @@ class CaseConfigPage(ConfigView):
         self._script_config_factories: dict[
             str, Callable[[Any, str, str, Mapping[str, Any]], ScriptConfigEntry]
         ] = {
-            "test/stability/test_str.py": create_test_str_config_entry_from_schema,
+            # Merged stability script combining STR relay and Wi‑Fi switching.
+            "test/stability/test_switch_wifi_str.py": create_test_switch_wifi_str_config_entry_from_schema,
+            # Legacy switch‑Wi‑Fi script (Wi‑Fi list only) kept for backward compatibility.
             "test/stability/test_switch_wifi.py": create_test_switch_wifi_config_entry_from_schema,
         }
         self._script_groups: dict[str, ScriptConfigEntry] = {}

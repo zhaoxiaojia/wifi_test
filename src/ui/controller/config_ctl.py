@@ -190,20 +190,6 @@ class ConfigController:
         if entry is None:
             entry = {}
 
-        if case_key == SWITCH_WIFI_CASE_KEY:
-            entry.setdefault(SWITCH_WIFI_USE_ROUTER_FIELD, False)
-            router_csv = entry.get(SWITCH_WIFI_ROUTER_CSV_FIELD)
-            entry[SWITCH_WIFI_ROUTER_CSV_FIELD] = str(router_csv or "").strip()
-            manual_entries = entry.get(SWITCH_WIFI_MANUAL_ENTRIES_FIELD)
-            entry[SWITCH_WIFI_MANUAL_ENTRIES_FIELD] = normalize_switch_wifi_manual_entries(
-                manual_entries
-            )
-            cases_section[case_key] = entry
-            for legacy_key in SWITCH_WIFI_CASE_ALIASES:
-                if legacy_key in cases_section:
-                    cases_section.pop(legacy_key, None)
-            return entry
-
         def _ensure_branch(name: str) -> None:
             branch = entry.get(name)
             if not isinstance(branch, dict):
@@ -214,6 +200,24 @@ class ConfigController:
             branch.setdefault("port", "")
             branch.setdefault("mode", "NO")
             entry[name] = branch
+
+        if case_key == SWITCH_WIFI_CASE_KEY:
+            entry.setdefault(SWITCH_WIFI_USE_ROUTER_FIELD, False)
+            router_csv = entry.get(SWITCH_WIFI_ROUTER_CSV_FIELD)
+            entry[SWITCH_WIFI_ROUTER_CSV_FIELD] = str(router_csv or "").strip()
+            manual_entries = entry.get(SWITCH_WIFI_MANUAL_ENTRIES_FIELD)
+            entry[SWITCH_WIFI_MANUAL_ENTRIES_FIELD] = normalize_switch_wifi_manual_entries(
+                manual_entries
+            )
+            # Merged stability case uses both AC/STR relay branches and Wi‑Fi
+            # router/manual list in a single config entry.
+            _ensure_branch("ac")
+            _ensure_branch("str")
+            cases_section[case_key] = entry
+            for legacy_key in SWITCH_WIFI_CASE_ALIASES:
+                if legacy_key in cases_section:
+                    cases_section.pop(legacy_key, None)
+            return entry
 
         _ensure_branch("ac")
         _ensure_branch("str")
@@ -500,6 +504,10 @@ class ConfigController:
                     from src.ui.view.config.config_switch_wifi import normalize_switch_wifi_manual_entries
 
                     cases[SWITCH_WIFI_CASE_KEY] = {
+                        # Merged stability case keeps AC/STR relay branches
+                        # alongside Wi‑Fi router/manual configuration.
+                        "ac": _normalize_cycle(case_value.get("ac")),
+                        "str": _normalize_cycle(case_value.get("str")),
                         SWITCH_WIFI_USE_ROUTER_FIELD: bool(
                             case_value.get(SWITCH_WIFI_USE_ROUTER_FIELD)
                         ),

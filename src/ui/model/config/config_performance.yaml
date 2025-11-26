@@ -30,7 +30,7 @@ rvr:
 router:
   name: xiaomibe7000
   address: 192.168.31.1
-text_case: test/compatibility/test_compatibility.py
+text_case: test/stability/test_switch_wifi_str.py
 debug:
   database_mode: false
   skip_router: true
@@ -44,7 +44,7 @@ check_point:
   ping: false
   ping_targets: 192.168.1.1
 cases:
-  test_str:
+  test_switch_wifi_str:
     ac:
       enabled: false
       on_duration: '5'
@@ -54,14 +54,18 @@ cases:
       port: ''
       mode: 'NO'
     str:
-      enabled: false
+      enabled: true
       on_duration: '14'
       off_duration: '15'
       relay_type: usb_relay
       relay_params: []
       port: ''
       mode: 'NO'
-  test_switch_wifi:
     use_router: false
     router_csv: C:\Users\SH171300-1522\PycharmProjects\wifi_test\config\performance_test_csv\rvr_wifi_setup.csv
     manual_entries: []
+  test_switch_wifi:
+    manual_entries: []
+    use_router: false
+    router_csv: C:\Users\SH171300-1522\PycharmProjects\wifi_test\config\performance_test_csv\rvr_wifi_setup.csv
+csv_path: performance_test_csv/rvr_wifi_setup.csv

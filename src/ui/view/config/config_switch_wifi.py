@@ -12,6 +12,8 @@ from qfluentwidgets import ComboBox
 from src.util.constants import (
     AUTH_OPTIONS,
     OPEN_AUTH,
+    SWITCH_WIFI_CASE_KEY,
+    SWITCH_WIFI_CASE_KEYS,
     SWITCH_WIFI_ENTRY_PASSWORD_FIELD,
     SWITCH_WIFI_ENTRY_SECURITY_FIELD,
     SWITCH_WIFI_ENTRY_SSID_FIELD,
@@ -228,15 +230,21 @@ def _resolve_switch_wifi_widgets(page: Any) -> tuple[Any, Any, Any]:
     """Helper to resolve switch_wifi widgets from the page field map."""
     field_widgets = getattr(page, "field_widgets", {}) or {}
     use_router = (
-        field_widgets.get("stability.cases.switch_wifi.use_router")
+        field_widgets.get(f"stability.cases.{SWITCH_WIFI_CASE_KEY}.use_router")
+        or field_widgets.get(f"cases.{SWITCH_WIFI_CASE_KEY}.use_router")
+        or field_widgets.get("stability.cases.switch_wifi.use_router")
         or field_widgets.get("cases.test_switch_wifi.use_router")
     )
     router_csv = (
-        field_widgets.get("stability.cases.switch_wifi.router_csv")
+        field_widgets.get(f"stability.cases.{SWITCH_WIFI_CASE_KEY}.router_csv")
+        or field_widgets.get(f"cases.{SWITCH_WIFI_CASE_KEY}.router_csv")
+        or field_widgets.get("stability.cases.switch_wifi.router_csv")
         or field_widgets.get("cases.test_switch_wifi.router_csv")
     )
     wifi_list = (
-        field_widgets.get("stability.cases.switch_wifi.manual_entries")
+        field_widgets.get(f"stability.cases.{SWITCH_WIFI_CASE_KEY}.manual_entries")
+        or field_widgets.get(f"cases.{SWITCH_WIFI_CASE_KEY}.manual_entries")
+        or field_widgets.get("stability.cases.switch_wifi.manual_entries")
         or field_widgets.get("cases.test_switch_wifi.manual_entries")
     )
     return use_router, router_csv, wifi_list
@@ -255,7 +263,7 @@ def sync_switch_wifi_on_csv_changed(page: Any, new_path: str | None) -> None:
             script_key = ""
     except Exception:
         script_key = ""
-    if script_key != "switch_wifi":
+    if script_key not in SWITCH_WIFI_CASE_KEYS:
         return
 
     use_router, router_csv, wifi_list = _resolve_switch_wifi_widgets(page)
@@ -369,7 +377,14 @@ def handle_switch_wifi_use_router_changed(page: Any, checked: bool) -> None:
             cfg = getattr(page, "config", {}) or {}
             stability = cfg.get("stability", {}) if isinstance(cfg, dict) else {}
             cases = stability.get("cases", {}) if isinstance(stability, dict) else {}
-            case_cfg = cases.get("test_switch_wifi", {}) if isinstance(cases, dict) else {}
+            case_cfg = {}
+            if isinstance(cases, dict):
+                case_cfg = (
+                    cases.get(SWITCH_WIFI_CASE_KEY)
+                    or cases.get("test_switch_wifi")
+                    or cases.get("switch_wifi")
+                    or {}
+                )
             entries = case_cfg.get(SWITCH_WIFI_MANUAL_ENTRIES_FIELD, [])
             wifi_list.set_entries(entries)
     if config_ctl is not None:
@@ -410,7 +425,7 @@ def handle_switch_wifi_router_csv_changed(page: Any, index: int) -> None:
 
     if isinstance(wifi_list, SwitchWifiConfigPage) and config_ctl is not None:
         try:
-            entries = config_ctl.load_switch_wifi_entries(new_path)
+            entries = config_ctl.load_switch_wifi_entries(csv_path)
         except Exception:
             entries = []
         # 仅刷新展示，不写回配置，避免覆盖 YAML。

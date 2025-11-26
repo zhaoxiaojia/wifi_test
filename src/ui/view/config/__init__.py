@@ -24,6 +24,7 @@ from src.util.constants import (
     SWITCH_WIFI_ROUTER_CSV_FIELD,
     SWITCH_WIFI_USE_ROUTER_FIELD,
 )
+from src.ui.view.config.config_str import create_test_str_config_entry_from_schema
 
 
 def init_stability_common_groups(page: Any) -> None:
@@ -110,6 +111,83 @@ def create_test_switch_wifi_config_entry_from_schema(
 
     field_keys = set(widgets.keys())
     section_controls: dict[str, tuple[QCheckBox, Sequence[QWidget]]] = {}
+
+    return ScriptConfigEntry(
+        group=group,
+        widgets=widgets,
+        field_keys=field_keys,
+        section_controls=section_controls,
+        case_key=case_key,
+        case_path=case_path,
+    )
+
+
+def create_test_switch_wifi_str_config_entry_from_schema(
+    page: Any,
+    case_key: str,
+    case_path: str,
+    data: Mapping[str, Any],
+) -> ScriptConfigEntry:
+    """
+    Build ScriptConfigEntry for the merged ``test_switch_wifi_str`` stability case.
+
+    This combines the STR/AC relay controls from the ``test_str`` schema with the
+    Wi‑Fi router/manual configuration used by ``test_switch_wifi``, stacking them
+    vertically in a single two‑column stability group.
+    """
+    # First, create the STR/AC portion using the existing helper.
+    base_entry = create_test_str_config_entry_from_schema(page, case_key, case_path, data)
+    group = base_entry.group
+    widgets: dict[str, QWidget] = dict(base_entry.widgets)
+    section_controls = dict(base_entry.section_controls)
+
+    # Then, extend the same group with switch‑Wi‑Fi controls.
+    section_id = f"cases.{case_key}"
+    field_widgets = getattr(page, "field_widgets", {})
+
+    def _bind_field(field: str) -> QWidget | None:
+        key = script_field_key(case_key, field)
+        widget = field_widgets.get(key)
+        if widget is None:
+            raw_key = f"{section_id}.{field}"
+            widget = field_widgets.get(raw_key)
+            if widget is not None:
+                field_widgets[key] = widget
+        if widget is not None:
+            widgets[key] = widget
+        return widget
+
+    use_router_widget = _bind_field(SWITCH_WIFI_USE_ROUTER_FIELD)
+    router_widget = _bind_field(SWITCH_WIFI_ROUTER_CSV_FIELD)
+
+    # Insert SwitchWifiConfigPage as manual_entries editor at the bottom of the group.
+    try:
+        parent = group
+        layout = parent.layout()
+        if not isinstance(layout, QFormLayout):
+            layout = QFormLayout(parent)
+            parent.setLayout(layout)
+
+        editor = SwitchWifiConfigPage(parent)
+        layout.addRow(editor)
+
+        key_script = script_field_key(case_key, SWITCH_WIFI_MANUAL_ENTRIES_FIELD)
+        widgets[key_script] = editor
+        field_widgets[key_script] = editor
+        # Backwards compatible aliases using the legacy case key in dotted form.
+        alias_prefix = "cases.test_switch_wifi."
+        field_widgets[f"{alias_prefix}{SWITCH_WIFI_MANUAL_ENTRIES_FIELD}"] = editor
+        if use_router_widget is not None:
+            field_widgets[f"{alias_prefix}{SWITCH_WIFI_USE_ROUTER_FIELD}"] = use_router_widget
+        if router_widget is not None:
+            field_widgets[f"{alias_prefix}{SWITCH_WIFI_ROUTER_CSV_FIELD}"] = router_widget
+
+    except Exception as exc:  # pragma: no cover - debug only
+        import logging
+
+        logging.info("[DEBUG switch_wifi_str] failed to extend group:", repr(exc))
+
+    field_keys = set(widgets.keys())
 
     return ScriptConfigEntry(
         group=group,
@@ -230,6 +308,7 @@ __all__ = [
     "init_stability_common_groups",
     "script_field_key",
     "create_test_switch_wifi_config_entry_from_schema",
+    "create_test_switch_wifi_str_config_entry_from_schema",
     "initialize_script_config_groups",
     "compose_stability_groups",
     "register_switch_wifi_csv_combo",

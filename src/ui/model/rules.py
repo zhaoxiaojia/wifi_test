@@ -488,72 +488,72 @@ CUSTOM_SIMPLE_UI_RULES.append(
 )
 
 
-# 9) test_str Stability: AC/STR section enabled flags.
+# 9) Combined stability (test_switch_wifi_str): AC/STR section enabled flags.
 CUSTOM_SIMPLE_UI_RULES.append(
     SimpleRuleSpec(
-        trigger_field="stability.cases.test_str.ac.enabled",
+        trigger_field="stability.cases.test_switch_wifi_str.ac.enabled",
         effects=[
             # When AC is enabled, all AC fields are editable.
             SimpleFieldEffect(
-                target_field="stability.cases.test_str.ac.on_duration",
+                target_field="stability.cases.test_switch_wifi_str.ac.on_duration",
                 action="enable",
-                condition=lambda values: _value_as_bool(values, "stability.cases.test_str.ac.enabled"),
+                condition=lambda values: _value_as_bool(values, "stability.cases.test_switch_wifi_str.ac.enabled"),
             ),
             SimpleFieldEffect(
-                target_field="stability.cases.test_str.ac.off_duration",
+                target_field="stability.cases.test_switch_wifi_str.ac.off_duration",
                 action="enable",
-                condition=lambda values: _value_as_bool(values, "stability.cases.test_str.ac.enabled"),
+                condition=lambda values: _value_as_bool(values, "stability.cases.test_switch_wifi_str.ac.enabled"),
             ),
             SimpleFieldEffect(
-                target_field="stability.cases.test_str.ac.relay_type",
+                target_field="stability.cases.test_switch_wifi_str.ac.relay_type",
                 action="enable",
-                condition=lambda values: _value_as_bool(values, "stability.cases.test_str.ac.enabled"),
+                condition=lambda values: _value_as_bool(values, "stability.cases.test_switch_wifi_str.ac.enabled"),
             ),
             SimpleFieldEffect(
-                target_field="stability.cases.test_str.ac.port",
+                target_field="stability.cases.test_switch_wifi_str.ac.port",
                 action="enable",
-                condition=lambda values: _value_as_bool(values, "stability.cases.test_str.ac.enabled"),
+                condition=lambda values: _value_as_bool(values, "stability.cases.test_switch_wifi_str.ac.enabled"),
             ),
             SimpleFieldEffect(
-                target_field="stability.cases.test_str.ac.mode",
+                target_field="stability.cases.test_switch_wifi_str.ac.mode",
                 action="enable",
-                condition=lambda values: _value_as_bool(values, "stability.cases.test_str.ac.enabled"),
+                condition=lambda values: _value_as_bool(values, "stability.cases.test_switch_wifi_str.ac.enabled"),
             ),
             SimpleFieldEffect(
-                target_field="stability.cases.test_str.ac.relay_params",
+                target_field="stability.cases.test_switch_wifi_str.ac.relay_params",
                 action="enable",
-                condition=lambda values: _value_as_bool(values, "stability.cases.test_str.ac.enabled"),
+                condition=lambda values: _value_as_bool(values, "stability.cases.test_switch_wifi_str.ac.enabled"),
             ),
             # When AC is disabled, all AC fields are disabled.
             SimpleFieldEffect(
-                target_field="stability.cases.test_str.ac.on_duration",
+                target_field="stability.cases.test_switch_wifi_str.ac.on_duration",
                 action="disable",
-                condition=lambda values: not _value_as_bool(values, "stability.cases.test_str.ac.enabled"),
+                condition=lambda values: not _value_as_bool(values, "stability.cases.test_switch_wifi_str.ac.enabled"),
             ),
             SimpleFieldEffect(
-                target_field="stability.cases.test_str.ac.off_duration",
+                target_field="stability.cases.test_switch_wifi_str.ac.off_duration",
                 action="disable",
-                condition=lambda values: not _value_as_bool(values, "stability.cases.test_str.ac.enabled"),
+                condition=lambda values: not _value_as_bool(values, "stability.cases.test_switch_wifi_str.ac.enabled"),
             ),
             SimpleFieldEffect(
-                target_field="stability.cases.test_str.ac.relay_type",
+                target_field="stability.cases.test_switch_wifi_str.ac.relay_type",
                 action="disable",
-                condition=lambda values: not _value_as_bool(values, "stability.cases.test_str.ac.enabled"),
+                condition=lambda values: not _value_as_bool(values, "stability.cases.test_switch_wifi_str.ac.enabled"),
             ),
             SimpleFieldEffect(
-                target_field="stability.cases.test_str.ac.port",
+                target_field="stability.cases.test_switch_wifi_str.ac.port",
                 action="disable",
-                condition=lambda values: not _value_as_bool(values, "stability.cases.test_str.ac.enabled"),
+                condition=lambda values: not _value_as_bool(values, "stability.cases.test_switch_wifi_str.ac.enabled"),
             ),
             SimpleFieldEffect(
-                target_field="stability.cases.test_str.ac.mode",
+                target_field="stability.cases.test_switch_wifi_str.ac.mode",
                 action="disable",
-                condition=lambda values: not _value_as_bool(values, "stability.cases.test_str.ac.enabled"),
+                condition=lambda values: not _value_as_bool(values, "stability.cases.test_switch_wifi_str.ac.enabled"),
             ),
             SimpleFieldEffect(
-                target_field="stability.cases.test_str.ac.relay_params",
+                target_field="stability.cases.test_switch_wifi_str.ac.relay_params",
                 action="disable",
-                condition=lambda values: not _value_as_bool(values, "stability.cases.test_str.ac.enabled"),
+                condition=lambda values: not _value_as_bool(values, "stability.cases.test_switch_wifi_str.ac.enabled"),
             ),
         ],
     )
@@ -561,69 +561,69 @@ CUSTOM_SIMPLE_UI_RULES.append(
 
 CUSTOM_SIMPLE_UI_RULES.append(
     SimpleRuleSpec(
-        trigger_field="stability.cases.test_str.str.enabled",
+        trigger_field="stability.cases.test_switch_wifi_str.str.enabled",
         effects=[
             # STR branch enabled -> STR fields editable.
             SimpleFieldEffect(
-                target_field="stability.cases.test_str.str.on_duration",
+                target_field="stability.cases.test_switch_wifi_str.str.on_duration",
                 action="enable",
-                condition=lambda values: _value_as_bool(values, "stability.cases.test_str.str.enabled"),
+                condition=lambda values: _value_as_bool(values, "stability.cases.test_switch_wifi_str.str.enabled"),
             ),
             SimpleFieldEffect(
-                target_field="stability.cases.test_str.str.off_duration",
+                target_field="stability.cases.test_switch_wifi_str.str.off_duration",
                 action="enable",
-                condition=lambda values: _value_as_bool(values, "stability.cases.test_str.str.enabled"),
+                condition=lambda values: _value_as_bool(values, "stability.cases.test_switch_wifi_str.str.enabled"),
             ),
             SimpleFieldEffect(
-                target_field="stability.cases.test_str.str.relay_type",
+                target_field="stability.cases.test_switch_wifi_str.str.relay_type",
                 action="enable",
-                condition=lambda values: _value_as_bool(values, "stability.cases.test_str.str.enabled"),
+                condition=lambda values: _value_as_bool(values, "stability.cases.test_switch_wifi_str.str.enabled"),
             ),
             SimpleFieldEffect(
-                target_field="stability.cases.test_str.str.port",
+                target_field="stability.cases.test_switch_wifi_str.str.port",
                 action="enable",
-                condition=lambda values: _value_as_bool(values, "stability.cases.test_str.str.enabled"),
+                condition=lambda values: _value_as_bool(values, "stability.cases.test_switch_wifi_str.str.enabled"),
             ),
             SimpleFieldEffect(
-                target_field="stability.cases.test_str.str.mode",
+                target_field="stability.cases.test_switch_wifi_str.str.mode",
                 action="enable",
-                condition=lambda values: _value_as_bool(values, "stability.cases.test_str.str.enabled"),
+                condition=lambda values: _value_as_bool(values, "stability.cases.test_switch_wifi_str.str.enabled"),
             ),
             SimpleFieldEffect(
-                target_field="stability.cases.test_str.str.relay_params",
+                target_field="stability.cases.test_switch_wifi_str.str.relay_params",
                 action="enable",
-                condition=lambda values: _value_as_bool(values, "stability.cases.test_str.str.enabled"),
+                condition=lambda values: _value_as_bool(values, "stability.cases.test_switch_wifi_str.str.enabled"),
             ),
             # STR branch disabled -> STR fields disabled.
             SimpleFieldEffect(
-                target_field="stability.cases.test_str.str.on_duration",
+                target_field="stability.cases.test_switch_wifi_str.str.on_duration",
                 action="disable",
-                condition=lambda values: not _value_as_bool(values, "stability.cases.test_str.str.enabled"),
+                condition=lambda values: not _value_as_bool(values, "stability.cases.test_switch_wifi_str.str.enabled"),
             ),
             SimpleFieldEffect(
-                target_field="stability.cases.test_str.str.off_duration",
+                target_field="stability.cases.test_switch_wifi_str.str.off_duration",
                 action="disable",
-                condition=lambda values: not _value_as_bool(values, "stability.cases.test_str.str.enabled"),
+                condition=lambda values: not _value_as_bool(values, "stability.cases.test_switch_wifi_str.str.enabled"),
             ),
             SimpleFieldEffect(
-                target_field="stability.cases.test_str.str.relay_type",
+                target_field="stability.cases.test_switch_wifi_str.str.relay_type",
                 action="disable",
-                condition=lambda values: not _value_as_bool(values, "stability.cases.test_str.str.enabled"),
+                condition=lambda values: not _value_as_bool(values, "stability.cases.test_switch_wifi_str.str.enabled"),
             ),
             SimpleFieldEffect(
-                target_field="stability.cases.test_str.str.port",
+                target_field="stability.cases.test_switch_wifi_str.str.port",
                 action="disable",
-                condition=lambda values: not _value_as_bool(values, "stability.cases.test_str.str.enabled"),
+                condition=lambda values: not _value_as_bool(values, "stability.cases.test_switch_wifi_str.str.enabled"),
             ),
             SimpleFieldEffect(
-                target_field="stability.cases.test_str.str.mode",
+                target_field="stability.cases.test_switch_wifi_str.str.mode",
                 action="disable",
-                condition=lambda values: not _value_as_bool(values, "stability.cases.test_str.str.enabled"),
+                condition=lambda values: not _value_as_bool(values, "stability.cases.test_switch_wifi_str.str.enabled"),
             ),
             SimpleFieldEffect(
-                target_field="stability.cases.test_str.str.relay_params",
+                target_field="stability.cases.test_switch_wifi_str.str.relay_params",
                 action="disable",
-                condition=lambda values: not _value_as_bool(values, "stability.cases.test_str.str.enabled"),
+                condition=lambda values: not _value_as_bool(values, "stability.cases.test_switch_wifi_str.str.enabled"),
             ),
         ],
     )
@@ -848,24 +848,24 @@ CUSTOM_TESTCASE_UI_RULES.append(
               # `test_switch_wifi` controls should always be user-editable
               # when the script group is visible.
               SimpleFieldEffect(
-                  target_field="stability.cases.test_switch_wifi.use_router",
+                  target_field="stability.cases.test_switch_wifi_str.use_router",
                   action="enable",
                   condition=lambda values: True,
               ),
               SimpleFieldEffect(
-                  target_field="stability.cases.test_switch_wifi.manual_entries",
+                  target_field="stability.cases.test_switch_wifi_str.manual_entries",
                   action="enable",
                   condition=lambda values: True,
               ),
             # `test_str` AC/STR enable checkboxes should always be user-editable
             # when the group is visible; testcase rules must not lock them out.
             SimpleFieldEffect(
-                target_field="stability.cases.test_str.ac.enabled",
+                target_field="stability.cases.test_switch_wifi_str.ac.enabled",
                 action="enable",
                 condition=lambda values: True,
             ),
             SimpleFieldEffect(
-                target_field="stability.cases.test_str.str.enabled",
+                target_field="stability.cases.test_switch_wifi_str.str.enabled",
                 action="enable",
                 condition=lambda values: True,
             ),

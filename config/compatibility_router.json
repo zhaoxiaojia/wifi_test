@@ -112,22 +112,6 @@
         }
     },
     {
-        "ip": "192.168.200.x",
-        "port": "x",
-        "brand": "MERCURY",
-        "model": "D126",
-        "2.4G": {
-            "mode": "11N",
-            "security_mode": "wpa2",
-            "bandwidth": "20MHz"
-        },
-        "5G": {
-            "mode": "11AC",
-            "security_mode": "wpa2",
-            "bandwidth": "80MHz"
-        }
-    },
-    {
         "ip": "192.168.200.3",
         "port": "8",
         "brand": "AT&T",
@@ -196,22 +180,6 @@
         "port": "4",
         "brand": "ZTE",
         "model": "ZXSLC SR6110",
-        "2.4G": {
-            "mode": "11AX",
-            "security_mode": "wpa2",
-            "bandwidth": "20MHz"
-        },
-        "5G": {
-            "mode": "11AX",
-            "security_mode": "wpa2",
-            "bandwidth": "80MHz"
-        }
-    },
-    {
-        "ip": "192.168.200.4",
-        "port": "5",
-        "brand": "TENDA",
-        "model": "BE6LPRO",
         "2.4G": {
             "mode": "11AX",
             "security_mode": "wpa2",
@@ -544,22 +512,6 @@
         }
     },
     {
-        "ip": "192.168.200.x",
-        "port": "x",
-        "brand": "ARRIS",
-        "model": "SBR-AC1200P",
-        "2.4G": {
-            "mode": "11N",
-            "security_mode": "wpa2",
-            "bandwidth": "20MHz"
-        },
-        "5G": {
-            "mode": "11AC",
-            "security_mode": "wpa2",
-            "bandwidth": "80MHz"
-        }
-    },
-    {
         "ip": "192.168.200.7",
         "port": "2",
         "brand": "TENDA",
@@ -674,24 +626,8 @@
     {
         "ip": "192.168.200.8",
         "port": "1",
-        "brand": "VANTIVA",
-        "model": "SDX62",
-        "2.4G": {
-            "mode": "11N",
-            "security_mode": "wpa2",
-            "bandwidth": "20MHz"
-        },
-        "5G": {
-            "mode": "11AX",
-            "security_mode": "wpa2",
-            "bandwidth": "80MHz"
-        }
-    },
-    {
-        "ip": "192.168.200.8",
-        "port": "3",
-        "brand": "PORTAL",
-        "model": "2AFZUSAP102",
+        "brand": "ARRIS",
+        "model": "TG3492LG-LG",
         "2.4G": {
             "mode": "11N",
             "security_mode": "wpa2",
@@ -705,7 +641,23 @@
     },
     {
         "ip": "192.168.200.8",
-        "port": "3",
+        "port": "4",
+        "brand": "MERCURY",
+        "model": "D126-LAN100M",
+        "2.4G": {
+            "mode": "11N",
+            "security_mode": "wpa2",
+            "bandwidth": "20MHz"
+        },
+        "5G": {
+            "mode": "11AC",
+            "security_mode": "wpa2",
+            "bandwidth": "80MHz"
+        }
+    },
+    {
+        "ip": "192.168.200.8",
+        "port": "5",
         "brand": "VANTIVA",
         "model": "SETUP-E089",
         "2.4G": {
@@ -721,9 +673,9 @@
     },
     {
         "ip": "192.168.200.8",
-        "port": "4",
-        "brand": "MERCURY",
-        "model": "D126-LAN100M",
+        "port": "7",
+        "brand": "BUFFALO",
+        "model": "WNR-5400XE6P/N",
         "2.4G": {
             "mode": "11N",
             "security_mode": "wpa2",
