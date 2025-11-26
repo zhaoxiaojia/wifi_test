@@ -59,7 +59,10 @@ from src.ui.view.config.config_switch_wifi import (
     normalize_switch_wifi_manual_entries,
     SwitchWifiConfigPage,
 )
-from src.ui.view.config.config_compatibility import CompatibilityRelayEditor
+from src.ui.view.config.config_compatibility import (
+    CompatibilityRelayEditor,
+    derive_selected_router_keys,
+)
 from src.ui.view.config.config_str import script_field_key
 from src.ui.controller import show_info_bar
 
@@ -751,6 +754,9 @@ class ConfigController:
                 # editor used on the Compatibility Settings panel.
                 relays = widget.relays()
                 ref[leaf] = relays
+                # Keep compatibility section free of redundant selected_routers.
+                compat_cfg = page.config.setdefault("compatibility", {})
+                compat_cfg.pop("selected_routers", None)
             elif isinstance(widget, ComboBox):
                 data_val = widget.currentData()
                 if data_val not in (None, "", widget.currentText()):

@@ -1,11 +1,36 @@
 compatibility:
   power_ctrl:
     relays:
+    - ip: 192.168.200.5
+      ports:
+      - 1
+      - 2
+      - 3
+      - 4
+      - 7
+      - 8
+    - ip: 192.168.200.4
+      ports:
+      - 1
+      - 2
+      - 3
+      - 4
+      - 7
+      - 8
+    - ip: 192.168.200.8
+      ports:
+      - 8
+    - ip: 192.168.200.7
+      ports:
+      - 6
+      - 8
     - ip: 192.168.200.3
       ports:
       - 1
       - 2
       - 3
       - 4
+      - 5
+      - 6
+      - 7
   nic: 以太网
-  selected_routers: []

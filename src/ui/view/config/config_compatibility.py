@@ -16,6 +16,7 @@ The page is intentionally UI‑only:
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 import json
@@ -125,6 +126,125 @@ def load_compatibility_router_catalog() -> tuple[list[str], list[CompatibilityRo
     return headers, rows
 
 
+def derive_selected_router_keys(relays: Iterable[Mapping[str, Any]] | None) -> list[str]:
+    """
+    Derive ``ip:port`` selection keys from configured relay entries.
+
+    The result is filtered against the router catalogue so we only return
+    entries that exist in ``compatibility_router.json``.  Ports are coerced
+    to integers to normalise values like ``\"1\"`` and ``1``.
+    """
+    try:
+        _, catalog = load_compatibility_router_catalog()
+        valid_keys = {row.key for row in catalog}
+    except Exception:
+        valid_keys = set()
+
+    selected: set[str] = set()
+    if relays is None:
+        return []
+
+    for item in relays:
+        if not isinstance(item, Mapping):
+            continue
+        ip = str(item.get("ip", "") or "").strip()
+        ports_val = item.get("ports") or []
+        if isinstance(ports_val, str):
+            ports_iter = [p.strip() for p in ports_val.split(",") if p.strip()]
+        elif isinstance(ports_val, Iterable):
+            ports_iter = ports_val
+        else:
+            ports_iter = []
+        for port in ports_iter:
+            try:
+                port_str = str(int(port))
+            except Exception:
+                continue
+            key_str = f"{ip}:{port_str}"
+            if valid_keys and key_str not in valid_keys:
+                continue
+            selected.add(key_str)
+    return sorted(selected)
+
+
+def apply_selected_keys_to_relays(
+    selected_keys: Iterable[str],
+    existing_relays: Iterable[Mapping[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """
+    Return a relay list that mirrors ``selected_keys`` while preserving
+    non-catalog ports from ``existing_relays``.
+
+    - Ports represented by the router catalogue are controlled solely by
+      ``selected_keys`` (checked rows on the Case page).
+    - Ports that are not part of the catalogue remain untouched so users
+      can keep custom relay wiring outside the compatibility list.
+    """
+    try:
+        _, catalog = load_compatibility_router_catalog()
+        valid_keys = {row.key for row in catalog}
+    except Exception:
+        valid_keys = set()
+
+    # Normalise selected keys -> ip -> {ports}
+    selected_map: dict[str, set[int]] = {}
+    for key in selected_keys or []:
+        if not isinstance(key, str) or ":" not in key:
+            continue
+        ip, port_str = key.split(":", 1)
+        try:
+            port = int(port_str)
+        except Exception:
+            continue
+        if valid_keys and key not in valid_keys:
+            continue
+        selected_map.setdefault(ip.strip(), set()).add(port)
+
+    # Start with any non-catalog ports from existing relays so we do not
+    # drop user-entered data that the compatibility table does not know about.
+    preserved_map: dict[str, set[int]] = {}
+    ordered_ips: list[str] = []
+
+    def _touch_ip(ip_val: str) -> None:
+        if ip_val not in ordered_ips:
+            ordered_ips.append(ip_val)
+
+    for entry in existing_relays or []:
+        if not isinstance(entry, Mapping):
+            continue
+        ip = str(entry.get("ip", "") or "").strip()
+        if not ip:
+            continue
+        _touch_ip(ip)
+        ports_val = entry.get("ports") or []
+        ports_iter = ports_val if isinstance(ports_val, Iterable) else []
+        for port in ports_iter:
+            try:
+                port_int = int(port)
+            except Exception:
+                continue
+            key = f"{ip}:{port_int}"
+            if valid_keys and key in valid_keys:
+                # Catalog-backed ports will be overridden by selected_map.
+                continue
+            preserved_map.setdefault(ip, set()).add(port_int)
+
+    # Ensure IP order includes any newly selected IPs.
+    for ip in selected_map:
+        _touch_ip(ip)
+
+    result: list[dict[str, Any]] = []
+    for ip in ordered_ips:
+        ports: set[int] = set()
+        ports.update(preserved_map.get(ip, set()))
+        ports.update(selected_map.get(ip, set()))
+        if not ports:
+            continue
+        result.append({"ip": ip, "ports": sorted(ports)})
+
+    return result
+
+
 class CompatibilityConfigPage(CardWidget):
     """Compatibility Settings view (router list + checkboxes).
 
@@ -144,6 +264,10 @@ class CompatibilityConfigPage(CardWidget):
         super().__init__(parent)
         apply_theme(self)
         self.setObjectName("compatibilityConfigPage")
+        # Let the router list occupy all available space on the Case
+        # page when used for compatibility testcases.
+        size_policy = QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setSizePolicy(size_policy)
 
         headers, catalog = load_compatibility_router_catalog()
         self._catalog: list[CompatibilityRouterRow] = catalog
@@ -153,18 +277,10 @@ class CompatibilityConfigPage(CardWidget):
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
 
-        content = QWidget(self)
-        layout = QHBoxLayout(content)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-        outer.addWidget(content, 1)
-
         rows = [row.to_row() for row in self._catalog]
-        self.list = FormListPage(headers=self._header_labels, rows=rows, checkable=True, parent=content)
-        # Show fewer visible rows when embedded in narrow layouts.
-        size_policy = QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.setSizePolicy(size_policy)
-        layout.addWidget(self.list, 1)
+        self.list = FormListPage(headers=self._header_labels, rows=rows, checkable=True, parent=self)
+        self.list.setSizePolicy(QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding))
+        outer.addWidget(self.list, 1)
 
         self.list.checkToggled.connect(self._on_check_toggled)
 
@@ -186,6 +302,7 @@ class CompatibilityConfigPage(CardWidget):
     def set_selected_keys(self, keys: Iterable[str]) -> None:
         """Update checkboxes based on persisted selection keys."""
         key_set = {str(k) for k in keys}
+        logging.debug("compat set_selected_keys: %s", key_set)
         changed = False
         for index, row in enumerate(self.list.rows):
             target = False
@@ -196,6 +313,7 @@ class CompatibilityConfigPage(CardWidget):
                 changed = True
         if changed:
             self.list.set_rows(self.list.rows)
+            logging.debug("compat rows updated with _checked flags")
             self.selectionChanged.emit()
 
     # ------------------------------------------------------------------

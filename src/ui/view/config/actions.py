@@ -110,6 +110,38 @@ def set_refresh_ui_locked(page: Any, locked: bool) -> None:
         logging.debug("set_refresh_ui_locked: failed to toggle updates", exc_info=True)
 
 
+def _refresh_case_page_compatibility(page: Any) -> None:
+    """Refresh the Case-page compatibility selection to mirror config state."""
+    try:
+        main_window = page.window()
+    except Exception:
+        main_window = None
+    if main_window is None:
+        return
+    rvr_page = getattr(main_window, "rvr_wifi_config_page", None)
+    if rvr_page is None or not hasattr(rvr_page, "set_case_mode"):
+        return
+    try:
+        from src.ui.view import determine_case_category  # local import to avoid cycles
+    except Exception:
+        determine_case_category = None  # type: ignore[assignment]
+    try:
+        case_path = getattr(page, "_current_case_path", "") or ""
+    except Exception:
+        case_path = ""
+    if determine_case_category is not None:
+        try:
+            category = determine_case_category(case_path=case_path, display_path=None)
+        except Exception:
+            category = None
+        if category != "compatibility":
+            return
+    try:
+        rvr_page.set_case_mode("compatibility")
+    except Exception:
+        logging.debug("Failed to refresh Case page compatibility selection", exc_info=True)
+
+
 def apply_ui(page: Any, case_path: str) -> None:
     """Recompute case-scoped UI state and apply testcase + simple rules.
 
@@ -184,6 +216,26 @@ def apply_ui(page: Any, case_path: str) -> None:
             evaluate_all_rules(page, None)
         except Exception:
             logging.exception("apply_ui: failed to evaluate rules for testcase", exc_info=True)
+
+        # Update the Case page content: performance cases with RvR Wi‑Fi
+        # enabled show the RvR Wi‑Fi editor; compatibility cases show the
+        # compatibility router list; other cases keep the Case page empty.
+        try:
+            main_window = page.window()
+            if main_window is not None:
+                rvr_page = getattr(main_window, "rvr_wifi_config_page", None)
+                if rvr_page is not None and hasattr(rvr_page, "set_case_mode"):
+                    from src.ui.view import determine_case_category as _case_cat
+
+                    category = _case_cat(case_path=case_path, display_path=None)
+                    if category == "compatibility":
+                        rvr_page.set_case_mode("compatibility")
+                    elif info.enable_rvr_wifi:
+                        rvr_page.set_case_mode("performance")
+                    else:
+                        rvr_page.set_case_mode("none")
+        except Exception:
+            logging.debug("apply_ui: failed to update case-page mode", exc_info=True)
     finally:
         set_refresh_ui_locked(page, False)
         page._refreshing = False
@@ -533,6 +585,12 @@ def handle_config_event(page: Any, event: str, **payload: Any) -> None:
         # Generic field-change events are used purely to drive the
         # autosave decorator; no additional view behaviour is required.
         field = payload.get("field")
+        try:
+            if isinstance(field, str) and field.startswith("compatibility."):
+                # Defer refresh so autosave can flush widget state first.
+                QTimer.singleShot(0, lambda: _refresh_case_page_compatibility(page))
+        except Exception:
+            logging.debug("compatibility refresh scheduling failed", exc_info=True)
         return
 
     if event in {

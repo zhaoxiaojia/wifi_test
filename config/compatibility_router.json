@@ -1,5 +1,165 @@
 [
     {
+        "ip": "192.168.200.3",
+        "port": "1",
+        "brand": "ZTE",
+        "model": "ZXSLC SR7410",
+        "2.4G": {
+            "mode": "11AX",
+            "security_mode": "wpa2",
+            "bandwidth": "20MHz"
+        },
+        "5G": {
+            "mode": "11AX",
+            "security_mode": "wpa2",
+            "bandwidth": "80MHz"
+        }
+    },
+    {
+        "ip": "192.168.200.3",
+        "port": "2",
+        "brand": "LINKSYS",
+        "model": "E8450",
+        "2.4G": {
+            "mode": "11AX",
+            "security_mode": "wpa2",
+            "bandwidth": "20MHz"
+        },
+        "5G": {
+            "mode": "11AX",
+            "security_mode": "wpa2",
+            "bandwidth": "80MHz"
+        }
+    },
+    {
+        "ip": "192.168.200.3",
+        "port": "3",
+        "brand": "NETGEAR",
+        "model": "RAX70",
+        "2.4G": {
+            "mode": "11AX",
+            "security_mode": "wpa2",
+            "bandwidth": "20MHz"
+        },
+        "5G": {
+            "mode": "11AX",
+            "security_mode": "wpa2",
+            "bandwidth": "80MHz"
+        }
+    },
+    {
+        "ip": "192.168.200.3",
+        "port": "4",
+        "brand": "NETGEAR",
+        "model": "RAX50",
+        "2.4G": {
+            "mode": "11AX",
+            "security_mode": "wpa2",
+            "bandwidth": "20MHz"
+        },
+        "5G": {
+            "mode": "11AX",
+            "security_mode": "wpa2",
+            "bandwidth": "80MHz"
+        }
+    },
+    {
+        "ip": "192.168.200.3",
+        "port": "5",
+        "brand": "NETCORE",
+        "model": "LK-DS7587",
+        "2.4G": {
+            "mode": "11AX",
+            "security_mode": "wpa2",
+            "bandwidth": "20MHz"
+        },
+        "5G": {
+            "mode": "11AX",
+            "security_mode": "wpa2",
+            "bandwidth": "80MHz"
+        }
+    },
+    {
+        "ip": "192.168.200.3",
+        "port": "6",
+        "brand": "TP-LINK",
+        "model": "TL-7DR7230YIZHANBAN",
+        "2.4G": {
+            "mode": "11AX",
+            "security_mode": "wpa2",
+            "bandwidth": "20MHz"
+        },
+        "5G": {
+            "mode": "11AX",
+            "security_mode": "wpa2",
+            "bandwidth": "80MHz"
+        }
+    },
+    {
+        "ip": "192.168.200.3",
+        "port": "7",
+        "brand": "RUIJIE",
+        "model": "X60",
+        "2.4G": {
+            "mode": "11AX",
+            "security_mode": "wpa2",
+            "bandwidth": "20MHz"
+        },
+        "5G": {
+            "mode": "11AX",
+            "security_mode": "wpa2",
+            "bandwidth": "80MHz"
+        }
+    },
+    {
+        "ip": "192.168.200.x",
+        "port": "x",
+        "brand": "MERCURY",
+        "model": "D126",
+        "2.4G": {
+            "mode": "11N",
+            "security_mode": "wpa2",
+            "bandwidth": "20MHz"
+        },
+        "5G": {
+            "mode": "11AC",
+            "security_mode": "wpa2",
+            "bandwidth": "80MHz"
+        }
+    },
+    {
+        "ip": "192.168.200.3",
+        "port": "8",
+        "brand": "AT&T",
+        "model": "BGW320-500",
+        "2.4G": {
+            "mode": "11AX",
+            "security_mode": "wpa2",
+            "bandwidth": "20MHz"
+        },
+        "5G": {
+            "mode": "11AX",
+            "security_mode": "wpa2",
+            "bandwidth": "80MHz"
+        }
+    },
+    {
+        "ip": "192.168.200.4",
+        "port": "1",
+        "brand": "TP-LINK",
+        "model": "TL-WDR7660QIANZHAOYIZHANBAN",
+        "2.4G": {
+            "mode": "11N",
+            "security_mode": "wpa2",
+            "bandwidth": "20MHz"
+        },
+        "5G": {
+            "mode": "11AC",
+            "security_mode": "wpa2",
+            "bandwidth": "80MHz"
+        }
+    },
+    {
         "ip": "192.168.200.4",
         "port": "2",
         "brand": "ASUS",
@@ -16,10 +176,10 @@
         }
     },
     {
-        "ip": "192.168.200.6",
-        "port": "7",
-        "brand": "XIAOMI",
-        "model": "AX3000 RA80",
+        "ip": "192.168.200.4",
+        "port": "3",
+        "brand": "HONOR",
+        "model": "X4PRO HLB-600",
         "2.4G": {
             "mode": "11AX",
             "security_mode": "wpa2",
@@ -27,6 +187,86 @@
         },
         "5G": {
             "mode": "11AX",
+            "security_mode": "wpa2",
+            "bandwidth": "80MHz"
+        }
+    },
+    {
+        "ip": "192.168.200.4",
+        "port": "4",
+        "brand": "ZTE",
+        "model": "ZXSLC SR6110",
+        "2.4G": {
+            "mode": "11AX",
+            "security_mode": "wpa2",
+            "bandwidth": "20MHz"
+        },
+        "5G": {
+            "mode": "11AX",
+            "security_mode": "wpa2",
+            "bandwidth": "80MHz"
+        }
+    },
+    {
+        "ip": "192.168.200.4",
+        "port": "5",
+        "brand": "TENDA",
+        "model": "BE6LPRO",
+        "2.4G": {
+            "mode": "11AX",
+            "security_mode": "wpa2",
+            "bandwidth": "20MHz"
+        },
+        "5G": {
+            "mode": "11AX",
+            "security_mode": "wpa2",
+            "bandwidth": "80MHz"
+        }
+    },
+    {
+        "ip": "192.168.200.4",
+        "port": "6",
+        "brand": "TENDA",
+        "model": "JD12LPROXINHAOZENGQIANGBAN",
+        "2.4G": {
+            "mode": "11AX",
+            "security_mode": "wpa2",
+            "bandwidth": "20MHz"
+        },
+        "5G": {
+            "mode": "11AX",
+            "security_mode": "wpa2",
+            "bandwidth": "80MHz"
+        }
+    },
+    {
+        "ip": "192.168.200.4",
+        "port": "7",
+        "brand": "TP-LINK",
+        "model": "TL-XDR5410YIZHANBAN",
+        "2.4G": {
+            "mode": "11AX",
+            "security_mode": "wpa2",
+            "bandwidth": "20MHz"
+        },
+        "5G": {
+            "mode": "11AX",
+            "security_mode": "wpa2",
+            "bandwidth": "80MHz"
+        }
+    },
+    {
+        "ip": "192.168.200.4",
+        "port": "8",
+        "brand": "RUIJIE",
+        "model": "RG-EW1300G",
+        "2.4G": {
+            "mode": "11N",
+            "security_mode": "wpa2",
+            "bandwidth": "20MHz"
+        },
+        "5G": {
+            "mode": "11AC",
             "security_mode": "wpa2",
             "bandwidth": "80MHz"
         }
@@ -64,170 +304,10 @@
         }
     },
     {
-        "ip": "192.168.200.6",
-        "port": "8",
-        "brand": "ASUS",
-        "model": "RT-AC1900P",
-        "2.4G": {
-            "mode": "11N",
-            "security_mode": "wpa2",
-            "bandwidth": "20MHz"
-        },
-        "5G": {
-            "mode": "11AC",
-            "security_mode": "wpa2",
-            "bandwidth": "80MHz"
-        }
-    },
-    {
-        "ip": "192.168.200.4",
-        "port": "6",
-        "brand": "TENDA",
-        "model": "JD12LPROXINHAOZENGQIANGBAN",
-        "2.4G": {
-            "mode": "11AX",
-            "security_mode": "wpa2",
-            "bandwidth": "20MHz"
-        },
-        "5G": {
-            "mode": "11AX",
-            "security_mode": "wpa2",
-            "bandwidth": "80MHz"
-        }
-    },
-    {
-        "ip": "192.168.200.4",
-        "port": "5",
-        "brand": "TENDA",
-        "model": "BE6LPRO",
-        "2.4G": {
-            "mode": "11AX",
-            "security_mode": "wpa2",
-            "bandwidth": "20MHz"
-        },
-        "5G": {
-            "mode": "11AX",
-            "security_mode": "wpa2",
-            "bandwidth": "80MHz"
-        }
-    },
-    {
-        "ip": "192.168.200.6",
+        "ip": "192.168.200.5",
         "port": "3",
-        "brand": "COMFAST",
-        "model": "CF-WR633AX",
-        "2.4G": {
-            "mode": "11AX",
-            "security_mode": "wpa2",
-            "bandwidth": "20MHz"
-        },
-        "5G": {
-            "mode": "11AX",
-            "security_mode": "wpa2",
-            "bandwidth": "80MHz"
-        }
-    },
-    {
-        "ip": "192.168.200.3",
-        "port": "6",
-        "brand": "TP-LINK",
-        "model": "TL-7DR7230YIZHANBAN",
-        "2.4G": {
-            "mode": "11AX",
-            "security_mode": "wpa2",
-            "bandwidth": "20MHz"
-        },
-        "5G": {
-            "mode": "11AX",
-            "security_mode": "wpa2",
-            "bandwidth": "80MHz"
-        }
-    },
-    {
-        "ip": "192.168.200.3",
-        "port": "1",
-        "brand": "ZTE",
-        "model": "ZXSLC SR7410",
-        "2.4G": {
-            "mode": "11AX",
-            "security_mode": "wpa2",
-            "bandwidth": "20MHz"
-        },
-        "5G": {
-            "mode": "11AX",
-            "security_mode": "wpa2",
-            "bandwidth": "80MHz"
-        }
-    },
-    {
-        "ip": "192.168.200.6",
-        "port": "6",
-        "brand": "HUAWEI",
-        "model": "AX3PRO WS7206",
-        "2.4G": {
-            "mode": "11AX",
-            "security_mode": "wpa2",
-            "bandwidth": "20MHz"
-        },
-        "5G": {
-            "mode": "11AX",
-            "security_mode": "wpa2",
-            "bandwidth": "80MHz"
-        }
-    },
-    {
-        "ip": "192.168.200.6",
-        "port": "2",
-        "brand": "HUAWEI",
-        "model": "XIHE-BE70",
-        "2.4G": {
-            "mode": "11AX",
-            "security_mode": "wpa2",
-            "bandwidth": "20MHz"
-        },
-        "5G": {
-            "mode": "11AX",
-            "security_mode": "wpa2",
-            "bandwidth": "80MHz"
-        }
-    },
-    {
-        "ip": "192.168.200.4",
-        "port": "4",
-        "brand": "ZTE",
-        "model": "ZXSLC SR6110",
-        "2.4G": {
-            "mode": "11AX",
-            "security_mode": "wpa2",
-            "bandwidth": "20MHz"
-        },
-        "5G": {
-            "mode": "11AX",
-            "security_mode": "wpa2",
-            "bandwidth": "80MHz"
-        }
-    },
-    {
-        "ip": "192.168.200.3",
-        "port": "8",
-        "brand": "MERCURY",
-        "model": "D126",
-        "2.4G": {
-            "mode": "11N",
-            "security_mode": "wpa2",
-            "bandwidth": "20MHz"
-        },
-        "5G": {
-            "mode": "11AC",
-            "security_mode": "wpa2",
-            "bandwidth": "80MHz"
-        }
-    },
-    {
-        "ip": "192.168.200.4",
-        "port": "3",
-        "brand": "HONOR",
-        "model": "X4PRO HLB-600",
+        "brand": "THUNDEROBOT",
+        "model": "SR5301ZA",
         "2.4G": {
             "mode": "11AX",
             "security_mode": "wpa2",
@@ -244,22 +324,6 @@
         "port": "4",
         "brand": "H3C",
         "model": "NX30PRO",
-        "2.4G": {
-            "mode": "11AX",
-            "security_mode": "wpa2",
-            "bandwidth": "20MHz"
-        },
-        "5G": {
-            "mode": "11AX",
-            "security_mode": "wpa2",
-            "bandwidth": "80MHz"
-        }
-    },
-    {
-        "ip": "192.168.200.5",
-        "port": "3",
-        "brand": "THUNDEROBOT",
-        "model": "SR5301ZA",
         "2.4G": {
             "mode": "11AX",
             "security_mode": "wpa2",
@@ -320,54 +384,6 @@
         }
     },
     {
-        "ip": "192.168.200.4",
-        "port": "7",
-        "brand": "TP-LINK",
-        "model": "TL-XDR5410YIZHANBAN",
-        "2.4G": {
-            "mode": "11AX",
-            "security_mode": "wpa2",
-            "bandwidth": "20MHz"
-        },
-        "5G": {
-            "mode": "11AX",
-            "security_mode": "wpa2",
-            "bandwidth": "80MHz"
-        }
-    },
-    {
-        "ip": "192.168.200.6",
-        "port": "4",
-        "brand": "H3C",
-        "model": "MAGIC NX54",
-        "2.4G": {
-            "mode": "11AX",
-            "security_mode": "wpa2",
-            "bandwidth": "20MHz"
-        },
-        "5G": {
-            "mode": "11AX",
-            "security_mode": "wpa2",
-            "bandwidth": "80MHz"
-        }
-    },
-    {
-        "ip": "192.168.200.4",
-        "port": "1",
-        "brand": "TP-LINK",
-        "model": "TL-WDR7660QIANZHAOYIZHANBAN",
-        "2.4G": {
-            "mode": "11N",
-            "security_mode": "wpa2",
-            "bandwidth": "20MHz"
-        },
-        "5G": {
-            "mode": "11AC",
-            "security_mode": "wpa2",
-            "bandwidth": "80MHz"
-        }
-    },
-    {
         "ip": "192.168.200.5",
         "port": "8",
         "brand": "ASUS",
@@ -400,10 +416,10 @@
         }
     },
     {
-        "ip": "192.168.200.3",
-        "port": "4",
-        "brand": "NETGEAR",
-        "model": "RAX50",
+        "ip": "192.168.200.6",
+        "port": "2",
+        "brand": "HUAWEI",
+        "model": "XIHE-BE70",
         "2.4G": {
             "mode": "11AX",
             "security_mode": "wpa2",
@@ -416,10 +432,10 @@
         }
     },
     {
-        "ip": "192.168.200.3",
+        "ip": "192.168.200.6",
         "port": "3",
-        "brand": "NETGEAR",
-        "model": "RAX70",
+        "brand": "COMFAST",
+        "model": "CF-WR633AX",
         "2.4G": {
             "mode": "11AX",
             "security_mode": "wpa2",
@@ -432,42 +448,10 @@
         }
     },
     {
-        "ip": "192.168.200.4",
-        "port": "8",
-        "brand": "RUIJIE",
-        "model": "RG-EW1300G",
-        "2.4G": {
-            "mode": "11N",
-            "security_mode": "wpa2",
-            "bandwidth": "20MHz"
-        },
-        "5G": {
-            "mode": "11AC",
-            "security_mode": "wpa2",
-            "bandwidth": "80MHz"
-        }
-    },
-    {
-        "ip": "192.168.200.3",
-        "port": "7",
-        "brand": "RUIJIE",
-        "model": "X60",
-        "2.4G": {
-            "mode": "11AX",
-            "security_mode": "wpa2",
-            "bandwidth": "20MHz"
-        },
-        "5G": {
-            "mode": "11AX",
-            "security_mode": "wpa2",
-            "bandwidth": "80MHz"
-        }
-    },
-    {
-        "ip": "192.168.200.3",
-        "port": "5",
-        "brand": "NETCORE",
-        "model": "LK-DS7587",
+        "ip": "192.168.200.6",
+        "port": "4",
+        "brand": "H3C",
+        "model": "MAGIC NX54",
         "2.4G": {
             "mode": "11AX",
             "security_mode": "wpa2",
@@ -496,10 +480,10 @@
         }
     },
     {
-        "ip": "192.168.200.3",
-        "port": "2",
-        "brand": "LINKSYS",
-        "model": "E8450",
+        "ip": "192.168.200.6",
+        "port": "6",
+        "brand": "HUAWEI",
+        "model": "AX3PRO WS7206",
         "2.4G": {
             "mode": "11AX",
             "security_mode": "wpa2",
@@ -507,6 +491,38 @@
         },
         "5G": {
             "mode": "11AX",
+            "security_mode": "wpa2",
+            "bandwidth": "80MHz"
+        }
+    },
+    {
+        "ip": "192.168.200.6",
+        "port": "7",
+        "brand": "XIAOMI",
+        "model": "AX3000 RA80",
+        "2.4G": {
+            "mode": "11AX",
+            "security_mode": "wpa2",
+            "bandwidth": "20MHz"
+        },
+        "5G": {
+            "mode": "11AX",
+            "security_mode": "wpa2",
+            "bandwidth": "80MHz"
+        }
+    },
+    {
+        "ip": "192.168.200.6",
+        "port": "8",
+        "brand": "ASUS",
+        "model": "RT-AC1900P",
+        "2.4G": {
+            "mode": "11N",
+            "security_mode": "wpa2",
+            "bandwidth": "20MHz"
+        },
+        "5G": {
+            "mode": "11AC",
             "security_mode": "wpa2",
             "bandwidth": "80MHz"
         }
@@ -528,8 +544,8 @@
         }
     },
     {
-        "ip": "192.168.200.7",
-        "port": "2",
+        "ip": "192.168.200.x",
+        "port": "x",
         "brand": "ARRIS",
         "model": "SBR-AC1200P",
         "2.4G": {
@@ -539,6 +555,22 @@
         },
         "5G": {
             "mode": "11AC",
+            "security_mode": "wpa2",
+            "bandwidth": "80MHz"
+        }
+    },
+    {
+        "ip": "192.168.200.7",
+        "port": "2",
+        "brand": "TENDA",
+        "model": "BE6L-PRO",
+        "2.4G": {
+            "mode": "11AX",
+            "security_mode": "wpa2",
+            "bandwidth": "40MHz"
+        },
+        "5G": {
+            "mode": "11AX",
             "security_mode": "wpa2",
             "bandwidth": "80MHz"
         }
@@ -580,6 +612,22 @@
         "port": "5",
         "brand": "BAFFALO",
         "model": "WZR-1750DHP",
+        "2.4G": {
+            "mode": "11N",
+            "security_mode": "wpa2",
+            "bandwidth": "20MHz"
+        },
+        "5G": {
+            "mode": "11AC",
+            "security_mode": "wpa2",
+            "bandwidth": "80MHz"
+        }
+    },
+    {
+        "ip": "192.168.200.7",
+        "port": "6",
+        "brand": "ARRIS",
+        "model": "SBR-AC1200P-LAN100M",
         "2.4G": {
             "mode": "11N",
             "security_mode": "wpa2",
@@ -657,54 +705,6 @@
     },
     {
         "ip": "192.168.200.8",
-        "port": "8",
-        "brand": "ARRIS",
-        "model": "SBR-AC1750",
-        "2.4G": {
-            "mode": "11N",
-            "security_mode": "wpa2",
-            "bandwidth": "20MHz"
-        },
-        "5G": {
-            "mode": "11AC",
-            "security_mode": "wpa2",
-            "bandwidth": "80MHz"
-        }
-    },
-    {
-        "ip": "192.168.200.3",
-        "port": "8",
-        "brand": "AT&T",
-        "model": "BGW320-500",
-        "2.4G": {
-            "mode": "11AX",
-            "security_mode": "wpa2",
-            "bandwidth": "20MHz"
-        },
-        "5G": {
-            "mode": "11AX",
-            "security_mode": "wpa2",
-            "bandwidth": "80MHz"
-        }
-    },
-    {
-        "ip": "192.168.200.7",
-        "port": "2",
-        "brand": "TENDA",
-        "model": "BE6L-PRO",
-        "2.4G": {
-            "mode": "11AX",
-            "security_mode": "wpa2",
-            "bandwidth": "40MHz"
-        },
-        "5G": {
-            "mode": "11AX",
-            "security_mode": "wpa2",
-            "bandwidth": "80MHz"
-        }
-    },
-    {
-        "ip": "192.168.200.8",
         "port": "3",
         "brand": "VANTIVA",
         "model": "SETUP-E089",
@@ -736,10 +736,10 @@
         }
     },
     {
-        "ip": "192.168.200.7",
-        "port": "6",
+        "ip": "192.168.200.8",
+        "port": "8",
         "brand": "ARRIS",
-        "model": "SBR-AC1200P-LAN100M",
+        "model": "SBR-AC1750",
         "2.4G": {
             "mode": "11N",
             "security_mode": "wpa2",

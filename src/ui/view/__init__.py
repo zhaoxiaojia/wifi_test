@@ -29,7 +29,7 @@ from PyQt5.QtWidgets import (
 from qfluentwidgets import CardWidget, ComboBox, LineEdit, PushButton, TableWidget
 
 from src.util.constants import AUTH_OPTIONS, OPEN_AUTH
-from src.ui.view.theme import apply_theme, apply_font_and_selection
+from src.ui.view.theme import apply_theme, apply_font_and_selection, FORMLIST_CHECKBOX_COL_WIDTH
 
 
 def _load_view_event_table() -> Dict[str, Any]:
@@ -266,6 +266,17 @@ class FormListPage(CardWidget):
             for c, h in enumerate(self.headers):
                 item = QTableWidgetItem(str(row.get(h, "")))
                 self.table.setItem(r, c + col_offset, item)
+
+        # Narrow checkbox column so the first column does not leave
+        # excessive empty space for tables that use a checkable column
+        # (this is a theme-level preference).
+        if self.checkable:
+            try:
+                header = self.table.horizontalHeader()
+                header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+                self.table.setColumnWidth(0, FORMLIST_CHECKBOX_COL_WIDTH)
+            except Exception:
+                pass
 
         self.table.clearSelection()
         if self.rows:

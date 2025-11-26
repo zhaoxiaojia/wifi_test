@@ -408,6 +408,7 @@ def _load_config_cached(base_dir: str) -> dict[str, Any]:
     stability_section = _read_yaml_dict(stability_path)
     tool_section = _read_yaml_dict(tool_path)
     compatibility_section = _read_yaml_dict(compatibility_path)
+    logging.debug("compatibility section loaded: %s", compatibility_section)
     return merge_config_sections(
         dut_section,
         execution_section,
@@ -509,6 +510,7 @@ def save_config_sections(
     compatibility_payload = (
         compatibility_section if isinstance(compatibility_section, Mapping) else {}
     )
+    logging.debug("compatibility payload persisted: %s", compatibility_payload)
     _write_yaml_dict(compatibility_path, compatibility_payload)
     tool_payload = tool_section if isinstance(tool_section, Mapping) else {}
     _write_yaml_dict(tool_path, tool_payload)

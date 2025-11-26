@@ -221,7 +221,7 @@ a.set_info("192.168.200.4", '4', 'ZTE', 'ZXSLC SR6110',
            {'2.4G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
             '5G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
-a.set_info("192.168.200.3", '8', 'MERCURY', 'D126',
+a.set_info("192.168.200.", '', 'MERCURY', 'D126',
            {'2.4G': {'mode': '11N', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
             '5G': {'mode': '11AC', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
@@ -300,7 +300,7 @@ a.set_info("192.168.200.7", '1', 'ARRIS', 'TR4400',
            {'2.4G': {'mode': '11N', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
             '5G': {'mode': '11AC', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
-a.set_info("192.168.200.7", '2', 'ARRIS', 'SBR-AC1200P',
+a.set_info("192.168.200.", '', 'ARRIS', 'SBR-AC1200P',
            {'2.4G': {'mode': '11N', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
             '5G': {'mode': '11AC', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
@@ -328,7 +328,7 @@ a.set_info("192.168.200.8", '1', 'VANTIVA', 'SDX62',
            {'2.4G': {'mode': '11N', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
             '5G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
-a.set_info("192.168.200.8", '3', 'PORTAL', '2AFZUSAP102',
+a.set_info("192.168.200.", '', 'PORTAL', '2AFZUSAP102',
            {'2.4G': {'mode': '11N', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
             '5G': {'mode': '11AC', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
@@ -344,7 +344,7 @@ a.set_info("192.168.200.7", '2', 'Tenda', 'BE6L-Pro',
            {'2.4G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '40MHz'},
             '5G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
-a.set_info("192.168.200.8", '3', 'Vantiva', 'SETUP-E089',
+a.set_info("192.168.200.", '', 'Vantiva', 'SETUP-E089',
            {'2.4G': {'mode': '11N', 'security_mode': 'wpa2', 'bandwidth': '40MHz'},
             '5G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 

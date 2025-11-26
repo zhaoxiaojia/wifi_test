@@ -48,6 +48,10 @@ CONTROL_HEIGHT: Annotated[int, "Default control height in pixels for inputs/butt
 ICON_SIZE: Annotated[int, "Icon size in pixels used for buttons/labels"] = 18
 ICON_TEXT_SPACING: Annotated[int, "Horizontal spacing in pixels between icon and text"] = 8
 LEFT_PAD: Annotated[int, "Left padding width combining icon size and spacing"] = ICON_SIZE + ICON_TEXT_SPACING
+FORMLIST_CHECKBOX_COL_WIDTH: Annotated[
+    int,
+    "Preferred width in pixels for the checkbox column in FormListPage tables",
+] = 18
 
 # Switch Wi-Fi credential table palette tuned for dark theme readability.
 SWITCH_WIFI_TABLE_HEADER_BG: Annotated[
