@@ -68,4 +68,3 @@ cases:
     manual_entries: []
     use_router: false
     router_csv: C:\Users\SH171300-1522\PycharmProjects\wifi_test\config\performance_test_csv\rvr_wifi_setup.csv
-csv_path: performance_test_csv/rvr_wifi_setup.csv
