@@ -339,10 +339,6 @@ def split_config_data(
     compatibility_section: dict[str, Any] = {}
     tool_section: dict[str, Any] = {}
 
-    # Local classification sets for Settings groups.
-    stability_keys = STABILITY_SECTION_KEYS
-    compatibility_keys = COMPATIBILITY_SECTION_KEYS
-
     for key, value in normalised.items():
         # Tool section is stored as-is in its own YAML.
         if key == TOOL_SECTION_KEY:
@@ -351,7 +347,7 @@ def split_config_data(
             continue
 
         # Stability Settings (stability/duration_control/check_point/cases).
-        if key in stability_keys:
+        if key in STABILITY_SECTION_KEYS:
             # Merged stability section: copy the mapping wholesale.
             if key == "stability" and isinstance(value, Mapping):
                 # If stability_section already has content, merge it so that
@@ -371,7 +367,7 @@ def split_config_data(
 
         # Compatibility Settings live under a top-level ``compatibility`` key
         # in their own YAML file.
-        if key in compatibility_keys:
+        if key in COMPATIBILITY_SECTION_KEYS:
             if isinstance(value, Mapping):
                 compatibility_section = {"compatibility": copy.deepcopy(value)}
             else:
