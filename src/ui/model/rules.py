@@ -630,55 +630,56 @@ CUSTOM_SIMPLE_UI_RULES.append(
 )
 
 
-# 10) test_str Relay Type -> USB vs relay params (AC and STR branches).
+# 10) test_switch_wifi_str Relay Type -> USB vs relay params (AC and STR branches).
 CUSTOM_SIMPLE_UI_RULES.append(
     SimpleRuleSpec(
-        trigger_field="stability.cases.test_str.ac.relay_type",
+        trigger_field="stability.cases.test_switch_wifi_str.ac.relay_type",
         effects=[
             # usb_relay -> enable port/mode, disable relay_params.
             SimpleFieldEffect(
-                target_field="stability.cases.test_str.ac.port",
+                target_field="stability.cases.test_switch_wifi_str.ac.port",
                 action="enable",
-                condition=lambda values: values.get("stability.cases.test_str.ac.relay_type") == "usb_relay"
-                and _value_as_bool(values, "stability.cases.test_str.ac.enabled"),
+                condition=lambda values: values.get("stability.cases.test_switch_wifi_str.ac.relay_type") == "usb_relay"
+                and _value_as_bool(values, "stability.cases.test_switch_wifi_str.ac.enabled"),
             ),
             SimpleFieldEffect(
-                target_field="stability.cases.test_str.ac.port",
+                target_field="stability.cases.test_switch_wifi_str.ac.port",
                 action="set_options",
                 value=lambda values: _serial_port_option_labels(),
-                condition=lambda values: values.get("stability.cases.test_str.ac.relay_type") == "usb_relay"
-                and _value_as_bool(values, "stability.cases.test_str.ac.enabled"),
+                condition=lambda values: values.get("stability.cases.test_switch_wifi_str.ac.relay_type") == "usb_relay"
+                and _value_as_bool(values, "stability.cases.test_switch_wifi_str.ac.enabled"),
             ),
             SimpleFieldEffect(
-                target_field="stability.cases.test_str.ac.mode",
+                target_field="stability.cases.test_switch_wifi_str.ac.mode",
                 action="enable",
-                condition=lambda values: values.get("stability.cases.test_str.ac.relay_type") == "usb_relay"
-                and _value_as_bool(values, "stability.cases.test_str.ac.enabled"),
+                condition=lambda values: values.get("stability.cases.test_switch_wifi_str.ac.relay_type") == "usb_relay"
+                and _value_as_bool(values, "stability.cases.test_switch_wifi_str.ac.enabled"),
             ),
             SimpleFieldEffect(
-                target_field="stability.cases.test_str.ac.relay_params",
+                target_field="stability.cases.test_switch_wifi_str.ac.relay_params",
                 action="disable",
-                condition=lambda values: values.get("stability.cases.test_str.ac.relay_type") == "usb_relay"
-                and _value_as_bool(values, "stability.cases.test_str.ac.enabled"),
+                condition=lambda values: values.get("stability.cases.test_switch_wifi_str.ac.relay_type") == "usb_relay"
+                and _value_as_bool(values, "stability.cases.test_switch_wifi_str.ac.enabled"),
             ),
             # GWGJ-XC3012 -> disable port/mode, enable relay_params.
             SimpleFieldEffect(
-                target_field="stability.cases.test_str.ac.port",
+                target_field="stability.cases.test_switch_wifi_str.ac.port",
                 action="disable",
-                condition=lambda values: values.get("stability.cases.test_str.ac.relay_type")
+                condition=lambda values: values.get("stability.cases.test_switch_wifi_str.ac.relay_type")
                 == "GWGJ-XC3012",
             ),
             SimpleFieldEffect(
-                target_field="stability.cases.test_str.ac.mode",
+                target_field="stability.cases.test_switch_wifi_str.ac.mode",
                 action="disable",
-                condition=lambda values: values.get("stability.cases.test_str.ac.relay_type")
+                condition=lambda values: values.get("stability.cases.test_switch_wifi_str.ac.relay_type")
                 == "GWGJ-XC3012",
             ),
             SimpleFieldEffect(
-                target_field="stability.cases.test_str.ac.relay_params",
+                target_field="stability.cases.test_switch_wifi_str.ac.relay_params",
                 action="enable",
-                condition=lambda values: values.get("stability.cases.test_str.ac.relay_type") == "GWGJ-XC3012"
-                and _value_as_bool(values, "stability.cases.test_str.ac.enabled"),
+                condition=lambda values: values.get("stability.cases.test_switch_wifi_str.ac.relay_type")
+                == "GWGJ-XC3012"
+                and _value_as_bool(values, "stability.cases.test_switch_wifi_str.ac.enabled"),
             ),
         ],
     )
@@ -686,50 +687,51 @@ CUSTOM_SIMPLE_UI_RULES.append(
 
 CUSTOM_SIMPLE_UI_RULES.append(
     SimpleRuleSpec(
-        trigger_field="stability.cases.test_str.str.relay_type",
+        trigger_field="stability.cases.test_switch_wifi_str.str.relay_type",
         effects=[
             SimpleFieldEffect(
-                target_field="stability.cases.test_str.str.port",
+                target_field="stability.cases.test_switch_wifi_str.str.port",
                 action="enable",
-                condition=lambda values: values.get("stability.cases.test_str.str.relay_type") == "usb_relay"
-                and _value_as_bool(values, "stability.cases.test_str.str.enabled"),
+                condition=lambda values: values.get("stability.cases.test_switch_wifi_str.str.relay_type") == "usb_relay"
+                and _value_as_bool(values, "stability.cases.test_switch_wifi_str.str.enabled"),
             ),
             SimpleFieldEffect(
-                target_field="stability.cases.test_str.str.port",
+                target_field="stability.cases.test_switch_wifi_str.str.port",
                 action="set_options",
                 value=lambda values: _serial_port_option_labels(),
-                condition=lambda values: values.get("stability.cases.test_str.str.relay_type") == "usb_relay"
-                and _value_as_bool(values, "stability.cases.test_str.str.enabled"),
+                condition=lambda values: values.get("stability.cases.test_switch_wifi_str.str.relay_type") == "usb_relay"
+                and _value_as_bool(values, "stability.cases.test_switch_wifi_str.str.enabled"),
             ),
             SimpleFieldEffect(
-                target_field="stability.cases.test_str.str.mode",
+                target_field="stability.cases.test_switch_wifi_str.str.mode",
                 action="enable",
-                condition=lambda values: values.get("stability.cases.test_str.str.relay_type") == "usb_relay"
-                and _value_as_bool(values, "stability.cases.test_str.str.enabled"),
+                condition=lambda values: values.get("stability.cases.test_switch_wifi_str.str.relay_type") == "usb_relay"
+                and _value_as_bool(values, "stability.cases.test_switch_wifi_str.str.enabled"),
             ),
             SimpleFieldEffect(
-                target_field="stability.cases.test_str.str.relay_params",
+                target_field="stability.cases.test_switch_wifi_str.str.relay_params",
                 action="disable",
-                condition=lambda values: values.get("stability.cases.test_str.str.relay_type") == "usb_relay"
-                and _value_as_bool(values, "stability.cases.test_str.str.enabled"),
+                condition=lambda values: values.get("stability.cases.test_switch_wifi_str.str.relay_type") == "usb_relay"
+                and _value_as_bool(values, "stability.cases.test_switch_wifi_str.str.enabled"),
             ),
             SimpleFieldEffect(
-                target_field="stability.cases.test_str.str.port",
+                target_field="stability.cases.test_switch_wifi_str.str.port",
                 action="disable",
-                condition=lambda values: values.get("stability.cases.test_str.str.relay_type")
+                condition=lambda values: values.get("stability.cases.test_switch_wifi_str.str.relay_type")
                 == "GWGJ-XC3012",
             ),
             SimpleFieldEffect(
-                target_field="stability.cases.test_str.str.mode",
+                target_field="stability.cases.test_switch_wifi_str.str.mode",
                 action="disable",
-                condition=lambda values: values.get("stability.cases.test_str.str.relay_type")
+                condition=lambda values: values.get("stability.cases.test_switch_wifi_str.str.relay_type")
                 == "GWGJ-XC3012",
             ),
             SimpleFieldEffect(
-                target_field="stability.cases.test_str.str.relay_params",
+                target_field="stability.cases.test_switch_wifi_str.str.relay_params",
                 action="enable",
-                condition=lambda values: values.get("stability.cases.test_str.str.relay_type") == "GWGJ-XC3012"
-                and _value_as_bool(values, "stability.cases.test_str.str.enabled"),
+                condition=lambda values: values.get("stability.cases.test_switch_wifi_str.str.relay_type")
+                == "GWGJ-XC3012"
+                and _value_as_bool(values, "stability.cases.test_switch_wifi_str.str.enabled"),
             ),
         ],
     )
