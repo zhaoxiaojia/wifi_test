@@ -35,39 +35,3 @@ debug:
   database_mode: false
   skip_router: true
   skip_corner_rf: false
-duration_control:
-  loop: ''
-  duration_hours: ''
-  exitfirst: false
-  retry_limit: '2'
-check_point:
-  ping: false
-  ping_targets: 192.168.1.1
-cases:
-  test_switch_wifi_str:
-    ac:
-      enabled: true
-      on_duration: '5'
-      off_duration: '5'
-      relay_type: usb_relay
-      relay_params: []
-      port: ''
-      mode: 'NO'
-    str:
-      enabled: true
-      on_duration: '14'
-      off_duration: '15'
-      relay_type: usb_relay
-      relay_params: []
-      port: ''
-      mode: 'NO'
-    use_router: false
-    router_csv: C:\Users\SH171300-1522\PycharmProjects\wifi_test\config\performance_test_csv\rvr_wifi_setup.csv
-    manual_entries: []
-  test_switch_wifi:
-    manual_entries:
-    - ssid: aaa
-      security_mode: Open System
-      password: ''
-    use_router: false
-    router_csv: C:\Users\SH171300-1522\PycharmProjects\wifi_test\config\performance_test_csv\rvr_wifi_setup.csv

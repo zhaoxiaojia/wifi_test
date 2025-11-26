@@ -174,13 +174,6 @@ def create_test_switch_wifi_str_config_entry_from_schema(
         key_script = script_field_key(case_key, SWITCH_WIFI_MANUAL_ENTRIES_FIELD)
         widgets[key_script] = editor
         field_widgets[key_script] = editor
-        # Backwards compatible aliases using the legacy case key in dotted form.
-        alias_prefix = "cases.test_switch_wifi."
-        field_widgets[f"{alias_prefix}{SWITCH_WIFI_MANUAL_ENTRIES_FIELD}"] = editor
-        if use_router_widget is not None:
-            field_widgets[f"{alias_prefix}{SWITCH_WIFI_USE_ROUTER_FIELD}"] = use_router_widget
-        if router_widget is not None:
-            field_widgets[f"{alias_prefix}{SWITCH_WIFI_ROUTER_CSV_FIELD}"] = router_widget
 
     except Exception as exc:  # pragma: no cover - debug only
         import logging

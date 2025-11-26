@@ -1,8 +1,8 @@
 duration_control:
-  loop: null
-  duration_hours: null
+  loop: ''
+  duration_hours: ''
   exitfirst: false
-  retry_limit: 2
+  retry_limit: '2'
 check_point:
   ping: false
   ping_targets: 192.168.1.1
@@ -10,17 +10,17 @@ cases:
   test_switch_wifi_str:
     ac:
       enabled: true
-      on_duration: '5'
-      off_duration: '5'
-      port: ''
+      on_duration: '0'
+      off_duration: '0'
+      port: COM14 (蓝牙链接上的标准串行 (COM14))
       mode: 'NO'
       relay_type: usb_relay
       relay_params: []
     str:
       enabled: true
-      on_duration: '14'
-      off_duration: '15'
-      port: ''
+      on_duration: '0'
+      off_duration: '0'
+      port: COM1 (通信端口 (COM1))
       mode: 'NO'
       relay_type: usb_relay
       relay_params: []
@@ -30,4 +30,4 @@ cases:
     - ssid: aaa
       security_mode: Open System
       password: ''
-text_case: test/stability/test_switch_wifi_str.py
+text_case: ''

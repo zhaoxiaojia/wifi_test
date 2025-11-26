@@ -348,18 +348,28 @@ def split_config_data(
 
         # Stability Settings (stability/duration_control/check_point/cases).
         if key in STABILITY_SECTION_KEYS:
-            # Merged stability section: copy the mapping wholesale.
+            # Primary stability section lives under the ``stability`` key.
             if key == "stability" and isinstance(value, Mapping):
                 # If stability_section already has content, merge it so that
                 # any per-key updates (duration_control/cases/etc.) from the
-                # flat config are preserved.
+                # flat config are preserved. Keys already present in
+                # stability_section take precedence.
+                base = copy.deepcopy(value)
+                if isinstance(stability_section, Mapping):
+                    base.update(stability_section)
+                stability_section = base
+            elif key == "cases":
+                # Legacy top-level ``cases`` support: only use it when there
+                # is no structured stability section yet. This avoids
+                # overwriting stability.cases.* data (including manual_entries)
+                # that has already been normalised.
                 if stability_section:
-                    tmp = copy.deepcopy(value)
-                    tmp.update(stability_section)
-                    stability_section = tmp
-                else:
-                    stability_section = copy.deepcopy(value)
+                    continue
+                if not isinstance(stability_section, dict):
+                    stability_section = {}
+                stability_section["cases"] = copy.deepcopy(value)
             else:
+                # duration_control / check_point written into stability section.
                 if not isinstance(stability_section, dict):
                     stability_section = {}
                 stability_section[key] = copy.deepcopy(value)
