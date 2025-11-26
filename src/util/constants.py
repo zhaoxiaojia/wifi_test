@@ -124,6 +124,27 @@ TOOL_SECTION_KEY: Final[str] = "tool"
 TOOL_CONFIG_FILENAME: Final[str] = "config_tool.yaml"
 STABILITY_CONFIG_FILENAME: Final[str] = "config_stability.yaml"
 COMPATIBILITY_CONFIG_FILENAME: Final[str] = "config_compatibility.yaml"
+STABILITY_SECTION_KEYS: Final[frozenset[str]] = frozenset({
+    "stability",
+    "duration_control",
+    "check_point",
+    "cases",
+})
+COMPATIBILITY_SECTION_KEYS: Final[frozenset[str]] = frozenset({
+    "compatibility",
+})
+PERFORMANCE_SECTION_KEYS: Final[frozenset[str]] = frozenset({
+    "Turntable",
+    "rf_solution",
+    "rvr",
+    "router",
+    "text_case",
+    "debug",
+    "duration_control",
+    "check_point",
+    "cases",
+    "csv_path",
+})
 
 # UI theme defaults
 FONT_SIZE: Final[int] = 14
@@ -310,31 +331,61 @@ def split_config_data(
 ]:
     """Split the full configuration into DUT, execution, stability, compatibility, and tool sections."""
     normalised = _normalize_config_keys(config)
+
+    # Section payloads written back to individual YAML files.
     dut_section: dict[str, Any] = {}
     execution_section: dict[str, Any] = {}
     stability_section: dict[str, Any] = {}
     compatibility_section: dict[str, Any] = {}
     tool_section: dict[str, Any] = {}
+
+    # Local classification sets for Settings groups.
+    stability_keys = STABILITY_SECTION_KEYS
+    compatibility_keys = COMPATIBILITY_SECTION_KEYS
+
     for key, value in normalised.items():
-        if key == "stability":
-            if isinstance(value, Mapping):
-                stability_section = copy.deepcopy(value)
-            continue
-        if key == "compatibility":
-            # Store compatibility settings in their own section file
-            # with a top-level ``compatibility`` key for readability.
-            compatibility_section = {"compatibility": copy.deepcopy(value)} if isinstance(
-                value, Mapping
-            ) else {}
-            continue
+        # Tool section is stored as-is in its own YAML.
         if key == TOOL_SECTION_KEY:
             if isinstance(value, Mapping):
                 tool_section = copy.deepcopy(value)
             continue
+
+        # Stability Settings (stability/duration_control/check_point/cases).
+        if key in stability_keys:
+            # Merged stability section: copy the mapping wholesale.
+            if key == "stability" and isinstance(value, Mapping):
+                # If stability_section already has content, merge it so that
+                # any per-key updates (duration_control/cases/etc.) from the
+                # flat config are preserved.
+                if stability_section:
+                    tmp = copy.deepcopy(value)
+                    tmp.update(stability_section)
+                    stability_section = tmp
+                else:
+                    stability_section = copy.deepcopy(value)
+            else:
+                if not isinstance(stability_section, dict):
+                    stability_section = {}
+                stability_section[key] = copy.deepcopy(value)
+            continue
+
+        # Compatibility Settings live under a top-level ``compatibility`` key
+        # in their own YAML file.
+        if key in compatibility_keys:
+            if isinstance(value, Mapping):
+                compatibility_section = {"compatibility": copy.deepcopy(value)}
+            else:
+                compatibility_section = {}
+            continue
+
+        # DUT Settings use a fixed set of top-level keys (connect_type/project/etc.).
         if key in DUT_SECTION_KEYS:
             dut_section[key] = copy.deepcopy(value)
-        else:
-            execution_section[key] = copy.deepcopy(value)
+            continue
+
+        # All remaining keys belong to the Performance/Execution config.
+        execution_section[key] = copy.deepcopy(value)
+
     return dut_section, execution_section, stability_section, compatibility_section, tool_section
 
 
