@@ -9,7 +9,7 @@ check_point:
 cases:
   test_switch_wifi_str:
     ac:
-      enabled: false
+      enabled: true
       on_duration: '5'
       off_duration: '5'
       port: ''
@@ -26,5 +26,8 @@ cases:
       relay_params: []
     use_router: false
     router_csv: performance_test_csv/rvr_wifi_setup.csv
-    manual_entries: []
+    manual_entries:
+    - ssid: aaa
+      security_mode: Open System
+      password: ''
 text_case: test/stability/test_switch_wifi_str.py

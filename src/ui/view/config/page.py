@@ -41,7 +41,6 @@ from src.ui.view.config.actions import (
     apply_ui,
 )
 from src.ui.view.config import (
-    create_test_switch_wifi_config_entry_from_schema,
     create_test_switch_wifi_str_config_entry_from_schema,
     initialize_script_config_groups,
 )
@@ -442,8 +441,6 @@ class CaseConfigPage(ConfigView):
         ] = {
             # Merged stability script combining STR relay and Wi‑Fi switching.
             "test/stability/test_switch_wifi_str.py": create_test_switch_wifi_str_config_entry_from_schema,
-            # Legacy switch‑Wi‑Fi script (Wi‑Fi list only) kept for backward compatibility.
-            "test/stability/test_switch_wifi.py": create_test_switch_wifi_config_entry_from_schema,
         }
         self._script_groups: dict[str, ScriptConfigEntry] = {}
         self._active_script_case: str | None = None

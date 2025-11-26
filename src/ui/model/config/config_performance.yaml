@@ -46,7 +46,7 @@ check_point:
 cases:
   test_switch_wifi_str:
     ac:
-      enabled: false
+      enabled: true
       on_duration: '5'
       off_duration: '5'
       relay_type: usb_relay
@@ -65,6 +65,9 @@ cases:
     router_csv: C:\Users\SH171300-1522\PycharmProjects\wifi_test\config\performance_test_csv\rvr_wifi_setup.csv
     manual_entries: []
   test_switch_wifi:
-    manual_entries: []
+    manual_entries:
+    - ssid: aaa
+      security_mode: Open System
+      password: ''
     use_router: false
     router_csv: C:\Users\SH171300-1522\PycharmProjects\wifi_test\config\performance_test_csv\rvr_wifi_setup.csv
