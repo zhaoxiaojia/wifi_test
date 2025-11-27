@@ -14,12 +14,17 @@ server.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
+from datetime import datetime
+from pathlib import Path
 
 from ldap3 import ALL, Connection, NTLM, Server
 from ldap3.core.exceptions import LDAPException
 from PyQt5.QtCore import QObject, pyqtSignal
+
+from src.util.constants import Paths
 
 
 # -----------------------------------------------------------------------------
@@ -259,6 +264,80 @@ def ldap_authenticate(username: str, password: str) -> str | None:
                 logging.debug("ldap_authenticate: ignored unbind exception", exc_info=True)
 
 
+# -----------------------------------------------------------------------------
+# Authentication state persistence
+# -----------------------------------------------------------------------------
+
+AUTH_STATE_FILENAME = "auth_state.json"
+
+
+def _auth_state_path() -> Path:
+    """Return the path for the persisted authentication state file."""
+    return Path(Paths.CONFIG_DIR) / AUTH_STATE_FILENAME
+
+
+def load_auth_state() -> dict | None:
+    """
+    Load the last authentication state from disk.
+
+    Returns
+    -------
+    dict | None
+        A dict containing at least ``username`` and ``authenticated``
+        when a previous login was recorded successfully, otherwise None.
+    """
+    path = _auth_state_path()
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        logging.warning("Failed to read auth state file %s: %s", path, exc)
+        return None
+
+    username = str(data.get("username", "") or "").strip()
+    authenticated = bool(data.get("authenticated", False))
+    if not username or not authenticated:
+        return None
+    updated_at = str(data.get("updated_at") or "")
+    return {"username": username, "authenticated": authenticated, "updated_at": updated_at}
+
+
+def save_auth_state(username: str, authenticated: bool) -> None:
+    """
+    Persist the current authentication state to disk.
+
+    Only the username and a boolean flag are stored. Passwords are
+    never written to disk.
+    """
+    username = (username or "").strip()
+    if not username:
+        clear_auth_state()
+        return
+
+    data = {
+        "username": username,
+        "authenticated": bool(authenticated),
+        "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    }
+    path = _auth_state_path()
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception as exc:
+        logging.warning("Failed to write auth state file %s: %s", path, exc)
+
+
+def clear_auth_state() -> None:
+    """Remove any persisted authentication state."""
+    path = _auth_state_path()
+    try:
+        if path.exists():
+            path.unlink()
+    except Exception as exc:
+        logging.warning("Failed to clear auth state file %s: %s", path, exc)
+
+
 __all__ = [
     "_LDAPAuthWorker",
     "get_configured_ldap_server",
@@ -266,4 +345,3 @@ __all__ = [
     "LDAP_HOST",
     "LDAP_DOMAIN",
 ]
-

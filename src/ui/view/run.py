@@ -395,7 +395,16 @@ class RunPage(CardWidget):
     def run_case(self) -> None:
         self.reset()
         self._set_action_button("stop")
-        self.runner = CaseRunner(self.case_path)
+        account_name = ""
+        try:
+            mw = getattr(self, "main_window", None) or self.window()
+            if mw is not None and hasattr(mw, "_active_account"):
+                payload = getattr(mw, "_active_account", None)
+                if isinstance(payload, dict):
+                    account_name = str(payload.get("username", "")).strip()
+        except Exception:
+            account_name = ""
+        self.runner = CaseRunner(self.case_path, account_name=account_name, display_case_path=self.display_case_path)
         self.runner.log_signal.connect(self._append_log)
         self.runner.progress_signal.connect(self.update_progress)
         with suppress(Exception):

@@ -17,6 +17,7 @@ from PyQt5.QtGui import QDesktopServices
 from PyQt5.QtWidgets import QMessageBox
 
 from src.util.constants import Paths, get_build_metadata
+from src.util.test_history import get_total_test_duration_hh_mm
 from src.ui.view.style import acknowledgements_from_readme, latest_version_from_changelog, normalize_data_source_label
 
 
@@ -71,11 +72,13 @@ class AboutController:
         metadata = get_build_metadata()
         latest_version = latest_version_from_changelog(metadata)
         acknowledgements = acknowledgements_from_readme()
+        total_duration = get_total_test_duration_hh_mm()
 
         display_rows = [
             ("Application Name", metadata.get("package_name", "Unknown")),
             ("Version", latest_version or "Unknown"),
             ("Build Time", metadata.get("build_time", "Unknown")),
+            ("Total Test Duration", total_duration or "00:00"),
             ("Author", "chao.li"),
             ("Acknowledgements", acknowledgements if acknowledgements else "Unknown"),
         ]

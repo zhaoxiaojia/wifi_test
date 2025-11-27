@@ -39,7 +39,13 @@ from src.ui.view.about import AboutView
 from src.ui.view.account import CompanyLoginPage
 from src.ui.controller.about_ctl import AboutController
 from src.ui.controller.report_ctl import ReportController
-from src.ui.controller.account_ctl import get_configured_ldap_server, ldap_authenticate
+from src.ui.controller.account_ctl import (
+    get_configured_ldap_server,
+    ldap_authenticate,
+    load_auth_state,
+    save_auth_state,
+    clear_auth_state,
+)
 
 
 def log_exception(exc_type, exc_value, exc_tb) -> None:
@@ -225,19 +231,21 @@ class MainWindow(FluentWindow):
         }
 
         self._nav_logged_out_states = {
-            self.sidebar_nav_buttons["config"]: True,
+            self.sidebar_nav_buttons["config"]: False,
             self.sidebar_nav_buttons["case"]: False,
-            self.sidebar_nav_buttons["run"]: True,
+            self.sidebar_nav_buttons["run"]: False,
             self.sidebar_nav_buttons["report"]: False,
+            self.sidebar_nav_buttons["about"]: False,
+        }
+        # In the logged-in state, all feature pages are enabled.
+        self._nav_logged_in_states = {
+            self.sidebar_nav_buttons["config"]: True,
+            self.sidebar_nav_buttons["case"]: True,
+            self.sidebar_nav_buttons["run"]: True,
+            self.sidebar_nav_buttons["report"]: True,
             self.sidebar_nav_buttons["about"]: True,
         }
-        self._nav_logged_in_states = dict(self._nav_logged_out_states)
-        # After login, the Case button should be enabled by default;
-        # the Case page itself decides what, if anything, to show for
-        # the current testcase.
-        self._nav_logged_in_states[self.sidebar_nav_buttons["case"]] = True
-        self._apply_nav_enabled(self._nav_logged_out_states)
-        self.setCurrentIndex(self.caseConfigPage)
+        self._initialize_login_state()
 
         # Backward compatibility fields
         self._run_nav_button = self.run_nav_button
@@ -283,6 +291,31 @@ class MainWindow(FluentWindow):
     # Login / logout
     # ------------------------------------------------------------------
 
+    def _initialize_login_state(self) -> None:
+        """Restore navigation and initial page based on persisted auth state."""
+        auth_state = load_auth_state()
+        if (
+            isinstance(auth_state, dict)
+            and auth_state.get("authenticated")
+            and auth_state.get("username")
+        ):
+            # Treat as already authenticated: enable all features and go to Config page.
+            username = str(auth_state.get("username", "") or "").strip()
+            self._active_account = {"username": username, "source": "cached"}
+            self._apply_nav_enabled(self._nav_logged_in_states)
+            # Keep Account page UI in sync with the cached login state.
+            try:
+                if getattr(self, "login_page", None) is not None:
+                    self.login_page.apply_cached_login(username)
+            except Exception:
+                logging.debug("Failed to apply cached login state to Account page", exc_info=True)
+            self.setCurrentIndex(self.caseConfigPage)
+        else:
+            # No previous login or explicitly cleared: force Account page and lock features.
+            self._active_account = None
+            self._apply_nav_enabled(self._nav_logged_out_states)
+            self.setCurrentIndex(self.login_page)
+
     def _on_login_result(self, success: bool, message: str, payload: dict) -> None:
         """Handle completion of a login attempt."""
         logging.info(
@@ -293,10 +326,13 @@ class MainWindow(FluentWindow):
         )
         if success:
             self._active_account = dict(payload)
+            username = str(self._active_account.get("username", "") or "").strip()
+            save_auth_state(username=username, authenticated=True)
             self._apply_nav_enabled(self._nav_logged_in_states)
             self.setCurrentIndex(self.caseConfigPage)
         else:
             self._active_account = None
+            clear_auth_state()
             self._apply_nav_enabled(self._nav_logged_out_states)
             self.setCurrentIndex(self.login_page)
 
@@ -306,6 +342,7 @@ class MainWindow(FluentWindow):
         self._apply_nav_enabled(self._nav_logged_out_states)
         self.setCurrentIndex(self.login_page)
         self._active_account = None
+        clear_auth_state()
         self.login_page.set_status_message("Signed out. Please sign in again.", state="info")
 
     # ------------------------------------------------------------------

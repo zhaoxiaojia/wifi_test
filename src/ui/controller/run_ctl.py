@@ -184,9 +184,11 @@ class CaseRunner(QThread):
     progress_signal = pyqtSignal(int)
     report_dir_signal = pyqtSignal(str)
 
-    def __init__(self, case_path: str, parent=None):
+    def __init__(self, case_path: str, account_name: str | None = None, display_case_path: str | None = None, parent=None):
         super().__init__(parent)
         self.case_path = case_path
+        self.account_name = (account_name or "").strip()
+        self.display_case_path = display_case_path or case_path
         self._ctx = multiprocessing.get_context("spawn")
         self._queue = self._ctx.Queue()
         self._proc: multiprocessing.Process | None = None
@@ -201,6 +203,10 @@ class CaseRunner(QThread):
 
     def run(self) -> None:  # type: ignore[override]
         """Spawn the worker process and relay events to the UI."""
+        from datetime import datetime
+
+        run_started_at = datetime.now()
+        run_started_ts = time.time()
         logging.info("CaseRunner: preparing to start process for %s", self.case_path)
         self._should_stop = False
         python_log_path = self._prepare_python_log_path()
@@ -225,10 +231,25 @@ class CaseRunner(QThread):
                 self.report_dir_signal.emit(str(payload))
             elif kind == "python_log":
                 self._python_log_path = str(payload)
+        # Flush any in-flight case timing marker.
         if self._case_start_time is not None:
             duration_ms = int((time.time() - self._case_start_time) * 1000)
             self.log_signal.emit(f"[PYQT_CASETIME]{duration_ms}")
             self._case_start_time = None
+        # Record aggregated pytest run duration for history.
+        try:
+            from src.util.test_history import append_test_history_record
+
+            duration_seconds = max(0.0, time.time() - run_started_ts)
+            test_case_label = getattr(self, "display_case_path", "") or self.case_path
+            append_test_history_record(
+                account_name=getattr(self, "account_name", "") or "",
+                start_time=run_started_at,
+                test_case=str(test_case_label),
+                duration_seconds=duration_seconds,
+            )
+        except Exception as exc:
+            logging.warning("CaseRunner: failed to record test history: %s", exc)
         self._queue.close()
         self._queue.join_thread()
         queue_msg = (

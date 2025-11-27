@@ -163,6 +163,38 @@ class CompanyLoginPage(QWidget):
         self.account_edit.setEnabled(not loading and not self._logged_in)
         self.password_edit.setEnabled(not loading and not self._logged_in)
 
+    def apply_cached_login(self, username: str) -> None:
+        """
+        Restore the UI to a previously authenticated state without re-running LDAP.
+
+        This is used when a cached auth_state.json indicates that the last
+        session was successfully authenticated. It updates only local UI/flags
+        and does not emit the ``loginResult`` signal again.
+        """
+        clean_username = (username or "").strip()
+        if not clean_username:
+            self.reset()
+            return
+
+        self._logged_in = True
+        self._loading = False
+        self._last_payload = {"username": clean_username}
+
+        self.account_edit.setText(clean_username)
+        self.account_edit.setEnabled(False)
+        self.password_edit.clear()
+        self.password_edit.setEnabled(False)
+
+        self.login_button.setVisible(False)
+        self.login_button.setEnabled(False)
+        self.logout_button.setVisible(True)
+        self.logout_button.setEnabled(True)
+
+        self.set_status_message(
+            f"Signed in as {clean_username} (restored from previous session).",
+            state="success",
+        )
+
     def set_status_message(self, message: str, *, state: str = "info") -> None:
         """
         Update the status message label with text and color.
@@ -307,4 +339,3 @@ class CompanyLoginPage(QWidget):
 
 
 __all__ = ["AccountView", "CompanyLoginPage"]
-
