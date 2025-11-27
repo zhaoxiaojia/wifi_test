@@ -359,15 +359,9 @@ def split_config_data(
                     base.update(stability_section)
                 stability_section = base
             elif key == "cases":
-                # Legacy top-level ``cases`` support: only use it when there
-                # is no structured stability section yet. This avoids
-                # overwriting stability.cases.* data (including manual_entries)
-                # that has already been normalised.
-                if stability_section:
-                    continue
-                if not isinstance(stability_section, dict):
-                    stability_section = {}
-                stability_section["cases"] = copy.deepcopy(value)
+                # Legacy top-level ``cases`` keys are no longer persisted.
+                # Canonical stability case data lives under ``stability.cases``.
+                continue
             else:
                 # duration_control / check_point written into stability section.
                 if not isinstance(stability_section, dict):
