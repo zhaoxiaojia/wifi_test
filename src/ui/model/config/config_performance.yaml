@@ -26,7 +26,6 @@ rvr:
   repeat: '0'
   throughput_threshold: '0'
   tool: iperf
-  enable_wpa3: false
 router:
   name: xiaomibe7000
   address: 192.168.31.1

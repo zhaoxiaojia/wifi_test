@@ -273,7 +273,15 @@ class RvrWifiConfigPage(CardWidget):
     def reload_csv(self) -> None:
         logging.info("Reloading CSV from %s", self.csv_path)
         self.headers, self.rows = self._load_csv()
-        self.list.set_data(self.headers, self.rows)
+        # Keep FormListBinder and FormListPage in sync with the new rows
+        # list so that subsequent edits update the correct CSV data.
+        if hasattr(self.list, "set_rows"):
+            self.list.set_data(self.headers, self.rows)
+        # Rebind binder's internal row reference to the freshly loaded list.
+        try:
+            self._binder._rows = self.rows  # type: ignore[attr-defined]
+        except Exception:  # pragma: no cover - defensive
+            logging.debug("Failed to rebind binder rows after CSV reload", exc_info=True)
         self.dataChanged.emit()
 
     def _save_csv(self) -> None:
@@ -298,11 +306,18 @@ class RvrWifiConfigPage(CardWidget):
             logging.error("reload router failed: %s", e)
             return
         self.form.set_router(self.router)
+        # When router changes, reload CSV for the new router so that the
+        # form/list/binder all operate on the same row list.
+        self.headers, self.rows = self._load_csv()
+        self.list.set_data(self.headers, self.rows)
+        try:
+            self._binder._rows = self.rows  # type: ignore[attr-defined]
+        except Exception:  # pragma: no cover - defensive
+            logging.debug("Failed to rebind binder rows after router reload", exc_info=True)
         if not self.rows:
             self.form.reset_form()
         else:
             self.form.load_row(self.rows[0])
-            self.list.set_data(self.headers, self.rows)
 
     def on_csv_file_changed(self, path: str) -> None:
         if not path:
@@ -321,8 +336,9 @@ class RvrWifiConfigPage(CardWidget):
         if not (0 <= row_index < len(self.rows)):
             return
         row = self.rows[row_index]
-        row["tx"] = "1" if checked else "0"
-        row["rx"] = "1" if checked else "0"
+        # List checkbox只表示“该行是否启用”，不再强制把 tx/rx
+        # 都改为 1，保留表单中用户单独勾选的方向设置。
+        row["_checked"] = bool(checked)
         self.dataChanged.emit()
 
     def _on_row_updated(self, index: int, row: dict[str, str]) -> None:

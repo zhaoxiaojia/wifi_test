@@ -152,28 +152,11 @@ CUSTOM_TESTCASE_UI_RULES: List[SimpleRuleSpec] = []
 # Rule declarations
 # ---------------------------------------------------------------------------
 
-# 1) RvR tool selection (iperf vs ixchariot) and WPA3 toggle.
+# 1) RvR tool selection (iperf vs ixchariot).
 CUSTOM_SIMPLE_UI_RULES.append(
     SimpleRuleSpec(
         trigger_field="rvr.tool",
         effects=[
-            # Enable WPA3 only when tool is iperf.
-            SimpleFieldEffect(
-                target_field="rvr.enable_wpa3",
-                action="enable",
-                condition=lambda values: values.get("rvr.tool") == "iperf",
-            ),
-            SimpleFieldEffect(
-                target_field="rvr.enable_wpa3",
-                action="disable",
-                condition=lambda values: values.get("rvr.tool") != "iperf",
-            ),
-            SimpleFieldEffect(
-                target_field="rvr.enable_wpa3",
-                action="set_value",
-                value=lambda values: False,
-                condition=lambda values: values.get("rvr.tool") != "iperf",
-            ),
             # IxChariot path editable only when tool is ixchariot.
             SimpleFieldEffect(
                 target_field="rvr.ixchariot.path",
