@@ -750,10 +750,20 @@ class dut():
         if is_database_debug_enabled():
             logging.info("Database debug mode enabled, skip killing iperf processes")
             return
-        commands = [
-            pytest.dut.IPERF_KILL.format(self.test_tool),
-            pytest.dut.IPERF_WIN_KILL.format(self.test_tool),
-        ]
+        commands = []
+
+        # Kill iperf processes on the host (Windows/Linux PC).
+        commands.append(pytest.dut.IPERF_KILL.format(self.test_tool))
+        commands.append(pytest.dut.IPERF_WIN_KILL.format(self.test_tool))
+
+        # Also attempt to kill iperf on the DUT side via ADB when applicable.
+        connect_type = str(getattr(pytest, "connect_type", "")).lower()
+        serial = getattr(self, "serialnumber", "") or getattr(pytest, "serialnumber", "")
+        if connect_type == "android" and serial:
+            # Best‑effort; device might not have killall/pkill, errors are ignored by _run_host_commands.
+            commands.append(f'adb -s {serial} shell killall -9 {self.test_tool}')
+            commands.append(f'adb -s {serial} shell pkill -9 {self.test_tool}')
+
         self._run_host_commands(commands)
 
     def _run_host_commands(self, commands: Sequence[str]) -> None:

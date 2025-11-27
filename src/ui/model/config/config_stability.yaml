@@ -27,4 +27,4 @@ cases:
     use_router: false
     router_csv: ''
     manual_entries: []
-text_case: ''
+text_case: test/performance/test_wifi_peak_throughput.py
