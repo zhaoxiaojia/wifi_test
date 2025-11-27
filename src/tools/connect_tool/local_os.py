@@ -5,7 +5,7 @@ import subprocess
 import time
 from subprocess import check_output
 
-from tools.yamlTool import yamlTool
+from src.tools.yamlTool import yamlTool
 
 
 class LocalOS:
@@ -15,10 +15,6 @@ class LocalOS:
         return LocalOS._instance
 
     def __init__(self):
-        self.config = yamlTool(os.path.join(os.getcwd(), 'config', 'config.yaml'))
-        self.host = self.config.get_note('host_os')
-        self.user = self.host['user']
-        self.passwd = self.host['password']
         self.ip = ''
 
     def checkoutput(self, cmd):

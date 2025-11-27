@@ -46,6 +46,7 @@ from src.ui.controller.account_ctl import (
     save_auth_state,
     clear_auth_state,
 )
+from src.ui.controller import set_run_locked
 
 
 def log_exception(exc_type, exc_value, exc_tb) -> None:
@@ -203,7 +204,7 @@ class MainWindow(FluentWindow):
 
         self.about_page = AboutView(self)
         # Attach behaviour from the controller (migrated from the old AboutPage)
-        AboutController(self.about_page)
+        self.about_ctl = AboutController(self.about_page)
         self.about_nav_button = self._create_sidebar_button(
             "about",
             self.about_page,
@@ -315,6 +316,9 @@ class MainWindow(FluentWindow):
             self._active_account = None
             self._apply_nav_enabled(self._nav_logged_out_states)
             self.setCurrentIndex(self.login_page)
+        # Ensure About page metadata (including test duration) is in sync with
+        # the latest on-disk state when the application starts.
+        self.refresh_about_metadata()
 
     def _on_login_result(self, success: bool, message: str, payload: dict) -> None:
         """Handle completion of a login attempt."""
@@ -344,6 +348,15 @@ class MainWindow(FluentWindow):
         self._active_account = None
         clear_auth_state()
         self.login_page.set_status_message("Signed out. Please sign in again.", state="info")
+
+    def refresh_about_metadata(self) -> None:
+        """Refresh the About page metadata, including total test duration."""
+        ctl = getattr(self, "about_ctl", None)
+        try:
+            if ctl is not None and hasattr(ctl, "populate_metadata"):
+                ctl.populate_metadata()
+        except Exception:
+            logging.debug("refresh_about_metadata failed", exc_info=True)
 
     # ------------------------------------------------------------------
     # RVR Wi-Fi page animation
@@ -704,19 +717,14 @@ class MainWindow(FluentWindow):
 
     def on_run(self, case_path, display_case_path, config):
         """Kick off execution of a test case and display the run page."""
-        if hasattr(self.rvr_wifi_config_page, "config_ctl"):
-            self.rvr_wifi_config_page.config_ctl.lock_for_running(True)
-        if getattr(self, "rvr_wifi_config_page", None):
-            self.rvr_wifi_config_page.set_readonly(True)
+        # Lock Config + Case pages while the run is active.
+        set_run_locked(self, True)
         try:
             self._trigger_run(case_path, display_case_path, config)
         except Exception as e:
             logging.error("on_run failed: %s", e, exc_info=True)
             QMessageBox.critical(self, "Error", f"Unable to run: {e}")
-            if hasattr(self.rvr_wifi_config_page, "config_ctl"):
-                self.rvr_wifi_config_page.config_ctl.lock_for_running(False)
-            if getattr(self, "rvr_wifi_config_page", None):
-                self.rvr_wifi_config_page.set_readonly(False)
+            set_run_locked(self, False)
             if self._run_nav_button and not sip.isdeleted(self._run_nav_button):
                 self._run_nav_button.setEnabled(False)
                 self._run_nav_button.setVisible(False)
@@ -739,18 +747,14 @@ class MainWindow(FluentWindow):
         if self.stackedWidget.indexOf(self.run_page) == -1:
             self.stackedWidget.addWidget(self.run_page)
         self.switchTo(self.run_page)
-        if hasattr(self.rvr_wifi_config_page, "set_readonly"):
-            self.rvr_wifi_config_page.set_readonly(True)
-
         self.run_page.run_case()
         runner = getattr(self.run_page, "runner", None)
         if runner:
 
             def _on_runner_finished():
-                if hasattr(self.rvr_wifi_config_page, "config_ctl"):
-                    self.rvr_wifi_config_page.config_ctl.lock_for_running(False)
-                if getattr(self, "rvr_wifi_config_page", None):
-                    self.rvr_wifi_config_page.set_readonly(False)
+                set_run_locked(self, False)
+                # After each run, refresh About metadata so total duration updates.
+                self.refresh_about_metadata()
 
             self._runner_finished_slot = _on_runner_finished
             runner.finished.connect(self._runner_finished_slot)
@@ -772,16 +776,10 @@ class MainWindow(FluentWindow):
         """Abort a running test and return to the case configuration page."""
         self.setCurrentIndex(self.rvr_wifi_config_page)
         QCoreApplication.processEvents()
-        if hasattr(self.rvr_wifi_config_page, "config_ctl"):
-            self.rvr_wifi_config_page.config_ctl.lock_for_running(False)
-        if getattr(self, "rvr_wifi_config_page", None):
-            self.rvr_wifi_config_page.set_readonly(False)
+        set_run_locked(self, False)
+        self.refresh_about_metadata()
         if self._run_nav_button and not sip.isdeleted(self._run_nav_button):
             self._run_nav_button.setEnabled(False)
-        if hasattr(self, "rvr_wifi_config_page", "set_readonly"):
-            self.rvr_wifi_config_page.set_readonly(False)
-        if hasattr(self.rvr_wifi_config_page, "set_readonly"):
-            self.rvr_wifi_config_page.set_readonly(False)
         logging.info("Switched to CaseConfigPage")
 
     def enable_report_page(self, report_dir: str) -> None:

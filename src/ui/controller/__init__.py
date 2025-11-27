@@ -88,4 +88,42 @@ def list_serial_ports() -> List[Tuple[str, str]]:
     return ports
 
 
-__all__ = ["info_bar_parent", "show_info_bar", "list_serial_ports"]
+def set_run_locked(main_window: Any, locked: bool) -> None:
+    """
+    Apply run-lock state across Config and Case pages.
+
+    This is the single entrypoint used by the UI when a test run starts
+    or finishes. It delegates to the ConfigController for the Config
+    page (so existing apply_run_lock_ui_state logic is reused) and
+    disables/enables the Case page widgets as a best-effort.
+    """
+    # Lock/unlock the Config page via its controller so that all field
+    # widgets, CSV selection and run buttons follow the existing model.
+    try:
+        cfg_page = getattr(main_window, "caseConfigPage", None)
+        cfg_ctl = getattr(cfg_page, "config_ctl", None) if cfg_page is not None else None
+        if cfg_ctl is not None and hasattr(cfg_ctl, "lock_for_running"):
+            cfg_ctl.lock_for_running(bool(locked))
+    except Exception:
+        logging.debug("set_run_locked: failed to update Config page lock state", exc_info=True)
+
+    # Lock/unlock the Case (Rvr Wi-Fi) page.  If the view exposes a
+    # dedicated API (set_readonly), prefer it; otherwise fall back to
+    # simply enabling/disabling the top-level widget.
+    try:
+        rvr_page = getattr(main_window, "rvr_wifi_config_page", None)
+        if rvr_page is None:
+            return
+        if hasattr(rvr_page, "set_readonly"):
+            try:
+                rvr_page.set_readonly(bool(locked))
+                return
+            except Exception:
+                logging.debug("set_run_locked: rvr_page.set_readonly failed", exc_info=True)
+        if hasattr(rvr_page, "setEnabled"):
+            rvr_page.setEnabled(not bool(locked))
+    except Exception:
+        logging.debug("set_run_locked: failed to update Case page lock state", exc_info=True)
+
+
+__all__ = ["info_bar_parent", "show_info_bar", "list_serial_ports", "set_run_locked"]

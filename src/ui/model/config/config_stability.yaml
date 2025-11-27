@@ -12,7 +12,7 @@ cases:
       enabled: false
       on_duration: '0'
       off_duration: '0'
-      port: COM14 (蓝牙链接上的标准串行 (COM14))
+      port: ''
       mode: 'NO'
       relay_type: usb_relay
       relay_params: []
@@ -20,11 +20,11 @@ cases:
       enabled: false
       on_duration: '0'
       off_duration: '0'
-      port: COM14 (蓝牙链接上的标准串行 (COM14))
+      port: ''
       mode: 'NO'
       relay_type: usb_relay
       relay_params: []
     use_router: false
-    router_csv: performance_test_csv/rvr_wifi_setup.csv
+    router_csv: ''
     manual_entries: []
 text_case: ''
