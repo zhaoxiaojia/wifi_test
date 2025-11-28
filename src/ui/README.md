@@ -341,28 +341,28 @@ CSV → pytest), use this checklist:
 3. **Decide whether the Case page needs content**
    - If the test uses the **same CSV schema** as RvR, reuse
      `RvrWifiConfigPage`:
-       - `ConfigController._apply_editable_ui_state` calls
-         `set_case_content_visible(enable_rvr_wifi)` so that the RvR Wi‑Fi
-         page is only shown for cases that enable this feature via rules.
-       - In `rules.py` / `CUSTOM_SIMPLE_UI_RULES`, set
-         `enable_rvr_wifi=True` for the relevant `text_case` values.
+     - `ConfigController._apply_editable_ui_state` calls
+       `set_case_content_visible(enable_rvr_wifi)` so that the RvR Wi‑Fi
+       page is only shown for cases that enable this feature via rules.
+     - In `rules.py` / `CUSTOM_SIMPLE_UI_RULES`, set
+       `enable_rvr_wifi=True` for the relevant `text_case` values.
    - If the test needs a *different* per‑scenario editor:
-       - Create a new view under `src/ui/view/` (similar to
-         `RvrWifiConfigPage`) and keep it UI‑only.
-       - Add a small controller helper in `case_ctl.py` if you reuse CSV
-         discovery or combo synchronisation.
-       - Extend `MainWindow` to host the new Case page and expose a
-         `set_case_content_visible(...)` method on it.
-       - In `ConfigController._apply_editable_ui_state`, call the new Case
-         page when rules indicate that this test type is active.
+     - Create a new view under `src/ui/view/` (similar to
+       `RvrWifiConfigPage`) and keep it UI‑only.
+     - Add a small controller helper in `case_ctl.py` if you reuse CSV
+       discovery or combo synchronisation.
+     - Extend `MainWindow` to host the new Case page and expose a
+       `set_case_content_visible(...)` method on it.
+     - In `ConfigController._apply_editable_ui_state`, call the new Case
+       page when rules indicate that this test type is active.
 4. **Wire autosave / config usage**
    - For Performance / DUT / Stability panels, continue to rely on the
      central autosave decorator in `src/ui/model/autosave.py` instead of
      hand‑calling `save_config` from random slots.
    - For CSV‑driven Case pages, keep auto‑save inside the page:
-       - Update the in‑memory `rows` list when widgets change.
-       - Write back to CSV through a single helper (like
-         `RvrWifiConfigPage._save_csv()`).
+     - Update the in‑memory `rows` list when widgets change.
+     - Write back to CSV through a single helper (like
+       `RvrWifiConfigPage._save_csv()`).
    - In the pytest module, read only from YAML/CSV (never from Qt widgets)
      so tests stay decoupled from the UI.
 5. **Classify the test for reporting**
