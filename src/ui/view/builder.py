@@ -107,9 +107,7 @@ def _register_config_control(
     instead of spaces or punctuation. The mapping is stored on
     ``page.config_controls`` when present and ignored otherwise.
     """
-    controls = getattr(page, "config_controls", None)
-    if controls is None:
-        return
+    controls = page.config_controls
 
     panel_token = _normalize_control_token(panel or "main")
     group_token = _normalize_control_token(group or panel or "group")
@@ -117,16 +115,6 @@ def _register_config_control(
     suffix = _widget_suffix(widget)
     control_id = f"config_{panel_token}_{group_token}_{field_token}_{suffix}"
 
-    existing = controls.get(control_id)
-    if existing is widget:
-        return
-    if existing is not None and existing is not widget:
-        logging.debug(
-            "Config builder: control id collision for %s (old=%r new=%r)",
-            control_id,
-            existing,
-            widget,
-        )
     controls[control_id] = widget
 
 
@@ -153,10 +141,7 @@ def _create_widget(page: Any, spec: FieldSpec, value: Any) -> QWidget:
             spin.setMinimum(spec.minimum)
         if spec.maximum is not None:
             spin.setMaximum(spec.maximum)
-        try:
-            spin.setValue(int(value) if value is not None else 0)
-        except Exception:
-            spin.setValue(0)
+        spin.setValue(int(value) if value is not None else 0)
         return spin
 
     if wtype == "read_only_text":
@@ -175,11 +160,7 @@ def _create_widget(page: Any, spec: FieldSpec, value: Any) -> QWidget:
         # manages start/stop/step segments with Add/Del controls.
         if spec.key == "rf_solution.step":
             widget = RfStepSegmentsWidget(page)
-            try:
-                widget.load_from_raw(value)
-            except Exception:
-                # Fall back to default empty segments on parse failure.
-                pass
+            widget.load_from_raw(value)
             return widget
 
     # Default: line edit or combo box.
@@ -260,22 +241,16 @@ def build_groups_from_schema(
             # rf_solution section of the current config so that existing
             # behaviour (model list driven by config) is preserved.
             if not choices and key == "rf_solution.model":
-                try:
-                    rf_cfg = config.get("rf_solution") if isinstance(config, dict) else None
-                    if isinstance(rf_cfg, Mapping):
-                        derived = [
-                            str(model_key)
-                            for model_key in rf_cfg.keys()
-                            if model_key not in {"model", "step"}
-                        ]
-                        # Historically RS232Board5 has been a valid RF model
-                        # even though it has no dedicated rf_solution section.
-                        if TURN_TABLE_MODEL_RS232 not in derived:
-                            derived.append(TURN_TABLE_MODEL_RS232)
-                        if derived:
-                            choices = sorted(derived)
-                except Exception:
-                    logging.debug("Failed to derive rf_solution.model choices from config", exc_info=True)
+                rf_cfg = config.get("rf_solution")
+                derived = [
+                    str(model_key)
+                    for model_key in rf_cfg.keys()
+                    if model_key not in {"model", "step"}
+                ]
+                if TURN_TABLE_MODEL_RS232 not in derived:
+                    derived.append(TURN_TABLE_MODEL_RS232)
+                if derived:
+                    choices = sorted(derived)
 
             spec = FieldSpec(
                 key=key,
@@ -311,41 +286,24 @@ def build_groups_from_schema(
             # Maintain config_controls mapping on the page when present.
             group_name = section_id or key.split(".")[0]
             field_name = key.split(".")[-1]
-            try:
-                _register_config_control(page, panel_key, group_name, field_name, widget)
-            except Exception:
-                # Keep builder resilient; config_controls is optional.
-                pass
+            _register_config_control(page, panel_key, group_name, field_name, widget)
 
         # If the parent looks like a ConfigGroupPanel, let it manage layout.
         # For Stability "cases.*" sections, defer adding to the panel; these
         # script groups are composed later (compose_stability_groups) to avoid
         # all scripts being laid out at startup.
         skip_panel_add = panel_key == "stability" and section_id.startswith("cases.")
-        if parent is not None and hasattr(parent, "add_group") and not skip_panel_add:
-            try:
-                parent.add_group(group, defer=True)
-            except Exception:
-                pass
+        if parent is not None and not skip_panel_add:
+            parent.add_group(group, defer=True)
 
         # Record the group on the page so that higher-level layout helpers
         # (e.g. stability common groups) can reference it later.
-        try:
-            if not hasattr(page, "_dut_groups"):
-                page._dut_groups = {}
-            if not hasattr(page, "_other_groups"):
-                page._other_groups = {}
-            target = page._dut_groups if panel_key == "dut" else page._other_groups
-            target[section_id or group_label] = group
-        except Exception:
-            pass
+        target = page._dut_groups if panel_key == "dut" else page._other_groups
+        target[section_id or group_label] = group
 
     # Trigger a single rebalance for this panel if supported.
-    if parent is not None and hasattr(parent, "request_rebalance"):
-        try:
-            parent.request_rebalance()
-        except Exception:
-            pass
+    if parent is not None:
+        parent.request_rebalance()
 
 
 __all__ = ["load_ui_schema", "build_groups_from_schema"]

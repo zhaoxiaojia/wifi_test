@@ -34,12 +34,8 @@ from src.ui.view.theme import (
     apply_theme,
     apply_settings_tab_label_style,
 )
-from src.ui.view.config.actions import (
-    handle_config_event,
-    init_fpga_dropdowns,
-    refresh_config_page_controls,
-    apply_ui,
-)
+from src.ui.view.config.actions import init_fpga_dropdowns, refresh_config_page_controls, apply_ui
+from src.ui.view.config.ui_adapter import UiAdapter, UiEvent
 from src.ui.view.config import (
     create_test_switch_wifi_str_config_entry_from_schema,
     initialize_script_config_groups,
@@ -189,20 +185,6 @@ class ConfigView(CardWidget):
         for key in ("dut", "execution", "stability", "compatibility"):
             lbl = _ConfigTabLabel(self._page_label_map[key], self)
             apply_settings_tab_label_style(lbl, active=(key == "dut"))
-
-            def _make_handler(page_key: str) -> Any:
-                def _handler() -> None:
-                    # Find the owning config page that holds the controller.
-                    page = self
-                    while page is not None and not hasattr(page, "config_ctl"):
-                        page = page.parent()
-                    # Basic debug output to help analyse tab behaviour.
-                    if page is not None:
-                        handle_config_event(page, "settings_tab_clicked", key=page_key)
-
-                return _handler
-
-            lbl.clicked.connect(_make_handler(key))
             self._page_buttons[key] = lbl
             tabs_row.addWidget(lbl)
         tabs_row.addStretch(1)
@@ -379,7 +361,6 @@ class CaseConfigPage(ConfigView):
     can be used directly without a separate wrapper module.
     """
 
-    routerInfoChanged = pyqtSignal()
     csvFileChanged = pyqtSignal(str)
 
     def __init__(self, on_run_callback) -> None:
@@ -419,6 +400,7 @@ class CaseConfigPage(ConfigView):
         self._enable_rvr_wifi: bool = False
         self._router_config_active: bool = False
         self._run_locked: bool = False
+        self._ui_adapter: UiAdapter | None = None
         self._locked_fields: set[str] | None = None
         # Preserve any _current_case_path set by the controller during
         # load_initial_config; default to empty string otherwise.
@@ -454,6 +436,13 @@ class CaseConfigPage(ConfigView):
         # Render form fields from YAML and initialise script groups.
         refresh_config_page_controls(self)
         initialize_script_config_groups(self)
+        # Bind UI events via the adapter so that all interactions flow
+        # into a unified UiEvent pipeline handled by the controller.
+        self._ui_adapter = UiAdapter(self, self._emit_ui_event)
+        try:
+            self._ui_adapter.bind_all()
+        except Exception:
+            self._ui_adapter = None
 
         # ------------------------------------------------------------------
         # Simple rules integration
@@ -487,7 +476,6 @@ class CaseConfigPage(ConfigView):
             pass
 
         # CSV/router updates.
-        self.routerInfoChanged.connect(self.config_ctl.update_csv_options)
         self.config_ctl.update_csv_options()
 
         # Connect signals after UI ready.
@@ -496,6 +484,21 @@ class CaseConfigPage(ConfigView):
             0,
             lambda: apply_ui(self, getattr(self, "_current_case_path", "") or ""),
         )
+
+    # ------------------------------------------------------------------
+    # UiAdapter integration
+    # ------------------------------------------------------------------
+
+    def _emit_ui_event(self, event: UiEvent) -> None:
+        """Forward UiAdapter events to the config controller, if available."""
+        ctl = getattr(self, "config_ctl", None)
+        if ctl is None or not hasattr(ctl, "handle_ui_event"):
+            return
+        try:
+            ctl.handle_ui_event(event)  # type: ignore[arg-type]
+        except Exception:
+            # Keep UI responsive even if controller misbehaves.
+            pass
 
     # ------------------------------------------------------------------
     # Helpers used by controller / actions

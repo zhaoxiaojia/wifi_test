@@ -77,7 +77,7 @@ def bind_view_events(page: Any, view_key: str, event_handler: Any) -> None:
     spec = table.get(view_key) or {}
     events: Iterable[Dict[str, Any]] = spec.get("events") or []
 
-    field_widgets = getattr(page, "field_widgets", {}) or {}
+    field_widgets = page.field_widgets
 
     for ev in events:
         field_key = str(ev.get("field") or "").strip()
@@ -99,15 +99,15 @@ def bind_view_events(page: Any, view_key: str, event_handler: Any) -> None:
                 data: Dict[str, Any] = {}
                 for key, source in payload.items():
                     if source == "text":
-                        if hasattr(w, "currentText"):
+                        if isinstance(w, ComboBox):
                             data[key] = str(w.currentText())
-                        elif hasattr(w, "text"):
+                        elif isinstance(w, LineEdit):
                             data[key] = str(w.text())
                     elif source == "checked":
-                        if hasattr(w, "isChecked"):
+                        if isinstance(w, QCheckBox):
                             data[key] = bool(w.isChecked())
                     elif source == "bool_text":
-                        if hasattr(w, "isChecked"):
+                        if isinstance(w, QCheckBox):
                             data[key] = "True" if w.isChecked() else "False"
                 event_handler(page, name, **data)
 
@@ -116,15 +116,13 @@ def bind_view_events(page: Any, view_key: str, event_handler: Any) -> None:
         handler = _make_handler(widget, payload_spec, event_name)
 
         # Connect appropriate Qt signal based on the declared trigger.
-        if trigger == "toggled" and hasattr(widget, "toggled"):
+        if trigger == "toggled" and isinstance(widget, QCheckBox):
             widget.toggled.connect(lambda *_a, h=handler: h(*_a))
         elif trigger == "text":
-            if hasattr(widget, "currentTextChanged"):
+            if isinstance(widget, ComboBox):
                 widget.currentTextChanged.connect(lambda *_a, h=handler: h(*_a))
-            elif hasattr(widget, "textChanged"):
+            elif isinstance(widget, LineEdit):
                 widget.textChanged.connect(lambda *_a, h=handler: h(*_a))
-            elif hasattr(widget, "currentIndexChanged"):
-                widget.currentIndexChanged.connect(lambda *_a, h=handler: h(*_a))
 
         if initial:
             handler()
@@ -271,12 +269,9 @@ class FormListPage(CardWidget):
         # excessive empty space for tables that use a checkable column
         # (this is a theme-level preference).
         if self.checkable:
-            try:
-                header = self.table.horizontalHeader()
-                header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
-                self.table.setColumnWidth(0, FORMLIST_CHECKBOX_COL_WIDTH)
-            except Exception:
-                pass
+            header = self.table.horizontalHeader()
+            header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+            self.table.setColumnWidth(0, FORMLIST_CHECKBOX_COL_WIDTH)
 
         self.table.clearSelection()
         if self.rows:
@@ -447,7 +442,7 @@ class RouterConfigForm(CardWidget):
             widget.hide()
 
         # Populate band choices based on router when available.
-        band_list = getattr(self.router, "BAND_LIST", ["2.4G", "5G"])
+        band_list = self.router.BAND_LIST
         self.band_combo.addItems(band_list)
 
         # Wire up interactions.
@@ -569,7 +564,7 @@ class RouterConfigForm(CardWidget):
             "rx": "1" if self.rx_check.isChecked() else "0",
         }
         # When a field subset is configured, only expose those keys.
-        if getattr(self, "fields", None):
+        if self.fields:
             return {k: v for k, v in data.items() if k in self.fields}
         return data
 
@@ -586,13 +581,12 @@ class RouterConfigForm(CardWidget):
         from src.util.constants import RouterConst  # local import to avoid heavy deps at module import time
 
         wireless = RouterConst.DEFAULT_WIRELESS_MODES.get(band, [])
-        router = self.router
         if band == "2.4G":
-            channel = getattr(router, "CHANNEL_2", []) if router is not None else []
-            bandwidth = getattr(router, "BANDWIDTH_2", []) if router is not None else []
+            channel = self.router.CHANNEL_2
+            bandwidth = self.router.BANDWIDTH_2
         elif band == "5G":
-            channel = getattr(router, "CHANNEL_5", []) if router is not None else []
-            bandwidth = getattr(router, "BANDWIDTH_5", []) if router is not None else []
+            channel = self.router.CHANNEL_5
+            bandwidth = self.router.BANDWIDTH_5
         else:
             channel = []
             bandwidth = []
@@ -676,17 +670,15 @@ class FormListBinder(QObject):
         self._on_rows_changed = on_rows_changed
 
         # Selection changes: populate form from the active row.
-        if hasattr(self._list, "currentRowChanged"):
-            self._list.currentRowChanged.connect(self._on_list_row_changed)
+        self._list.currentRowChanged.connect(self._on_list_row_changed)
 
         # Form edits: merge into current row and refresh list.
-        if hasattr(self._form, "rowChanged"):
-            self._form.rowChanged.connect(self._on_form_row_changed)
+        self._form.rowChanged.connect(self._on_form_row_changed)
 
         # Optional add/delete wiring.
-        if bind_add and hasattr(self._form, "addRequested"):
+        if bind_add:
             self._form.addRequested.connect(self._on_form_add_requested)
-        if bind_delete and hasattr(self._form, "deleteRequested"):
+        if bind_delete:
             self._form.deleteRequested.connect(self._on_form_delete_requested)
 
     # ------------------------------------------------------------------
@@ -696,19 +688,10 @@ class FormListBinder(QObject):
     def _on_list_row_changed(self, index: int) -> None:
         if not (0 <= index < len(self._rows)):
             return
-        row = self._rows[index]
-        load = getattr(self._form, "load_row", None)
-        if callable(load):
-            load(row)
+        self._form.load_row(self._rows[index])
 
     def _current_index(self) -> int:
-        getter = getattr(self._list, "current_row", None)
-        if callable(getter):
-            try:
-                return int(getter())
-            except Exception:
-                return -1
-        return -1
+        return int(self._list.current_row())
 
     def _on_form_row_changed(self, data: Mapping[str, Any]) -> None:
         index = self._current_index()
@@ -719,20 +702,16 @@ class FormListBinder(QObject):
         if callable(self._on_row_updated):
             self._on_row_updated(index, row)
         self._rows[index] = row
-        if hasattr(self._list, "update_row"):
-            self._list.update_row(index, row)
+        self._list.update_row(index, row)
         if callable(self._on_rows_changed):
             self._on_rows_changed(self._rows)
 
     def _on_form_add_requested(self, data: Mapping[str, Any]) -> None:
         row = dict(data)
         self._rows.append(row)
-        if hasattr(self._list, "set_rows"):
-            self._list.set_rows(self._rows)
-        # Move selection to the new row if helper is available.
-        setter = getattr(self._list, "set_current_row", None)
-        if callable(setter) and self._rows:
-            setter(len(self._rows) - 1)
+        self._list.set_rows(self._rows)
+        if self._rows:
+            self._list.set_current_row(len(self._rows) - 1)
         if callable(self._on_rows_changed):
             self._on_rows_changed(self._rows)
 
@@ -741,12 +720,9 @@ class FormListBinder(QObject):
         if not (0 <= index < len(self._rows)):
             return
         del self._rows[index]
-        if hasattr(self._list, "set_rows"):
-            self._list.set_rows(self._rows)
+        self._list.set_rows(self._rows)
         if self._rows:
-            setter = getattr(self._list, "set_current_row", None)
-            if callable(setter):
-                setter(min(index, len(self._rows) - 1))
+            self._list.set_current_row(min(index, len(self._rows) - 1))
         if callable(self._on_rows_changed):
             self._on_rows_changed(self._rows)
 

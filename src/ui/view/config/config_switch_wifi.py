@@ -1,4 +1,4 @@
-﻿"""Switch Wi-Fi specific widgets and helpers for the Config page."""
+"""Switch Wi-Fi specific widgets and helpers for the Config page."""
 
 from __future__ import annotations
 
@@ -61,7 +61,7 @@ class SwitchWifiConfigPage(QWidget):
         super().__init__(parent)
         _apply_theme(self, recursive=True)
         self.setObjectName("switchWifiConfigPage")
-        # 水平填充父布局，高度依据 sizeHint，避免占满整列。
+
         size_policy = QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.setSizePolicy(size_policy)
 
@@ -115,41 +115,26 @@ class SwitchWifiConfigPage(QWidget):
     # ------------------------------------------------------------------
 
     def sizeHint(self) -> QSize:  # type: ignore[override]
-        """Constrain height so the Wi‑Fi list shows about 6–7 rows.
-
-        The underlying table仍然带垂直滚动条，多余行通过滚动查看，避免脚本区留白过多。
-        """
+        """Constrain height so the Wi-Fi list shows about 6–7 rows."""
         base = super().sizeHint()
         width = base.width() if base.isValid() else 0
         if width < 300:
             width = 400
 
-        # 估算列表高度：表头 + N 行 + 适当内边距
-        try:
-            table = self.list.table  # type: ignore[attr-defined]
-            vh = table.verticalHeader()
-            hh = table.horizontalHeader()
-            row_height = vh.defaultSectionSize() if vh is not None else 28
-            header_height = hh.height() if hh is not None else 24
-        except Exception:  # pragma: no cover - defensive
-            row_height = 28
-            header_height = 24
-        # 可见行数：1~7 行之间
-        visible_rows = len(getattr(self, "rows", []) or [])
+        table = self.list.table  # type: ignore[attr-defined]
+        vh = table.verticalHeader()
+        hh = table.horizontalHeader()
+        row_height = vh.defaultSectionSize() if vh is not None else 28
+        header_height = hh.height() if hh is not None else 24
+
+        visible_rows = len(self.rows)
         if visible_rows <= 0:
             visible_rows = 1
         visible_rows = min(visible_rows, 7)
-        height = header_height + row_height * visible_rows + 32  # 额外留少量 padding
-        # 给一个下限，避免过于紧凑影响操作
+        height = header_height + row_height * visible_rows + 32
         if height < 180:
             height = 180
         return QSize(width, height)
-
-    def showEvent(self, event) -> None:  # type: ignore[override]
-        super().showEvent(event)
-        parent = self.parentWidget()
-        layout = parent.layout() if parent else None
-        # 淇濈暀绠€鍗曠殑鐖跺竷灞€璋冩暣閫昏緫锛屼笉鍐嶈緭鍑鸿缁嗚皟璇曚俊鎭€?        _ = layout  # silence linters
 
     # ------------------------------------------------------------------
     # Public API
@@ -189,20 +174,15 @@ class SwitchWifiConfigPage(QWidget):
         if not ssid:
             return
         # For non-open security modes, require a non-empty password so that
-        # the configuration is usable. This mirrors the original behaviour
-        # that reminded users to provide a password when needed.
+        # the configuration is usable.
         if security and security not in OPEN_AUTH and not password:
-            try:
-                from PyQt5.QtWidgets import QMessageBox
+            from PyQt5.QtWidgets import QMessageBox
 
-                QMessageBox.warning(
-                    self,
-                    "Password required",
-                    "Please enter a password for the selected security mode.",
-                )
-            except Exception:
-                # Fall back to ignoring the row when message box cannot be shown.
-                pass
+            QMessageBox.warning(
+                self,
+                "Password required",
+                "Please enter a password for the selected security mode.",
+            )
             return
         self.rows.append(entry)
         self.list.set_rows(self.rows)
@@ -228,7 +208,7 @@ class SwitchWifiConfigPage(QWidget):
 
 def _resolve_switch_wifi_widgets(page: Any) -> tuple[Any, Any, Any]:
     """Helper to resolve switch_wifi widgets from the page field map."""
-    field_widgets = getattr(page, "field_widgets", {}) or {}
+    field_widgets = page.field_widgets
     use_router = (
         field_widgets.get(f"stability.cases.{SWITCH_WIFI_CASE_KEY}.use_router")
         or field_widgets.get(f"cases.{SWITCH_WIFI_CASE_KEY}.use_router")
@@ -254,15 +234,8 @@ def sync_switch_wifi_on_csv_changed(page: Any, new_path: str | None) -> None:
     """Sync switch_wifi UI when the global Execution CSV combo changes."""
     if not new_path:
         return
-    try:
-        case_path = getattr(page, "_current_case_path", "") or ""
-        config_ctl = getattr(page, "config_ctl", None)
-        if case_path and config_ctl is not None and hasattr(config_ctl, "script_case_key"):
-            script_key = config_ctl.script_case_key(case_path)
-        else:
-            script_key = ""
-    except Exception:
-        script_key = ""
+    case_path = page._current_case_path or ""
+    script_key = page.config_ctl.script_case_key(case_path) if case_path else ""
     if script_key not in SWITCH_WIFI_CASE_KEYS:
         return
 
@@ -271,58 +244,16 @@ def sync_switch_wifi_on_csv_changed(page: Any, new_path: str | None) -> None:
     if not is_router_mode:
         return
 
-    config_ctl = getattr(page, "config_ctl", None)
-    if isinstance(router_csv, ComboBox) and config_ctl is not None:
-        try:
-            normalized = config_ctl.normalize_csv_path(new_path)
-            idx = config_ctl.find_csv_index(normalized, router_csv)
-        except Exception:
-            idx = -1
+    config_ctl = page.config_ctl
+    if isinstance(router_csv, ComboBox):
+        normalized = config_ctl.normalize_csv_path(new_path)
+        idx = config_ctl.find_csv_index(normalized, router_csv)
         if idx >= 0:
-            try:
-                with QSignalBlocker(router_csv):
-                    router_csv.setCurrentIndex(idx)
-            except Exception:
-                logging.debug(
-                    "Failed to sync switch_wifi router_csv from Execution CSV change",
-                    exc_info=True,
-                )
+            with QSignalBlocker(router_csv):
+                router_csv.setCurrentIndex(idx)
 
-    if isinstance(wifi_list, SwitchWifiConfigPage) and config_ctl is not None:
-        try:
-            entries = config_ctl.load_switch_wifi_entries(new_path)
-        except Exception:
-            entries = []
-        # 仅刷新展示，不写回配置，避免覆盖 YAML。
-        wifi_list.set_entries(entries)
-    use_router, router_csv, wifi_list = _resolve_switch_wifi_widgets(page)
-    is_router_mode = bool(isinstance(use_router, QCheckBox) and use_router.isChecked())
-    if not is_router_mode:
-        return
-
-    config_ctl = getattr(page, "config_ctl", None)
-    if isinstance(router_csv, ComboBox) and config_ctl is not None:
-        try:
-            normalized = config_ctl.normalize_csv_path(new_path)
-            idx = config_ctl.find_csv_index(normalized, router_csv)
-        except Exception:
-            idx = -1
-        if idx >= 0:
-            try:
-                with QSignalBlocker(router_csv):
-                    router_csv.setCurrentIndex(idx)
-            except Exception:
-                logging.debug(
-                    "Failed to sync switch_wifi router_csv from Execution CSV change",
-                    exc_info=True,
-                )
-
-    if isinstance(wifi_list, SwitchWifiConfigPage) and config_ctl is not None:
-        try:
-            entries = config_ctl.load_switch_wifi_entries(new_path)
-        except Exception:
-            entries = []
-        # 仅刷新展示，不写回配置，避免覆盖 YAML。
+    if isinstance(wifi_list, SwitchWifiConfigPage):
+        entries = config_ctl.load_switch_wifi_entries(new_path)
         wifi_list.set_entries(entries)
 
 
@@ -330,71 +261,39 @@ def handle_switch_wifi_use_router_changed(page: Any, checked: bool) -> None:
     """Handle toggling of the 'Use router configuration' checkbox for switch_wifi."""
     use_router, router_csv, wifi_list = _resolve_switch_wifi_widgets(page)
 
-    if router_csv is not None:
-        if hasattr(router_csv, "setEnabled"):
-            router_csv.setEnabled(bool(checked))
-        if hasattr(router_csv, "setVisible"):
-            router_csv.setVisible(bool(checked))
+    if isinstance(router_csv, ComboBox):
+        router_csv.setEnabled(bool(checked))
+        router_csv.setVisible(bool(checked))
 
-    config_ctl = getattr(page, "config_ctl", None)
+    config_ctl = page.config_ctl
     csv_path: str | None = None
 
-    if checked and router_csv is not None and hasattr(router_csv, "currentIndex"):
-        try:
-            idx = router_csv.currentIndex()
-        except Exception:
-            idx = -1
-        if idx >= 0 and hasattr(router_csv, "itemData"):
+    if checked and isinstance(router_csv, ComboBox):
+        idx = router_csv.currentIndex()
+        if idx >= 0:
             data = router_csv.itemData(idx)
             csv_path = data if isinstance(data, str) and data else router_csv.currentText()
-            if config_ctl is not None:
-                try:
-                    config_ctl.set_selected_csv(csv_path, sync_combo=True)
-                except Exception:
-                    logging.debug(
-                        "Failed to sync selected CSV for switch_wifi router mode",
-                        exc_info=True,
-                    )
-            signal = getattr(page, "csvFileChanged", None)
-            if signal is not None and hasattr(signal, "emit"):
-                try:
-                    signal.emit(csv_path or "")
-                except Exception:
-                    logging.debug(
-                        "Failed to emit csvFileChanged for switch_wifi router mode",
-                        exc_info=True,
-                    )
-            # Router 模式下仅展示 CSV 内容，不写回配置。
-            if isinstance(wifi_list, SwitchWifiConfigPage) and config_ctl is not None:
-                try:
-                    entries = config_ctl.load_switch_wifi_entries(csv_path)
-                except Exception:
-                    entries = []
+            config_ctl.set_selected_csv(csv_path, sync_combo=True)
+            page.csvFileChanged.emit(csv_path or "")
+            if isinstance(wifi_list, SwitchWifiConfigPage):
+                entries = config_ctl.load_switch_wifi_entries(csv_path)
                 wifi_list.set_entries(entries)
     else:
-        # 退出 router 模式时，列表回退到稳定性配置中的 manual_entries。
         if isinstance(wifi_list, SwitchWifiConfigPage):
-            cfg = getattr(page, "config", {}) or {}
-            stability = cfg.get("stability", {}) if isinstance(cfg, dict) else {}
-            cases = stability.get("cases", {}) if isinstance(stability, dict) else {}
-            case_cfg = {}
-            if isinstance(cases, dict):
-                case_cfg = (
-                    cases.get(SWITCH_WIFI_CASE_KEY)
-                    or cases.get("test_switch_wifi")
-                    or cases.get("switch_wifi")
-                    or {}
-                )
+            cfg = page.config
+            stability = cfg.get("stability", {})
+            cases = stability.get("cases", {})
+            case_cfg = (
+                cases.get(SWITCH_WIFI_CASE_KEY)
+                or cases.get("test_switch_wifi")
+                or cases.get("switch_wifi")
+                or {}
+            )
             entries = case_cfg.get(SWITCH_WIFI_MANUAL_ENTRIES_FIELD, [])
             wifi_list.set_entries(entries)
-    if config_ctl is not None:
-        try:
-            setattr(page, "_router_config_active", bool(csv_path))
-            config_ctl.update_rvr_nav_button()
-        except Exception:
-            logging.debug("Failed to update RVR nav button for switch_wifi", exc_info=True)
 
-    # End of router toggle handling.
+    page._router_config_active = bool(csv_path)
+    config_ctl.update_rvr_nav_button()
 
 
 def handle_switch_wifi_router_csv_changed(page: Any, index: int) -> None:
@@ -403,56 +302,37 @@ def handle_switch_wifi_router_csv_changed(page: Any, index: int) -> None:
     is_router_mode = bool(isinstance(use_router, QCheckBox) and use_router.isChecked())
     if not is_router_mode:
         return
-    if router_csv is None or not hasattr(router_csv, "itemData"):
+    if not isinstance(router_csv, ComboBox):
         return
     if index < 0:
         return
+
     data = router_csv.itemData(index)
     csv_path = data if isinstance(data, str) and data else router_csv.currentText()
 
-    config_ctl = getattr(page, "config_ctl", None)
-    if config_ctl is not None:
-        try:
-            config_ctl.set_selected_csv(csv_path, sync_combo=True)
-        except Exception:
-            logging.debug("Failed to sync selected_csv_path from switch_wifi router_csv", exc_info=True)
-    signal = getattr(page, "csvFileChanged", None)
-    if signal is not None and hasattr(signal, "emit"):
-        try:
-            signal.emit(csv_path or "")
-        except Exception:
-            logging.debug("Failed to emit csvFileChanged from switch_wifi", exc_info=True)
+    config_ctl = page.config_ctl
+    config_ctl.set_selected_csv(csv_path, sync_combo=True)
+    page.csvFileChanged.emit(csv_path or "")
 
-    if isinstance(wifi_list, SwitchWifiConfigPage) and config_ctl is not None:
-        try:
-            entries = config_ctl.load_switch_wifi_entries(csv_path)
-        except Exception:
-            entries = []
-        # 仅刷新展示，不写回配置，避免覆盖 YAML。
+    if isinstance(wifi_list, SwitchWifiConfigPage):
+        entries = config_ctl.load_switch_wifi_entries(csv_path)
         wifi_list.set_entries(entries)
-    if config_ctl is not None:
-        try:
-            setattr(page, "_router_config_active", bool(csv_path))
-            config_ctl.update_rvr_nav_button()
-        except Exception:
-            logging.debug("Failed to update RVR nav button for switch_wifi CSV change", exc_info=True)
+
+    page._router_config_active = bool(csv_path)
+    config_ctl.update_rvr_nav_button()
 
 
 def init_switch_wifi_actions(page: Any) -> None:
-    """Wire test_switch_wifi Stability case controls to the unified dispatcher."""
-    _use_router, router_csv, _wifi_list = _resolve_switch_wifi_widgets(page)
+    """Wire test_switch_wifi stability case controls to the unified dispatcher."""
+    use_router, router_csv, _wifi_list = _resolve_switch_wifi_widgets(page)
 
     if isinstance(router_csv, ComboBox):
         router_csv.setProperty("switch_wifi_include_placeholder", False)
-        config_ctl = getattr(page, "config_ctl", None)
-        if config_ctl is not None:
-            try:
-                config_ctl.refresh_registered_csv_combos()
-            except Exception:
-                logging.debug("refresh_registered_csv_combos failed for switch_wifi", exc_info=True)
+    page.config_ctl.refresh_registered_csv_combos()
 
     use_router, router_csv, _wifi_list = _resolve_switch_wifi_widgets(page)
     if isinstance(use_router, QCheckBox):
+
         def _on_use_router_toggled(checked: bool) -> None:
             from src.ui.view.config.actions import handle_config_event  # local import to avoid cycles
 
@@ -465,7 +345,8 @@ def init_switch_wifi_actions(page: Any) -> None:
         use_router.toggled.connect(_on_use_router_toggled)
         _on_use_router_toggled(use_router.isChecked())
 
-    if router_csv is not None and hasattr(router_csv, "currentIndexChanged"):
+    if isinstance(router_csv, ComboBox):
+
         def _on_router_csv_index_changed(index: int) -> None:
             from src.ui.view.config.actions import handle_config_event  # local import to avoid cycles
 

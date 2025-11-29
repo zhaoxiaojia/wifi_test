@@ -125,27 +125,12 @@ class MainWindow(FluentWindow):
 
         # Keep RvR Wi‑Fi Case page in sync with the selected CSV from
         # the Config page.
-        try:
-            self.caseConfigPage.csvFileChanged.connect(
-                self.rvr_wifi_config_page.on_csv_file_changed
-            )
-            # Also apply any CSV selection that was restored from the
-            # persisted config on startup so that the Case page content
-            # matches the Execution panel combo before the user edits it.
-            initial_csv = getattr(self.caseConfigPage, "selected_csv_path", None)
-            if initial_csv:
-                try:
-                    self.rvr_wifi_config_page.on_csv_file_changed(initial_csv)
-                except Exception:
-                    logging.debug(
-                        "Failed to apply initial CSV to RvrWifiConfigPage",
-                        exc_info=True,
-                    )
-        except Exception:
-            logging.debug(
-                "Failed to connect csvFileChanged to RvrWifiConfigPage",
-                exc_info=True,
-            )
+        self.caseConfigPage.csvFileChanged.connect(
+            self.rvr_wifi_config_page.on_csv_file_changed
+        )
+        initial_csv = self.caseConfigPage.selected_csv_path
+        if initial_csv:
+            self.rvr_wifi_config_page.on_csv_file_changed(initial_csv)
         self.run_page = RunPage("", parent=self)
         # Ensure run page starts empty
         self.run_page.reset()
@@ -305,11 +290,7 @@ class MainWindow(FluentWindow):
             self._active_account = {"username": username, "source": "cached"}
             self._apply_nav_enabled(self._nav_logged_in_states)
             # Keep Account page UI in sync with the cached login state.
-            try:
-                if getattr(self, "login_page", None) is not None:
-                    self.login_page.apply_cached_login(username)
-            except Exception:
-                logging.debug("Failed to apply cached login state to Account page", exc_info=True)
+            self.login_page.apply_cached_login(username)
             self.setCurrentIndex(self.caseConfigPage)
         else:
             # No previous login or explicitly cleared: force Account page and lock features.
@@ -351,12 +332,7 @@ class MainWindow(FluentWindow):
 
     def refresh_about_metadata(self) -> None:
         """Refresh the About page metadata, including total test duration."""
-        ctl = getattr(self, "about_ctl", None)
-        try:
-            if ctl is not None and hasattr(ctl, "populate_metadata"):
-                ctl.populate_metadata()
-        except Exception:
-            logging.debug("refresh_about_metadata failed", exc_info=True)
+        self.about_ctl.populate_metadata()
 
     # ------------------------------------------------------------------
     # RVR Wi-Fi page animation
@@ -438,8 +414,8 @@ class MainWindow(FluentWindow):
 
     def _ensure_rvr_page(self):
         """Return a live RVR page, registering it with the nav stack if required."""
-        page = getattr(self, "rvr_wifi_config_page", None)
-        if page is None or sip.isdeleted(page):
+        page = self.rvr_wifi_config_page
+        if sip.isdeleted(page):
             self.rvr_wifi_config_page = RvrWifiConfigPage()
             page = self.rvr_wifi_config_page
         if page and not sip.isdeleted(page) and hasattr(page, "reload_csv"):
@@ -451,16 +427,13 @@ class MainWindow(FluentWindow):
             self._rvr_visible = True
             logging.debug("show_rvr_wifi_config: reuse nav item; setVisible(True)")
             return page
-        nav = getattr(self, "navigationInterface", None)
-        nav_items = []
-        if nav:
-            nav_items = [getattr(btn, "text", lambda: "")() for btn in nav.findChildren(QAbstractButton)]
+        nav_items = [btn.text() for btn in self.navigationInterface.findChildren(QAbstractButton)]
         logging.debug(
             "show_rvr_wifi_config start: page id=%s nav items=%s",
             id(page),
             nav_items,
         )
-        route_key = self._rvr_route_key or getattr(page, "objectName", lambda: None)()
+        route_key = self._rvr_route_key or page.objectName()
         self._cleanup_route(route_key)
         self._rvr_nav_button = self._create_sidebar_button("case", page, FluentIcon.WIFI)
         if not self._rvr_nav_button:
@@ -488,42 +461,34 @@ class MainWindow(FluentWindow):
         """Remove stale FluentWindow route mappings if they still exist."""
         if not route_key:
             return
-        for attr in ("_interfaces", "_routes"):
-            mapping = getattr(self, attr, None)
-            if not mapping:
-                continue
-            try:
-                if mapping.pop(route_key, None) is not None:
-                    logging.debug("show_rvr_wifi_config: removed stale %s[%s]", attr, route_key)
-            except Exception as exc:
-                logging.warning(
-                    "show_rvr_wifi_config: failed to remove %s[%s]: %s",
-                    attr,
-                    route_key,
-                    exc,
-                )
+        for mapping in (self._interfaces, self._routes):
+            if mapping.pop(route_key, None) is not None:
+                logging.debug("show_rvr_wifi_config: removed stale route %s", route_key)
 
     def _detach_sub_interface(self, page):
         """Disconnect a page from the Fluent navigation system."""
-        nav = getattr(self, "navigationInterface", None)
-        if not nav or not page or sip.isdeleted(page):
+        nav = self.navigationInterface
+        if not page or sip.isdeleted(page):
             return False
 
         # Prefer official APIs (try in order, finally removeWidget(page))
-        for name in ("removeSubInterface", "removeInterface", "removeItem", "removeWidget"):
-            func = getattr(nav, name, None)
-            if callable(func):
-                try:
-                    func(page)  # remove by page
-                    return True
-                except Exception:
-                    pass
+        for func in (
+            nav.removeSubInterface,
+            nav.removeInterface,
+            nav.removeItem,
+            nav.removeWidget,
+        ):
+            try:
+                func(page)
+                return True
+            except Exception:
+                pass
 
         # Fallback: remove any child with the same routeKey (not always QAbstractButton)
         try:
             from PyQt5.QtWidgets import QWidget
 
-            rk = getattr(page, "objectName", lambda: None)() or "rvrWifiConfigPage"
+            rk = page.objectName() or "rvrWifiConfigPage"
             for w in nav.findChildren(QWidget):
                 try:
                     if w.property("routeKey") == rk:
@@ -549,8 +514,8 @@ class MainWindow(FluentWindow):
             raise RuntimeError("_add_interface called with a None/invalid widget")
         logging.debug("_add_interface: adding %s", widget)
         btn = self.addSubInterface(*args, **kwargs)
-        nav = getattr(self, "navigationInterface", None)
-        nav_count = len(nav.findChildren(QAbstractButton)) if nav else 0
+        nav = self.navigationInterface
+        nav_count = len(nav.findChildren(QAbstractButton))
         stack_count = self.stackedWidget.count()
         logging.debug(
             "_add_interface: nav count=%s stack count=%s", nav_count, stack_count
@@ -563,24 +528,16 @@ class MainWindow(FluentWindow):
 
     def _remove_interface(self, page, route_key=None, nav_button=None):
         """Remove a page and its navigation entry from the UI."""
-        nav = getattr(self, "navigationInterface", None)
+        nav = self.navigationInterface
 
-        rk = (
-            route_key
-            or (nav_button.property("routeKey") if nav_button else None)
-            or getattr(page, "objectName", lambda: None)()
-        )
+        rk = route_key or (nav_button.property("routeKey") if nav_button else None) or page.objectName()
         removed = False
         try:
             # 1) Prefer FluentWindow.removeSubInterface
-            func = getattr(self, "removeSubInterface", None)
-            if callable(func):
-                removed = bool(func(page))
+            removed = bool(self.removeSubInterface(page))
             # 2) Fallback: navigationInterface.removeItem
-            elif nav and rk:
-                func = getattr(nav, "removeItem", None)
-                if callable(func):
-                    removed = bool(func(rk))
+            if not removed and rk:
+                removed = bool(nav.removeItem(rk))
         except Exception as e:
             logging.error("_remove_interface: failed to remove nav item %s: %s", rk, e)
             raise
@@ -617,11 +574,10 @@ class MainWindow(FluentWindow):
 
     def clear_run_page(self):
         """Reset the RunPage and disconnect any associated event hooks."""
-        if self.run_page and not sip.isdeleted(self.run_page):
-            runner = getattr(self.run_page, "runner", None)
-            if runner and self._runner_finished_slot:
+        if not sip.isdeleted(self.run_page):
+            if self._runner_finished_slot:
                 with suppress(Exception):
-                    runner.finished.disconnect(self._runner_finished_slot)
+                    self.run_page.runner.finished.disconnect(self._runner_finished_slot)
             self._runner_finished_slot = None
             if self._run_nav_button and self._nav_button_clicked_log_slot:
                 with suppress(Exception):
@@ -639,10 +595,7 @@ class MainWindow(FluentWindow):
 
     def _set_nav_buttons_enabled(self, enabled: bool):
         """Enable all navigation buttons and optionally adjust their appearance."""
-        nav = getattr(self, "navigationInterface", None)
-        if not nav:
-            return
-        buttons = nav.findChildren(QAbstractButton)
+        buttons = self.navigationInterface.findChildren(QAbstractButton)
         for btn in buttons:
             # Keep run button visible
             if btn is self._run_nav_button:
@@ -666,8 +619,7 @@ class MainWindow(FluentWindow):
         """Switch the active page with a cross-fade animation."""
         try:
             if page_widget is self.rvr_wifi_config_page and (ssid or passwd):
-                if hasattr(self.rvr_wifi_config_page, "set_router_credentials"):
-                    self.rvr_wifi_config_page.set_router_credentials(ssid or "", passwd or "")
+                self.rvr_wifi_config_page.set_router_credentials(ssid or "", passwd or "")
             self._route_to_page(page_widget)
         except Exception as e:
             logging.error("Failed to set current widget: %s", e)
@@ -731,15 +683,13 @@ class MainWindow(FluentWindow):
 
     def _trigger_run(self, case_path, display_case_path, config) -> None:
         """Populate the RunPage state and start executing the selected case."""
-        if self.run_page:
-            with suppress(Exception):
-                self.run_page.reset()
+        with suppress(Exception):
+            self.run_page.reset()
         self.run_page.case_path = case_path
         self.run_page.display_case_path = self.run_page._calc_display_path(
             case_path, display_case_path
         )
-        if hasattr(self.run_page, "case_path_label"):
-            self.run_page.case_path_label.setText(self.run_page.display_case_path)
+        self.run_page.case_path_label.setText(self.run_page.display_case_path)
         self.run_page.config = config
 
         self.run_nav_button.setVisible(True)
@@ -748,16 +698,14 @@ class MainWindow(FluentWindow):
             self.stackedWidget.addWidget(self.run_page)
         self.switchTo(self.run_page)
         self.run_page.run_case()
-        runner = getattr(self.run_page, "runner", None)
-        if runner:
+        runner = self.run_page.runner
 
-            def _on_runner_finished():
-                set_run_locked(self, False)
-                # After each run, refresh About metadata so total duration updates.
-                self.refresh_about_metadata()
+        def _on_runner_finished():
+            set_run_locked(self, False)
+            self.refresh_about_metadata()
 
-            self._runner_finished_slot = _on_runner_finished
-            runner.finished.connect(self._runner_finished_slot)
+        self._runner_finished_slot = _on_runner_finished
+        runner.finished.connect(self._runner_finished_slot)
 
         logging.info("Switched to RunPage: %s", self.run_page)
 
@@ -786,15 +734,10 @@ class MainWindow(FluentWindow):
         """Activate the report viewing page after test execution."""
         try:
             self.last_report_dir = str(Path(report_dir).resolve())
-            if hasattr(self, "report_ctl") and self.report_ctl:
-                case_path = getattr(self.run_page, "case_path", "")
-                self.report_ctl.set_case_context(case_path or None)
-                self.report_ctl.set_report_dir(self.last_report_dir)
-            if (
-                hasattr(self, "report_nav_button")
-                and self.report_nav_button
-                and not sip.isdeleted(self.report_nav_button)
-            ):
+            case_path = self.run_page.case_path
+            self.report_ctl.set_case_context(case_path or None)
+            self.report_ctl.set_report_dir(self.last_report_dir)
+            if not sip.isdeleted(self.report_nav_button):
                 self.report_nav_button.setEnabled(True)
                 self.report_nav_button.setVisible(True)
         except Exception:

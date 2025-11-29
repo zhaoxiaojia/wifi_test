@@ -180,16 +180,9 @@ class RvrWifiConfigPage(CardWidget):
 
     def _sync_config_page_relays(self, relays: list[dict[str, Any]]) -> None:
         """Apply updated relays into the Config page widget and model."""
-        try:
-            main_window = self.window()
-        except Exception:
-            main_window = None
-        if main_window is None:
-            return
-        cfg_page = getattr(main_window, "caseConfigPage", None)
-        if cfg_page is None:
-            return
-        field_widgets = getattr(cfg_page, "field_widgets", {}) or {}
+        main_window = self.window()
+        cfg_page = main_window.caseConfigPage
+        field_widgets = cfg_page.field_widgets
         editor = field_widgets.get("compatibility.power_ctrl.relays")
         if editor is None:
             return

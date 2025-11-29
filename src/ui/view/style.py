@@ -102,15 +102,12 @@ def apply_font_and_selection(
         border-bottom: 1px solid {grid};
     }}
     """
-    try:
-        h = getattr(view, "horizontalHeader", lambda: None)()
-        v = getattr(view, "verticalHeader", lambda: None)()
-        if h:
-            h.setStyleSheet(header_qss)
-        if v:
-            v.setStyleSheet(header_qss)
-    except Exception:
-        pass
+    h = view.horizontalHeader() if isinstance(view, (QTableView, QTableWidget)) else None
+    v = view.verticalHeader() if isinstance(view, (QTableView, QTableWidget)) else None
+    if h:
+        h.setStyleSheet(header_qss)
+    if v:
+        v.setStyleSheet(header_qss)
 
     view.setStyleSheet(
         view.styleSheet()
@@ -127,7 +124,7 @@ def apply_font_and_selection(
         """
     )
 
-    if hasattr(view, "setUniformRowHeights") and isinstance(view, QTreeView):
+    if isinstance(view, QTreeView):
         view.setUniformRowHeights(False)
     view.viewport().update()
 
@@ -203,7 +200,7 @@ def acknowledgements_from_readme() -> str:
         if in_section and stripped.startswith("#"):
             break
         if in_section and stripped:
-            cleaned = stripped.lstrip("-�? ").strip()
+            cleaned = stripped.lstrip("-* ").strip()
             ack_lines.append(cleaned)
     return ", ".join(dict.fromkeys(ack_lines))
 

@@ -486,22 +486,18 @@ def navigate_to_index(page: Any, target_index: int) -> None:
     """Navigate the page stack to `target_index` with validation.
 
     """
-    stack = getattr(page, "stack", None)
-    if stack is None or stack.count() == 0:
+    stack = page.stack
+    if stack.count() == 0:
         return
     target_index = max(0, min(target_index, stack.count() - 1))
     current = stack.currentIndex()
     if target_index == current:
         return
     if current == 0 and target_index > current:
-        config_ctl = getattr(page, "config_ctl", None)
-        if config_ctl is not None:
-            if not config_ctl.validate_first_page():
-                stack.setCurrentIndex(0)
-                return
-    config_ctl = getattr(page, "config_ctl", None)
-    if config_ctl is not None:
-        config_ctl.sync_widgets_to_config()
+        if not page.config_ctl.validate_first_page():
+            stack.setCurrentIndex(0)
+            return
+    page.config_ctl.sync_widgets_to_config()
     stack.setCurrentIndex(target_index)
 
 
@@ -612,7 +608,7 @@ class _StepSwitcher(QWidget):
     def eventFilter(self, obj: QObject, event: QEvent) -> bool:  # type: ignore[override]
         """Emit the `stepActivated` signal when a label is clicked."""
         if event.type() == QEvent.MouseButtonRelease and obj in self._labels:
-            if getattr(event, "button", lambda: Qt.LeftButton)() == Qt.LeftButton:
+            if event.button() == Qt.LeftButton:
                 self.stepActivated.emit(self._labels.index(obj))  # type: ignore[arg-type]
                 return True
         return super().eventFilter(obj, event)

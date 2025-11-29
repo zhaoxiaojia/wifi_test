@@ -4,7 +4,7 @@ import copy
 import logging
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Mapping, Optional,Sequence
+from typing import TYPE_CHECKING, Any, Mapping, Optional, Sequence
 
 from PyQt5.QtCore import QSignalBlocker, QSortFilterProxyModel
 from PyQt5.QtWidgets import QCheckBox, QSpinBox, QDoubleSpinBox
@@ -65,6 +65,7 @@ from src.ui.view.config.config_compatibility import (
 )
 from src.ui.view.config.config_str import script_field_key
 from src.ui.controller import show_info_bar
+from src.ui.view.config.ui_adapter import UiEvent
 
 if TYPE_CHECKING:  # pragma: no cover - circular import guard
     from src.ui.view.config.page import CaseConfigPage
@@ -82,6 +83,7 @@ class ConfigController:
 
     def __init__(self, page: "CaseConfigPage") -> None:
         self.page = page
+        self.logger = logging.getLogger(__name__)
 
     def get_application_base(self) -> Path:
         """Return the application source base path (was CaseConfigPage._get_application_base)."""
@@ -161,13 +163,11 @@ class ConfigController:
 
     def save_config(self) -> None:
         """Persist the active configuration and refresh cached state."""
-        page = self.page
-        logging.debug("[save] data=%s", page.config)
-        refreshed = save_page_config(page)
-        if hasattr(page, "_config_tool_snapshot"):
-            page._config_tool_snapshot = copy.deepcopy(
-                refreshed.get(TOOL_SECTION_KEY, {})
-            )
+        logging.debug("[save] data=%s", self.page.config)
+        refreshed = save_page_config(self.page)
+        self.page._config_tool_snapshot = copy.deepcopy(
+            refreshed.get(TOOL_SECTION_KEY, {})
+        )
 
     # ------------------------------------------------------------------
     # Stability case defaults
@@ -223,6 +223,293 @@ class ConfigController:
         _ensure_branch("str")
         cases_section[case_key] = entry
         return entry
+
+    # ------------------------------------------------------------------
+    # Unified UI event entrypoint
+    # ------------------------------------------------------------------
+
+    def handle_ui_event(self, event: UiEvent) -> None:
+        """Dispatch a UiEvent emitted by the adapter to a dedicated handler.
+
+        This method is the single entrypoint for all user-driven Config UI
+        interactions once the UiAdapter layer is in place.  Legacy callers
+        using ``handle_config_event`` can be gradually migrated to emit
+        :class:`UiEvent` instances instead of calling controller helpers
+        directly.
+        """
+        kind = event.kind or ""
+        dispatch = {
+            "field.change": self._on_field_change,
+            "case.select": self._on_case_select,
+            "csv.select": self._on_csv_select,
+            "tab.switch": self._on_tab_switch,
+            "action.run": self._on_action_run,
+            "connect_type.changed": self._on_connect_type_changed,
+            "connect_type.third_party": self._on_third_party_toggled,
+            "serial.status.changed": self._on_serial_status_changed,
+            "rf_model.changed": self._on_rf_model_changed,
+            "rvr_tool.changed": self._on_rvr_tool_changed,
+            "router.name.changed": self._on_router_name_changed,
+            "router.address.changed": self._on_router_address_changed,
+            "stability.exitfirst": self._on_stability_flags_changed,
+            "stability.ping": self._on_stability_flags_changed,
+            "stability.script_section": self._on_stability_flags_changed,
+            "stability.relay_type": self._on_stability_flags_changed,
+            "switch_wifi.use_router": self._on_switch_wifi_use_router,
+            "switch_wifi.router_csv": self._on_switch_wifi_router_csv,
+        }
+        handler = dispatch.get(kind)
+        if handler is None:
+            self.logger.warning("Unknown UI event: %s from %s", kind, event.source)
+            return
+        handler(event)
+
+    # Individual handlers are intentionally thin wrappers around existing
+    # helpers so that behaviour can be verified incrementally.  After the
+    # Phase 2 refactor, they host all controller-side business logic and no
+    # longer delegate back to ``handle_config_event``.
+
+    def _on_field_change(self, event: UiEvent) -> None:
+        """Handle generic field-change events from the UI."""
+        from PyQt5.QtCore import QTimer  # local import
+        from src.ui.view.config.actions import _refresh_case_page_compatibility  # type: ignore[attr-defined]
+        from src.ui.model.autosave import should_autosave
+
+        page = self.page
+        field = event.payload.get("field")
+
+        # Compatibility page: refresh after autosave has flushed widget state.
+        try:
+            if isinstance(field, str) and field.startswith("compatibility."):
+                QTimer.singleShot(0, lambda: _refresh_case_page_compatibility(page))
+        except Exception:
+            logging.debug("compatibility refresh scheduling failed", exc_info=True)
+
+        # Autosave for field_changed events routed through UiAdapter.
+        if not should_autosave("field_changed") or page._refreshing:
+            return
+        try:
+            self.sync_widgets_to_config()
+            self.save_config()
+        except Exception:
+            logging.debug("autosave failed for field_changed in _on_field_change", exc_info=True)
+
+    def _on_case_select(self, event: UiEvent) -> None:
+        """Handle case selection from the tree view."""
+        page = self.page
+        case_path = event.payload.get("case_path") or ""
+        display_path = event.payload.get("display_path") or ""
+
+        if case_path:
+            setattr(page, "_current_case_path", case_path)
+        if display_path:
+            setattr(page, "_current_case_display_path", display_path)
+
+        # Update "Selected Test Case" text if such a field exists.
+        field_widgets = page.field_widgets
+        updated_widgets: set[int] = set()
+        text_value = display_path or case_path
+        for key, widget in field_widgets.items():
+            if key == "text_case" or key.endswith(".text_case"):
+                if widget is None or id(widget) in updated_widgets:
+                    continue
+                if hasattr(widget, "setText"):
+                    try:
+                        widget.setText(text_value)
+                        updated_widgets.add(id(widget))
+                    except Exception:
+                        continue
+        if not updated_widgets:
+            # Use centralized display updater for the selected test case.
+            try:
+                from src import update_test_case_display  # local import
+
+                update_test_case_display(page, text_value)
+            except Exception:
+                logging.debug("update_test_case_display failed in _on_case_select", exc_info=True)
+
+        # Re-compute testcase-specific UI and apply rules.
+        from src.ui.view.config.actions import apply_ui  # local import
+
+        apply_ui(page, case_path)
+
+        view = page.view
+        if self.is_stability_case(case_path):
+            view.set_current_page("stability")
+        elif self.is_performance_case(case_path):
+            view.set_current_page("execution")
+
+        # Compose DUT Settings according to the testcase category so that
+        # category-specific settings (such as Compatibility Settings) are
+        # only visible when relevant.
+        try:
+            from pathlib import Path as _Path
+            from src.ui.view.config.actions import apply_dut_settings_for_case  # local import
+
+            normalized_display = _Path(display_path).as_posix() if display_path else ""
+            apply_dut_settings_for_case(page, case_path=case_path, display_path=normalized_display)
+        except Exception:
+            logging.debug("_on_case_select: apply_dut_settings_for_case failed", exc_info=True)
+
+    def _on_csv_select(self, event: UiEvent) -> None:
+        """Handle main CSV combo selection changes."""
+        page = self.page
+        index = int(event.payload.get("index", -1))
+        force = bool(event.payload.get("force", False))
+
+        csv_combo = page.csv_combo
+        if index < 0:
+            self.set_selected_csv(None, sync_combo=False)
+            return
+        data = csv_combo.itemData(index)
+        logging.debug("_on_csv_select index=%s data=%s", index, data)
+        new_path = self.normalize_csv_path(data)
+        current = page.selected_csv_path
+        if not force and new_path == current:
+            return
+        self.set_selected_csv(new_path, sync_combo=False)
+        page.selected_csv_path = new_path
+
+        page.csvFileChanged.emit(new_path or "")
+
+        try:
+            from src.ui.view.config.config_switch_wifi import sync_switch_wifi_on_csv_changed  # local import
+
+            sync_switch_wifi_on_csv_changed(page, new_path)
+        except Exception:
+            logging.debug("_on_csv_select: sync_switch_wifi_on_csv_changed failed", exc_info=True)
+
+    def _on_tab_switch(self, event: UiEvent) -> None:
+        """Handle Config tab switches."""
+        page = self.page
+        key = str(event.payload.get("key", "")).strip()
+        page.view.set_current_page(key)
+
+    def _on_connect_type_changed(self, event: UiEvent) -> None:
+        """Handle Control Type combo changes."""
+        from src.ui.view.config.actions import handle_connect_type_changed
+
+        text = event.payload.get("text", "")
+        try:
+            handle_connect_type_changed(self.page, text)
+        except Exception:
+            logging.debug("_on_connect_type_changed failed", exc_info=True)
+
+    def _on_third_party_toggled(self, event: UiEvent) -> None:
+        """Handle Third-party checkbox toggles."""
+        from src.ui.view.config.actions import handle_third_party_toggled
+
+        checked = bool(event.payload.get("checked", False))
+        try:
+            handle_third_party_toggled(self.page, checked)
+        except Exception:
+            logging.debug("_on_third_party_toggled failed", exc_info=True)
+
+    def _on_serial_status_changed(self, event: UiEvent) -> None:
+        """Handle Serial status checkbox changes."""
+        from src.ui.view.config.actions import apply_serial_enabled_ui_state, _rebalance_panel
+
+        text = str(event.payload.get("text", ""))
+        page = self.page
+        try:
+            apply_serial_enabled_ui_state(page, text)
+            if hasattr(page, "_dut_panel"):
+                _rebalance_panel(page._dut_panel)
+        except Exception:
+            logging.debug("_on_serial_status_changed UI update failed", exc_info=True)
+        try:
+            evaluate_all_rules(page, "serial_port.status")
+        except Exception:
+            logging.debug("_on_serial_status_changed rule evaluation failed", exc_info=True)
+
+    def _on_rf_model_changed(self, event: UiEvent) -> None:
+        """Handle RF model combo changes (panel rebalance only)."""
+        from src.ui.view.config.actions import _rebalance_panel
+
+        page = self.page
+        _ = event
+        if hasattr(page, "_execution_panel"):
+            try:
+                _rebalance_panel(page._execution_panel)
+            except Exception:
+                logging.debug("_on_rf_model_changed panel rebalance failed", exc_info=True)
+
+    def _on_rvr_tool_changed(self, event: UiEvent) -> None:
+        """Handle RvR tool selection changes."""
+        from src.ui.view.config.actions import apply_rvr_tool_ui_state, _rebalance_panel
+
+        page = self.page
+        tool_text = str(event.payload.get("tool_text", ""))
+        try:
+            apply_rvr_tool_ui_state(page, tool_text)
+            if hasattr(page, "_execution_panel"):
+                _rebalance_panel(page._execution_panel)
+        except Exception:
+            logging.debug("_on_rvr_tool_changed failed", exc_info=True)
+
+    def _on_router_name_changed(self, event: UiEvent) -> None:
+        """Handle router name edits."""
+        name = str(event.payload.get("name", ""))
+        try:
+            self.handle_router_name_changed(name)
+        except Exception:
+            logging.debug("_on_router_name_changed failed", exc_info=True)
+
+    def _on_router_address_changed(self, event: UiEvent) -> None:
+        """Handle router address edits."""
+        address = str(event.payload.get("address", ""))
+        try:
+            self.handle_router_address_changed(address)
+        except Exception:
+            logging.debug("_on_router_address_changed failed", exc_info=True)
+
+    def _on_stability_flags_changed(self, event: UiEvent) -> None:
+        """Re-evaluate rules after stability-related toggles."""
+        page = self.page
+        _ = event
+        try:
+            evaluate_all_rules(page, None)
+        except Exception:
+            logging.debug("_on_stability_flags_changed rule evaluation failed", exc_info=True)
+
+    def _on_switch_wifi_use_router(self, event: UiEvent) -> None:
+        """Handle switch_wifi use-router toggles (stability section)."""
+        from src.ui.view.config.config_switch_wifi import handle_switch_wifi_use_router_changed
+
+        page = self.page
+        checked = bool(event.payload.get("checked", False))
+        try:
+            handle_switch_wifi_use_router_changed(page, checked)
+        except Exception:
+            logging.debug("_on_switch_wifi_use_router handler failed", exc_info=True)
+        self._on_stability_flags_changed(event)
+
+    def _on_switch_wifi_router_csv(self, event: UiEvent) -> None:
+        """Handle switch_wifi router-CSV combo changes (stability section)."""
+        from src.ui.view.config.config_switch_wifi import handle_switch_wifi_router_csv_changed
+
+        page = self.page
+        index = int(event.payload.get("index", -1))
+        try:
+            handle_switch_wifi_router_csv_changed(page, index)
+        except Exception:
+            logging.debug("_on_switch_wifi_router_csv handler failed", exc_info=True)
+        self._on_stability_flags_changed(event)
+
+    def _on_action_run(self, event: UiEvent) -> None:
+        _ = event
+        if hasattr(self, "on_run"):
+            try:
+                self.on_run()  # type: ignore[call-arg]
+                return
+            except Exception:
+                self.logger.exception("Failed to execute on_run handler", exc_info=True)
+        page = self.page
+        if hasattr(page, "on_run_callback"):
+            try:
+                page.on_run_callback()
+            except Exception:
+                self.logger.exception("Failed to execute on_run_callback", exc_info=True)
 
     # ------------------------------------------------------------------
     # FPGA helpers
@@ -607,7 +894,7 @@ class ConfigController:
     # ------------------------------------------------------------------
 
     def handle_router_name_changed(self, name: str) -> None:
-        """Handle router combo changes: update router_obj, address widget, and signal."""
+        """Handle router combo changes: update router_obj and dependent UI."""
         page = self.page
         try:
             from src.tools.router_tool.router_factory import get_router  # type: ignore
@@ -631,10 +918,12 @@ class ConfigController:
             except Exception:
                 pass
 
-        # Emit routerInfoChanged for dependent UI (CSV combos, etc.).
-        signal = getattr(page, "routerInfoChanged", None)
-        if signal is not None and hasattr(signal, "emit"):
-            signal.emit()
+        # Refresh CSV options and related UI directly instead of going
+        # through a view-defined signal round-trip.
+        try:
+            self.update_csv_options()
+        except Exception:
+            self.logger.debug("Failed to update CSV options after router change", exc_info=True)
 
     def handle_router_address_changed(self, address: str) -> None:
         """Handle manual edits to the router address field."""
@@ -642,9 +931,10 @@ class ConfigController:
         router_obj = getattr(page, "router_obj", None)
         if router_obj is not None:
             router_obj.address = address
-        signal = getattr(page, "routerInfoChanged", None)
-        if signal is not None and hasattr(signal, "emit"):
-            signal.emit()
+        try:
+            self.update_csv_options()
+        except Exception:
+            self.logger.debug("Failed to update CSV options after router address change", exc_info=True)
 
     # ------------------------------------------------------------------
     # Stability script config glue

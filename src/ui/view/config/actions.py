@@ -264,361 +264,42 @@ def _rebalance_panel(panel: Any) -> None:
         logging.debug("Failed to rebalance config panel", exc_info=True)
 
 
-def _bind_autosave_field_events(page: Any) -> None:
-    """Wire generic field-change signals to the autosave decorator entry.
-
-    This helper connects common widget signals (textChanged, toggled,
-    valueChanged, currentIndexChanged) for all widgets registered in
-    ``page.field_widgets`` to the unified :func:`handle_config_event`
-    dispatcher using a lightweight ``field_changed`` event.  The actual
-    persistence work is performed by the :func:`autosave_config`
-    decorator in ``src.ui.model.autosave``.
-
-    Only edits that occur while the page is *not* in a refresh pass
-    (``page._refreshing``) will trigger autosave, so rule-driven
-    programmatic updates do not cause redundant writes.
-    """
-    if getattr(page, "_autosave_bound", False):
-        return
-    setattr(page, "_autosave_bound", True)
-
-    field_widgets = getattr(page, "field_widgets", {}) or {}
-
-    # Local imports avoid hard dependencies at module import time.
-    try:
-        from src.ui.view.common import RfStepSegmentsWidget
-    except Exception:  # pragma: no cover - defensive: widget not available
-        RfStepSegmentsWidget = None  # type: ignore[assignment]
-    try:
-        # Optional composite widget used by test_switch_wifi.
-        from src.ui.view.config.config_switch_wifi import SwitchWifiConfigPage
-    except Exception:  # pragma: no cover - optional widget
-        SwitchWifiConfigPage = None  # type: ignore[assignment]
-    try:
-        from src.ui.view.config.config_switch_wifi import SwitchWifiConfigPage
-    except Exception:  # pragma: no cover - optional widget
-        SwitchWifiConfigPage = None  # type: ignore[assignment]
-
-    for field_key, widget in field_widgets.items():
-        if widget is None:
-            continue
-
-        def _make_handler(key: str):
-            def _on_changed(*_args: Any) -> None:
-                # Skip autosave while the page is performing a refresh so
-                # that rule-driven widget updates do not cause spurious
-                # config writes.
-                if getattr(page, "_refreshing", False):
-                    return
-                handle_config_event(page, "field_changed", field=key)
-
-            return _on_changed
-
-        handler = _make_handler(field_key)
-
-        # Custom composite widgets: wire their internal edits/buttons.
-        if RfStepSegmentsWidget is not None and isinstance(widget, RfStepSegmentsWidget):
-            for attr in ("start_edit", "stop_edit", "step_edit"):
-                edit = getattr(widget, attr, None)
-                if edit is not None and hasattr(edit, "textChanged"):
-                    edit.textChanged.connect(handler)
-            for attr in ("add_btn", "del_btn"):
-                btn = getattr(widget, attr, None)
-                if btn is not None and hasattr(btn, "clicked"):
-                    btn.clicked.connect(handler)
-            seg_list = getattr(widget, "segment_list", None)
-            if seg_list is not None and hasattr(seg_list, "currentRowChanged"):
-                seg_list.currentRowChanged.connect(handler)
-            continue
-        # SwitchWifiConfigPage: treat entriesChanged as a field-change event so
-        # that manual Wi‑Fi edits participate in autosave.
-        if SwitchWifiConfigPage is not None and isinstance(widget, SwitchWifiConfigPage):
-            if hasattr(widget, "entriesChanged"):
-                widget.entriesChanged.connect(handler)
-            continue
-        # SwitchWifiConfigPage: treat entriesChanged as a "field_changed"
-        # signal so that manual Wi-Fi edits participate in autosave.
-        if SwitchWifiConfigPage is not None and isinstance(widget, SwitchWifiConfigPage):
-            if hasattr(widget, "entriesChanged"):
-                widget.entriesChanged.connect(handler)
-            continue
-
-        # QFluent ComboBox: connect both index and text change signals so
-        # autosave is triggered regardless of which signal the widget emits.
-        try:
-            from qfluentwidgets import ComboBox as FluentComboBox  # type: ignore
-        except Exception:  # pragma: no cover - defensive
-            FluentComboBox = None  # type: ignore[assignment]
-        if FluentComboBox is not None and isinstance(widget, FluentComboBox):
-            if hasattr(widget, "currentIndexChanged"):
-                widget.currentIndexChanged.connect(handler)
-            if hasattr(widget, "currentTextChanged"):
-                widget.currentTextChanged.connect(handler)
-            continue
-
-        # Standard widgets: prefer high-level change notifications.
-        if hasattr(widget, "toggled"):
-            widget.toggled.connect(handler)
-            continue
-        if hasattr(widget, "currentIndexChanged"):
-            widget.currentIndexChanged.connect(handler)
-            continue
-        if hasattr(widget, "valueChanged") and not hasattr(widget, "currentText"):
-            widget.valueChanged.connect(handler)
-            continue
-        if hasattr(widget, "textChanged"):
-            widget.textChanged.connect(handler)
-            continue
-
-
 @autosave_config
 def handle_config_event(page: Any, event: str, **payload: Any) -> None:
-    """Unified entry point for all Config-page UI events.
-
-    Controllers and signal bindings should route user interactions here,
-    passing a simple ``event`` string plus any structured payload
-    (e.g. case path, RF model text, CSV index).  The dispatcher then
-    calls the existing action helpers so that init-time and user-driven
-    state changes share the same code paths.
-    """
+    """Thin compatibility layer: map legacy events to UiEvent + forward."""
     event = str(event or "").strip() if event is not None else ""
-    config_ctl = getattr(page, "config_ctl", None)
-
-    if event == "init":
-        # Initial UI pass: derive state from current config and widget values
-        # and apply testcase + simple rules once.
-        try:
-            case_path = getattr(page, "_current_case_path", "") or ""
-        except Exception:
-            case_path = ""
-        apply_ui(page, case_path)
-        # Apply connect type related UI if we have a combo bound.
-        ct_combo = getattr(page, "connect_type_combo", None)
-        if ct_combo is not None and hasattr(ct_combo, "currentText"):
-            handle_config_event(
-                page,
-                "connect_type_changed",
-                text=ct_combo.currentText(),
-            )
-        # Third-party checkbox initial state.
-        third_checkbox = getattr(page, "third_party_checkbox", None)
-        if isinstance(third_checkbox, QCheckBox):
-            handle_config_event(
-                page,
-                "third_party_toggled",
-                checked=third_checkbox.isChecked(),
-            )
-        # Serial port initial state.
-        field_widgets = getattr(page, "field_widgets", {}) or {}
-        serial_status = field_widgets.get("serial_port.status")
-        if isinstance(serial_status, QCheckBox):
-            handle_config_event(
-                page,
-                "serial_status_changed",
-                text="True" if serial_status.isChecked() else "False",
-            )
-        # RF Model / RvR tool initial state.
-        rf_model = field_widgets.get("rf_solution.model")
-        if rf_model is not None and hasattr(rf_model, "currentText"):
-            handle_config_event(
-                page,
-                "rf_model_changed",
-                model_text=rf_model.currentText(),
-            )
-        rvr_tool = field_widgets.get("rvr.tool") or field_widgets.get("rvr.tool_name")
-        if rvr_tool is not None and hasattr(rvr_tool, "currentText"):
-            handle_config_event(
-                page,
-                "rvr_tool_changed",
-                tool_text=rvr_tool.currentText(),
-            )
+    ctl = getattr(page, "config_ctl", None)
+    if not ctl or not hasattr(ctl, "handle_ui_event"):
         return
 
-    if event == "case_clicked":
-        # User selected a test case in the tree.
-        case_path = payload.get("case_path") or ""
-        display_path = payload.get("display_path") or ""
+    from src.ui.view.config.ui_adapter import UiEvent  # local import to avoid cycles
 
-        # Keep a lightweight reference to the current case path so that
-        # future "init" passes can re-apply editable fields.
-        if case_path:
-            setattr(page, "_current_case_path", case_path)
-        if display_path:
-            setattr(page, "_current_case_display_path", display_path)
+    mapping = {
+        "field_changed": "field.change",
+        "case_clicked": "case.select",
+        "csv_changed": "csv.select",
+        "csv_index_changed": "csv.select",
+        "settings_tab_clicked": "tab.switch",
+        "run_clicked": "action.run",
+        "switch_wifi_use_router_changed": "switch_wifi.use_router",
+        "switch_wifi_router_csv_changed": "switch_wifi.router_csv",
+        "connect_type_changed": "connect_type.changed",
+        "third_party_toggled": "connect_type.third_party",
+        "serial_status_changed": "serial.status.changed",
+        "rf_model_changed": "rf_model.changed",
+        "rvr_tool_changed": "rvr_tool.changed",
+        "router_name_changed": "router.name.changed",
+        "router_address_changed": "router.address.changed",
+        "stability_exitfirst_changed": "stability.exitfirst",
+        "stability_ping_changed": "stability.ping",
+        "stability_script_section_toggled": "stability.script_section",
+        "stability_relay_type_changed": "stability.relay_type",
+    }
+    kind = mapping.get(event, event)
 
-        # Update "Selected Test Case" text if such a field exists.
-        field_widgets = getattr(page, "field_widgets", {}) or {}
-        updated_widgets: set[int] = set()
-        text_value = display_path or case_path
-        for key, widget in field_widgets.items():
-            if key == "text_case" or key.endswith(".text_case"):
-                if widget is None or id(widget) in updated_widgets:
-                    continue
-                if hasattr(widget, "setText"):
-                    try:
-                        widget.setText(text_value)
-                        updated_widgets.add(id(widget))
-                    except Exception:
-                        continue
-        if not updated_widgets:
-            # Use centralized display updater for the selected test case.
-            try:
-                update_test_case_display(page, text_value)
-            except Exception:
-                logging.debug("update_test_case_display failed in case_clicked", exc_info=True)
-
-        # Re-compute testcase-specific UI and apply rules.
-        view = getattr(page, "view", None)
-        if config_ctl is not None:
-            apply_ui(page, case_path)
-            if view is not None and hasattr(view, "set_current_page"):
-                try:
-                    if config_ctl.is_stability_case(case_path):
-                        view.set_current_page("stability")
-                    elif config_ctl.is_performance_case(case_path):
-                        view.set_current_page("execution")
-                except Exception as exc:
-                    logging.debug("auto page switch failed: %s", exc)
-        # Compose DUT Settings according to the testcase category so that
-        # category-specific settings (such as Compatibility Settings) are
-        # only visible when relevant.
-        try:
-            from pathlib import Path as _Path
-
-            normalized_display = _Path(display_path).as_posix() if display_path else ""
-            apply_dut_settings_for_case(page, case_path=case_path, display_path=normalized_display)
-        except Exception:
-            logging.debug("case_clicked: apply_dut_settings_for_case failed", exc_info=True)
-        return
-
-    if event == "settings_tab_clicked":
-        key = str(payload.get("key", "")).strip()
-        view = getattr(page, "view", None)
-        if view is None or not hasattr(view, "set_current_page"):
-            return
-        view.set_current_page(key)
-        return
-
-    if event == "connect_type_changed":
-        text = payload.get("text", "")
-        handle_connect_type_changed(page, text)
-        return
-
-    if event == "third_party_toggled":
-        checked = bool(payload.get("checked", False))
-        handle_third_party_toggled(page, checked)
-        return
-
-    if event == "serial_status_changed":
-        text = str(payload.get("text", ""))
-        # Apply serial UI + rules regardless of the underlying widget type.
-        apply_serial_enabled_ui_state(page, text)
-        if hasattr(page, "_dut_panel"):
-            _rebalance_panel(page._dut_panel)
-        try:
-            evaluate_all_rules(page, "serial_port.status")
-        except Exception:
-            pass
-        return
-
-    if event == "rf_model_changed":
-        # RF model changes are now handled by the simple rule engine.
-        # The event is kept only to allow panel rebalancing when the set of
-        # visible RF fields changes.
-        if hasattr(page, "_execution_panel"):
-            _rebalance_panel(page._execution_panel)
-        return
-
-    if event == "rvr_tool_changed":
-        tool_text = str(payload.get("tool_text", ""))
-        apply_rvr_tool_ui_state(page, tool_text)
-        if hasattr(page, "_execution_panel"):
-            _rebalance_panel(page._execution_panel)
-        return
-
-    if event == "router_name_changed":
-        name = str(payload.get("name", ""))
-        if config_ctl is not None:
-            config_ctl.handle_router_name_changed(name)
-        return
-
-    if event == "router_address_changed":
-        text = str(payload.get("address", ""))
-        if config_ctl is not None:
-            config_ctl.handle_router_address_changed(text)
-        return
-
-    if event == "csv_index_changed":
-        index = int(payload.get("index", -1))
-        force = bool(payload.get("force", False))
-        if config_ctl is None:
-            return
-        csv_combo = getattr(page, "csv_combo", None)
-        if csv_combo is None:
-            return
-        if index < 0:
-            config_ctl.set_selected_csv(None, sync_combo=False)
-            return
-        if not hasattr(csv_combo, "itemData"):
-            return
-        data = csv_combo.itemData(index)
-        logging.debug("handle_config_event csv_index_changed index=%s data=%s", index, data)
-        new_path = config_ctl.normalize_csv_path(data)
-        current = getattr(page, "selected_csv_path", None)
-        if not force and new_path == current:
-            return
-        config_ctl.set_selected_csv(new_path, sync_combo=False)
-        setattr(page, "selected_csv_path", new_path)
-        signal = getattr(page, "csvFileChanged", None)
-        if signal is not None and hasattr(signal, "emit"):
-            signal.emit(new_path or "")
-
-        sync_switch_wifi_on_csv_changed(page, new_path)
-        return
-
-    if event == "switch_wifi_use_router_changed":
-        checked = bool(payload.get("checked", False))
-        handle_switch_wifi_use_router_changed(page, checked)
-        return
-
-    if event == "switch_wifi_router_csv_changed":
-        index = int(payload.get("index", -1))
-        handle_switch_wifi_router_csv_changed(page, index)
-        return
-
-    if event == "field_changed":
-        # Generic field-change events are used purely to drive the
-        # autosave decorator; no additional view behaviour is required.
-        field = payload.get("field")
-        try:
-            if isinstance(field, str) and field.startswith("compatibility."):
-                # Defer refresh so autosave can flush widget state first.
-                QTimer.singleShot(0, lambda: _refresh_case_page_compatibility(page))
-        except Exception:
-            logging.debug("compatibility refresh scheduling failed", exc_info=True)
-        return
-
-    if event in {
-        "stability_exitfirst_changed",
-        "stability_ping_changed",
-        "stability_script_section_toggled",
-        "stability_relay_type_changed",
-        "switch_wifi_use_router_changed",
-        "switch_wifi_router_csv_changed",
-    }:
-        # Stability Settings: test_str / test_switch_wifi duration & relay
-        # rules. All concrete enable/disable behaviour is defined via simple
-        # rules in CUSTOM_SIMPLE_UI_RULES; here we re-evaluate them based on
-        # updated widget states.
-        try:
-            evaluate_all_rules(page, None)
-        except Exception:
-            pass
-        return
-
-    # Unknown events are ignored to keep the dispatcher tolerant of future
-    # extensions.
-    logging.debug("handle_config_event: unknown event %r payload=%r", event, payload)
+    source = str(payload.get("field") or payload.get("key") or event)
+    ui_event = UiEvent(kind=kind, source=source, payload=dict(payload))
+    ctl.handle_ui_event(ui_event)
 
 
 def apply_rvr_tool_ui_state(page: Any, tool: str) -> None:
@@ -882,23 +563,12 @@ def refresh_config_page_controls(page: Any) -> None:
     init_system_version_actions(page)
     init_stability_actions(page)
     init_switch_wifi_actions(page)
-    # Serial / RF / RvR / router field wiring is now driven by the
-    # declarative view-event table via ``bind_view_events``.
-    _bind_turntable_actions(page)
-    _bind_case_tree_actions(page)
-    _bind_csv_actions(page)
-    _bind_run_actions(page)
 
     # Bind declarative view events for the Config page.
     try:
         bind_view_events(page, "config", handle_config_event)
     except Exception:
         logging.debug("bind_view_events(config) failed", exc_info=True)
-
-    # Finally, attach generic autosave wiring so that any widget edit on
-    # the Config page is persisted via the unified decorator-based flow.
-    _bind_autosave_field_events(page)
-
 
 def set_available_pages(page: Any, page_keys: list[str]) -> None:
     """Delegate logical page selection to the Config page implementation."""
@@ -1463,137 +1133,6 @@ def init_connect_type_actions(page: Any) -> None:
         setattr(page, "third_party_checkbox", third_checkbox)
     if third_wait is not None:
         setattr(page, "third_party_wait_edit", third_wait)
-
-
-def _bind_serial_actions(page: Any) -> None:
-    """Serial wiring is handled by the view-event table."""
-    _ = page
-
-
-def _bind_rf_rvr_actions(page: Any) -> None:
-    """RF / RvR wiring is handled by the view-event table."""
-    _ = page
-
-
-def _bind_turntable_actions(page: Any) -> None:
-    """Turntable field behaviour is driven by the simple rule engine.
-
-    The generic simple-rule wiring in :class:`CaseConfigPage` connects the
-    ``Turntable.model`` combo to the rule engine, so no extra per-field
-    wiring is required here.  This function is kept as a placeholder to
-    avoid breaking the refresh pipeline.
-    """
-    return
-
-
-def _bind_router_actions(page: Any) -> None:
-    """Router wiring is handled by the view-event table."""
-    _ = page
-
-
-def _bind_csv_actions(page: Any) -> None:
-    """Wire main CSV combo to the unified dispatcher."""
-    csv_combo = getattr(page, "csv_combo", None)
-    if csv_combo is None:
-        return
-
-    if hasattr(csv_combo, "activated"):
-        def _on_csv_activated(index: int) -> None:
-            logging.debug("on_csv_activated index=%s", index)
-            handle_config_event(
-                page,
-                "csv_index_changed",
-                index=index,
-                force=True,
-            )
-
-        csv_combo.activated.connect(_on_csv_activated)
-
-    if hasattr(csv_combo, "currentIndexChanged"):
-        csv_combo.currentIndexChanged.connect(
-            lambda idx: handle_config_event(
-                page,
-                "csv_index_changed",
-                index=idx,
-                force=False,
-            )
-        )
-
-
-def _bind_case_tree_actions(page: Any) -> None:
-    """Wire case tree click to the unified config dispatcher."""
-    tree = getattr(page, "case_tree", None)
-    if tree is None or not hasattr(tree, "clicked"):
-        return
-
-    def _on_case_tree_clicked(proxy_idx) -> None:
-        model = tree.model()
-        if model is None:
-            return
-        if isinstance(model, QSortFilterProxyModel):
-            source_idx = model.mapToSource(proxy_idx)
-        else:
-            source_idx = proxy_idx
-        fs_model = getattr(page, "fs_model", None)
-        if fs_model is None or not hasattr(fs_model, "filePath"):
-            return
-        path = fs_model.filePath(source_idx)
-        config_ctl = getattr(page, "config_ctl", None)
-        try:
-            base = config_ctl.get_application_base() if config_ctl is not None else None
-        except Exception:
-            base = None
-        try:
-            display_path = os.path.relpath(path, base) if base is not None else path
-        except Exception:
-            display_path = path
-        logging.debug("on_case_tree_clicked path=%s display=%s", path, display_path)
-
-        if os.path.isdir(path):
-            if tree.isExpanded(proxy_idx):
-                tree.collapse(proxy_idx)
-            else:
-                tree.expand(proxy_idx)
-            set_fields_editable(page, set())
-            return
-
-        if not (os.path.isfile(path)
-                and os.path.basename(path).startswith("test_")
-                and path.endswith(".py")):
-            set_fields_editable(page, set())
-            return
-
-        from pathlib import Path as _Path
-
-        normalized_display = _Path(display_path).as_posix() if display_path else ""
-
-        handle_config_event(
-            page,
-            "case_clicked",
-            case_path=path,
-            display_path=normalized_display,
-        )
-
-    tree.clicked.connect(_on_case_tree_clicked)
-
-
-def _bind_run_actions(page: Any) -> None:
-    """Wire Run buttons to the shared run proxy."""
-    run_buttons = getattr(page, "_run_buttons", []) or []
-    if not run_buttons:
-        return
-
-    config_ctl = getattr(page, "config_ctl", None)
-
-    for btn in run_buttons:
-        if not hasattr(btn, "clicked"):
-            continue
-        # Prefer controller run handler; fall back to page.config_ctl when
-        # controller reference is present on the page (legacy compatibility).
-        if config_ctl is not None and hasattr(config_ctl, "on_run"):
-            btn.clicked.connect(lambda _checked=False, ctl=config_ctl: ctl.on_run())
-        elif hasattr(page, "config_ctl") and getattr(page, "config_ctl") is not None and hasattr(page.config_ctl, "on_run"):
-            btn.clicked.connect(lambda _checked=False, ctl=page.config_ctl: ctl.on_run())
 
 
 __all__ = [

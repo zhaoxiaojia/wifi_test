@@ -203,7 +203,7 @@ class RunPage(CardWidget):
         self._current_has_fixture = False
 
     def eventFilter(self, obj, event):  # type: ignore[override]
-        if obj is getattr(self, "process", None) and event.type() == QEvent.Resize:
+        if obj is self.process and event.type() == QEvent.Resize:
             rect = self.process.rect()
             self.process_label.setGeometry(rect)
             self.remaining_time_label.setGeometry(rect)
@@ -297,12 +297,10 @@ class RunPage(CardWidget):
             self._remaining_time_timer.start()
 
     def _stop_remaining_timer(self) -> None:
-        if hasattr(self, "_remaining_time_timer"):
-            self._remaining_time_timer.stop()
+        self._remaining_time_timer.stop()
         self._remaining_overtime = False
         self._overtime_seconds = 0
-        if hasattr(self, "remaining_time_label"):
-            self.remaining_time_label.hide()
+        self.remaining_time_label.hide()
 
     def _on_remaining_tick(self) -> None:
         if self._remaining_overtime:
@@ -315,7 +313,7 @@ class RunPage(CardWidget):
         self._remaining_seconds -= 1
         if self._remaining_seconds <= 0:
             remaining_cases = max(self.total_count - self.finished_count, 0)
-            runner_running = bool(getattr(self, "runner", None) and self.runner.isRunning())
+            runner_running = self.runner is not None and self.runner.isRunning()
             if remaining_cases > 0 or runner_running:
                 self._remaining_overtime = True
                 self._overtime_seconds = 0
@@ -355,14 +353,7 @@ class RunPage(CardWidget):
             self._progress_animation = anim
 
     def _trigger_config_run(self) -> None:
-        cfg_page = getattr(self.main_window, "rvr_wifi_config_page", None)
-        config_ctl = None
-        if cfg_page and not sip.isdeleted(cfg_page):
-            config_ctl = getattr(cfg_page, "config_ctl", None)
-        if config_ctl is not None and hasattr(config_ctl, "on_run"):
-            config_ctl.on_run()
-        else:
-            self.run_case()
+        self.main_window.caseConfigPage.config_ctl.on_run()
 
     def _set_action_button(self, mode: str) -> None:
         with suppress(TypeError):
@@ -396,14 +387,8 @@ class RunPage(CardWidget):
         self.reset()
         self._set_action_button("stop")
         account_name = ""
-        try:
-            mw = getattr(self, "main_window", None) or self.window()
-            if mw is not None and hasattr(mw, "_active_account"):
-                payload = getattr(mw, "_active_account", None)
-                if isinstance(payload, dict):
-                    account_name = str(payload.get("username", "")).strip()
-        except Exception:
-            account_name = ""
+        if self.main_window and self.main_window._active_account:
+            account_name = str(self.main_window._active_account.get("username", "")).strip()
         self.runner = CaseRunner(self.case_path, account_name=account_name, display_case_path=self.display_case_path)
         self.runner.log_signal.connect(self._append_log)
         self.runner.progress_signal.connect(self.update_progress)
@@ -413,10 +398,7 @@ class RunPage(CardWidget):
         self.runner.start()
 
     def _finalize_runner(self) -> None:
-        runner = getattr(self, "runner", None)
-        if not runner:
-            self.on_runner_finished()
-            return
+        runner = self.runner
         for signal, slot in (
             (runner.log_signal, self._append_log),
             (runner.progress_signal, self.update_progress),
@@ -432,16 +414,11 @@ class RunPage(CardWidget):
         self.on_runner_finished()
 
     def _on_report_dir_ready(self, path: str) -> None:
-        try:
-            mw = getattr(self, "main_window", None) or self.window()
-            if mw and hasattr(mw, "enable_report_page"):
-                mw.enable_report_page(path)
-        except Exception:
-            pass
+        self.main_window.enable_report_page(path)
 
     def cleanup(self, disconnect_page: bool = True) -> None:
-        stack = getattr(self.main_window, "stackedWidget", None)
-        idx = stack.indexOf(self) if stack else None
+        stack = self.main_window.stackedWidget
+        idx = stack.indexOf(self)
         logging.info(
             "RunPage.cleanup start id=%s isdeleted=%s index=%s",
             id(self),
@@ -449,9 +426,7 @@ class RunPage(CardWidget):
             idx,
         )
         self.remaining_time_label.hide()
-        runner = getattr(self, "runner", None)
-        if not runner:
-            return
+        runner = self.runner
         logging.info("runner isRunning before wait: %s", runner.isRunning())
         runner.stop()
         logging.getLogger().handlers[:] = runner.old_handlers
@@ -485,8 +460,8 @@ class RunPage(CardWidget):
                 logging.info("Disconnecting signals for RunPage id=%s", id(self))
                 self.disconnect()
                 logging.info("Signals disconnected for RunPage id=%s", id(self))
-        stack = getattr(self.main_window, "stackedWidget", None)
-        idx = stack.indexOf(self) if stack else None
+        stack = self.main_window.stackedWidget
+        idx = stack.indexOf(self)
         logging.info(
             "RunPage.cleanup end id=%s isdeleted=%s index=%s",
             id(self),
