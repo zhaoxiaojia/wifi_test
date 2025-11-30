@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import copy
-import logging
 import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Mapping, Optional
@@ -12,7 +11,7 @@ from qfluentwidgets import ComboBox, LineEdit
 
 from src.ui.model.rules import evaluate_all_rules
 from src.ui.view.common import EditableInfo
-from src.ui import load_page_config, save_page_config
+from src.ui import load_config_page_state, save_config_page_state
 from src import display_to_case_path
 from src.util.constants import (
     SWITCH_WIFI_CASE_ALIASES,
@@ -63,107 +62,55 @@ if TYPE_CHECKING:  # pragma: no cover - circular import guard
     from src.ui.view.config.page import CaseConfigPage
 
 
-class ConfigController:
-    """
-    Controller responsible for configuration lifecycle and normalisation
-    for the Config page.
+class _ConnectTypeControllerMixin:
+    """Connect-type specific configuration helpers."""
 
-    This keeps all config I/O and structural cleanup out of the Qt widget
-    class so that CaseConfigPage can focus on wiring UI and delegating
-    business logic.
-    """
+    def normalize_connect_type_section(self, raw_value: Any) -> dict[str, Any]:
+        """Normalise connect_type section including Android/Linux/third_party."""
+        source = raw_value if isinstance(raw_value, Mapping) else {}
+        normalized: dict[str, Any] = {}
 
-    def __init__(self, page: "CaseConfigPage") -> None:
-        self.page = page
-        self.logger = logging.getLogger(__name__)
+        type_value = source.get("type", "")
+        type_value = str(type_value).strip() or "Android"
+        lowered_type = type_value.lower()
+        if lowered_type in {"android", "adb"}:
+            type_value = "Android"
+        elif lowered_type in {"linux", "telnet"}:
+            type_value = "Linux"
+        normalized["type"] = type_value
 
-    def get_application_base(self) -> Path:
-        """Return the application source base path (was CaseConfigPage._get_application_base)."""
-        return Path(get_src_base()).resolve()
+        android_cfg = source.get("Android")
+        android_dict = dict(android_cfg)
+        device = android_dict.get("device", "")
+        android_dict["device"] = str(device).strip() if device is not None else ""
+        normalized["Android"] = android_dict
+        normalized.pop("adb", None)
 
-    def init_case_tree(self, root_dir: Path) -> None:
-        """Initialize the case tree model + proxy (migrated from CaseConfigPage).
+        linux_cfg = source.get("Linux")
+        linux_dict = dict(linux_cfg)
+        telnet_ip = linux_dict.get("ip", "")
+        linux_dict["ip"] = str(telnet_ip).strip() if telnet_ip is not None else ""
+        wildcard = linux_dict.get("wildcard", "")
+        linux_dict["wildcard"] = str(wildcard).strip() if wildcard is not None else ""
+        normalized["Linux"] = linux_dict
+        normalized.pop("telnet", None)
 
-        This constructs a QFileSystemModel rooted at `root_dir` and attaches a
-        TestFileFilterModel proxy so that only test_*.py files (and directories)
-        are visible. The tree widget on the page is configured accordingly.
-        """
-        page = self.page
-        try:
-            from PyQt5.QtWidgets import QFileSystemModel
-        except Exception:
-            return
-        # create/replace models on the page
-        page.fs_model = QFileSystemModel(page.case_tree)
-        root_index = page.fs_model.setRootPath(str(root_dir))
-        page.fs_model.setNameFilters(["test_*.py"])
-        page.fs_model.setNameFilterDisables(True)
-        from PyQt5.QtCore import QDir
+        third_cfg = source.get("third_party")
+        third_dict = dict(third_cfg)
+        enabled_val = third_dict.get("enabled", False)
+        enabled_bool = bool(enabled_val)
+        third_dict["enabled"] = enabled_bool
+        wait_val = third_dict.get("wait_seconds")
+        wait_seconds: Optional[int]
+        wait_seconds = int(str(wait_val).strip()) if wait_val not in (None, "") else None
+        third_dict["wait_seconds"] = wait_seconds if wait_seconds is None or wait_seconds > 0 else None
+        normalized["third_party"] = third_dict
 
-        page.fs_model.setFilter(QDir.Filter.AllDirs | QDir.Filter.NoDotAndDotDot | QDir.Filter.Files)
-        page.proxy_model = TestFileFilterModel()
-        page.proxy_model.setSourceModel(page.fs_model)
-        page.case_tree.setModel(page.proxy_model)
-        page.case_tree.setRootIndex(page.proxy_model.mapFromSource(root_index))
-        # hide non-name columns
-        try:
-            page.case_tree.header().hide()
-            for col in range(1, page.fs_model.columnCount()):
-                page.case_tree.hideColumn(col)
-        except Exception:
-            pass
+        return normalized
 
-    # ------------------------------------------------------------------
-    # Lifecycle
-    # ------------------------------------------------------------------
 
-    def load_initial_config(self) -> dict:
-        """
-        Load configuration data from disk and normalise persisted paths.
-
-        - Populates page.config
-        - Captures the TOOL_SECTION snapshot for change detection
-        - Restores CSV selection into page.selected_csv_path if supported
-        """
-        page = self.page
-        page.config = load_page_config(page)
-        # Initialise current testcase path from persisted config (if any) so
-        # that testcase-scoped rules can apply immediately on startup.
-        try:
-            text_case = str(page.config.get("text_case", "") or "").strip()
-        except Exception:
-            text_case = ""
-        if text_case:
-            try:
-                base = Path(self.get_application_base())
-                abs_path = (base / text_case).resolve()
-                setattr(page, "_current_case_path", abs_path.as_posix())
-            except Exception:
-                # Leave _current_case_path unchanged on failure.
-                pass
-
-        # Capture snapshot for tool section and restore CSV selection.
-        snapshot = copy.deepcopy(page.config.get(TOOL_SECTION_KEY, {}))
-        setattr(page, "_config_tool_snapshot", snapshot)
-
-        try:
-            _proxy_load_csv_selection_from_config(page)
-        except Exception:
-            pass
-
-        return page.config
-
-    def save_config(self) -> None:
-        """Persist the active configuration and refresh cached state."""
-        logging.debug("[save] data=%s", self.page.config)
-        refreshed = save_page_config(self.page)
-        self.page._config_tool_snapshot = copy.deepcopy(
-            refreshed.get(TOOL_SECTION_KEY, {})
-        )
-
-    # ------------------------------------------------------------------
-    # Stability case defaults
-    # ------------------------------------------------------------------
+class _StabilityControllerMixin:
+    """Stability-case specific helpers for defaults and settings."""
 
     def ensure_script_case_defaults(self, case_key: str, case_path: str) -> dict[str, Any]:
         """Ensure stability case defaults exist, handling legacy aliases."""
@@ -201,8 +148,6 @@ class ConfigController:
             entry[SWITCH_WIFI_MANUAL_ENTRIES_FIELD] = normalize_switch_wifi_manual_entries(
                 manual_entries
             )
-            # Merged stability case uses both AC/STR relay branches and Wi‑Fi
-            # router/manual list in a single config entry.
             _ensure_branch("ac")
             _ensure_branch("str")
             cases_section[case_key] = entry
@@ -216,9 +161,273 @@ class ConfigController:
         cases_section[case_key] = entry
         return entry
 
+    # (duplicate normalize_stability_settings removed here)
+
+    def script_case_key(self, case_path: str | Path) -> str:
+        """Return the logical script key used by stability config for the given case path."""
+        path_obj = case_path if isinstance(case_path, Path) else Path(case_path)
+        if path_obj.is_absolute():
+            from src.util.constants import get_src_base
+
+            path_obj = path_obj.resolve().relative_to(Path(get_src_base()).resolve())
+        stem = path_obj.stem.lower()
+        if stem in SWITCH_WIFI_CASE_KEYS:
+            return SWITCH_WIFI_CASE_KEY
+        return stem
+
+    def is_stability_case(self, case_path: str | Path | None) -> bool:
+        """Return True if the given case path is a stability testcase."""
+        if not case_path:
+            return False
+        path_obj = case_path if isinstance(case_path, Path) else Path(case_path)
+        parts = path_obj.as_posix().split("/")
+        return "stability" in (p.lower() for p in parts)
+
+    def is_performance_case(self, abs_case_path: str | Path | None) -> bool:
+        """Return True if the given case path is a performance testcase."""
+        if not abs_case_path:
+            return False
+        path_obj = abs_case_path if isinstance(abs_case_path, Path) else Path(abs_case_path)
+        parts = path_obj.as_posix().split("/")
+        return "performance" in (p.lower() for p in parts)
+
+
+class _CsvRvrControllerMixin:
+    """CSV / RvR helpers shared across Config UI."""
+
+    def resolve_csv_config_path(self, value: Any) -> str | None:
+        return _proxy_resolve_csv_config_path(value)
+
+    def normalize_csv_path(self, path: Any) -> str | None:
+        return _proxy_normalize_csv_path(path)
+
+    def relativize_config_path(self, path: Any) -> str:
+        return _proxy_relativize_config_path(path)
+
+    def find_csv_index(self, normalized_path: str | None, combo=None) -> int:
+        return _proxy_find_csv_index(self.page, normalized_path, combo)
+
+    def set_selected_csv(self, path: str | None, *, sync_combo: bool = True) -> bool:
+        return _proxy_set_selected_csv(self.page, path, sync_combo=sync_combo)
+
+    def update_csv_options(self) -> None:
+        _proxy_update_csv_options(self.page)
+
+    def capture_preselected_csv(self) -> None:
+        _proxy_capture_preselected_csv(self.page)
+
+    def populate_csv_combo(
+        self,
+        combo,
+        selected_path: str | None,
+        *,
+        include_placeholder: bool = False,
+    ) -> None:
+        _proxy_populate_csv_combo(
+            self.page,
+            combo,
+            selected_path,
+            include_placeholder=include_placeholder,
+        )
+
+    def refresh_registered_csv_combos(self) -> None:
+        _proxy_refresh_registered_csv_combos(self.page)
+
+    def load_switch_wifi_entries(self, csv_path: str | None) -> list[dict[str, str]]:
+        return _proxy_load_switch_wifi_entries(self.page, csv_path)
+
+    def update_switch_wifi_preview(self, preview, csv_path: str | None) -> None:
+        _proxy_update_switch_wifi_preview(self.page, preview, csv_path)
+
+    def update_rvr_nav_button(self) -> None:
+        _proxy_update_rvr_nav_button(self.page)
+
+    def open_rvr_wifi_config(self) -> None:
+        _proxy_open_rvr_wifi_config(self.page)
+
+    def reset_second_page_inputs(self) -> None:
+        self.reset_second_page_model_state()
+        self.reset_second_page_ui_state()
+
+    def reset_second_page_model_state(self) -> None:
+        page = self.page
+        self.set_selected_csv(page.selected_csv_path, sync_combo=True)
+
+    def reset_second_page_ui_state(self) -> None:
+        page = self.page
+        page.csv_combo.setEnabled(bool(page._enable_rvr_wifi))
+
+
+class _RouterControllerMixin:
+    """Router-related helpers for Config UI."""
+
+    def handle_router_name_changed(self, name: str) -> None:
+        page = self.page
+        from src.tools.router_tool.router_factory import get_router  # type: ignore
+
+        router_cfg = page.config.get("router", {})
+        addr = router_cfg.get("address") if router_cfg.get("name") == name else None
+        router_obj = get_router(name, addr)
+        page.router_obj = router_obj
+        router_addr_widget = page.field_widgets.get("router.address")
+        router_addr_widget.setText(router_obj.address)
+        self.update_csv_options()
+
+    def handle_router_address_changed(self, address: str) -> None:
+        page = self.page
+        router_obj = page.router_obj
+        router_obj.address = address
+        self.update_csv_options()
+
+
+class _EditableStateControllerMixin:
+    """EditableInfo and run/lock helpers for Config UI."""
+
+    def apply_editable_info(self, info: "EditableInfo | None") -> None:
+        page = self.page
+        if info is None:
+            fields: set[str] = set()
+            enable_csv = False
+            enable_rvr_wifi = False
+        else:
+            fields = set(info.fields)
+            enable_csv = info.enable_csv
+            enable_rvr_wifi = info.enable_rvr_wifi
+        snapshot = EditableInfo(
+            fields=fields,
+            enable_csv=enable_csv,
+            enable_rvr_wifi=enable_rvr_wifi,
+        )
+        page._last_editable_info = snapshot
+        self._apply_editable_model_state(snapshot)
+        self._apply_editable_ui_state(snapshot)
+
+    def _apply_editable_model_state(self, snapshot: "EditableInfo") -> None:
+        page = self.page
+        page._enable_rvr_wifi = snapshot.enable_rvr_wifi
+        page._router_config_active = False if not snapshot.enable_rvr_wifi else page._router_config_active
+        self.set_selected_csv(page.selected_csv_path, sync_combo=True) if snapshot.enable_csv else self.set_selected_csv(None, sync_combo=False)
+
+    def _apply_editable_ui_state(self, snapshot: "EditableInfo") -> None:
+        page = self.page
+        page.csv_combo.setEnabled(True)
+        self.update_rvr_nav_button()
+        main_window = page.window()
+        rvr_page = main_window.rvr_wifi_config_page
+        rvr_page.set_case_content_visible(bool(snapshot.enable_rvr_wifi))
+
+    def restore_editable_state(self) -> None:
+        page = self.page
+        self.apply_editable_info(page._last_editable_info)
+
+    def sync_run_buttons_enabled(self) -> None:
+        page = self.page
+        enabled = not page._run_locked
+        for btn in page._run_buttons:
+            btn.setEnabled(enabled)
+
+    def lock_for_running(self, locked: bool) -> None:
+        from src.ui.view.config.actions import apply_run_lock_ui_state  # local import
+
+        page = self.page
+        page._run_locked = bool(locked)
+        apply_run_lock_ui_state(page, locked)
+        self.sync_run_buttons_enabled()
+
+
+class ConfigController(
+    _ConnectTypeControllerMixin,
+    _StabilityControllerMixin,
+    _CsvRvrControllerMixin,
+    _RouterControllerMixin,
+    _EditableStateControllerMixin,
+):
+    """
+    Controller responsible for configuration lifecycle and normalisation
+    for the Config page.
+
+    This keeps all config I/O and structural cleanup out of the Qt widget
+    class so that CaseConfigPage can focus on wiring UI and delegating
+    business logic.
+    """
+
+    UI_EVENT_HANDLERS: Mapping[str, str] = {
+        "field.change": "_on_field_change",
+        "case.select": "_on_case_select",
+        "csv.select": "_on_csv_select",
+        "tab.switch": "_on_tab_switch",
+        "action.run": "_on_action_run",
+        "connect_type.changed": "_on_connect_type_changed",
+        "connect_type.third_party": "_on_third_party_toggled",
+        "serial.status.changed": "_on_serial_status_changed",
+        "rf_model.changed": "_on_rf_model_changed",
+        "rvr_tool.changed": "_on_rvr_tool_changed",
+        "router.name.changed": "_on_router_name_changed",
+        "router.address.changed": "_on_router_address_changed",
+        "stability.exitfirst": "_on_stability_flags_changed",
+        "stability.ping": "_on_stability_flags_changed",
+        "stability.script_section": "_on_stability_flags_changed",
+        "stability.relay_type": "_on_stability_flags_changed",
+        "switch_wifi.use_router": "_on_switch_wifi_use_router",
+        "switch_wifi.router_csv": "_on_switch_wifi_router_csv",
+    }
+
+    def __init__(self, page: "CaseConfigPage") -> None:
+        self.page = page
+
+    def get_application_base(self) -> Path:
+        """Return the application source base path (was CaseConfigPage._get_application_base)."""
+        return Path(get_src_base()).resolve()
+
+    def init_case_tree(self, root_dir: Path) -> None:
+        """Initialize the case tree model + proxy rooted at ``root_dir``."""
+        from PyQt5.QtWidgets import QFileSystemModel
+        from PyQt5.QtCore import QDir
+
+        page = self.page
+        page.fs_model = QFileSystemModel(page.case_tree)
+        root_index = page.fs_model.setRootPath(str(root_dir))
+        page.fs_model.setNameFilters(["test_*.py"])
+        page.fs_model.setNameFilterDisables(True)
+        page.fs_model.setFilter(QDir.AllDirs | QDir.NoDotAndDotDot | QDir.Files)
+
+        page.proxy_model = TestFileFilterModel()
+        page.proxy_model.setSourceModel(page.fs_model)
+        page.case_tree.setModel(page.proxy_model)
+        page.case_tree.setRootIndex(page.proxy_model.mapFromSource(root_index))
+
+        page.case_tree.header().hide()
+        for col in range(1, page.fs_model.columnCount()):
+            page.case_tree.hideColumn(col)
+
     # ------------------------------------------------------------------
-    # Unified UI event entrypoint
+    # Lifecycle
     # ------------------------------------------------------------------
+
+    def load_initial_config(self) -> dict:
+        """
+        Load configuration data from disk and normalise persisted paths.
+
+        - Populates page.config
+        - Captures the TOOL_SECTION snapshot for change detection
+        - Restores CSV selection into page.selected_csv_path if supported
+        """
+        page = self.page
+        page.config = load_config_page_state(page)
+        return page.config
+
+    def save_config(self) -> None:
+        """Persist the active configuration and refresh cached state."""
+        page = self.page
+        page.config = save_config_page_state(page)
+
+    # ------------------------------------------------------------------
+    # Stability case defaults
+    # ------------------------------------------------------------------
+
+      # ------------------------------------------------------------------
+      # Unified UI event entrypoint
+      # ------------------------------------------------------------------
 
     def handle_ui_event(self, event: UiEvent) -> None:
         """Dispatch a UiEvent emitted by the adapter to a dedicated handler.
@@ -229,8 +438,7 @@ class ConfigController:
         :class:`UiEvent` instances instead of calling controller helpers
         directly.
         """
-        kind = event.kind or ""
-        dispatch = {
+        handlers = {
             "field.change": self._on_field_change,
             "case.select": self._on_case_select,
             "csv.select": self._on_csv_select,
@@ -250,11 +458,9 @@ class ConfigController:
             "switch_wifi.use_router": self._on_switch_wifi_use_router,
             "switch_wifi.router_csv": self._on_switch_wifi_router_csv,
         }
-        handler = dispatch.get(kind)
-        if handler is None:
-            self.logger.warning("Unknown UI event: %s from %s", kind, event.source)
-            return
-        handler(event)
+        handler = handlers.get(event.kind)
+        if handler is not None:
+            handler(event)
 
     # Individual handlers are intentionally thin wrappers around existing
     # helpers so that behaviour can be verified incrementally.  After the
@@ -268,93 +474,58 @@ class ConfigController:
         from src.ui.model.autosave import should_autosave
 
         page = self.page
-        field = event.payload.get("field")
+        field = str(event.payload["field"]).strip()
 
-        # Compatibility page: refresh after autosave has flushed widget state.
-        try:
-            if isinstance(field, str) and field.startswith("compatibility."):
-                QTimer.singleShot(0, lambda: _refresh_case_page_compatibility(page))
-        except Exception:
-            logging.debug("compatibility refresh scheduling failed", exc_info=True)
+        if field.startswith("compatibility."):
+            QTimer.singleShot(0, lambda: _refresh_case_page_compatibility(page))
 
-        # Autosave for field_changed events routed through UiAdapter.
-        if not should_autosave("field_changed") or page._refreshing:
-            return
-        try:
+        if field != "csv_path" and should_autosave("field_changed") and not page._refreshing:
             self.sync_widgets_to_config()
             self.save_config()
-        except Exception:
-            logging.debug("autosave failed for field_changed in _on_field_change", exc_info=True)
+
+        trigger = field or None
+        evaluate_all_rules(page, trigger)
 
     def _on_case_select(self, event: UiEvent) -> None:
         """Handle case selection from the tree view."""
         page = self.page
-        case_path = event.payload.get("case_path") or ""
-        display_path = event.payload.get("display_path") or ""
+        case_path = str(event.payload["case_path"])
+        display_path = str(event.payload["display_path"])
 
-        if case_path:
-            setattr(page, "_current_case_path", case_path)
-        if display_path:
-            setattr(page, "_current_case_display_path", display_path)
+        page._current_case_path = case_path
+        page._current_case_display_path = display_path
 
         # Update "Selected Test Case" text if such a field exists.
-        field_widgets = page.field_widgets
         updated_widgets: set[int] = set()
         text_value = display_path or case_path
-        for key, widget in field_widgets.items():
+        for key, widget in page.field_widgets.items():
             if key == "text_case" or key.endswith(".text_case"):
-                if widget is None or id(widget) in updated_widgets:
+                if id(widget) in updated_widgets:
                     continue
-                if hasattr(widget, "setText"):
-                    try:
-                        widget.setText(text_value)
-                        updated_widgets.add(id(widget))
-                    except Exception:
-                        continue
-        if not updated_widgets:
-            # Use centralized display updater for the selected test case.
-            try:
-                from src import update_test_case_display  # local import
-
-                update_test_case_display(page, text_value)
-            except Exception:
-                logging.debug("update_test_case_display failed in _on_case_select", exc_info=True)
+                widget.setText(text_value)
+                updated_widgets.add(id(widget))
 
         # Re-compute testcase-specific UI and apply rules.
         from src.ui.view.config.actions import apply_ui  # local import
 
         apply_ui(page, case_path)
 
-        view = page.view
         if self.is_stability_case(case_path):
-            view.set_current_page("stability")
+            page.view.set_current_page("stability")
         elif self.is_performance_case(case_path):
-            view.set_current_page("execution")
-
-        # Compose DUT Settings according to the testcase category so that
-        # category-specific settings (such as Compatibility Settings) are
-        # only visible when relevant.
-        try:
-            from pathlib import Path as _Path
-            from src.ui.view.config.actions import apply_dut_settings_for_case  # local import
-
-            normalized_display = _Path(display_path).as_posix() if display_path else ""
-            apply_dut_settings_for_case(page, case_path=case_path, display_path=normalized_display)
-        except Exception:
-            logging.debug("_on_case_select: apply_dut_settings_for_case failed", exc_info=True)
+            page.view.set_current_page("execution")
 
     def _on_csv_select(self, event: UiEvent) -> None:
         """Handle main CSV combo selection changes."""
         page = self.page
-        index = int(event.payload.get("index", -1))
-        force = bool(event.payload.get("force", False))
+        index = int(event.payload["index"])
+        force = bool(event.payload["force"])
 
         csv_combo = page.csv_combo
         if index < 0:
             self.set_selected_csv(None, sync_combo=False)
             return
         data = csv_combo.itemData(index)
-        logging.debug("_on_csv_select index=%s data=%s", index, data)
         new_path = self.normalize_csv_path(data)
         current = page.selected_csv_path
         if not force and new_path == current:
@@ -364,116 +535,80 @@ class ConfigController:
 
         page.csvFileChanged.emit(new_path or "")
 
-        try:
-            from src.ui.view.config.config_switch_wifi import sync_switch_wifi_on_csv_changed  # local import
+        from src.ui.view.config.config_switch_wifi import sync_switch_wifi_on_csv_changed  # local import
+        from src.ui.model.autosave import should_autosave  # local import
 
-            sync_switch_wifi_on_csv_changed(page, new_path)
-        except Exception:
-            logging.debug("_on_csv_select: sync_switch_wifi_on_csv_changed failed", exc_info=True)
+        sync_switch_wifi_on_csv_changed(page, new_path)
+
+        if not page._refreshing and should_autosave("csv_index_changed"):
+            self.sync_widgets_to_config()
+            self.save_config()
 
     def _on_tab_switch(self, event: UiEvent) -> None:
         """Handle Config tab switches."""
-        page = self.page
-        key = str(event.payload.get("key", "")).strip()
-        page.view.set_current_page(key)
+        key = str(event.payload["key"]).strip()
+        self.page.view.set_current_page(key)
 
     def _on_connect_type_changed(self, event: UiEvent) -> None:
         """Handle Control Type combo changes."""
         from src.ui.view.config.actions import handle_connect_type_changed
 
-        text = event.payload.get("text", "")
-        try:
-            handle_connect_type_changed(self.page, text)
-        except Exception:
-            logging.debug("_on_connect_type_changed failed", exc_info=True)
+        text = event.payload["text"]
+        handle_connect_type_changed(self.page, text)
 
     def _on_third_party_toggled(self, event: UiEvent) -> None:
         """Handle Third-party checkbox toggles."""
         from src.ui.view.config.actions import handle_third_party_toggled
 
-        checked = bool(event.payload.get("checked", False))
-        try:
-            handle_third_party_toggled(self.page, checked)
-        except Exception:
-            logging.debug("_on_third_party_toggled failed", exc_info=True)
+        checked = bool(event.payload["checked"])
+        handle_third_party_toggled(self.page, checked)
 
     def _on_serial_status_changed(self, event: UiEvent) -> None:
         """Handle Serial status checkbox changes."""
         from src.ui.view.config.actions import apply_serial_enabled_ui_state, _rebalance_panel
 
-        text = str(event.payload.get("text", ""))
+        text = str(event.payload["text"])
         page = self.page
-        try:
-            apply_serial_enabled_ui_state(page, text)
-            if hasattr(page, "_dut_panel"):
-                _rebalance_panel(page._dut_panel)
-        except Exception:
-            logging.debug("_on_serial_status_changed UI update failed", exc_info=True)
-        try:
-            evaluate_all_rules(page, "serial_port.status")
-        except Exception:
-            logging.debug("_on_serial_status_changed rule evaluation failed", exc_info=True)
+        apply_serial_enabled_ui_state(page, text)
+        _rebalance_panel(page._dut_panel)
 
     def _on_rf_model_changed(self, event: UiEvent) -> None:
         """Handle RF model combo changes (panel rebalance only)."""
         from src.ui.view.config.actions import _rebalance_panel
 
-        page = self.page
-        _ = event
-        if hasattr(page, "_execution_panel"):
-            try:
-                _rebalance_panel(page._execution_panel)
-            except Exception:
-                logging.debug("_on_rf_model_changed panel rebalance failed", exc_info=True)
+        _rebalance_panel(self.page._execution_panel)
 
     def _on_rvr_tool_changed(self, event: UiEvent) -> None:
         """Handle RvR tool selection changes."""
         from src.ui.view.config.actions import apply_rvr_tool_ui_state, _rebalance_panel
 
+        tool_text = str(event.payload["tool_text"])
         page = self.page
-        tool_text = str(event.payload.get("tool_text", ""))
-        try:
-            apply_rvr_tool_ui_state(page, tool_text)
-            if hasattr(page, "_execution_panel"):
-                _rebalance_panel(page._execution_panel)
-        except Exception:
-            logging.debug("_on_rvr_tool_changed failed", exc_info=True)
+        apply_rvr_tool_ui_state(page, tool_text)
+        _rebalance_panel(page._execution_panel)
 
     def _on_router_name_changed(self, event: UiEvent) -> None:
         """Handle router name edits."""
-        name = str(event.payload.get("name", ""))
-        try:
-            self.handle_router_name_changed(name)
-        except Exception:
-            logging.debug("_on_router_name_changed failed", exc_info=True)
+        name = str(event.payload["name"])
+        self.handle_router_name_changed(name)
 
     def _on_router_address_changed(self, event: UiEvent) -> None:
         """Handle router address edits."""
-        address = str(event.payload.get("address", ""))
-        try:
-            self.handle_router_address_changed(address)
-        except Exception:
-            logging.debug("_on_router_address_changed failed", exc_info=True)
+        address = str(event.payload["address"])
+        self.handle_router_address_changed(address)
 
     def _on_stability_flags_changed(self, event: UiEvent) -> None:
         """Re-evaluate rules after stability-related toggles."""
-        page = self.page
         _ = event
-        try:
-            evaluate_all_rules(page, None)
-        except Exception:
-            logging.debug("_on_stability_flags_changed rule evaluation failed", exc_info=True)
+        evaluate_all_rules(self.page, None)
 
     def _on_switch_wifi_use_router(self, event: UiEvent) -> None:
         """Handle switch_wifi use-router toggles (stability section)."""
         from src.ui.view.config.config_switch_wifi import handle_switch_wifi_use_router_changed
 
         page = self.page
-        checked = bool(event.payload.get("checked", False))
-        try:
-            handle_switch_wifi_use_router_changed(page, checked)
-        except Exception:
-            logging.debug("_on_switch_wifi_use_router handler failed", exc_info=True)
+        checked = bool(event.payload["checked"])
+        handle_switch_wifi_use_router_changed(page, checked)
         self._on_stability_flags_changed(event)
 
     def _on_switch_wifi_router_csv(self, event: UiEvent) -> None:
@@ -481,27 +616,13 @@ class ConfigController:
         from src.ui.view.config.config_switch_wifi import handle_switch_wifi_router_csv_changed
 
         page = self.page
-        index = int(event.payload.get("index", -1))
-        try:
-            handle_switch_wifi_router_csv_changed(page, index)
-        except Exception:
-            logging.debug("_on_switch_wifi_router_csv handler failed", exc_info=True)
+        index = int(event.payload["index"])
+        handle_switch_wifi_router_csv_changed(page, index)
         self._on_stability_flags_changed(event)
 
     def _on_action_run(self, event: UiEvent) -> None:
         _ = event
-        if hasattr(self, "on_run"):
-            try:
-                self.on_run()  # type: ignore[call-arg]
-                return
-            except Exception:
-                self.logger.exception("Failed to execute on_run handler", exc_info=True)
-        page = self.page
-        if hasattr(page, "on_run_callback"):
-            try:
-                page.on_run_callback()
-            except Exception:
-                self.logger.exception("Failed to execute on_run_callback", exc_info=True)
+        self.on_run()  # type: ignore[call-arg]
 
     # ------------------------------------------------------------------
     # FPGA helpers
@@ -696,17 +817,9 @@ class ConfigController:
             enabled_bool = bool(enabled_val)
         third_dict["enabled"] = enabled_bool
         wait_val = third_dict.get("wait_seconds")
-        wait_seconds: Optional[int]
-        if wait_val in (None, ""):
-            wait_seconds = None
-        else:
-            try:
-                wait_seconds = int(str(wait_val).strip())
-            except (TypeError, ValueError):
-                wait_seconds = None
-        if wait_seconds is not None and wait_seconds < 0:
-            wait_seconds = None
-        third_dict["wait_seconds"] = wait_seconds
+        wait_seconds_str = str(wait_val).strip() if wait_val not in (None, "") else ""
+        wait_seconds = int(wait_seconds_str) if wait_seconds_str else None
+        third_dict["wait_seconds"] = wait_seconds if wait_seconds is None or wait_seconds > 0 else None
         normalized["third_party"] = third_dict
 
         return normalized
@@ -714,94 +827,59 @@ class ConfigController:
     def normalize_stability_settings(self, raw_value: Any) -> dict[str, Any]:
         """Normalise stability settings including duration, checkpoints, cases."""
 
-        def _coerce_positive_int(value: Any) -> int | None:
-            try:
-                candidate = int(value)
-            except (TypeError, ValueError):
-                return None
-            return candidate if candidate > 0 else None
-
-        def _coerce_positive_float(value: Any) -> float | None:
-            try:
-                candidate = float(value)
-            except (TypeError, ValueError):
-                return None
-            return candidate if candidate > 0 else None
-
         def _normalize_cycle(value: Any) -> dict[str, Any]:
             mapping = value if isinstance(value, Mapping) else {}
-            result = {
+            return {
                 "enabled": bool(mapping.get("enabled")),
                 "on_duration": max(0, int(mapping.get("on_duration", 0) or 0)),
                 "off_duration": max(0, int(mapping.get("off_duration", 0) or 0)),
                 "port": str(mapping.get("port", "") or "").strip(),
                 "mode": str(mapping.get("mode", "") or "NO").strip().upper() or "NO",
             }
-            return result
 
-        page = self.page
         source = raw_value if isinstance(raw_value, Mapping) else {}
 
-        duration_cfg = source.get("duration_control")
-        if isinstance(duration_cfg, Mapping):
-            loop_value = _coerce_positive_int(duration_cfg.get("loop"))
-            duration_value = _coerce_positive_float(duration_cfg.get("duration_hours"))
-            exitfirst_flag = bool(duration_cfg.get("exitfirst"))
-            retry_limit = _coerce_positive_int(duration_cfg.get("retry_limit")) or 0
-        else:
-            loop_value = None
-            duration_value = None
-            exitfirst_flag = False
-            retry_limit = 0
+        duration_cfg = source.get("duration_control", {})
+        loop_str = str(duration_cfg.get("loop", "")).strip()
+        loop_value = int(loop_str) if loop_str.isdigit() and int(loop_str) > 0 else None
+        duration_str = str(duration_cfg.get("duration_hours", "")).strip()
+        is_duration_number = duration_str.replace(".", "", 1).isdigit() if duration_str else False
+        duration_value = float(duration_str) if is_duration_number and float(duration_str) > 0 else None
+        exitfirst_flag = bool(duration_cfg.get("exitfirst"))
+        retry_str = str(duration_cfg.get("retry_limit", "")).strip()
+        retry_limit = int(retry_str) if retry_str.isdigit() and int(retry_str) > 0 else 0
 
-        check_point_cfg = source.get("check_point")
-        if isinstance(check_point_cfg, Mapping):
-            check_point = {key: bool(value) for key, value in check_point_cfg.items()}
-        else:
-            check_point = {"ping": False}
+        check_point_cfg = source.get("check_point", {})
+        check_point = {key: bool(value) for key, value in check_point_cfg.items()}
         check_point.setdefault("ping", False)
-        ping_targets = (
-            str(check_point_cfg.get("ping_targets", "")).strip()
-            if isinstance(check_point_cfg, Mapping)
-            else ""
-        )
-        check_point["ping_targets"] = ping_targets
+        check_point["ping_targets"] = str(check_point_cfg.get("ping_targets", "")).strip()
 
-        cases_cfg = source.get("cases")
+        cases_cfg = source.get("cases", {})
         cases: dict[str, dict[str, Any]] = {}
-        if isinstance(cases_cfg, Mapping):
-            for name, case_value in cases_cfg.items():
-                if not isinstance(case_value, Mapping):
-                    continue
-                normalized_name = (
-                    SWITCH_WIFI_CASE_KEY
-                    if name in SWITCH_WIFI_CASE_KEYS
-                    else name
-                )
-                if normalized_name == SWITCH_WIFI_CASE_KEY:
-                    manual_entries = case_value.get(SWITCH_WIFI_MANUAL_ENTRIES_FIELD)
-                    from src.ui.view.config.config_switch_wifi import normalize_switch_wifi_manual_entries
+        for name, case_value in cases_cfg.items():
+            normalized_name = SWITCH_WIFI_CASE_KEY if name in SWITCH_WIFI_CASE_KEYS else name
+            if normalized_name == SWITCH_WIFI_CASE_KEY:
+                manual_entries = case_value.get(SWITCH_WIFI_MANUAL_ENTRIES_FIELD)
+                from src.ui.view.config.config_switch_wifi import normalize_switch_wifi_manual_entries
 
-                    cases[SWITCH_WIFI_CASE_KEY] = {
-                        # Merged stability case keeps AC/STR relay branches
-                        # alongside Wi‑Fi router/manual configuration.
-                        "ac": _normalize_cycle(case_value.get("ac")),
-                        "str": _normalize_cycle(case_value.get("str")),
-                        SWITCH_WIFI_USE_ROUTER_FIELD: bool(
-                            case_value.get(SWITCH_WIFI_USE_ROUTER_FIELD)
-                        ),
-                        SWITCH_WIFI_ROUTER_CSV_FIELD: str(
-                            case_value.get(SWITCH_WIFI_ROUTER_CSV_FIELD, "") or ""
-                        ).strip(),
-                        SWITCH_WIFI_MANUAL_ENTRIES_FIELD: normalize_switch_wifi_manual_entries(
-                            manual_entries
-                        ),
-                    }
-                else:
-                    cases[normalized_name] = {
-                        "ac": _normalize_cycle(case_value.get("ac")),
-                        "str": _normalize_cycle(case_value.get("str")),
-                    }
+                cases[SWITCH_WIFI_CASE_KEY] = {
+                    "ac": _normalize_cycle(case_value.get("ac")),
+                    "str": _normalize_cycle(case_value.get("str")),
+                    SWITCH_WIFI_USE_ROUTER_FIELD: bool(
+                        case_value.get(SWITCH_WIFI_USE_ROUTER_FIELD)
+                    ),
+                    SWITCH_WIFI_ROUTER_CSV_FIELD: str(
+                        case_value.get(SWITCH_WIFI_ROUTER_CSV_FIELD, "") or ""
+                    ).strip(),
+                    SWITCH_WIFI_MANUAL_ENTRIES_FIELD: normalize_switch_wifi_manual_entries(
+                        manual_entries
+                    ),
+                }
+            else:
+                cases[normalized_name] = {
+                    "ac": _normalize_cycle(case_value.get("ac")),
+                    "str": _normalize_cycle(case_value.get("str")),
+                }
 
         return {
             "duration_control": {
@@ -813,120 +891,6 @@ class ConfigController:
             "check_point": check_point,
             "cases": cases,
         }
-
-    # ------------------------------------------------------------------
-    # CSV / RvR Wi-Fi helpers
-    # ------------------------------------------------------------------
-
-    def resolve_csv_config_path(self, value: Any) -> str | None:
-        """Resolve persisted CSV paths to absolute path strings."""
-        return _proxy_resolve_csv_config_path(value)
-
-    def normalize_csv_path(self, path: Any) -> str | None:
-        """Normalise CSV paths to absolute strings for reliable comparisons."""
-        return _proxy_normalize_csv_path(path)
-
-    def relativize_config_path(self, path: Any) -> str:
-        """Convert CSV paths into config-relative strings for persistence."""
-        return _proxy_relativize_config_path(path)
-
-    def find_csv_index(self, normalized_path: str | None, combo=None) -> int:
-        """Locate CSV indices using the RvR Wi-Fi proxy helper."""
-        return _proxy_find_csv_index(self.page, normalized_path, combo)
-
-    def set_selected_csv(self, path: str | None, *, sync_combo: bool = True) -> bool:
-        """Update CSV selection via the RvR Wi-Fi proxy implementation."""
-        return _proxy_set_selected_csv(self.page, path, sync_combo=sync_combo)
-
-    def update_csv_options(self) -> None:
-        """Refresh CSV drop-downs via the RvR Wi-Fi proxy."""
-        _proxy_update_csv_options(self.page)
-
-    def capture_preselected_csv(self) -> None:
-        """Cache CSV selections using the RvR Wi-Fi proxy helper."""
-        _proxy_capture_preselected_csv(self.page)
-
-    def populate_csv_combo(
-        self,
-        combo,
-        selected_path: str | None,
-        *,
-        include_placeholder: bool = False,
-    ) -> None:
-        """Populate CSV combos via the RvR Wi-Fi proxy helper."""
-        _proxy_populate_csv_combo(
-            self.page,
-            combo,
-            selected_path,
-            include_placeholder=include_placeholder,
-        )
-
-    def refresh_registered_csv_combos(self) -> None:
-        """Refresh CSV combo registrations via the RvR Wi-Fi proxy."""
-        _proxy_refresh_registered_csv_combos(self.page)
-
-    def load_switch_wifi_entries(self, csv_path: str | None) -> list[dict[str, str]]:
-        """Load Wi-Fi CSV rows through the RvR Wi-Fi proxy implementation."""
-        return _proxy_load_switch_wifi_entries(self.page, csv_path)
-
-    def update_switch_wifi_preview(self, preview, csv_path: str | None) -> None:
-        """Update Wi-Fi preview widgets via the RvR Wi-Fi proxy."""
-        _proxy_update_switch_wifi_preview(self.page, preview, csv_path)
-
-    def update_rvr_nav_button(self) -> None:
-        """Update the RVR navigation button using the proxy helper."""
-        _proxy_update_rvr_nav_button(self.page)
-
-    def open_rvr_wifi_config(self) -> None:
-        """Open the RVR Wi-Fi configuration page via the proxy helper."""
-        _proxy_open_rvr_wifi_config(self.page)
-
-    # ------------------------------------------------------------------
-    # Router helpers
-    # ------------------------------------------------------------------
-
-    def handle_router_name_changed(self, name: str) -> None:
-        """Handle router combo changes: update router_obj and dependent UI."""
-        page = self.page
-        try:
-            from src.tools.router_tool.router_factory import get_router  # type: ignore
-        except Exception:
-            return
-        cfg = getattr(page, "config", {}) or {}
-        router_cfg = cfg.get("router", {}) if isinstance(cfg, dict) else {}
-        addr = router_cfg.get("address") if router_cfg.get("name") == name else None
-        try:
-            router_obj = get_router(name, addr)
-        except Exception:
-            return
-        setattr(page, "router_obj", router_obj)
-
-        # Keep field widget in sync.
-        field_widgets = getattr(page, "field_widgets", {}) or {}
-        router_addr_widget = field_widgets.get("router.address")
-        if router_addr_widget is not None and hasattr(router_addr_widget, "setText"):
-            try:
-                router_addr_widget.setText(router_obj.address)
-            except Exception:
-                pass
-
-        # Refresh CSV options and related UI directly instead of going
-        # through a view-defined signal round-trip.
-        try:
-            self.update_csv_options()
-        except Exception:
-            self.logger.debug("Failed to update CSV options after router change", exc_info=True)
-
-    def handle_router_address_changed(self, address: str) -> None:
-        """Handle manual edits to the router address field."""
-        page = self.page
-        router_obj = getattr(page, "router_obj", None)
-        if router_obj is not None:
-            router_obj.address = address
-        try:
-            self.update_csv_options()
-        except Exception:
-            self.logger.debug("Failed to update CSV options after router address change", exc_info=True)
 
     # ------------------------------------------------------------------
     # Stability script config glue
@@ -946,23 +910,15 @@ class ConfigController:
         # Delegate to the view-layer helper so the UI-side implementation
         # lives with other visual logic. Keep this thin wrapper to avoid
         # breaking callers that expect the controller API.
-        try:
-            from src.ui.view.config.actions import load_script_config_into_widgets as _view_load
+        from src.ui.view.config.actions import load_script_config_into_widgets as _view_load
 
-            _view_load(self.page, entry, data)
-            return
-        except Exception:
-            logging.debug("Controller fallback to view-layer loader failed", exc_info=True)
+        _view_load(self.page, entry, data)
+        return
 
     def sync_widgets_to_config(self) -> None:
         """Read all widgets into page.config, including stability settings."""
         page = self.page
-        if not isinstance(page.config, dict):
-            page.config = {}
-        if hasattr(page, "_config_tool_snapshot"):
-            page.config[TOOL_SECTION_KEY] = copy.deepcopy(
-                page._config_tool_snapshot
-            )
+        page.config[TOOL_SECTION_KEY] = copy.deepcopy(page._config_tool_snapshot)
         for key, widget in page.field_widgets.items():
             parts = key.split(".")
             ref = page.config
@@ -1022,19 +978,15 @@ class ConfigController:
                 # configuration (``use_router=True``), the list editor shows
                 # a CSV preview that must *not* be written back into the
                 # stability YAML; in that mode we skip serialization here.
-                try:
-                    from src.ui.view.config import script_field_key as _script_key
-                    from src.util.constants import (
-                        SWITCH_WIFI_CASE_KEY as _SW_CASE,
-                        SWITCH_WIFI_USE_ROUTER_FIELD as _SW_USE_ROUTER,
-                    )
+                from src.ui.view.config import script_field_key as _script_key
+                from src.util.constants import (
+                    SWITCH_WIFI_CASE_KEY as _SW_CASE,
+                    SWITCH_WIFI_USE_ROUTER_FIELD as _SW_USE_ROUTER,
+                )
 
-                    use_router_widget = page.field_widgets.get(
-                        _script_key(_SW_CASE, _SW_USE_ROUTER)
-                    )
-                except Exception:
-                    use_router_widget = None
-
+                use_router_widget = page.field_widgets.get(
+                    _script_key(_SW_CASE, _SW_USE_ROUTER)
+                )
                 is_router_mode = isinstance(use_router_widget, QCheckBox) and use_router_widget.isChecked()
                 if is_router_mode:
                     continue
@@ -1067,8 +1019,7 @@ class ConfigController:
                 ref[leaf] = float(widget.value())
             elif isinstance(widget, QCheckBox):
                 ref[leaf] = widget.isChecked()
-        if hasattr(page, "_fpga_details"):
-            page.config["project"] = dict(page._fpga_details)
+        page.config["project"] = dict(page._fpga_details)
         base = Path(self.get_application_base())
         case_display = page.field_widgets.get("text_case")
         display_text = case_display.text().strip() if isinstance(case_display, LineEdit) else ""
@@ -1080,15 +1031,13 @@ class ConfigController:
         else:
             abs_case_path = ""
         page.config["text_case"] = case_path
-        if page.selected_csv_path:
-            base_cfg = get_config_base()
-            try:
-                rel_csv = os.path.relpath(Path(page.selected_csv_path).resolve(), base_cfg)
-            except ValueError:
-                rel_csv = Path(page.selected_csv_path).resolve().as_posix()
+        base_cfg = get_config_base()
+        csv_path = page.selected_csv_path
+        if csv_path:
+            rel_csv = os.path.relpath(Path(csv_path).resolve(), base_cfg)
             page.config["csv_path"] = Path(rel_csv).as_posix()
         else:
-            page.config.pop("csv_path", None)
+            page.config["csv_path"] = ""
         proxy_idx = page.case_tree.currentIndex()
         model = page.case_tree.model()
         src_idx = (
@@ -1104,52 +1053,29 @@ class ConfigController:
             page._current_case_path = case_path
             page.config["text_case"] = case_path
 
-        stability_cfg = page.config.get("stability")
-        if isinstance(stability_cfg, dict):
-            duration_cfg = stability_cfg.get("duration_control")
-            if isinstance(duration_cfg, dict):
-                loop_value = duration_cfg.get("loop")
-                if not isinstance(loop_value, int) or loop_value <= 0:
-                    duration_cfg["loop"] = None
-                duration_value = duration_cfg.get("duration_hours")
-                try:
-                    duration_float = float(duration_value)
-                except (TypeError, ValueError):
-                    duration_float = 0.0
-                duration_cfg["duration_hours"] = duration_float if duration_float > 0 else None
-                duration_cfg["exitfirst"] = bool(duration_cfg.get("exitfirst"))
-                try:
-                    retry_int = int(duration_cfg.get("retry_limit") or 0)
-                except (TypeError, ValueError):
-                    retry_int = 0
-                duration_cfg["retry_limit"] = max(0, retry_int)
-            checkpoint_cfg = stability_cfg.get("check_point")
-            if isinstance(checkpoint_cfg, dict):
-                checkpoint_cfg["ping"] = bool(checkpoint_cfg.get("ping"))
-                checkpoint_cfg["ping_targets"] = str(
-                    checkpoint_cfg.get("ping_targets", "") or ""
-                ).strip()
+        stability_cfg = self.normalize_stability_settings(page.config.get("stability", {}))
+        page.config["stability"] = stability_cfg
 
     def validate_test_str_requirements(self) -> bool:
         """Ensure test_str stability settings require port/mode when AC/STR enabled."""
         page = self.page
-        config = page.config if isinstance(page.config, dict) else {}
+        config = page.config
         case_path = config.get("text_case", "")
         case_key = self.script_case_key(case_path)
         if case_key != "test_str":
             return True
 
-        stability_cfg = config.get("stability") if isinstance(config, dict) else {}
-        cases_cfg = stability_cfg.get("cases") if isinstance(stability_cfg, dict) else {}
-        case_cfg = cases_cfg.get(case_key) if isinstance(cases_cfg, dict) else {}
+        stability_cfg = config.get("stability", {})
+        cases_cfg = stability_cfg.get("cases", {})
+        case_cfg = cases_cfg.get(case_key, {})
 
         errors: list[str] = []
         focus_widget = None
 
         def _require(branch: str, label: str) -> None:
             nonlocal focus_widget
-            branch_cfg = case_cfg.get(branch) if isinstance(case_cfg, dict) else {}
-            if not isinstance(branch_cfg, dict) or not branch_cfg.get("enabled"):
+            branch_cfg = case_cfg.get(branch, {})
+            if not branch_cfg.get("enabled"):
                 return
             relay_type = str(branch_cfg.get("relay_type") or "usb_relay").strip() or "usb_relay"
             relay_key = relay_type.lower()
@@ -1167,20 +1093,16 @@ class ConfigController:
                         f"stability.cases.{case_key}.{branch}.mode"
                     )
             elif relay_key == "gwgj-xc3012":
-                params = branch_cfg.get("relay_params")
-                if isinstance(params, (list, tuple)):
-                    items = list(params)
-                elif isinstance(params, str):
-                    items = [item.strip() for item in params.split(",") if item.strip()]
-                else:
-                    items = []
+                params = branch_cfg.get("relay_params", [])
+                items = (
+                    list(params)
+                    if isinstance(params, (list, tuple))
+                    else [item.strip() for item in str(params).split(",") if item.strip()]
+                )
                 ip_value = str(items[0]).strip() if items else ""
                 port_value = None
                 if len(items) > 1:
-                    try:
-                        port_value = int(str(items[1]).strip())
-                    except (TypeError, ValueError):
-                        port_value = None
+                    port_value = int(str(items[1]).strip())
                 if not ip_value or port_value is None:
                     errors.append(
                         f"{label}: Relay params must include IP and port for GWGJ-XC3012."
@@ -1195,24 +1117,20 @@ class ConfigController:
             return True
 
         message = "\n".join(errors)
-        try:
-            bar = show_info_bar(
-                page,
-                "warning",
-                "Configuration error",
-                message,
-                duration=4000,
-            )
-            if bar is None:
-                raise RuntimeError("InfoBar unavailable")
-        except Exception:
+        bar = show_info_bar(
+            page,
+            "warning",
+            "Configuration error",
+            message,
+            duration=4000,
+        )
+        if bar is None:
             from PyQt5.QtWidgets import QMessageBox  # local import
 
             QMessageBox.warning(page, "Configuration error", message)
-        if focus_widget is not None and hasattr(focus_widget, "setFocus"):
+        if focus_widget is not None:
             focus_widget.setFocus()
-            if hasattr(focus_widget, "selectAll"):
-                focus_widget.selectAll()
+            focus_widget.selectAll()
         return False
 
     def validate_first_page(self) -> bool:
@@ -1223,75 +1141,49 @@ class ConfigController:
         errors: list[str] = []
         connect_type = ""
         focus_widget = None
-        if hasattr(page, "connect_type_combo"):
-            connect_type = current_connect_type(page)
-            if not connect_type:
-                errors.append("Connect type is required.")
-                focus_widget = focus_widget or getattr(page, "connect_type_combo", None)
-            elif connect_type == "Android" and hasattr(page, "adb_device_edit"):
-                if not page.adb_device_edit.text().strip():
-                    errors.append("ADB device is required.")
-                    focus_widget = focus_widget or page.adb_device_edit
-            elif connect_type == "Linux" and hasattr(page, "telnet_ip_edit"):
-                if not page.telnet_ip_edit.text().strip():
-                    errors.append("Linux IP is required.")
-                    focus_widget = focus_widget or page.telnet_ip_edit
-                kernel_text = ""
-                if hasattr(page, "kernel_version_combo"):
-                    kernel_text = page.kernel_version_combo.currentText().strip()
-                if not kernel_text:
-                    errors.append("Kernel version is required for Linux access.")
-                    focus_widget = focus_widget or getattr(page, "kernel_version_combo", None)
-            if (
-                hasattr(page, "third_party_checkbox")
-                and page.third_party_checkbox.isChecked()
-            ):
-                wait_text = (
-                    page.third_party_wait_edit.text().strip()
-                    if hasattr(page, "third_party_wait_edit")
-                    else ""
-                )
-                if not wait_text or not wait_text.isdigit() or int(wait_text) <= 0:
-                    errors.append("Third-party wait time must be a positive integer.")
-                    if hasattr(page, "third_party_wait_edit"):
-                        focus_widget = focus_widget or page.third_party_wait_edit
-        else:
-            errors.append("Connect type widget missing.")
+        widgets = page.field_widgets
+        connect_type = current_connect_type(page)
+        if not connect_type:
+            errors.append("Connect type is required.")
+            focus_widget = focus_widget or page.connect_type_combo
+        elif connect_type == "Android":
+            android_device_edit = widgets["connect_type.Android.device"]
+            if not android_device_edit.text().strip():
+                errors.append("ADB device is required.")
+                focus_widget = focus_widget or android_device_edit
+        elif connect_type == "Linux":
+            telnet_ip_edit = widgets["connect_type.Linux.ip"]
+            if not telnet_ip_edit.text().strip():
+                errors.append("Linux IP is required.")
+                focus_widget = focus_widget or telnet_ip_edit
+            kernel_text = page.kernel_version_combo.currentText().strip()
+            if not kernel_text:
+                errors.append("Kernel version is required for Linux access.")
+                focus_widget = focus_widget or page.kernel_version_combo
+        if page.third_party_checkbox.isChecked():
+            wait_text = page.third_party_wait_edit.text().strip()
+            if not wait_text or not wait_text.isdigit() or int(wait_text) <= 0:
+                errors.append("Third-party wait time must be a positive integer.")
+                focus_widget = focus_widget or page.third_party_wait_edit
 
-        if (
-            hasattr(page, "android_version_combo")
-            and connect_type == "Android"
-            and not page.android_version_combo.currentText().strip()
-        ):
+        if connect_type == "Android" and not page.android_version_combo.currentText().strip():
             errors.append("Android version is required.")
-            focus_widget = focus_widget or getattr(page, "android_version_combo", None)
+            focus_widget = focus_widget or page.android_version_combo
 
-        fpga_valid = (
-            hasattr(page, "fpga_customer_combo")
-            and hasattr(page, "fpga_product_combo")
-            and hasattr(page, "fpga_project_combo")
-        )
-        customer_text = (
-            page.fpga_customer_combo.currentText().strip() if fpga_valid else ""
-        )
-        product_text = (
-            page.fpga_product_combo.currentText().strip() if fpga_valid else ""
-        )
-        project_text = (
-            page.fpga_project_combo.currentText().strip() if fpga_valid else ""
-        )
-        if not fpga_valid or not customer_text or not product_text or not project_text:
+        customer_text = page.fpga_customer_combo.currentText().strip()
+        product_text = page.fpga_product_combo.currentText().strip()
+        project_text = page.fpga_project_combo.currentText().strip()
+        if not customer_text or not product_text or not project_text:
             errors.append(
                 "Wi-Fi chipset customer, product line and project are required."
             )
-            if fpga_valid:
-                focus_widget = focus_widget or (
-                    page.fpga_customer_combo
-                    if not customer_text
-                    else page.fpga_product_combo
-                    if not product_text
-                    else page.fpga_project_combo
-                )
+            focus_widget = focus_widget or (
+                page.fpga_customer_combo
+                if not customer_text
+                else page.fpga_product_combo
+                if not product_text
+                else page.fpga_project_combo
+            )
 
         if errors:
             show_info_bar(
@@ -1303,8 +1195,7 @@ class ConfigController:
             )
             if focus_widget is not None:
                 focus_widget.setFocus()
-                if hasattr(focus_widget, "selectAll"):
-                    focus_widget.selectAll()
+                focus_widget.selectAll()
             return False
         return True
 
@@ -1313,48 +1204,24 @@ class ConfigController:
     # ------------------------------------------------------------------
 
     def is_performance_case(self, abs_case_path: str | Path | None) -> bool:
-        """
-        Determine whether abs_case_path is under the test/performance directory at any level.
-
-        Does not rely on project root path; only checks path segments.
-        """
-        logging.debug("Checking performance case path: %s", abs_case_path)
         if not abs_case_path:
-            logging.debug("is_performance_case: empty path -> False")
             return False
-        try:
-            p = Path(abs_case_path).resolve()
-            for node in (p, *p.parents):
-                if node.name == "performance" and node.parent.name == "test":
-                    logging.debug("is_performance_case: True")
-                    return True
-                logging.debug("is_performance_case: False")
-            return False
-        except Exception as exc:
-            logging.error("is_performance_case exception: %s", exc)
-            return False
+        p = Path(abs_case_path).resolve()
+        for node in (p, *p.parents):
+            if node.name == "performance" and node.parent.name == "test":
+                return True
+        return False
 
     def is_stability_case(self, case_path: str | Path | None) -> bool:
         """Return True when the case resides under ``test/stability``."""
 
         if not case_path:
             return False
-        try:
-            path_obj = case_path if isinstance(case_path, Path) else Path(case_path)
-        except (TypeError, ValueError):
-            return False
-        try:
-            resolved = path_obj.resolve()
-        except OSError:
-            resolved = path_obj
-        candidates = [path_obj, resolved]
-        for candidate in candidates:
-            normalized = candidate.as_posix().replace("\\", "/")
-            segments = [seg.lower() for seg in normalized.split("/") if seg]
-            for idx in range(len(segments) - 1):
-                if segments[idx] == "test" and segments[idx + 1] == "stability":
-                    return True
-            if normalized.lower().startswith("test/stability/"):
+        path_obj = case_path if isinstance(case_path, Path) else Path(case_path)
+        resolved = path_obj.resolve()
+        segments = [seg.lower() for seg in resolved.as_posix().split("/") if seg]
+        for idx in range(len(segments) - 1):
+            if segments[idx] == "test" and segments[idx + 1] == "stability":
                 return True
         return False
 
@@ -1364,12 +1231,9 @@ class ConfigController:
             return ""
         path_obj = case_path if isinstance(case_path, Path) else Path(case_path)
         if path_obj.is_absolute():
-            try:
-                from src.util.constants import get_src_base
+            from src.util.constants import get_src_base
 
-                path_obj = path_obj.resolve().relative_to(Path(get_src_base()).resolve())
-            except ValueError:
-                path_obj = path_obj.resolve()
+            path_obj = path_obj.resolve().relative_to(Path(get_src_base()).resolve())
         stem = path_obj.stem.lower()
         if stem in SWITCH_WIFI_CASE_KEYS:
             return SWITCH_WIFI_CASE_KEY
@@ -1384,24 +1248,21 @@ class ConfigController:
 
         # Derive category primarily from the folder under ``test`` so that
         # Settings tabs map to top-level test directories.
-        try:
-            from src.ui.view import determine_case_category  # local import to avoid cycles
+        from src.ui.view import determine_case_category  # local import to avoid cycles
 
-            category = determine_case_category(case_path=case_path, display_path=None)
-        except Exception:
-            category = None
+        category = determine_case_category(case_path=case_path, display_path=None)
 
         if category == "compatibility":
             if "compatibility" not in keys:
                 keys.append("compatibility")
             return keys
 
-        if self.is_performance_case(case_path) or getattr(info, "enable_csv", False):
+        if self.is_performance_case(case_path) or info.enable_csv:
             if "execution" not in keys:
                 keys.append("execution")
         else:
             case_key = self.script_case_key(case_path)
-            script_groups = getattr(self.page, "_script_groups", {})
+            script_groups = self.page._script_groups
             if case_key in script_groups:
                 keys.append("stability")
         return keys
@@ -1440,25 +1301,20 @@ class ConfigController:
         page = self.page
         if not flag:
             return True
-        case_path = getattr(page, "_current_case_path", "") or ""
+        case_path = page._current_case_path
         basename = os.path.basename(case_path) if case_path else ""
         abs_path = case_path
-        try:
-            path_obj = Path(case_path)
-            if not path_obj.is_absolute():
-                abs_path = (Path(self.get_application_base()) / path_obj).as_posix()
-            else:
-                abs_path = path_obj.as_posix()
-        except Exception:
-            pass
-
+        path_obj = Path(case_path)
+        abs_path = (
+            (Path(self.get_application_base()) / path_obj).as_posix()
+            if not path_obj.is_absolute()
+            else path_obj.as_posix()
+        )
         if flag == "performance_or_enable_csv":
-            info = getattr(page, "_last_editable_info", None)
-            enable_csv = bool(getattr(info, "enable_csv", False))
-            return bool(self.is_performance_case(abs_path) or enable_csv)
+            info = page._last_editable_info
+            return bool(self.is_performance_case(abs_path) or info.enable_csv)
         if flag == "execution_panel_visible":
-            keys = getattr(page, "_current_page_keys", [])
-            return "execution" in keys
+            return "execution" in page._current_page_keys
         if flag == "stability_case":
             return self.is_stability_case(abs_path or case_path)
         if flag == "rvr_case":
@@ -1466,12 +1322,7 @@ class ConfigController:
         if flag == "rvo_case":
             return "rvo" in basename.lower()
         if flag == "performance_case_with_rvr_wifi":
-            is_perf = self.is_performance_case(abs_path)
-            has_rvr = bool(
-                getattr(page, "_enable_rvr_wifi", False)
-                and getattr(page, "selected_csv_path", None)
-            )
-            return bool(is_perf and has_rvr)
+              return bool(self.is_performance_case(abs_path) and page._enable_rvr_wifi and page.selected_csv_path)
         return False
 
     def apply_sidebar_rules(self) -> None:
@@ -1480,36 +1331,16 @@ class ConfigController:
 
         page = self.page
         main_window = page.window()
-        if not main_window:
-            return
-        try:
-            rules: dict[str, RuleSpec] = SIDEBAR_RULES
-        except Exception:
-            return
+        rules: dict[str, RuleSpec] = SIDEBAR_RULES
 
-        spec = rules.get("S11_case_button_for_performance")
-        if not spec:
-            return
+        spec = rules["S11_case_button_for_performance"]
         sidebar_key = spec.get("trigger_sidebar_key") or "case"
         sidebar_enabled = self.eval_case_type_flag(
             spec.get("trigger_case_type") or ""
         )
 
-        btn = None
-        sidebar_map = getattr(main_window, "sidebar_nav_buttons", None)
-        if isinstance(sidebar_map, dict):
-            btn = sidebar_map.get(sidebar_key)
-        if btn is None:
-            btn = getattr(main_window, "rvr_nav_button", None)
-        if btn is None:
-            return
-        try:
-            import sip  # local import to avoid top-level dependency
-
-            if sip.isdeleted(btn):
-                return
-        except Exception:
-            pass
+        sidebar_map = main_window.sidebar_nav_buttons
+        btn = sidebar_map.get(sidebar_key) or main_window.rvr_nav_button
         btn.setEnabled(bool(sidebar_enabled))
 
     def apply_editable_info(self, info: "EditableInfo | None") -> None:
@@ -1546,7 +1377,7 @@ class ConfigController:
             page._router_config_active = False
         if snapshot.enable_csv:
             # Ensure selected CSV is applied and combo synced when CSV is enabled.
-            self.set_selected_csv(getattr(page, "selected_csv_path", None), sync_combo=True)
+            self.set_selected_csv(page.selected_csv_path, sync_combo=True)
         else:
             # Clear CSV selection when CSV usage is disabled.
             self.set_selected_csv(None, sync_combo=False)
@@ -1554,8 +1385,7 @@ class ConfigController:
     def _apply_editable_ui_state(self, snapshot: "EditableInfo") -> None:
         """Apply UI-related changes for EditableInfo (non field-level widgets)."""
         page = self.page
-        if hasattr(page, "csv_combo"):
-            page.csv_combo.setEnabled(True)
+        page.csv_combo.setEnabled(True)
         # Keep the RvR navigation button state in sync with CSV/router
         # configuration, but do not disable the Case button for
         # non‑performance cases – the Case page itself decides what
@@ -1566,77 +1396,13 @@ class ConfigController:
         # when RvR Wi‑Fi is enabled for the selected testcase, show the
         # RvrWifiConfigPage UI; otherwise keep the Case page empty.
         main_window = page.window()
-        if main_window is not None:
-            rvr_page = getattr(main_window, "rvr_wifi_config_page", None)
-            if rvr_page is not None and hasattr(rvr_page, "set_case_content_visible"):
-                try:
-                    rvr_page.set_case_content_visible(bool(snapshot.enable_rvr_wifi))
-                except Exception:
-                    logging.debug("Failed to update case-page visibility", exc_info=True)
+        rvr_page = main_window.rvr_wifi_config_page
+        rvr_page.set_case_content_visible(bool(snapshot.enable_rvr_wifi))
 
     def restore_editable_state(self) -> None:
         """Re-apply last EditableInfo snapshot."""
         page = self.page
-        info = getattr(page, "_last_editable_info", None)
-        self.apply_editable_info(info)
-
-    # ------------------------------------------------------------------
-    # Second-page (Execution) reset helpers
-    # ------------------------------------------------------------------
-
-    def reset_second_page_inputs(self) -> None:
-        """Reset Execution-page inputs (CSV selection + enabled state) after a run."""
-        page = self.page
-        if hasattr(page, "csv_combo"):
-            self.reset_second_page_model_state()
-            self.reset_second_page_ui_state()
-        else:
-            # When there is no CSV combo, clear selection via controller helper.
-            try:
-                self.set_selected_csv(None, sync_combo=False)
-            except Exception:
-                pass
-
-    def reset_second_page_model_state(self) -> None:
-        """Restore CSV selection to the last pre-run value."""
-        page = self.page
-        selected = getattr(page, "selected_csv_path", None)
-        try:
-            self.set_selected_csv(selected, sync_combo=True)
-        except Exception:
-            pass
-
-    def reset_second_page_ui_state(self) -> None:
-        """Restore CSV combo enabled state based on RvR Wi-Fi toggle."""
-        page = self.page
-        if hasattr(page, "csv_combo"):
-            try:
-                page.csv_combo.setEnabled(bool(getattr(page, "_enable_rvr_wifi", False)))
-            except Exception:
-                pass
-
-    # ------------------------------------------------------------------
-    # Run / lock state
-    # ------------------------------------------------------------------
-
-    def sync_run_buttons_enabled(self) -> None:
-        """Enable/disable all Run buttons based on _run_locked flag."""
-        page = self.page
-        enabled = not getattr(page, "_run_locked", False)
-        for btn in getattr(page, "_run_buttons", []) or []:
-            try:
-                btn.setEnabled(enabled)
-            except Exception:
-                logging.debug("Failed to update run button enabled state", exc_info=True)
-
-    def lock_for_running(self, locked: bool) -> None:
-        """Update model + UI when a run starts or finishes."""
-        from src.ui.view.config.actions import apply_run_lock_ui_state  # local import
-
-        page = self.page
-        page._run_locked = bool(locked)
-        apply_run_lock_ui_state(page, locked)
-        self.sync_run_buttons_enabled()
+        self.apply_editable_info(page._last_editable_info)
 
     def on_run(self) -> None:
         """Main entry for running the currently selected case from the Config page."""
@@ -1653,15 +1419,6 @@ class ConfigController:
         self.sync_widgets_to_config()
         if not self.validate_test_str_requirements():
             return
-
-        logging.info(
-            "[on_run] start case=%s csv=%s config=%s",
-            page.field_widgets["text_case"].text().strip()
-            if "text_case" in page.field_widgets
-            else "",
-            getattr(page, "selected_csv_path", None),
-            page.config,
-        )
 
         base = Path(self.get_application_base())
         case_path = page.config.get("text_case", "")
@@ -1686,40 +1443,27 @@ class ConfigController:
         self.save_config()
 
         # Performance case must have CSV selected.
-        try:
-            if self.is_performance_case(abs_case_path) and not getattr(
-                page, "selected_csv_path", None
-            ):
-                try:
-                    bar = show_info_bar(
-                        page,
-                        "warning",
-                        "Hint",
-                        "This is a performance test. Please select a CSV file before running.",
-                        duration=3000,
-                    )
-                    if bar is None:
-                        raise RuntimeError("InfoBar unavailable")
-                except Exception:
-                    QMessageBox.warning(
-                        page,
-                        "Hint",
-                        "This is a performance test.\nPlease select a CSV file before running.",
-                    )
-                return
-        except Exception:
-            # Fall through and let the normal missing-case handling show an error.
-            pass
+        if self.is_performance_case(abs_case_path) and not page.selected_csv_path:
+            bar = show_info_bar(
+                page,
+                "warning",
+                "Hint",
+                "This is a performance test. Please select a CSV file before running.",
+                duration=3000,
+            )
+            if bar is None:
+                QMessageBox.warning(
+                    page,
+                    "Hint",
+                    "This is a performance test.\nPlease select a CSV file before running.",
+                )
+            return
 
         from src.ui.controller.run_ctl import reset_wizard_after_run
 
         if os.path.isfile(abs_case_path) and abs_case_path.endswith(".py"):
-            try:
-                page.on_run_callback(abs_case_path, case_path, page.config)
-            except Exception as exc:  # pragma: no cover - callback logging only
-                logging.exception("Run callback failed: %s", exc)
-            else:
-                reset_wizard_after_run(page)
+            page.on_run_callback(abs_case_path, case_path, page.config)
+            reset_wizard_after_run(page)
         else:
             show_info_bar(
                 page,

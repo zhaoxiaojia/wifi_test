@@ -16,13 +16,14 @@ from __future__ import annotations
 from typing import Any, Dict, Optional, Tuple
 from pathlib import Path
 import logging
+import copy
 
 from PyQt5.QtCore import QTimer
 from PyQt5.QtWidgets import QWidget
 from qfluentwidgets import InfoBar, InfoBarPosition
 
 from src.tools.config_loader import load_config, save_config
-from src.util.constants import get_src_base
+from src.util.constants import get_src_base, TOOL_SECTION_KEY
 
 __all__ = [
     "SIDEBAR_PAGE_KEYS",
@@ -31,6 +32,8 @@ __all__ = [
     "save_config",
     "load_page_config",
     "save_page_config",
+    "load_config_page_state",
+    "save_config_page_state",
     "FormListPage",
     "RouterConfigForm",
 ]
@@ -157,6 +160,50 @@ def save_page_config(page: QWidget) -> dict[str, Any]:
         return getattr(page, "config", {}) or {}
 
 
+def load_config_page_state(page: QWidget) -> dict[str, Any]:
+    """
+    Load and initialise configuration state for the Config page.
+
+    This wraps :func:`load_page_config` with additional state used by
+    ConfigController and related helpers:
+
+    - sets ``page._current_case_path`` from ``text_case`` when available,
+    - captures a snapshot of the tool section on ``page._config_tool_snapshot``,
+    - restores CSV selection using the shared case controller helpers.
+    """
+    config = load_page_config(page)
+
+    text_case = str(config.get("text_case", "") or "").strip()
+    if text_case:
+        base = Path(get_src_base()).resolve()
+        abs_path = (base / text_case).resolve()
+        page._current_case_path = abs_path.as_posix()  # type: ignore[attr-defined]
+
+    page._config_tool_snapshot = copy.deepcopy(  # type: ignore[attr-defined]
+        config.get(TOOL_SECTION_KEY, {})
+    )
+
+    from src.ui.controller.case_ctl import (  # local import to avoid cycles
+        _load_csv_selection_from_config as _proxy_load_csv_selection_from_config,
+    )
+
+    _proxy_load_csv_selection_from_config(page)
+    return config
+
+
+def save_config_page_state(page: QWidget) -> dict[str, Any]:
+    """
+    Persist and refresh Config page configuration state.
+
+    This wraps :func:`save_page_config` and updates the tool snapshot so
+    controller logic can compare TOOL_SECTION changes efficiently.
+    """
+    refreshed = save_page_config(page)
+    page._config_tool_snapshot = copy.deepcopy(  # type: ignore[attr-defined]
+        refreshed.get(TOOL_SECTION_KEY, {})
+    )
+    return refreshed
+
+
 # Re-export shared view widgets so callers can use ``src.ui`` as a stable
 # entry point without depending on the view package structure.
-

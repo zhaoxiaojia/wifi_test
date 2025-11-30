@@ -157,6 +157,8 @@ class RunView(CardWidget):
 class RunPage(CardWidget):
     """Widget that hosts :class:`RunView` and drives test execution."""
 
+    process: QFrame | None = None
+
     def __init__(self, case_path: str, display_case_path: str | None = None, config=None, parent=None):
         super().__init__(parent)
         self.setObjectName("runPage")
@@ -399,6 +401,8 @@ class RunPage(CardWidget):
 
     def _finalize_runner(self) -> None:
         runner = self.runner
+        if runner is None:
+            return
         for signal, slot in (
             (runner.log_signal, self._append_log),
             (runner.progress_signal, self.update_progress),
@@ -427,6 +431,8 @@ class RunPage(CardWidget):
         )
         self.remaining_time_label.hide()
         runner = self.runner
+        if runner is None:
+            return
         logging.info("runner isRunning before wait: %s", runner.isRunning())
         runner.stop()
         logging.getLogger().handlers[:] = runner.old_handlers

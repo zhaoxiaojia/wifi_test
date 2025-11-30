@@ -10,21 +10,16 @@ cases:
   test_switch_wifi_str:
     ac:
       enabled: false
-      on_duration: '0'
-      off_duration: '0'
+      on_duration: 0
+      off_duration: 0
       port: ''
       mode: 'NO'
-      relay_type: usb_relay
-      relay_params: []
     str:
       enabled: false
-      on_duration: '0'
-      off_duration: '0'
+      on_duration: 0
+      off_duration: 0
       port: ''
       mode: 'NO'
-      relay_type: usb_relay
-      relay_params: []
     use_router: false
     router_csv: ''
     manual_entries: []
-text_case: test/performance/test_wifi_peak_throughput.py

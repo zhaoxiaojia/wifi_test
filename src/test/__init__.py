@@ -21,15 +21,14 @@ def get_testdata(router):
     else:
         csv_path = config_base / "performance_test_csv" / "rvr_wifi_setup.csv"
 
-    # print(f"router_name: {router_name}, csv_path: {csv_path}")
     pc_ip, dut_ip = "", ""
     # 读取 测试配置
     test_data = []
     try:
         with open(csv_path, "r", encoding="utf-8") as f:
             reader = csv.reader(f)
-
-            for i in [j for j in reader][1:]:
+            rows = [j for j in reader]
+            for i in rows[1:]:
                 if not i:
                     continue
                 stripped_i = [field.strip() for field in i]

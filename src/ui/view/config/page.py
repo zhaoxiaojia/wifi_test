@@ -431,6 +431,10 @@ class CaseConfigPage(ConfigView):
         # Containers for groups discovered from the YAML schema.
         self._dut_groups: dict[str, QWidget] = {}
         self._other_groups: dict[str, QWidget] = {}
+        # Field map used by the simple rule engine; initialised to an empty
+        # mapping so that early rule evaluations can safely access it before
+        # refresh_config_page_controls populates field_widgets.
+        self._field_map: dict[str, QWidget] = {}
 
         # Render form fields from YAML and initialise script groups.
         refresh_config_page_controls(self)
@@ -489,15 +493,8 @@ class CaseConfigPage(ConfigView):
     # ------------------------------------------------------------------
 
     def _emit_ui_event(self, event: UiEvent) -> None:
-        """Forward UiAdapter events to the config controller, if available."""
-        ctl = getattr(self, "config_ctl", None)
-        if ctl is None or not hasattr(ctl, "handle_ui_event"):
-            return
-        try:
-            ctl.handle_ui_event(event)  # type: ignore[arg-type]
-        except Exception:
-            # Keep UI responsive even if controller misbehaves.
-            pass
+        """Forward UiAdapter events to the config controller."""
+        self.config_ctl.handle_ui_event(event)  # type: ignore[arg-type]
 
     # ------------------------------------------------------------------
     # Helpers used by controller / actions
@@ -519,71 +516,18 @@ class CaseConfigPage(ConfigView):
 
     def _connect_simple_rules(self) -> None:
         """
-        Wire up field change signals to the simple rule engine.
+        Initialise the simple rule engine for the current field map.
 
-        The simple rule system defined in :mod:`src.ui.model.rules` needs
-        to know when certain fields change in order to evaluate and apply
-        dynamic UI effects.  This helper inspects the custom rule registry
-        and connects the appropriate Qt signals for each trigger field.
-
-        For each rule in ``CUSTOM_SIMPLE_UI_RULES``, this method looks up
-        the corresponding widget in ``self._field_map``.  Depending on the
-        widget type, it connects a change signal to ``self.on_field_changed``
-        with the rule's trigger field name.  This ensures that when a user
-        changes the field in the UI, the simple rule engine is invoked.
+        Field change signals are routed through the UiAdapter into
+        ConfigController._on_field_change, which in turn calls
+        evaluate_all_rules. This helper only needs to ensure that the
+        field map is populated and that an initial rules pass is run
+        so the UI reflects the current config state.
         """
-        try:
-            from src.ui.model.rules import CUSTOM_SIMPLE_UI_RULES  # type: ignore
-        except Exception:
-            CUSTOM_SIMPLE_UI_RULES = []  # type: ignore
-        for rule in CUSTOM_SIMPLE_UI_RULES:
-            field_id = getattr(rule, "trigger_field", None)
-            if not field_id:
-                continue
-            widget = self._field_map.get(field_id)
-            if widget is None:
-                continue
-            try:
-                # Combo boxes emit currentTextChanged when the selection changes.
-                if hasattr(widget, "currentTextChanged"):
-                    widget.currentTextChanged.connect(
-                        lambda value, fid=field_id: self.on_field_changed(fid, value)
-                    )
-                # Checkboxes emit toggled when the checked state changes.
-                elif hasattr(widget, "toggled"):
-                    widget.toggled.connect(
-                        lambda value, fid=field_id: self.on_field_changed(fid, value)
-                    )
-                # Line edits emit textChanged for free‑form input.
-                elif hasattr(widget, "textChanged"):
-                    widget.textChanged.connect(
-                        lambda value, fid=field_id: self.on_field_changed(fid, value)
-                    )
-            except Exception:
-                # Ignore connection errors; missing signals simply mean the rule
-                # cannot be triggered automatically.
-                continue
-        # Evaluate simple rules for current values on initialisation.
-        # In particular, rules that depend on default configuration values
-        # should apply their effects immediately so the UI reflects the
-        # current config state.
-        for rule in CUSTOM_SIMPLE_UI_RULES:
-            fid = getattr(rule, "trigger_field", None)
-            if fid and fid in self._field_map:
-                widget = self._field_map[fid]
-                # Determine the current value for the field based on widget type.
-                try:
-                    if hasattr(widget, "isChecked"):
-                        current_value = bool(widget.isChecked())
-                    elif hasattr(widget, "currentText"):
-                        current_value = str(widget.currentText())
-                    elif hasattr(widget, "text"):
-                        current_value = str(widget.text())
-                    else:
-                        current_value = None
-                    self.on_field_changed(fid, current_value)
-                except Exception:
-                    continue
+        from src.ui.model.rules import evaluate_all_rules
+
+        self._field_map = self.field_widgets or {}
+        evaluate_all_rules(self, None)
 
     def on_field_changed(self, field_id: str, value: Any) -> None:
         """

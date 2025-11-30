@@ -206,9 +206,22 @@ class RvrWifiConfigPage(CardWidget):
     # --- router / CSV helpers -------------------------------------------------
 
     def _compute_csv_path(self, router_name: str | None = None) -> Path:
-        csv_dir = Path(Paths.CONFIG_DIR) / "performance_test_csv"
+        """Return the CSV path used by performance tests."""
+        from src.tools.config_loader import load_config
+        from src.util.constants import get_config_base
+
+        cfg = load_config(refresh=True) or {}
+        config_base = Path(get_config_base())
+        raw_csv = cfg.get("csv_path") or ""
+        if raw_csv:
+            csv_path = Path(raw_csv)
+            if not csv_path.is_absolute():
+                csv_path = (config_base / csv_path).resolve()
+            return csv_path
+
+        csv_dir = config_base / "performance_test_csv"
         csv_dir.mkdir(parents=True, exist_ok=True)
-        name = router_name or "rvr_wifi_setup"
+        name = router_name or cfg.get("router", {}).get("name") or "rvr_wifi_setup"
         return (csv_dir / f"{name}.csv").resolve()
 
     def _load_router(self, name: str | None = None, address: str | None = None):
@@ -288,6 +301,11 @@ class RvrWifiConfigPage(CardWidget):
                 writer.writeheader()
                 for row in self.rows:
                     writer.writerow({h: row.get(h, "") for h in fieldnames})
+            debug_rows = [
+                {h: row.get(h, "") for h in fieldnames}
+                for row in self.rows
+                if row.get("_checked")
+            ]
         except Exception:
             logging.exception("Failed to save Wi-Fi CSV to %s", self.csv_path)
 

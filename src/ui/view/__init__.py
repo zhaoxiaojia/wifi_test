@@ -442,7 +442,7 @@ class RouterConfigForm(CardWidget):
             widget.hide()
 
         # Populate band choices based on router when available.
-        band_list = self.router.BAND_LIST
+        band_list = self.router.BAND_LIST if self.router is not None else []
         self.band_combo.addItems(band_list)
 
         # Wire up interactions.

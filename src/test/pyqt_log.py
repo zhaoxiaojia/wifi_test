@@ -7,20 +7,6 @@ import pytest
 
 from src.util.constants import PYQT_ACTUAL_PARAMS_ATTR as _ACTUAL_PARAMS_ATTR
 
-
-def get_pyqt_logger() -> logging.Logger:
-    logger = logging.getLogger("pyqt_bridge")
-    if not logger.handlers:
-        handler = logging.StreamHandler()
-        handler.setFormatter(logging.Formatter("%(message)s"))
-        logger.addHandler(handler)
-    logger.setLevel(logging.INFO)
-    logger.propagate = False
-    return logger
-
-
-_PYQT_LOGGER = get_pyqt_logger()
-
 def _ensure_actual_params(node):
     actual_params = getattr(node, _ACTUAL_PARAMS_ATTR, None)
     if actual_params is None:
@@ -125,11 +111,11 @@ def pyqt_log(tag: str, fixture: str, params):
             return repr(o)
 
     payload = json.dumps({"fixture": fixture, "params": params}, default=default, ensure_ascii=False)
-    _PYQT_LOGGER.info("[PYQT_%s]%s", tag, payload)
+    logging.info("[PYQT_%s]%s", tag, payload)
 
 
 def emit_pyqt_message(tag: str, payload: str) -> None:
-    _PYQT_LOGGER.info("[PYQT_%s]%s", tag, payload)
+    logging.info("[PYQT_%s]%s", tag, payload)
 
 
 def log_fixture_params(tag="FIX", name=None):

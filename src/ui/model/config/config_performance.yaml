@@ -15,7 +15,7 @@ rf_solution:
     ip_address: 192.168.5.200
     channels: '1'
   model: RC4DAT-8G-95
-  step: 0,75:1
+  step: 0,3:1
 rvr:
   iperf:
     path: ''
@@ -29,7 +29,7 @@ rvr:
 router:
   name: xiaomibe7000
   address: 192.168.31.1
-text_case: test/performance/test_wifi_peak_throughput.py
+text_case: test/performance/test_wifi_rvr.py
 debug:
   database_mode: true
   skip_router: false

@@ -138,6 +138,8 @@ class UiAdapter(QObject):
             display_path = Path(path).relative_to(base).as_posix()
 
             if Path(path).is_dir():
+                is_expanded = tree.isExpanded(proxy_idx)
+                tree.setExpanded(proxy_idx, not is_expanded)
                 self._emit_event(
                     "case.dir.click",
                     source="case_tree",
