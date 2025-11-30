@@ -1,0 +1,32 @@
+band,ssid,wireless_mode,channel,bandwidth,security_mode,password,tx,rx
+5G,coco_5g,11ac,36,20 MHz,Open System,,1,1
+5G,coco_5g,11ac,40,20 MHz,Open System,,1,1
+5G,coco_5g,11ac,165,20 MHz,Open System,,1,1
+5G,coco_5g,11ac,36,40 MHz,Open System,,1,1
+5G,coco_5g,11ac,40,40 MHz,Open System,,1,1
+5G,coco_5g,11ac,165,40 MHz,Open System,,1,1
+5G,coco_5g,11ac,36,80 MHz,Open System,,1,1
+5G,coco_5g,11ac,40,80 MHz,Open System,,1,1
+5G,coco_5g,11ac,165,80 MHz,Open System,,1,1
+5G,coco_5g,11ax,36,20 MHz,Open System,,1,1
+5G,coco_5g,11ax,40,20 MHz,Open System,,1,1
+5G,coco_5g,11ax,165,20 MHz,Open System,,1,1
+5G,coco_5g,11ax,36,40 MHz,Open System,,1,1
+5G,coco_5g,11ax,40,40 MHz,Open System,,1,1
+5G,coco_5g,11ax,165,40 MHz,Open System,,1,1
+5G,coco_5g,11ax,36,80 MHz,Open System,,1,1
+5G,coco_5g,11ax,40,80 MHz,Open System,,1,1
+5G,coco_5g,11ax,165,80 MHz,Open System,,1,1
+2.4G,coco_2g,11n,1,20 MHz,Open System,,1,1
+2.4G,coco_2g,11n,6,20 MHz,Open System,,1,1
+2.4G,coco_2g,11n,11,20 MHz,Open System,,1,1
+2.4G,coco_2g,11n,1,40 MHz,Open System,,1,1
+2.4G,coco_2g,11n,6,40 MHz,Open System,,1,1
+2.4G,coco_2g,11n,11,40 MHz,Open System,,1,1
+2.4G,coco_2g,11ax,1,20 MHz,Open System,,1,1
+2.4G,coco_2g,11ax,6,20 MHz,Open System,,1,1
+2.4G,coco_2g,11ax,11,20 MHz,Open System,,1,1
+2.4G,coco_2g,11ax,1,40 MHz,Open System,,1,1
+2.4G,coco_2g,11ax,6,40 MHz,Open System,,1,1
+2.4G,coco_2g,11ax,11,40 MHz,Open System,,1,1
+

@@ -1,0 +1,57 @@
+# This is yaml for linksys router xpath info
+
+linksys:
+  passwd: 12345678
+  password_element: adminPass
+  signin_element: submit-login
+  signin_done_element: routerIcon
+
+  #  band_element: //*[@id="wl_unit_field"]/td/select
+  wireless_mode_element:
+    mode_2g: //*[@id="RADIO_2.4GHz"]/div/div[3]/select/option[{}]
+    mode_5g: //*[@id="RADIO_5GHz"]/div/div[3]/select/option[{}]
+  ssid_element_2g: //*[@id="RADIO_2.4GHz"]/div/h3/input
+  ssid_element_5g: //*[@id="RADIO_5GHz"]/div/h3/input
+
+  #  //*[@id="WLgeneral"]/tbody/tr[11]/td/select/option[4]
+  channel_regu_element:
+    channel_2g: //*[@id="RADIO_2.4GHz"]/div/div[1]/select/option[{}]
+    channel_5g: //*[@id="RADIO_5GHz"]/div/div[1]/select/option[{}]
+  bandwidth_element:
+    bandwidth_2g: //*[@id="RADIO_2.4GHz"]/div/div[4]/select/option[{}]
+    bandwidth_5g: //*[@id="RADIO_5GHz"]/div/div[4]/select/option[{}]
+
+  authentication_regu_element:
+    authtication_2g: //*[@id="RADIO_2.4GHz"]/div/div[2]/select/option[{}]
+    authtication_5g: //*[@id="RADIO_5GHz"]/div/div[2]/select/option[{}]
+  wpa_passwd:
+    passwd_2g: //*[@id="RADIO_2.4GHz"]/div/input[1]
+    passwd_5g: //*[@id="RADIO_5GHz"]/div/input[1]
+
+  #  wep_passwd:
+  #    passwd_2g: //*[@id="RADIO_2.4GHz"]/div/input[3]
+  #    passwd_5g: //*[@id="RADIO_5GHz"]/div/input[3]
+  wep_passwd:
+    wep_2g: //*[@id="RADIO_2.4GHz"]/div/input[5]
+    wep_5g: //*[@id="RADIO_5GHz"]/div/input[5]
+
+  passwd_element: wpa_key
+  wep_encrypt_regu_element:
+    wep_2g: //*[@id="RADIO_2.4GHz"]/div/select[2]/option[{}]
+    wep_5g: //*[@id="RADIO_5GHz"]/div/select[2]/option[{}]
+  wpa_encrypt_regu_element: //*[@id="WLgeneral"]/tbody/tr[14]/td/select/option[{}]
+  passwd_index_regu_element: //*[@id="WLgeneral"]/tbody/tr[17]/td/select/option[{}]
+
+  wep_passwd_element: wpa_key
+
+  wpa_passwd_element:
+    asus_86u: //*[@id="wpa_psk_key_field"]/td/div/div[1]/input
+    asus_88u: //*[@id="WLgeneral"]/tbody/tr[15]/td/input
+  protect_frame_regu_element: //*[@id="WLgeneral"]/tbody/tr[26]/td/select/option[{}]
+
+  apply_element: applyButton
+  setting_load_element: //*[@id="loadingBlock"]/tbody/tr/td[2]
+
+  wait_reboot_element:
+    asus_86u: /html/body/form/div/div/div[1]/div[2]
+    asus_88u: /html/body/form/div/div/div[2]
