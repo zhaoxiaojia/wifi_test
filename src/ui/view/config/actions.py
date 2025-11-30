@@ -5,11 +5,10 @@
 from __future__ import annotations
 
 import logging
-import os
-from typing import Any, Sequence, Mapping
+from typing import Any, Mapping
 
-from PyQt5.QtCore import QSortFilterProxyModel, QSignalBlocker, QTimer
-from PyQt5.QtWidgets import QWidget, QCheckBox, QFormLayout, QLabel, QSpinBox, QDoubleSpinBox
+from PyQt5.QtCore import QSignalBlocker, QTimer
+from PyQt5.QtWidgets import QWidget, QCheckBox, QSpinBox
 from qfluentwidgets import LineEdit, ComboBox
 
 from src.util.constants import (
@@ -21,14 +20,10 @@ from src.util.constants import (
 from src.ui.model.rules import normalize_connect_type_label, current_connect_type, evaluate_all_rules
 from src.ui.model.autosave import autosave_config
 from src.ui.view.builder import build_groups_from_schema, load_ui_schema
-from src.ui.view import bind_view_events, determine_case_category
+from src.ui.view import bind_view_events
 from src.ui.view.config.config_switch_wifi import (
-    sync_switch_wifi_on_csv_changed,
-    handle_switch_wifi_use_router_changed,
-    handle_switch_wifi_router_csv_changed,
     init_switch_wifi_actions,
 )
-from src import display_to_case_path, case_path_to_display, update_test_case_display
 
 
 def set_connect_type_combo_selection(page: Any, type_value: str) -> None:
@@ -272,7 +267,7 @@ def handle_config_event(page: Any, event: str, **payload: Any) -> None:
     if not ctl or not hasattr(ctl, "handle_ui_event"):
         return
 
-    from src.ui.view.config.ui_adapter import UiEvent  # local import to avoid cycles
+    from src.ui.view.ui_adapter import UiEvent  # local import to avoid cycles
 
     mapping = {
         "field_changed": "field.change",

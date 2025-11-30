@@ -4,11 +4,11 @@ import copy
 import logging
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Mapping, Optional, Sequence
+from typing import TYPE_CHECKING, Any, Mapping, Optional
 
-from PyQt5.QtCore import QSignalBlocker, QSortFilterProxyModel
+from PyQt5.QtCore import QSortFilterProxyModel
 from PyQt5.QtWidgets import QCheckBox, QSpinBox, QDoubleSpinBox
-from qfluentwidgets import InfoBar, InfoBarPosition, ComboBox, LineEdit
+from qfluentwidgets import ComboBox, LineEdit
 
 from src.ui.model.rules import evaluate_all_rules
 from src.ui.view.common import EditableInfo
@@ -18,23 +18,16 @@ from src.util.constants import (
     SWITCH_WIFI_CASE_ALIASES,
     SWITCH_WIFI_CASE_KEY,
     SWITCH_WIFI_CASE_KEYS,
-    SWITCH_WIFI_ENTRY_PASSWORD_FIELD,
-    SWITCH_WIFI_ENTRY_SECURITY_FIELD,
-    SWITCH_WIFI_ENTRY_SSID_FIELD,
     SWITCH_WIFI_MANUAL_ENTRIES_FIELD,
     SWITCH_WIFI_ROUTER_CSV_FIELD,
     SWITCH_WIFI_USE_ROUTER_FIELD,
     TOOL_SECTION_KEY,
     WIFI_PRODUCT_PROJECT_MAP,
     TURN_TABLE_SECTION_KEY,
-    TURN_TABLE_FIELD_MODEL,
     TURN_TABLE_FIELD_IP_ADDRESS,
     TURN_TABLE_FIELD_STEP,
     TURN_TABLE_FIELD_STATIC_DB,
     TURN_TABLE_FIELD_TARGET_RSSI,
-    TURN_TABLE_MODEL_CHOICES,
-    TURN_TABLE_MODEL_RS232,
-    TURN_TABLE_MODEL_OTHER,
     get_config_base,
     get_src_base,
 )
@@ -61,11 +54,10 @@ from src.ui.view.config.config_switch_wifi import (
 )
 from src.ui.view.config.config_compatibility import (
     CompatibilityRelayEditor,
-    derive_selected_router_keys,
 )
 from src.ui.view.config.config_str import script_field_key
 from src.ui.controller import show_info_bar
-from src.ui.view.config.ui_adapter import UiEvent
+from src.ui.view.ui_adapter import UiEvent
 
 if TYPE_CHECKING:  # pragma: no cover - circular import guard
     from src.ui.view.config.page import CaseConfigPage

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Callable, Mapping, Sequence, Dict, List
+from typing import Any, Callable, Mapping, Sequence, Dict
 
 from PyQt5.QtCore import (
     Qt,
@@ -34,8 +34,8 @@ from src.ui.view.theme import (
     apply_theme,
     apply_settings_tab_label_style,
 )
-from src.ui.view.config.actions import init_fpga_dropdowns, refresh_config_page_controls, apply_ui
-from src.ui.view.config.ui_adapter import UiAdapter, UiEvent
+from src.ui.view.config.actions import refresh_config_page_controls, apply_ui
+from src.ui.view.ui_adapter import UiAdapter, UiEvent
 from src.ui.view.config import (
     create_test_switch_wifi_str_config_entry_from_schema,
     initialize_script_config_groups,
@@ -44,7 +44,6 @@ from src.util.constants import (
     DEFAULT_ANDROID_VERSION_CHOICES,
     DEFAULT_KERNEL_VERSION_CHOICES,
 )
-from src.tools.router_tool.router_factory import router_list, get_router
 from src.ui.controller.case_ctl import _register_switch_wifi_csv_combo as _reg_sw_csv
 
 
