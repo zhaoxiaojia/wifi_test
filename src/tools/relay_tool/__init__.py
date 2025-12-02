@@ -33,7 +33,7 @@ def get_relay_controller(
     relay_type: str | None,
     relay_params: Sequence[Any] | None = None,
     **kwargs: Any,
-) -> "Relay" | None:
+) -> Relay | None:
     """Instantiate a relay controller matching the requested type.
 
     Parameters:

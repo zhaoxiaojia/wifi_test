@@ -221,3 +221,8 @@ def apply_settings_tab_label_style(label: QLabel, *, active: bool = False) -> No
         }}
         """
     label.setStyleSheet(stylesheet)
+
+
+def apply_tool_text_style(widget: QWidget) -> None:
+    """Apply a transparent background style for tool labels/buttons."""
+    widget.setStyleSheet("background-color: transparent; border: none;")

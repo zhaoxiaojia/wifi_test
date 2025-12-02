@@ -34,6 +34,7 @@ from src.dut_control.roku_ctrl import roku_ctrl
 from src.tools.router_tool.Router import Router
 from src.tools.reporting import generate_project_report
 from src.test.pyqt_log import emit_pyqt_message
+from src.test.compatibility.results import write_compatibility_results
 
 # ----------------------------------------------------------------------------
 # Logging
@@ -178,8 +179,7 @@ def pytest_sessionstart(session):
     pytest.config = load_config(refresh=True) or {}
 
     # Connection type setup
-    pytest.chip_info = pytest.config.get('project')
-    connect_cfg = pytest.config.get('connect_type') or {}
+    connect_cfg = pytest.config.get("connect_type") or {}
     connect_type_value = connect_cfg.get('type', 'Android')
     if isinstance(connect_type_value, str):
         connect_type_value = connect_type_value.strip() or 'Android'
@@ -402,6 +402,31 @@ def pytest_runtest_teardown(item, nextitem):
         emit_pyqt_message("PROGRESS", f" {session.pyqt_finished}/{total}")
     item._pyqt_progress_recorded = True
 
+@pytest.fixture(autouse=True)
+def record_test_data(request):
+    """
+    自动收集测试用例的 fixture 参数 ids,并存储返回值
+    """
+    test_name = request.node.originalname
+    logging.info(test_name)
+    fixture_values = {}
+    for fixture_name in request.node.fixturenames:
+        if fixture_name in request.node.funcargs:
+            fixture_values[fixture_name] = request.node.funcargs[fixture_name]
+
+    request.node._store = getattr(request.node, "_store", {})
+    request.node._store["return_value"] = None
+    request.node._store["fixture_values"] = fixture_values
+
+    yield
+
+    test_result = request.node._store.get("test_result", "UNKNOWN")
+    test_return_value = request.node._store.get("return_value", "None")
+    test_results.append({test_name: {
+        "result": test_result,
+        "return_value": test_return_value,
+        "fixtures": fixture_values
+    }})
 
 def pytest_sessionfinish(session, exitstatus):
     """
@@ -418,6 +443,9 @@ def pytest_sessionfinish(session, exitstatus):
     """
     result_path = getattr(pytest, "_result_path", None)
     destination_dir: Path | None = None
+    csv_file = "test_results.csv"
+    logging.info(test_results)
+    write_compatibility_results(test_results, csv_file)
     if result_path:
         destination_dir = Path(result_path)
         with suppress(Exception):

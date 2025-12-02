@@ -21,10 +21,25 @@ class power_ctrl(Relay):
     SET_CMD = 'snmpset -v1 -c private {} 1.3.6.1.4.1.23273.4.4{}.0 i 255'
 
     def __init__(self, default_port: tuple[str, int] | Sequence[Any] | None = None) -> None:
-        """Load SNMP relay config and optional default port."""
+        """Load SNMP relay config and optional default port.
+
+        The relay configuration is defined under ``compatibility.power_ctrl``
+        in ``config_compatibility.yaml``.
+        """
         super().__init__(self._coerce_default_port(default_port))
         self.config = load_config(refresh=True)
-        self.power_ctrl = self.config.get('power_relay')
+
+        compat = self.config["compatibility"]
+        power_cfg = compat["power_ctrl"]
+        relays_cfg = power_cfg["relays"]
+
+        power_relay: dict[str, list[int]] = {}
+        for entry in relays_cfg:
+            ip = str(entry["ip"]).strip()
+            ports = [int(p) for p in entry["ports"]]
+            power_relay[ip] = ports
+
+        self.power_ctrl = power_relay
         self.ip_list = list(self.power_ctrl.keys())
         self.ctrl = self._handle_env_data()
 
@@ -69,22 +84,15 @@ class power_ctrl(Relay):
 
     @staticmethod
     def check_output(cmd: str) -> bytes | None:
-        """Run a shell command and log its output.
-
-        Parameters:
-            cmd (str): The command string to execute via the shell.
-
-        Returns:
-            bytes | None: The raw command output if execution succeeded,
-            otherwise ``None``.
-        """
-        try:
-            info = subprocess.check_output(cmd, shell=True)
-            logging.info(info)
-            return info
-        except subprocess.CalledProcessError as e:
-            logging.error(f"Command failed: {e}")
+        result = subprocess.run(cmd, shell=True, capture_output=True)
+        logging.info("SNMP cmd: %s", cmd)
+        # logging.info("SNMP stdout: %s", result.stdout)
+        # logging.info("SNMP stderr: %s", result.stderr)
+        if result.returncode != 0:
+            logging.error("SNMP exit code: %s", result.returncode)
             return None
+        return result.stdout
+
 
     def switch(self, ip: str, port: int, status: int) -> None:
         """Toggle an individual relay on or off.

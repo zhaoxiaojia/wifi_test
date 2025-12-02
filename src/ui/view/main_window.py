@@ -47,6 +47,9 @@ from src.ui.controller.account_ctl import (
     clear_auth_state,
 )
 from src.ui.controller import set_run_locked
+from src.ui.model.tools_registry import load_tools_registry
+from src.ui.view.tools_global import GlobalToolsBar, GlobalToolsPanel
+from src.ui.controller.tools_ctl import GlobalToolsController
 
 
 def log_exception(exc_type, exc_value, exc_tb) -> None:
@@ -77,6 +80,14 @@ class MainWindow(FluentWindow):
         height = int(screen.height() * 0.7)
         self.resize(width, height)
         self.setMinimumSize(width, height)
+        # Global tools (toolbar + side panel)
+        tool_specs = load_tools_registry()
+        self.global_tools_bar = GlobalToolsBar(tool_specs, parent=self.stackedWidget)
+        self.global_tools_panel = GlobalToolsPanel(parent=self.stackedWidget)
+        self.global_tools_panel.hide()
+        self.global_tools_controller = GlobalToolsController(
+            self, self.global_tools_bar, self.global_tools_panel, tool_specs
+        )
         self.center_window()
         self.show()
 
@@ -243,6 +254,8 @@ class MainWindow(FluentWindow):
 
         # Enable Mica effect on Windows 11
         self.setMicaEffectEnabled(True)
+        # Position global tools after initial layout
+        self._update_global_tools_geometry()
 
     # ------------------------------------------------------------------
     # Navigation button helpers
@@ -614,6 +627,33 @@ class MainWindow(FluentWindow):
         center_point = screen_geometry.center()
         window_geometry.moveCenter(center_point)
         self.move(window_geometry.topLeft())
+        self._update_global_tools_geometry()
+
+    def resizeEvent(self, event):  # type: ignore[override]
+        """Reposition global tool widgets when the window is resized."""
+        super().resizeEvent(event)
+        self._update_global_tools_geometry()
+
+    def _update_global_tools_geometry(self) -> None:
+        """Place the global tools bar and panel relative to the content area."""
+        content = self.stackedWidget
+        width = content.width()
+        height = content.height()
+        margin = 8
+
+        bar = self.global_tools_bar
+        bar_height = bar.sizeHint().height()
+        content.setContentsMargins(0, bar_height + margin, 0, 0)
+        bar.setGeometry(0, 0, width, bar_height)
+
+        panel = self.global_tools_panel
+        if not panel.isVisible():
+            return
+        panel_width = max(int(width * 0.3), 320)
+        panel_x = max(0, width - panel_width)
+        panel_y = bar_height + margin
+        panel_height = max(0, height - panel_y)
+        panel.setGeometry(panel_x, panel_y, max(0, width - panel_x), panel_height)
 
     def setCurrentIndex(self, page_widget, ssid: str | None = None, passwd: str | None = None):
         """Switch the active page with a cross-fade animation."""

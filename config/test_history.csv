@@ -14,3 +14,17 @@ chao.li,2025-11-30 15:27:29,test/performance/test_wifi_rvr.py,00:00
 chao.li,2025-11-30 15:28:21,test/performance/test_wifi_rvr.py,00:00
 chao.li,2025-11-30 15:32:46,test/performance/test_wifi_peak_throughput.py,00:00
 chao.li,2025-11-30 15:33:07,test/performance/test_wifi_rvr.py,00:03
+chao.li,2025-12-01 14:02:15,test/compatibility/test_compatibility.py,00:00
+chao.li,2025-12-01 14:09:11,test/compatibility/test_compatibility.py,00:00
+chao.li,2025-12-01 14:20:56,test/compatibility/test_compatibility.py,00:01
+chao.li,2025-12-01 14:22:03,test/compatibility/test_compatibility.py,00:00
+chao.li,2025-12-01 14:34:26,test/compatibility/test_compatibility.py,00:01
+chao.li,2025-12-01 14:38:46,test/compatibility/test_compatibility.py,00:01
+chao.li,2025-12-01 14:41:48,test/compatibility/test_compatibility.py,00:01
+chao.li,2025-12-01 14:47:57,test/compatibility/test_compatibility.py,00:01
+chao.li,2025-12-01 14:52:26,test/compatibility/test_compatibility.py,00:01
+chao.li,2025-12-01 15:24:05,test/compatibility/test_compatibility.py,00:01
+chao.li,2025-12-01 15:28:23,test/compatibility/test_compatibility.py,00:01
+chao.li,2025-12-01 15:43:12,test/compatibility/test_compatibility.py,00:01
+chao.li,2025-12-02 09:35:25,test/stability/test_switch_wifi_str.py,00:06
+chao.li,2025-12-02 10:14:20,test/stability/test_switch_wifi_str.py,00:00

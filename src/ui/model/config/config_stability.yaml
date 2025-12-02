@@ -9,17 +9,24 @@ check_point:
 cases:
   test_switch_wifi_str:
     ac:
-      enabled: false
+      enabled: true
       on_duration: 0
       off_duration: 0
-      port: ''
+      relay_type: GWGJ-XC3012
+      port: COM13 (蓝牙链接上的标准串行 (COM13))
       mode: 'NO'
+      relay_params: 192.168.1.102
     str:
       enabled: false
       on_duration: 0
       off_duration: 0
+      relay_type: usb_relay
       port: ''
       mode: 'NO'
+      relay_params: ''
     use_router: false
-    router_csv: ''
-    manual_entries: []
+    router_csv: performance_test_csv/rvr_wifi_setup.csv
+    manual_entries:
+    - ssid: sunshine
+      security_mode: WPA2-Personal
+      password: Home1357

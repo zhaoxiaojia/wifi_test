@@ -8,10 +8,15 @@ import pytest
 
 from src.tools.relay_tool.pdusnmp import power_ctrl
 from src.tools.router_tool.Router import Router
-from src.tools.router_tool.router_performance import FPGA_CONFIG, compatibility_router
+from src.tools.router_tool.router_performance import (
+    FPGA_CONFIG,
+    compatibility_router,
+    handle_expectdata as perf_handle_expectdata,
+)
 from src.tools.config_loader import load_config
 
 power_delay = power_ctrl()
+# power_delay.shutdown()
 power_ctrl = power_delay.ctrl
 router = ''
 ssid = {
@@ -21,42 +26,12 @@ ssid = {
 ssid_6g = 'Aml_AP_Comp_6G'
 passwd = '@Aml#*st271'
 
-wifichip, interface = pytest.chip_info.split('_')
+# Project and chip info
+project_cfg = pytest.config.get("project") or {}
+wifi_module = str(project_cfg.get("wifi_module", "")).strip().upper()
+interface = str(project_cfg.get("interface", "")).strip().upper()
+pytest.chip_info = f"{wifi_module}_{interface}" if wifi_module or interface else ""
 # Avoid shutting down power at import time; defer to fixture lifecycle.
-
-
-def handle_expectdata(ip, port, band, dir):
-    '''
-
-    Args:
-        ip: the ip address of the pdu
-        port: the port of router,value ranges from 0-8
-        band: the frequency band for Wi-Fi, only can be 2.4G or 5G
-        bandwidth: the bandwidth of Wi-Fi
-        dir: the direction of the throughput
-
-    Returns:
-
-    '''
-    with open(f"{os.getcwd()}/config/compatibility_dut.json", 'r') as f:
-        router_datas = json.load(f)
-    for data in router_datas:
-        try:
-            port_str = str(data.get('port', '')).strip()
-        except Exception:
-            port_str = ''
-        if data.get('ip') == ip and port_str == str(port):
-            mode = data[band]['mode']
-            bandwidth = data[band]['bandwidth']
-            authentication = data[band].get('authentication') or data[band].get('security_mode')
-            with open(f"{os.getcwd()}/config/compatibility_dut.json", 'r') as f:
-                dut_data = json.load(f)
-                logging.info(dut_data[band])
-                logging.info(dut_data[band][interface.upper()])
-                logging.info(dut_data[band][interface.upper()][FPGA_CONFIG[wifichip][band]])
-                logging.info(dut_data[band][interface.upper()][FPGA_CONFIG[wifichip][band]][bandwidth])
-                logging.info(dut_data[band][interface.upper()][FPGA_CONFIG[wifichip][band]][bandwidth][FPGA_CONFIG[wifichip]['mimo']])
-    return dut_data[band][interface.upper()][FPGA_CONFIG[wifichip][band]][bandwidth][FPGA_CONFIG[wifichip]['mimo']][dir]
 
 
 @pytest.fixture(scope='module', autouse=True, params=power_ctrl, ids=[str(i) for i in power_ctrl])
@@ -91,10 +66,9 @@ def router_setting(power_setting, request):
     logging.info(f'pc_ip {pytest.dut.pc_ip}')
     router_set = power_setting
     band = request.param
-    expect_tx = handle_expectdata(router_set['ip'], router_set['port'], band, 'UL')
-    expect_rx = handle_expectdata(router_set['ip'], router_set['port'], band, 'DL')
+    expect_tx = perf_handle_expectdata(router_set, band, 'UL', pytest.chip_info)
+    expect_rx = perf_handle_expectdata(router_set, band, 'DL', pytest.chip_info)
     router_obj = Router(
-        ap=router_set['mode'],
         band=band,
         wireless_mode=router_set[band]['mode'],
         channel='default',

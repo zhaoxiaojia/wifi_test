@@ -18,26 +18,20 @@ class LocalOS:
         self.ip = ''
 
     def checkoutput(self, cmd):
-        try:
-            info = subprocess.check_output(
-                cmd,
-                shell=True,
-                encoding='utf-8',
-                errors='ignore'
-            )
-        except Exception:
-            return None
-        else:
-            return info
-
-    def checkoutput_root(self, cmd):
-        return self.checkoutput(cmd)
+        info = subprocess.check_output(
+            cmd,
+            shell=True,
+            encoding='utf-8',
+            errors='ignore'
+        )
+        logging.info(f'Local os cmd : {cmd}')
+        return info
 
     def get_ipaddress(self, net_card=''):
-        info = self.checkoutput('ipconfig')
+        info = self.checkoutput(f'ipconfig {net_card}')
         if not info:
             return None
-
+        logging.info(info)
         lines = info.splitlines()
         blocks = []
         current_header = None
@@ -95,12 +89,10 @@ class LocalOS:
         return None
 
     def dynamic_flush_network_card(self, net_card=''):
-        if net_card:
-            cmd = f'ipconfig /renew "{net_card}"'
-        else:
-            cmd = 'ipconfig /renew'
-
-        self.checkoutput_root(cmd)
+        disable_cmd = f'netsh interface set interface "{net_card}" disable'
+        enable_cmd = f'netsh interface set interface "{net_card}" enable'
+        self.checkoutput(disable_cmd)
+        self.checkoutput(enable_cmd)
 
         for _ in range(30):
             time.sleep(15)

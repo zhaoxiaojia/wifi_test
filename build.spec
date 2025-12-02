@@ -38,6 +38,7 @@ a = Analysis(
         'pytest_html.plugin',
         'pytest_reportlog',
         'pytest-repeat',
+        'pytest_dependency',
         'selenium',
         'selenium.webdriver',
         'selenium.webdriver.common',

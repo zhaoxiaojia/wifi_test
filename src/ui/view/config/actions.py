@@ -484,14 +484,20 @@ def refresh_config_page_controls(page: Any) -> None:
                 try:
                     import psutil  # type: ignore
 
-                    for name, addrs in psutil.net_if_addrs().items():
-                        # Skip loopback-only interfaces.
-                        has_non_loopback = any(
-                            getattr(addr, "address", "").strip() not in ("127.0.0.1", "")
-                            for addr in addrs
-                        )
-                        if has_non_loopback:
+                    addrs_by_name = psutil.net_if_addrs()
+                    stats_by_name = psutil.net_if_stats()
+
+                    for name, addrs in addrs_by_name.items():
+                        # Only include interfaces that are up; do not filter by IP
+                        # presence so that active NICs without an address are still
+                        # visible in the dropdown.
+                        stats = stats_by_name.get(name)
+                        if stats is None or not getattr(stats, "isup", False):
+                            continue
+                        if not addrs:
                             nic_labels.append(str(name))
+                            continue
+                        nic_labels.append(str(name))
                 except Exception:
                     nic_labels = []
 

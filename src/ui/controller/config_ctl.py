@@ -136,6 +136,8 @@ class _StabilityControllerMixin:
             branch.setdefault("enabled", False)
             branch.setdefault("on_duration", 0)
             branch.setdefault("off_duration", 0)
+            branch.setdefault("relay_type", "usb_relay")
+            branch.setdefault("relay_params", "")
             branch.setdefault("port", "")
             branch.setdefault("mode", "NO")
             entry[name] = branch

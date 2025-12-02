@@ -2769,7 +2769,7 @@ class adb(dut):
             cmd = pytest.dut.CMD_WIFI_CONNECT.format(router_info.ssid, "open", "")
         else:
             cmd = pytest.dut.CMD_WIFI_CONNECT.format(router_info.ssid, type,
-                                                     router_info.wpa_passwd)
+                                                     router_info.password)
         # Hide SSID if the flag is set to a truthy value
         if router_info.hide_ssid in ('yes', 'true', True):
             cmd += pytest.dut.CMD_WIFI_HIDE

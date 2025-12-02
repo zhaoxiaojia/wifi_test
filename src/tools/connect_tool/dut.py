@@ -77,6 +77,16 @@ class dut():
     IPERF_KILL = 'killall -9 {}'
     IPERF_WIN_KILL = 'taskkill /im {}.exe -f'
 
+    def __init__(self) -> None:
+        """
+        Initialize common DUT state.
+
+        This sets baseline attributes that are shared across adb/telnet
+        implementations so that tests can rely on them being present.
+        """
+        self.rssi_num = -1
+        self.freq_num = 0
+
     @staticmethod
     def _parse_iperf_params(cmd: str) -> tuple[int, int]:
         """
@@ -1894,7 +1904,7 @@ class dut():
             This method does not return a value.
         """
         if pytest.connect_type == 'Linux':
-            pytest.dut.roku.wifi_conn(ssid=router.ssid, pwd=router.wpa_passwd)
+            pytest.dut.roku.wifi_conn(ssid=router.ssid, pwd=router.password)
         else:
             pytest.dut.checkoutput(pytest.dut.get_wifi_cmd(router))
 
@@ -1933,6 +1943,7 @@ class dut():
             rssi_info = ''
 
         if 'Not connected' in rssi_info:
+            self.rssi_num = -1
             assert False, "Wifi is not connected"
         try:
             self.rssi_num = int(re.findall(r'signal:\s*(-?\d+)\s+dBm', rssi_info, re.S)[0])
