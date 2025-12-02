@@ -702,5 +702,37 @@
             "security_mode": "wpa2",
             "bandwidth": "80MHz"
         }
+    },
+    {
+        "ip": "192.168.200.102",
+        "port": "1",
+        "brand": "ARRISAAAAA",
+        "model": "SBR-AAAAA",
+        "2.4G": {
+            "mode": "11N",
+            "security_mode": "wpa2",
+            "bandwidth": "20MHz"
+        },
+        "5G": {
+            "mode": "11AC",
+            "security_mode": "wpa2",
+            "bandwidth": "80MHz"
+        }
+    },
+    {
+        "ip": "192.168.200.102",
+        "port": "2",
+        "brand": "ARRISBBBBB",
+        "model": "SBR-BBBBBB",
+        "2.4G": {
+            "mode": "11N",
+            "security_mode": "wpa2",
+            "bandwidth": "20MHz"
+        },
+        "5G": {
+            "mode": "11AC",
+            "security_mode": "wpa2",
+            "bandwidth": "80MHz"
+        }
     }
 ]

@@ -1,8 +1,7 @@
 compatibility:
   power_ctrl:
     relays:
-    - ip: 192.168.200.3
+    - ip: 192.168.200.102
       ports:
       - 1
-      - 2
   nic: 以太网

@@ -397,6 +397,7 @@ def _init_worker_env(
         "--rootdir=.",
         "--import-mode=importlib",
         f"--resultpath={report_dir}",
+        f'--pytest-tmreport-name=report.html',
         case_path,
     ]
 

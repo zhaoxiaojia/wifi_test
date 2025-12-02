@@ -10,12 +10,12 @@ connect_type:
   Android:
     device: ross9de10187504720
   Linux:
-    ip: 192.168.1.103
+    ip: 192.168.200.100
     wildcard: ''
   third_party:
     enabled: false
     wait_seconds: 45
-  type: Android
+  type: Linux
 project:
   customer: XIAOMI
   product_line: TV

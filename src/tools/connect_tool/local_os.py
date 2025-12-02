@@ -3,6 +3,7 @@ import os
 import re
 import subprocess
 import time
+import locale
 from subprocess import check_output
 
 from src.tools.yamlTool import yamlTool
@@ -18,20 +19,25 @@ class LocalOS:
         self.ip = ''
 
     def checkoutput(self, cmd):
-        info = subprocess.check_output(
+        result = subprocess.run(
             cmd,
             shell=True,
-            encoding='utf-8',
-            errors='ignore'
+            capture_output=True,
+            encoding=locale.getpreferredencoding(False),
+            errors='ignore',
         )
-        logging.info(f'Local os cmd : {cmd}')
-        return info
+        logging.info("Local os cmd: %s", cmd)
+        logging.info("Local os stdout: %s", result.stdout)
+        logging.info("Local os stderr: %s", result.stderr)
+        if result.returncode != 0:
+            logging.error("Local os exit code: %s", result.returncode)
+            return None
+        return result.stdout
 
     def get_ipaddress(self, net_card=''):
-        info = self.checkoutput(f'ipconfig {net_card}')
+        info = self.checkoutput('ipconfig')
         if not info:
             return None
-        logging.info(info)
         lines = info.splitlines()
         blocks = []
         current_header = None
@@ -95,7 +101,7 @@ class LocalOS:
         self.checkoutput(enable_cmd)
 
         for _ in range(30):
-            time.sleep(15)
+            time.sleep(5)
             ip = self.get_ipaddress(net_card)
             if ip:
                 self.ip = ip

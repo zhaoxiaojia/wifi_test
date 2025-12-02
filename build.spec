@@ -39,6 +39,7 @@ a = Analysis(
         'pytest_reportlog',
         'pytest-repeat',
         'pytest_dependency',
+        'pytest-tmreport',
         'selenium',
         'selenium.webdriver',
         'selenium.webdriver.common',
