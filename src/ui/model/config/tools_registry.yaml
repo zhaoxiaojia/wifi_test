@@ -1,0 +1,7 @@
+tools:
+  - id: bt_fw_log
+    title: "BT FW Log"
+    icon: "BLUETOOTH"
+  - id: ai_chat
+    title: "AI Chat"
+    icon: "ROBOT"
