@@ -37,19 +37,23 @@ pytest.chip_info = f"{wifi_module}_{interface}" if wifi_module or interface else
 @pytest.fixture(scope='module', autouse=True, params=power_ctrl, ids=[str(i) for i in power_ctrl])
 def power_setting(request):
     ip, port = request.param
-    power_delay.switch(ip, port, 1)
-    time.sleep(30)
-    # logging.info(f'port {port} ip {ip}')
-    # logging.info(compatibility_router._instances)
     try:
-        info = [x for x in filter(lambda x: str(x.get('port')) == str(port) and x.get('ip') == ip, compatibility_router._instances)]
-    except Exception:
-        info = []
-    if not info:
-        raise RuntimeError(f"Router info not found for ip={ip} port={port}")
-    yield info[0]
-    logging.info('test done shutdown the router')
-    power_delay.switch(ip, port, 2)
+        power_delay.switch(ip, port, 1)
+        time.sleep(30)
+        info = [
+            x
+            for x in filter(
+                lambda x: str(x.get('port')) == str(port) and x.get('ip') == ip,
+                compatibility_router._instances,
+            )
+        ]
+        if not info:
+            raise RuntimeError(f"Router info not found for ip={ip} port={port}")
+        yield info[0]
+    finally:
+        logging.info('test done shutdown the router')
+        power_delay.switch(ip, port, 2)
+
 
 
 @pytest.fixture(scope='module', autouse=True, params=['2.4G', '5G'], ids=['2.4G', '5G'])
