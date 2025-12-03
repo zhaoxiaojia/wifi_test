@@ -16,6 +16,7 @@ from src.tools.config_loader import load_config
 from src.tools.router_tool.router_performance import handle_expectdata
 from src.util.constants import is_database_debug_enabled
 from src.tools.connect_tool.command_batch import CommandBatch, CommandRunner, CommandExecutionError, CommandTimeoutError
+from src.tools.TestResult import PerformanceResult
 
 lock = threading.Lock()
 
@@ -86,6 +87,29 @@ class dut():
         """
         self.rssi_num = -1
         self.freq_num = 0
+
+    def _is_performance_debug_enabled(self) -> bool:
+        """
+        Return True when database debug mode should affect throughput logic.
+
+        Database debug mode is only honored for performance‑type runs
+        (RVR/RVO/Performance). Compatibility and other tests are not
+        affected even if the global debug flag is enabled.
+        """
+        if not is_database_debug_enabled():
+            return False
+        selected = getattr(pytest, "selected_test_types", set())
+        return any(kind in {"RVR", "RVO", "PERFORMANCE"} for kind in selected)
+    def _ensure_performance_result(self) -> None:
+        """
+        Lazily create the shared PerformanceResult instance used for
+        throughput logging when it is first needed.
+        """
+        if getattr(pytest, "testResult", None) is not None:
+            return
+        logdir = getattr(pytest, "_result_path", None) or os.getcwd()
+        repeat_times = getattr(pytest, "_testresult_repeat_times", 0)
+        pytest.testResult = PerformanceResult(logdir, [], repeat_times)
 
     @staticmethod
     def _parse_iperf_params(cmd: str) -> tuple[int, int]:
@@ -757,7 +781,7 @@ class dut():
         None
             This method does not return a value.
         """
-        if is_database_debug_enabled():
+        if self._is_performance_debug_enabled():
             logging.info("Database debug mode enabled, skip killing iperf processes")
             return
         commands = []
@@ -1451,6 +1475,7 @@ class dut():
                 None,
                 None,
             )
+            self._ensure_performance_result()
             pytest.testResult.save_result(self._format_result_row(values))
             return 'N/A'
 
@@ -1458,7 +1483,7 @@ class dut():
         self.rvr_result = None
         mcs_rx = None
 
-        database_debug = is_database_debug_enabled()
+        database_debug = self._is_performance_debug_enabled()
         debug_enabled = debug or database_debug
         if debug_enabled:
             sources = []
@@ -1556,6 +1581,7 @@ class dut():
             latency_value,
             packet_loss_value,
         )
+        self._ensure_performance_result()
         pytest.testResult.save_result(self._format_result_row(values))
         return ','.join([cell for cell in throughput_cells if cell]) or 'N/A'
 
@@ -1621,7 +1647,7 @@ class dut():
         self.rvr_result = None
         mcs_tx = None
 
-        database_debug = is_database_debug_enabled()
+        database_debug = self._is_performance_debug_enabled()
         debug_enabled = debug or database_debug
         if debug_enabled:
             sources = []
@@ -1722,6 +1748,7 @@ class dut():
         )
         formatted = self._format_result_row(values)
         logging.info(formatted)
+        self._ensure_performance_result()
         pytest.testResult.save_result(formatted)
         return ','.join([cell for cell in throughput_cells if cell]) or 'N/A'
 
@@ -1924,7 +1951,7 @@ class dut():
         Any
             The result produced by the function.
         """
-        if is_database_debug_enabled():
+        if self._is_performance_debug_enabled():
             simulated_rssi = -random.randint(40, 80)
             self.rssi_num = simulated_rssi
             self.freq_num = 0

@@ -28,7 +28,7 @@ from src.tools.connect_tool.adb import adb
 from src.tools.connect_tool.serial_tool import serial_tool
 from src.tools.connect_tool.telnet_tool import telnet_tool
 from src.tools.connect_tool.local_os import LocalOS
-from src.tools.TestResult import TestResult
+from src.tools.TestResult import PerformanceResult
 from src.tools.config_loader import load_config
 from src.dut_control.roku_ctrl import roku_ctrl
 from src.tools.router_tool.Router import Router
@@ -98,7 +98,7 @@ def _maybe_generate_project_report() -> None:
         - Only runs when pytest.config['project']['customer'] is 'XIAOMI' (case‑insensitive).
         - If a single Wi‑Fi test type was selected (RVR/RVO/PERFORMANCE), force the
           report to that type for clearer labeling.
-        - Writes the report file to `pytest.testResult.logdir` with a timestamped name.
+
 
     Side effects:
         Logs success/failure and exceptions; never raises to the caller.
@@ -239,7 +239,6 @@ def pytest_sessionstart(session):
     # Artifact paths and state
     pytest._result_path = session.config.getoption("--resultpath") or os.getcwd()
     pytest._testresult_repeat_times = repeat_times
-    pytest.testResult = None
 
     # Cleanup temp file used by some legacy scripts
     if os.path.exists('temp.txt'):
@@ -263,7 +262,6 @@ def pytest_collection_finish(session):
     """
     After test collection completes:
       - Detect selected Wi‑Fi test types from collected paths.
-      - Initialize `pytest.testResult` for performance‑related runs.
       - Record total test count for PyQt progress display.
 
     Args:
@@ -292,18 +290,6 @@ def pytest_collection_finish(session):
         logging.info("Detected selected Wi‑Fi test types: %s", ", ".join(sorted(selected_types)))
     else:
         pytest.selected_test_types = set()
-
-    # Initialize TestResult only for performance‑type runs
-    result_path = getattr(pytest, "_result_path", None)
-    repeat_times = getattr(pytest, "_testresult_repeat_times", 0)
-    needs_performance_logging = any(kind in {"RVR", "RVO", "PERFORMANCE"} for kind in selected_types)
-    if needs_performance_logging:
-        logdir = result_path or os.getcwd()
-        pytest.testResult = TestResult(logdir, [], repeat_times)
-    else:
-        pytest.testResult = None
-        if "STABILITY" in selected_types:
-            logging.info("Performance log artifacts disabled for stability‑only execution")
 
 
 def pytest_runtest_setup(item):
@@ -434,8 +420,6 @@ def pytest_sessionfinish(session, exitstatus):
 
     - Copies `pytest.log` -> `debug.log` and `kernel_log.txt` -> `kernel.log`
       into `--resultpath` when provided.
-    - If `pytest.testResult` exists, calls `_maybe_generate_project_report()`
-      for eligible customers (e.g., XIAOMI).
 
     Args:
         session (pytest.Session): The pytest session (unused beyond state read).
@@ -466,7 +450,7 @@ def pytest_sessionfinish(session, exitstatus):
             logging.warning("Failed to copy pytest.log to %s: %s", destination_dir, exc)
 
     test_result = getattr(pytest, "testResult", None)
-    if isinstance(test_result, TestResult):
+    if isinstance(test_result, PerformanceResult):
         _maybe_generate_project_report()
 
     # (Deliberately not moving report.html artifacts here; handled elsewhere.)

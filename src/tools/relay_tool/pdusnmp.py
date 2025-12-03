@@ -3,11 +3,12 @@
 This module provides a simple wrapper around SNMP commands to control power
 relays. It exposes a :class:`power_ctrl` class that reads configuration
 information, constructs SNMP command strings and executes them using
-``subprocess``.  All function and method arguments are documented in a
+``subprocess``. All function and method arguments are documented in a
 ``Parameters`` section.
 """
 import logging
 import subprocess
+import time
 from typing import Any, Sequence
 
 from src.tools.config_loader import load_config
@@ -84,14 +85,18 @@ class power_ctrl(Relay):
 
     @staticmethod
     def check_output(cmd: str) -> bytes | None:
-        result = subprocess.run(cmd, shell=True, capture_output=True)
-        logging.info("SNMP cmd: %s", cmd)
-        # logging.info("SNMP stdout: %s", result.stdout)
-        # logging.info("SNMP stderr: %s", result.stderr)
-        if result.returncode != 0:
-            logging.error("SNMP exit code: %s", result.returncode)
-            return None
-        return result.stdout
+        for attempt in range(1, 4):
+            result = subprocess.run(cmd, shell=True, capture_output=True)
+            logging.info("SNMP cmd[%s]: %s", attempt, cmd)
+            if result.stdout:
+                logging.info("SNMP stdout[%s]: %s", attempt, result.stdout)
+            if result.stderr:
+                logging.info("SNMP stderr[%s]: %s", attempt, result.stderr)
+            if result.returncode == 0:
+                return result.stdout
+            logging.error("SNMP exit code[%s]: %s", attempt, result.returncode)
+            time.sleep(1)
+        return None
 
 
     def switch(self, ip: str, port: int, status: int) -> None:

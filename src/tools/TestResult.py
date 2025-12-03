@@ -1,11 +1,12 @@
 """Result logging utilities for receiver sensitivity and throughput tests.
 
-This module defines the :class:`TestResult` class which collects,
-normalizes and persists test results from Wi-Fi receiver sensitivity (RVR)
-executions.  It constructs appropriate CSV headers based on the number of
-repeat runs, writes results to disk, and provides helpers for normalizing
-profile and scenario metadata.  All public methods and parameters are
-documented using a ``Parameters`` section.
+This module defines the :class:`PerformanceResult` class which collects,
+normalizes and persists performance test results from Wi-Fi receiver
+sensitivity (RVR) and related throughput executions. It constructs
+appropriate CSV headers based on the number of repeat runs, writes
+results to disk, and provides helpers for normalizing profile and
+scenario metadata. All public methods and parameters are documented
+using a ``Parameters`` section.
 """
 
 import logging
@@ -22,7 +23,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 plt.rcParams['font.family'] = ['SimHei']
 
 
-class TestResult():
+class PerformanceResult:
     """Collect and persist Wi-Fi performance results for each RVR execution.
 
     Instances of this class manage the construction of CSV headers, the
@@ -65,7 +66,7 @@ class TestResult():
     )
 
     def __init__(self, logdir: str, step: List[Any], repeat_times: int = 0) -> None:
-        """Initialize a new TestResult instance and prepare result storage.
+        """Initialize a new PerformanceResult instance and prepare result storage.
 
         Parameters:
             logdir (str): Directory in which to create result files.
@@ -312,7 +313,7 @@ class TestResult():
         if value is None:
             return ""
         if isinstance(value, (list, tuple, set)):
-            items = [TestResult._normalize_profile_value(item) for item in value]
+            items = [PerformanceResult._normalize_profile_value(item) for item in value]
             items = [item for item in items if item]
             return items[0] if items else ""
         text = str(value).strip()

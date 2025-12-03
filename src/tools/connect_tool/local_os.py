@@ -35,62 +35,34 @@ class LocalOS:
         return result.stdout
 
     def get_ipaddress(self, net_card=''):
-        info = self.checkoutput('ipconfig')
-        if not info:
+        output = self.checkoutput('ipconfig')
+        if not output:
             return None
-        lines = info.splitlines()
-        blocks = []
-        current_header = None
-        current_lines = []
 
-        for line in lines:
-            if line.strip() == '':
-                if current_header is not None:
-                    blocks.append((current_header, current_lines))
-                    current_header = None
-                    current_lines = []
-                continue
-
-            if not line.startswith(' ') and line.strip().endswith(':'):
-                if current_header is not None:
-                    blocks.append((current_header, current_lines))
-                current_header = line.strip()
-                current_lines = [line]
-            else:
-                if current_header is not None:
-                    current_lines.append(line)
-
-        if current_header is not None:
-            blocks.append((current_header, current_lines))
+        lines = output.splitlines()
 
         if net_card:
-            target_block = None
-            key = net_card.lower()
-            for header, content in blocks:
-                if key in header.lower():
-                    target_block = '\n'.join(content)
-                    break
+            in_block = False
+            for line in lines:
+                stripped = line.strip()
+                if stripped.endswith(':') and not line.startswith(' '):
+                    in_block = net_card in stripped
+                    continue
+                if in_block and 'IPv4' in line:
+                    match = re.search(r'(\d+\.\d+\.\d+\.\d+)', line)
+                    if match:
+                        return match.group(1)
+            return None
 
-            if target_block:
-                ipv4_list = re.findall(r'IPv4[^\n:]*:\s*([\d\.]+)', target_block, re.S)
-                for ip in ipv4_list:
-                    if not ip.startswith('127.'):
-                        return ip
+        for line in lines:
+            if 'IPv4' in line:
+                match = re.search(r'(\d+\.\d+\.\d+\.\d+)', line)
+                if match:
+                    return match.group(1)
 
-                generic_list = re.findall(r'(\d+\.\d+\.\d+\.\d+)', target_block, re.S)
-                for ip in generic_list:
-                    if not ip.startswith('127.'):
-                        return ip
-
-        ipv4_list = re.findall(r'IPv4[^\n:]*:\s*([\d\.]+)', info, re.S)
-        for ip in ipv4_list:
-            if not ip.startswith('127.'):
-                return ip
-
-        generic_list = re.findall(r'(\d+\.\d+\.\d+\.\d+)', info, re.S)
-        for ip in generic_list:
-            if not ip.startswith('127.'):
-                return ip
+        match = re.search(r'(\d+\.\d+\.\d+\.\d+)', output)
+        if match:
+            return match.group(1)
 
         return None
 
