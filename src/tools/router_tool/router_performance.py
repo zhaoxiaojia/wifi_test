@@ -345,13 +345,13 @@ a.set_info("192.168.200.8", '8', 'ARRIS', 'SBR-AC1750',
            {'2.4G': {'mode': '11N', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
             '5G': {'mode': '11AC', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
-# a.set_info("192.168.200.102", '1', 'ARRISAAAAA', 'SBR-AAAAA',
-#            {'2.4G': {'mode': '11N', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
-#             '5G': {'mode': '11AC', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
-#
-# a.set_info("192.168.200.102", '2', 'ARRISBBBBB', 'SBR-BBBBBB',
-#            {'2.4G': {'mode': '11N', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
-#             '5G': {'mode': '11AC', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
+a.set_info("192.168.200.102", '1', 'ARRISAAAAA', 'SBR-AAAAA',
+           {'2.4G': {'mode': '11N', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AC', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
+
+a.set_info("192.168.200.102", '2', 'ARRISBBBBB', 'SBR-BBBBBB',
+           {'2.4G': {'mode': '11N', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AC', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 a.save_expect()
 dut = dut_standard()
 

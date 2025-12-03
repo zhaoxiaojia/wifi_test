@@ -397,7 +397,6 @@ def _init_worker_env(
         "--rootdir=.",
         "--import-mode=importlib",
         f"--resultpath={report_dir}",
-        f'--pytest-tmreport-name=report.html',
         case_path,
     ]
 
@@ -550,9 +549,10 @@ def _pytest_worker(
     case_path: str,
     q: multiprocessing.Queue,
     log_file_path_str: str | None = None,
+    ctx: "_WorkerContext" | None = None
 ) -> None:
     """Spawned multiprocessing entrypoint that runs pytest and streams logs."""
-    ctx: "_WorkerContext" | None = None
+
     try:
         ctx = _init_worker_env(case_path, q, log_file_path_str)
         _stream_pytest_events(ctx)

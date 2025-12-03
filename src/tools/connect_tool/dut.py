@@ -16,7 +16,7 @@ from src.tools.config_loader import load_config
 from src.tools.router_tool.router_performance import handle_expectdata
 from src.util.constants import is_database_debug_enabled
 from src.tools.connect_tool.command_batch import CommandBatch, CommandRunner, CommandExecutionError, CommandTimeoutError
-from src.tools.TestResult import PerformanceResult
+from src.tools.performance_result import PerformanceResult
 
 lock = threading.Lock()
 
@@ -100,6 +100,7 @@ class dut():
             return False
         selected = getattr(pytest, "selected_test_types", set())
         return any(kind in {"RVR", "RVO", "PERFORMANCE"} for kind in selected)
+    
     def _ensure_performance_result(self) -> None:
         """
         Lazily create the shared PerformanceResult instance used for

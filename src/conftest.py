@@ -28,7 +28,7 @@ from src.tools.connect_tool.adb import adb
 from src.tools.connect_tool.serial_tool import serial_tool
 from src.tools.connect_tool.telnet_tool import telnet_tool
 from src.tools.connect_tool.local_os import LocalOS
-from src.tools.TestResult import PerformanceResult
+from src.tools.performance_result import PerformanceResult
 from src.tools.config_loader import load_config
 from src.dut_control.roku_ctrl import roku_ctrl
 from src.tools.router_tool.Router import Router

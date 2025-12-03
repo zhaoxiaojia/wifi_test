@@ -20,7 +20,7 @@ import numpy as np
 import pandas as pd
 from matplotlib.backends.backend_pdf import PdfPages
 
-plt.rcParams['font.family'] = ['SimHei']
+plt.rcParams["font.family"] = ["SimHei"]
 
 
 class PerformanceResult:
@@ -29,7 +29,7 @@ class PerformanceResult:
     Instances of this class manage the construction of CSV headers, the
     accumulation of throughput results across repeated runs, and the
     normalization of metadata such as profile modes, profile values and
-    scenario group keys.  Results are saved to a CSV file in the configured
+    scenario group keys. Results are saved to a CSV file in the configured
     log directory and can be extended to additional output formats if needed.
 
     Parameters:
@@ -37,32 +37,32 @@ class PerformanceResult:
         step (Sequence[Any]): A sequence of x-axis positions or other step
             values corresponding to the measurement series.
         repeat_times (int, optional): Number of times the measurement should be
-            repeated.  Determines how many throughput columns to allocate.
+            repeated. Determines how many throughput columns to allocate.
             Defaults to ``0``.
     """
 
     _BASE_HEADERS: Tuple[str, ...] = (
-        'SerianNumber',
-        'Test_Category',
-        'Standard',
-        'Freq_Band',
-        'BW',
-        'Data_Rate',
-        'CH_Freq_MHz',
-        'Protocol',
-        'Direction',
-        'Total_Path_Loss',
-        'DB',
-        'RSSI',
-        'Angel',
-        'MCS_Rate',
-        'Throughput',
-        'Expect_Rate',
-        'Latency',
-        'Packet_Loss',
-        'Profile_Mode',
-        'Profile_Value',
-        'Scenario_Group_Key',
+        "SerianNumber",
+        "Test_Category",
+        "Standard",
+        "Freq_Band",
+        "BW",
+        "Data_Rate",
+        "CH_Freq_MHz",
+        "Protocol",
+        "Direction",
+        "Total_Path_Loss",
+        "DB",
+        "RSSI",
+        "Angel",
+        "MCS_Rate",
+        "Throughput",
+        "Expect_Rate",
+        "Latency",
+        "Packet_Loss",
+        "Profile_Mode",
+        "Profile_Value",
+        "Scenario_Group_Key",
     )
 
     def __init__(self, logdir: str, step: List[Any], repeat_times: int = 0) -> None:
@@ -73,8 +73,8 @@ class PerformanceResult:
             step (List[Any]): A list of x-axis values (e.g., attenuation settings)
                 used for plotting or indexing results.
             repeat_times (int, optional): Number of repeated measurements for
-                each test case.  Determines how many throughput columns will
-                be created.  Defaults to ``0``.
+                each test case. Determines how many throughput columns will
+                be created. Defaults to ``0``.
 
         Returns:
             None
@@ -128,7 +128,12 @@ class PerformanceResult:
         except FileNotFoundError:
             return
         except OSError as exc:
-            logging.warning("Failed to rename performance log %s -> %s: %s", current_path, new_path, exc)
+            logging.warning(
+                "Failed to rename performance log %s -> %s: %s",
+                current_path,
+                new_path,
+                exc,
+            )
             return
         self.log_file = str(new_path)
 
@@ -142,8 +147,8 @@ class PerformanceResult:
         """
         total_runs = self._repeat_times + 1
         if total_runs <= 1:
-            return ['Throughput']
-        return [f'Throughput {index}' for index in range(1, total_runs + 1)]
+            return ["Throughput"]
+        return [f"Throughput {index}" for index in range(1, total_runs + 1)]
 
     def _build_header_row(self) -> List[str]:
         """Build the complete list of CSV header names for result files.
@@ -157,13 +162,13 @@ class PerformanceResult:
         """
         headers: List[str] = []
         for name in self._BASE_HEADERS:
-            if name == 'Throughput':
+            if name == "Throughput":
                 headers.extend(self._throughput_header)
             else:
                 headers.append(name)
         return headers
 
-    def init_rvr_result(self):
+    def init_rvr_result(self) -> None:
         """Initialize on-disk files for RVR result collection.
 
         This method creates a new CSV file for performance data and writes
@@ -173,17 +178,19 @@ class PerformanceResult:
         Returns:
             None
         """
-        self.rvr_excelfile = os.path.join(self.logdir, 'RvrCheckExcel.xlsx')
-        if not hasattr(self, 'log_file'):
+        self.rvr_excelfile = os.path.join(self.logdir, "RvrCheckExcel.xlsx")
+        if not hasattr(self, "log_file"):
             self.log_file = os.path.join(
                 self.logdir,
-                'Performance' + time.asctime().replace(' ', '_').replace(':', '_') + '.csv',
+                "Performance"
+                + time.asctime().replace(" ", "_").replace(":", "_")
+                + ".csv",
             )
-            with open(self.log_file, 'a', encoding='gb2312') as f:
-                f.write(','.join(self._headers))
+            with open(self.log_file, "a", encoding="gb2312") as f:
+                f.write(",".join(self._headers))
                 f.write("\n")
 
-    def save_result(self, result):
+    def save_result(self, result: str) -> None:
         """Append a result line to the CSV log file.
 
         Parameters:
@@ -194,16 +201,17 @@ class PerformanceResult:
         Returns:
             None
         """
-        logging.info('Writing to csv')
+        logging.info("Writing to csv")
         mode, value = self._get_active_profile_columns()
         scenario_key = self._get_scenario_group_key()
         line = f"{result},{mode},{value},{scenario_key}"
-        with open(self.log_file, 'a') as f:
+        with open(self.log_file, "a") as f:
             f.write(line)
-            f.write('\n')
-        logging.info('Write done')
+            f.write("\n")
+        logging.info("Write done")
 
     # --- profile helpers -------------------------------------------------
+
     def set_active_profile(self, mode: Optional[str], value: Any) -> None:
         """Set the current profile mode and value for subsequent results.
 
@@ -225,64 +233,31 @@ class PerformanceResult:
         self._profile_value = normalized_value
 
     def clear_active_profile(self) -> None:
-        """Clear the current profile mode and value.
-
-        Returns:
-            None
-        """
+        """Clear the current profile mode and value."""
         self._profile_mode = ""
         self._profile_value = ""
 
     def set_scenario_group_key(self, key: Optional[str]) -> None:
-        """Set the scenario group key associated with subsequent results.
-
-        Parameters:
-            key (Optional[str]): A user-defined string used to group related
-                scenarios together. May be ``None`` to clear the key.
-
-        Returns:
-            None
-        """
+        """Set the scenario group key associated with subsequent results."""
         self._scenario_group_key = self._normalize_scenario_group_key(key)
 
     def clear_scenario_group_key(self) -> None:
-        """Clear the scenario group key for subsequent results.
-
-        Returns:
-            None
-        """
+        """Clear the scenario group key for subsequent results."""
         self._scenario_group_key = ""
 
-    # internal helpers
-    def _get_active_profile_columns(self) -> Tuple[str, str]:
-        """Return the current profile mode and value as a pair.
+    # internal helpers ----------------------------------------------------
 
-        Returns:
-            Tuple[str, str]: The normalized profile mode and value strings.
-        """
+    def _get_active_profile_columns(self) -> Tuple[str, str]:
+        """Return the current profile mode and value as a pair."""
         return self._profile_mode, self._profile_value
 
     def _get_scenario_group_key(self) -> str:
-        """Return the current scenario group key.
-
-        Returns:
-            str: The scenario group key or an empty string if none is set.
-        """
+        """Return the current scenario group key."""
         return self._scenario_group_key
 
     @staticmethod
     def _normalize_profile_mode(mode: Optional[str]) -> str:
-        """Normalize a profile mode string to an uppercase canonical form.
-
-        Parameters:
-            mode (Optional[str]): A raw profile mode value.  ``None`` or an
-                empty string will result in an empty return value.
-
-        Returns:
-            str: A normalized uppercase representation of the profile mode,
-            mapping known aliases such as ``"target"`` and ``"static"`` to
-            canonical names.
-        """
+        """Normalize a profile mode string to an uppercase canonical form."""
         if mode is None:
             return ""
         text = str(mode).strip().lower()
@@ -298,18 +273,7 @@ class PerformanceResult:
 
     @staticmethod
     def _normalize_profile_value(value: Any) -> str:
-        """Normalize a profile value to a concise string representation.
-
-        Parameters:
-            value (Any): A value or collection of values associated with a
-                profile.  If a collection is provided, only the first
-                non-empty normalized element will be returned.
-
-        Returns:
-            str: A string representation of the value.  Numeric values are
-            formatted to remove trailing zeros.  Non-numeric values are
-            returned as-is after stripping whitespace.
-        """
+        """Normalize a profile value to a concise string representation."""
         if value is None:
             return ""
         if isinstance(value, (list, tuple, set)):
@@ -325,29 +289,16 @@ class PerformanceResult:
             return text
         if number.is_integer():
             return str(int(number))
-        return f"{number:.2f}".rstrip('0').rstrip('.')
+        return f"{number:.2f}".rstrip("0").rstrip(".")
 
     @staticmethod
     def _normalize_scenario_group_key(key: Optional[str]) -> str:
-        """Normalize and sanitize a scenario group key.
-
-        Parameters:
-            key (Optional[str]): A raw scenario group key value.  ``None`` or
-                an empty string will result in an empty return value.
-
-        Returns:
-            str: A sanitized version of the key where carriage returns and
-            newlines are replaced with spaces and commas are replaced with
-            underscores.
-        """
+        """Normalize and sanitize a scenario group key."""
         if key is None:
             return ""
         text = str(key).strip()
         if not text:
             return ""
-        sanitized = text.replace('\r', ' ').replace('\n', ' ')
-        sanitized = sanitized.replace(',', '_')
+        sanitized = text.replace("\r", " ").replace("\n", " ")
+        sanitized = sanitized.replace(",", "_")
         return sanitized.strip()
-
-
-
