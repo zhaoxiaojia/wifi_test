@@ -191,7 +191,7 @@ def apply_ui(page: Any, case_path: str) -> None:
                 logging.debug("apply_ui: apply_editable_info failed", exc_info=True)
 
         # Determine which logical pages should be visible.
-    page_keys = getattr(page, "_current_page_keys", ["basic"])
+        page_keys = getattr(page, "_current_page_keys", ["basic"])
         if config_ctl is not None:
             try:
                 page_keys = config_ctl.determine_pages_for_case(case_path, info)
