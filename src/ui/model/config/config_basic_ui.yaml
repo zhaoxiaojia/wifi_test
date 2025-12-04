@@ -1,5 +1,5 @@
 panels:
-  dut:
+  basic:
     sections:
       - id: software_info
         label: "Software Info"
@@ -90,3 +90,30 @@ panels:
             widget: combo_box
             label: "Baud Rate"
             choices: ["9600", "19200", "38400", "57600", "115200", "921600"]
+      - id: throughput
+        label: "Throughput Generator"
+        fields:
+          - key: rvr.tool
+            widget: combo_box
+            label: "Throughput Tool"
+            choices: ["iperf", "ixchariot"]
+          - key: rvr.iperf.path
+            widget: line_edit
+            label: "iperf path (DUT)"
+          - key: rvr.iperf.server_cmd
+            widget: line_edit
+            label: "iperf server cmd"
+          - key: rvr.iperf.client_cmd
+            widget: line_edit
+            label: "iperf client cmd"
+          - key: rvr.ixchariot.path
+            widget: line_edit
+            label: "IxChariot path"
+          - key: rvr.repeat
+            widget: line_edit
+            label: "Repeat"
+            placeholder: "0"
+          - key: rvr.throughput_threshold
+            widget: line_edit
+            label: "Zero Point Threshold"
+            placeholder: "0"

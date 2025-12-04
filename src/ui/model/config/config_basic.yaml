@@ -27,3 +27,13 @@ serial_port:
   baud: '9600'
   port: COM14 (蓝牙链接上的标准串行 (COM14))
   status: false
+rvr:
+  iperf:
+    path: ''
+    server_cmd: iperf -s -i 1
+    client_cmd: iperf -c {ip} -i 1 -t 5 -P 1
+  ixchariot:
+    path: D:/Program Files (x86)/Ixia/IxChariot
+  repeat: '0'
+  throughput_threshold: '0'
+  tool: iperf
