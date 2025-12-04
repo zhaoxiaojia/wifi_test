@@ -1,4 +1,4 @@
-"""View + page implementation for the Config sidebar (DUT/Performance/Stability)."""
+"""View + page implementation for the Config sidebar (Basic/Performance/Stability)."""
 
 from __future__ import annotations
 
@@ -129,7 +129,7 @@ class AnimatedTreeView(TreeView):
 
 
 class _ConfigTabLabel(QLabel):
-    """Clickable label used for DUT/Performance/Stability tabs."""
+    """Clickable label used for Basic/Performance/Stability tabs."""
 
     clicked = pyqtSignal()
 
@@ -170,9 +170,9 @@ class ConfigView(CardWidget):
         # Track which logical pages are currently available
         self._current_page_keys: list[str] = []
 
-        # Simple tab row for DUT / Performance / Stability / Compatibility
+        # Simple tab row for Basic / Performance / Stability / Compatibility
         self._page_label_map: dict[str, str] = {
-            "dut": "DUT",
+            "basic": "Basic",
             "execution": "Performance",
             "stability": "Stability",
             "compatibility": "Compatibility",
@@ -181,9 +181,9 @@ class ConfigView(CardWidget):
         tabs_row = QHBoxLayout()
         tabs_row.setContentsMargins(PAGE_CONTENT_MARGIN, PAGE_CONTENT_MARGIN, PAGE_CONTENT_MARGIN, 0)
         tabs_row.setSpacing(8)
-        for key in ("dut", "execution", "stability", "compatibility"):
+        for key in ("basic", "execution", "stability", "compatibility"):
             lbl = _ConfigTabLabel(self._page_label_map[key], self)
-            apply_settings_tab_label_style(lbl, active=(key == "dut"))
+            apply_settings_tab_label_style(lbl, active=(key == "basic"))
             self._page_buttons[key] = lbl
             tabs_row.addWidget(lbl)
         tabs_row.addStretch(1)
@@ -193,7 +193,7 @@ class ConfigView(CardWidget):
         right.addWidget(self.stack, 1)
 
         self._page_panels: dict[str, ConfigGroupPanel] = {
-            "dut": ConfigGroupPanel(self),
+            "basic": ConfigGroupPanel(self),
             "execution": ConfigGroupPanel(self),
             # 稳定性页使用两列布局：左侧给脚本用例（如 test_switch_wifi）更多空间，
             # 右侧堆叠 Duration / Check Point / Selected Test Case。
@@ -203,7 +203,8 @@ class ConfigView(CardWidget):
         # These aliases allow refresh_config_page_controls (and related helpers)
         # to treat the panels as dedicated attributes while the view internally
         # tracks them in a dictionary.
-        self._dut_panel = self._page_panels["dut"]
+        self._basic_panel = self._page_panels["basic"]
+        self._dut_panel = self._basic_panel
         self._execution_panel = self._page_panels["execution"]
         self._stability_panel = self._page_panels["stability"]
         # Additional panel used for folder-based Compatibility Settings.
@@ -214,7 +215,7 @@ class ConfigView(CardWidget):
         self._page_widgets: dict[str, QWidget] = {}
         self._run_buttons: list[PushButton] = []
 
-        for key in ("dut", "execution", "stability", "compatibility"):
+        for key in ("basic", "execution", "stability", "compatibility"):
             panel = self._page_panels[key]
             page = QWidget()
             page.setObjectName(f"config_{key}_page")
@@ -232,7 +233,7 @@ class ConfigView(CardWidget):
             self._page_widgets[key] = page
 
         # Initialise stack and step view with the default page selection.
-        self.set_available_pages(["dut"])
+        self.set_available_pages(["basic"])
 
         scroll_area.setWidget(container)
         self.splitter.addWidget(scroll_area)
@@ -271,8 +272,8 @@ class ConfigView(CardWidget):
                 continue
             if key not in normalized:
                 normalized.append(key)
-        if "dut" not in normalized:
-            normalized.insert(0, "dut")
+        if "basic" not in normalized:
+            normalized.insert(0, "basic")
         if normalized == getattr(self, "_current_page_keys", []):
             return
 
@@ -415,7 +416,7 @@ class CaseConfigPage(ConfigView):
         self._kernel_versions = list(DEFAULT_KERNEL_VERSION_CHOICES)
 
         # Logical page tracking from the controller perspective.
-        self._current_page_keys = ["dut"]
+        self._current_page_keys = ["basic"]
 
         self._script_config_factories: dict[
             str, Callable[[Any, str, str, Mapping[str, Any]], ScriptConfigEntry]
@@ -426,10 +427,11 @@ class CaseConfigPage(ConfigView):
         self._script_groups: dict[str, ScriptConfigEntry] = {}
         self._active_script_case: str | None = None
 
-        self._config_panels = tuple(self._page_panels[key] for key in ("dut", "execution", "stability"))
+        self._config_panels = tuple(self._page_panels[key] for key in ("basic", "execution", "stability"))
 
         # Containers for groups discovered from the YAML schema.
-        self._dut_groups: dict[str, QWidget] = {}
+        self._basic_groups: dict[str, QWidget] = {}
+        self._dut_groups = self._basic_groups
         self._other_groups: dict[str, QWidget] = {}
         # Field map used by the simple rule engine; initialised to an empty
         # mapping so that early rule evaluations can safely access it before

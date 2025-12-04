@@ -2,7 +2,7 @@
 
 This module reads UI schema YAML files from ``src/ui/model/config``
 and constructs Qt widgets (group boxes + field controls) for a given
-Config panel. It is used to render DUT / Performance / Stability
+Config panel. It is used to render Basic / Performance / Stability
 panels from YAML.
 """
 
@@ -51,7 +51,8 @@ def _load_yaml_schema(filename: str) -> Dict[str, Any]:
 def load_ui_schema(section: str) -> Dict[str, Any]:
     """Load the UI schema for the given high-level section."""
     mapping = {
-        "dut": "config_dut_ui.yaml",
+        "basic": "config_basic_ui.yaml",
+        "dut": "config_basic_ui.yaml",
         "execution": "config_performance_ui.yaml",
         "stability": "config_stability_ui.yaml",
         "compatibility": "config_compatibility_ui.yaml",
@@ -298,7 +299,8 @@ def build_groups_from_schema(
 
         # Record the group on the page so that higher-level layout helpers
         # (e.g. stability common groups) can reference it later.
-        target = page._dut_groups if panel_key == "dut" else page._other_groups
+        is_basic_panel = panel_key in {"basic", "dut"}
+        target = page._basic_groups if is_basic_panel else page._other_groups
         target[section_id or group_label] = group
 
     # Trigger a single rebalance for this panel if supported.
