@@ -9,11 +9,12 @@ of the codebase.
 """
 
 from src.util.constants import (
+    BASIC_CONFIG_FILENAME,
+    BASIC_SECTION_KEYS,
+    COMPATIBILITY_CONFIG_FILENAME,
     CONFIG_KEY_ALIASES,
     DUT_CONFIG_FILENAME,
-    DUT_SECTION_KEYS,
     EXECUTION_CONFIG_FILENAME,
-    COMPATIBILITY_CONFIG_FILENAME,
     STABILITY_CONFIG_FILENAME,
     get_config_base,
     merge_config_sections,
@@ -23,8 +24,9 @@ from src.util.constants import (
 
 __all__ = [
     "CONFIG_KEY_ALIASES",
+    "BASIC_CONFIG_FILENAME",
+    "BASIC_SECTION_KEYS",
     "DUT_CONFIG_FILENAME",
-    "DUT_SECTION_KEYS",
     "EXECUTION_CONFIG_FILENAME",
     "COMPATIBILITY_CONFIG_FILENAME",
     "STABILITY_CONFIG_FILENAME",

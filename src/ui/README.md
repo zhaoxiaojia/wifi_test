@@ -22,9 +22,9 @@ Goals:
 - Location: `src/ui/model/`
 - Purpose: describe *what* can be configured and how fields are grouped.
 - Typical files:
-  - `config_dut.yaml`, `config_performance.yaml`, `config_stability.yaml`
+  - `config_basic.yaml`, `config_performance.yaml`, `config_stability.yaml`
     (persisted config values)
-  - `config_dut_ui.yaml`, `config_performance_ui.yaml`, `config_stability_ui.yaml`
+  - `config_basic_ui.yaml`, `config_performance_ui.yaml`, `config_stability_ui.yaml`
     (UI schema: panels/sections/fields)
   - `options.py` (dynamic choice lists for comboboxes)
   - `rules.py` (declarative UI rules and helpers)
@@ -77,14 +77,14 @@ Controllers must not create their own ad‑hoc layouts or windows.
 
 ## 2. Config Page End‑to‑End Flow
 
-This section describes the **exact pipeline** for the Config page (DUT,
+This section describes the **exact pipeline** for the Config page (Basic,
 Performance, Stability) from YAML to widgets to rule‑driven behaviour.
 
 ### 2.1 Config YAML (values)
 
 Persisted configuration is stored under `src/ui/model/config/`:
 
-- `config_dut.yaml`
+- `config_basic.yaml`
 - `config_performance.yaml`
 - `config_stability.yaml`
 - `config_tool.yaml`
@@ -103,13 +103,13 @@ Loading and saving is handled by helpers in `src/ui/__init__.py` and
 
 The *structure* of the Config page is described in:
 
-- `config_dut_ui.yaml`
+- `config_basic_ui.yaml`
 - `config_performance_ui.yaml`
 - `config_stability_ui.yaml`
 
 Each schema file defines panels and sections:
 
-- `panels.dut.sections[].fields[]`
+- `panels.basic.sections[].fields[]`
 - `panels.execution.sections[].fields[]`
 - `panels.stability.sections[].fields[]`
 

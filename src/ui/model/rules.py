@@ -20,7 +20,7 @@ The design is intentionally small:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Mapping, Optional
 import logging
 import os
 
@@ -59,6 +59,18 @@ def current_connect_type(page: Any) -> str:
         return normalize_connect_type_label(text) if isinstance(text, str) else ""
     except Exception:
         return ""
+
+
+def needs_throughput(values: Mapping[str, Any]) -> bool:
+    """Return whether the selected testcase requires traffic generation."""
+
+    return bool(
+        values.get("testcase.is_peak_throughput")
+        or values.get("testcase.is_performance")
+        or values.get("testcase.is_rvr")
+        or values.get("testcase.is_rvo")
+        or values.get("testcase.is_compatibility")
+    )
 
 
 def _value_as_bool(values: Dict[str, Any], key: str) -> bool:
@@ -889,89 +901,38 @@ CUSTOM_TESTCASE_UI_RULES.append(
                 condition=lambda values: True,
             ),
             # ------------------------------------------------------------------
-            # Performance / peak throughput RvR fields.
+            # Throughput generator fields shared across test types.
             # ------------------------------------------------------------------
-            # RvR base controls (peak throughput and all performance cases).
-            SimpleFieldEffect(
-                target_field="rvr",
-                action="enable",
-                condition=lambda values: bool(
-                    values.get("testcase.is_peak_throughput")
-                    or values.get("testcase.is_performance")
-                ),
-            ),
+            # RvR base controls (any testcase that needs throughput measurements).
             SimpleFieldEffect(
                 target_field="rvr.tool",
                 action="enable",
-                condition=lambda values: bool(
-                    values.get("testcase.is_peak_throughput")
-                    or values.get("testcase.is_performance")
-                ),
+                condition=needs_throughput,
             ),
             SimpleFieldEffect(
                 target_field="rvr.iperf.path",
                 action="enable",
-                condition=lambda values: bool(
-                    values.get("testcase.is_peak_throughput")
-                    or values.get("testcase.is_performance")
-                ),
+                condition=needs_throughput,
             ),
             SimpleFieldEffect(
                 target_field="rvr.iperf.server_cmd",
                 action="enable",
-                condition=lambda values: bool(
-                    values.get("testcase.is_peak_throughput")
-                    or values.get("testcase.is_performance")
-                ),
+                condition=needs_throughput,
             ),
             SimpleFieldEffect(
                 target_field="rvr.iperf.client_cmd",
                 action="enable",
-                condition=lambda values: bool(
-                    values.get("testcase.is_peak_throughput")
-                    or values.get("testcase.is_performance")
-                ),
+                condition=needs_throughput,
             ),
-              SimpleFieldEffect(
-                  target_field="rvr.ixchariot.path",
-                  action="enable",
-                  condition=lambda values: bool(
-                      values.get("testcase.is_peak_throughput")
-                      or values.get("testcase.is_performance")
-                  ),
-              ),
-              # ------------------------------------------------------------------
-              # Compatibility Settings fields.
-              # ------------------------------------------------------------------
-              # NIC selection and power‑relay configuration are only editable
-              # for compatibility testcases; keep them disabled otherwise.
-              SimpleFieldEffect(
-                  target_field="compatibility.nic",
-                  action="enable",
-                  condition=lambda values: bool(values.get("testcase.is_compatibility")),
-              ),
-              SimpleFieldEffect(
-                  target_field="compatibility.nic",
-                  action="disable",
-                  condition=lambda values: not bool(values.get("testcase.is_compatibility")),
-              ),
-              SimpleFieldEffect(
-                  target_field="compatibility.power_ctrl.relays",
-                  action="enable",
-                  condition=lambda values: bool(values.get("testcase.is_compatibility")),
-              ),
-              SimpleFieldEffect(
-                  target_field="compatibility.power_ctrl.relays",
-                  action="disable",
-                  condition=lambda values: not bool(values.get("testcase.is_compatibility")),
-              ),
+            SimpleFieldEffect(
+                target_field="rvr.ixchariot.path",
+                action="enable",
+                condition=needs_throughput,
+            ),
             SimpleFieldEffect(
                 target_field="rvr.repeat",
                 action="enable",
-                condition=lambda values: bool(
-                    values.get("testcase.is_peak_throughput")
-                    or values.get("testcase.is_performance")
-                ),
+                condition=needs_throughput,
             ),
             # Throughput threshold: all performance cases.
             SimpleFieldEffect(
@@ -979,62 +940,61 @@ CUSTOM_TESTCASE_UI_RULES.append(
                 action="enable",
                 condition=lambda values: bool(values.get("testcase.is_performance")),
             ),
-            # Disable RvR fields when not performance/peak.
+            # ------------------------------------------------------------------
+            # Compatibility Settings fields.
+            # ------------------------------------------------------------------
+            # NIC selection and power‑relay configuration are only editable
+            # for compatibility testcases; keep them disabled otherwise.
             SimpleFieldEffect(
-                target_field="rvr",
-                action="disable",
-                condition=lambda values: not bool(
-                    values.get("testcase.is_peak_throughput")
-                    or values.get("testcase.is_performance")
-                ),
+                target_field="compatibility.nic",
+                action="enable",
+                condition=lambda values: bool(values.get("testcase.is_compatibility")),
             ),
+            SimpleFieldEffect(
+                target_field="compatibility.nic",
+                action="disable",
+                condition=lambda values: not bool(values.get("testcase.is_compatibility")),
+            ),
+            SimpleFieldEffect(
+                target_field="compatibility.power_ctrl.relays",
+                action="enable",
+                condition=lambda values: bool(values.get("testcase.is_compatibility")),
+            ),
+            SimpleFieldEffect(
+                target_field="compatibility.power_ctrl.relays",
+                action="disable",
+                condition=lambda values: not bool(values.get("testcase.is_compatibility")),
+            ),
+            # Disable RvR fields when throughput inputs are not required.
             SimpleFieldEffect(
                 target_field="rvr.tool",
                 action="disable",
-                condition=lambda values: not bool(
-                    values.get("testcase.is_peak_throughput")
-                    or values.get("testcase.is_performance")
-                ),
+                condition=lambda values: not needs_throughput(values),
             ),
             SimpleFieldEffect(
                 target_field="rvr.iperf.path",
                 action="disable",
-                condition=lambda values: not bool(
-                    values.get("testcase.is_peak_throughput")
-                    or values.get("testcase.is_performance")
-                ),
+                condition=lambda values: not needs_throughput(values),
             ),
             SimpleFieldEffect(
                 target_field="rvr.iperf.server_cmd",
                 action="disable",
-                condition=lambda values: not bool(
-                    values.get("testcase.is_peak_throughput")
-                    or values.get("testcase.is_performance")
-                ),
+                condition=lambda values: not needs_throughput(values),
             ),
             SimpleFieldEffect(
                 target_field="rvr.iperf.client_cmd",
                 action="disable",
-                condition=lambda values: not bool(
-                    values.get("testcase.is_peak_throughput")
-                    or values.get("testcase.is_performance")
-                ),
+                condition=lambda values: not needs_throughput(values),
             ),
             SimpleFieldEffect(
                 target_field="rvr.ixchariot.path",
                 action="disable",
-                condition=lambda values: not bool(
-                    values.get("testcase.is_peak_throughput")
-                    or values.get("testcase.is_performance")
-                ),
+                condition=lambda values: not needs_throughput(values),
             ),
             SimpleFieldEffect(
                 target_field="rvr.repeat",
                 action="disable",
-                condition=lambda values: not bool(
-                    values.get("testcase.is_peak_throughput")
-                    or values.get("testcase.is_performance")
-                ),
+                condition=lambda values: not needs_throughput(values),
             ),
             SimpleFieldEffect(
                 target_field="rvr.throughput_threshold",

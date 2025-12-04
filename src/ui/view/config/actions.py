@@ -191,7 +191,7 @@ def apply_ui(page: Any, case_path: str) -> None:
                 logging.debug("apply_ui: apply_editable_info failed", exc_info=True)
 
         # Determine which logical pages should be visible.
-        page_keys = getattr(page, "_current_page_keys", ["dut"])
+        page_keys = getattr(page, "_current_page_keys", ["basic"])
         if config_ctl is not None:
             try:
                 page_keys = config_ctl.determine_pages_for_case(case_path, info)
@@ -382,6 +382,8 @@ def apply_run_lock_ui_state(page: Any, locked: bool) -> None:
 def refresh_config_page_controls(page: Any) -> None:
     """Build and refresh all controls on the Config page (including FPGA mapping)."""
     # Clear cached groups so rebuilding the UI does not accumulate stale widgets.
+    if hasattr(page, "_basic_groups"):
+        page._basic_groups.clear()
     if hasattr(page, "_dut_groups"):
         page._dut_groups.clear()
     if hasattr(page, "_other_groups"):
@@ -393,12 +395,12 @@ def refresh_config_page_controls(page: Any) -> None:
         page.config = config
 
     # Ensure a few top-level sections always exist and are dicts.
-    defaults_for_dut = {
+    defaults_for_basic = {
         "software_info": {},
         "hardware_info": {},
         "system": {},
     }
-    for key, default in defaults_for_dut.items():
+    for key, default in defaults_for_basic.items():
         existing = config.get(key)
         if not isinstance(existing, dict):
             config[key] = default.copy()
@@ -450,9 +452,9 @@ def refresh_config_page_controls(page: Any) -> None:
     # Build panels from YAML schemas.  Parent all groups directly
     # to the corresponding ConfigGroupPanel so that layout is fully
     # owned by the view layer.
-    dut_schema = load_ui_schema("dut")
-    dut_panel = getattr(page, "_dut_panel", None)
-    build_groups_from_schema(page, config, dut_schema, panel_key="dut", parent=dut_panel)
+    basic_schema = load_ui_schema("basic")
+    basic_panel = getattr(page, "_basic_panel", None) or getattr(page, "_dut_panel", None)
+    build_groups_from_schema(page, config, basic_schema, panel_key="basic", parent=basic_panel)
 
     # Compatibility Settings live on their own panel so that they can
     # behave as a dedicated Settings tab for compatibility testcases.
@@ -1073,7 +1075,7 @@ def apply_connect_type_ui_state(page: Any, connect_type: str) -> None:
     All field-level attribute changes (Android vs Linux device/IP fields and
     related system widgets) are expressed via the simple rule engine in
     ``rules.py``.  This helper no longer mutates widget attributes directly
-    so that the DUT section stays purely rule-driven.
+    so that the Basic section stays purely rule-driven.
     """
     _ = page, connect_type
 
@@ -1092,8 +1094,9 @@ def handle_connect_type_changed(page: Any, display_text: str) -> None:
     except Exception:
         logging.debug("Failed to update Android system for connect type", exc_info=True)
 
-    if hasattr(page, "_dut_panel"):
-        _rebalance_panel(page._dut_panel)
+    panel = getattr(page, "_basic_panel", None) or getattr(page, "_dut_panel", None)
+    if panel is not None:
+        _rebalance_panel(panel)
 
     try:
         evaluate_all_rules(page, "connect_type.type")
