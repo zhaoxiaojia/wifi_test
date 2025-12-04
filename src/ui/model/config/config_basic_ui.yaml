@@ -91,11 +91,11 @@ panels:
             label: "Baud Rate"
             choices: ["9600", "19200", "38400", "57600", "115200", "921600"]
       - id: throughput
-        label: "Traffic Generator"
+        label: "Throughput Generator"
         fields:
           - key: rvr.tool
             widget: combo_box
-            label: "Data Generator"
+            label: "Throughput Tool"
             choices: ["iperf", "ixchariot"]
           - key: rvr.iperf.path
             widget: line_edit

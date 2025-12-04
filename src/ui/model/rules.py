@@ -905,11 +905,6 @@ CUSTOM_TESTCASE_UI_RULES.append(
             # ------------------------------------------------------------------
             # RvR base controls (any testcase that needs throughput measurements).
             SimpleFieldEffect(
-                target_field="rvr",
-                action="enable",
-                condition=needs_throughput,
-            ),
-            SimpleFieldEffect(
                 target_field="rvr.tool",
                 action="enable",
                 condition=needs_throughput,
@@ -971,11 +966,6 @@ CUSTOM_TESTCASE_UI_RULES.append(
                 condition=lambda values: not bool(values.get("testcase.is_compatibility")),
             ),
             # Disable RvR fields when throughput inputs are not required.
-            SimpleFieldEffect(
-                target_field="rvr",
-                action="disable",
-                condition=lambda values: not needs_throughput(values),
-            ),
             SimpleFieldEffect(
                 target_field="rvr.tool",
                 action="disable",
