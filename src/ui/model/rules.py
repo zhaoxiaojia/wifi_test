@@ -69,6 +69,7 @@ def needs_throughput(values: Mapping[str, Any]) -> bool:
         or values.get("testcase.is_performance")
         or values.get("testcase.is_rvr")
         or values.get("testcase.is_rvo")
+        or values.get("testcase.is_stability")
         or values.get("testcase.is_compatibility")
     )
 
