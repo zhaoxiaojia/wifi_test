@@ -16,16 +16,6 @@ rf_solution:
     channels: '1'
   model: RC4DAT-8G-95
   step: 0,3:1
-rvr:
-  iperf:
-    path: ''
-    server_cmd: iperf -s -i 1
-    client_cmd: iperf -c {ip} -i 1 -t 5 -P 1
-  ixchariot:
-    path: D:/Program Files (x86)/Ixia/IxChariot
-  repeat: '0'
-  throughput_threshold: '0'
-  tool: iperf
 router:
   name: xiaomibe7000
   address: 192.168.31.1

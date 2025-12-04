@@ -1242,11 +1242,11 @@ class ConfigController(
         return stem
 
     def determine_pages_for_case(self, case_path: str, info: "EditableInfo") -> list[str]:
-        """Return which logical pages (dut/execution/stability/compatibility) are visible for the case."""
+        """Return which logical pages (basic/execution/stability/compatibility) are visible for the case."""
         if not case_path:
-            return ["dut"]
+            return ["basic"]
 
-        keys = ["dut"]
+        keys = ["basic"]
 
         # Derive category primarily from the folder under ``test`` so that
         # Settings tabs map to top-level test directories.

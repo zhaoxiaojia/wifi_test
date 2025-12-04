@@ -52,34 +52,6 @@ panels:
             widget: line_edit
             label: "LDA-908V-8 Channels"
 
-      - id: rvr
-        label: "Performance Config"
-        fields:
-          - key: rvr.tool
-            widget: combo_box
-            label: "Data Generator"
-            choices: ["iperf", "ixchariot"]
-          - key: rvr.iperf.path
-            widget: line_edit
-            label: "iperf path (DUT)"
-          - key: rvr.iperf.server_cmd
-            widget: line_edit
-            label: "iperf server cmd"
-          - key: rvr.iperf.client_cmd
-            widget: line_edit
-            label: "iperf client cmd"
-          - key: rvr.ixchariot.path
-            widget: line_edit
-            label: "IxChariot path"
-          - key: rvr.repeat
-            widget: line_edit
-            label: "Repeat"
-            placeholder: "0"
-          - key: rvr.throughput_threshold
-            widget: line_edit
-            label: "Zero Point Threshold"
-            placeholder: "0"
-
       - id: router
         label: "Router"
         fields:
