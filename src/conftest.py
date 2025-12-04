@@ -267,7 +267,9 @@ def pytest_collection_finish(session):
     Args:
         session (pytest.Session): The current pytest session object.
     """
-    # Number of tests collected
+    # For progress, each collected pytest item counts once. Parameterized
+    # fixtures are already expanded into individual items, so this total
+    # naturally reflects (ip, port, band, test) combinations.
     session.total_test_count = len(session.items)
 
     # Detect selected test types based on path hints
@@ -378,14 +380,13 @@ def pytest_runtest_teardown(item, nextitem):
     """
     yield
     session = item.session
-    if not hasattr(session, 'pyqt_finished'):
+    if not hasattr(session, "pyqt_finished"):
         session.pyqt_finished = 0
-    if getattr(item, '_pyqt_progress_recorded', False):
+    if getattr(item, "_pyqt_progress_recorded", False):
         return
     session.pyqt_finished += 1
-    total = getattr(session, 'total_test_count', None)
-    if total:
-        emit_pyqt_message("PROGRESS", f" {session.pyqt_finished}/{total}")
+    total = getattr(session, "total_test_count", None) or len(session.items)
+    emit_pyqt_message("PROGRESS", f" {session.pyqt_finished}/{total}")
     item._pyqt_progress_recorded = True
 
 @pytest.fixture(autouse=True)
