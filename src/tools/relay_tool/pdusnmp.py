@@ -38,7 +38,12 @@ class power_ctrl(Relay):
         for entry in relays_cfg:
             ip = str(entry["ip"]).strip()
             ports = [int(p) for p in entry["ports"]]
-            power_relay[ip] = ports
+            if ip in power_relay:
+                for port in ports:
+                    if port not in power_relay[ip]:
+                        power_relay[ip].append(port)
+            else:
+                power_relay[ip] = ports
 
         self.power_ctrl = power_relay
         self.ip_list = list(self.power_ctrl.keys())
