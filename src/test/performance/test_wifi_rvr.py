@@ -15,15 +15,7 @@ import pytest
 
 from src.test import get_testdata
 from src.test.pyqt_log import log_fixture_params
-from src.test.performance import (
-    common_setup,
-    get_cfg,
-    get_rf_step_list,
-    init_rf,
-    init_router,
-    scenario_group,
-    wait_connect,
-)
+from src.test.performance import common_setup, ensure_performance_result, get_cfg, get_rf_step_list, init_rf, init_router, scenario_group, wait_connect
 from src.tools.router_tool.Router import router_str
 
 _test_data = get_testdata(init_router())
@@ -56,9 +48,9 @@ def setup_attenuation(request, setup_router):
 
 def test_rvr(setup_attenuation, performance_sync_manager):
     connect_status, router_info, db_set = setup_attenuation
+    test_result = ensure_performance_result()
     with scenario_group(router_info):
-        if hasattr(pytest.testResult, "ensure_log_file_prefix"):
-            pytest.testResult.ensure_log_file_prefix("RVR")
+        test_result.ensure_log_file_prefix("RVR")
         if not connect_status:
             logging.info("Cannot connect to Wi-Fi, skip remaining steps")
         else:
@@ -73,6 +65,6 @@ def test_rvr(setup_attenuation, performance_sync_manager):
 
     performance_sync_manager(
         "RVR",
-        pytest.testResult.log_file,
+        test_result.log_file,
         message="RVR data rows stored in database",
     )

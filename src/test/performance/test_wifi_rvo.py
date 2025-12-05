@@ -21,6 +21,7 @@ from src.test.pyqt_log import log_fixture_params, update_fixture_params
 from src.test.performance import (
     common_setup,
     describe_debug_reason,
+    ensure_performance_result,
     get_corner_step_list,
     get_rf_step_list,
     get_rvo_static_db_list,
@@ -324,9 +325,9 @@ def setup_rvo_case(request, setup_router):
 
 def test_rvo(setup_rvo_case, performance_sync_manager):
     connect_status, router_info, corner_angle, attenuation_db, rssi_num, profile = setup_rvo_case
+    test_result = ensure_performance_result()
     with scenario_group(router_info):
-        if hasattr(pytest.testResult, "ensure_log_file_prefix"):
-            pytest.testResult.ensure_log_file_prefix("RVO")
+        test_result.ensure_log_file_prefix("RVO")
         if not connect_status:
             logging.info("Can't connect wifi ,input 0")
             return
@@ -335,7 +336,7 @@ def test_rvo(setup_rvo_case, performance_sync_manager):
         logging.info('corner angle set to %s', corner_angle)
         logging.info('start test iperf tx %s rx %s', router_info.tx, router_info.rx)
 
-        pytest.testResult.set_active_profile(profile.mode, profile.value)
+        test_result.set_active_profile(profile.mode, profile.value)
         try:
             if int(router_info.tx):
                 logging.info('rssi : %s', rssi_num)
@@ -354,10 +355,10 @@ def test_rvo(setup_rvo_case, performance_sync_manager):
                     db_set='' if attenuation_db is None else attenuation_db,
                 )
         finally:
-            pytest.testResult.clear_active_profile()
+            test_result.clear_active_profile()
 
     performance_sync_manager(
         "RVO",
-        pytest.testResult.log_file,
+        test_result.log_file,
         message="RVO data rows stored in database",
     )

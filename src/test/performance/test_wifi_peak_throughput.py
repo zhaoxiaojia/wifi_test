@@ -16,7 +16,7 @@ import pytest
 from src.tools.router_tool.Router import router_str
 from src.util.constants import get_debug_flags
 
-from src.test.performance import common_setup, init_router, scenario_group, wait_connect
+from src.test.performance import common_setup, ensure_performance_result, init_router, scenario_group, wait_connect
 
 _test_data = get_testdata(init_router())
 router = init_router()
@@ -41,6 +41,7 @@ def setup_router(request):
 
 def test_rvr(setup_router, performance_sync_manager):
     connect_status, router_info = setup_router
+    test_result = ensure_performance_result()
     with scenario_group(router_info):
         if not connect_status:
             logging.info("Can't connect wifi ,input 0")
@@ -63,6 +64,6 @@ def test_rvr(setup_router, performance_sync_manager):
 
     performance_sync_manager(
         "Peak",
-        pytest.testResult.log_file,
+        test_result.log_file,
         message="Peak throught data rows stored in database",
     )

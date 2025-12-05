@@ -57,7 +57,7 @@ class _PerformanceSyncSession:
             run_source=(run_source or "FRAMEWORK").strip() or "FRAMEWORK",
             message=message or f"Stored rows for {normalized_type}",
         )
-        if normalized_type in {"RVR", "RVO"}:
+        if normalized_type in {"RVR", "RVO", "PEAK"}:
             _generate_charts(normalized_type, log_file)
 
     def flush(self) -> None:

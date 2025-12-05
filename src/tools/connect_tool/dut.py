@@ -1460,7 +1460,8 @@ class dut():
                 'bandwidth': router_info.bandwidth,
             }
         }
-        expect_rate = handle_expectdata(router_cfg, router_info.band, 'DL', pytest.chip_info)
+        chip_info = getattr(pytest, "chip_info", None)
+        expect_rate = handle_expectdata(router_cfg, router_info.band, 'DL', chip_info)
         if self.skip_rx:
             corner = corner_tool.get_turntanle_current_angle() if corner_tool else ''
             throughput_cells = self._normalize_throughput_cells(['0'])
@@ -1623,7 +1624,8 @@ class dut():
                 'bandwidth': router_info.bandwidth,
             }
         }
-        expect_rate = handle_expectdata(router_cfg, router_info.band, 'UL', pytest.chip_info)
+        chip_info = getattr(pytest, "chip_info", None)
+        expect_rate = handle_expectdata(router_cfg, router_info.band, 'UL', chip_info)
         if self.skip_tx:
             corner = corner_tool.get_turntanle_current_angle() if corner_tool else ''
             throughput_cells = self._normalize_throughput_cells(['0'])

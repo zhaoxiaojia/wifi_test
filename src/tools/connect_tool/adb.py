@@ -1860,10 +1860,10 @@ class adb(dut):
             command += self.CMD_WIFI_HIDE
 
         connect_status = False
-        for _ in range(3):
+        for _ in range(5):
             try:
                 self.checkoutput(command)
-                time.sleep(5)
+                time.sleep(10)
                 if lan:
                     if not getattr(self, "ip_target", ""):
                         _ = self.pc_ip

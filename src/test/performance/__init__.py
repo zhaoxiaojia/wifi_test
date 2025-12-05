@@ -4,6 +4,7 @@
 通用性能测试工具
 """
 import logging
+import os
 import re
 import time
 from contextlib import contextmanager
@@ -13,6 +14,7 @@ from typing import Any, Optional
 import pytest
 
 from src.tools.config_loader import load_config
+from src.tools.performance_result import PerformanceResult
 from src.tools.router_tool.Router import Router
 from src.tools.router_tool.router_factory import get_router
 from src.tools.connect_tool.lab_device_controller import LabDeviceController
@@ -83,6 +85,18 @@ def build_scenario_group_key(router_info: Router) -> str:
     if not parts:
         return "SCENARIO|UNKNOWN"
     return "SCENARIO|" + "|".join(parts)
+
+
+def ensure_performance_result() -> PerformanceResult:
+    """Return the shared PerformanceResult instance, creating it on first use."""
+    existing = getattr(pytest, "testResult", None)
+    if isinstance(existing, PerformanceResult):
+        return existing
+    logdir = getattr(pytest, "_result_path", None) or os.getcwd()
+    repeat_times = getattr(pytest, "_testresult_repeat_times", 0)
+    result = PerformanceResult(logdir, [], repeat_times)
+    pytest.testResult = result
+    return result
 
 
 @contextmanager

@@ -15,7 +15,7 @@ rf_solution:
     ip_address: 192.168.5.200
     channels: '1'
   model: RC4DAT-8G-95
-  step: 0,3:1
+  step: 0,75:3
 router:
   name: xiaomibe7000
   address: 192.168.31.1
@@ -24,4 +24,4 @@ debug:
   database_mode: true
   skip_router: false
   skip_corner_rf: false
-csv_path: performance_test_csv/rvr_wifi_setup.csv
+csv_path: performance_test_csv/rvr_wifi_setup_demo.csv
