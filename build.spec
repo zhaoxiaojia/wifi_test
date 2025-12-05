@@ -75,6 +75,6 @@ exe = EXE(
     strip=False,
     upx=True,
     runtime_tmpdir=None,
-    icon='wifi.ico'
+    icon='res/logo/wifi.ico'
 )
 

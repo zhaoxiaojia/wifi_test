@@ -41,3 +41,5 @@ chao.li,2025-12-03 15:52:15,test/compatibility/test_compatibility.py,00:00
 chao.li,2025-12-03 15:53:22,test/compatibility/test_compatibility.py,00:02
 chao.li,2025-12-03 16:05:13,test/compatibility/test_compatibility.py,00:02
 chao.li,2025-12-03 16:19:47,test/compatibility/test_compatibility.py,00:02
+chao.li,2025-12-05 13:47:38,test/performance/test_wifi_rvr.py,00:00
+chao.li,2025-12-05 13:53:37,test/performance/test_wifi_rvr.py,00:01

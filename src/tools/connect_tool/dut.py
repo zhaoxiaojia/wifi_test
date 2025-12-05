@@ -1860,8 +1860,8 @@ class dut():
         if pytest.connect_type == 'Linux':
             return pytest.dut.roku.wifi_scan(ssid)
         else:
-            for _ in range(5):
-                info = pytest.dut.checkoutput("cmd wifi start-scan;sleep 5;cmd wifi list-scan-results")
+            for _ in range(10):
+                info = pytest.dut.checkoutput("cmd wifi start-scan;sleep 10;cmd wifi list-scan-results")
                 logging.info(info)
                 if ssid in info:
                     return True

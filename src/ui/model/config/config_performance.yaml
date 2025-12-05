@@ -19,7 +19,7 @@ rf_solution:
 router:
   name: xiaomibe7000
   address: 192.168.31.1
-text_case: test/compatibility/test_compatibility.py
+text_case: test/performance/test_wifi_rvr.py
 debug:
   database_mode: true
   skip_router: false

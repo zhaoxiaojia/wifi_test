@@ -430,7 +430,20 @@ def pytest_sessionfinish(session, exitstatus):
     destination_dir: Path | None = None
     csv_file = "test_results.csv"
     logging.info(test_results)
-    write_compatibility_results(test_results, csv_file)
+
+    compatibility_results = []
+    for record in test_results:
+        if not isinstance(record, dict) or not record:
+            continue
+        test_name = next(iter(record))
+        data = record[test_name]
+        fixtures = data.get("fixtures", {})
+        if "router_setting" in fixtures or "power_setting" in fixtures:
+            compatibility_results.append(record)
+
+    if compatibility_results:
+        write_compatibility_results(compatibility_results, csv_file)
+
     if result_path:
         destination_dir = Path(result_path)
         with suppress(Exception):
