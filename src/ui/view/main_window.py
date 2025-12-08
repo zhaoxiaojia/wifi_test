@@ -643,8 +643,12 @@ class MainWindow(FluentWindow):
 
         bar = self.global_tools_bar
         bar_height = bar.sizeHint().height()
-        content.setContentsMargins(0, bar_height + margin, 0, 0)
-        bar.setGeometry(0, 0, width, bar_height)
+        content.setContentsMargins(0, 0, 0, 0)
+        bar_width = bar.sizeHint().width()
+        bar_x = max(0, width - bar_width - margin)
+        bar_y = 3
+        bar.setGeometry(bar_x, bar_y, bar_width, bar_height)
+        bar.raise_()
 
         panel = self.global_tools_panel
         if not panel.isVisible():

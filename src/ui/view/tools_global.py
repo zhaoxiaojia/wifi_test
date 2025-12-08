@@ -44,7 +44,7 @@ class GlobalToolsBar(QWidget):
     def __init__(self, tools: Sequence[ToolSpec], parent: QWidget | None = None) -> None:
         super().__init__(parent)
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(4, 2, 4, 2)
+        layout.setContentsMargins(2, 3, 2, 1)
         layout.setSpacing(2)
 
         self._buttons: Dict[str, ToolButton] = {}

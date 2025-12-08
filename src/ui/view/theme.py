@@ -226,3 +226,37 @@ def apply_settings_tab_label_style(label: QLabel, *, active: bool = False) -> No
 def apply_tool_text_style(widget: QWidget) -> None:
     """Apply a transparent background style for tool labels/buttons."""
     widget.setStyleSheet("background-color: transparent; border: none;")
+
+
+def apply_tool_input_box_style(widget: QWidget) -> None:
+    """Apply rounded dark-theme styling for tool input text boxes."""
+    widget.setStyleSheet(
+        """
+        border-radius: 10px;
+        border: 1px solid #555555;
+        padding: 6px 32px 6px 8px;
+        """
+    )
+
+
+def apply_tool_send_button_style(widget: QWidget) -> None:
+    """Apply circular arrow-style send button theme for tool input areas."""
+    widget.setFixedSize(26, 26)
+    widget.setStyleSheet(
+        """
+        QPushButton {
+            border-radius: 13px;
+            background-color: #555555;
+            color: white;
+            border: none;
+            font-size: 14px;
+        }
+        QPushButton:hover {
+            background-color: #666666;
+        }
+        QPushButton:pressed {
+            background-color: #444444;
+        }
+        """
+    )
+    widget.setText("")

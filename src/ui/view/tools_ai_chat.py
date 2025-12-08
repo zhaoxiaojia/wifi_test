@@ -18,7 +18,7 @@ from PyQt5.QtWidgets import (
 )
 from qfluentwidgets import CardWidget, ComboBox
 
-from src.ui.view.theme import apply_tool_text_style
+from src.ui.view.theme import apply_tool_input_box_style, apply_tool_send_button_style, apply_tool_text_style
 
 
 class AiChatToolView(CardWidget):
@@ -59,6 +59,7 @@ class AiChatToolView(CardWidget):
         # Chat area
         self.history_view = QTextEdit(self)
         self.history_view.setReadOnly(True)
+        apply_tool_input_box_style(self.history_view)
         layout.addWidget(self.history_view, 1)
 
         # Input block at the bottom, spanning full width
@@ -68,16 +69,11 @@ class AiChatToolView(CardWidget):
 
         self.input_edit = QPlainTextEdit(self)
         self.input_edit.setPlaceholderText("Ask the AI about your tests or configuration...")
+        apply_tool_input_box_style(self.input_edit)
         input_block.addWidget(self.input_edit, 1)
 
-        send_row = QHBoxLayout()
-        send_row.setContentsMargins(0, 0, 0, 0)
-        send_row.setSpacing(6)
-        send_row.addStretch(1)
-        send_button = QPushButton("Send", self)
-        apply_tool_text_style(send_button)
-        send_row.addWidget(send_button)
-        input_block.addLayout(send_row)
+        self.send_button = QPushButton(self.input_edit)
+        apply_tool_send_button_style(self.send_button)
 
         def _on_send() -> None:
             text = self.input_edit.toPlainText().strip()
@@ -85,9 +81,10 @@ class AiChatToolView(CardWidget):
                 return
             self.sendMessageRequested.emit(text)
 
-        send_button.clicked.connect(_on_send)
+        self.send_button.clicked.connect(_on_send)
 
         layout.addLayout(input_block)
+        self._update_send_button_position()
 
     def append_message(self, role: str, text: str) -> None:
         """Append a message to the history view."""
@@ -96,3 +93,14 @@ class AiChatToolView(CardWidget):
 
     def clear_input(self) -> None:
         self.input_edit.clear()
+
+    def resizeEvent(self, event):  # type: ignore[override]
+        super().resizeEvent(event)
+        self._update_send_button_position()
+
+    def _update_send_button_position(self) -> None:
+        rect = self.input_edit.rect()
+        margin = 6
+        x = rect.right() - self.send_button.width() - margin
+        y = rect.bottom() - self.send_button.height() - margin
+        self.send_button.move(x, y)

@@ -18,7 +18,7 @@ from PyQt5.QtWidgets import (
 )
 from qfluentwidgets import CardWidget, LineEdit, PushButton
 
-from src.ui.view.theme import apply_theme, apply_tool_text_style
+from src.ui.view.theme import apply_theme, apply_tool_input_box_style, apply_tool_text_style
 
 
 class BtFwLogToolView(CardWidget):
@@ -41,8 +41,10 @@ class BtFwLogToolView(CardWidget):
         serial_layout.setContentsMargins(8, 8, 8, 8)
         self.port_edit = LineEdit(serial_group)
         self.port_edit.setPlaceholderText("COM port (e.g. COM3)")
+        apply_tool_input_box_style(self.port_edit)
         self.baud_edit = LineEdit(serial_group)
         self.baud_edit.setPlaceholderText("Baud rate (e.g. 115200)")
+        apply_tool_input_box_style(self.baud_edit)
         serial_layout.addRow("Port:", self.port_edit)
         serial_layout.addRow("Baud:", self.baud_edit)
         layout.addWidget(serial_group)
@@ -53,6 +55,7 @@ class BtFwLogToolView(CardWidget):
         file_layout.setContentsMargins(8, 8, 8, 8)
         self.file_path_edit = LineEdit(file_group)
         self.file_path_edit.setReadOnly(True)
+        apply_tool_input_box_style(self.file_path_edit)
         browse_button = PushButton("Browse", file_group)
         apply_tool_text_style(browse_button)
         browse_button.clicked.connect(lambda: self.browseFileRequested.emit())
@@ -76,7 +79,7 @@ class BtFwLogToolView(CardWidget):
         self.result_view.setReadOnly(True)
         layout.addWidget(self.result_view, 1)
 
-        apply_theme(self, recursive=True)
+        apply_theme(self, recursive=False)
 
     def set_file_path(self, path: str) -> None:
         self.file_path_edit.setText(path)

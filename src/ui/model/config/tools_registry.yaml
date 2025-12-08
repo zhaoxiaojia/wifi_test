@@ -4,4 +4,4 @@ tools:
     icon: "BLUETOOTH"
   - id: ai_chat
     title: "AI Chat"
-    icon: "ROBOT"
+    icon: "res/logo/chatgpt.png"
