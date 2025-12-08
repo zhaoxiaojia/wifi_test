@@ -528,18 +528,24 @@ def animate_progress_fill(
     """
     rect = container.rect()
     total_w = rect.width() or 300
-    target_w = total_w if percent >= 99 else int(total_w * percent / 100)
+    if percent >= 99:
+        # Slightly overdraw to visually fill the border fully at 100%.
+        target_x = -1
+        target_w = total_w + 2
+    else:
+        target_x = 0
+        target_w = int(total_w * percent / 100)
 
     current_geo = fill_frame.geometry()
     current_w = current_geo.width()
     if abs(target_w - current_w) < min_delta_px:
-        fill_frame.setGeometry(0, 0, target_w, rect.height())
+        fill_frame.setGeometry(target_x, 0, target_w, rect.height())
         return None
 
     anim = QPropertyAnimation(fill_frame, b"geometry", fill_frame)
     anim.setDuration(duration_ms)
     anim.setStartValue(current_geo)
-    anim.setEndValue(QRect(0, 0, target_w, rect.height()))
+    anim.setEndValue(QRect(target_x, 0, target_w, rect.height()))
     anim.setEasingCurve(QEasingCurve.OutCubic)
     anim.start()
     return anim

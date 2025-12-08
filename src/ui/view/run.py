@@ -210,8 +210,14 @@ class RunPage(CardWidget):
             self.process_label.setGeometry(rect)
             self.remaining_time_label.setGeometry(rect)
             total_w = max(rect.width(), 1)
-            w = total_w if self._current_percent >= 99 else int(total_w * self._current_percent / 100)
-            self.process_fill.setGeometry(0, 0, w, rect.height())
+            if self._current_percent >= 99:
+                # Slightly overdraw to ensure the bar visually fills the frame.
+                x = -1
+                w = total_w + 2
+            else:
+                x = 0
+                w = int(total_w * self._current_percent / 100)
+            self.process_fill.setGeometry(x, 0, w, rect.height())
         return super().eventFilter(obj, event)
 
     def _fixture_upsert(self, name: str, params: str) -> None:
