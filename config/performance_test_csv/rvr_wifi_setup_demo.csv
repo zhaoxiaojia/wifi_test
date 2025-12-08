@@ -1,2 +1,2 @@
 band,ssid,wireless_mode,channel,bandwidth,security_mode,password,tx,rx
-2.4G,coco_5g,auto,auto,20/40 MHz,Open System,,0,1
+2.4G,coco_5g,auto,auto,20/40 MHz,WPA2-Personal,12345678,1,1

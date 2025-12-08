@@ -8,7 +8,7 @@ system:
   kernel_version: Kernel 6.1
 connect_type:
   Android:
-    device: '69512800000001136'
+    device: bq201809df119520b1b
   Linux:
     ip: 192.168.200.100
     wildcard: ''
@@ -30,8 +30,8 @@ serial_port:
 rvr:
   iperf:
     path: ''
-    server_cmd: iperf -s -i 1
-    client_cmd: iperf -c {ip} -i 1 -t 5 -P 1
+    server_cmd: iperf3 -s -i 1
+    client_cmd: iperf3 -c {ip} -i 1 -t 30 -P 10
   ixchariot:
     path: D:/Program Files (x86)/Ixia/IxChariot
   repeat: '0'

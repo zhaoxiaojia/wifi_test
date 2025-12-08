@@ -10,7 +10,7 @@ rf_solution:
   RC4DAT-8G-95:
     idProduct: '35'
     idVendor: '8398'
-    ip_address: 192.168.1.101
+    ip_address: 192.168.200.102
   LDA-908V-8:
     ip_address: 192.168.5.200
     channels: '1'
@@ -19,9 +19,9 @@ rf_solution:
 router:
   name: xiaomibe7000
   address: 192.168.31.1
-text_case: test/compatibility/test_compatibility.py
+text_case: test/performance/test_wifi_rvr.py
 debug:
-  database_mode: true
-  skip_router: false
+  database_mode: false
+  skip_router: true
   skip_corner_rf: false
-csv_path: ''
+csv_path: performance_test_csv/rvr_wifi_setup_demo.csv

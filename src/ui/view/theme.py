@@ -260,3 +260,26 @@ def apply_tool_send_button_style(widget: QWidget) -> None:
         """
     )
     widget.setText("")
+
+
+def apply_tool_attach_button_style(widget: QWidget) -> None:
+    """Apply circular attachment button style for tool input areas."""
+    widget.setFixedSize(26, 26)
+    widget.setStyleSheet(
+        """
+        QPushButton {
+            border-radius: 13px;
+            background-color: #555555;
+            color: white;
+            border: none;
+            font-size: 16px;
+        }
+        QPushButton:hover {
+            background-color: #666666;
+        }
+        QPushButton:pressed {
+            background-color: #444444;
+        }
+        """
+    )
+    widget.setText("+")

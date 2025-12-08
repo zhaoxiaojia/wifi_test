@@ -49,3 +49,8 @@ chao.li,2025-12-05 15:34:38,test/performance/test_wifi_peak_throughput.py,00:00
 chao.li,2025-12-05 15:35:01,test/performance/test_wifi_rvr.py,00:00
 chao.li,2025-12-05 15:44:50,test/performance/test_wifi_rvr.py,00:00
 chao.li,2025-12-05 15:45:19,test/performance/test_wifi_rvr.py,00:00
+chao.li,2025-12-08 13:39:30,test/performance/test_wifi_peak_throughput.py,00:00
+chao.li,2025-12-08 13:40:49,test/performance/test_wifi_peak_throughput.py,00:01
+chao.li,2025-12-08 13:44:56,test/performance/test_wifi_peak_throughput.py,00:01
+chao.li,2025-12-08 13:48:49,test/performance/test_wifi_rvr.py,00:00
+chao.li,2025-12-08 13:49:46,test/performance/test_wifi_rvr.py,00:34

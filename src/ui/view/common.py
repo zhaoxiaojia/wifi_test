@@ -36,6 +36,7 @@ from PyQt5.QtWidgets import (
     QLabel,
     QListWidget,
     QListWidgetItem,
+    QScrollArea,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
@@ -44,11 +45,7 @@ from PyQt5.QtWidgets import (
 )
 from qfluentwidgets import TreeView, LineEdit, PushButton
 
-from src.ui.view.theme import (
-    STEP_LABEL_FONT_PIXEL_SIZE,
-    apply_groupbox_style,
-    apply_theme,
-)
+from src.ui.view.theme import FONT_FAMILY, FONT_SIZE, STEP_LABEL_FONT_PIXEL_SIZE, apply_groupbox_style, apply_theme
 
 
 # Layout/spacing constants used across config-related views.
@@ -196,6 +193,40 @@ class AnimatedTreeView(TreeView):
             group.start(QPropertyAnimation.DeleteWhenStopped)
         else:
             super().setExpanded(index, expand)
+
+
+class ChatMessageBubble(QWidget):
+    """Single chat message bubble aligned left or right."""
+
+    def __init__(self, text: str, is_user: bool, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(12, 2, 12, 2)
+        layout.setSpacing(4)
+
+        bubble = QLabel(text, self)
+        bubble.setWordWrap(True)
+        bubble.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        bubble.setStyleSheet(
+            f"""
+            QLabel {{
+                background-color: {"#3d3d3d" if is_user else "#2f2f2f"};
+                border-radius: 12px;
+                padding: 8px 14px;
+                font-family: {FONT_FAMILY};
+                font-size: {FONT_SIZE}px;
+            }}
+            """
+        )
+        bubble.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+
+        if is_user:
+            layout.addStretch(1)
+            layout.addWidget(bubble, 1, Qt.AlignRight)
+        else:
+            layout.addWidget(bubble, 1, Qt.AlignLeft)
+            layout.addStretch(1)
 
 
 class ConfigGroupPanel(QWidget):
@@ -910,4 +941,5 @@ __all__ = [
     "TestFileFilterModel",
     "_StepSwitcher",
     "RfStepSegmentsWidget",
+    "ChatMessageBubble",
 ]
