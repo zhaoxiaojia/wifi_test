@@ -7,12 +7,12 @@ This module is part of the AsusRouter package.
 from __future__ import annotations
 
 import logging
-import telnetlib
 import time
 from typing import Union
 
 from src.tools.router_tool.RouterControl import ConfigError
 from src.tools.router_tool.AsusRouter.AsusBaseControl import AsusBaseControl
+from src.tools.connect_tool.telnet_common import TelnetSession
 
 
 class AsusTelnetNvramControl(AsusBaseControl):
@@ -91,7 +91,7 @@ class AsusTelnetNvramControl(AsusBaseControl):
         self.host = self.address
         self.port = self.TELNET_PORT
         self.prompt = prompt
-        self.telnet: telnetlib.Telnet | None = None
+        self.telnet: TelnetSession | None = None
         self._is_logged_in = False
         self._wl0_channel: str = 'auto'
         self._wl0_bandwidth: str | None = None
@@ -123,7 +123,6 @@ class AsusTelnetNvramControl(AsusBaseControl):
                 None
                     This function does not return a value.
         """
-        self.telnet = telnetlib.Telnet(self.host, self.port)
         self._is_logged_in = False
         try:
             if self.telnet is not None:
@@ -131,7 +130,8 @@ class AsusTelnetNvramControl(AsusBaseControl):
                     self.telnet.close()
                 except Exception:
                     pass
-            self.telnet = telnetlib.Telnet(self.host, self.port, timeout=10)
+            self.telnet = TelnetSession(self.host, self.port, timeout=10)
+            self.telnet.open()
             self.telnet.read_until(b'login:', timeout=10)
             self.telnet.write(self.TELNET_USER.encode('ascii') + b'\n')
             self.telnet.read_until(b'Password:', timeout=10)

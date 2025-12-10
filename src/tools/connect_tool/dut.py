@@ -7,7 +7,6 @@ import time
 import asyncio
 import random
 import pytest
-import telnetlib
 from dataclasses import dataclass
 from typing import Optional, Sequence
 from src.tools.ixchariot import ix
@@ -17,6 +16,7 @@ from src.tools.router_tool.router_performance import handle_expectdata
 from src.util.constants import is_database_debug_enabled
 from src.tools.connect_tool.command_batch import CommandBatch, CommandRunner, CommandExecutionError, CommandTimeoutError
 from src.tools.performance_result import PerformanceResult
+from src.tools.connect_tool.telnet_common import TelnetSession
 
 lock = threading.Lock()
 
@@ -1098,17 +1098,26 @@ class dut():
                             This method does not return a value.
                         """
                         logging.info(f'server telnet command: {command}')
-                        tn = telnetlib.Telnet(self.dut_ip)
-                        tn.write(command.encode('ascii') + b'\n')
                         try:
+                            session = TelnetSession(self.dut_ip, port=23)
+                            session.open()
+                            session.write(command.encode('ascii') + b'\n')
                             while True:
-                                line = tn.read_until(b'\n', timeout=1).decode('gbk', 'ignore').strip()
+                                try:
+                                    chunk = session.read_until(b'\n', timeout=1)
+                                except EOFError:
+                                    logging.info('telnet server session closed')
+                                    break
+                                if not chunk:
+                                    continue
+                                line = chunk.decode('gbk', 'ignore').strip()
                                 if line:
                                     _extend_logs(self.iperf_server_log_list, [line], "iperf server telnet:")
-                        except EOFError:
-                            logging.info('telnet server session closed')
                         finally:
-                            tn.close()
+                            try:
+                                session.close()
+                            except Exception:
+                                logging.debug('Error closing telnet session for iperf server', exc_info=True)
 
                     t = Thread(target=telnet_iperf, daemon=True)
                     t.start()
@@ -1233,8 +1242,6 @@ class dut():
             if summary_value is not None:
                 throughput_value = summary_value
             elif values:
-                logging.info(f'[coco] {values}')
-                logging.info(f'[coco] {len(values)}')
                 throughput_value = sum(values) / len(values)
             elif udp_metrics_local and udp_metrics_local.throughput_mbps is not None:
                 throughput_value = udp_metrics_local.throughput_mbps

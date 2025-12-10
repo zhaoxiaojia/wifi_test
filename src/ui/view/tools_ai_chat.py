@@ -34,7 +34,6 @@ class AiChatToolView(CardWidget):
         super().__init__(parent)
         self.setObjectName("aiChatToolView")
         self.setStyleSheet("background-color: #333333; border-radius: 8px;")
-        print("[DEBUG_AICHAT] AiChatToolView initialized")  # DEBUG_AICHAT
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
@@ -92,7 +91,6 @@ class AiChatToolView(CardWidget):
 
         def _on_send() -> None:
             text = self.input_edit.toPlainText().strip()
-            print(f"[DEBUG_AICHAT] send button clicked, text={text!r}")  # DEBUG_AICHAT
             if not text:
                 return
             self.sendMessageRequested.emit(text)
@@ -105,7 +103,6 @@ class AiChatToolView(CardWidget):
 
     def append_message(self, role: str, text: str) -> None:
         """Append a message bubble to the history view."""
-        print(f"[DEBUG_AICHAT] append_message role={role!r}, text={text!r}")  # DEBUG_AICHAT
         is_user = role == "user"
         bubble = ChatMessageBubble(text, is_user, parent=self.history_widget)
         index = max(0, self.history_layout.count() - 1)

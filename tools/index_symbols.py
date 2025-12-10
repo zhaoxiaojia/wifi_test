@@ -459,7 +459,6 @@ def main():
     english_flag = "english-only" if FORCE_ENGLISH else "raw-text"
     style_flag = "minified" if not PRETTY_MD else "pretty"
     note = f", pruned: {len(removed)}" if removed else ""
-    print(f"[index] files: {len(files)}, changed: {changed}{note}, out: {OUTPUT_DIR} [{english_flag}, {style_flag}]")
 
 if __name__ == "__main__":
     t0 = time.time()
@@ -467,4 +466,3 @@ if __name__ == "__main__":
         main()
     except Exception as e:
         print("ERROR:", e); sys.exit(1)
-    print(f"done in {time.time()-t0:.2f}s")

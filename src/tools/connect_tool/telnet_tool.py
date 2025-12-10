@@ -8,7 +8,6 @@ import logging
 import os.path
 import re
 import subprocess
-import telnetlib
 import time
 import weakref
 from contextlib import suppress
@@ -17,8 +16,8 @@ from typing import Tuple
 import pytest
 import asyncio
 import telnetlib3
-from telnetlib3.client import TelnetClient
 from src.tools.connect_tool.dut import dut
+from src.tools.connect_tool.telnet_common import FastNegotiationTelnetClient
 from src.util.constants import DEFAULT_CONNECT_MINWAIT, DEFAULT_CONNECT_MAXWAIT, get_telnet_connect_window
 from typing import Annotated
 from src.tools.config_loader import load_config
@@ -73,144 +72,6 @@ def _get_connect_wait_window() -> Tuple[float, float]:
         maxwait_val = minwait_val
 
     return minwait_val, maxwait_val
-
-
-class FastNegotiationTelnetClient(TelnetClient):
-    """
-    Fast negotiation telnet client.
-
-    -------------------------
-    Returns
-    -------------------------
-    None
-        This class does not return a value.
-    """
-
-    def begin_negotiation(self):
-        """
-        Begin negotiation.
-
-        -------------------------
-        Returns
-        -------------------------
-        None
-            This method does not return a value.
-        """
-        super().begin_negotiation()
-        _complete_negotiation_if_ready(self)
-
-    def data_received(self, data):  # noqa: D401 reuse base class documentation
-        """
-        Execute the data received operation.
-
-        This function encapsulates the logic required to perform its operation. It typically validates input data, performs the core computation or side effects, and handles exceptions gracefully.
-
-        Parameters
-        ----------
-        data : Any
-            Description of the data parameter.
-
-        Returns
-        -------
-        Any
-            Description of the return value.
-        """
-        super().data_received(data)
-        _complete_negotiation_if_ready(self)
-
-    def check_negotiation(self, final=False):  # noqa: D401 reuse base class documentation
-        """
-        Execute the check negotiation operation.
-
-        This function encapsulates the logic required to perform its operation. It typically validates input data, performs the core computation or side effects, and handles exceptions gracefully.
-
-        Parameters
-        ----------
-        final : Any
-            Description of the final parameter.
-
-        Returns
-        -------
-        Any
-            Description of the return value.
-        """
-        if _negotiation_settled(self, final):
-            """
-            Data received.
-    
-            -------------------------
-            Parameters
-            -------------------------
-            data : Any
-                The ``data`` parameter.
-    
-            -------------------------
-            Returns
-            -------------------------
-            None
-                This method does not return a value.
-            """
-            return True
-
-        return super().check_negotiation(final=final)
-
-
-def _negotiation_settled(self, final=False) -> bool:
-    """
-    Negotiation settled.
-
-    -------------------------
-    Parameters
-    -------------------------
-    final : Any
-        The ``final`` parameter.
-
-    -------------------------
-    Returns
-    -------------------------
-    bool
-        A value of type ``bool``.
-    """
-    if self.writer is None:
-        return False
-    if any(self.writer.pending_option.values()):
-        return False
-    return final or self.duration >= self.connect_minwait
-
-
-def _complete_negotiation_if_ready(self):
-    """
-    Complete negotiation if ready.
-
-    -------------------------
-    Returns
-    -------------------------
-    None
-        This method does not return a value.
-    """
-    if self._waiter_connected.done():
-        return
-    if not self._negotiation_settled():
-        return
-
-    check_later = getattr(self, "_check_later", None)
-    if check_later is not None:
-        check_later.cancel()
-        with suppress(ValueError):
-            self._tasks.remove(check_later)
-
-    self._waiter_connected.set_result(weakref.proxy(self))
-
-
-# Attach helper functions as methods on the fast client so that
-# attribute lookups used by telnetlib3 callbacks succeed even when
-# the underlying TelnetClient implementation does not provide these
-# helpers natively.
-FastNegotiationTelnetClient._negotiation_settled = _negotiation_settled  # type: ignore[attr-defined]
-FastNegotiationTelnetClient._complete_negotiation_if_ready = (  # type: ignore[attr-defined]
-    _complete_negotiation_if_ready
-)
-
 
 class telnet_tool(dut):
     """

@@ -12,7 +12,7 @@ cases:
       enabled: true
       on_duration: 0
       off_duration: 0
-      port: COM14 (蓝牙链接上的标准串行 (COM14))
+      port: ''
       mode: 'NO'
     str:
       enabled: false

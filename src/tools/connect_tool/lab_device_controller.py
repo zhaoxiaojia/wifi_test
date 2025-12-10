@@ -2,7 +2,6 @@
 import logging
 import re
 import time
-import telnetlib
 from collections.abc import Iterable
 from urllib.error import URLError
 from urllib.parse import urlencode
@@ -10,6 +9,7 @@ from urllib.request import urlopen
 
 import pytest
 
+from src.tools.connect_tool.telnet_common import TelnetSession
 
 
 class LabDeviceController:
@@ -259,8 +259,8 @@ class LabDeviceController:
             return
         try:
             logging.info('Try to connect %s', self.ip)
-            self.tn = telnetlib.Telnet()
-            self.tn.open(self.ip, port=23)
+            self.tn = TelnetSession(self.ip, port=23)
+            self.tn.open()
             logging.info('Telnet connection established to %s:23', self.ip)
         except Exception as exc:
             logging.error("Failed to connect to lab controller %s: %s", self.ip, exc)
