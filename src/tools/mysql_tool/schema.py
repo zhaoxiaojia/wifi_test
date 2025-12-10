@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import json
 import logging
+import re
 import textwrap
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, TYPE_CHECKING
@@ -361,6 +362,46 @@ _VIEW_DEFINITIONS: Dict[str, str] = {
 }
 
 
+def _supports_window_functions(client) -> bool:
+    """
+    Supports window functions.
+
+    Detects whether the connected MySQL server supports SQL window functions
+    such as ROW_NUMBER() OVER (...).  Window functions are available in
+    MySQL 8.0 and later.  If the version cannot be determined, this helper
+    defaults to ``True`` to preserve existing behaviour.
+
+    Parameters
+    ----------
+    client : Any
+        An object providing a ``query_all`` method compatible with
+        :class:`MySqlClient` and :class:`_ConnectionAdapter`.
+
+    Returns
+    -------
+    bool
+        ``True`` if window functions are assumed to be supported, otherwise
+        ``False``.
+    """
+    try:
+        rows = client.query_all("SELECT VERSION() AS version")
+    except Exception:
+        logging.debug("Failed to detect MySQL version for window function support", exc_info=True)
+        return True
+    if not rows:
+        return True
+    version_text = str(rows[0].get("version") or "")
+    # Expect versions like "5.7.42-0ubuntu0.18.04.1" or "8.0.36"
+    match = re.match(r"(\d+)\.(\d+)", version_text)
+    if not match:
+        return True
+    try:
+        major = int(match.group(1))
+    except ValueError:
+        return True
+    return major >= 8
+
+
 def ensure_table(client, table_name: str, spec: TableSpec) -> None:
     """
     Ensure table.
@@ -703,11 +744,21 @@ def _ensure_views(client) -> None:
     None
         This function does not return a value.
     """
+    supports_window = _supports_window_functions(client)
     for name, definition in _VIEW_DEFINITIONS.items():
+        if name == "v_perf_latest" and not supports_window:
+            logging.info(
+                "Skipping view %s: requires MySQL 8.0 or later for window functions",
+                name,
+            )
+            continue
         statement = textwrap.dedent(definition).strip()
         if not statement:
             continue
-        client.execute(f"CREATE OR REPLACE VIEW `{name}` AS\n{statement}")
+        try:
+            client.execute(f"CREATE OR REPLACE VIEW `{name}` AS\n{statement}")
+        except Exception:
+            logging.exception("Failed to create or replace view %s", name)
 
 
 def _flatten_section(
