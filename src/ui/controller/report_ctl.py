@@ -617,28 +617,76 @@ class ReportController(RvrChartLogic, QObject):
         self, group: pd.DataFrame, title: str, charts_dir: Path
     ) -> Optional[InteractiveChartLabel]:
         """Create a polar chart for RVO data."""
-        angles = group["__angle__"].tolist()
-        throughputs = group["__throughput_value__"].tolist()
-        finite_pairs = [
-            (float(a), float(t))
-            for a, t in zip(angles, throughputs)
-            if isinstance(a, (int, float))
-            and isinstance(t, (int, float))
-            and math.isfinite(a)
-            and math.isfinite(t)
-        ]
-        if not finite_pairs:
+        if "__angle_value__" not in group.columns or "__throughput_value__" not in group.columns:
             return self._create_empty_chart_widget(title, charts_dir, chart_type="polar")
 
-        fig = plt.figure(figsize=(6.4, 6.4), dpi=CHART_DPI)
-        ax = fig.add_subplot(111, projection="polar")
-        theta = [math.radians(a) for a, _ in finite_pairs]
-        r = [t for _, t in finite_pairs]
-        ax.plot(theta, r, marker="o")
-        ax.set_title(title)
+        angle_positions = self._collect_angle_positions(group)
+        if not angle_positions:
+            return self._create_empty_chart_widget(title, charts_dir, chart_type="polar")
+
+        angle_values = [value for value, _ in angle_positions]
+        angle_labels = [label for _, label in angle_positions]
+        theta = [math.radians(value) for value in angle_values]
+        theta_cycle = theta + [theta[0]] if theta else []
+
+        fig, ax = plt.subplots(
+            figsize=(8.0, 6.2),
+            dpi=CHART_DPI,
+            subplot_kw={"projection": "polar"},
+        )
         ax.set_theta_zero_location("N")
         ax.set_theta_direction(-1)
-        ax.grid(True, linestyle="--", alpha=0.5)
+        ax.set_rlabel_position(135)
+        ax.grid(alpha=0.3, linestyle="--")
+        ax.set_title(title, pad=8)
+        ax.set_xticks(theta)
+        ax.set_xticklabels(angle_labels)
+
+        channel_series = self._collect_rvo_channel_series(group, angle_values)
+        if not channel_series:
+            plt.close(fig)
+            return self._create_empty_chart_widget(title, charts_dir, chart_type="polar")
+
+        all_values: list[float] = []
+        has_series = False
+        for series_label, values in channel_series:
+            cycle_values = list(values)
+            cycle_values.append(values[0] if values else None)
+            series = self._series_with_nan(cycle_values)
+            if any(v is not None and math.isfinite(float(v)) for v in values if v is not None):
+                has_series = True
+            ax.plot(theta_cycle, series, marker="o", label=series_label)
+            all_values.extend([float(v) for v in values if isinstance(v, (int, float)) and math.isfinite(float(v))])
+
+        if not has_series:
+            plt.close(fig)
+            return self._create_empty_chart_widget(title, charts_dir, chart_type="polar")
+
+        if all_values:
+            max_value = max(all_values)
+            if max_value <= 0:
+                max_value = 1.0
+            extra = max(max_value * 0.15, 1.0)
+            ax.set_ylim(0, max_value + extra)
+        else:
+            max_value = 1.0
+            ax.set_ylim(0, 1)
+
+        handles, labels = ax.get_legend_handles_labels()
+        handles = list(handles)
+        labels = list(labels)
+        if handles:
+            legend = ax.legend(
+                handles,
+                labels,
+                loc="upper right",
+                bbox_to_anchor=(1.18, 1.05),
+                ncol=max(1, min(len(handles), 2)),
+                frameon=False,
+            )
+            if legend is not None:
+                for text_item in legend.get_texts():
+                    text_item.set_ha("left")
 
         canvas = FigureCanvasAgg(fig)
         canvas.draw()
@@ -653,18 +701,22 @@ class ReportController(RvrChartLogic, QObject):
         widget = InteractiveChartLabel()
         widget.setPixmap(pixmap)
         points: list[dict[str, object]] = []
-        for angle_deg, throughput in finite_pairs:
-            angle_rad = math.radians(angle_deg)
-            x = (angle_rad / (2 * math.pi)) * width
-            y = height / 2 - (throughput / max(r)) * (height / 2)
-            tooltip = self._make_tooltip_html(
-                title,
-                x_label="Angle (deg)",
-                x_value=angle_deg,
-                y_label="Throughput (Mbps)",
-                y_value=throughput,
-            )
-            points.append({"position": (x, y), "tooltip": tooltip})
+        for series_label, values in channel_series:
+            for angle_deg, throughput in zip(angle_values, values):
+                if throughput is None:
+                    continue
+                angle_rad = math.radians(angle_deg)
+                x = (angle_rad / (2 * math.pi)) * width
+                radius = float(throughput)
+                y = height / 2 - (radius / max_value) * (height / 2) if max_value > 0 else height / 2
+                tooltip = self._make_tooltip_html(
+                    series_label,
+                    x_label="Angle (deg)",
+                    x_value=angle_deg,
+                    y_label="Throughput (Mbps)",
+                    y_value=throughput,
+                )
+                points.append({"position": (x, y), "tooltip": tooltip})
         widget.set_points(points)
 
         try:

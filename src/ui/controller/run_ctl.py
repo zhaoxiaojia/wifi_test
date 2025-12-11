@@ -313,12 +313,16 @@ class CaseRunner(QThread):
     def _normalize_log_messages(self, payload: str) -> list[str]:
         """Inject synthetic CASETIME markers as needed for the UI."""
         messages: list[str] = []
-        if payload.startswith("[PYQT_CASE]"):
+        # Payload lines may include timestamps and prefixes; locate the raw marker.
+        marker_index = payload.find("[PYQT_")
+        marker = payload[marker_index:] if marker_index != -1 else payload
+
+        if marker.startswith("[PYQT_CASE]"):
             if self._case_start_time is not None:
                 duration_ms = int((time.time() - self._case_start_time) * 1000)
                 messages.append(f"[PYQT_CASETIME]{duration_ms}")
             self._case_start_time = time.time()
-        elif payload.startswith("[PYQT_PROGRESS]") and self._case_start_time is not None:
+        elif marker.startswith("[PYQT_PROGRESS]") and self._case_start_time is not None:
             duration_ms = int((time.time() - self._case_start_time) * 1000)
             messages.append(f"[PYQT_CASETIME]{duration_ms}")
             self._case_start_time = None

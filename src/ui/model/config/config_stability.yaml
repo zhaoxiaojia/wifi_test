@@ -4,7 +4,7 @@ duration_control:
   exitfirst: false
   retry_limit: '2'
 check_point:
-  ping: false
+  ping: true
   ping_targets: 192.168.1.1
 cases:
   test_switch_wifi_str:
@@ -12,13 +12,13 @@ cases:
       enabled: true
       on_duration: 0
       off_duration: 0
-      port: ''
+      port: COM5 (蓝牙链接上的标准串行 (COM5))
       mode: 'NO'
     str:
-      enabled: false
+      enabled: true
       on_duration: 0
       off_duration: 0
-      port: ''
+      port: COM5 (蓝牙链接上的标准串行 (COM5))
       mode: 'NO'
     use_router: false
     router_csv: ''

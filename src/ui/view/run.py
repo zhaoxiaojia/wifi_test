@@ -240,30 +240,34 @@ class RunPage(CardWidget):
             return
         if msg.strip() == "KeyboardInterrupt":
             return
-        if msg.startswith("[PYQT_FIX]"):
-            info = json.loads(msg[len("[PYQT_FIX]") :])
+        # Extract raw PYQT markers from log lines that include timestamps/prefixes.
+        marker_index = msg.find("[PYQT_")
+        marker = msg[marker_index:] if marker_index != -1 else msg
+
+        if marker.startswith("[PYQT_FIX]"):
+            info = json.loads(marker[len("[PYQT_FIX]") :])
             name = str(info.get("fixture", "")).strip()
             params = str(info.get("params", "")).strip()
             if name and params:
                 self._fixture_upsert(name, params)
             return
-        if msg.startswith("[PYQT_CASE]"):
-            fn = msg[len("[PYQT_CASE]") :].strip()
+        if marker.startswith("[PYQT_CASE]"):
+            fn = marker[len("[PYQT_CASE]") :].strip()
             if fn != getattr(self, "_case_fn", ""):
                 self._case_fn = fn
                 self._fixture_chain = []
             self._case_name_base = f"Current case : {fn}"
             self._rebuild_case_info_label()
             return
-        if msg.startswith("[PYQT_CASEINFO]"):
-            info = json.loads(msg[len("[PYQT_CASEINFO]") :])
+        if marker.startswith("[PYQT_CASEINFO]"):
+            info = json.loads(marker[len("[PYQT_CASEINFO]") :])
             fixtures = info.get("fixtures") or []
             self._current_has_fixture = bool(fixtures)
             self._update_remaining_time_label()
             return
-        if msg.startswith("[PYQT_CASETIME]"):
+        if marker.startswith("[PYQT_CASETIME]"):
             try:
-                duration_ms = int(msg[len("[PYQT_CASETIME]") :])
+                duration_ms = int(marker[len("[PYQT_CASETIME]") :])
             except ValueError:
                 return
             self.finished_count += 1
@@ -271,8 +275,8 @@ class RunPage(CardWidget):
             self.avg_case_duration = self._duration_sum / self.finished_count
             self._update_remaining_time_label()
             return
-        if msg.startswith("[PYQT_PROGRESS]"):
-            parts = msg[len("[PYQT_PROGRESS]") :].strip().split("/")
+        if marker.startswith("[PYQT_PROGRESS]"):
+            parts = marker[len("[PYQT_PROGRESS]") :].strip().split("/")
             if len(parts) == 2:
                 with suppress(ValueError):
                     self.finished_count = int(parts[0])

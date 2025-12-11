@@ -11,4 +11,21 @@ compatibility:
       - 6
       - 7
       - 8
-  nic: WLAN
+    - ip: 192.168.200.4
+      ports:
+      - 1
+      - 2
+      - 3
+      - 4
+      - 5
+      - 6
+      - 7
+      - 8
+    - ip: 192.168.200.5
+      ports:
+      - 4
+      - 5
+      - 6
+      - 7
+      - 8
+  nic: Loopback Pseudo-Interface 1

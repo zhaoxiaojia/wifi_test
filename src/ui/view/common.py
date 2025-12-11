@@ -786,28 +786,12 @@ class RfStepSegmentsWidget(QWidget):
         ``start,stop:step`` segments separated by ``;``.  When no segments
         are defined, an empty string is returned so that downstream logic
         falls back to the default ``0,75:3`` specification.
-
-        To match user expectations, when no explicit segment has been added
-        but the Start/Stop/Step edits have been modified, this method
-        treats the current edits as an implicit single segment so that
-        changes are persisted without requiring an extra “Add” click.
         """
         if not self._segments:
-            try:
-                start = self._coerce_int(self.start_edit.text(), self.DEFAULT_SEGMENT[0])
-                stop = self._coerce_int(self.stop_edit.text(), self.DEFAULT_SEGMENT[1])
-                step = self._coerce_int(self.step_edit.text(), self.DEFAULT_SEGMENT[2])
-            except Exception:
-                return ""
-            # If the edits still match the default segment, keep the
-            # config empty so downstream code uses the standard default.
-            if (
-                start == self.DEFAULT_SEGMENT[0]
-                and stop == self.DEFAULT_SEGMENT[1]
-                and step == self.DEFAULT_SEGMENT[2]
-            ):
-                return ""
-            return f"{int(start)},{int(stop)}:{int(step)}"
+            # No explicit range has been added; leave the config empty
+            # so that performance helpers apply the built-in 0-75 step 3
+            # default instead of any transient edit values.
+            return ""
         parts = []
         for start, stop, step in self._segments:
             parts.append(f"{int(start)},{int(stop)}:{int(step)}")

@@ -55,13 +55,11 @@ class AiChatToolController:
 
     def _on_model_index_changed(self, index: int) -> None:
         model_id = self.view.model_combo.itemData(index)
-        print(f"[DEBUG_AICHAT] model index changed to {index}, id={model_id!r}")  # DEBUG_AICHAT
         if isinstance(model_id, str):
             self._current_model_id = model_id
 
     def _on_send_message(self, text: str) -> None:
         """Handle a user message from the view."""
-        print(f"[DEBUG_AICHAT] controller _on_send_message text={text!r}")  # DEBUG_AICHAT
         self.view.append_message("user", text)
         self.view.clear_input()
         try:
@@ -72,12 +70,10 @@ class AiChatToolController:
                 try:
                     reply = send_chat_completion(model_id, text)
                 except RuntimeError as exc:
-                    print(f"[DEBUG_AICHAT] RuntimeError from backend: {exc!r}")  # DEBUG_AICHAT
                     signup_url = get_signup_url(model_id)
                     self._prompt_for_signup(signup_url, str(exc))
                     reply = str(exc)
         except Exception as exc:  # noqa: BLE001
-            print(f"[DEBUG_AICHAT] unexpected error in _on_send_message: {exc!r}")  # DEBUG_AICHAT
             reply = f"Error calling model: {exc}"
         self.view.append_message("assistant", reply)
 

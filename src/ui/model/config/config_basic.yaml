@@ -25,8 +25,8 @@ project:
   interface: USB
 serial_port:
   baud: '9600'
-  port: ''
-  status: false
+  port: COM5 (蓝牙链接上的标准串行 (COM5))
+  status: true
 rvr:
   iperf:
     path: ''
