@@ -93,6 +93,12 @@ class GlobalToolsController(QObject):
         self._panel_visible = False
         self._current_tool_id = None
         self.tools_bar.set_active_tool(None)
+        # Refresh geometry so that the central content regains
+        # the space previously reserved for the tools panel.
+        try:
+            self.main_window._update_global_tools_geometry()
+        except Exception:
+            pass
 
     # ------------------------------------------------------------------
     # Public helpers

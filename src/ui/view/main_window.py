@@ -82,6 +82,8 @@ class MainWindow(FluentWindow):
         self.setMinimumSize(width, height)
         # Global tools (toolbar + side panel)
         tool_specs = load_tools_registry()
+        # Parent on the central content stack so that tools live
+        # alongside pages but occupy their own reserved area.
         self.global_tools_bar = GlobalToolsBar(tool_specs, parent=self.stackedWidget)
         self.global_tools_panel = GlobalToolsPanel(parent=self.stackedWidget)
         self.global_tools_panel.hide()
@@ -642,22 +644,42 @@ class MainWindow(FluentWindow):
         margin = 8
 
         bar = self.global_tools_bar
+        if not bar:
+            return
+
         bar_height = bar.sizeHint().height()
-        content.setContentsMargins(0, 0, 0, 0)
         bar_width = bar.sizeHint().width()
+
+        # Reserve a fixed strip at the top of the content area
+        # so that pages never overlap the toolbar, similar to
+        # how the left navigation bar is always visible.
+        top_margin = bar_height + margin
+
+        panel = self.global_tools_panel
+        panel_width = 0
+        if panel and panel.isVisible():
+            # Reserve space on the right for the tools panel when visible
+            panel_width = max(int(width * 0.3), 320)
+
+        # Apply margins so pages are laid out below the toolbar
+        # and not underneath the right-hand panel.
+        content.setContentsMargins(0, top_margin, panel_width, 0)
+
+        # Position toolbar inside the reserved top strip, aligned to the
+        # outer right edge of the content area (independent of the tools
+        # panel width) so that icons always sit at the far right.
         bar_x = max(0, width - bar_width - margin)
-        bar_y = 3
+        bar_y = max(0, (top_margin - bar_height) // 2)
         bar.setGeometry(bar_x, bar_y, bar_width, bar_height)
         bar.raise_()
 
-        panel = self.global_tools_panel
-        if not panel.isVisible():
-            return
-        panel_width = max(int(width * 0.3), 320)
-        panel_x = max(0, width - panel_width)
-        panel_y = bar_height + margin
-        panel_height = max(0, height - panel_y)
-        panel.setGeometry(panel_x, panel_y, max(0, width - panel_x), panel_height)
+        # Position the tools panel as a fixed right-hand column that
+        # starts below the toolbar and has the reserved width.
+        if panel and panel.isVisible():
+            panel_x = max(0, width - panel_width)
+            panel_y = top_margin
+            panel_height = max(0, height - panel_y)
+            panel.setGeometry(panel_x, panel_y, panel_width, panel_height)
 
     def setCurrentIndex(self, page_widget, ssid: str | None = None, passwd: str | None = None):
         """Switch the active page with a cross-fade animation."""
