@@ -74,7 +74,7 @@ SWITCH_WIFI_TABLE_SELECTION_FG: Annotated[
 # -----------------------------------------------------------------------------
 # Imports for Theming Helpers
 # -----------------------------------------------------------------------------
-from PyQt5.QtWidgets import QAbstractItemView, QWidget, QGroupBox, QLabel
+from PyQt5.QtWidgets import QAbstractItemView, QWidget, QGroupBox, QLabel, QProgressBar
 from PyQt5.QtGui import QFont, QPalette
 from PyQt5.QtCore import Qt
 from qfluentwidgets import PushButton
@@ -283,3 +283,21 @@ def apply_tool_attach_button_style(widget: QWidget) -> None:
         """
     )
     widget.setText("+")
+
+
+def apply_tool_progress_style(bar: QProgressBar) -> None:
+    """Apply a thin, accent-coloured progress style for tool areas."""
+    bar.setTextVisible(False)
+    bar.setFixedHeight(4)
+    bar.setStyleSheet(
+        """
+        QProgressBar {
+            border: none;
+            background-color: transparent;
+        }
+        QProgressBar::chunk {
+            background-color: #2F5D90;
+            border-radius: 2px;
+        }
+        """
+    )

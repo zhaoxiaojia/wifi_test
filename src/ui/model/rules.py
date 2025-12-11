@@ -94,7 +94,7 @@ def _serial_port_option_labels() -> List[str]:
         ports = list_serial_ports()
     except Exception:
         logging.debug("Failed to enumerate serial ports in rules", exc_info=True)
-        return []
+        ports = []
 
     labels: List[str] = []
     for p in ports:
@@ -102,6 +102,10 @@ def _serial_port_option_labels() -> List[str]:
             labels.append(p[1])
         else:
             labels.append(str(p))
+
+    if not labels:
+        # Provide a user-visible hint rather than an empty combo box.
+        labels.append("No serial ports detected")
     return labels
 
 

@@ -12,13 +12,13 @@ cases:
       enabled: true
       on_duration: 0
       off_duration: 0
-      port: COM5 (蓝牙链接上的标准串行 (COM5))
+      port: ''
       mode: 'NO'
     str:
       enabled: true
       on_duration: 0
       off_duration: 0
-      port: COM5 (蓝牙链接上的标准串行 (COM5))
+      port: ''
       mode: 'NO'
     use_router: false
     router_csv: ''
