@@ -112,17 +112,17 @@ class ConfigSyncResult:
 
     Instances of this data class are returned from
     :meth:`ConfigDatabaseSync.sync_config`.  They record the primary keys
-    of the ``dut`` and ``execution`` rows that were either created or
+    of the ``dut`` and ``shielded`` rows that were either created or
     reused during a synchronization operation.
 
     Parameters:
         dut_id (int): The identifier of the corresponding row in the
             ``dut`` table.
-        execution_id (int): The identifier of the row in the ``execution``
+        shielded_id (int): The identifier of the row in the ``shielded``
             table that stores information about a specific test execution.
     """
     dut_id: int
-    execution_id: int
+    shielded_id: int
 
 
 def derive_case_root(case_path: str) -> str:
@@ -237,7 +237,7 @@ class ConfigDatabaseSync:
     Examples:
         >>> sync = ConfigDatabaseSync()
         >>> result = sync.sync_config(dut_payload, execution_payload)
-        >>> print(result.dut_id, result.execution_id)
+        >>> print(result.dut_id, result.shielded_id)
         >>> sync.close()
     """
 
@@ -446,7 +446,7 @@ class ConfigDatabaseSync:
 
                 case_path = execution_payload.get("case_path")
                 case_root = execution_payload.get("case_root") or derive_case_root(case_path or "")
-                execution_columns = [
+                shielded_columns = [
                     "case_path",
                     "case_root",
                     "router_name",
@@ -455,7 +455,7 @@ class ConfigDatabaseSync:
                     "corner_model",
                     "lab_name",
                 ]
-                execution_values = [
+                shielded_values = [
                     case_path,
                     case_root,
                     execution_payload.get("router_name"),
@@ -464,45 +464,45 @@ class ConfigDatabaseSync:
                     execution_payload.get("corner_model"),
                     execution_payload.get("lab_name"),
                 ]
-                logging.debug("Prepared execution values: %s", execution_values)
+                logging.debug("Prepared shielded values: %s", shielded_values)
 
-                existing_execution_id = self._find_existing_row_id(
-                    cursor, "execution", execution_columns, execution_values
+                existing_shielded_id = self._find_existing_row_id(
+                    cursor, "shielded", shielded_columns, shielded_values
                 )
-                if existing_execution_id is not None:
-                    execution_id = existing_execution_id
-                    logging.info("Reused existing execution row id=%s", execution_id)
+                if existing_shielded_id is not None:
+                    shielded_id = existing_shielded_id
+                    logging.info("Reused existing shielded row id=%s", shielded_id)
                 else:
                     cursor.execute(
-                        f"INSERT INTO execution ({', '.join(f'`{column}`' for column in execution_columns)}) "
-                        f"VALUES ({', '.join(['%s'] * len(execution_columns))})",
-                        execution_values,
+                        f"INSERT INTO shielded ({', '.join(f'`{column}`' for column in shielded_columns)}) "
+                        f"VALUES ({', '.join(['%s'] * len(shielded_columns))})",
+                        shielded_values,
                     )
-                    execution_id = cursor.lastrowid
-                    logging.info("Inserted execution row id=%s", execution_id)
+                    shielded_id = cursor.lastrowid
+                    logging.info("Inserted shielded row id=%s", shielded_id)
             self.connection.commit()
-            return ConfigSyncResult(dut_id=dut_id, execution_id=execution_id)
+            return ConfigSyncResult(dut_id=dut_id, shielded_id=shielded_id)
         except Exception:
             logging.exception("Failed to sync configuration to database")
             self.connection.rollback()
             raise
 
-    def fetch_latest_execution_id(self) -> int | None:
-        """Fetch the ID of the most recently inserted execution row.
+    def fetch_latest_shielded_id(self) -> int | None:
+        """Fetch the ID of the most recently inserted shielded row.
 
-        Returns the identifier of the latest entry in the ``execution`` table
-        ordered by descending ``id``.  If no execution rows exist, ``None``
+        Returns the identifier of the latest entry in the ``shielded`` table
+        ordered by descending ``id``.  If no shielded rows exist, ``None``
         is returned.
 
         Returns:
-            int | None: The ID of the most recent execution row, or ``None``.
+            int | None: The ID of the most recent shielded row, or ``None``.
         """
         with self.connection.cursor() as cursor:
-            cursor.execute("SELECT id FROM execution ORDER BY id DESC LIMIT 1")
+            cursor.execute("SELECT id FROM shielded ORDER BY id DESC LIMIT 1")
             row = cursor.fetchone()
         if not row:
             logging.debug(
-                "No execution rows found when fetching latest id."
+                "No shielded rows found when fetching latest id."
             )
             return None
         return row["id"]

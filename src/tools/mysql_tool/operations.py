@@ -1,4 +1,5 @@
 from __future__ import annotations
+import csv
 import json
 import logging
 import re
@@ -27,6 +28,7 @@ __all__ = [
     "sync_configuration",
     "sync_test_result_to_db",
     "sync_file_to_db",
+    "sync_compatibility_artifacts_to_db",
 ]
 
 ColumnNormalizer = Callable[[Any], Any]
@@ -611,9 +613,9 @@ class PerformanceTableManager:
         comment = column.original.replace("'", "''")
         return f"{column.sql_type} NULL DEFAULT NULL COMMENT '{comment}'"
 
-    def _resolve_execution_id(self, case_path: Optional[str]) -> Optional[int]:
+    def _resolve_shielded_id(self, case_path: Optional[str]) -> Optional[int]:
         """
-        Resolve execution ID.
+        Resolve shielded ID.
 
         Logs informational messages and errors for debugging purposes.
 
@@ -631,12 +633,12 @@ class PerformanceTableManager:
             return None
         try:
             row = self._client.query_one(
-                "SELECT id FROM `execution` WHERE case_path = %s ORDER BY id DESC LIMIT 1",
+                "SELECT id FROM `shielded` WHERE case_path = %s ORDER BY id DESC LIMIT 1",
                 (case_path,),
             )
         except Exception:
             logging.debug(
-                "Failed to resolve execution id via case_path=%s",
+                "Failed to resolve shielded id via case_path=%s",
                 case_path,
                 exc_info=True,
             )
@@ -652,7 +654,7 @@ class PerformanceTableManager:
             csv_path: str,
             data_type: Optional[str],
             case_path: Optional[str],
-            execution_id: Optional[int],
+            shielded_id: Optional[int],
             dut_id: Optional[int],
     ) -> int:
         """
@@ -671,18 +673,18 @@ class PerformanceTableManager:
         int
             A value of type ``int``.
         """
-        resolved_execution_id = execution_id
-        if resolved_execution_id is None:
-            resolved_execution_id = self._resolve_execution_id(case_path)
+        resolved_shielded_id = shielded_id
+        if resolved_shielded_id is None:
+            resolved_shielded_id = self._resolve_shielded_id(case_path)
         insert_sql = (
             "INSERT INTO `test_report` "
-            "(`execution_id`, `dut_id`, `csv_name`, `csv_path`, `data_type`, `case_path`) "
+            "(`shielded_id`, `dut_id`, `csv_name`, `csv_path`, `data_type`, `case_path`) "
             "VALUES (%s, %s, %s, %s, %s, %s)"
         )
         return self._client.insert(
             insert_sql,
             (
-                resolved_execution_id,
+                resolved_shielded_id,
                 dut_id,
                 csv_name,
                 csv_path,
@@ -720,7 +722,7 @@ class PerformanceTableManager:
             data_type: Optional[str],
             run_source: str,
             case_path: Optional[str],
-            execution_id: Optional[int] = None,
+            shielded_id: Optional[int] = None,
             dut_id: Optional[int] = None,
     ) -> int:
         """
@@ -754,7 +756,7 @@ class PerformanceTableManager:
             csv_path=csv_path,
             data_type=data_type,
             case_path=case_path,
-            execution_id=execution_id,
+            shielded_id=shielded_id,
             dut_id=dut_id,
         )
         logging.debug("Created test_report entry id=%s", report_id)
@@ -1189,9 +1191,9 @@ def sync_configuration(config: dict | None) -> Optional[Any]:
         return None
 
     logging.info(
-        "Configuration synced successfully (dut_id=%s, execution_id=%s)",
+        "Configuration synced successfully (dut_id=%s, shielded_id=%s)",
         getattr(result, "dut_id", None),
-        getattr(result, "execution_id", None),
+        getattr(result, "shielded_id", None),
     )
     return result
 
@@ -1243,12 +1245,203 @@ def sync_test_result_to_db(
         logging.debug("sync_test_result_to_db: no configuration available for database sync.")
         sync_result = None
 
-    execution_hint = getattr(sync_result, "execution_id", None)
+    shielded_hint = getattr(sync_result, "shielded_id", None)
     dut_hint = getattr(sync_result, "dut_id", None)
 
     file_path = Path(log_file)
     if not file_path.is_file():
         logging.error("Log file %s not found, skip syncing test results.", log_file)
+    return 0
+
+
+def sync_compatibility_artifacts_to_db(
+        config: dict | None,
+        *,
+        csv_file: str,
+        router_json: str,
+        case_path: Optional[str] = None,
+        run_source: str = "local",
+) -> int:
+    """
+    Sync compatibility CSV + router catalogue into database.
+
+    Inserts/updates router entries into `router`, registers the CSV into
+    `test_report` with data_type='compatibility', then bulk inserts rows
+    into `compatibility` linked by `test_report_id` and `router_id`.
+    """
+    if not isinstance(config, Mapping) or not config:
+        logging.debug("sync_compatibility_artifacts_to_db: skipped, config missing")
+        return 0
+
+    sync_result = sync_configuration(config)
+    shielded_id = getattr(sync_result, "shielded_id", None) if sync_result else None
+    dut_id = getattr(sync_result, "dut_id", None) if sync_result else None
+
+    try:
+        with MySqlClient() as client:
+            ensure_report_tables(client)
+
+            # --- upsert router catalogue ---
+            try:
+                with open(router_json, "r", encoding="utf-8") as handle:
+                    router_entries = json.load(handle) or []
+            except Exception as exc:
+                logging.warning("Failed to load router JSON %s: %s", router_json, exc)
+                router_entries = []
+
+            upsert_sql = (
+                "INSERT INTO `router` (`ip`, `port`, `brand`, `model`, `payload_json`) "
+                "VALUES (%s, %s, %s, %s, %s) "
+                "ON DUPLICATE KEY UPDATE "
+                "`brand`=VALUES(`brand`), `model`=VALUES(`model`), `payload_json`=VALUES(`payload_json`)"
+            )
+            router_rows = []
+            for entry in router_entries:
+                try:
+                    ip = str(entry.get("ip") or "").strip()
+                    port = int(str(entry.get("port") or "0").strip() or 0)
+                except Exception:
+                    continue
+                if not ip or port <= 0:
+                    continue
+                brand = str(entry.get("brand") or "").strip()
+                model = str(entry.get("model") or "").strip()
+                payload_json = json.dumps(entry, ensure_ascii=False)
+                router_rows.append((ip, port, brand, model, payload_json))
+            if router_rows:
+                client.executemany(upsert_sql, router_rows)
+
+            routers = client.query_all("SELECT id, ip, port FROM `router`")
+            router_id_by_key = {
+                (str(r.get("ip") or "").strip(), int(r.get("port") or 0)): int(r["id"])
+                for r in routers
+                if r.get("id") is not None
+            }
+
+            # --- register test_report for compatibility CSV ---
+            csv_name = Path(csv_file).name
+            csv_path = str(Path(csv_file).resolve())
+            insert_report_sql = (
+                "INSERT INTO `test_report` "
+                "(`shielded_id`, `dut_id`, `csv_name`, `csv_path`, `data_type`, `case_path`) "
+                "VALUES (%s, %s, %s, %s, %s, %s)"
+            )
+            try:
+                report_id = client.insert(
+                    insert_report_sql,
+                    (shielded_id, dut_id, csv_name, csv_path, "compatibility", case_path),
+                )
+            except Exception:
+                existing = client.query_one(
+                    "SELECT id FROM `test_report` WHERE `shielded_id` <=> %s AND `csv_name`=%s ORDER BY id DESC LIMIT 1",
+                    (shielded_id, csv_name),
+                )
+                report_id = int(existing["id"]) if existing and existing.get("id") else 0
+
+            # --- parse compatibility CSV ---
+            try:
+                with open(csv_file, "r", encoding="utf-8") as handle:
+                    reader = csv.reader(handle)
+                    rows = list(reader)
+            except Exception as exc:
+                logging.warning("Failed to read compatibility CSV %s: %s", csv_file, exc)
+                return 0
+
+            if not rows or len(rows) < 2:
+                return 0
+
+            data_rows = rows[1:]
+            insert_cols = [
+                "test_report_id",
+                "router_id",
+                "pdu_ip",
+                "pdu_port",
+                "ap_brand",
+                "band",
+                "ssid",
+                "wifi_mode",
+                "bandwidth",
+                "security",
+                "scan_result",
+                "connect_result",
+                "tx_result",
+                "tx_channel",
+                "tx_rssi",
+                "tx_criteria",
+                "tx_throughput_mbps",
+                "rx_result",
+                "rx_channel",
+                "rx_rssi",
+                "rx_criteria",
+                "rx_throughput_mbps",
+            ]
+            placeholders = ", ".join(["%s"] * len(insert_cols))
+            insert_sql = f"INSERT INTO `compatibility` ({', '.join(f'`{c}`' for c in insert_cols)}) VALUES ({placeholders})"
+
+            compat_rows = []
+            for r in data_rows:
+                if not r or len(r) < 4:
+                    continue
+                # Title order from write_compatibility_results.
+                try:
+                    pdu_ip = str(r[0]).strip()
+                    pdu_port = int(str(r[1]).strip() or 0)
+                except Exception:
+                    continue
+                ap_brand = str(r[2]).strip() if len(r) > 2 else ""
+                band = str(r[3]).strip() if len(r) > 3 else ""
+                ssid = str(r[4]).strip() if len(r) > 4 else ""
+                wifi_mode = str(r[5]).strip() if len(r) > 5 else ""
+                bandwidth = str(r[6]).strip() if len(r) > 6 else ""
+                security = str(r[7]).strip() if len(r) > 7 else ""
+                scan_result = str(r[8]).strip() if len(r) > 8 else ""
+                connect_result = str(r[9]).strip() if len(r) > 9 else ""
+                tx_result = str(r[10]).strip() if len(r) > 10 else ""
+                tx_channel = str(r[11]).strip() if len(r) > 11 else ""
+                tx_rssi = str(r[12]).strip() if len(r) > 12 else ""
+                tx_criteria = str(r[13]).strip() if len(r) > 13 else ""
+                tx_thr = str(r[14]).strip() if len(r) > 14 else ""
+                rx_result = str(r[15]).strip() if len(r) > 15 else ""
+                rx_channel = str(r[16]).strip() if len(r) > 16 else ""
+                rx_rssi = str(r[17]).strip() if len(r) > 17 else ""
+                rx_criteria = str(r[18]).strip() if len(r) > 18 else ""
+                rx_thr = str(r[19]).strip() if len(r) > 19 else ""
+
+                router_id = router_id_by_key.get((pdu_ip, pdu_port))
+                compat_rows.append(
+                    (
+                        report_id,
+                        router_id,
+                        pdu_ip,
+                        pdu_port,
+                        ap_brand,
+                        band,
+                        ssid,
+                        wifi_mode,
+                        bandwidth,
+                        security,
+                        scan_result,
+                        connect_result,
+                        tx_result,
+                        tx_channel,
+                        tx_rssi,
+                        tx_criteria,
+                        tx_thr,
+                        rx_result,
+                        rx_channel,
+                        rx_rssi,
+                        rx_criteria,
+                        rx_thr,
+                    )
+                )
+
+            if not compat_rows:
+                return 0
+            affected = client.executemany(insert_sql, compat_rows)
+            logging.info("Synced %s compatibility rows into DB", affected)
+            return affected
+    except Exception:
+        logging.exception("sync_compatibility_artifacts_to_db: failed")
         return 0
 
     headers, rows = read_csv_rows(file_path)
@@ -1310,7 +1503,7 @@ def sync_test_result_to_db(
                 data_type=normalized_data_type,
                 run_source=normalized_source,
                 case_path=case_path,
-                execution_id=execution_hint,
+                shielded_id=shielded_hint,
                 dut_id=dut_hint,
             )
         return affected

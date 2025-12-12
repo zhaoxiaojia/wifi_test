@@ -449,6 +449,41 @@ def pytest_sessionfinish(session, exitstatus):
         with suppress(Exception):
             destination_dir.mkdir(parents=True, exist_ok=True)
 
+    # For compatibility cases, archive the CSV into the report directory and
+    # sync both CSV + router catalogue into MySQL (best effort).
+    csv_path_for_db = Path(csv_file).resolve()
+    if compatibility_results and destination_dir:
+        try:
+            target_csv = destination_dir / csv_file
+            shutil.copy(Path(csv_file), target_csv)
+            csv_path_for_db = target_csv.resolve()
+        except Exception as exc:
+            logging.warning("Failed to copy %s into %s: %s", csv_file, destination_dir, exc)
+
+    if compatibility_results:
+        try:
+            from src.tools.mysql_tool.operations import sync_compatibility_artifacts_to_db
+            from src.tools.config_loader import load_config
+
+            config = load_config(refresh=True) or {}
+            router_json = str((Path.cwd() / "config" / "compatibility_router.json").resolve())
+            case_path_hint = None
+            try:
+                args = getattr(session.config, "args", None) or []
+                if args:
+                    case_path_hint = str(args[-1])
+            except Exception:
+                case_path_hint = None
+
+            sync_compatibility_artifacts_to_db(
+                config,
+                csv_file=str(csv_path_for_db),
+                router_json=router_json,
+                case_path=case_path_hint,
+            )
+        except Exception:
+            logging.debug("Compatibility DB sync skipped/failed", exc_info=True)
+
     src_log = Path("pytest.log")
     if destination_dir and src_log.exists():
         try:
