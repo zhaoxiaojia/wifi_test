@@ -1,6 +1,7 @@
 import logging
 import os
 import re
+import shutil
 import subprocess
 import threading
 import time
@@ -785,19 +786,22 @@ class dut():
         if self._is_performance_debug_enabled():
             logging.info("Database debug mode enabled, skip killing iperf processes")
             return
-        commands = []
+        commands: list[str] = []
 
-        # Kill iperf processes on the host (Windows/Linux PC).
-        commands.append(pytest.dut.IPERF_KILL.format(self.test_tool))
+        # 1) PC 端（本机）：只负责杀掉本机 iperf 进程，用 Windows 的 taskkill。
+        #    这里约定测试框架运行在 Windows PC 上。
         commands.append(pytest.dut.IPERF_WIN_KILL.format(self.test_tool))
 
-        # Also attempt to kill iperf on the DUT side via ADB when applicable.
+        # 2) DUT 端：不论 Android 还是 Linux，都通过 pytest.dut.checkoutput 在 DUT 上执行 killall。
         connect_type = str(getattr(pytest, "connect_type", "")).lower()
-        serial = getattr(self, "serialnumber", "") or getattr(pytest, "serialnumber", "")
-        if connect_type == "android" and serial:
-            # Best‑effort; device might not have killall/pkill, errors are ignored by _run_host_commands.
-            commands.append(f'adb -s {serial} shell killall -9 {self.test_tool}')
-            commands.append(f'adb -s {serial} shell pkill -9 {self.test_tool}')
+        try:
+            if connect_type in ("android", "linux"):
+                dut_kill_cmd = pytest.dut.IPERF_KILL.format(self.test_tool)
+                logging.info(f"DUT kill iperf command: {dut_kill_cmd}")
+                # 这里是“DUT 端命令”，统一通过 checkoutput 在 DUT 上执行。
+                _ = pytest.dut.checkoutput(dut_kill_cmd)
+        except Exception as exc:  # pragma: no cover - 依赖真实设备
+            logging.warning(f"Failed to kill iperf on DUT: {exc}")
 
         self._run_host_commands(commands)
 
@@ -1076,9 +1080,26 @@ class dut():
             Any
                 The result produced by the function.
             """
+            cmd_parts = command.split()
             if use_adb and pytest.connect_type != 'Linux':
-                return ['adb', '-s', self.serialnumber, 'shell', *command.split()]
-            return command.split()
+                return ['adb', '-s', self.serialnumber, 'shell', *cmd_parts]
+
+            # PC 端执行：如果 iperf 可执行文件不在 PATH 中，尝试从 tool_path 补全路径。
+            if not use_adb and cmd_parts:
+                exe = cmd_parts[0]
+                if not any(sep in exe for sep in ("/", "\\")):
+                    resolved = shutil.which(exe)
+                    if not resolved:
+                        tool_path = getattr(self, "tool_path", "") or ""
+                        if tool_path:
+                            candidate = os.path.join(tool_path, exe)
+                            if os.name == "nt" and not candidate.lower().endswith(".exe"):
+                                candidate_exe = candidate + ".exe"
+                                if os.path.isfile(candidate_exe):
+                                    candidate = candidate_exe
+                            if os.path.isfile(candidate):
+                                cmd_parts[0] = candidate
+            return cmd_parts
 
         if '-s' in command:
             self.iperf_server_log_list = []
