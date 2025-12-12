@@ -656,6 +656,7 @@ class PerformanceTableManager:
             case_path: Optional[str],
             shielded_id: Optional[int],
             dut_id: Optional[int],
+            duration_seconds: Optional[float] = None,
     ) -> int:
         """
         Register test report.
@@ -678,8 +679,8 @@ class PerformanceTableManager:
             resolved_shielded_id = self._resolve_shielded_id(case_path)
         insert_sql = (
             "INSERT INTO `test_report` "
-            "(`shielded_id`, `dut_id`, `csv_name`, `csv_path`, `data_type`, `case_path`) "
-            "VALUES (%s, %s, %s, %s, %s, %s)"
+            "(`shielded_id`, `dut_id`, `csv_name`, `csv_path`, `data_type`, `case_path`, `duration_seconds`) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s)"
         )
         return self._client.insert(
             insert_sql,
@@ -690,6 +691,7 @@ class PerformanceTableManager:
                 csv_path,
                 data_type,
                 case_path,
+                int(duration_seconds) if duration_seconds is not None else None,
             ),
         )
 
@@ -724,6 +726,7 @@ class PerformanceTableManager:
             case_path: Optional[str],
             shielded_id: Optional[int] = None,
             dut_id: Optional[int] = None,
+            duration_seconds: Optional[float] = None,
     ) -> int:
         """
         Replace with CSV.
@@ -758,6 +761,7 @@ class PerformanceTableManager:
             case_path=case_path,
             shielded_id=shielded_id,
             dut_id=dut_id,
+            duration_seconds=duration_seconds,
         )
         logging.debug("Created test_report entry id=%s", report_id)
 
@@ -1205,6 +1209,7 @@ def sync_test_result_to_db(
         data_type: Optional[str] = None,
         case_path: Optional[str] = None,
         run_source: str = "local",
+        duration_seconds: Optional[float] = None,
 ) -> int:
     """
     Sync test result to db.
@@ -1251,7 +1256,76 @@ def sync_test_result_to_db(
     file_path = Path(log_file)
     if not file_path.is_file():
         logging.error("Log file %s not found, skip syncing test results.", log_file)
-    return 0
+        return 0
+
+    headers, rows = read_csv_rows(file_path)
+    logging.info(
+        "Loaded CSV %s | header_count=%s row_count=%s",
+        file_path,
+        len(headers),
+        len(rows),
+    )
+    if not headers:
+        logging.warning("CSV file %s does not contain a header row.", log_file)
+
+    normalized_data_type = data_type.strip().upper() if isinstance(data_type, str) else None
+    normalized_source = (run_source or "local").strip() or "local"
+    normalized_source = normalized_source.upper()[:32]
+
+    if normalized_data_type in {"RVR", "RVO"}:
+        try:
+            from src.tools.performance import generate_rvr_charts
+        except Exception:
+            logging.exception(
+                "sync_test_result_to_db: unable to import chart generator for %s", normalized_data_type
+            )
+        else:
+            try:
+                charts_subdir = 'rvo_charts' if normalized_data_type == 'RVO' else 'rvr_charts'
+                generated = generate_rvr_charts(file_path, charts_subdir=charts_subdir)
+            except Exception:
+                logging.exception(
+                    "sync_test_result_to_db: failed to auto-generate %s charts for %s",
+                    normalized_data_type,
+                    file_path,
+                )
+            else:
+                if generated:
+                    charts_dir = Path(generated[0]).parent
+                    logging.info(
+                        "sync_test_result_to_db: saved %d %s chart image(s) under %s",
+                        len(generated),
+                        normalized_data_type,
+                        charts_dir,
+                    )
+                else:
+                    logging.warning(
+                        "sync_test_result_to_db: no chart images were produced for %s (%s)",
+                        normalized_data_type,
+                        file_path,
+                    )
+
+    try:
+        with MySqlClient() as client:
+            manager = PerformanceTableManager(client)
+            manager.ensure_schema_initialized()
+            affected = manager.replace_with_csv(
+                csv_name=file_path.name,
+                csv_path=str(file_path),
+                headers=headers,
+                rows=rows,
+                data_type=normalized_data_type,
+                run_source=normalized_source,
+                case_path=case_path,
+                shielded_id=shielded_hint,
+                dut_id=dut_hint,
+                duration_seconds=duration_seconds,
+            )
+            _sync_test_history_into_test_report(client)
+        return affected
+    except Exception:
+        logging.exception("Failed to sync CSV results into performance table")
+        return 0
 
 
 def sync_compatibility_artifacts_to_db(
@@ -1261,6 +1335,7 @@ def sync_compatibility_artifacts_to_db(
         router_json: str,
         case_path: Optional[str] = None,
         run_source: str = "local",
+        duration_seconds: Optional[float] = None,
 ) -> int:
     """
     Sync compatibility CSV + router catalogue into database.
@@ -1323,13 +1398,21 @@ def sync_compatibility_artifacts_to_db(
             csv_path = str(Path(csv_file).resolve())
             insert_report_sql = (
                 "INSERT INTO `test_report` "
-                "(`shielded_id`, `dut_id`, `csv_name`, `csv_path`, `data_type`, `case_path`) "
-                "VALUES (%s, %s, %s, %s, %s, %s)"
+                "(`shielded_id`, `dut_id`, `csv_name`, `csv_path`, `data_type`, `case_path`, `duration_seconds`) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s)"
             )
             try:
                 report_id = client.insert(
                     insert_report_sql,
-                    (shielded_id, dut_id, csv_name, csv_path, "compatibility", case_path),
+                    (
+                        shielded_id,
+                        dut_id,
+                        csv_name,
+                        csv_path,
+                        "compatibility",
+                        case_path,
+                        int(duration_seconds) if duration_seconds is not None else None,
+                    ),
                 )
             except Exception:
                 existing = client.query_one(
@@ -1439,77 +1522,121 @@ def sync_compatibility_artifacts_to_db(
                 return 0
             affected = client.executemany(insert_sql, compat_rows)
             logging.info("Synced %s compatibility rows into DB", affected)
+            _sync_test_history_into_test_report(client)
             return affected
     except Exception:
         logging.exception("sync_compatibility_artifacts_to_db: failed")
         return 0
 
-    headers, rows = read_csv_rows(file_path)
-    logging.info(
-        "Loaded CSV %s | header_count=%s row_count=%s",
-        file_path,
-        len(headers),
-        len(rows),
-    )
-    if not headers:
-        logging.warning("CSV file %s does not contain a header row.", log_file)
 
-    normalized_data_type = data_type.strip().upper() if isinstance(data_type, str) else None
-    normalized_source = (run_source or "local").strip() or "local"
-    normalized_source = normalized_source.upper()[:32]
+def _parse_duration_hh_mm_to_seconds(value: str) -> int:
+    try:
+        parts = str(value).strip().split(":")
+        if len(parts) != 2:
+            return 0
+        hours = int(parts[0])
+        minutes = int(parts[1])
+        if hours < 0 or minutes < 0:
+            return 0
+        return hours * 3600 + minutes * 60
+    except Exception:
+        return 0
 
-    if normalized_data_type in {"RVR", "RVO"}:
-        try:
-            from src.tools.performance import generate_rvr_charts
-        except Exception:
-            logging.exception(
-                "sync_test_result_to_db: unable to import chart generator for %s", normalized_data_type
-            )
-        else:
-            try:
-                charts_subdir = 'rvo_charts' if normalized_data_type == 'RVO' else 'rvr_charts'
-                generated = generate_rvr_charts(file_path, charts_subdir=charts_subdir)
-            except Exception:
-                logging.exception(
-                    "sync_test_result_to_db: failed to auto-generate %s charts for %s",
-                    normalized_data_type,
-                    file_path,
-                )
-            else:
-                if generated:
-                    charts_dir = Path(generated[0]).parent
-                    logging.info(
-                        "sync_test_result_to_db: saved %d %s chart image(s) under %s",
-                        len(generated),
-                        normalized_data_type,
-                        charts_dir,
-                    )
-                else:
-                    logging.warning(
-                        "sync_test_result_to_db: no chart images were produced for %s (%s)",
-                        normalized_data_type,
-                        file_path,
-                    )
+
+def _sync_test_history_into_test_report(client: MySqlClient) -> int:
+    """Best-effort sync config/test_history.csv durations into test_report."""
+    try:
+        from src.util.test_history import get_history_path, TEST_HISTORY_HEADERS
+
+        csv_path = get_history_path()
+    except Exception:
+        csv_path = Path.cwd() / "config" / "test_history.csv"
+        TEST_HISTORY_HEADERS = ("account", "start_time", "test_case", "duration")  # type: ignore
+
+    if not csv_path.exists():
+        return 0
 
     try:
-        with MySqlClient() as client:
-            manager = PerformanceTableManager(client)
-            manager.ensure_schema_initialized()
-            affected = manager.replace_with_csv(
-                csv_name=file_path.name,
-                csv_path=str(file_path),
-                headers=headers,
-                rows=rows,
-                data_type=normalized_data_type,
-                run_source=normalized_source,
-                case_path=case_path,
-                shielded_id=shielded_hint,
-                dut_id=dut_hint,
-            )
-        return affected
-    except Exception:
-        logging.exception("Failed to sync CSV results into performance table")
+        with csv_path.open("r", newline="", encoding="utf-8") as handle:
+            reader = csv.reader(handle)
+            rows = list(reader)
+    except Exception as exc:
+        logging.debug("Failed to read test history CSV %s: %s", csv_path, exc)
         return 0
+
+    if not rows:
+        return 0
+
+    data_rows = rows
+    if rows and tuple(rows[0]) == tuple(TEST_HISTORY_HEADERS):
+        data_rows = rows[1:]
+
+    updated = 0
+    for row in data_rows:
+        if not row or len(row) < 4:
+            continue
+        test_case = str(row[2]).strip()
+        duration_hh_mm = str(row[3]).strip()
+        if not test_case:
+            continue
+        duration_seconds = _parse_duration_hh_mm_to_seconds(duration_hh_mm)
+        try:
+            shielded_row = client.query_one(
+                "SELECT id FROM `shielded` WHERE `case_path`=%s ORDER BY `id` DESC LIMIT 1",
+                (test_case,),
+            )
+            shielded_id = int(shielded_row["id"]) if shielded_row and shielded_row.get("id") else None
+
+            affected = 0
+            if shielded_id is not None:
+                affected = client.execute(
+                    "UPDATE `test_report` SET `duration_seconds`=%s "
+                    "WHERE `shielded_id`=%s ORDER BY `id` DESC LIMIT 1",
+                    (duration_seconds, shielded_id),
+                )
+            if not affected:
+                # Fallback: update latest report by case_path if any.
+                affected = client.execute(
+                    "UPDATE `test_report` SET `duration_seconds`=%s "
+                    "WHERE `case_path`=%s ORDER BY `id` DESC LIMIT 1",
+                    (duration_seconds, test_case),
+                )
+            if not affected:
+                # No existing report row -> insert a history-only report.
+                tool_guess = "unknown"
+                try:
+                    normalized = test_case.replace("\\", "/").lower()
+                    if "/test/" in normalized:
+                        tool_guess = normalized.split("/test/", 1)[1].split("/", 1)[0] or "unknown"
+                    elif normalized.startswith("test/"):
+                        tool_guess = normalized.split("/", 2)[1] or "unknown"
+                except Exception:
+                    tool_guess = "unknown"
+                history_name = f"history_{tool_guess}_{duration_hh_mm}_{updated}.csv"
+                insert_sql = (
+                    "INSERT INTO `test_report` "
+                    "(`shielded_id`, `dut_id`, `csv_name`, `csv_path`, `data_type`, `case_path`, `duration_seconds`) "
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s)"
+                )
+                client.insert(
+                    insert_sql,
+                    (
+                        shielded_id,
+                        None,
+                        history_name,
+                        None,
+                        tool_guess.upper(),
+                        test_case,
+                        duration_seconds,
+                    ),
+                )
+                affected = 1
+
+            updated += affected
+        except Exception:
+            logging.debug("Failed to update duration for case_path=%s", test_case, exc_info=True)
+            continue
+    return updated
 
 
 def sync_file_to_db(
@@ -1519,6 +1646,7 @@ def sync_file_to_db(
         config: Optional[dict] = None,
         case_path: Optional[str] = None,
         run_source: str = "FRAMEWORK",
+        duration_seconds: Optional[float] = None,
 ) -> int:
     """
     Sync file to db.
@@ -1542,4 +1670,5 @@ def sync_file_to_db(
         data_type=data_type,
         case_path=case_path,
         run_source=run_source,
+        duration_seconds=duration_seconds,
     )
