@@ -12,13 +12,13 @@ cases:
       enabled: true
       on_duration: 0
       off_duration: 0
-      port: ''
+      port: No serial ports detected
       mode: 'NO'
     str:
       enabled: true
       on_duration: 0
       off_duration: 0
-      port: ''
+      port: No serial ports detected
       mode: 'NO'
     use_router: false
     router_csv: ''

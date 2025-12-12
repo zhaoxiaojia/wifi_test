@@ -4,7 +4,7 @@
 测试所需的虚拟数据。默认注入数量如下：
 
 * ``dut`` 表 20 条
-* ``execution`` 表 10 条
+* ``shielded`` 表 10 条
 * ``performance`` 表 100000 条
 
 可以通过命令行参数调整数量或在注入前清空相关表。
@@ -391,9 +391,9 @@ def _generate_dut_rows(count: int, rng: random.Random) -> Sequence[Sequence[obje
     return rows
 
 
-def _generate_execution_rows(count: int, rng: random.Random) -> Sequence[Sequence[object]]:
+def _generate_shielded_rows(count: int, rng: random.Random) -> Sequence[Sequence[object]]:
     """
-    Generate execution rows.
+    Generate shielded rows.
 
     Generates random values for seeding or testing purposes.
 
@@ -409,7 +409,7 @@ def _generate_execution_rows(count: int, rng: random.Random) -> Sequence[Sequenc
     Sequence[Sequence[object]]
         A value of type ``Sequence[Sequence[object]]``.
     """
-    columns = _build_column_specs("execution")
+    columns = _build_column_specs("shielded")
     rf_models = ["Spirent E6", "Octoscope", "R&S CMW" ]
     corner_models = ["Corner-A", "Corner-B", "Corner-C"]
     lab_names = ["Lab-North", "Lab-East", "Lab-West"]
@@ -446,7 +446,7 @@ def _generate_execution_rows(count: int, rng: random.Random) -> Sequence[Sequenc
 
 def _generate_test_reports(
     dut_ids: Sequence[int],
-    execution_ids: Sequence[int],
+    shielded_ids: Sequence[int],
     *,
     rng: random.Random,
     min_reports: int,
@@ -461,8 +461,8 @@ def _generate_test_reports(
     ----------
     dut_ids : Any
         The ``dut_ids`` parameter.
-    execution_ids : Any
-        The ``execution_ids`` parameter.
+    shielded_ids : Any
+        The ``shielded_ids`` parameter.
 
     Returns
     -------
@@ -470,15 +470,15 @@ def _generate_test_reports(
         A value of type ``Sequence[Sequence[object]]``.
     """
     columns = _build_column_specs("test_report")
-    combinations = list(itertools.product(execution_ids, dut_ids))
+    combinations = list(itertools.product(shielded_ids, dut_ids))
     rng.shuffle(combinations)
     selected = combinations[: max(min_reports, 1)]
     rows: List[List[object]] = []
-    for index, (execution_id, dut_id) in enumerate(selected):
+    for index, (shielded_id, dut_id) in enumerate(selected):
         values: List[object] = []
         for column in columns:
-            if column.name == "execution_id":
-                values.append(execution_id)
+            if column.name == "shielded_id":
+                values.append(shielded_id)
                 continue
             if column.name == "dut_id":
                 values.append(dut_id)
@@ -605,7 +605,7 @@ def _generate_performance_rows(
         yield values
 
 
-def _resolve_min_reports(performance_count: int, dut_count: int, execution_count: int) -> int:
+def _resolve_min_reports(performance_count: int, dut_count: int, shielded_count: int) -> int:
     """
     Resolve min reports.
 
@@ -615,8 +615,8 @@ def _resolve_min_reports(performance_count: int, dut_count: int, execution_count
         The ``performance_count`` parameter.
     dut_count : Any
         The ``dut_count`` parameter.
-    execution_count : Any
-        The ``execution_count`` parameter.
+    shielded_count : Any
+        The ``shielded_count`` parameter.
 
     Returns
     -------
@@ -626,8 +626,8 @@ def _resolve_min_reports(performance_count: int, dut_count: int, execution_count
     if performance_count <= 0:
         return 0
     candidate = int(math.sqrt(performance_count) // 2)
-    candidate = max(candidate, min(dut_count * execution_count, 10))
-    return min(candidate, max(1, dut_count * execution_count))
+    candidate = max(candidate, min(dut_count * shielded_count, 10))
+    return min(candidate, max(1, dut_count * shielded_count))
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -648,14 +648,14 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     """
     parser = argparse.ArgumentParser(description="向数据库注入虚拟数据")
     parser.add_argument("--dut-count", type=int, default=20, help="DUT 表注入数量")
-    parser.add_argument("--execution-count", type=int, default=10, help="Execution 表注入数量")
+    parser.add_argument("--shielded-count", type=int, default=10, help="Shielded 表注入数量")
     parser.add_argument(
         "--performance-count", type=int, default=100_000, help="Performance 表注入数量"
     )
     parser.add_argument(
         "--truncate",
         action="store_true",
-        help="注入前清空 performance/test_report/execution/dut 表",
+        help="注入前清空 performance/test_report/shielded/dut 表",
     )
     parser.add_argument(
         "--seed",
@@ -697,20 +697,20 @@ def main(argv: Sequence[str] | None = None) -> None:
     with MySqlClient() as client:
         ensure_report_tables(client)
         if args.truncate:
-            _truncate_tables(client, ("performance", "test_report", "execution", "dut"))
+            _truncate_tables(client, ("performance", "test_report", "shielded", "dut"))
 
         dut_rows = _generate_dut_rows(args.dut_count, rng)
         dut_ids = _insert_with_ids(client, "dut", _build_column_specs("dut"), dut_rows)
 
-        execution_rows = _generate_execution_rows(args.execution_count, rng)
-        execution_ids = _insert_with_ids(
-            client, "execution", _build_column_specs("execution"), execution_rows
+        shielded_rows = _generate_shielded_rows(args.shielded_count, rng)
+        shielded_ids = _insert_with_ids(
+            client, "shielded", _build_column_specs("shielded"), shielded_rows
         )
 
-        min_reports = _resolve_min_reports(args.performance_count, len(dut_ids), len(execution_ids))
+        min_reports = _resolve_min_reports(args.performance_count, len(dut_ids), len(shielded_ids))
         report_rows = _generate_test_reports(
             dut_ids,
-            execution_ids,
+            shielded_ids,
             rng=rng,
             min_reports=min_reports,
         )
@@ -728,9 +728,9 @@ def main(argv: Sequence[str] | None = None) -> None:
         )
 
     LOGGER.info(
-        "虚拟数据注入完成：dut=%d execution=%d test_report=%d performance=%d",
+        "虚拟数据注入完成：dut=%d shielded=%d test_report=%d performance=%d",
         len(dut_rows),
-        len(execution_rows),
+        len(shielded_rows),
         len(report_rows),
         args.performance_count,
     )
@@ -738,4 +738,3 @@ def main(argv: Sequence[str] | None = None) -> None:
 
 if __name__ == "__main__":  # pragma: no cover - 手动执行入口
     main()
-

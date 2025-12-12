@@ -41,30 +41,60 @@ class LocalOS:
 
         lines = output.splitlines()
 
-        if net_card:
-            in_block = False
-            for line in lines:
-                stripped = line.strip()
-                if stripped.endswith(':') and not line.startswith(' '):
-                    in_block = net_card in stripped
-                    continue
-                if in_block and 'IPv4' in line:
-                    match = re.search(r'(\d+\.\d+\.\d+\.\d+)', line)
-                    if match:
-                        return match.group(1)
-            return None
+        def _norm(name: str) -> str:
+            return re.sub(r"[\s\-]", "", str(name)).lower()
+
+        target_norm = _norm(net_card) if net_card else ""
+
+        current_name = ""
+        current_norm = ""
+        disconnected = False
+        found_fallback = None
+
+        def _header_to_name(header: str) -> str:
+            h = header.rstrip(":").strip()
+            if "适配器" in h:
+                parts = h.split("适配器", 1)
+                return parts[1].strip() if len(parts) > 1 else h
+            m = re.search(r"adapter\s+(.+)$", h, re.IGNORECASE)
+            if m:
+                return m.group(1).strip()
+            return h
 
         for line in lines:
-            if 'IPv4' in line:
-                match = re.search(r'(\d+\.\d+\.\d+\.\d+)', line)
-                if match:
-                    return match.group(1)
+            raw = line.rstrip()
+            stripped = raw.strip()
 
-        match = re.search(r'(\d+\.\d+\.\d+\.\d+)', output)
-        if match:
-            return match.group(1)
+            if stripped.endswith(":") and not raw.startswith((" ", "\t")):
+                current_name = _header_to_name(stripped)
+                current_norm = _norm(current_name)
+                disconnected = False
+                continue
 
-        return None
+            if not current_name:
+                continue
+
+            if ("媒体已断开连接" in stripped) or re.search(r"media\s+disconnected", stripped, re.IGNORECASE):
+                disconnected = True
+
+            if re.search(r"IPv4", stripped, re.IGNORECASE):
+                m = re.search(r"(\d+\.\d+\.\d+\.\d+)", stripped)
+                if not m:
+                    continue
+                ip = m.group(1)
+                if ip.startswith("169.254.") or ip == "0.0.0.0":
+                    continue
+
+                if target_norm:
+                    if target_norm in current_norm:
+                        return ip
+                else:
+                    if not disconnected:
+                        return ip
+                    if found_fallback is None:
+                        found_fallback = ip
+
+        return found_fallback
 
     def dynamic_flush_network_card(self, net_card=''):
         disable_cmd = f'netsh interface set interface "{net_card}" disable'

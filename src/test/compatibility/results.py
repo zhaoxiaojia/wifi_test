@@ -148,7 +148,12 @@ def write_compatibility_results(test_results, csv_file: str) -> None:
                     if router_desc not in row_data:
                         row_data.append(router_desc)
         temp_data.append(test_name)
-        if data["result"]:
+        # For throughput tests, prefer the explicit comparison result so that
+        # the test case itself can pass while still reporting PASS/FAIL.
+        compare_result = data.get("compat_compare")
+        if compare_result:
+            row_data.append(compare_result)
+        elif data["result"]:
             row_data.append(data["result"])
         if data["return_value"]:
             row_data.extend([*data["return_value"]])

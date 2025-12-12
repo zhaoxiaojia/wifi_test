@@ -1507,7 +1507,7 @@ class dut():
             )
             self._ensure_performance_result()
             pytest.testResult.save_result(self._format_result_row(values))
-            return 'N/A'
+            return ','.join([cell for cell in throughput_cells if cell]) or '0'
 
         rx_metrics_list: list[IperfMetrics] = []
         self.rvr_result = None
@@ -1596,6 +1596,8 @@ class dut():
             if formatted is not None:
                 throughput_entries.append(formatted)
         throughput_cells = self._normalize_throughput_cells(throughput_entries)
+        if not throughput_entries:
+            throughput_cells = ["0"] * len(throughput_cells)
         latency_value = rx_metrics_list[-1].latency_ms if rx_metrics_list else None
         packet_loss_value = rx_metrics_list[-1].packet_loss if rx_metrics_list else None
         corner = corner_tool.get_turntanle_current_angle() if corner_tool else ''
@@ -1613,7 +1615,7 @@ class dut():
         )
         self._ensure_performance_result()
         pytest.testResult.save_result(self._format_result_row(values))
-        return ','.join([cell for cell in throughput_cells if cell]) or 'N/A'
+        return ','.join([cell for cell in throughput_cells if cell]) or '0'
 
     @step
     def get_tx_rate(self, router_info, type='TCP', corner_tool=None, db_set='', debug=False):
@@ -1672,7 +1674,7 @@ class dut():
             formatted = self._format_result_row(values)
             logging.info(formatted)
             pytest.testResult.save_result(formatted)
-            return 'N/A'
+            return ','.join([cell for cell in throughput_cells if cell]) or '0'
 
         tx_metrics_list: list[IperfMetrics] = []
         self.rvr_result = None
@@ -1762,6 +1764,8 @@ class dut():
             if formatted is not None:
                 throughput_entries.append(formatted)
         throughput_cells = self._normalize_throughput_cells(throughput_entries)
+        if not throughput_entries:
+            throughput_cells = ["0"] * len(throughput_cells)
         latency_value = tx_metrics_list[-1].latency_ms if tx_metrics_list else None
         packet_loss_value = tx_metrics_list[-1].packet_loss if tx_metrics_list else None
         corner = corner_tool.get_turntanle_current_angle() if corner_tool else ''
@@ -1781,7 +1785,7 @@ class dut():
         logging.info(formatted)
         self._ensure_performance_result()
         pytest.testResult.save_result(formatted)
-        return ','.join([cell for cell in throughput_cells if cell]) or 'N/A'
+        return ','.join([cell for cell in throughput_cells if cell]) or '0'
 
     def wait_for_wifi_address(self, cmd: str = '', target='.', lan=True):
         """

@@ -173,7 +173,7 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
         ),
         include_audit_columns=False,
     ),
-    "execution": TableSpec(
+    "shielded": TableSpec(
         columns=(
             ColumnDefinition("case_path", "VARCHAR(512)"),
             ColumnDefinition("case_root", "VARCHAR(128)"),
@@ -187,7 +187,7 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
     ),
     "test_report": TableSpec(
         columns=(
-            ColumnDefinition("execution_id", "INT NULL DEFAULT NULL"),
+            ColumnDefinition("shielded_id", "INT NULL DEFAULT NULL"),
             ColumnDefinition("dut_id", "INT NULL DEFAULT NULL"),
             ColumnDefinition("csv_name", "VARCHAR(255) NOT NULL"),
             ColumnDefinition("csv_path", "VARCHAR(512)"),
@@ -196,7 +196,7 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
         ),
         indexes=(
             TableIndex(
-                "idx_test_report_execution", "INDEX idx_test_report_execution (`execution_id`)"
+                "idx_test_report_shielded", "INDEX idx_test_report_shielded (`shielded_id`)"
             ),
             TableIndex(
                 "idx_test_report_dut", "INDEX idx_test_report_dut (`dut_id`)"
@@ -208,16 +208,83 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
         ),
         constraints=(
             TableConstraint(
-                "uq_test_report_execution_csv",
-                "CONSTRAINT uq_test_report_execution_csv UNIQUE (`execution_id`, `csv_name`)",
+                "uq_test_report_shielded_csv",
+                "CONSTRAINT uq_test_report_shielded_csv UNIQUE (`shielded_id`, `csv_name`)",
             ),
             TableConstraint(
-                "fk_test_report_execution",
-                "CONSTRAINT fk_test_report_execution FOREIGN KEY (`execution_id`) REFERENCES `execution`(`id`)",
+                "fk_test_report_shielded",
+                "CONSTRAINT fk_test_report_shielded FOREIGN KEY (`shielded_id`) REFERENCES `shielded`(`id`)",
             ),
             TableConstraint(
                 "fk_test_report_dut",
                 "CONSTRAINT fk_test_report_dut FOREIGN KEY (`dut_id`) REFERENCES `dut`(`id`)",
+            ),
+        ),
+    ),
+    "router": TableSpec(
+        columns=(
+            ColumnDefinition("ip", "VARCHAR(64) NOT NULL"),
+            ColumnDefinition("port", "INT NOT NULL"),
+            ColumnDefinition("brand", "VARCHAR(128)"),
+            ColumnDefinition("model", "VARCHAR(128)"),
+            ColumnDefinition("payload_json", "JSON"),
+        ),
+        indexes=(
+            TableIndex(
+                "idx_router_ip_port",
+                "INDEX idx_router_ip_port (`ip`, `port`)",
+            ),
+        ),
+        constraints=(
+            TableConstraint(
+                "uq_router_ip_port",
+                "CONSTRAINT uq_router_ip_port UNIQUE (`ip`, `port`)",
+            ),
+        ),
+    ),
+    "compatibility": TableSpec(
+        columns=(
+            ColumnDefinition("test_report_id", "INT NOT NULL"),
+            ColumnDefinition("router_id", "INT NULL DEFAULT NULL"),
+            ColumnDefinition("pdu_ip", "VARCHAR(64)"),
+            ColumnDefinition("pdu_port", "INT"),
+            ColumnDefinition("ap_brand", "VARCHAR(255)"),
+            ColumnDefinition("band", "VARCHAR(32)"),
+            ColumnDefinition("ssid", "VARCHAR(255)"),
+            ColumnDefinition("wifi_mode", "VARCHAR(64)"),
+            ColumnDefinition("bandwidth", "VARCHAR(64)"),
+            ColumnDefinition("security", "VARCHAR(64)"),
+            ColumnDefinition("scan_result", "VARCHAR(32)"),
+            ColumnDefinition("connect_result", "VARCHAR(32)"),
+            ColumnDefinition("tx_result", "VARCHAR(64)"),
+            ColumnDefinition("tx_channel", "VARCHAR(64)"),
+            ColumnDefinition("tx_rssi", "VARCHAR(64)"),
+            ColumnDefinition("tx_criteria", "VARCHAR(64)"),
+            ColumnDefinition("tx_throughput_mbps", "VARCHAR(64)"),
+            ColumnDefinition("rx_result", "VARCHAR(64)"),
+            ColumnDefinition("rx_channel", "VARCHAR(64)"),
+            ColumnDefinition("rx_rssi", "VARCHAR(64)"),
+            ColumnDefinition("rx_criteria", "VARCHAR(64)"),
+            ColumnDefinition("rx_throughput_mbps", "VARCHAR(64)"),
+        ),
+        indexes=(
+            TableIndex(
+                "idx_compat_report",
+                "INDEX idx_compat_report (`test_report_id`)",
+            ),
+            TableIndex(
+                "idx_compat_router",
+                "INDEX idx_compat_router (`router_id`)",
+            ),
+        ),
+        constraints=(
+            TableConstraint(
+                "fk_compat_report",
+                "CONSTRAINT fk_compat_report FOREIGN KEY (`test_report_id`) REFERENCES `test_report`(`id`)",
+            ),
+            TableConstraint(
+                "fk_compat_router",
+                "CONSTRAINT fk_compat_router FOREIGN KEY (`router_id`) REFERENCES `router`(`id`)",
             ),
         ),
     ),
@@ -272,7 +339,7 @@ _VIEW_DEFINITIONS: Dict[str, str] = {
     "v_run_overview": """
         SELECT
             tr.id AS test_report_id,
-            tr.execution_id,
+            tr.shielded_id,
             tr.dut_id,
             tr.csv_name,
             tr.csv_path,
@@ -280,7 +347,7 @@ _VIEW_DEFINITIONS: Dict[str, str] = {
             tr.case_path,
             tr.created_at AS report_created_at,
             tr.updated_at AS report_updated_at,
-            e.case_path AS execution_case_path,
+            e.case_path AS shielded_case_path,
             e.case_root,
             e.router_name,
             e.router_address,
@@ -305,7 +372,7 @@ _VIEW_DEFINITIONS: Dict[str, str] = {
             agg.throughput_avg_mean_mbps,
             agg.target_throughput_avg_mbps
         FROM test_report AS tr
-        LEFT JOIN execution AS e ON tr.execution_id = e.id
+        LEFT JOIN shielded AS e ON tr.shielded_id = e.id
         LEFT JOIN dut AS d ON tr.dut_id = d.id
         LEFT JOIN (
             SELECT
@@ -463,7 +530,7 @@ def ensure_config_tables(client) -> None:
         This function does not return a value.
     """
     ensure_table(client, "dut", _TABLE_SPECS["dut"])
-    ensure_table(client, "execution", _TABLE_SPECS["execution"])
+    ensure_table(client, "shielded", _TABLE_SPECS["shielded"])
 
 
 def ensure_report_tables(client) -> None:
@@ -486,12 +553,18 @@ def ensure_report_tables(client) -> None:
     ensure_table(client, "test_report", _TABLE_SPECS["test_report"])
     ensure_table(client, "performance", _TABLE_SPECS["performance"])
     ensure_table(client, "perf_metric_kv", _TABLE_SPECS["perf_metric_kv"])
+    ensure_table(client, "router", _TABLE_SPECS["router"])
+    ensure_table(client, "compatibility", _TABLE_SPECS["compatibility"])
     _ensure_table_indexes(client, "test_report", _TABLE_SPECS["test_report"].indexes)
     _ensure_table_constraints(client, "test_report", _TABLE_SPECS["test_report"].constraints)
     _ensure_table_indexes(client, "performance", _TABLE_SPECS["performance"].indexes)
     _ensure_table_constraints(client, "performance", _TABLE_SPECS["performance"].constraints)
     _ensure_table_indexes(client, "perf_metric_kv", _TABLE_SPECS["perf_metric_kv"].indexes)
     _ensure_table_constraints(client, "perf_metric_kv", _TABLE_SPECS["perf_metric_kv"].constraints)
+    _ensure_table_indexes(client, "router", _TABLE_SPECS["router"].indexes)
+    _ensure_table_constraints(client, "router", _TABLE_SPECS["router"].constraints)
+    _ensure_table_indexes(client, "compatibility", _TABLE_SPECS["compatibility"].indexes)
+    _ensure_table_constraints(client, "compatibility", _TABLE_SPECS["compatibility"].constraints)
     _ensure_views(client)
 
 

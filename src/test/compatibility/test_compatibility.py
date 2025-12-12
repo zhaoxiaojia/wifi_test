@@ -124,8 +124,15 @@ def test_multi_throughtput_tx(router_setting, request):
     logging.info(f'tx_result {tx_result}')
     expect_data = float(router_setting.expected_rate.split(' ')[0])
     logging.info(f'expect_data {expect_data}')
+    # Record compare result for reporting, but do not fail the test.
+    compare_pass = True
+    try:
+        values = [float(x) for x in str(tx_result).split(',') if str(x).strip()]
+        compare_pass = all(v > float(expect_data) for v in values) if values else False
+    except Exception:
+        compare_pass = False
+    request.node._store['compat_compare'] = "PASS" if compare_pass else "FAIL"
     request.node._store['return_value'] = (pytest.dut.channel, pytest.dut.rssi_num, expect_data, tx_result)
-    assert all(float(x) > float(expect_data) for x in tx_result.split(','))
 
 
 @pytest.mark.dependency(depends=["connect"])
@@ -135,5 +142,12 @@ def test_multi_throughtput_rx(router_setting, request):
     logging.info(f'rx_result {rx_result}')
     expect_data = float(router_setting.expected_rate.split(' ')[1])
     logging.info(f'expect_data {expect_data}')
+    # Record compare result for reporting, but do not fail the test.
+    compare_pass = True
+    try:
+        values = [float(x) for x in str(rx_result).split(',') if str(x).strip()]
+        compare_pass = all(v > float(expect_data) for v in values) if values else False
+    except Exception:
+        compare_pass = False
+    request.node._store['compat_compare'] = "PASS" if compare_pass else "FAIL"
     request.node._store['return_value'] = (pytest.dut.channel, pytest.dut.rssi_num, expect_data, rx_result)
-    assert all(float(x) > float(expect_data) for x in rx_result.split(','))
