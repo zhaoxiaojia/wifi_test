@@ -193,6 +193,7 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
             ColumnDefinition("csv_path", "VARCHAR(512)"),
             ColumnDefinition("data_type", "VARCHAR(64)"),
             ColumnDefinition("case_path", "VARCHAR(512)"),
+            ColumnDefinition("duration_seconds", "INT NULL DEFAULT NULL"),
         ),
         indexes=(
             TableIndex(
@@ -565,7 +566,25 @@ def ensure_report_tables(client) -> None:
     _ensure_table_constraints(client, "router", _TABLE_SPECS["router"].constraints)
     _ensure_table_indexes(client, "compatibility", _TABLE_SPECS["compatibility"].indexes)
     _ensure_table_constraints(client, "compatibility", _TABLE_SPECS["compatibility"].constraints)
+
+    # Best-effort migrations: add missing columns for existing tables.
+    _ensure_missing_test_report_columns(client)
     _ensure_views(client)
+
+
+def _ensure_missing_test_report_columns(client) -> None:
+    """Add duration_seconds column to test_report if missing."""
+    try:
+        cols = client.query_all("SHOW COLUMNS FROM `test_report`")
+    except Exception:
+        logging.debug("Failed to inspect test_report columns for migration", exc_info=True)
+        return
+    existing = {str(c.get("Field") or "") for c in cols}
+    if "duration_seconds" not in existing:
+        try:
+            client.execute("ALTER TABLE `test_report` ADD COLUMN `duration_seconds` INT NULL DEFAULT NULL")
+        except Exception:
+            logging.debug("Failed to add duration_seconds to test_report", exc_info=True)
 
 
 def _table_exists(client, table_name: str) -> bool:

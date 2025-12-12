@@ -1,4 +1,5 @@
 import logging
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Dict, Optional
@@ -99,7 +100,15 @@ class _PerformanceSyncSession:
         if not info.log_file or not info.data_type:
             return
         try:
-            rows = sync_file_to_db(info.log_file, info.data_type, run_source=info.run_source)
+            rows = sync_file_to_db(
+                info.log_file,
+                info.data_type,
+                run_source=info.run_source,
+                duration_seconds=(
+                    getattr(pytest, "_session_duration_seconds", None)
+                    or max(0.0, time.time() - float(getattr(pytest, "_session_start_ts", time.time())))
+                ),
+            )
         except Exception as exc:
             logging.info("跳过 %s 数据同步：MySQL 操作失败（%s）", info.data_type, exc)
             self._mysql_available = False

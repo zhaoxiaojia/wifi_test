@@ -16,6 +16,7 @@ import re
 import shutil
 import subprocess
 import logging
+import time
 from contextlib import suppress
 from datetime import datetime
 from pathlib import Path
@@ -175,6 +176,7 @@ def pytest_sessionstart(session):
     else:
         pytest.win_flag = False
     pytest.host_os = LocalOS()
+    pytest._session_start_ts = time.time()
     # Load configuration (fresh)
     pytest.config = load_config(refresh=True) or {}
 
@@ -427,6 +429,10 @@ def pytest_sessionfinish(session, exitstatus):
         exitstatus (int): Pytest exit status code.
     """
     result_path = getattr(pytest, "_result_path", None)
+    try:
+        pytest._session_duration_seconds = max(0.0, time.time() - float(getattr(pytest, "_session_start_ts", time.time())))
+    except Exception:
+        pytest._session_duration_seconds = None
     destination_dir: Path | None = None
     csv_file = "test_results.csv"
     logging.info(test_results)
@@ -480,6 +486,7 @@ def pytest_sessionfinish(session, exitstatus):
                 csv_file=str(csv_path_for_db),
                 router_json=router_json,
                 case_path=case_path_hint,
+                duration_seconds=getattr(pytest, "_session_duration_seconds", None),
             )
         except Exception:
             logging.debug("Compatibility DB sync skipped/failed", exc_info=True)
