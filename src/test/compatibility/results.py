@@ -2,7 +2,7 @@ import csv
 import json
 import os
 
-from src.tools.config_loader import load_config
+from src.util.constants import load_config
 from src.tools.router_tool.Router import Router
 
 

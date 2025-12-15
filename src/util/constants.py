@@ -40,6 +40,11 @@ def get_model_config_base() -> Path:
     return Path(__file__).resolve().parents[2] / "src" / "ui" / "model" / "config"
 
 
+def get_model_toolbar_base() -> Path:
+    """Return the base directory for YAML toolbar configuration."""
+    return Path(__file__).resolve().parents[2] / "src" / "ui" / "model" / "toolbar"
+
+
 _SRC_TEMP_DIR: Path | None = None
 
 
@@ -126,6 +131,8 @@ CONFIG_KEY_ALIASES: Final[dict[str, str]] = {
 }
 TOOL_SECTION_KEY: Final[str] = "tool"
 TOOL_CONFIG_FILENAME: Final[str] = "config_tool.yaml"
+TOOLBAR_SECTION_KEY: Final[str] = "toolbar"
+TOOLBAR_CONFIG_FILENAME: Final[str] = "config_toolbar.yaml"
 STABILITY_CONFIG_FILENAME: Final[str] = "config_stability.yaml"
 COMPATIBILITY_CONFIG_FILENAME: Final[str] = "config_compatibility.yaml"
 STABILITY_SECTION_KEYS: Final[frozenset[str]] = frozenset({
@@ -331,8 +338,9 @@ def split_config_data(
     dict[str, Any],
     dict[str, Any],
     dict[str, Any],
+    dict[str, Any],
 ]:
-    """Split the full configuration into basic, execution, stability, compatibility, and tool sections."""
+    """Split the full configuration into basic, execution, stability, compatibility, tool and toolbar sections."""
     normalised = _normalize_config_keys(config)
 
     # Section payloads written back to individual YAML files.
@@ -341,12 +349,19 @@ def split_config_data(
     stability_section: dict[str, Any] = {}
     compatibility_section: dict[str, Any] = {}
     tool_section: dict[str, Any] = {}
+    toolbar_section: dict[str, Any] = {}
 
     for key, value in normalised.items():
         # Tool section is stored as-is in its own YAML.
         if key == TOOL_SECTION_KEY:
             if isinstance(value, Mapping):
                 tool_section = copy.deepcopy(value)
+            continue
+
+        # Toolbar section is stored as-is in its own YAML.
+        if key == TOOLBAR_SECTION_KEY:
+            if isinstance(value, Mapping):
+                toolbar_section = copy.deepcopy(value)
             continue
 
         # Stability Settings (stability/duration_control/check_point/cases).
@@ -389,7 +404,14 @@ def split_config_data(
         # All remaining keys belong to the Performance/Execution config.
         execution_section[key] = copy.deepcopy(value)
 
-    return basic_section, execution_section, stability_section, compatibility_section, tool_section
+    return (
+        basic_section,
+        execution_section,
+        stability_section,
+        compatibility_section,
+        tool_section,
+        toolbar_section,
+    )
 
 
 def merge_config_sections(
@@ -398,8 +420,9 @@ def merge_config_sections(
     stability_section: Mapping[str, Any] | None = None,
     compatibility_section: Mapping[str, Any] | None = None,
     tool_section: Mapping[str, Any] | None = None,
+    toolbar_section: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Return a merged configuration mapping from basic, execution, stability, compatibility, and tool sections."""
+    """Return a merged configuration mapping from basic, execution, stability, compatibility, tool and toolbar sections."""
     merged: dict[str, Any] = {}
     merged.update(_normalize_config_keys(execution_section))
     merged.update(_normalize_config_keys(basic_section))
@@ -416,6 +439,10 @@ def merge_config_sections(
         merged[TOOL_SECTION_KEY] = copy.deepcopy(tool_section)
     else:
         merged.setdefault(TOOL_SECTION_KEY, {})
+    if isinstance(toolbar_section, Mapping):
+        merged[TOOLBAR_SECTION_KEY] = copy.deepcopy(toolbar_section)
+    else:
+        merged.setdefault(TOOLBAR_SECTION_KEY, {})
     return merged
 
 
@@ -457,16 +484,19 @@ def _write_yaml_dict(path: Path, payload: Mapping[str, Any]) -> None:
 def _load_config_cached(base_dir: str) -> dict[str, Any]:
     """Load configuration sections from disk and merge them."""
     config_dir = Path(base_dir)
+    toolbar_dir = config_dir.parent / "toolbar"
     basic_path = config_dir / BASIC_CONFIG_FILENAME
     execution_path = config_dir / EXECUTION_CONFIG_FILENAME
     stability_path = config_dir / STABILITY_CONFIG_FILENAME
     tool_path = config_dir / TOOL_CONFIG_FILENAME
     compatibility_path = config_dir / COMPATIBILITY_CONFIG_FILENAME
+    toolbar_path = toolbar_dir / TOOLBAR_CONFIG_FILENAME
     basic_section = _read_yaml_dict(basic_path)
     execution_section = _read_yaml_dict(execution_path)
     stability_section = _read_yaml_dict(stability_path)
     tool_section = _read_yaml_dict(tool_path)
     compatibility_section = _read_yaml_dict(compatibility_path)
+    toolbar_section = _read_yaml_dict(toolbar_path)
     logging.debug("compatibility section loaded: %s", compatibility_section)
     return merge_config_sections(
         basic_section,
@@ -474,6 +504,7 @@ def _load_config_cached(base_dir: str) -> dict[str, Any]:
         stability_section,
         compatibility_section,
         tool_section,
+        toolbar_section,
     )
 
 
@@ -552,16 +583,19 @@ def save_config_sections(
     stability_section: Mapping[str, Any] | None,
     compatibility_section: Mapping[str, Any] | None,
     tool_section: Mapping[str, Any] | None,
+    toolbar_section: Mapping[str, Any] | None,
     *,
     base_dir: str | os.PathLike[str] | None = None,
 ) -> None:
-    """Persist basic, execution, stability, compatibility, and tool configuration sections."""
+    """Persist basic, execution, stability, compatibility, tool and toolbar configuration sections."""
     config_base = Path(base_dir) if base_dir is not None else get_model_config_base()
+    toolbar_base = config_base.parent / "toolbar"
     basic_path = config_base / BASIC_CONFIG_FILENAME
     execution_path = config_base / EXECUTION_CONFIG_FILENAME
     stability_path = config_base / STABILITY_CONFIG_FILENAME
     compatibility_path = config_base / COMPATIBILITY_CONFIG_FILENAME
     tool_path = config_base / TOOL_CONFIG_FILENAME
+    toolbar_path = toolbar_base / TOOLBAR_CONFIG_FILENAME
     _write_yaml_dict(basic_path, _normalize_config_keys(basic_section))
     _write_yaml_dict(execution_path, _normalize_config_keys(execution_section))
     stability_payload = stability_section if isinstance(stability_section, Mapping) else {}
@@ -573,6 +607,8 @@ def save_config_sections(
     _write_yaml_dict(compatibility_path, compatibility_payload)
     tool_payload = tool_section if isinstance(tool_section, Mapping) else {}
     _write_yaml_dict(tool_path, tool_payload)
+    toolbar_payload = toolbar_section if isinstance(toolbar_section, Mapping) else {}
+    _write_yaml_dict(toolbar_path, toolbar_payload)
 
 
 def save_config(
@@ -587,6 +623,7 @@ def save_config(
         stability_section,
         compatibility_section,
         tool_section,
+        toolbar_section,
     ) = split_config_data(config)
     save_config_sections(
         basic_section,
@@ -594,6 +631,7 @@ def save_config(
         stability_section,
         compatibility_section,
         tool_section,
+        toolbar_section,
         base_dir=base_dir,
     )
     _load_config_cached.cache_clear()

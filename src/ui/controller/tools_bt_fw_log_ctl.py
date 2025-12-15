@@ -15,9 +15,9 @@ from typing import Optional
 from PyQt5.QtCore import QThread, pyqtSignal, QObject
 from PyQt5.QtWidgets import QFileDialog, QMessageBox, QWidget
 
-from src.tools.bt_fw_log_analyzer import analyze_bt_fw_log, capture_serial_log
+from src.tools.analyze.bt import analyze_bt_fw_log, capture_serial_log
 from src.ui.controller import list_serial_ports
-from src.ui.view.tools_bt_fw_log import BtFwLogToolView
+from src.ui.view.toolbar.tools_bt_fw_log import BtFwLogToolView
 
 
 class BtFwLogToolController:

@@ -19,7 +19,7 @@ from typing import Any, Dict, Sequence, Tuple
 import pymysql
 from pymysql.cursors import DictCursor
 
-from src.tools.config_loader import load_config
+from src.util.constants import load_config
 from src.util.constants import TOOL_CONFIG_FILENAME, TOOL_SECTION_KEY, get_config_base
 from src.tools.mysql_tool.schema import ensure_report_tables
 

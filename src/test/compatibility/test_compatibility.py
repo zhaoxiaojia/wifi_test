@@ -13,7 +13,7 @@ from src.tools.router_tool.router_performance import (
     compatibility_router,
     handle_expectdata as perf_handle_expectdata,
 )
-from src.tools.config_loader import load_config
+from src.util.constants import load_config
 
 power_delay = power_ctrl()
 # power_delay.shutdown()

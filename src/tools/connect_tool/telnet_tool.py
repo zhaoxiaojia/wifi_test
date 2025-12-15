@@ -20,7 +20,7 @@ from src.tools.connect_tool.dut import dut
 from src.tools.connect_tool.telnet_common import FastNegotiationTelnetClient
 from src.util.constants import DEFAULT_CONNECT_MINWAIT, DEFAULT_CONNECT_MAXWAIT, get_telnet_connect_window
 from typing import Annotated
-from src.tools.config_loader import load_config
+from src.util.constants import load_config
 
 def _get_connect_wait_window() -> Tuple[float, float]:
     """

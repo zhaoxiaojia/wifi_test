@@ -246,7 +246,7 @@ def normalize_stability_config(raw_value: Any) -> StabilityPlan:
 def load_stability_plan() -> StabilityPlan:
     """Load and normalize the current stability execution plan."""
 
-    from src.tools.config_loader import load_config
+    from src.util.constants import load_config
 
     snapshot = load_config(refresh=True) or {}
     stability_cfg = snapshot.get("stability")
@@ -326,13 +326,12 @@ def describe_iteration(iteration: int, budget: LoopBudget, mode: str) -> str:
 def prepare_stability_environment() -> None:
     """Reload configuration and clear cached test modules before execution."""
 
-    from src.tools.config_loader import load_config
+    from src.util.constants import load_config
 
     load_config(refresh=True)
     for module_name in list(sys.modules):
         if module_name.startswith("src.test"):
             sys.modules.pop(module_name, None)
-    sys.modules.pop("src.tools.config_loader", None)
     sys.modules.pop("src.conftest", None)
 
 

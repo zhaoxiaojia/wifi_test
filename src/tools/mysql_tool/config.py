@@ -6,7 +6,7 @@ from typing import Any, Dict
 
 import pymysql
 
-from src.tools.config_loader import load_config
+from src.util.constants import load_config
 from src.util.constants import Paths, TOOL_CONFIG_FILENAME, TOOL_SECTION_KEY
 
 

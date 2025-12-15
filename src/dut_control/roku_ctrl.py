@@ -24,7 +24,7 @@ from roku import Roku
 
 from src.tools.connect_tool.serial_tool import serial_tool
 from src.tools.connect_tool.telnet_tool import telnet_tool
-from src.tools.config_loader import load_config
+from src.util.constants import load_config
 from src.util.constants import RokuConst
 from typing import Annotated
 

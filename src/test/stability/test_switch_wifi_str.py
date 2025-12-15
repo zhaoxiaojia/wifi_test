@@ -21,7 +21,7 @@ from src.test.stability import (
     load_stability_plan,
     run_checkpoints,
 )
-from src.tools.config_loader import load_config
+from src.util.constants import load_config
 from src.tools.relay_tool import Relay, get_relay_controller
 from src.util.constants import (
     AUTH_OPTIONS,
