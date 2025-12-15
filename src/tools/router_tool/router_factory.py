@@ -11,7 +11,7 @@ from src.tools.router_tool.AsusRouter.Asusax5400Control import Asusax5400Control
 from src.tools.router_tool.AsusRouter.Asusax6700Control import Asusax6700Control
 from src.tools.router_tool.Xiaomi.Xiaomiax3600Control import Xiaomiax3600Control
 from src.tools.router_tool.Xiaomi.XiaomiBe7000Control import XiaomiBe7000Control
-from src.tools.config_loader import load_config
+from src.util.constants import load_config
 
 router_list = {
     'asusax86u': Asusax86uControl,

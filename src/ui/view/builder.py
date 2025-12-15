@@ -16,7 +16,7 @@ from typing import Any, Dict, Mapping
 from PyQt5.QtWidgets import QCheckBox, QGroupBox, QFormLayout, QSpinBox, QWidget, QLabel
 from qfluentwidgets import ComboBox, LineEdit
 
-from src.util.constants import get_model_config_base, TURN_TABLE_MODEL_RS232
+from src.util.constants import get_model_config_base, get_model_toolbar_base, TURN_TABLE_MODEL_RS232
 from src.ui.model.options import get_field_choices
 from src.ui.view.common import RfStepSegmentsWidget
 
@@ -34,9 +34,9 @@ class FieldSpec:
     choices: list[str] | None = None
 
 
-def _load_yaml_schema(filename: str) -> Dict[str, Any]:
-    base = get_model_config_base()
-    path = base / filename
+def _load_yaml_schema(filename: str, *, base: Path | None = None) -> Dict[str, Any]:
+    base_dir = base if base is not None else get_model_config_base()
+    path = base_dir / filename
     try:
         text = path.read_text(encoding="utf-8")
     except Exception:
@@ -57,10 +57,62 @@ def load_ui_schema(section: str) -> Dict[str, Any]:
         "stability": "config_stability_ui.yaml",
         "compatibility": "config_compatibility_ui.yaml",
     }
+    if section == "toolbar":
+        return _load_yaml_schema("config_toolbar_ui.yaml", base=get_model_toolbar_base())
     filename = mapping.get(section)
     if not filename:
         return {}
     return _load_yaml_schema(filename)
+
+
+def build_inline_fields_from_schema(
+    page: Any,
+    config: Mapping[str, Any],
+    ui_schema: Mapping[str, Any],
+    panel_key: str,
+    section_id: str,
+    *,
+    parent: QWidget,
+) -> list[tuple[str, QWidget, str]]:
+    """Build a flat list of fields for inline layouts (e.g. toolbar rows).
+
+    Returns a list of (key, widget, label_text).
+    """
+    panels = ui_schema.get("panels") or {}
+    panel_spec = panels.get(panel_key) or {}
+    sections = panel_spec.get("sections") or []
+
+    for section in sections:
+        if str(section.get("id") or "") != section_id:
+            continue
+        fields = section.get("fields") or []
+        built: list[tuple[str, QWidget, str]] = []
+        for field in fields:
+            key = str(field.get("key") or "").strip()
+            if not key:
+                continue
+            widget_type = str(field.get("widget") or "line_edit")
+            label_text = str(field.get("label") or key)
+            placeholder = field.get("placeholder")
+            minimum = field.get("minimum")
+            maximum = field.get("maximum")
+            choices = field.get("choices") or None
+
+            spec = FieldSpec(
+                key=key,
+                widget=widget_type,
+                label=label_text,
+                placeholder=placeholder,
+                minimum=int(minimum) if isinstance(minimum, int) else None,
+                maximum=int(maximum) if isinstance(maximum, int) else None,
+                choices=[str(c) for c in choices] if isinstance(choices, list) else None,
+            )
+            value = _get_nested(config, key)
+            widget = _create_widget(page, spec, value)
+            built.append((key, widget, label_text))
+        return built
+
+    return []
 
 
 def _get_nested(config: Mapping[str, Any], dotted_key: str) -> Any:
@@ -308,4 +360,4 @@ def build_groups_from_schema(
         parent.request_rebalance()
 
 
-__all__ = ["load_ui_schema", "build_groups_from_schema"]
+__all__ = ["load_ui_schema", "build_groups_from_schema", "build_inline_fields_from_schema"]

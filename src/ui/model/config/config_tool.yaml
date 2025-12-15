@@ -6,3 +6,5 @@ mysql:
   user: FAE-QA
   passwd: 12345678
   database: wifi_test
+ai_chat:
+  model_id: groq-llama3-8b

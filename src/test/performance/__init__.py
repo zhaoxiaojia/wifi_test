@@ -13,7 +13,7 @@ from typing import Any, Optional
 
 import pytest
 
-from src.tools.config_loader import load_config
+from src.util.constants import load_config
 from src.tools.performance_result import PerformanceResult
 from src.tools.router_tool.Router import Router
 from src.tools.router_tool.router_factory import get_router

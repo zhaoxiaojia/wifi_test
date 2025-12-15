@@ -13,8 +13,8 @@ from PyQt5.QtCore import QObject
 
 from src.ui.model.tools_registry import ToolSpec
 from src.ui.view.tools_global import GlobalToolsBar, GlobalToolsPanel
-from src.ui.view.tools_bt_fw_log import BtFwLogToolView
-from src.ui.view.tools_ai_chat import AiChatToolView
+from src.ui.view.toolbar.tools_bt_fw_log import BtFwLogToolView
+from src.ui.view.toolbar.tools_ai_chat import AiChatToolView
 from src.ui.controller.tools_bt_fw_log_ctl import BtFwLogToolController
 from src.ui.controller.tools_ai_chat_ctl import AiChatToolController
 

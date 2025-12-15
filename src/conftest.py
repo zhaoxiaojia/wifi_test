@@ -30,7 +30,7 @@ from src.tools.connect_tool.serial_tool import serial_tool
 from src.tools.connect_tool.telnet_tool import telnet_tool
 from src.tools.connect_tool.local_os import LocalOS
 from src.tools.performance_result import PerformanceResult
-from src.tools.config_loader import load_config
+from src.util.constants import load_config
 from src.dut_control.roku_ctrl import roku_ctrl
 from src.tools.router_tool.Router import Router
 from src.tools.reporting import generate_project_report
@@ -469,7 +469,7 @@ def pytest_sessionfinish(session, exitstatus):
     if compatibility_results:
         try:
             from src.tools.mysql_tool.operations import sync_compatibility_artifacts_to_db
-            from src.tools.config_loader import load_config
+            from src.util.constants import load_config
 
             config = load_config(refresh=True) or {}
             router_json = str((Path.cwd() / "config" / "compatibility_router.json").resolve())

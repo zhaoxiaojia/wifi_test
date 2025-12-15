@@ -1,0 +1,177 @@
+version: 1
+
+# This catalog is the only project context the LLM needs for mapping
+# natural-language test requests to YAML configuration updates.
+#
+# The execution process must enforce allow-lists and validate the LLM output.
+
+allowed_update_keys:
+  # Case selection
+  - text_case
+
+  # Performance CSV selection
+  - csv_path
+
+  # Common environment/config knobs (safe subset)
+  - router.name
+  - router.address
+  - rf_solution.model
+  - rf_solution.step
+  - Turntable.Turntable
+  - Turntable.IP address
+  - Turntable.Step
+  - Turntable.Static dB
+  - Turntable.Target RSSI
+
+  - connect_type.type
+  - connect_type.Android.device
+  - connect_type.Linux.ip
+
+  # RVR tool selection
+  - rvr.tool
+  - rvr.repeat
+  - rvr.throughput_threshold
+
+key_aliases:
+  case_path: text_case
+  testcase: text_case
+  Turntable.model: Turntable.Turntable
+  Turntable.ip_address: Turntable.IP address
+  Turntable.step: Turntable.Step
+  Turntable.static_db: Turntable.Static dB
+  Turntable.target_rssi: Turntable.Target RSSI
+
+cases:
+  - id: perf_peak
+    title: "Performance: Peak Throughput"
+    text_case: test/performance/test_wifi_peak_throughput.py
+    synonyms: ["peak", "峰值", "峰值吞吐", "吞吐", "throughput", "t-put"]
+
+  - id: perf_rvr
+    title: "Performance: RVR"
+    text_case: test/performance/test_wifi_rvr.py
+    synonyms: ["rvr", "range", "覆盖", "距离", "灵敏度", "rvr吞吐"]
+
+  - id: perf_rvo
+    title: "Performance: RVO"
+    text_case: test/performance/test_wifi_rvo.py
+    synonyms: ["rvo", "roaming", "漫游", "切换", "切ap"]
+
+  - id: compatibility
+    title: "Compatibility"
+    text_case: test/compatibility/test_compatibility.py
+    synonyms: ["兼容", "兼容性", "compatibility", "互通"]
+
+  - id: stability_switch_wifi
+    title: "Stability: Switch Wi-Fi STR"
+    text_case: test/stability/test_switch_wifi_str.py
+    synonyms: ["压测", "稳定性", "stability", "str", "切wifi", "切换wifi", "循环"]
+
+fields:
+  - key: text_case
+    type: string
+    description: "Relative path to the selected test case (Python file)."
+    synonyms: ["case_path", "用例", "脚本", "case"]
+
+  - key: csv_path
+    type: string
+    description: "Performance CSV relative path (e.g. performance_test_csv/xxx.csv)."
+    synonyms: ["csv", "csv文件", "csv_path"]
+
+  - key: router.name
+    type: string
+    description: "Router name key used by router workflow."
+    synonyms: ["router", "路由器", "路由器型号"]
+
+  - key: router.address
+    type: string
+    description: "Router IP address."
+    synonyms: ["router_ip", "路由器ip"]
+
+  - key: rf_solution.model
+    type: string
+    description: "RF model name."
+    synonyms: ["rf", "rf_model", "暗室", "衰减器"]
+
+  - key: rf_solution.step
+    type: string
+    description: "RF step settings string."
+
+  - key: Turntable.Turntable
+    type: string
+    description: "Turntable model name."
+
+  - key: Turntable.IP address
+    type: string
+    description: "Turntable IP address."
+
+  - key: Turntable.Step
+    type: string
+    description: "Turntable rotation step settings."
+
+  - key: Turntable.Static dB
+    type: string
+    description: "Static attenuation dB."
+
+  - key: Turntable.Target RSSI
+    type: string
+    description: "Target RSSI range."
+
+  - key: connect_type.type
+    type: string
+    description: "Control type: Android or Linux."
+    choices: ["Android", "Linux"]
+    synonyms: ["adb", "telnet", "控制方式"]
+
+  - key: connect_type.Android.device
+    type: string
+    description: "adb device identifier."
+    synonyms: ["device", "设备", "adb设备"]
+
+  - key: connect_type.Linux.ip
+    type: string
+    description: "Linux DUT IP address."
+
+  - key: rvr.tool
+    type: string
+    description: "RVR tool: iperf or ixchariot."
+    choices:
+      - value: iperf
+        synonyms: ["iperf", "i perf", "iperf2", "iperf 2"]
+      - value: iperf3
+        synonyms: ["iperf3", "iperf 3", "iperf-3", "iperf_3"]
+      - value: ixchariot
+        synonyms: ["ixchariot", "ix chariot", "ix-chariot", "ixia", "chariot", "ix"]
+
+  - key: rvr.repeat
+    type: string
+    description: "Repeat count (string in current config)."
+
+  - key: rvr.throughput_threshold
+    type: string
+    description: "Throughput threshold (string in current config)."
+
+csv_templates:
+  - path: performance_test_csv/rvr_wifi_setup.csv
+    tags:
+      bands: ["5G", "2.4G"]
+      wireless_modes: ["11ax", "11ac", "11n"]
+      bandwidths_mhz: [20, 40, 80]
+      security_modes: ["Open System"]
+    synonyms: ["默认", "demo", "通用", "coco"]
+
+  - path: performance_test_csv/xiaomi_peak_T-put_wifi6.csv
+    tags:
+      bands: ["5G", "2.4G"]
+      wireless_modes: ["11ax", "11ac"]
+      bandwidths_mhz: [20, 40, 80]
+      security_modes: ["Open System"]
+    synonyms: ["xiaomi", "小米", "wifi6", "peak"]
+
+  - path: performance_test_csv/xiaomi_peak_T-put_wifi5.csv
+    tags:
+      bands: ["5G", "2.4G"]
+      wireless_modes: ["11ax", "11ac"]
+      bandwidths_mhz: [20, 40, 80]
+      security_modes: ["Open System"]
+    synonyms: ["xiaomi", "小米", "wifi5", "peak"]

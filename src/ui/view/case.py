@@ -136,7 +136,7 @@ class RvrWifiConfigPage(CardWidget):
             # that Case page checkboxes mirror the Config-page
             # Compatibility Settings (selected_routers).
             try:
-                from src.tools.config_loader import load_config  # local import to avoid cycles
+                from src.util.constants import load_config  # local import to avoid cycles
 
                 cfg = load_config(refresh=True) or {}
                 compat_cfg = cfg.get("compatibility", {}) or {}
@@ -162,7 +162,7 @@ class RvrWifiConfigPage(CardWidget):
         try:
             selected = sorted(self.compat_page.selected_keys())
             logging.debug("compat CasePage selection changed -> %s", selected)
-            from src.tools.config_loader import load_config, save_config
+            from src.util.constants import load_config, save_config
             from src.ui.view.config.config_compatibility import apply_selected_keys_to_relays
 
             cfg = load_config(refresh=True) or {}
@@ -207,7 +207,7 @@ class RvrWifiConfigPage(CardWidget):
 
     def _compute_csv_path(self, router_name: str | None = None) -> Path:
         """Return the CSV path used by performance tests."""
-        from src.tools.config_loader import load_config
+        from src.util.constants import load_config
         from src.util.constants import get_config_base
 
         cfg = load_config(refresh=True) or {}
@@ -225,7 +225,7 @@ class RvrWifiConfigPage(CardWidget):
         return (csv_dir / f"{name}.csv").resolve()
 
     def _load_router(self, name: str | None = None, address: str | None = None):
-        from src.tools.config_loader import load_config
+        from src.util.constants import load_config
 
         try:
             cfg = load_config(refresh=True) or {}

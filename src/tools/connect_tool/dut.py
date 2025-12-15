@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from typing import Optional, Sequence
 from src.tools.ixchariot import ix
 from threading import Thread
-from src.tools.config_loader import load_config
+from src.util.constants import load_config
 from src.tools.router_tool.router_performance import handle_expectdata
 from src.util.constants import is_database_debug_enabled
 from src.tools.connect_tool.command_batch import CommandBatch, CommandRunner, CommandExecutionError, CommandTimeoutError

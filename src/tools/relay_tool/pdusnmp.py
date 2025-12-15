@@ -11,7 +11,7 @@ import subprocess
 import time
 from typing import Any, Sequence
 
-from src.tools.config_loader import load_config
+from src.util.constants import load_config
 from src.tools.relay_tool import Relay
 
 

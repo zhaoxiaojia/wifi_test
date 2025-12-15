@@ -22,7 +22,7 @@ from PyQt5.QtCore import QTimer
 from PyQt5.QtWidgets import QWidget
 from qfluentwidgets import InfoBar, InfoBarPosition
 
-from src.tools.config_loader import load_config, save_config
+from src.util.constants import load_config, save_config
 from src.util.constants import get_src_base, TOOL_SECTION_KEY
 
 __all__ = [
