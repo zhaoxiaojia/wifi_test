@@ -484,13 +484,12 @@ def _write_yaml_dict(path: Path, payload: Mapping[str, Any]) -> None:
 def _load_config_cached(base_dir: str) -> dict[str, Any]:
     """Load configuration sections from disk and merge them."""
     config_dir = Path(base_dir)
-    toolbar_dir = config_dir.parent / "toolbar"
     basic_path = config_dir / BASIC_CONFIG_FILENAME
     execution_path = config_dir / EXECUTION_CONFIG_FILENAME
     stability_path = config_dir / STABILITY_CONFIG_FILENAME
     tool_path = config_dir / TOOL_CONFIG_FILENAME
     compatibility_path = config_dir / COMPATIBILITY_CONFIG_FILENAME
-    toolbar_path = toolbar_dir / TOOLBAR_CONFIG_FILENAME
+    toolbar_path = config_dir / TOOLBAR_CONFIG_FILENAME
     basic_section = _read_yaml_dict(basic_path)
     execution_section = _read_yaml_dict(execution_path)
     stability_section = _read_yaml_dict(stability_path)
@@ -517,7 +516,7 @@ def load_config(
 
     Set ``refresh=True`` to discard the cached content and re-read from disk.
     """
-    config_base = Path(base_dir) if base_dir is not None else get_model_config_base()
+    config_base = Path(base_dir) if base_dir is not None else get_config_base()
     cache_key = str(config_base.resolve())
     if refresh:
         _load_config_cached.cache_clear()
@@ -588,14 +587,13 @@ def save_config_sections(
     base_dir: str | os.PathLike[str] | None = None,
 ) -> None:
     """Persist basic, execution, stability, compatibility, tool and toolbar configuration sections."""
-    config_base = Path(base_dir) if base_dir is not None else get_model_config_base()
-    toolbar_base = config_base.parent / "toolbar"
+    config_base = Path(base_dir) if base_dir is not None else get_config_base()
     basic_path = config_base / BASIC_CONFIG_FILENAME
     execution_path = config_base / EXECUTION_CONFIG_FILENAME
     stability_path = config_base / STABILITY_CONFIG_FILENAME
     compatibility_path = config_base / COMPATIBILITY_CONFIG_FILENAME
     tool_path = config_base / TOOL_CONFIG_FILENAME
-    toolbar_path = toolbar_base / TOOLBAR_CONFIG_FILENAME
+    toolbar_path = config_base / TOOLBAR_CONFIG_FILENAME
     _write_yaml_dict(basic_path, _normalize_config_keys(basic_section))
     _write_yaml_dict(execution_path, _normalize_config_keys(execution_section))
     stability_payload = stability_section if isinstance(stability_section, Mapping) else {}

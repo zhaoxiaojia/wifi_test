@@ -346,7 +346,7 @@ class CaseRunner(QThread):
         if self._python_log_copied or not self._python_log_path:
             return messages
         if self._proc and self._proc.is_alive():
-            return messages
+            return messagesgit
         src = Path(self._python_log_path)
         if not src.exists():
             self._python_log_copied = True
