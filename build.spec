@@ -14,7 +14,12 @@ a = Analysis(
         ('src/pytest.ini', 'src'),
         ('src/test', 'src/test'),
         ('config/performance_test_csv', 'config/performance_test_csv'),
-        ('src/ui/model/config/config_tool.yaml', 'config'),
+        ('config/config_basic.yaml', 'config'),
+        ('config/config_performance.yaml', 'config'),
+        ('config/config_stability.yaml', 'config'),
+        ('config/config_compatibility.yaml', 'config'),
+        ('config/config_tool.yaml', 'config'),
+        ('config/config_toolbar.yaml', 'config'),
     ],
     hiddenimports=[
         'PyQt5',
@@ -77,4 +82,3 @@ exe = EXE(
     runtime_tmpdir=None,
     icon='res/logo/wifi.ico'
 )
-
