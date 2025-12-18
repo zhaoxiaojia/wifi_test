@@ -1,3 +1,14 @@
+#!/usr/bin/env python
+# encoding: utf-8
+'''
+@author: Yonghua.Yan
+@contact: Yonghua.Yan@amlogic.com
+@software: pycharm
+@file: linux_control.py
+@time: 2025/12/18 18:58
+@desc: This file includes functions to control liunx host: ssh_connect, tcpdump capture, etc.
+'''
+
 import paramiko
 import time
 import logging
