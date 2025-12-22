@@ -22,3 +22,5 @@ pytest-dependency
 scapy
 ldap3
 pycryptodome
+xlrd
+allure-pytest

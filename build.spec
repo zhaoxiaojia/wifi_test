@@ -56,7 +56,7 @@ a = Analysis(
         'selenium.webdriver.chrome',
         *requirements,
         'src.ui.run',
-
+        'xlrd'
     ],
     hookspath=[],
     runtime_hooks=[],

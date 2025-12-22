@@ -326,6 +326,9 @@ class dut():
             This method does not return a value.
         """
         self.serialnumber = 'executer'
+        self.rssi_num = -1
+        self._freq_num = 0
+        self.channel = 0
         cfg = load_config(refresh=True)
         rvr_cfg = cfg.get('rvr', {})
         self.rvr_tool = rvr_cfg.get('tool', 'iperf')

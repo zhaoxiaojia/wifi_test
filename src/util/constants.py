@@ -280,38 +280,53 @@ def _normalize_turntable_section(data: Mapping[str, Any] | None) -> dict[str, An
     else:
         source = {}
 
-    if any(
-        key in source
-        for key in (
-            TURN_TABLE_FIELD_MODEL,
-            TURN_TABLE_FIELD_IP_ADDRESS,
-            TURN_TABLE_FIELD_STEP,
-            TURN_TABLE_FIELD_STATIC_DB,
-            TURN_TABLE_FIELD_TARGET_RSSI,
-        )
-    ):
-        model_value = source.get(TURN_TABLE_FIELD_MODEL, TURN_TABLE_MODEL_RS232)
-        ip_value = source.get(TURN_TABLE_FIELD_IP_ADDRESS, "")
-        step_value = source.get(TURN_TABLE_FIELD_STEP, "")
-        static_value = source.get(TURN_TABLE_FIELD_STATIC_DB, "")
-        target_value = source.get(TURN_TABLE_FIELD_TARGET_RSSI, "")
-    else:
-        model_value = source.get("turntable_type") or source.get("model") or TURN_TABLE_MODEL_RS232
-        ip_value = source.get("ip_address") or source.get("ip") or ""
-        step_value = source.get("step", "")
-        static_value = source.get("static_db", "")
-        target_value = source.get("target_rssi", "")
+    # Prefer the internal/UI (lowercase) keys when present so that edits
+    # from the Config page take effect even when legacy/display keys are
+    # still present in the mapping. Fall back to the display names used
+    # in YAML for older configs.
+    model_value = (
+        source.get("model")
+        or source.get("turntable_type")
+        or source.get(TURN_TABLE_FIELD_MODEL)
+        or TURN_TABLE_MODEL_RS232
+    )
+    ip_value = (
+        source.get("ip_address")
+        or source.get("ip")
+        or source.get(TURN_TABLE_FIELD_IP_ADDRESS)
+        or ""
+    )
+    step_value = source.get("step") or source.get(TURN_TABLE_FIELD_STEP) or ""
+    static_value = source.get("static_db") or source.get(TURN_TABLE_FIELD_STATIC_DB) or ""
+    target_value = (
+        source.get("target_rssi")
+        or source.get(TURN_TABLE_FIELD_TARGET_RSSI)
+        or ""
+    )
 
     model_text = str(model_value).strip() if model_value is not None else ""
     if model_text not in TURN_TABLE_MODEL_CHOICES:
         model_text = TURN_TABLE_MODEL_RS232
 
-    normalized = {
+    # Expose both the display-name keys used in YAML (e.g. "Step") and
+    # the internal/UI keys ("step", "ip_address", ...) so that all call
+    # sites (tests, UI builder, autosave) observe consistent values.
+    step_text = _stringify_turntable_value(step_value)
+    ip_text = _stringify_turntable_value(ip_value)
+    static_text = _stringify_turntable_value(static_value)
+    target_text = _stringify_turntable_value(target_value)
+
+    normalized: dict[str, Any] = {
         TURN_TABLE_FIELD_MODEL: model_text,
-        TURN_TABLE_FIELD_IP_ADDRESS: _stringify_turntable_value(ip_value),
-        TURN_TABLE_FIELD_STEP: _stringify_turntable_value(step_value),
-        TURN_TABLE_FIELD_STATIC_DB: _stringify_turntable_value(static_value),
-        TURN_TABLE_FIELD_TARGET_RSSI: _stringify_turntable_value(target_value),
+        TURN_TABLE_FIELD_IP_ADDRESS: ip_text,
+        TURN_TABLE_FIELD_STEP: step_text,
+        TURN_TABLE_FIELD_STATIC_DB: static_text,
+        TURN_TABLE_FIELD_TARGET_RSSI: target_text,
+        "model": model_text,
+        "ip_address": ip_text,
+        "step": step_text,
+        "static_db": static_text,
+        "target_rssi": target_text,
     }
     return normalized
 
@@ -327,6 +342,26 @@ def _normalize_config_keys(data: Mapping[str, Any] | None) -> dict[str, Any]:
             continue
         target_key = CONFIG_KEY_ALIASES.get(key, key)
         normalised[target_key] = copy.deepcopy(value)
+    return normalised
+
+
+def _normalize_config_keys_for_save(data: Mapping[str, Any] | None) -> dict[str, Any]:
+    """
+    Normalise config keys for persistence.
+
+    This wraps :func:`_normalize_config_keys` but prunes internal
+    Turntable helper keys (``model``, ``ip_address``, ``step``, etc.)
+    so that the YAML files keep only the user-facing field names.
+    """
+    normalised = _normalize_config_keys(data)
+    turntable = normalised.get(TURN_TABLE_SECTION_KEY)
+    if isinstance(turntable, Mapping):
+        # Drop the internal lower-case duplicates so that only the
+        # display-name keys are written into YAML.
+        cleaned = dict(turntable)
+        for extra_key in ("model", "ip_address", "step", "static_db", "target_rssi"):
+            cleaned.pop(extra_key, None)
+        normalised[TURN_TABLE_SECTION_KEY] = cleaned
     return normalised
 
 
@@ -594,8 +629,8 @@ def save_config_sections(
     compatibility_path = config_base / COMPATIBILITY_CONFIG_FILENAME
     tool_path = config_base / TOOL_CONFIG_FILENAME
     toolbar_path = config_base / TOOLBAR_CONFIG_FILENAME
-    _write_yaml_dict(basic_path, _normalize_config_keys(basic_section))
-    _write_yaml_dict(execution_path, _normalize_config_keys(execution_section))
+    _write_yaml_dict(basic_path, _normalize_config_keys_for_save(basic_section))
+    _write_yaml_dict(execution_path, _normalize_config_keys_for_save(execution_section))
     stability_payload = stability_section if isinstance(stability_section, Mapping) else {}
     _write_yaml_dict(stability_path, stability_payload)
     compatibility_payload = (

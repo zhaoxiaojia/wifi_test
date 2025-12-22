@@ -32,6 +32,7 @@ def setup_router(request):
     connect_status = wait_connect(router_info)
     yield router_info, connect_status
     pytest.dut.kill_iperf()
+    rf_tool.execute_rf_cmd(0)
 
 
 @pytest.fixture(scope="function", params=get_rf_step_list())
