@@ -4,4 +4,4 @@ compatibility:
     - ip: 192.168.200.3
       ports:
       - 1
-  nic: WLAN
+  nic: 以太网

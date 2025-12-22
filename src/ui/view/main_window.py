@@ -799,10 +799,9 @@ class MainWindow(FluentWindow):
     def enable_report_page(self, report_dir: str) -> None:
         """Activate the report viewing page after test execution."""
         try:
-            self.last_report_dir = str(Path(report_dir).resolve())
             case_path = self.run_page.case_path
             self.report_ctl.set_case_context(case_path or None)
-            self.report_ctl.set_report_dir(self.last_report_dir)
+            self.report_ctl.set_report_dir(str(Path(report_dir).resolve()))
             if not sip.isdeleted(self.report_nav_button):
                 self.report_nav_button.setEnabled(True)
                 self.report_nav_button.setVisible(True)

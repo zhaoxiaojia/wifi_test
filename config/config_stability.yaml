@@ -12,13 +12,13 @@ cases:
       enabled: true
       on_duration: 0
       off_duration: 0
-      port: No serial ports detected
+      port: COM5 (Silicon Labs CP210x USB to UART Bridge (COM5))
       mode: 'NO'
     str:
       enabled: true
       on_duration: 0
       off_duration: 0
-      port: No serial ports detected
+      port: COM5 (Silicon Labs CP210x USB to UART Bridge (COM5))
       mode: 'NO'
     use_router: false
     router_csv: ''

@@ -9,18 +9,21 @@ This module contains the view layer for the Run page:
 
 from __future__ import annotations
 
+import socket
+import subprocess
+import sys
 from pathlib import Path
 from contextlib import suppress
 import logging
 import json
 
-from PyQt5.QtCore import QEvent, Qt, QTimer, QEasingCurve
-from PyQt5.QtGui import QTextCursor
+from PyQt5.QtCore import QEvent, Qt, QTimer, QEasingCurve, QUrl, QPoint, QSize
+from PyQt5.QtGui import QTextCursor, QDesktopServices, QIcon
 from PyQt5.QtWidgets import QApplication, QFrame, QHBoxLayout, QLabel, QTextEdit, QVBoxLayout
 from qfluentwidgets import CardWidget, PushButton, StrongBodyLabel
 from PyQt5 import sip
 
-from src.util.constants import get_src_base
+from src.util.constants import get_src_base, Paths
 from src.ui.controller.run_ctl import CaseRunner
 from src.ui.view.theme import ACCENT_COLOR, CONTROL_HEIGHT, FONT_FAMILY, apply_theme, format_log_html
 from src.ui.view.common import animate_progress_fill, attach_view_to_page
@@ -56,6 +59,47 @@ class RunView(CardWidget):
         self.log_area.setMinimumHeight(400)
         apply_theme(self.log_area)
         layout.addWidget(self.log_area, stretch=5)
+
+        # Floating button (bottom-right of log area) to open the
+        # Allure HTML report for the latest run. Enabled only after a
+        # test run has finished and the report directory is known.
+        self.open_allure_btn = PushButton(self.log_area)
+        self.open_allure_btn.setObjectName("openAllureBtn")
+        self.open_allure_btn.setText("")
+        self.open_allure_btn.setToolTip("Open Allure report")
+        self.open_allure_btn.setFixedSize(32, 32)
+        self.open_allure_btn.setEnabled(False)
+        self.open_allure_btn.setStyleSheet(
+            """
+            #openAllureBtn {
+                border-radius: 16px;
+                background-color: #555555;
+                border: none;
+                color: white;
+                font-size: 16px;
+            }
+            #openAllureBtn:hover {
+                background-color: #666666;
+            }
+            #openAllureBtn:pressed {
+                background-color: #444444;
+            }
+            #openAllureBtn:disabled {
+                background-color: rgba(255,255,255,0.15);
+            }
+            """
+        )
+        # Use a Google Chrome icon from the shared res directory when available.
+        icon_path = Path(Paths.RES_DIR) / "logo" / "google-chrome.webp"
+        if icon_path.exists():
+            self.open_allure_btn.setIcon(QIcon(str(icon_path)))
+            self.open_allure_btn.setIconSize(QSize(20, 20))
+        else:
+            self.open_allure_btn.setText("🌐")
+        self._allure_report_dir: str | None = None
+        self._allure_server_proc: subprocess.Popen | None = None
+        self._allure_server_url: str | None = None
+        self.open_allure_btn.clicked.connect(self._on_open_allure_clicked)
 
         # Current case info
         self.case_info_label = QLabel("Current case : ", self)
@@ -153,6 +197,51 @@ class RunView(CardWidget):
             "run_main_action_btn": self.action_btn,
         }
 
+    def resizeEvent(self, event) -> None:  # type: ignore[override]
+        super().resizeEvent(event)
+        self._position_allure_button()
+
+    def _position_allure_button(self) -> None:
+        if not self.open_allure_btn:
+            return
+        margin_right = 20
+        margin_bottom = 12
+        rect = self.log_area.rect()
+        x = rect.right() - self.open_allure_btn.width() - margin_right
+        y = rect.bottom() - self.open_allure_btn.height() - margin_bottom
+        self.open_allure_btn.move(x, y)
+
+    def set_allure_report_dir(self, report_dir: str | None) -> None:
+        self._allure_report_dir = report_dir
+        self.open_allure_btn.setEnabled(bool(report_dir))
+
+    def _on_open_allure_clicked(self) -> None:
+        if not self._allure_report_dir:
+            return
+        base = Path(self._allure_report_dir)
+        report_root = (base / "allure-report").resolve()
+        index_path = report_root / "index.html"
+        if not report_root.exists() or not index_path.exists():
+            return
+
+        if self._allure_server_proc is not None and self._allure_server_proc.poll() is None and self._allure_server_url:
+            QDesktopServices.openUrl(QUrl(self._allure_server_url))
+            return
+
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.bind(("127.0.0.1", 0))
+            port = sock.getsockname()[1]
+
+        proc = subprocess.Popen(
+            [sys.executable, "-m", "http.server", str(port), "--bind", "127.0.0.1"],
+            cwd=str(report_root),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        self._allure_server_proc = proc
+        self._allure_server_url = f"http://127.0.0.1:{port}/index.html"
+        QDesktopServices.openUrl(QUrl(self._allure_server_url))
+
 
 class RunPage(CardWidget):
     """Widget that hosts :class:`RunView` and drives test execution."""
@@ -169,6 +258,7 @@ class RunPage(CardWidget):
         self.main_window = parent
 
         self.display_case_path = self._calc_display_path(case_path, display_case_path)
+        self._last_report_dir: str | None = None
 
         # Compose pure UI view and alias widgets for logic.
         self.view = RunView(self)
@@ -428,6 +518,7 @@ class RunPage(CardWidget):
         self.on_runner_finished()
 
     def _on_report_dir_ready(self, path: str) -> None:
+        self._last_report_dir = path
         self.main_window.enable_report_page(path)
 
     def cleanup(self, disconnect_page: bool = True) -> None:
@@ -494,6 +585,8 @@ class RunPage(CardWidget):
         self._case_name_base = "Current case : "
         self._fixture_chain = []
         self.case_info_label.setText(self._case_name_base)
+        if self._last_report_dir:
+            self.view.set_allure_report_dir(self._last_report_dir)
 
     def on_stop(self) -> None:
         self._append_log("on_stop entered")

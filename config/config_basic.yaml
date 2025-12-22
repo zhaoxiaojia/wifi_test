@@ -10,12 +10,12 @@ connect_type:
   Android:
     device: QASEIB300000371
   Linux:
-    ip: 192.168.10.245
+    ip: 192.168.200.103
     wildcard: ''
   third_party:
     enabled: false
     wait_seconds: 45
-  type: Android
+  type: Linux
 project:
   customer: XIAOMI
   product_line: TV
@@ -25,13 +25,13 @@ project:
   interface: USB
 serial_port:
   baud: '9600'
-  port: No serial ports detected
+  port: COM5 (Silicon Labs CP210x USB to UART Bridge (COM5))
   status: false
 rvr:
   iperf:
     path: ''
-    server_cmd: iperf3 -s -i 1
-    client_cmd: iperf3 -c {ip} -i 1 -t 10 -P 1
+    server_cmd: iperf -s -i 1
+    client_cmd: iperf -c {ip} -i 1 -t 10 -P 1
   ixchariot:
     path: D:/Program Files (x86)/Ixia/IxChariot
   repeat: '0'

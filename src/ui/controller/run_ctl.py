@@ -395,9 +395,6 @@ def _init_worker_env(
         q.put(("report_dir", str(report_dir)))
     plugin = install_redactor_for_current_process()
     pytest_args = [
-        "-v",
-        "-s",
-        "--full-trace",
         "--rootdir=.",
         "--import-mode=importlib",
         f"--resultpath={report_dir}",

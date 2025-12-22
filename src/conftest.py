@@ -67,6 +67,135 @@ _FILENAME_SANITIZE_PATTERN: Annotated[re.Pattern[str], "Pattern used to sanitize
 # ----------------------------------------------------------------------------
 # Helpers
 # ----------------------------------------------------------------------------
+def _find_allure_executable() -> str | None:
+    """
+    Return the first available Allure CLI executable, or ``None``.
+
+    This helper avoids hard-coding platform-specific names in multiple
+    places and keeps Allure integration best-effort only.
+    """
+    for name in ("allure", "allure.bat", "allure.cmd"):
+        path = shutil.which(name)
+        if path:
+            return path
+    return None
+
+
+def _derive_test_category_from_session(session: pytest.Session) -> Path:
+    """
+    Derive a logical test category path from the session's collected args.
+
+    The category is the path segment under ``src/test`` for the active
+    testcase, for example:
+        src/test/performance/test_wifi_rvo.py -> performance/test_wifi_rvo
+    When the path cannot be resolved, a generic ``root`` category is used.
+    """
+    args = getattr(session.config, "args", None) or []
+    case_path: Path | None = None
+    for raw in args:
+        try:
+            candidate = Path(raw)
+        except TypeError:
+            continue
+        if candidate.exists():
+            case_path = candidate.resolve()
+            break
+    if case_path is None:
+        return Path("root")
+
+    parts = case_path.parts
+    category_parts: tuple[str, ...] | None = None
+    for idx, part in enumerate(parts):
+        if part == "src" and idx + 1 < len(parts) and parts[idx + 1] == "test":
+            remaining = parts[idx + 2 :]
+            if remaining:
+                category_parts = remaining
+            break
+    if not category_parts:
+        # Fallback: use filename (without extension) as the category.
+        return Path(case_path.stem)
+    # Drop the .py suffix for the last segment while preserving directories.
+    *dirs, leaf = category_parts
+    leaf_stem = Path(leaf).stem
+    if dirs:
+        return Path(*dirs) / leaf_stem
+    return Path(leaf_stem)
+
+
+def _generate_allure_report(session: pytest.Session, destination_dir: Path | None) -> None:
+    """
+    Best-effort Allure report generation with per-category history.
+
+    - Uses ``allure_results`` as the shared result directory (configured via pytest.ini).
+    - Derives a history root under ``report/allure_history/<src/test/...>``.
+    - Copies history into the results dir before generation and back out
+      after generation so that each test category has its own timeline.
+    - Places the HTML report under ``destination_dir / 'allure-report'``
+      when a result path is configured by the UI controller.
+    """
+    results_dir = Path("allure_results")
+    if not results_dir.exists() or not results_dir.is_dir():
+        logging.debug("Allure results directory %s missing; skip Allure report", results_dir)
+        return
+
+    allure_exe = _find_allure_executable()
+    if allure_exe is None:
+        logging.debug("Allure CLI not found on PATH; skip Allure report generation")
+        return
+
+    # When running via the UI, ``destination_dir`` is the per-run report dir.
+    if destination_dir is None:
+        logging.debug("No destination_dir for Allure report; skip HTML generation")
+        return
+
+    category_rel = _derive_test_category_from_session(session)
+    history_root = Path("report") / "allure_history"
+    category_dir = (history_root / category_rel).resolve()
+
+    try:
+        category_dir.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        logging.debug("Failed to ensure Allure history directory %s", category_dir, exc_info=True)
+
+    # Inject per-category history into the current results so that Allure
+    # can compute trends.
+    history_src = category_dir / "history"
+    history_dst = results_dir / "history"
+    if history_src.exists() and history_src.is_dir():
+        try:
+            shutil.copytree(history_src, history_dst, dirs_exist_ok=True)
+        except Exception:
+            logging.debug("Failed to copy Allure history from %s to %s", history_src, history_dst, exc_info=True)
+
+    output_dir = (destination_dir / "allure-report").resolve()
+    try:
+        output_dir.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        logging.debug("Failed to ensure Allure output directory %s", output_dir, exc_info=True)
+
+    try:
+        cmd = [allure_exe, "generate", str(results_dir.resolve()), "-o", str(output_dir), "--clean"]
+        subprocess.run(
+            cmd,
+            check=True,
+        )
+    except Exception:
+        logging.warning("Allure report generation failed; see debug logs for details", exc_info=True)
+        return
+
+    # Persist the refreshed history for this category for the next run.
+    history_from_report = output_dir / "history"
+    if history_from_report.exists() and history_from_report.is_dir():
+        try:
+            shutil.copytree(history_from_report, history_src, dirs_exist_ok=True)
+        except Exception:
+            logging.debug(
+                "Failed to update Allure history cache from %s to %s",
+                history_from_report,
+                history_src,
+                exc_info=True,
+            )
+
 
 def _sanitize_filename_component(value) -> str:
     """
@@ -170,6 +299,14 @@ def pytest_sessionstart(session):
     Args:
         session (pytest.Session): The current pytest session object.
     """
+    # Ensure the Allure results directory exists; historical trends are
+    # maintained via the dedicated history cache in _generate_allure_report.
+    try:
+        results_dir = Path("allure_results")
+        results_dir.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        logging.debug("Failed to ensure Allure results directory", exc_info=True)
+
     # get host os
     if ('win32' or 'win64') in sys.platform:
         pytest.win_flag = True
@@ -411,11 +548,17 @@ def record_test_data(request):
 
     test_result = request.node._store.get("test_result", "UNKNOWN")
     test_return_value = request.node._store.get("return_value", "None")
-    test_results.append({test_name: {
+    compat_compare = request.node._store.get("compat_compare", None)
+
+    record = {
         "result": test_result,
         "return_value": test_return_value,
-        "fixtures": fixture_values
-    }})
+        "fixtures": fixture_values,
+    }
+    if compat_compare is not None:
+        record["compat_compare"] = compat_compare
+
+    test_results.append({test_name: record})
 
 def pytest_sessionfinish(session, exitstatus):
     """
@@ -459,54 +602,52 @@ def pytest_sessionfinish(session, exitstatus):
     # sync both CSV + router catalogue into MySQL (best effort).
     csv_path_for_db = Path(csv_file).resolve()
     if compatibility_results and destination_dir:
-        try:
-            target_csv = destination_dir / csv_file
-            shutil.copy(Path(csv_file), target_csv)
-            csv_path_for_db = target_csv.resolve()
-        except Exception as exc:
-            logging.warning("Failed to copy %s into %s: %s", csv_file, destination_dir, exc)
+        target_csv = destination_dir / csv_file
+        shutil.copy(Path(csv_file), target_csv)
+        csv_path_for_db = target_csv.resolve()
 
     if compatibility_results:
+        from src.tools.mysql_tool.operations import sync_compatibility_artifacts_to_db
+        from src.util.constants import load_config
+
+        config = load_config(refresh=True) or {}
+        router_json = str((Path.cwd() / "config" / "compatibility_router.json").resolve())
+        case_path_hint = None
         try:
-            from src.tools.mysql_tool.operations import sync_compatibility_artifacts_to_db
-            from src.util.constants import load_config
-
-            config = load_config(refresh=True) or {}
-            router_json = str((Path.cwd() / "config" / "compatibility_router.json").resolve())
-            case_path_hint = None
-            try:
-                args = getattr(session.config, "args", None) or []
-                if args:
-                    case_path_hint = str(args[-1])
-            except Exception:
-                case_path_hint = None
-
-            sync_compatibility_artifacts_to_db(
-                config,
-                csv_file=str(csv_path_for_db),
-                router_json=router_json,
-                case_path=case_path_hint,
-                duration_seconds=getattr(pytest, "_session_duration_seconds", None),
-            )
+            args = getattr(session.config, "args", None) or []
+            if args:
+                case_path_hint = str(args[-1])
         except Exception:
-            logging.debug("Compatibility DB sync skipped/failed", exc_info=True)
+            case_path_hint = None
+
+        sync_compatibility_artifacts_to_db(
+            config,
+            csv_file=str(csv_path_for_db),
+            router_json=router_json,
+            case_path=case_path_hint,
+            duration_seconds=getattr(pytest, "_session_duration_seconds", None),
+        )
 
     src_log = Path("pytest.log")
     if destination_dir and src_log.exists():
-        try:
-            shutil.copy(src_log, destination_dir / "debug.log")
-        except Exception as exc:
-            logging.warning("Failed to copy pytest.log to %s: %s", destination_dir, exc)
+        shutil.copy(src_log, destination_dir / "debug.log")
 
     ser_log = Path("kernel_log.txt")
     if destination_dir and ser_log.exists():
         try:
             shutil.copy(ser_log, destination_dir / "kernel.log")
         except Exception as exc:
-            logging.warning("Failed to copy pytest.log to %s: %s", destination_dir, exc)
+            logging.warning("Failed to copy kernel_log.txt to %s: %s", destination_dir, exc)
 
     test_result = getattr(pytest, "testResult", None)
     if isinstance(test_result, PerformanceResult):
         _maybe_generate_project_report()
 
-    # (Deliberately not moving report.html artifacts here; handled elsewhere.)
+    # Generate an Allure HTML report under the per-run report directory when
+    # available, using a history cache derived from the src/test subpath so
+    # that each testcase family (peak/RVR/RVO/compatibility/etc.) maintains
+    # its own historical trend.
+    try:
+        _generate_allure_report(session, destination_dir)
+    except Exception:
+        logging.debug("Allure report generation skipped/failed", exc_info=True)
