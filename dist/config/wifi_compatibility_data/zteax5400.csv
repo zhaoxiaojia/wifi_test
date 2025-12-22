@@ -1,2 +1,0 @@
-serial   ,band   ,ssid          ,wireless_mode         ,channel,bandwidth               ,security_mode,wpa_passwd,test_type,protocol_type,wep_encrypt,wep_passwd,hide_ssid,hide_type
-1,2.4G,ZTEax5400_2.4G,802.11 b/g/n             ,1,20MHz                   ,OPEN                 ,          ,tx rx    ,TCP          ,           ,          ,否        ,
