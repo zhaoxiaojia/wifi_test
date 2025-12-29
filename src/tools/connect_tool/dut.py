@@ -1216,10 +1216,9 @@ class dut():
                 A value of type ``tuple[Optional[float], Optional[IperfMetrics], int, bool]``.
             """
             interval_pattern = re.compile(r'(\d+(?:\.\d*)?)\s*-\s*(\d+(?:\.\d*)?)\s*sec', re.IGNORECASE)
-            values: list[float] = []
-            seen_intervals: set[tuple[str, str]] = set()
+            interval_throughput: dict[tuple[str, str], dict[str, float]] = {}
+            summary_interval_key: Optional[tuple[str, str]] = None
             udp_metrics_local: Optional[IperfMetrics] = None
-            summary_value: Optional[float] = None
             has_summary_line = False
 
             for raw_line in lines:
@@ -1253,15 +1252,40 @@ class dut():
                 )
                 if throughput is None:
                     continue
-                if interval_key in seen_intervals:
-                    logging.debug(f'skip duplicate interval {interval_key} (throughput={throughput})')
-                    continue
-                seen_intervals.add(interval_key)
-                values.append(throughput)
+
+                lower_line = line.lower()
+                role = "none"
+                if "receiver" in lower_line:
+                    role = "receiver"
+                elif "sender" in lower_line:
+                    role = "sender"
+
+                role_map = interval_throughput.setdefault(interval_key, {})
+                role_map[role] = throughput
+
                 duration = end_time - start_time
                 if start_time < 0.5 and duration > 1.5:
-                    summary_value = throughput
+                    summary_interval_key = interval_key
                     has_summary_line = True
+
+            has_receiver = any("receiver" in role_map for role_map in interval_throughput.values())
+            values: list[float] = []
+            for role_map in interval_throughput.values():
+                chosen: Optional[float] = None
+                if has_receiver:
+                    chosen = role_map.get("receiver") or role_map.get("none")
+                else:
+                    chosen = role_map.get("none") or role_map.get("sender")
+                if chosen is not None:
+                    values.append(chosen)
+
+            summary_value: Optional[float] = None
+            if summary_interval_key is not None:
+                role_map = interval_throughput.get(summary_interval_key, {})
+                if has_receiver:
+                    summary_value = role_map.get("receiver") or role_map.get("none")
+                else:
+                    summary_value = role_map.get("none") or role_map.get("sender")
 
             if summary_value is not None:
                 throughput_value = summary_value
@@ -1290,15 +1314,10 @@ class dut():
                         line_count,
                         expected_intervals,
                     )
-                elif expected_intervals:
-                    logging.info(
-                        "iperf summary line missing; using average throughput over %d intervals",
-                        line_count,
-                    )
             else:
                 logging.warning("iperf output did not contain interval lines")
         throughput_result = preferred_value if preferred_value is not None else None
-        logging.info(
+        logging.debug(
             "iperf throughput result after analysis: %s (intervals=%d, summary=%s)",
             throughput_result,
             line_count,
@@ -1330,14 +1349,9 @@ class dut():
         if expected_intervals:
             interval_pattern = re.compile(r'(\d+(?:\.\d*)?)\s*-\s*(\d+(?:\.\d*)?)\s*sec', re.IGNORECASE)
             wait_deadline = time.time() + min(5.0, max(1.0, expected_intervals * 0.1))
-            start_time = time.time()
-            last_sum_count = -1
-            last_total_lines = -1
-            exit_reason = "deadline"
             has_summary = False
             while time.time() < wait_deadline:
                 snapshot = list(self.iperf_server_log_list)
-                total_lines = len(snapshot)
                 sum_intervals: set[tuple[str, str]] = set()
                 for text in snapshot:
                     sanitized = dut._sanitize_iperf_line(text)
@@ -1359,47 +1373,14 @@ class dut():
                         if end_f - start_f >= max(1.0, expected_intervals - 1):
                             has_summary = True
                 current_sum_count = len(sum_intervals)
-                elapsed = time.time() - start_time
-                if (
-                        current_sum_count != last_sum_count
-                        or total_lines != last_total_lines
-                ):
-                    logging.debug(
-                        "iperf wait: SUM intervals=%d total_lines=%d after %.2fs",
-                        current_sum_count,
-                        total_lines,
-                        elapsed,
-                    )
-                    last_sum_count = current_sum_count
-                    last_total_lines = total_lines
                 if has_summary:
-                    exit_reason = "summary_line"
                     break
                 if expected_intervals and current_sum_count >= expected_intervals:
-                    exit_reason = "expected_interval_count"
                     break
                 time.sleep(0.1)
-            elapsed = time.time() - start_time
-            logging.debug(
-                "iperf wait finished: sum_intervals=%d, summary=%s, elapsed=%.2fs, reason=%s",
-                last_sum_count if last_sum_count >= 0 else 0,
-                has_summary,
-                elapsed,
-                exit_reason,
-            )
         server_lines = list(self.iperf_server_log_list)
-        logging.debug("iperf server raw lines captured: %d", len(server_lines))
         if not server_lines:
-            logging.debug(
-                "iperf server log list is empty; background reader may not have received data yet"
-            )
-        else:
-            preview_count = min(5, len(server_lines))
-            logging.debug(
-                "iperf server log preview (first %d lines): %s",
-                preview_count,
-                server_lines[:preview_count],
-            )
+            logging.warning("iperf server log list is empty; no data captured")
         result = self._parse_iperf_log(server_lines)
         self.iperf_server_log_list.clear()
         if result is None:
@@ -1816,9 +1797,12 @@ class dut():
             The result produced by the function.
         """
         if pytest.connect_type == 'Linux':
-            pytest.dut.roku.ser.write('iw wlan0 link')
-            logging.info(pytest.dut.roku.ser.recv())
-            return True, pytest.dut.roku.ser.get_ip_address('wlan0')
+            if not hasattr(pytest, "serial") or pytest.serial is None:
+                logging.info("Linux DUT has no serial handler; skip wait_for_wifi_address serial workflow.")
+                return False, ""
+            pytest.serial.write('iw wlan0 link')
+            logging.info(pytest.serial.recv())
+            return True, pytest.serial.get_ip_address('wlan0')
         else:
             if lan and (not target):
                 if not self.ip_target:
@@ -1894,7 +1878,11 @@ class dut():
         Any
             The result produced by the function.
         """
+
         if pytest.connect_type == 'Linux':
+            if not hasattr(pytest.dut, "roku") or pytest.dut.roku is None:
+                logging.info("Linux DUT has no Roku controller; skip wifi_scan Roku workflow.")
+                return True
             return pytest.dut.roku.wifi_scan(ssid)
         else:
             for _ in range(10):
@@ -1969,6 +1957,9 @@ class dut():
             This method does not return a value.
         """
         if pytest.connect_type == 'Linux':
+            if not hasattr(pytest.dut, "roku") or pytest.dut.roku is None:
+                logging.info("Linux DUT has no Roku controller; skip connect_ssid Roku workflow.")
+                return
             pytest.dut.roku.wifi_conn(ssid=router.ssid, pwd=router.password)
         else:
             pytest.dut.checkoutput(pytest.dut.get_wifi_cmd(router))

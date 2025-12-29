@@ -1528,24 +1528,26 @@ class adb(dut):
         """
         count = 0
 
-        while subprocess.run(f'adb -s {self.serialnumber} shell getprop sys.boot_completed'.split(),
-                             stdout=subprocess.PIPE).returncode != 0:
-            logging.info('wait')
-            info = subprocess.check_output("adb devices", shell=True, encoding='utf-8')
-            if re.findall(r'\n(.*?)\s+device', info, re.S):
-                self.serialnumber = re.findall(r'\n(.*?)\s+device', info, re.S)[0]
-                if '.' in self.serialnumber:
-                    subprocess.check_output(f'adb connect {self.serialnumber}', shell=True)
-            flag = True
-            if count % 10 == 0:
-                logging.info('devices not exists')
-            self.set_status_off()
-            time.sleep(5)
-            count += 1
-            if count > 20:
-                raise EnvironmentError('Lost Device')
-            time.sleep(10)
-        self.set_status_on()
+        # while True:
+            # try:
+            #     info = subprocess.check_output("adb devices", shell=True, encoding='utf-8',ignore='',)
+            # except:
+            #     info = ''
+            # if re.findall(r'\n(.*?)\s+device', info, re.S):
+            #     self.serialnumber = re.findall(r'\n(.*?)\s+device', info, re.S)[0]
+            #     if '.' in self.serialnumber:
+            #         subprocess.check_output(f'adb connect {self.serialnumber}', shell=True)
+            #     self.set_status_on()
+            #     break
+            # if count % 10 == 0:
+            #     logging.info('devices not exists')
+            # self.set_status_off()
+            # time.sleep(5)
+            # count += 1
+            # if count > 20:
+            #     raise EnvironmentError('Lost Device')
+            # time.sleep(10)
+
 
     def kill_logcat_pid(self):
         """
