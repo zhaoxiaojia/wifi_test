@@ -88,22 +88,22 @@ def router_setting(power_setting, request):
 
 @pytest.mark.dependency(name="scan")
 def test_scan(router_setting):
-    # result = 'FAIL'
-    # if pytest.connect_type == 'telnet':
-    #     result = 'PASS' if pytest.dut.roku.flush_ip() else 'FAIL'
-    #     assert result =='PASS',f"Can't be reconnected"
-    #     logging.info(f'dut_ip: {pytest.dut.roku.flush_ip()}')
-    # pytest.dut.push_iperf()
-    result = 'PASS' # if pytest.dut.wifi_scan(router_setting.ssid) else 'FAIL'
+    result = 'FAIL'
+    if pytest.connect_type == 'telnet':
+        result = 'PASS' if pytest.dut.roku.flush_ip() else 'FAIL'
+        assert result =='PASS',f"Can't be reconnected"
+        logging.info(f'dut_ip: {pytest.dut.roku.flush_ip()}')
+    pytest.dut.push_iperf()
+    result = 'PASS' if pytest.dut.wifi_scan(router_setting.ssid) else 'FAIL'
     assert result == 'PASS', f"Can't scan target ssid {router_setting.ssid}"
 
 
 @pytest.mark.dependency(name="connect", depends=["scan"])
 def test_connect(router_setting):
-    # result = 'FAIL'
-    # pytest.dut.forget_wifi()
-    # pytest.dut.connect_ssid(router_setting)
-    result = 'PASS' # if pytest.dut.wait_for_wifi_address()[0] else 'FAIL'
+    result = 'FAIL'
+    pytest.dut.forget_wifi()
+    pytest.dut.connect_ssid(router_setting)
+    result = 'PASS' if pytest.dut.wait_for_wifi_address()[0] else 'FAIL'
     pytest.dut.get_rssi()
     if router_setting.band == '5G':
         assert pytest.dut.freq_num > 5000

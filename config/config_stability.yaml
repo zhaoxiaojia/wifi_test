@@ -12,13 +12,13 @@ cases:
       enabled: true
       on_duration: 0
       off_duration: 0
-      port: COM5 (Silicon Labs CP210x USB to UART Bridge (COM5))
+      port: COM14 (蓝牙链接上的标准串行 (COM14))
       mode: 'NO'
     str:
       enabled: true
       on_duration: 0
       off_duration: 0
-      port: COM5 (Silicon Labs CP210x USB to UART Bridge (COM5))
+      port: COM14 (蓝牙链接上的标准串行 (COM14))
       mode: 'NO'
     use_router: false
     router_csv: ''

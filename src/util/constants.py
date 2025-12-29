@@ -525,6 +525,21 @@ def _load_config_cached(base_dir: str) -> dict[str, Any]:
     tool_path = config_dir / TOOL_CONFIG_FILENAME
     compatibility_path = config_dir / COMPATIBILITY_CONFIG_FILENAME
     toolbar_path = config_dir / TOOLBAR_CONFIG_FILENAME
+    required_paths = [
+        basic_path,
+        execution_path,
+        stability_path,
+        tool_path,
+        compatibility_path,
+        toolbar_path,
+    ]
+    missing = [str(path) for path in required_paths if not path.exists()]
+    if missing:
+        raise RuntimeError(
+            "Missing required config file(s): "
+            + ", ".join(missing)
+            + f" (config base: {config_dir})"
+        )
     basic_section = _read_yaml_dict(basic_path)
     execution_section = _read_yaml_dict(execution_path)
     stability_section = _read_yaml_dict(stability_path)
@@ -951,6 +966,25 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, str]]]]]
             },
         },
     },
+    "Roku": {
+        "TV": {
+            "Blueplanet": {
+                "main_chip": "T963D4",
+                "wifi_module": "W2",
+                "interface": "USB",
+            },
+        },
+    },
+    "ONN": {
+        "IPC": {
+            "KitKat513": {
+                "main_chip": "C302X",
+                "wifi_module": "W1U",
+                "interface": "USB",
+            },
+        },
+    },
+
 }
 
 

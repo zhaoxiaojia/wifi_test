@@ -100,6 +100,12 @@ class AsusTelnetNvramControl(AsusBaseControl):
         self._wl1_chanspec_suffix: str | None = '80'
         self._last_wl1_chanspec: str | None = None
         self._wl1_bandwidth_map = dict(self.WL1_BANDWIDTH_MAP)
+        logging.info(
+            "AsusTelnetNvramControl init: router=%s host=%s prompt=%s",
+            self.router_info,
+            self.host,
+            self.prompt,
+        )
         if self.router_info in {'asus_88u', 'asus_88u_pro'}:
             self._wl1_bandwidth_map.update({
                 '20MHZ': ('1', '20'),
@@ -124,6 +130,7 @@ class AsusTelnetNvramControl(AsusBaseControl):
                     This function does not return a value.
         """
         self._is_logged_in = False
+        logging.info("Telnet login start: host=%s port=%s", self.host, self.port)
         try:
             if self.telnet is not None:
                 try:
@@ -148,6 +155,7 @@ class AsusTelnetNvramControl(AsusBaseControl):
             raise RuntimeError(f"Telnet login failed: {exc}") from exc
         else:
             self._is_logged_in = True
+            logging.info("Telnet login success")
 
     def _ensure_connection(self) -> None:
         """
@@ -161,10 +169,22 @@ class AsusTelnetNvramControl(AsusBaseControl):
                 None
                     This function does not return a value.
         """
-        if not self._is_logged_in or self.telnet is None or getattr(self.telnet, 'sock', None) is None:
+        if (
+            not self._is_logged_in
+            or self.telnet is None
+            or not getattr(self.telnet, "is_connected", lambda: False)()
+        ):
+            logging.info("Telnet reconnect required (logged_in=%s)", self._is_logged_in)
             self._login()
 
-    def telnet_write(self, cmd: Union[str, bytes], *, wait_prompt: bool = False, timeout: int = 30) -> None:
+    def telnet_write(
+        self,
+        cmd: Union[str, bytes],
+        *,
+        wait_prompt: bool = False,
+        timeout: int = 30,
+        retry_once: bool = True,
+    ) -> None:
         """
             Telnet write
                 Logs informational or debugging messages for tracing execution.
@@ -197,7 +217,30 @@ class AsusTelnetNvramControl(AsusBaseControl):
         except Exception as exc:
             self._is_logged_in = False
             logging.error("Telnet command %r failed: %s", cmd, exc, exc_info=True)
+            if retry_once:
+                logging.info("Telnet retry once: %r", cmd)
+                if self.telnet is not None:
+                    try:
+                        self.telnet.close()
+                    except Exception:
+                        pass
+                self.telnet = None
+                self._login()
+                self.telnet_write(cmd, wait_prompt=wait_prompt, timeout=timeout, retry_once=False)
+                return
             raise RuntimeError(f"Telnet command failed: {exc}") from exc
+
+    def _ensure_prompt_ready(self) -> None:
+        """
+            Ensure prompt is ready before issuing a new batch of commands.
+        """
+        try:
+            logging.info("Telnet ensure prompt ready")
+            self.telnet_write('', wait_prompt=True, timeout=5)
+        except Exception:
+            self._is_logged_in = False
+            logging.info("Telnet prompt ready failed, relogin")
+            self._login()
 
     @staticmethod
     def _normalize_bandwidth(width: str) -> str:
@@ -632,13 +675,22 @@ class AsusTelnetNvramControl(AsusBaseControl):
         self.telnet_write('nvram set wl0_radio=1', wait_prompt=False)
         self.telnet_write('nvram set wl1_radio=1', wait_prompt=False)
         self.telnet_write('nvram commit', wait_prompt=True, timeout=60)
-        self.telnet_write('restart_wireless &', wait_prompt=False)
+        self.telnet_write(self._restart_wireless_detached_cmd(), wait_prompt=False)
         time.sleep(2)
         try:
             assert self.telnet is not None
             self.telnet.read_until(self.prompt, timeout=60)
         except EOFError:
+            logging.info("Telnet EOF after restart_wireless, reconnect")
             self._reconnect_after_restart()
+
+    @staticmethod
+    def _restart_wireless_detached_cmd() -> str:
+        return (
+            'sh -c "if command -v nohup >/dev/null 2>&1; then '
+            'nohup restart_wireless >/dev/null 2>&1 </dev/null & '
+            'else restart_wireless >/dev/null 2>&1 </dev/null & fi"'
+        )
 
     def _reconnect_after_restart(self, max_wait: int = 120) -> None:
         """
@@ -654,6 +706,7 @@ class AsusTelnetNvramControl(AsusBaseControl):
                     This function does not return a value.
         """
         self._is_logged_in = False
+        logging.info("Telnet reconnect after restart (max_wait=%s)", max_wait)
         if self.telnet is not None:
             try:
                 self.telnet.close()
@@ -683,46 +736,52 @@ class AsusTelnetNvramControl(AsusBaseControl):
                 bool
                     Description of the returned value.
         """
-        if router.ssid:
-            if '2' in router.band:
-                self.set_2g_ssid(router.ssid)
-            else:
-                self.set_5g_ssid(router.ssid)
+        logging.info("Router change_setting start: band=%s ssid=%s", router.band, router.ssid)
+        self._ensure_prompt_ready()
+        try:
+            if router.ssid:
+                if '2' in router.band:
+                    self.set_2g_ssid(router.ssid)
+                else:
+                    self.set_5g_ssid(router.ssid)
 
-        if router.wireless_mode:
-            if '2' in router.band:
-                self.set_2g_wireless(router.wireless_mode)
-            else:
-                self.set_5g_wireless(router.wireless_mode)
+            if router.wireless_mode:
+                if '2' in router.band:
+                    self.set_2g_wireless(router.wireless_mode)
+                else:
+                    self.set_5g_wireless(router.wireless_mode)
 
-        if router.password:
-            if '2' in router.band:
-                self.set_2g_password(router.password)
-            else:
-                self.set_5g_password(router.password)
+            if router.password:
+                if '2' in router.band:
+                    self.set_2g_password(router.password)
+                else:
+                    self.set_5g_password(router.password)
 
-        if router.security_mode:
-            if '2' in router.band:
-                self.set_2g_authentication(router.security_mode)
-            else:
-                self.set_5g_authentication(router.security_mode)
+            if router.security_mode:
+                if '2' in router.band:
+                    self.set_2g_authentication(router.security_mode)
+                else:
+                    self.set_5g_authentication(router.security_mode)
 
-        channel_5g: Union[str, int, None] = None
-        if router.channel:
-            if '2' in router.band:
-                self.set_2g_channel(router.channel)
-            else:
-                channel_5g = router.channel
+            channel_5g: Union[str, int, None] = None
+            if router.channel:
+                if '2' in router.band:
+                    self.set_2g_channel(router.channel)
+                else:
+                    channel_5g = router.channel
 
-        if router.bandwidth:
-            if '2' in router.band:
-                self.set_2g_bandwidth(router.bandwidth)
-            else:
-                self.set_5g_channel_bandwidth(bandwidth=router.bandwidth, channel=channel_5g)
-        elif channel_5g is not None:
-            self.set_5g_channel_bandwidth(channel=channel_5g)
+            if router.bandwidth:
+                if '2' in router.band:
+                    self.set_2g_bandwidth(router.bandwidth)
+                else:
+                    self.set_5g_channel_bandwidth(bandwidth=router.bandwidth, channel=channel_5g)
+            elif channel_5g is not None:
+                self.set_5g_channel_bandwidth(channel=channel_5g)
 
-        self.commit()
-        time.sleep(3)
-        logging.info('Router setting done')
-        return True
+            self.commit()
+            time.sleep(3)
+            logging.info('Router setting done')
+            return True
+        finally:
+            logging.info("Router change_setting cleanup: quit telnet")
+            self.quit()

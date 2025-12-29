@@ -41,13 +41,13 @@ from src.test.compatibility.results import write_compatibility_results
 # Logging
 # ----------------------------------------------------------------------------
 
-logging.basicConfig(
-    level=logging.INFO,
-    handlers=[logging.StreamHandler(sys.stdout)],
-    format="%(asctime)s | %(levelname)s | %(filename)s:%(funcName)s(line:%(lineno)d) |  %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-    force=True,
-)
+if not logging.getLogger().handlers:
+    logging.basicConfig(
+        level=logging.INFO,
+        handlers=[logging.StreamHandler(sys.stdout)],
+        format="%(asctime)s | %(levelname)s | %(filename)s:%(funcName)s(line:%(lineno)d) |  %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
 
 # ----------------------------------------------------------------------------
 # Globals (Annotated)
@@ -371,7 +371,10 @@ def pytest_sessionstart(session):
         if not telnet_ip:
             raise EnvironmentError("Not support connect type Linux: missing IP address")
         pytest.dut = telnet_tool(telnet_ip)
-        pytest.dut.roku = roku_ctrl(telnet_ip)
+        project_cfg = pytest.config.get("project") or {}
+        customer = str(project_cfg.get("customer") or "").strip().upper()
+        if customer == "ROKU":
+            pytest.dut.roku = roku_ctrl(telnet_ip)
     else:
         raise EnvironmentError("Not support connect type %s" % pytest.connect_type)
 

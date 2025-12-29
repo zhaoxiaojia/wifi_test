@@ -14,7 +14,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import weakref
-from contextlib import suppress
+from contextlib import contextmanager, suppress
 from typing import Optional
 
 import telnetlib3
@@ -109,6 +109,27 @@ class TelnetSession:
         # Exposed for compatibility with legacy telnetlib-based checks.
         self.sock = None
 
+    @contextmanager
+    def _use_loop(self):
+        """
+        Temporarily set this session's loop as the current loop for this thread.
+
+        telnetlib3 calls ``asyncio.get_event_loop()`` (via policy) inside
+        connection callbacks. In Python 3.10+ a non-main thread without an
+        explicitly set event loop will raise ``RuntimeError`` even if we drive
+        a loop via ``run_until_complete``.
+        """
+        previous_loop = None
+        try:
+            previous_loop = asyncio.get_event_loop_policy().get_event_loop()
+        except RuntimeError:
+            previous_loop = None
+        asyncio.set_event_loop(self._loop)
+        try:
+            yield
+        finally:
+            asyncio.set_event_loop(previous_loop)
+
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
@@ -129,9 +150,10 @@ class TelnetSession:
             self._loop = asyncio.new_event_loop()
 
         try:
-            reader, writer = self._loop.run_until_complete(
-                asyncio.wait_for(_open(), timeout=self.timeout)
-            )
+            with self._use_loop():
+                reader, writer = self._loop.run_until_complete(
+                    asyncio.wait_for(_open(), timeout=self.timeout)
+                )
         except Exception:
             logging.exception("Failed to open TelnetSession to %s:%s", self.host, self.port)
             self._reader = None
@@ -163,7 +185,8 @@ class TelnetSession:
 
         try:
             if self._writer is not None:
-                self._loop.run_until_complete(_close())
+                with self._use_loop():
+                    self._loop.run_until_complete(_close())
         finally:
             self._reader = None
             self._writer = None
@@ -175,6 +198,18 @@ class TelnetSession:
                 # not propagate to callers.
                 logging.debug("Error closing TelnetSession event loop", exc_info=True)
 
+    def is_connected(self) -> bool:
+        """
+        Return True when the underlying reader/writer are alive.
+        """
+        if self._reader is None or self._writer is None or self.sock is None:
+            return False
+        if hasattr(self._writer, "is_closing") and self._writer.is_closing():
+            return False
+        if hasattr(self._reader, "at_eof") and self._reader.at_eof():
+            return False
+        return True
+
     # ------------------------------------------------------------------
     # I/O helpers (telnetlib-like)
     # ------------------------------------------------------------------
@@ -182,7 +217,7 @@ class TelnetSession:
         """
         Write raw bytes to the telnet connection.
         """
-        if self._writer is None:
+        if not self.is_connected():
             raise RuntimeError("TelnetSession is not connected")
 
         async def _write():
@@ -190,7 +225,8 @@ class TelnetSession:
             self._writer.write(text)
             await self._writer.drain()
 
-        self._loop.run_until_complete(_write())
+        with self._use_loop():
+            self._loop.run_until_complete(_write())
 
     def read_some(self, size: int = 1024, timeout: Optional[float] = None) -> bytes:
         """
@@ -205,7 +241,8 @@ class TelnetSession:
             return await self._reader.read(size)
 
         try:
-            text = self._loop.run_until_complete(_read())
+            with self._use_loop():
+                text = self._loop.run_until_complete(_read())
         except asyncio.TimeoutError:
             return b""
 
@@ -242,7 +279,8 @@ class TelnetSession:
                 if buf.endswith(target):
                     return buf, False
 
-        text, eof = self._loop.run_until_complete(_read_until())
+        with self._use_loop():
+            text, eof = self._loop.run_until_complete(_read_until())
         if eof and not text:
             # Match telnetlib behaviour where read_until raises EOFError
             # when the connection is closed and no data is returned.
@@ -250,4 +288,3 @@ class TelnetSession:
         if not text:
             return b""
         return text.encode(self.encoding, errors="ignore")
-
