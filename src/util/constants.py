@@ -119,6 +119,8 @@ BASIC_SECTION_KEYS: Final[frozenset[str]] = frozenset({
     # Support both legacy and new naming for the system section.
     "android_system",
     "system",
+    "basic_test_duration",
+    "basic_router",
     # Shared throughput generator configuration.
     "rvr",
 })

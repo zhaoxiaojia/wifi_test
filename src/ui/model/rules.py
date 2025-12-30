@@ -847,6 +847,43 @@ CUSTOM_TESTCASE_UI_RULES.append(
                   action="enable",
                   condition=lambda values: True,
               ),
+#basic_ui_test_during configs should always enabled setting
+              SimpleFieldEffect(
+                  target_field="basic_test_duration.loop",
+                  action="enable",
+                  condition=lambda values: True,
+              ),
+             SimpleFieldEffect(
+                  target_field="basic_test_duration.duration_hours",
+                  action="enable",
+                  condition=lambda values: True,
+              ),
+            SimpleFieldEffect(
+                target_field="basic_test_duration.retry_limit",
+                action="enable",
+                condition=lambda values: True,
+            ),
+            # basic_route configs should always enabled setting
+            SimpleFieldEffect(
+                target_field="basic_router.name",
+                action="enable",
+                condition=lambda values: True,
+            ),
+            SimpleFieldEffect(
+                target_field="basic_router.address",
+                action="enable",
+                condition=lambda values: True,
+            ),
+            SimpleFieldEffect(
+                target_field="basic_router.24g_ssid",
+                action="enable",
+                condition=lambda values: True,
+            ),
+            SimpleFieldEffect(
+                target_field="basic_router.5g_ssid",
+                action="enable",
+                condition=lambda values: True,
+            ),
               # `test_switch_wifi` controls should always be user-editable
               # when the script group is visible.
               SimpleFieldEffect(

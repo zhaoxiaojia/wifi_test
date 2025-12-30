@@ -10,7 +10,7 @@ connect_type:
   Android:
     device: bq2019df11922160b
   Linux:
-    ip: 192.168.1.12
+    ip: 192.168.50.104
     wildcard: ''
   third_party:
     enabled: false
@@ -25,7 +25,7 @@ project:
   interface: USB
 serial_port:
   baud: '9600'
-  port: COM14 (蓝牙链接上的标准串行 (COM14))
+  port: COM14 (Prolific PL2303GC USB Serial COM Port (COM14))
   status: false
 rvr:
   iperf:
@@ -37,3 +37,12 @@ rvr:
   repeat: '0'
   throughput_threshold: '0'
   tool: iperf
+basic_router:
+  name: asusax88u
+  address: 192.168.50.1
+  24g_ssid: 2.4G
+  5g_ssid: 5G
+basic_test_duration:
+  loop: '2'
+  duration_hours: '1'
+  retry_limit: '0'
