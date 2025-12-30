@@ -157,14 +157,16 @@ class XiaomiBaseControl(RouterTools):
             self.scroll_to(wait_for)
 
         if router.ssid:
-            if self.BAND_2 == router.band:
-                target = 'ssid_2g'
-            else:
-                target = 'ssid_5g'
-            self.driver.find_element(
-                By.XPATH, self.xpath['ssid_element'][target]).clear()
-            self.driver.find_element(
-                By.XPATH, self.xpath['ssid_element'][target]).send_keys(router.ssid)
+            primary_band = router.band
+            secondary_band = self.BAND_5 if primary_band == self.BAND_2 else self.BAND_2
+
+            secondary_ssid = f"{router.ssid}_bat"
+
+            self.driver.find_element(By.XPATH, self.xpath["ssid_element"][primary_band]).clear()
+            self.driver.find_element(By.XPATH, self.xpath["ssid_element"][primary_band]).send_keys(router.ssid)
+
+            self.driver.find_element(By.XPATH, self.xpath["ssid_element"][secondary_band]).clear()
+            self.driver.find_element(By.XPATH, self.xpath["ssid_element"][secondary_band]).send_keys(secondary_ssid)
 
         hide_2g = self.driver.find_element(
             By.ID, self.xpath['hide_ssid']['hide_2g'])

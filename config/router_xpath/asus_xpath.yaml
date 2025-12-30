@@ -2,7 +2,7 @@
 
 asus:
   account: admin
-  passwd: Admin_12345678
+  passwd: 12345678
   username_element: login_username
   password_element: login_passwd
   signin_element:

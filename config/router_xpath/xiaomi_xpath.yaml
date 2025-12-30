@@ -9,8 +9,8 @@ xiaomi:
   #  band_element: //*[@id="wl_unit_field"]/td/select
   wireless_mode_element: //*[@id="wlanMode"]
   ssid_element:
-    ssid_2g: //*[@id="wifiset24"]/div[2]/span/input
-    ssid_5g: //*[@id="wifiset50"]/div[2]/span/input
+    "2.4G": //*[@id="wifiset24"]/div[2]/span/input
+    "5G": //*[@id="wifiset50"]/div[2]/span/input
 
   #  //*[@id="WLgeneral"]/tbody/tr[11]/td/select/option[4]
   channel_regu_element: //*[@id="dummydata"]/a[{}]/span

@@ -39,6 +39,7 @@ def setup_router(request):
     pytest.dut.kill_iperf()
 
 
+
 def test_rvr(setup_router, performance_sync_manager):
     connect_status, router_info = setup_router
     test_result = ensure_performance_result()
