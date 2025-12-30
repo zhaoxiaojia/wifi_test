@@ -264,9 +264,6 @@ def common_setup(router: Router, router_info: Router) -> bool:
         return True
 
     router.change_setting(router_info), "Can't set ap , pls check first"
-    # band = "5G" if "2" in router_info.band else "2.4G"
-    # ssid = router_info.ssid + "_bat"
-    # router.change_setting(Router(band=band, ssid=ssid))
     # if pytest.connect_type == 'Linux':
     #     if router_info.band == "2.4G":
     #         router.change_country("欧洲")

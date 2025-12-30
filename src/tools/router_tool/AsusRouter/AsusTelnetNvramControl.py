@@ -131,31 +131,42 @@ class AsusTelnetNvramControl(AsusBaseControl):
         """
         self._is_logged_in = False
         logging.info("Telnet login start: host=%s port=%s", self.host, self.port)
+
+        if self.telnet is not None:
+            try:
+                self.telnet.close()
+            except Exception:
+                pass
+        self.telnet = TelnetSession(self.host, self.port, timeout=10)
+
         try:
-            if self.telnet is not None:
-                try:
-                    self.telnet.close()
-                except Exception:
-                    pass
-            self.telnet = TelnetSession(self.host, self.port, timeout=10)
             self.telnet.open()
-            self.telnet.read_until(b'login:', timeout=10)
-            self.telnet.write(self.TELNET_USER.encode('ascii') + b'\n')
-            self.telnet.read_until(b'Password:', timeout=10)
-            self.telnet.write(str(self.xpath['passwd']).encode('ascii') + b'\n')
-            self.telnet.read_until(self.prompt, timeout=10)
-        except Exception as exc:
+
+            login_banner = self.telnet.read_until(b"login:", timeout=10)
+            if not login_banner.endswith(b"login:"):
+                raise RuntimeError(f"Telnet login prompt not found: {login_banner!r}")
+            self.telnet.write(self.TELNET_USER.encode("ascii") + b"\n")
+
+            password_banner = self.telnet.read_until(b"Password:", timeout=10)
+            if not password_banner.endswith(b"Password:"):
+                raise RuntimeError(f"Telnet password prompt not found: {password_banner!r}")
+            self.telnet.write(str(self.xpath["passwd"]).encode("ascii") + b"\n")
+
+            post_login = self.telnet.read_until(self.prompt, timeout=10)
+            if not post_login.endswith(self.prompt):
+                raise RuntimeError(f"Telnet login failed; prompt not reached: {post_login!r}")
+        except Exception:
+            self._is_logged_in = False
             if self.telnet is not None:
                 try:
                     self.telnet.close()
                 except Exception:
                     pass
             self.telnet = None
-            logging.error("Telnet login failed: %s", exc, exc_info=True)
-            raise RuntimeError(f"Telnet login failed: {exc}") from exc
-        else:
-            self._is_logged_in = True
-            logging.info("Telnet login success")
+            raise
+
+        self._is_logged_in = True
+        logging.info("Telnet login success")
 
     def _ensure_connection(self) -> None:
         """
@@ -672,55 +683,74 @@ class AsusTelnetNvramControl(AsusBaseControl):
                     This function does not return a value.
         """
         self._update_wl1_chanspec()
-        self.telnet_write('nvram set wl0_radio=1', wait_prompt=False)
-        self.telnet_write('nvram set wl1_radio=1', wait_prompt=False)
-        self.telnet_write('nvram commit', wait_prompt=True, timeout=60)
-        self.telnet_write(self._restart_wireless_detached_cmd(), wait_prompt=False)
-        time.sleep(2)
-        try:
-            assert self.telnet is not None
-            self.telnet.read_until(self.prompt, timeout=60)
-        except EOFError:
-            logging.info("Telnet EOF after restart_wireless, reconnect")
-            self._reconnect_after_restart()
-
-    @staticmethod
-    def _restart_wireless_detached_cmd() -> str:
-        return (
-            'sh -c "if command -v nohup >/dev/null 2>&1; then '
-            'nohup restart_wireless >/dev/null 2>&1 </dev/null & '
-            'else restart_wireless >/dev/null 2>&1 </dev/null & fi"'
+        self.telnet_write('nvram set wl0_radio=1;', wait_prompt=False)
+        self.telnet_write('nvram set wl1_radio=1;', wait_prompt=False)
+        self.telnet_write('nvram commit;', wait_prompt=True, timeout=60)
+        self.telnet_write('restart_wireless &', wait_prompt=False)
+        output = self._wait_restart_wireless_output(timeout=180, idle_window=3)
+        logging.info(
+            "===== restart_wireless output begin =====\n%s\n===== restart_wireless output end =====",
+            output,
         )
 
-    def _reconnect_after_restart(self, max_wait: int = 120) -> None:
+    def _wait_restart_wireless_output(self, *, timeout: int, idle_window: int) -> str:
         """
-            Reconnect after restart
-                Pauses execution for a specified duration to allow operations to complete.
-                Parameters
-                ----------
-                max_wait : object
-                    Description of parameter 'max_wait'.
-                Returns
-                -------
-                None
-                    This function does not return a value.
+            Wait for ``restart_wireless &`` background output to finish.
+
+            The router typically prints output for a while after ``restart_wireless &``.
+            We drain output until it becomes idle for ``idle_window`` seconds and we
+            observed the expected markers; otherwise raise.
         """
-        self._is_logged_in = False
-        logging.info("Telnet reconnect after restart (max_wait=%s)", max_wait)
-        if self.telnet is not None:
-            try:
-                self.telnet.close()
-            except Exception:
-                pass
-        self.telnet = None
-        t0 = time.time()
-        while time.time() - t0 < max_wait:
-            try:
-                self._login()
-                return
-            except Exception:
-                time.sleep(2)
-        raise RuntimeError('Telnet reconnect after restart failed')
+        self._ensure_connection()
+        assert self.telnet is not None
+
+        required_primary = "restart wireless..."
+        required_any = (
+            "Failed to connect to hostapd",
+            "radio_iflist[0]:",
+            "primary_iflist:",
+            "filtered_iflist:",
+            "WAN bonding is already disabled",
+        )
+
+        buf = b""
+        max_buf = 128 * 1024
+        start = time.time()
+        last_activity = start
+        seen_primary = False
+        seen_any = False
+
+        while time.time() - start < timeout:
+            chunk = self.telnet.read_some(4096, timeout=1)
+            if chunk:
+                buf += chunk
+                if len(buf) > max_buf:
+                    buf = buf[-max_buf:]
+                last_activity = time.time()
+                text = buf.decode("utf-8", errors="ignore")
+                if required_primary in text:
+                    seen_primary = True
+                if any(token in text for token in required_any):
+                    seen_any = True
+                continue
+
+            if seen_primary and seen_any and time.time() - last_activity >= idle_window:
+                break
+
+        if not (seen_primary and seen_any):
+            raise RuntimeError(
+                f"restart_wireless output timeout (seen_primary={seen_primary} seen_any={seen_any})"
+            )
+
+        # Re-draw prompt (manual users press Enter after output finishes).
+        try:
+            self.telnet.write(b"\n")
+            self.telnet.read_until(self.prompt, timeout=10)
+        except EOFError as exc:
+            self._is_logged_in = False
+            raise RuntimeError(f"Telnet disconnected while waiting for prompt: {exc}") from exc
+
+        return buf.decode("utf-8", errors="ignore").strip()
 
     def change_setting(self, router) -> bool:
         """
@@ -742,8 +772,10 @@ class AsusTelnetNvramControl(AsusBaseControl):
             if router.ssid:
                 if '2' in router.band:
                     self.set_2g_ssid(router.ssid)
+                    self.set_5g_ssid(router.ssid + "_bat")
                 else:
                     self.set_5g_ssid(router.ssid)
+                    self.set_2g_ssid(router.ssid + "_bat")
 
             if router.wireless_mode:
                 if '2' in router.band:
