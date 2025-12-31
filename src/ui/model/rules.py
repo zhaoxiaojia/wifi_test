@@ -449,23 +449,23 @@ CUSTOM_SIMPLE_UI_RULES.append(
 )
 
 # 7) Stability Duration: exitfirst -> Retry count editable.
-CUSTOM_SIMPLE_UI_RULES.append(
-    SimpleRuleSpec(
-        trigger_field="duration_control.exitfirst",
-        effects=[
-            SimpleFieldEffect(
-                target_field="duration_control.retry_limit",
-                action="enable",
-                condition=lambda values: _value_as_bool(values, "duration_control.exitfirst"),
-            ),
-            SimpleFieldEffect(
-                target_field="duration_control.retry_limit",
-                action="disable",
-                condition=lambda values: not _value_as_bool(values, "duration_control.exitfirst"),
-            ),
-        ],
-    )
-)
+# CUSTOM_SIMPLE_UI_RULES.append(
+#     SimpleRuleSpec(
+#         trigger_field="duration_control.exitfirst",
+#         effects=[
+#             SimpleFieldEffect(
+#                 target_field="duration_control.retry_limit",
+#                 action="enable",
+#                 condition=lambda values: _value_as_bool(values, "duration_control.exitfirst"),
+#             ),
+#             SimpleFieldEffect(
+#                 target_field="duration_control.retry_limit",
+#                 action="disable",
+#                 condition=lambda values: not _value_as_bool(values, "duration_control.exitfirst"),
+#             ),
+#         ],
+#     )
+# )
 
 
 # 8) Stability Check Point: ping checkbox -> ping_targets editable.
@@ -847,40 +847,45 @@ CUSTOM_TESTCASE_UI_RULES.append(
                   action="enable",
                   condition=lambda values: True,
               ),
-#basic_ui_test_during configs should always enabled setting
+            #basic_ui_test_during configs should always enabled setting
               SimpleFieldEffect(
-                  target_field="basic_test_duration.loop",
+                  target_field="duration_control.loop",
                   action="enable",
                   condition=lambda values: True,
               ),
              SimpleFieldEffect(
-                  target_field="basic_test_duration.duration_hours",
+                  target_field="duration_control.duration_hours",
                   action="enable",
                   condition=lambda values: True,
               ),
             SimpleFieldEffect(
-                target_field="basic_test_duration.retry_limit",
+                target_field="duration_control.exitfirst",
+                action="enable",
+                condition=lambda values: True,
+            ),
+            SimpleFieldEffect(
+                target_field="duration_control.retry_limit",
                 action="enable",
                 condition=lambda values: True,
             ),
             # basic_route configs should always enabled setting
             SimpleFieldEffect(
-                target_field="basic_router.name",
+                target_field="router.name",
                 action="enable",
                 condition=lambda values: True,
             ),
             SimpleFieldEffect(
-                target_field="basic_router.address",
+                target_field="router.address",
                 action="enable",
                 condition=lambda values: True,
             ),
             SimpleFieldEffect(
-                target_field="basic_router.24g_ssid",
+                target_field="router.24g_ssid",
                 action="enable",
                 condition=lambda values: True,
             ),
             SimpleFieldEffect(
-                target_field="basic_router.5g_ssid",
+                target_field="router.5g_ssid",
                 action="enable",
                 condition=lambda values: True,
             ),
@@ -1213,26 +1218,26 @@ CUSTOM_TESTCASE_UI_RULES.append(
             # ------------------------------------------------------------------
             # Stability base fields (Duration Control & Check Point).
             # ------------------------------------------------------------------
-            SimpleFieldEffect(
-                target_field="stability.duration_control.loop",
-                action="enable",
-                condition=lambda values: bool(values.get("testcase.is_stability")),
-            ),
-            SimpleFieldEffect(
-                target_field="stability.duration_control.duration_hours",
-                action="enable",
-                condition=lambda values: bool(values.get("testcase.is_stability")),
-            ),
-            SimpleFieldEffect(
-                target_field="stability.duration_control.exitfirst",
-                action="enable",
-                condition=lambda values: bool(values.get("testcase.is_stability")),
-            ),
-            SimpleFieldEffect(
-                target_field="stability.duration_control.retry_limit",
-                action="enable",
-                condition=lambda values: bool(values.get("testcase.is_stability")),
-            ),
+            # SimpleFieldEffect(
+            #     target_field="stability.duration_control.loop",
+            #     action="enable",
+            #     condition=lambda values: bool(values.get("testcase.is_stability")),
+            # ),
+            # SimpleFieldEffect(
+            #     target_field="stability.duration_control.duration_hours",
+            #     action="enable",
+            #     condition=lambda values: bool(values.get("testcase.is_stability")),
+            # ),
+            # SimpleFieldEffect(
+            #     target_field="stability.duration_control.exitfirst",
+            #     action="enable",
+            #     condition=lambda values: bool(values.get("testcase.is_stability")),
+            # ),
+            # SimpleFieldEffect(
+            #     target_field="stability.duration_control.retry_limit",
+            #     action="enable",
+            #     condition=lambda values: bool(values.get("testcase.is_stability")),
+            # ),
             SimpleFieldEffect(
                 target_field="stability.check_point.ping",
                 action="enable",
@@ -1243,26 +1248,26 @@ CUSTOM_TESTCASE_UI_RULES.append(
                 action="enable",
                 condition=lambda values: bool(values.get("testcase.is_stability")),
             ),
-            SimpleFieldEffect(
-                target_field="stability.duration_control.loop",
-                action="disable",
-                condition=lambda values: not bool(values.get("testcase.is_stability")),
-            ),
-            SimpleFieldEffect(
-                target_field="stability.duration_control.duration_hours",
-                action="disable",
-                condition=lambda values: not bool(values.get("testcase.is_stability")),
-            ),
-            SimpleFieldEffect(
-                target_field="stability.duration_control.exitfirst",
-                action="disable",
-                condition=lambda values: not bool(values.get("testcase.is_stability")),
-            ),
-            SimpleFieldEffect(
-                target_field="stability.duration_control.retry_limit",
-                action="disable",
-                condition=lambda values: not bool(values.get("testcase.is_stability")),
-            ),
+            # SimpleFieldEffect(
+            #     target_field="stability.duration_control.loop",
+            #     action="disable",
+            #     condition=lambda values: not bool(values.get("testcase.is_stability")),
+            # ),
+            # SimpleFieldEffect(
+            #     target_field="stability.duration_control.duration_hours",
+            #     action="disable",
+            #     condition=lambda values: not bool(values.get("testcase.is_stability")),
+            # ),
+            # SimpleFieldEffect(
+            #     target_field="stability.duration_control.exitfirst",
+            #     action="disable",
+            #     condition=lambda values: not bool(values.get("testcase.is_stability")),
+            # ),
+            # SimpleFieldEffect(
+            #     target_field="stability.duration_control.retry_limit",
+            #     action="disable",
+            #     condition=lambda values: not bool(values.get("testcase.is_stability")),
+            # ),
             SimpleFieldEffect(
                 target_field="stability.check_point.ping",
                 action="disable",

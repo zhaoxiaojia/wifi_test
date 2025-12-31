@@ -16,10 +16,7 @@ rf_solution:
     channels: 1,2,3,8
   model: LDA-908V-8
   step: ''
-router:
-  name: asusax88upro
-  address: 192.168.1.1
-text_case: test/performance/test_wifi_peak_throughput.py
+text_case: test/stability/test_soft_reboot_str.py
 debug:
   database_mode: false
   skip_router: false

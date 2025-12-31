@@ -52,17 +52,6 @@ panels:
             widget: line_edit
             label: "LDA-908V-8 Channels"
 
-      - id: router
-        label: "Router"
-        fields:
-          - key: router.name
-            widget: combo_box
-            label: "Router"
-          - key: router.address
-            widget: line_edit
-            label: "Router IP"
-            placeholder: "192.168.x.x"
-
       - id: text_case
         label: "Selected Test Case"
         fields:
