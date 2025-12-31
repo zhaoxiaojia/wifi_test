@@ -117,36 +117,37 @@ panels:
             widget: line_edit
             label: "Zero Point Threshold"
             placeholder: "0"
-
-      - id: basic_router
+      - id: router
         label: "Router"
         fields:
-          - key: basic_router.name
+          - key: router.name
             widget: combo_box
             label: "Router"
             choices: ["asusax88u", "asusax88upro", "asusax86u","ximaobe3600", "ximaobe7000"]
-          - key: basic_router.address
+          - key: router.address
             widget: line_edit
             label: "Router IP"
             placeholder: "192.168.x.x"
-          - key: basic_router.24g_ssid
+          - key: router.24g_ssid
             widget: line_edit
             label: "2.4G SSID"
             placeholder: "24G"
-          - key: basic_router.5g_ssid
+          - key: router.5g_ssid
             widget: line_edit
             label: "5G SSID"
             placeholder: "5G"
-
-      - id: basic_test_duration
+      - id: duration_control
         label: "Test Duration"
         fields:
-          - key: basic_test_duration.loop
+          - key: duration_control.loop
             widget: line_edit
             label: "Loop count"
-          - key: basic_test_duration.duration_hours
+          - key: duration_control.duration_hours
             widget: line_edit
             label: "Duration (hours)"
-          - key: basic_test_duration.retry_limit
+          - key: duration_control.exitfirst
+            widget: checkbox
+            label: "Stop immediately on failure (exitfirst)"
+          - key: duration_control.retry_limit
             widget: line_edit
             label: "Retry count"
