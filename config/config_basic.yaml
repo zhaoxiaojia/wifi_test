@@ -37,12 +37,13 @@ rvr:
   repeat: '0'
   throughput_threshold: '0'
   tool: iperf
-basic_router:
+duration_control:
+  loop: '2'
+  duration_hours: '1.0'
+  exitfirst: false
+  retry_limit: '0'
+router:
   name: asusax88u
   address: 192.168.50.1
-  24g_ssid: 2.4G
+  24g_ssid: 24G
   5g_ssid: 5G
-basic_test_duration:
-  loop: '2'
-  duration_hours: '1'
-  retry_limit: '0'
