@@ -24,10 +24,11 @@ from qfluentwidgets import CardWidget, PushButton, StrongBodyLabel
 from PyQt5 import sip
 
 from src.util.constants import get_src_base, Paths
-from src.ui.controller.run_ctl import CaseRunner
+from src.ui.controller.run_ctl import CaseRunner, ExcelPlanRunner
 from src.ui.view.theme import ACCENT_COLOR, CONTROL_HEIGHT, FONT_FAMILY, apply_theme, format_log_html
 from src.ui.view.common import animate_progress_fill, attach_view_to_page
-
+from qfluentwidgets import MessageBox
+from src.util.constants import get_config_base
 
 class RunView(CardWidget):
     """Pure UI view for executing and monitoring test runs."""
@@ -258,7 +259,9 @@ class RunPage(CardWidget):
         self.main_window = parent
 
         self.display_case_path = self._calc_display_path(case_path, display_case_path)
+        self.excel_plan_path: str | None = None #260104 For function test;
         self._last_report_dir: str | None = None
+        self._user_cancelled_single_run = False ##260105 For function test;
 
         # Compose pure UI view and alias widgets for logic.
         self.view = RunView(self)
@@ -286,6 +289,53 @@ class RunPage(CardWidget):
         self.process.installEventFilter(self)
         self._progress_animation = None
         self._current_percent = 0
+
+        #260105 For function test; Auto-load last function plan
+        try:
+            from src.util.constants import get_config_base
+            context_file = get_config_base() / "last_function_plan.txt"
+            print(f"[DEBUG] Looking for last plan at: {context_file}")
+            try:
+                with open(context_file, 'r', encoding='utf-8') as f:
+                    excel_path = f.read().strip()
+                # ↑↑↑ 文件 f 在此处已明确超出作用域并应被关闭 ↑↑↑
+            except Exception as read_error:
+                print(f"[ERROR] Failed to read last_function_plan.txt: {read_error}")
+                excel_path = None
+
+                # --- Step 2: 验证并设置路径 ---
+            if excel_path and Path(excel_path).exists():
+                print(f"[DEBUG] Found plan path in file: '{excel_path}'")
+                print(f"[DEBUG] Plan file exists on disk. Setting it.")
+                self.set_excel_plan_path(excel_path)
+
+                # --- Step 3: 尝试删除（增加安全措施）---
+                try:
+                    # 可选：增加一个极短的延迟，让 OS 有时间释放句柄
+                    import time
+                    time.sleep(0.01)  # 10毫秒，通常足够
+
+                    context_file.unlink()
+                    print(f"[DEBUG] Deleted last_function_plan.txt in __init__ for safety.")
+
+                except PermissionError as pe:
+                    # 捕获特定的权限错误
+                    print(f"[WARNING] Permission denied when deleting file: {pe}")
+                    # 降级方案：重命名文件
+                    try:
+                        bak_file = context_file.with_suffix('.txt.bak')
+                        if bak_file.exists():
+                            bak_file.unlink()  # 先清理旧的 .bak
+                        context_file.rename(bak_file)
+                        print(f"[DEBUG] Renamed to {bak_file.name} as fallback.")
+                    except Exception as rename_error:
+                        print(f"[ERROR] Fallback rename also failed: {rename_error}")
+
+                except Exception as e:
+                    print(f"[WARNING] Unexpected error when deleting file: {e}")
+        except Exception as e:
+            print(f"[DEBUG] Warning: Could not auto-load last function plan: {e}")
+        # End of auto-load block
 
         self.reset()
         self.finished_count = 0
@@ -486,18 +536,148 @@ class RunPage(CardWidget):
         self.action_btn.setEnabled(True)
 
     def run_case(self) -> None:
+        print(f"[DEBUG] run_case() called.")
+        print(f"[DEBUG] Current state - case_path: '{self.case_path}', excel_plan_path: '{self.excel_plan_path}'")
+
         self.reset()
         self._set_action_button("stop")
         account_name = ""
         if self.main_window and self.main_window._active_account:
             account_name = str(self.main_window._active_account.get("username", "")).strip()
-        self.runner = CaseRunner(self.case_path, account_name=account_name, display_case_path=self.display_case_path)
+
+        # --- 新增：智能判断是否应运行 Excel 计划 ---
+        # 条件1: 当前 case_path 指向 'project/' 目录下的文件
+        is_project_case = "project" in Path(self.case_path).parts
+
+        # 条件2: excel_plan_path 尚未被设置 (即为 None)
+        is_excel_not_set = self.excel_plan_path is None
+
+        if is_project_case and is_excel_not_set:
+            try:
+                #app_base = self._get_application_base()
+                #last_plan_file = app_base / "dist" / "last_function_plan.txt"
+                last_plan_file = get_config_base() / "last_function_plan.txt"
+
+                if last_plan_file.exists():
+                    excel_path = None
+                    # --- Step 1: 仅读取内容，确保 with 块独立结束 ---
+                    with open(last_plan_file, 'r', encoding='utf-8') as f:
+                        excel_path = f.read().strip()
+                    # ↑↑↑ 文件 f 在此处已明确关闭 ↑↑↑
+
+                    # --- Step 2: 验证路径并设置 ---
+                    if excel_path and Path(excel_path).exists():
+                        self.set_excel_plan_path(excel_path)
+                        print(f"[DEBUG] Auto-switched to Excel plan: {excel_path}")
+
+                        # --- Step 3: 尝试删除（关键修复）---
+                        try:
+                            import time
+                            time.sleep(0.01)  # 增加10毫秒延迟，让OS释放句柄
+
+                            last_plan_file.unlink()
+                            print(f"[DEBUG] Deleted last_function_plan.txt for safety.")
+
+                        except PermissionError:
+                            # --- 降级策略：重命名文件 ---
+                            try:
+                                bak_path = last_plan_file.with_suffix('.txt.bak')
+                                if bak_path.exists():
+                                    bak_path.unlink()  # 清理旧备份
+                                last_plan_file.rename(bak_path)
+                                print(f"[DEBUG] Renamed to {bak_path.name} as fallback.")
+                            except Exception as rename_e:
+                                print(f"[ERROR] Rename fallback failed: {rename_e}")
+
+                        except Exception as delete_error:
+                            print(f"[WARNING] Unexpected delete error: {delete_error}")
+
+            except Exception as e:
+                print(f"[DEBUG] Warning: Failed to auto-switch to Excel plan: {e}")
+
+            print(f"[DEBUG] Current state - case_path: '{self.case_path}', excel_plan_path: '{self.excel_plan_path}'")
+
+            # --- 260105 新增：弹出提醒对话框（仅当在 project/ 下且未加载到计划时）---
+            # 判断当前 case 是否属于 project 目录
+            is_project_case = "project" in Path(self.case_path).parts
+            # 判断是否成功加载了 Excel 计划
+            has_excel_plan = self.excel_plan_path is not None and self.excel_plan_path != "None"
+            print(f"[DEBUG] is_project_case check: 'project' in {Path(self.case_path).parts} -> {is_project_case}")
+
+            if is_project_case and not has_excel_plan:
+                from qfluentwidgets import MessageBox
+
+                # 创建消息框
+                message_box = MessageBox(
+                    title="Single Function Script Test Mode",
+                    content="Do Not Find Function Test Suite File,\n\n"
+                            "Single Function Script Will Start.\n\n"
+                            "Continue? \n\n"
+                            "If Not, Please Stop This test and Choice Test Scripts In Advanced Config UI",
+                    parent=self.main_window  # 使用主窗口作为父窗口
+                )
+                message_box.yesButton.setText("Continue?")
+                #message_box.cancelButton.setText("Cancel?")
+                message_box.cancelButton.hide()
+
+                # # 显示对话框并等待用户选择
+                # if not message_box.exec():
+                #     # 用户点击了“取消”
+                #     print("[INFO] User cancelled single-script run.")
+                #     # 可以在这里添加取消后的逻辑，例如：
+                #     #self.close() # 关闭当前页面 (可选)
+                #     #self._user_cancelled_single_run = True # cancel test
+
+                message_box.exec()
+                print("[INFO] User confirmed to run single script.")
+
+            # --- End of new dialog block ---
+
+        # Determine which runner to use 260104 For function test;
+        if self.excel_plan_path is not None:
+            # --- Mode 1: Run Excel Plan ---
+            print(f"[DEBUG] Branch taken: Creating ExcelPlanRunner for '{self.excel_plan_path}'")
+            try:
+                self.runner = ExcelPlanRunner(self.excel_plan_path)
+                print(f"[DEBUG] ExcelPlanRunner created successfully.")
+            except Exception as e:
+                self._append_log(f"<b style='color:red;'>Failed to create ExcelPlanRunner: {e}</b>")
+                self._set_action_button("run")
+                return
+            # ----------------------------
+        else:
+            # --- Mode 2: Run Single Case (Original Logic) ---
+            print(f"[DEBUG] Branch taken: Creating CaseRunner for '{self.case_path}'")
+            self.runner = CaseRunner(
+                self.case_path,
+                account_name=account_name,
+                display_case_path=self.display_case_path
+            )
+        #self.runner = CaseRunner(self.case_path, account_name=account_name, display_case_path=self.display_case_path)
+
+        # Connect signals for both runners
         self.runner.log_signal.connect(self._append_log)
         self.runner.progress_signal.connect(self.update_progress)
         with suppress(Exception):
             self.runner.report_dir_signal.connect(self._on_report_dir_ready)
-        self.runner.finished.connect(self._finalize_runner)
+        self.runner.finished_signal.connect(self._finalize_runner)
+        print(f"[DEBUG] Starting runner: {type(self.runner).__name__}")
         self.runner.start()
+
+    # 260104 For function test;
+    def set_excel_plan_path(self, path: str) -> None:
+        """
+        Set the path of the Excel test plan to be executed.
+        This should be called before `run_case()`.
+        """
+        if not path or not Path(path).exists():
+            raise ValueError(f"Invalid or non-existent Excel plan path: {path}")
+        self.excel_plan_path = path
+        # Update the UI header to show the plan name instead of the case path
+        self.view.case_path_label.setText(f"Plan: {Path(path).name}")
+        # Clear the single-case related state
+        self.case_path = ""
+        self.display_case_path = ""
 
     def _finalize_runner(self) -> None:
         runner = self.runner
@@ -588,6 +768,12 @@ class RunPage(CardWidget):
         if self._last_report_dir:
             self.view.set_allure_report_dir(self._last_report_dir)
 
+        # --- 260106 新增：通知主应用重置向导状态 ---
+        print("[DEBUG] About to call reset_wizard_after_run")
+        from src.ui.controller.run_ctl import reset_wizard_after_run
+        reset_wizard_after_run(self)
+        print("[DEBUG] reset_wizard_after_run called")
+
     def on_stop(self) -> None:
         self._append_log("on_stop entered")
         self.cleanup()
@@ -596,7 +782,12 @@ class RunPage(CardWidget):
         self.action_btn.setEnabled(True)
 
     def _get_application_base(self) -> Path:
-        return Path(get_src_base()).resolve()
+        # Get the directory of this file (run.py)
+        current_file_dir = Path(__file__).resolve().parent
+        # Go up: .../src/ui/view -> .../src/ui -> .../src -> project_root
+        project_root = current_file_dir.parent.parent.parent
+        print(f"[DEBUG] Calculated project root as: {project_root}")  # For verification
+        return project_root
 
     def _calc_display_path(self, case_path: str, display_case_path: str | None) -> str:
         if display_case_path:
