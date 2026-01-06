@@ -30,6 +30,20 @@ from src.ui.view.common import animate_progress_fill, attach_view_to_page
 from qfluentwidgets import MessageBox
 from src.util.constants import get_config_base
 
+
+def _is_project_test_script(case_path: str) -> bool:
+    """判断是否为 project/ 下的功能测试脚本"""
+    p = Path(case_path).resolve()
+    parts = p.parts
+
+    # 查找连续的三个部分：'src', 'test', 'project'
+    for i in range(len(parts) - 2):
+        if (str(parts[i]).lower() == "src" and
+                str(parts[i + 1]).lower() == "test" and
+                str(parts[i + 2]).lower() == "project"):
+            return True
+    return False
+
 class RunView(CardWidget):
     """Pure UI view for executing and monitoring test runs."""
 
@@ -535,6 +549,7 @@ class RunPage(CardWidget):
         self._set_action_button("run")
         self.action_btn.setEnabled(True)
 
+
     def run_case(self) -> None:
         print(f"[DEBUG] run_case() called.")
         print(f"[DEBUG] Current state - case_path: '{self.case_path}', excel_plan_path: '{self.excel_plan_path}'")
@@ -546,13 +561,17 @@ class RunPage(CardWidget):
             account_name = str(self.main_window._active_account.get("username", "")).strip()
 
         # --- 新增：智能判断是否应运行 Excel 计划 ---
-        # 条件1: 当前 case_path 指向 'project/' 目录下的文件
-        is_project_case = "project" in Path(self.case_path).parts
+        # --- 新增：只有 project 测试才允许使用 ExcelPlanRunner ---
+        is_project_case = _is_project_test_script(self.case_path)
+        # 如果不是 project 测试，强制清除 excel_plan_path
+        if not is_project_case:
+            self.excel_plan_path = None
+            print("[DEBUG] Non-project test detected. Cleared excel_plan_path.")
 
         # 条件2: excel_plan_path 尚未被设置 (即为 None)
         is_excel_not_set = self.excel_plan_path is None
 
-        if is_project_case and is_excel_not_set:
+        if is_project_case and self.excel_plan_path is None:
             try:
                 #app_base = self._get_application_base()
                 #last_plan_file = app_base / "dist" / "last_function_plan.txt"
@@ -599,7 +618,7 @@ class RunPage(CardWidget):
 
             # --- 260105 新增：弹出提醒对话框（仅当在 project/ 下且未加载到计划时）---
             # 判断当前 case 是否属于 project 目录
-            is_project_case = "project" in Path(self.case_path).parts
+            is_project_case = _is_project_test_script(self.case_path)
             # 判断是否成功加载了 Excel 计划
             has_excel_plan = self.excel_plan_path is not None and self.excel_plan_path != "None"
             print(f"[DEBUG] is_project_case check: 'project' in {Path(self.case_path).parts} -> {is_project_case}")
@@ -660,7 +679,13 @@ class RunPage(CardWidget):
         self.runner.progress_signal.connect(self.update_progress)
         with suppress(Exception):
             self.runner.report_dir_signal.connect(self._on_report_dir_ready)
-        self.runner.finished_signal.connect(self._finalize_runner)
+        # 连接完成信号：根据 runner 类型选择正确的信号
+        if isinstance(self.runner, ExcelPlanRunner):
+            self.runner.finished_signal.connect(self._finalize_runner)
+        elif isinstance(self.runner, CaseRunner):
+            self.runner.finished.connect(self._finalize_runner)  # ← 使用 QThread 内置信号
+        else:
+            raise TypeError(f"Unknown runner type: {type(self.runner)}")
         print(f"[DEBUG] Starting runner: {type(self.runner).__name__}")
         self.runner.start()
 
@@ -693,6 +718,15 @@ class RunPage(CardWidget):
             runner.report_dir_signal.disconnect(self._on_report_dir_ready)
         with suppress((TypeError, RuntimeError)):
             runner.finished.disconnect(self._finalize_runner)
+
+            # --- 新增：按类型断开 finished 信号 ---
+        if isinstance(runner, ExcelPlanRunner):
+            with suppress((TypeError, RuntimeError)):
+                runner.finished_signal.disconnect(self._finalize_runner)
+        elif isinstance(runner, CaseRunner):
+            with suppress((TypeError, RuntimeError)):
+                runner.finished.disconnect(self._finalize_runner)
+
         runner.deleteLater()
         self.runner = None
         self.on_runner_finished()
@@ -801,6 +835,7 @@ class RunPage(CardWidget):
         with _s(ValueError):
             display_case_path = display_case_path.relative_to(app_base)
         return display_case_path.as_posix()
+
 
 
 __all__ = ["RunView", "RunPage"]

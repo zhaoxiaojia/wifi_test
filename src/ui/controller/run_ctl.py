@@ -382,6 +382,37 @@ class CaseRunner(QThread):
         )
         return messages
 
+def _is_project_test_script(case_path: str) -> bool:
+    """判断是否为 project/ 下的功能测试脚本"""
+    parts = Path(case_path).resolve().parts
+    for i in range(len(parts) - 2):
+        if (str(parts[i]).lower() == "src" and
+            str(parts[i+1]).lower() == "test" and
+            str(parts[i+2]).lower() == "project"):
+            return True
+    return False
+
+
+def _extract_project_relative_path(case_path: str) -> Path:
+    """
+    从完整路径中提取相对于 'src/test/project/' 的部分
+    例如: C:/.../src/test/project/stb/test.py → stb/test.py
+    前提: 调用者需确保路径确实是 project 测试（即 _is_project_test_script 返回 True）
+    """
+    p = Path(case_path).resolve()
+    parts = p.parts
+
+    # 查找连续的 src/test/project
+    for i in range(len(parts) - 2):
+        if (str(parts[i]).lower() == "src" and
+                str(parts[i + 1]).lower() == "test" and
+                str(parts[i + 2]).lower() == "project"):
+            # 返回 project/ 之后的所有部分
+            relative_parts = parts[i + 3:]  # 注意是 i+3，跳过 src/test/project
+            return Path(*relative_parts)
+
+    # 理论上不会执行到这里（因为调用前已判断）
+    raise ValueError(f"Path does not contain 'src/test/project': {case_path}")
 
 def _init_worker_env(
         case_path: str,
@@ -403,20 +434,21 @@ def _init_worker_env(
     plugin = install_redactor_for_current_process()
 
     # --- CORRECT PATH HANDLING (兼容开发/打包) ---
+    # --- 修复：正确处理相对路径和绝对路径 ---
     input_path = Path(case_path)
+
     if input_path.is_absolute():
+        # 绝对路径：直接解析
         absolute_test_path = input_path.resolve()
     else:
-        # --- 智能定位 base_dir ---
+        # 相对路径：默认是 project 测试，直接拼接到 src/test/project/
         if getattr(sys, 'frozen', False):
-            # 打包模式 (PyInstaller): 资源在临时目录 _MEIPASS 中
             base_dir = Path(sys._MEIPASS)
         else:
-            # 开发模式: 从当前文件回溯到项目根目录
-            # run_ctl.py 路径: .../src/ui/controller/run_ctl.py
-            base_dir = Path(__file__).resolve().parents[3]  # -> 项目根目录
-        # --- 构建测试脚本的绝对路径 ---
-        absolute_test_path = base_dir / "src/test/project" / case_path
+            base_dir = Path(__file__).resolve().parents[3]
+
+        # 关键修复：相对路径直接视为 project 测试
+        absolute_test_path = (base_dir / "src" / "test" / "project" / input_path).resolve()
 
     if not absolute_test_path.exists():
         raise FileNotFoundError(f"Test file not found: {absolute_test_path}")
