@@ -1,0 +1,11 @@
+# Test script config file
+version: 1.0
+
+scripts:
+    - path: stb/test_check_wifi_status.py
+      priority: P1
+      suite: Status Check
+
+    - path: stb/test_wifi_connection.py
+      priority: P2
+      suite: Mode

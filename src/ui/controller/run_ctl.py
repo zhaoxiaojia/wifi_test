@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 from typing import Any
-import io
+import io, contextlib
 import logging
-import multiprocessing
+import multiprocessing, subprocess
 import queue
 import shutil
 import tempfile
 import time
+from datetime import datetime
 from pathlib import Path
 
 from PyQt5.QtCore import QThread, pyqtSignal
@@ -21,7 +22,8 @@ from src.test.stability import (
     run_stability_plan,
 )
 from src.util.pytest_redact import install_redactor_for_current_process
-import pytest
+import pytest, os, sys
+import pandas as pd
 
 
 def reset_wizard_after_run(page: Any) -> None:
@@ -189,6 +191,7 @@ class CaseRunner(QThread):
         self.case_path = case_path
         self.account_name = (account_name or "").strip()
         self.display_case_path = display_case_path or case_path
+        self.last_exit_code: int = 0
         self._ctx = multiprocessing.get_context("spawn")
         self._queue = self._ctx.Queue()
         self._proc: multiprocessing.Process | None = None
@@ -231,6 +234,8 @@ class CaseRunner(QThread):
                 self.report_dir_signal.emit(str(payload))
             elif kind == "python_log":
                 self._python_log_path = str(payload)
+            elif kind == "exit_code":
+                self.last_exit_code = int(payload)
         # Flush any in-flight case timing marker.
         if self._case_start_time is not None:
             duration_ms = int((time.time() - self._case_start_time) * 1000)
@@ -377,37 +382,102 @@ class CaseRunner(QThread):
         )
         return messages
 
+def _is_project_test_script(case_path: str) -> bool:
+    """判断是否为 project/ 下的功能测试脚本"""
+    parts = Path(case_path).resolve().parts
+    for i in range(len(parts) - 2):
+        if (str(parts[i]).lower() == "src" and
+            str(parts[i+1]).lower() == "test" and
+            str(parts[i+2]).lower() == "project"):
+            return True
+    return False
+
+
+def _extract_project_relative_path(case_path: str) -> Path:
+    """
+    从完整路径中提取相对于 'src/test/project/' 的部分
+    例如: C:/.../src/test/project/stb/test.py → stb/test.py
+    前提: 调用者需确保路径确实是 project 测试（即 _is_project_test_script 返回 True）
+    """
+    p = Path(case_path).resolve()
+    parts = p.parts
+
+    # 查找连续的 src/test/project
+    for i in range(len(parts) - 2):
+        if (str(parts[i]).lower() == "src" and
+                str(parts[i + 1]).lower() == "test" and
+                str(parts[i + 2]).lower() == "project"):
+            # 返回 project/ 之后的所有部分
+            relative_parts = parts[i + 3:]  # 注意是 i+3，跳过 src/test/project
+            return Path(*relative_parts)
+
+    # 理论上不会执行到这里（因为调用前已判断）
+    raise ValueError(f"Path does not contain 'src/test/project': {case_path}")
 
 def _init_worker_env(
-    case_path: str, q: multiprocessing.Queue, log_file_path_str: str | None
+        case_path: str,
+        q: multiprocessing.Queue,
+        log_file_path_str: str | None = None
 ) -> "_WorkerContext":
     """Prepare logging, report directories, and pytest arguments."""
     session = _RunLogSession(q, log_file_path_str)
     import random, datetime
+    from pathlib import Path
 
     timestamp = datetime.datetime.now().strftime("%Y.%m.%d_%H.%M.%S")
     timestamp = f"{timestamp}_{random.randint(1000, 9999)}"
     report_dir = (Path.cwd() / "report" / timestamp).resolve()
     report_dir.mkdir(parents=True, exist_ok=True)
     from contextlib import suppress
-
     with suppress(Exception):
         q.put(("report_dir", str(report_dir)))
     plugin = install_redactor_for_current_process()
+
+    # --- CORRECT PATH HANDLING (兼容开发/打包) ---
+    # --- 修复：正确处理相对路径和绝对路径 ---
+    input_path = Path(case_path)
+
+    if input_path.is_absolute():
+        # 绝对路径：直接解析
+        absolute_test_path = input_path.resolve()
+    else:
+        # 相对路径：默认是 project 测试，直接拼接到 src/test/project/
+        if getattr(sys, 'frozen', False):
+            base_dir = Path(sys._MEIPASS)
+        else:
+            base_dir = Path(__file__).resolve().parents[3]
+
+        # 关键修复：相对路径直接视为 project 测试
+        absolute_test_path = (base_dir / "src" / "test" / "project" / input_path).resolve()
+
+    if not absolute_test_path.exists():
+        raise FileNotFoundError(f"Test file not found: {absolute_test_path}")
+    # --- END PATH HANDLING ---
+
+    # Derive the path to pass to pytest (relative to CWD if possible)
+    try:
+        relative_path = absolute_test_path.relative_to(Path.cwd())
+        pytest_case_path = str(relative_path).replace("\\", "/")  # Use forward slashes for pytest
+    except ValueError:
+        # If outside project root, use absolute path
+        pytest_case_path = str(absolute_test_path)
+    # --- END PATH HANDLING ---
+
+    # --- Use pytest_case_path everywhere from now on ---
     pytest_args = [
         "--rootdir=.",
         "--import-mode=importlib",
         f"--resultpath={report_dir}",
-        case_path,
+        pytest_case_path,
     ]
 
-    # Only apply stability retry/exit-first flags for stability cases.
-    is_stability_case = is_stability_case_path(case_path)
+    # ✅ FIXED: Use pytest_case_path, NOT corrected_case_path
+    is_stability_case = is_stability_case_path(pytest_case_path)
     plan = load_stability_plan() if is_stability_case else None
     pytest_args = _apply_exitfirst_flags(pytest_args, plan)
 
     return _WorkerContext(
-        case_path=case_path,
+        case_path=pytest_case_path,  # ✅ Consistent
         queue=q,
         pytest_args=pytest_args,
         report_dir=report_dir,
@@ -416,7 +486,6 @@ def _init_worker_env(
         plan=plan if is_stability_case else None,
         log_session=session,
     )
-
 
 def _apply_exitfirst_flags(pytest_args: list[str], plan) -> list[str]:
     """Return pytest args extended with exit-first and retry flags when requested."""
@@ -513,6 +582,7 @@ def _stream_pytest_events(ctx: "_WorkerContext") -> None:
     def emit_stability_progress(percent: int) -> None:
         q.put(("progress", percent))
 
+
     if ctx.is_stability_case and ctx.plan is not None:
         result = run_stability_plan(
             ctx.plan,
@@ -592,4 +662,201 @@ class _WorkerContext:
         self.log_session = log_session
 
 
-__all__ = ["reset_wizard_after_run", "LiveLogWriter", "CaseRunner"]
+class ExcelPlanRunner(QThread):
+    """
+    Runner for executing a test plan from an Excel file.
+    It reuses the existing CaseRunner for execution and updates the Excel with results.
+    """
+    log_signal = pyqtSignal(str)
+    progress_signal = pyqtSignal(int)
+    report_dir_signal = pyqtSignal(str)
+    finished_signal = pyqtSignal()
+
+    def __init__(self, excel_path: str, parent=None):
+        super().__init__(parent)
+        self.excel_path = excel_path
+        self._current_case_runner = None #Add for case status record, 260105
+
+        # --- 260105 新增：保存并接管根日志记录器的处理器 ---
+        import logging
+        root_logger = logging.getLogger()
+        self.old_handlers = root_logger.handlers[:]
+        self.old_level = root_logger.level
+        # 清空处理器，防止日志污染主进程
+        root_logger.handlers.clear()
+        # --- End of new block ---
+
+    def run(self):
+        try:
+            # --- 1. Create a TOP-LEVEL report directory for the entire PLAN ---
+            plan_timestamp = datetime.now().strftime("%Y.%m.%d_%H.%M.%S")
+            plan_report_dir = Path(Paths.BASE_DIR) / "report" / f"Func_log_{plan_timestamp}"
+            plan_report_dir.mkdir(parents=True, exist_ok=True)
+            self.report_dir_signal.emit(str(plan_report_dir))
+
+            # --- 260105 新增：创建主 python.log and debug.log 文件路径 ---
+            main_python_log = plan_report_dir / "python.log"
+            main_python_log.touch(exist_ok=True)  # 创建空文件（如果不存在）
+            main_debug_log = plan_report_dir / "debug.log"
+            main_debug_log.touch(exist_ok=True)
+
+            df = pd.read_excel(self.excel_path)
+            if "Script Path" not in df.columns:
+                raise ValueError("Excel file must contain a 'Script Path' column.")
+
+            script_paths = df["Script Path"].dropna().tolist()
+            total_cases = len(script_paths)
+            if total_cases == 0:
+                self.log_signal.emit("<b>No test cases to run.</b>")
+                return
+
+            self.log_signal.emit(f"<b>Starting plan with {total_cases} case(s)... Report dir: {plan_report_dir}</b>")
+
+            for idx, script_path in enumerate(script_paths):
+                # --- 新增：检查是否被请求中断 ---
+                if self.isInterruptionRequested():
+                    self.log_signal.emit("<b style='color:red;'>Execution stopped by user.</b>")
+                    break
+
+                self.log_signal.emit(f"<br><b>Running: {script_path}</b>")
+
+                # Use the existing CaseRunner
+                runner = CaseRunner(case_path=str(script_path))
+                # Connect its signals directly to this runner's signals
+                runner.log_signal.connect(self.log_signal)
+                runner.report_dir_signal.connect(self.report_dir_signal)
+                self._current_case_runner = runner #Add for case status record, 260105
+
+                runner.start()
+                runner.wait()  # Wait for this case to finish
+                self._current_case_runner = None #260105 clear status after case finish
+
+                # Determine status based on exit code
+                status = "Passed" if runner.last_exit_code == 0 else "Failed"
+                self._update_excel_result(idx, status)
+
+                # --- 在循环内部，runner.wait() 之后，添加以下新代码 ---
+                # --- 2. NEW: Aggregate all case reports directly into the main plan directory ---
+                if runner._report_dir:
+                    case_report_dir = Path(runner._report_dir)
+                    if case_report_dir.exists():
+                        for item in case_report_dir.iterdir():
+                            if item.name == "debug":
+                                continue
+
+                            # --- 关键修改：特殊处理 python.log ---
+                            if item.name == "python.log" and item.is_file():
+                                # 将此 Case 的 python.log 内容追加到主日志文件
+                                try:
+                                    with open(item, 'r', encoding='utf-8') as src_log, \
+                                            open(main_python_log, 'a', encoding='utf-8') as dst_log:
+                                        # 可以选择性地添加分隔符，方便区分不同 Case
+                                        dst_log.write(f"\n\n{'=' * 80}\n")
+                                        dst_log.write(f"LOG FROM CASE: {script_path}\n")
+                                        dst_log.write(f"{'=' * 80}\n\n")
+                                        shutil.copyfileobj(src_log, dst_log)
+                                except Exception as e:
+                                    self.log_signal.emit(
+                                        f"<b style='color:orange;'>Failed to append log from {item}: {e}</b>")
+                                continue  # 处理完就跳过下面的通用复制逻辑
+
+                                # --- 新增：处理 debug.log ---
+                            elif item.name == "debug.log" and item.is_file():
+                                # 将此 Case 的 debug.log 内容追加到主 debug.log 文件
+                                try:
+                                    with open(item, 'r', encoding='utf-8') as src_log, \
+                                            open(main_debug_log, 'a', encoding='utf-8') as dst_log:
+                                        # 添加分隔符
+                                        dst_log.write(f"\n\n{'=' * 80}\n")
+                                        dst_log.write(f"DEBUG LOG FROM CASE: {script_path}\n")
+                                        dst_log.write(f"{'=' * 80}\n\n")
+                                        shutil.copyfileobj(src_log, dst_log)
+                                except Exception as e:
+                                    self.log_signal.emit(
+                                        f"<b style='color:orange;'>Failed to append debug log from {item}: {e}</b>")
+                                continue  # 跳过通用复制逻辑
+
+                            # --- 其他文件和目录的处理逻辑保持不变 ---
+                            dest = plan_report_dir / item.name
+                            if item.is_file():
+                                if dest.exists():
+                                    timestamp_suffix = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+                                    new_dest = plan_report_dir / f"{item.stem}_{timestamp_suffix}{item.suffix}"
+                                    shutil.copy2(item, new_dest)
+                                else:
+                                    shutil.copy2(item, dest)
+                            elif item.is_dir():
+                                if dest.exists() and dest.is_dir():
+                                    self._merge_directories(item, dest)
+                                else:
+                                    shutil.copytree(item, dest, dirs_exist_ok=True)
+
+                    # --- 260105 新增：清理 CaseRunner 生成的临时报告目录 ---
+                    if runner._report_dir:
+                        case_report_dir = Path(runner._report_dir)
+                        if case_report_dir.exists():
+                            try:
+                                shutil.rmtree(case_report_dir, ignore_errors=True)
+                                self.log_signal.emit(
+                                    f"<span style='color:gray;'>Temporary report for {script_path} cleaned up.</span>")
+                            except Exception as e:
+                                self.log_signal.emit(
+                                    f"<b style='color:orange;'>Failed to clean up {case_report_dir}: {e}</b>")
+                # Emit overall progress
+                self.progress_signal.emit(int((idx + 1) / total_cases * 100))
+            self.log_signal.emit(f"<b>All tests completed! Full report at: {plan_report_dir}</b>")
+
+            self.log_signal.emit("<b>All tests completed!</b>")
+
+        except Exception as e:
+            import traceback
+            self.log_signal.emit(f"<b style='color:red;'>Error: {e}</b>")
+            self.log_signal.emit(f"<pre>{traceback.format_exc()}</pre>")
+        finally:
+            # --- 260105 新增：恢复根日志记录器的处理器和级别 ---
+            import logging
+            root_logger = logging.getLogger()
+            # 清理当前可能存在的处理器（由子 CaseRunner 添加的）
+            root_logger.handlers.clear()
+            # 恢复原始的处理器和日志级别
+            for handler in getattr(self, 'old_handlers', []):
+                root_logger.addHandler(handler)
+            root_logger.setLevel(getattr(self, 'old_level', logging.WARNING))
+            # --- End of new block ---
+
+            self.finished_signal.emit()
+
+    def _update_excel_result(self, row_index: int, status: str):
+        """Update the 'Status' column in the Excel file."""
+        try:
+            df = pd.read_excel(self.excel_path)
+            df.loc[row_index, "Status"] = status
+            df.to_excel(self.excel_path, index=False, engine='openpyxl')
+        except Exception as e:
+            self.log_signal.emit(f"<b style='color:orange;'>Failed to update Excel: {e}</b>")
+
+    # --- 在 ExcelPlanRunner 类中新增方法 ---
+    def _merge_directories(self, src: Path, dst: Path):
+        """
+        Recursively merge the contents of src directory into dst directory.
+        If a file exists in both, the one from src will overwrite the one in dst.
+        """
+        dst.mkdir(parents=True, exist_ok=True)
+        for item in src.iterdir():
+            dest_item = dst / item.name
+            if item.is_dir():
+                self._merge_directories(item, dest_item)
+            else:
+                shutil.copy2(item, dest_item)
+
+    def stop(self) -> None:
+        """Stop the runner and its current child CaseRunner if any."""
+        self.requestInterruption()
+        # 260105 如果有正在运行的子 CaseRunner，也尝试停止它
+        if self._current_case_runner is not None:
+            try:
+                self._current_case_runner.stop()
+            except Exception as e:
+                logging.warning("Failed to stop child CaseRunner: %s", e)
+
+__all__ = ["reset_wizard_after_run", "LiveLogWriter", "CaseRunner", "ExcelPlanRunner"]

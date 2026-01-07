@@ -31,8 +31,11 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
     QWidget,
     QTableWidgetItem,
+    QLabel,
+    QVBoxLayout,
+    QSizePolicy,
 )
-from qfluentwidgets import CardWidget, ComboBox, LineEdit, PushButton, TableWidget, InfoBar, InfoBarPosition
+from qfluentwidgets import CardWidget, ComboBox, LineEdit, PushButton, TableWidget, InfoBar, InfoBarPosition, PrimaryPushButton
 
 from src.util.constants import AUTH_OPTIONS, OPEN_AUTH, Paths, RouterConst
 from src.tools.router_tool.router_factory import get_router
@@ -42,6 +45,8 @@ from src.ui.view.config.config_compatibility import (
     CompatibilityConfigPage,
     derive_selected_router_keys,
 )
+
+from src.ui.view.config.config_function import FunctionConfigForm
 
 
 class RvrWifiConfigPage(CardWidget):
@@ -73,6 +78,35 @@ class RvrWifiConfigPage(CardWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
         outer.addWidget(self._content, 1)
+
+        # # For Function test (func mode)
+        # # create func qwidget
+        # self.func_content = QWidget(self)
+        # self.func_content.setSizePolicy(
+        #     QSizePolicy.Expanding,
+        #     QSizePolicy.Expanding
+        # )
+        # func_layout = QHBoxLayout(self.func_content)
+        # func_layout.setContentsMargins(0, 0, 0, 0)
+        # func_layout.setSpacing(8)
+        #
+        # # ➕ 左侧：功能测试配置表单（来自独立模块）
+        # self.func_form = FunctionConfigForm(parent=self.func_content)
+        # func_layout.addWidget(self.func_form, 1)
+        #
+        # # ➕ 右侧：功能测试项列表（占位，未来可替换为 FormListPage）
+        # self.func_list = QWidget()
+        # list_layout = QVBoxLayout(self.func_list)
+        # #list_layout.addWidget(QLabel("Function Name:）"))
+        # func_layout.addWidget(self.func_list, 5)
+        #
+        # self.func_content.setVisible(False)
+        # outer.addWidget(self.func_content, 1)
+
+        self.func_form = FunctionConfigForm(parent=self)
+        self.func_form.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        outer.addWidget(self.func_form, 1)
+        self.func_form.setVisible(False)
 
         self.form = RouterConfigForm(self.router, parent=self._content)
         layout.addWidget(self.form, 2)
@@ -126,10 +160,12 @@ class RvrWifiConfigPage(CardWidget):
         mode = str(mode or "").lower()
         show_rvr = mode == "performance"
         show_compat = mode == "compatibility"
-        logging.debug("compat mode=%s show_rvr=%s show_compat=%s", mode, show_rvr, show_compat)
-
+        show_func = mode in ("functionality", "func", "project", "stb")
+        logging.debug("compat mode=%s show_rvr=%s show_compat=%s show_func=%s", mode, show_rvr, show_compat, show_func)
         self._content.setVisible(show_rvr)
         self.compat_page.setVisible(show_compat)
+        #self.func_content.setVisible(show_func)
+        self.func_form.setVisible(show_func)
 
         if show_compat:
             # Refresh router selection from the merged configuration so
