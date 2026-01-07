@@ -22,6 +22,7 @@ router:
 text_case: test/performance/test_wifi_peak_throughput.py
 debug:
   database_mode: false
-  skip_router: false
+  skip_router: true
   skip_corner_rf: false
+  skip_connect: false
 csv_path: performance_test_csv/ai_wifi_scenarios.csv

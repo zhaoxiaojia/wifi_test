@@ -1,391 +1,474 @@
 """
-Wpa
+WPA helpers.
 
-This module is part of the reporting package.
+This module hosts the core wpa_supplicant control logic. Product/platform
+wrappers should delegate to this module rather than duplicating the same
+control flows.
 """
+
+from __future__ import annotations
+
 import logging
 import re
 import time
 
 
-class cmd_wpa:
-    """
-    Cmd wpa
+class WpaSupplicantManager:
+    def __init__(self, executor, ui_signature: str | None = None, script_signature: str | None = None) -> None:
+        self.executor = executor
+        self.ui_signature = ui_signature or "/etc/wpa-supp.conf"
+        self.script_signature = script_signature or "/tmp/wpa_supplicant.conf"
+        self.process_list: list[dict[str, str]] = []
 
-    Parameters
-    ----------
-    None
-        This class is instantiated without additional parameters.
+    def refresh_process_list(self):
+        self.process_list.clear()
+        self.executor.write("ps -A -o pid,args | grep 'wpa_supplicant'")
+        ps_out = self.executor.recv()
+        for line in ps_out.splitlines():
+            line = line.strip()
+            if not line or "grep" in line:
+                continue
+            parts = line.split(None, 1)
+            if len(parts) != 2:
+                continue
+            pid, cmdline = parts
+            if self.ui_signature and self.ui_signature in cmdline:
+                proc_type = "ui"
+            elif self.script_signature and self.script_signature in cmdline:
+                proc_type = "script"
+            else:
+                proc_type = "unknown"
+            self.process_list.append({"pid": pid, "cmdline": cmdline, "type": proc_type})
 
-    Returns
-    -------
-    None
-        Classes return instances implicitly when constructed.
-    """
-    def __init__(self, host=None, dut=None):
-        """
-        Init
+    def kill_by_type(self, proc_type):
+        self.refresh_process_list()
+        killed = []
+        for proc in self.process_list:
+            if proc["type"] != proc_type:
+                continue
+            self.executor.write(f"kill {proc['pid']}")
+            killed.append(proc)
+            logging.info("[KILL] %s: PID=%s CMD=%s", proc_type, proc["pid"], proc["cmdline"])
+            time.sleep(0.5)
+        if not killed:
+            logging.info("No %s wpa_supplicant to kill", proc_type)
 
-        Parameters
-        ----------
-        host : object
-            Description of parameter 'host'.
-        dut : object
-            Description of parameter 'dut'.
+    def restart_ui_wpa(self, proc_type):
+        self.kill_by_type("script")
+        for proc in self.process_list:
+            if proc["type"] != proc_type:
+                continue
+            cmd = proc["cmdline"]
+            self.executor.write(cmd + " &")
+            logging.info("[RESTART] %s: %s", proc_type, cmd)
+            time.sleep(1)
 
-        Returns
-        -------
-        None
-            This function does not return a value.
-        """
-        self.host_control = host
+    def restart_interface(self, iface="wlan0"):
+        self.executor.write(f"ip link set {iface} down")
+        time.sleep(0.5)
+        self.executor.write(f"ip link set {iface} up")
+        time.sleep(1)
 
+    def make_ctrl_dir(self, path="/tmp/wpa_supplicant"):
+        self.executor.write(f"mkdir -p {path}")
+        time.sleep(0.2)
 
-        self.dut_control = dut
-        self.interface = 'wlp0s20f3'
+    def _wpa_cli(self, iface: str, cmd: str, ctrl_dir: str = "/tmp/wpa_supplicant") -> str:
+        self.executor.write(f"wpa_cli -p {ctrl_dir} -i {iface} {cmd}")
+        return self.executor.recv()
 
-    def send_cmd(self, cmd, target):
-        """
-        Send cmd
+    @staticmethod
+    def _sh_single_quote(value: str) -> str:
+        return "'" + value.replace("'", "'\\''") + "'"
 
-        Sends shell commands to the host or device and returns the output.
-        Asserts conditions to verify the success of operations.
-        Logs informational or warning messages for debugging and status reporting.
+    def create_network_block(
+        self,
+        ssid: str,
+        auth_type: str = "psk",
+        psk: str | None = None,
+        eap: str | None = None,
+        identity: str | None = None,
+        password: str | None = None,
+        key_mgmt: str | None = None,
+        proto: str | None = None,
+        ieee80211w: int | None = None,
+        pairwise: str | None = None,
+        group: str | None = None,
+        pmf: int | None = None,
+        priority: int | None = None,
+    ) -> str:
+        lines: list[str] = ["network={", f'    ssid="{ssid}"']
+        auth = (auth_type or "").lower()
+        if auth in {"open", "none"}:
+            lines.append("    key_mgmt=NONE")
+        elif auth in {"psk", "wpa-psk", "wpa2-psk"}:
+            lines.append(f'    psk="{psk or ""}"')
+        elif auth in {"sae", "wpa3"}:
+            lines.append("    key_mgmt=SAE")
+            lines.append(f'    psk="{psk or ""}"')
+        elif auth in {"eap", "wpa-eap", "enterprise"}:
+            lines.append("    key_mgmt=WPA-EAP")
+            if eap:
+                lines.append(f"    eap={eap}")
+            if identity:
+                lines.append(f'    identity="{identity}"')
+            if password:
+                lines.append(f'    password="{password}"')
 
-        Parameters
-        ----------
-        cmd : object
-            Description of parameter 'cmd'.
-        target : object
-            Identifier indicating whether the command runs on the host or the device.
+        if key_mgmt:
+            lines.append(f"    key_mgmt={key_mgmt}")
+        if proto:
+            lines.append(f"    proto={proto}")
+        if ieee80211w is not None:
+            lines.append(f"    ieee80211w={ieee80211w}")
+        if pairwise:
+            lines.append(f"    pairwise={pairwise}")
+        if group:
+            lines.append(f"    group={group}")
+        if pmf is not None:
+            lines.append(f"    pmf={pmf}")
+        if priority is not None:
+            lines.append(f"    priority={priority}")
+        lines.append("}")
+        return "\n".join(lines)
 
-        Returns
-        -------
-        object
-            Description of the returned value.
-        """
-        if target == 'host':
-            assert self.host_control, "Can't find any host control"
-            logging.info(cmd)
-            return self.host_control.checkoutput_root(cmd)
-        elif target == 'dut':
-            assert self.dut_control, "Can't find any dut control"
-            logging.info(cmd)
-            return self.dut.checkoutput(cmd)
+    def create_conf(
+        self,
+        ssid: str,
+        auth_type: str = "psk",
+        psk: str | None = None,
+        eap: str | None = None,
+        identity: str | None = None,
+        password: str | None = None,
+        key_mgmt: str | None = None,
+        proto: str | None = None,
+        ieee80211w: int | None = None,
+        pairwise: str | None = None,
+        group: str | None = None,
+        pmf: int | None = None,
+        priority: int | None = None,
+        *,
+        ap_scan: int = 1,
+        ctrl_interface: str = "/tmp/wpa_supplicant",
+        ctrl_interface_group: int = 0,
+        conf_path: str = "/tmp/wpa_supplicant.conf",
+    ) -> str:
+        network_block = self.create_network_block(
+            ssid,
+            auth_type=auth_type,
+            psk=psk,
+            eap=eap,
+            identity=identity,
+            password=password,
+            key_mgmt=key_mgmt,
+            proto=proto,
+            ieee80211w=ieee80211w,
+            pairwise=pairwise,
+            group=group,
+            pmf=pmf,
+            priority=priority,
+        )
+        wpa_conf = (
+            f"ap_scan={ap_scan}\n"
+            f"ctrl_interface={ctrl_interface}\n"
+            f"ctrl_interface_group={ctrl_interface_group}\n"
+            f"{network_block}\n"
+        )
+        lines = wpa_conf.splitlines()
+        if not lines:
+            self.executor.write(f"rm -f {conf_path}")
+            time.sleep(0.2)
+            return conf_path
 
-    def  flush_wlan(self, target):
-        """
-        Flush wlan
+        self.executor.write(f"rm -f {conf_path}")
+        time.sleep(0.1)
+        self.executor.write(f"echo {self._sh_single_quote(lines[0])} > {conf_path}")
+        time.sleep(0.05)
+        for line in lines[1:]:
+            self.executor.write(f"echo {self._sh_single_quote(line)} >> {conf_path}")
+            time.sleep(0.05)
+        time.sleep(0.2)
+        return conf_path
 
-        Sends shell commands to the host or device and returns the output.
-        Waits for a specified duration to allow asynchronous operations to complete.
+    def start_wpa_supplicant(self, iface="wlan0", conf="/tmp/wpa_supplicant.conf", debug: bool = False):
+        log_flag = "-dd" if debug else ""
+        self.executor.write(f"wpa_supplicant -B -i {iface} -c {conf} {log_flag}".strip())
+        time.sleep(1)
 
-        Parameters
-        ----------
-        target : object
-            Identifier indicating whether the command runs on the host or the device.
-
-        Returns
-        -------
-        None
-            This function does not return a value.
-        """
-        if not self.send_cmd(f'ifconfig {self.interface} |egrep -o "inet [^ ]*"|cut -d " " -f 2', target):
-            self.send_cmd(f'dhclient {self.interface}', target)
-            time.sleep(5)
-
-    def clear_wlan(self, target):
-        """
-        Clear wlan
-
-        Sends shell commands to the host or device and returns the output.
-        Waits for a specified duration to allow asynchronous operations to complete.
-
-        Parameters
-        ----------
-        target : object
-            Identifier indicating whether the command runs on the host or the device.
-
-        Returns
-        -------
-        None
-            This function does not return a value.
-        """
-        if self.send_cmd(f'ifconfig {self.interface} |egrep -o "inet [^ ]*"|cut -d " " -f 2', target):
-            self.send_cmd(f'dhclient -r {self.interface}', target)
-            time.sleep(5)
-
-    def associate_wifi(self, target, **kwargs):
-        """
-        Associate Wi‑Fi
-
-        Sends shell commands to the host or device and returns the output.
-        Configures or controls the wpa_supplicant client for Wi‑Fi connectivity.
-        Waits for a specified duration to allow asynchronous operations to complete.
-        Logs informational or warning messages for debugging and status reporting.
-
-        Parameters
-        ----------
-        target : object
-            Identifier indicating whether the command runs on the host or the device.
-        kwargs : object
-            Description of parameter 'kwargs'.
-
-        Returns
-        -------
-        object
-            Description of the returned value.
-        """
-        timeout = kwargs.get('timeout', 60)
-        retry = 3
-        interface = kwargs.get('interface', self.interface)
-        radio = kwargs.get('radio', '2.4G')
-        ssid = kwargs.get('ssid', None)
-        psk = kwargs.get('psk', None)
-        key_mgmt = kwargs.get('key_mgmt', None)
-        configs = kwargs.get('configs', None)
-        wpa_conf = kwargs.get('wpa_conf', None)
-        ap_scan = kwargs.get('ap_scan', 1)
-        p2p_disabled = kwargs.get('p2p_disabled', 1)
-        ctrl_interface = kwargs.get('ctrl_interface', '/var/run/wpa_supplicant')
-        ctrl_interface_group = kwargs.get('ctrl_interface_group', 0)
-        pairwise = kwargs.get('pairwise', None)
-        security = kwargs.get('security', None)
-        bssid = kwargs.get('bssid', None)
-        eap = kwargs.get('eap', None)
-        phase2 = kwargs.get('phase2', None)
-        proto = kwargs.get('proto', None)
-        scan_ssid = kwargs.get('scan_ssid', None)
-
-        current_status = self.send_cmd('wpa_cli status', target)
-        if current_status:
-            if ssid in current_status:
-                logging.info('already associate')
+    def wait_for_state(
+        self,
+        iface="wlan0",
+        target_state="COMPLETED",
+        timeout: int = 60,
+        *,
+        ctrl_dir: str = "/tmp/wpa_supplicant",
+        interval_s: int = 5,
+    ) -> bool:
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            status = self._wpa_cli(iface, "status", ctrl_dir=ctrl_dir)
+            if status and f"wpa_state={target_state}" in status:
                 return True
-            if 'wpa_state=COMPLETED' in current_status:
-                logging.info('forget first')
-                self.forget_wifi(target, **kwargs)
-        wpa_supplicant_conf = '/etc/wpa_supplicant.conf'
-        if not configs:
-            configs = f'ap_scan={ap_scan}\np2p_disabled={p2p_disabled}\nctrl_interface={ctrl_interface}\nctrl_interface_group={ctrl_interface_group}\n'
-            if radio == '6G':
-                configs += 'pmf=2\n'
-                configs += 'sae_pwe=2\n'
-            configs += 'network={\n'
-            if isinstance(security, str) and key_mgmt is None:
-                if security == 'None':
-                    key_mgmt = 'NONE'
-                elif re.search(f'Enterprise', security, re.I):
-                    key_mgmt = 'WPA-EAP'
-                elif re.search(f'WPA3-Personal', security, re.I):
-                    key_mgmt = 'SAE'
-                else:
-                    key_mgmt = 'WPA-PSK'
-            if isinstance(security, str) and proto is None and re.search(f'WPA', security, re.I):
-                proto = 'WPA RSN'
-            for var in ['ssid', 'psk', 'wep_key0', 'wep_key1', 'wep_key2', 'wep_key3', 'identity', 'password',
-                        'phase1', 'phase2']:
-                if var in locals().keys() and locals()[var] != None:
-                    if key_mgmt == 'NONE' and var == 'psk':
-                        continue
-                    configs += f'{var}=\\"{locals()[var]}\\"\n'
-            for var in ['proto', 'key_mgmt', 'wep_tx_keyidx', 'pairwise', 'group', 'priority', 'scan_freq',
-                        'filter_ssids',
-                        'scan_ssid', 'frequency', 'freq_list', 'mode', 'eap', 'ht40_intolerant', 'bssid', 'ieee80211w']:
-                if var in locals().keys() and locals()[var] != None:
-                    configs += f'{var}={locals()[var]}\n'
-            if isinstance(pairwise, str) and radio == '6G':
-                configs += 'pairwise=CCMP\n'
-            if key_mgmt == 'SAE':
-                configs += 'ieee80211w=2\n'
-            configs += '}'
-        if wpa_conf is None:
-            self.host_control.checkoutput(f'echo "{configs}" > /etc/wpa_supplicant.conf')
+            time.sleep(interval_s)
+        return False
+
+    def run_udhcpc(self, iface="wlan0"):
+        self.executor.write(f"udhcpc -i {iface} -n -q")
+        time.sleep(3)
+
+    def get_ip_address(self, iface="wlan0") -> str:
+        self.executor.write(f"ifconfig {iface} | grep 'inet '")
+        info = self.executor.recv()
+        match = re.search(r"inet\\s+(\\d+\\.\\d+\\.\\d+\\.\\d+)", info)
+        return match.group(1) if match else ""
+
+    def status_check(self, iface="wlan0"):
+        ip = self.get_ip_address(iface=iface)
+        return ip or None
+
+    @staticmethod
+    def _parse_network_id(output: str) -> str:
+        normalized = (
+            output.replace("/r/n", "\n")
+            .replace("/n", "\n")
+            .replace("\r\n", "\n")
+            .replace("\r", "\n")
+        )
+        match = re.search(r"CTRL-EVENT-NETWORK-ADDED\s+(\d+)", normalized)
+        if match:
+            return match.group(1)
+        for line in normalized.splitlines():
+            token = line.strip()
+            if token.isdigit():
+                return token
+        match = re.search(r"\b(\d+)\b", normalized)
+        if match:
+            return match.group(1)
+        raise ValueError("Failed to parse wpa_cli network id")
+
+    def _forget_all_networks_cli(self, iface: str) -> None:
+        _ = self._wpa_cli(iface, "disconnect", ctrl_dir="")
+        out = self._wpa_cli(iface, "remove_network all", ctrl_dir="")
+        logging.info(self._wpa_cli(iface, "list_networks", ctrl_dir=""))
+        self._wpa_cli(iface, "save_config", ctrl_dir="")
+
+
+    def _connect_via_cli(
+        self,
+        ssid: str,
+        *,
+        auth_type: str,
+        psk: str | None,
+        iface: str,
+        dhcp: bool,
+        state_timeout: int,
+        scan_wait: int,
+    ):
+        self._forget_all_networks_cli(iface)
+        _ = self._wpa_cli(iface, "scan", ctrl_dir="")
+        time.sleep(scan_wait)
+        _ = self._wpa_cli(iface, "scan_results", ctrl_dir="")
+
+        net_id = self._parse_network_id(self._wpa_cli(iface, "add_network", ctrl_dir=""))
+        _ = self._wpa_cli(iface, f"set_network {net_id} ssid '\"{ssid}\"'", ctrl_dir="")
+
+        auth = (auth_type or "").strip().lower()
+        if auth in {"open", "none"}:
+            _ = self._wpa_cli(iface, f"set_network {net_id} key_mgmt NONE", ctrl_dir="")
+        elif auth in {"sae", "wpa3"}:
+            _ = self._wpa_cli(iface, f"set_network {net_id} key_mgmt SAE", ctrl_dir="")
+            _ = self._wpa_cli(iface, f"set_network {net_id} ieee80211w 2", ctrl_dir="")
+            _ = self._wpa_cli(iface, f"set_network {net_id} sae_password '\"{psk or ''}\"'", ctrl_dir="")
         else:
-            tmp_conf = '/tmp/wpa_supplicant.conf'
-            wpa_supplicant_conf = tmp_conf
-            with open(tmp_conf, 'w') as conf:
-                conf.write(wpa_conf)
-        rsp = self.send_cmd(f'cat {wpa_supplicant_conf}', target)
-        for i in range(retry):
-            self.send_cmd(f'killall wpa_supplicant', target)
-            self.send_cmd(f'wpa_supplicant -B -i {interface} -c /etc/wpa_supplicant.conf', target)
-            time.sleep(5)
-            for j in range(3):
+            _ = self._wpa_cli(iface, f"set_network {net_id} psk '\"{psk or ''}\"'", ctrl_dir="")
 
-                rsp = self.send_cmd(f'wpa_cli status', target)
-                if rsp and ('wpa_state=COMPLETED' in rsp):
-                    return True
-                else:
-                    if isinstance(radio, str) and radio == '6G':
-                        time.sleep(30)
-                    else:
-                        time.sleep(5)
-            else:
-                return False
+        _ = self._wpa_cli(iface, f"enable_network {net_id}", ctrl_dir="")
+        status_out = self._wpa_cli(iface, "status", ctrl_dir="")
+        logging.info("[DBG_ONN_WPA] status after enable:\n%s", status_out.strip())
+        list_out = self._wpa_cli(iface, "list_networks", ctrl_dir="")
+        logging.info("[DBG_ONN_WPA] list_networks:\n%s", list_out.strip())
+        # _ = self._wpa_cli(iface, "reassociate", ctrl_dir="")
+        # ok = self.wait_for_state(iface=iface, target_state="COMPLETED", timeout=state_timeout, ctrl_dir="")
+        # if not ok:
+        #     return None
+        _ = self._wpa_cli(iface, "save_config", ctrl_dir="")
+        if dhcp:
+            self.executor.write(f"udhcpc -i {iface} -n -t 20 -T 3")
+            udhcpc_out = self.executor.recv()
+            logging.info("[DBG_ONN_WPA] udhcpc output:\n%s", udhcpc_out.strip())
 
-    def disassociate_wifi(self, target, **kwargs):
-        """
-        Disassociate Wi‑Fi
+        ip = self.status_check(iface=iface)
+        logging.info("[DBG_ONN_WPA] status_check ip=%s", ip or "")
+        return ip
 
-        Sends shell commands to the host or device and returns the output.
-        Configures or controls the wpa_supplicant client for Wi‑Fi connectivity.
-
-        Parameters
-        ----------
-        target : object
-            Identifier indicating whether the command runs on the host or the device.
-        kwargs : object
-            Description of parameter 'kwargs'.
-
-        Returns
-        -------
-        None
-            This function does not return a value.
-        """
-        timeout = kwargs.get('timeout', 20)
-        self.send_cmd(f'wpa_cli disconnect', target)
-
-
-    def connect_wifi(self, target, **kwargs):
-        """
-        Connect Wi‑Fi
-
-        Parameters
-        ----------
-        target : object
-            Identifier indicating whether the command runs on the host or the device.
-        kwargs : object
-            Description of parameter 'kwargs'.
-
-        Returns
-        -------
-        None
-            This function does not return a value.
-        """
-        self.associate_wifi(target, **kwargs)
-        self.flush_wlan(target)
-
-    def forget_wifi(self, target, **kwargs):
-        """
-        Forget Wi‑Fi
-
-        Parameters
-        ----------
-        target : object
-            Identifier indicating whether the command runs on the host or the device.
-        kwargs : object
-            Description of parameter 'kwargs'.
-
-        Returns
-        -------
-        None
-            This function does not return a value.
-        """
-        self.disassociate_wifi(target, **kwargs)
-        self.clear_wlan(target)
-
-    def get_wifi_conn_info(self, target, **kwargs):
-        """
-        Get Wi‑Fi conn info
-
-        Sends shell commands to the host or device and returns the output.
-        Configures or controls the wpa_supplicant client for Wi‑Fi connectivity.
-
-        Parameters
-        ----------
-        target : object
-            Identifier indicating whether the command runs on the host or the device.
-        kwargs : object
-            Description of parameter 'kwargs'.
-
-        Returns
-        -------
-        object
-            Description of the returned value.
-        """
-        conn_info = {}
-        timeout = kwargs.get('timeout', 20)
-        interface = kwargs.get('interface', self.interface)
-        rsp = self.send_cmd(f'wpa_cli status', target)
-        rsp_line = rsp.splitlines()
-        for index, line in enumerate(rsp_line):
-            reg_rsp = re.findall('([^=]*)=([^\n]*)', line, re.I | re.M)
-            if reg_rsp:
-                conn_info[reg_rsp[0][0]] = reg_rsp[0][1]
-        rsp = self.send_cmd(f'iwconfig {interface}', target)
-        reg_rsp = re.findall('Access Point: (([0-9A-F]{2}:){5}[0-9A-F]{2})', rsp, re.I | re.M)
-        if reg_rsp:
-            conn_info['access_point'] = reg_rsp[0][0]
-        reg_rsp = re.findall('Bit Rate=([0-9]{1,3})', rsp, re.I | re.M)
-        if reg_rsp:
-            conn_info['bit_rate'] = reg_rsp[0]
-        reg_rsp = re.findall('Bit Rate:(.*) [M|G]b/s', rsp, re.I)
-        if reg_rsp:
-            conn_info['bit_rate'] = reg_rsp[0]
-        reg_rsp = re.findall('ESSID:\"(.*)\"', rsp, re.I)
-        if reg_rsp:
-            conn_info['ssid'] = reg_rsp[0]
-        reg_rsp = re.findall('Frequency:([0-9]+.[0-9]+) GHz', rsp, re.I)
-        if reg_rsp:
-            conn_info['frequency'] = reg_rsp[0]
-
-        return conn_info
-
-    def scan_aps(self, target, **kwargs):
-        """
-        Scan aps
-
-        Sends shell commands to the host or device and returns the output.
-        Configures or controls the wpa_supplicant client for Wi‑Fi connectivity.
-        Waits for a specified duration to allow asynchronous operations to complete.
-
-        Parameters
-        ----------
-        target : object
-            Identifier indicating whether the command runs on the host or the device.
-        kwargs : object
-            Description of parameter 'kwargs'.
-
-        Returns
-        -------
-        object
-            Description of the returned value.
-        """
-        timeout = kwargs.get('timeout', 20)
-        interface = kwargs.get('interface', self.interface)
-        retry = kwargs.get('retry', 5)
-        ap = kwargs.get('ap', None)
-        rsp = ""
-
-        scan_result = False
-        self.send_cmd(f'killall wpa_supplicant', target)
-        for i in range(retry):
+    def _connect_via_conf(
+        self,
+        ssid: str,
+        *,
+        auth_type: str,
+        psk: str | None,
+        eap: str | None,
+        identity: str | None,
+        password: str | None,
+        key_mgmt: str | None,
+        proto: str | None,
+        ieee80211w: int | None,
+        pairwise: str | None,
+        group: str | None,
+        pmf: int | None,
+        priority: int | None,
+        iface: str,
+        dhcp: bool,
+        wait_connect: int,
+        max_retry: int,
+        retry_interval: int,
+        state_timeout: int,
+    ):
+        for attempt in range(1, max_retry + 1):
+            logging.info("Attempt %d to connect %s", attempt, ssid)
             try:
-                rsp = self.send_cmd(f'iw dev {interface} scan', target)
-            except Exception as error:
-                scan_result = False
-            if ap:
-                re1 = re.compile(r"{}(\b|\(|\n)".format(ap), re.I)
-                if re1.search(rsp, re.I):
-                    scan_result = True
-                    break
-                else:
-                    scan_result = False
-                    time.sleep(2)
-            else:
-                if re.search('busy|unavailable|No scan result', rsp, re.I):
+                self.kill_by_type("ui")
+                self.kill_by_type("unknown")
+                ctrl_dir = "/tmp/wpa_supplicant"
+                self.make_ctrl_dir(ctrl_dir)
+                conf_path = self.create_conf(
+                    ssid,
+                    auth_type,
+                    psk,
+                    eap,
+                    identity,
+                    password,
+                    key_mgmt,
+                    proto,
+                    ieee80211w,
+                    pairwise,
+                    group,
+                    pmf,
+                    priority,
+                    ctrl_interface=ctrl_dir,
+                )
 
-                    scan_result = False
-                    time.sleep(2)
-                else:
-                    break
-        return scan_result
+                self.executor.write(f"test -s {conf_path} && echo OK || echo FAIL")
+                verify_out = self.executor.recv().strip()
+                if "OK" not in verify_out:
+                    logging.error(
+                        "wpa conf write failed: %s (verify=%s)",
+                        conf_path,
+                        verify_out,
+                    )
+                    continue
 
+                self.start_wpa_supplicant(iface=iface, debug=False)
+                time.sleep(wait_connect)
+                reconn_out = self._wpa_cli(iface, "reconnect", ctrl_dir=ctrl_dir).strip()
+                status_out = self._wpa_cli(iface, "status", ctrl_dir=ctrl_dir).strip()
+                if reconn_out:
+                    logging.info("wpa_cli reconnect: %s", reconn_out)
+                if status_out:
+                    logging.info("wpa_cli status: %s", status_out.replace("\n", " | "))
+                ok = self.wait_for_state(
+                    iface=iface,
+                    target_state="COMPLETED",
+                    timeout=state_timeout,
+                    ctrl_dir=ctrl_dir,
+                )
+                if ok:
+                    if dhcp:
+                        self.run_udhcpc(iface=iface)
+                    logging.info("Attempt %d connection succeeded", attempt)
+                    time.sleep(3)
+                    self.restart_ui_wpa("ui")
+                    return self.status_check(iface=iface)
+                status_out = self._wpa_cli(iface, "status", ctrl_dir=ctrl_dir).strip()
+                if status_out:
+                    logging.info("wpa_cli status (timeout): %s", status_out.replace("\n", " | "))
+                logging.warning(
+                    "Attempt %d connection failed, retrying in %d seconds...",
+                    attempt,
+                    retry_interval,
+                )
+                time.sleep(retry_interval)
+                self.kill_by_type("script")
+            except Exception as exc:
+                logging.error("Attempt %d raised error: %s", attempt, exc)
+                time.sleep(retry_interval)
+        logging.error("Connection to %s failed after multiple attempts", ssid)
+        time.sleep(3)
+        self.restart_ui_wpa("ui")
+        return None
 
+    def scan_has_ssid(
+        self,
+        ssid: str,
+        *,
+        iface: str = "wlan0",
+        scan_wait: int = 3,
+        ctrl_dir: str = "/tmp/wpa_supplicant",
+    ) -> bool:
+        _ = self._wpa_cli(iface, "scan", ctrl_dir=ctrl_dir)
+        time.sleep(scan_wait)
+        out = self._wpa_cli(iface, "scan_results", ctrl_dir=ctrl_dir)
+        return ssid in out
 
+    def forget(self, iface: str = "wlan0", ctrl_dir: str = "/tmp/wpa_supplicant") -> None:
+        _ = self._wpa_cli(iface, "disconnect", ctrl_dir=ctrl_dir)
+        self.kill_by_type("script")
+        self.restart_ui_wpa("ui")
 
+    def connect(
+        self,
+        ssid: str,
+        *,
+        mode: str = "supplicant",
+        auth_type: str = "psk",
+        psk: str | None = None,
+        eap: str | None = None,
+        identity: str | None = None,
+        password: str | None = None,
+        key_mgmt: str | None = None,
+        proto: str | None = None,
+        ieee80211w: int | None = None,
+        pairwise: str | None = None,
+        group: str | None = None,
+        pmf: int | None = None,
+        priority: int | None = None,
+        iface: str = "wlan0",
+        dhcp: bool = True,
+        wait_connect: int = 5,
+        max_retry: int = 3,
+        retry_interval: int = 5,
+        state_timeout: int = 60,
+        scan_wait: int = 3,
+    ):
+        if mode == "cli":
+            return self._connect_via_cli(
+                ssid,
+                auth_type=auth_type,
+                psk=psk,
+                iface=iface,
+                dhcp=dhcp,
+                state_timeout=state_timeout,
+                scan_wait=scan_wait,
+            )
 
-
-
-
+        return self._connect_via_conf(
+            ssid,
+            auth_type=auth_type,
+            psk=psk,
+            eap=eap,
+            identity=identity,
+            password=password,
+            key_mgmt=key_mgmt,
+            proto=proto,
+            ieee80211w=ieee80211w,
+            pairwise=pairwise,
+            group=group,
+            pmf=pmf,
+            priority=priority,
+            iface=iface,
+            dhcp=dhcp,
+            wait_connect=wait_connect,
+            max_retry=max_retry,
+            retry_interval=retry_interval,
+            state_timeout=state_timeout,
+        )

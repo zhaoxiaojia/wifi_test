@@ -842,6 +842,11 @@ CUSTOM_TESTCASE_UI_RULES.append(
                 action="enable",
                 condition=lambda values: True,
             ),
+            SimpleFieldEffect(
+                target_field="debug.skip_connect",
+                action="enable",
+                condition=lambda values: True,
+            ),
               SimpleFieldEffect(
                   target_field="debug.skip_corner_rf",
                   action="enable",

@@ -79,6 +79,9 @@ panels:
           - key: debug.skip_router
             widget: checkbox
             label: "Skip router workflow"
+          - key: debug.skip_connect
+            widget: checkbox
+            label: "Skip DUT Wi-Fi connect workflow"
           - key: debug.skip_corner_rf
             widget: checkbox
             label: "Skip corner && RF workflow"

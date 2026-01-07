@@ -11,7 +11,7 @@ and to modify the underlying Tcl script as needed.
 import logging
 import os
 import re
-import subprocess
+from src.tools.connect_tool import command_batch as subprocess
 import time
 
 

@@ -9,7 +9,7 @@ from urllib.request import urlopen
 
 import pytest
 
-from src.tools.connect_tool.telnet_common import TelnetSession
+from src.tools.connect_tool.transports.telnet_tool import TelnetSession
 
 
 class LabDeviceController:

@@ -400,6 +400,28 @@ def _init_worker_env(
         f"--resultpath={report_dir}",
         case_path,
     ]
+    from src.util.constants import load_config
+
+    cfg = load_config(refresh=True)
+    connect_cfg = cfg.get("connect_type") or {}
+    dut_type = connect_cfg.get("type")
+    match dut_type:
+        case "Android":
+            pytest_args.append("--dut-type=Android")
+            android_cfg = connect_cfg.get("Android") or {}
+            device = android_cfg.get("device")
+            if device:
+                pytest_args.append(f"--android-device={device}")
+        case "Linux":
+            pytest_args.append("--dut-type=Linux")
+            telnet_cfg = connect_cfg.get("Linux") or {}
+            ip = telnet_cfg.get("ip")
+            if ip:
+                pytest_args.append(f"--linux-ip={ip}")
+            project_cfg = cfg.get("project") or {}
+            customer = project_cfg.get("customer")
+            if customer:
+                pytest_args.append(f"--project-customer={customer}")
 
     # Only apply stability retry/exit-first flags for stability cases.
     is_stability_case = is_stability_case_path(case_path)

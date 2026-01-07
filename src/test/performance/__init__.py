@@ -287,8 +287,8 @@ def common_setup(router: Router, router_info: Router) -> bool:
 def wait_connect(router_info: Router):
     third_party_cfg = get_cfg().get("connect_type", {}).get("third_party", {})
     flags = get_debug_flags()
-    if flags.skip_router:
-        reason = describe_debug_reason("skip_router", database_mode=flags.database_mode)
+    if flags.skip_connect:
+        reason = describe_debug_reason("skip_connect", database_mode=flags.database_mode)
         logging.info(
             "Debug flag (%s) enabled, skip Wi-Fi reconnection workflow (router=%s)",
             reason,
@@ -324,11 +324,11 @@ def wait_connect(router_info: Router):
             security_token = "wpa2"
             password = getattr(router_info, "password", "") or ""
 
-        connect_status = pytest.dut.connect_wifi(
+        connect_status = pytest.dut.wifi_connect(
             router_info.ssid,
             password,
             security_token,
-            hide=getattr(router_info, "hide_ssid", "") == '是',
+            hidden=getattr(router_info, "hide_ssid", "") == '是',
         )
 
     logging.info(f'dut_ip:{pytest.dut.dut_ip}')

@@ -10,7 +10,7 @@ This module contains the view layer for the Run page:
 from __future__ import annotations
 
 import socket
-import subprocess
+from src.tools.connect_tool import command_batch as subprocess
 import sys
 from pathlib import Path
 from contextlib import suppress

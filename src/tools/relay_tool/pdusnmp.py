@@ -7,7 +7,7 @@ information, constructs SNMP command strings and executes them using
 ``Parameters`` section.
 """
 import logging
-import subprocess
+from src.tools.connect_tool import command_batch as subprocess
 import time
 from typing import Any, Sequence
 

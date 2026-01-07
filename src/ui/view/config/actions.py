@@ -422,7 +422,7 @@ def refresh_config_page_controls(page: Any) -> None:
             normalized = dict(raw_value)
         else:
             normalized = {"database_mode": raw_value}
-        for option in ("database_mode", "skip_router", "skip_corner_rf"):
+        for option in ("database_mode", "skip_router", "skip_connect", "skip_corner_rf"):
             normalized[option] = _coerce_debug_flag(normalized.get(option))
         return normalized
 

@@ -217,6 +217,10 @@ a.set_info("192.168.200.4", '4', 'ZTE', 'ZXSLC SR6110',
            {'2.4G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
             '5G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
+a.set_info("192.168.200.4", '5', 'ARRIS', 'TG3492LG-LG',
+           {'2.4G': {'mode': '11N', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
+            '5G': {'mode': '11AC', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
+
 a.set_info("192.168.200.4", '6', 'TENDA', 'JD12LPROXINHAOZENGQIANGBAN',
            {'2.4G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
             '5G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
@@ -325,17 +329,13 @@ a.set_info("192.168.200.7", '8', 'ARRIS', 'TG3452',
            {'2.4G': {'mode': '11N', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
             '5G': {'mode': '11N', 'security_mode': 'wpa2', 'bandwidth': '20MHz'}})
 
-a.set_info("192.168.200.8", '1', 'ARRIS', 'TG3492LG-LG',
-           {'2.4G': {'mode': '11N', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
-            '5G': {'mode': '11AC', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
-
 a.set_info("192.168.200.8", '4', 'MERCURY', 'D126-LAN100M',
            {'2.4G': {'mode': '11N', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
             '5G': {'mode': '11AC', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
-a.set_info("192.168.200.8", '5', 'VANTIVA', 'SETUP-E089',
-           {'2.4G': {'mode': '11N', 'security_mode': 'wpa2', 'bandwidth': '40MHz'},
-            '5G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
+# a.set_info("192.168.200.8", '5', 'VANTIVA', 'SETUP-E089',
+#            {'2.4G': {'mode': '11N', 'security_mode': 'wpa2', 'bandwidth': '40MHz'},
+#             '5G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
 a.set_info("192.168.200.8", '7', 'BUFFALO', 'WNR-5400XE6P/N',
            {'2.4G': {'mode': '11N', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
@@ -345,11 +345,11 @@ a.set_info("192.168.200.8", '8', 'ARRIS', 'SBR-AC1750',
            {'2.4G': {'mode': '11N', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
             '5G': {'mode': '11AC', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
-a.set_info("192.168.200.102", '1', 'ARRISAAAAA', 'SBR-AAAAA',
+a.set_info("192.168.200.103", '1', 'ARRISAAAAA', 'SBR-AAAAA',
            {'2.4G': {'mode': '11N', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
             '5G': {'mode': '11AC', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
-a.set_info("192.168.200.102", '2', 'ARRISBBBBB', 'SBR-BBBBBB',
+a.set_info("192.168.200.103", '2', 'ARRISBBBBB', 'SBR-BBBBBB',
            {'2.4G': {'mode': '11N', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
             '5G': {'mode': '11AC', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 a.save_expect()

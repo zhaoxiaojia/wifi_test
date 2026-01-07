@@ -152,7 +152,7 @@ def _connect_wifi(target: WifiTarget) -> bool:
     )
     try:
         return bool(
-            pytest.dut.connect_wifi(target["ssid"], password, security_token, lan=False)
+            pytest.dut.wifi_connect(target["ssid"], password, security_token, lan=False)
         )
     except Exception as exc:  # pragma: no cover - hardware dependent
         logging.error("Wi-Fi connect API failed for %s: %s", target["ssid"], exc)
@@ -173,7 +173,7 @@ def _cycle_targets(
             if success:
                 run_checkpoints(label, checkpoints)
         finally:
-            pytest.dut.forget_wifi()
+            pytest.dut.wifi_forget()
 
         if success:
             logging.info("Successfully cycled %s", label)

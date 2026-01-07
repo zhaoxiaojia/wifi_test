@@ -1,10 +1,9 @@
 import logging
 import os
 import re
-import subprocess
+from src.tools.connect_tool import command_batch as subprocess
 import time
 import locale
-from subprocess import check_output
 
 from src.tools.yamlTool import yamlTool
 
