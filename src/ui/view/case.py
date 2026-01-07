@@ -46,7 +46,7 @@ from src.ui.view.config.config_compatibility import (
     derive_selected_router_keys,
 )
 
-from src.ui.view.config.function_config_form import FunctionConfigForm
+from src.ui.view.config.config_function import FunctionConfigForm
 
 
 class RvrWifiConfigPage(CardWidget):

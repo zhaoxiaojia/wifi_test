@@ -578,6 +578,7 @@ class RunPage(CardWidget):
                 last_plan_file = get_config_base() / "last_function_plan.txt"
 
                 if last_plan_file.exists():
+                    print("[DEBUG] last_function_plan txt found.")
                     excel_path = None
                     # --- Step 1: 仅读取内容，确保 with 块独立结束 ---
                     with open(last_plan_file, 'r', encoding='utf-8') as f:
@@ -801,6 +802,7 @@ class RunPage(CardWidget):
         self.case_info_label.setText(self._case_name_base)
         if self._last_report_dir:
             self.view.set_allure_report_dir(self._last_report_dir)
+        self.excel_plan_path = None   # --- reset excel_plan_path ---
 
         # --- 260106 新增：通知主应用重置向导状态 ---
         print("[DEBUG] About to call reset_wizard_after_run")
