@@ -119,6 +119,8 @@ BASIC_SECTION_KEYS: Final[frozenset[str]] = frozenset({
     # Support both legacy and new naming for the system section.
     "android_system",
     "system",
+    "duration_control",
+    "router",
     # Shared throughput generator configuration.
     "rvr",
 })
@@ -137,7 +139,6 @@ STABILITY_CONFIG_FILENAME: Final[str] = "config_stability.yaml"
 COMPATIBILITY_CONFIG_FILENAME: Final[str] = "config_compatibility.yaml"
 STABILITY_SECTION_KEYS: Final[frozenset[str]] = frozenset({
     "stability",
-    "duration_control",
     "check_point",
     "cases",
 })
@@ -150,7 +151,6 @@ PERFORMANCE_SECTION_KEYS: Final[frozenset[str]] = frozenset({
     "router",
     "text_case",
     "debug",
-    "duration_control",
     "check_point",
     "cases",
     "csv_path",

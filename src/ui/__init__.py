@@ -55,7 +55,7 @@ SIDEBAR_PAGE_KEYS: Tuple[str, ...] = (
 SIDEBAR_PAGE_LABELS: Dict[str, Tuple[str, Optional[str]]] = {
     "account": ("Login", None),
     "config": ("Config Setup", "Case Config"),
-    "case": ("RVR Scenario Config", "RVR Wi-Fi Config"),
+    "case": ("Advanced Test Setup", "RVR Wi-Fi Config"),
     "run": ("Test", None),
     "report": ("Reports", None),
     "about": ("About", None),

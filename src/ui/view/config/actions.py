@@ -230,6 +230,8 @@ def apply_ui(page: Any, case_path: str) -> None:
                     category = _case_cat(case_path=case_path, display_path=None)
                     if category == "compatibility":
                         rvr_page.set_case_mode("compatibility")
+                    elif category == "project":
+                        rvr_page.set_case_mode("project")
                     elif info.enable_rvr_wifi:
                         rvr_page.set_case_mode("performance")
                     else:

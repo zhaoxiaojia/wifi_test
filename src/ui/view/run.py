@@ -27,7 +27,22 @@ from src.util.constants import get_src_base, Paths
 from src.ui.controller.run_ctl import CaseRunner
 from src.ui.view.theme import ACCENT_COLOR, CONTROL_HEIGHT, FONT_FAMILY, apply_theme, format_log_html
 from src.ui.view.common import animate_progress_fill, attach_view_to_page
+from qfluentwidgets import MessageBox
+from src.util.constants import get_config_base
 
+
+def _is_project_test_script(case_path: str) -> bool:
+    """判断是否为 project/ 下的功能测试脚本"""
+    p = Path(case_path).resolve()
+    parts = p.parts
+
+    # 查找连续的三个部分：'src', 'test', 'project'
+    for i in range(len(parts) - 2):
+        if (str(parts[i]).lower() == "src" and
+                str(parts[i + 1]).lower() == "test" and
+                str(parts[i + 2]).lower() == "project"):
+            return True
+    return False
 
 class RunView(CardWidget):
     """Pure UI view for executing and monitoring test runs."""
@@ -259,7 +274,6 @@ class RunPage(CardWidget):
 
         self.display_case_path = self._calc_display_path(case_path, display_case_path)
         self._last_report_dir: str | None = None
-
         # Compose pure UI view and alias widgets for logic.
         self.view = RunView(self)
         attach_view_to_page(self, self.view)
@@ -286,6 +300,53 @@ class RunPage(CardWidget):
         self.process.installEventFilter(self)
         self._progress_animation = None
         self._current_percent = 0
+
+        #260105 For function test; Auto-load last function plan
+        try:
+            from src.util.constants import get_config_base
+            context_file = get_config_base() / "last_function_plan.txt"
+            print(f"[DEBUG] Looking for last plan at: {context_file}")
+            try:
+                with open(context_file, 'r', encoding='utf-8') as f:
+                    excel_path = f.read().strip()
+                # ↑↑↑ 文件 f 在此处已明确超出作用域并应被关闭 ↑↑↑
+            except Exception as read_error:
+                print(f"[ERROR] Failed to read last_function_plan.txt: {read_error}")
+                excel_path = None
+
+                # --- Step 2: 验证并设置路径 ---
+            if excel_path and Path(excel_path).exists():
+                print(f"[DEBUG] Found plan path in file: '{excel_path}'")
+                print(f"[DEBUG] Plan file exists on disk. Setting it.")
+                self.set_excel_plan_path(excel_path)
+
+                # --- Step 3: 尝试删除（增加安全措施）---
+                try:
+                    # 可选：增加一个极短的延迟，让 OS 有时间释放句柄
+                    import time
+                    time.sleep(0.01)  # 10毫秒，通常足够
+
+                    context_file.unlink()
+                    print(f"[DEBUG] Deleted last_function_plan.txt in __init__ for safety.")
+
+                except PermissionError as pe:
+                    # 捕获特定的权限错误
+                    print(f"[WARNING] Permission denied when deleting file: {pe}")
+                    # 降级方案：重命名文件
+                    try:
+                        bak_file = context_file.with_suffix('.txt.bak')
+                        if bak_file.exists():
+                            bak_file.unlink()  # 先清理旧的 .bak
+                        context_file.rename(bak_file)
+                        print(f"[DEBUG] Renamed to {bak_file.name} as fallback.")
+                    except Exception as rename_error:
+                        print(f"[ERROR] Fallback rename also failed: {rename_error}")
+
+                except Exception as e:
+                    print(f"[WARNING] Unexpected error when deleting file: {e}")
+        except Exception as e:
+            print(f"[DEBUG] Warning: Could not auto-load last function plan: {e}")
+        # End of auto-load block
 
         self.reset()
         self.finished_count = 0
@@ -484,7 +545,6 @@ class RunPage(CardWidget):
         self.case_info_label.setText(self._case_name_base)
         self._set_action_button("run")
         self.action_btn.setEnabled(True)
-
     def run_case(self) -> None:
         self.reset()
         self._set_action_button("stop")
@@ -498,6 +558,21 @@ class RunPage(CardWidget):
             self.runner.report_dir_signal.connect(self._on_report_dir_ready)
         self.runner.finished.connect(self._finalize_runner)
         self.runner.start()
+
+    # 260104 For function test;
+    def set_excel_plan_path(self, path: str) -> None:
+        """
+        Set the path of the Excel test plan to be executed.
+        This should be called before `run_case()`.
+        """
+        if not path or not Path(path).exists():
+            raise ValueError(f"Invalid or non-existent Excel plan path: {path}")
+        self.excel_plan_path = path
+        # Update the UI header to show the plan name instead of the case path
+        self.view.case_path_label.setText(f"Plan: {Path(path).name}")
+        # Clear the single-case related state
+        self.case_path = ""
+        self.display_case_path = ""
 
     def _finalize_runner(self) -> None:
         runner = self.runner
@@ -513,6 +588,15 @@ class RunPage(CardWidget):
             runner.report_dir_signal.disconnect(self._on_report_dir_ready)
         with suppress((TypeError, RuntimeError)):
             runner.finished.disconnect(self._finalize_runner)
+
+            # --- 新增：按类型断开 finished 信号 ---
+        if isinstance(runner, ExcelPlanRunner):
+            with suppress((TypeError, RuntimeError)):
+                runner.finished_signal.disconnect(self._finalize_runner)
+        elif isinstance(runner, CaseRunner):
+            with suppress((TypeError, RuntimeError)):
+                runner.finished.disconnect(self._finalize_runner)
+
         runner.deleteLater()
         self.runner = None
         self.on_runner_finished()
@@ -596,7 +680,12 @@ class RunPage(CardWidget):
         self.action_btn.setEnabled(True)
 
     def _get_application_base(self) -> Path:
-        return Path(get_src_base()).resolve()
+        # Get the directory of this file (run.py)
+        current_file_dir = Path(__file__).resolve().parent
+        # Go up: .../src/ui/view -> .../src/ui -> .../src -> project_root
+        project_root = current_file_dir.parent.parent.parent
+        print(f"[DEBUG] Calculated project root as: {project_root}")  # For verification
+        return project_root
 
     def _calc_display_path(self, case_path: str, display_case_path: str | None) -> str:
         if display_case_path:
@@ -610,6 +699,7 @@ class RunPage(CardWidget):
         with _s(ValueError):
             display_case_path = display_case_path.relative_to(app_base)
         return display_case_path.as_posix()
+
 
 
 __all__ = ["RunView", "RunPage"]
