@@ -8,25 +8,25 @@ system:
   kernel_version: Kernel 6.1
 connect_type:
   Android:
-    device: bq2019df11922160b
+    device: AV423352N0053
   Linux:
-    ip: 192.168.50.104
+    ip: 192.168.200.101
     wildcard: ''
   third_party:
     enabled: false
     wait_seconds: 45
-  type: Linux
+  type: Android
 project:
-  customer: XIAOMI
-  product_line: TV
-  project: Blueplanet
-  main_chip: T963D4
-  wifi_module: W2
+  customer: ONN
+  product_line: IPC
+  project: KitKat513
+  main_chip: C302X
+  wifi_module: W1U
   interface: USB
 serial_port:
-  baud: '9600'
-  port: COM14 (Prolific PL2303GC USB Serial COM Port (COM14))
-  status: false
+  baud: '921600'
+  port: COM5 (Silicon Labs CP210x USB to UART Bridge (COM5))
+  status: true
 rvr:
   iperf:
     path: ''

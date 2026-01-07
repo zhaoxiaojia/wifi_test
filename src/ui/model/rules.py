@@ -842,53 +842,17 @@ CUSTOM_TESTCASE_UI_RULES.append(
                 action="enable",
                 condition=lambda values: True,
             ),
+            SimpleFieldEffect(
+                target_field="debug.skip_connect",
+                action="enable",
+                condition=lambda values: True,
+            ),
               SimpleFieldEffect(
                   target_field="debug.skip_corner_rf",
                   action="enable",
                   condition=lambda values: True,
               ),
-            #basic_ui_test_during configs should always enabled setting
-              SimpleFieldEffect(
-                  target_field="duration_control.loop",
-                  action="enable",
-                  condition=lambda values: True,
-              ),
-             SimpleFieldEffect(
-                  target_field="duration_control.duration_hours",
-                  action="enable",
-                  condition=lambda values: True,
-              ),
-            SimpleFieldEffect(
-                target_field="duration_control.exitfirst",
-                action="enable",
-                condition=lambda values: True,
-            ),
-            SimpleFieldEffect(
-                target_field="duration_control.retry_limit",
-                action="enable",
-                condition=lambda values: True,
-            ),
-            # basic_route configs should always enabled setting
-            SimpleFieldEffect(
-                target_field="router.name",
-                action="enable",
-                condition=lambda values: True,
-            ),
-            SimpleFieldEffect(
-                target_field="router.address",
-                action="enable",
-                condition=lambda values: True,
-            ),
-            SimpleFieldEffect(
-                target_field="router.24g_ssid",
-                action="enable",
-                condition=lambda values: True,
-            ),
-            SimpleFieldEffect(
-                target_field="router.5g_ssid",
-                action="enable",
-                condition=lambda values: True,
-            ),
+
               # `test_switch_wifi` controls should always be user-editable
               # when the script group is visible.
               SimpleFieldEffect(

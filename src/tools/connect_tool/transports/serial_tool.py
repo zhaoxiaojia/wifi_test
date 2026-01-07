@@ -446,11 +446,11 @@ class serial_tool:
             This method does not return a value.
         """
         try:
-            self.ser.write(bytes(command + '\r', encoding='utf-8'))
+            self.ser.write(bytes(command + '\r\n', encoding='utf-8'))
         except (serial.serialutil.SerialException, AttributeError, OSError) as err:
             logging.error('Serial write failed for command %s: %s', command, err)
             self._ensure_connection()
-            self.ser.write(bytes(command + '\r', encoding='utf-8'))
+            self.ser.write(bytes(command + '\r\n', encoding='utf-8'))
         logging.info(f'=> {command}')
         sleep(0.1)
 
@@ -484,6 +484,55 @@ class serial_tool:
             except Empty:
                 break  # Timeout
         return buf.decode('utf-8', errors='ignore')
+
+    def exec_command(
+        self,
+        command: str,
+        *,
+        timeout: float = 8.0,
+        prompt_markers: tuple[bytes, ...] = (
+            b"\n/ #",
+            b"\r\n/ #",
+            b"/ #",
+            b"\n# ",
+            b"\r\n# ",
+            b"console:/ $",
+        ),
+        progress_interval_s: float = 0.0,
+        progress_tail_chars: int = 800,
+    ) -> str:
+        try:
+            while True:
+                self._rx_queue.get_nowait()
+        except Empty:
+            pass
+
+        self.write(command)
+        deadline = time.time() + timeout
+        next_progress = time.time() + float(progress_interval_s) if progress_interval_s else 0.0
+        buf = bytearray()
+        while time.time() < deadline:
+            remaining = deadline - time.time()
+            try:
+                chunk = self._rx_queue.get(timeout=remaining)
+            except Empty:
+                break
+            buf.extend(chunk)
+            if any(m in buf for m in prompt_markers):
+                break
+            if progress_interval_s and time.time() >= next_progress:
+                text = buf.decode("utf-8", errors="ignore")
+                tail = text[-progress_tail_chars:].strip()
+                if tail:
+                    logging.info("Serial command output (tail):\n%s", tail)
+                next_progress = time.time() + float(progress_interval_s)
+        text = buf.decode("utf-8", errors="ignore")
+        if not any(m in buf for m in prompt_markers):
+            tail = text[-1000:].strip()
+            raise RuntimeError(
+                f"Serial command did not complete: {command}\nCaptured output tail:\n{tail}"
+            )
+        return text
 
     def recv_until_pattern(self, pattern=b'', timeout=60):
         """
@@ -642,3 +691,27 @@ class serial_tool:
             logging.info('close serial port %s' % self.ser)
         except AttributeError as e:
             logging.info('failed to open serial port,not need to close')
+
+
+class SerialShellExecutor:
+    def __init__(self, serial: serial_tool, *, timeout: float = 20.0) -> None:
+        self._serial = serial
+        self._timeout = timeout
+        self._last_output = ""
+
+    def write(
+        self,
+        command: str,
+        timeout: float | None = None,
+        *,
+        progress_interval_s: float = 0.0,
+    ) -> None:
+        cmd_timeout = self._timeout if timeout is None else float(timeout)
+        self._last_output = self._serial.exec_command(
+            command,
+            timeout=cmd_timeout,
+            progress_interval_s=progress_interval_s,
+        )
+
+    def recv(self) -> str:
+        return self._last_output

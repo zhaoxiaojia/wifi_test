@@ -8,7 +8,7 @@ parses their output to track the current RF setting, angle and distance.
 
 import logging
 import re
-import subprocess
+from src.tools.connect_tool import command_batch as subprocess
 from typing import Optional
 
 from src.util.decorators import singleton

@@ -2,7 +2,7 @@ import logging
 import os
 import re
 import signal
-import subprocess
+from src.tools.connect_tool import command_batch as subprocess
 import threading
 import time
 from collections import Counter
@@ -12,8 +12,9 @@ from xml.dom import minidom
 import _io
 import pytest
 
-from src.tools.connect_tool.dut import dut
-from src.tools.connect_tool.uiautomator_tool import UiautomatorTool
+from src.tools.connect_tool.mixins.dut_mixins import WifiConnectParams
+from src.tools.connect_tool.duts.linux import linux
+from src.tools.connect_tool.transports.uiautomator_tool import UiautomatorTool
 
 
 def connect_again(func):
@@ -57,7 +58,7 @@ def connect_again(func):
     return inner
 
 
-class adb(dut):
+class android(linux):
     """
     ADB.
 
@@ -115,6 +116,62 @@ class adb(dut):
             self.root()
             self.remount()
 
+    def _wifi_connect_impl(self, params: WifiConnectParams) -> bool:
+        return bool(
+            self._android_connect_wifi(
+                params.ssid,
+                params.password,
+                params.security,
+                params.hidden,
+                params.lan,
+            )
+        )
+
+    def _wifi_scan_impl(self, ssid: str, *, attempts: int, scan_wait: int, interval: float) -> bool:
+        cmd = f"cmd wifi start-scan;sleep {scan_wait};cmd wifi list-scan-results"
+        for _ in range(attempts):
+            info = self.checkoutput(cmd)
+            logging.info(info)
+            if ssid in info:
+                return True
+            time.sleep(interval)
+        return False
+
+    def _wifi_forget_impl(self):
+        list_networks_cmd = "cmd wifi list-networks"
+        output = self.checkoutput(list_networks_cmd)
+        if "No networks" in output:
+            logging.debug("has no wifi connect")
+            return None
+
+        network_id = re.findall("\n(.*?) ", output)
+        if network_id:
+            forget_wifi_cmd = "cmd wifi forget-network {}".format(int(network_id[0]))
+            output1 = self.checkoutput(forget_wifi_cmd)
+            if "successful" in output1:
+                logging.info(f"Network id {network_id[0]} closed")
+        return None
+
+    def push_iperf(self):
+        if self.checkoutput('[ -e /system/bin/iperf ] && echo yes || echo no').strip() != 'yes':
+            path = os.path.join(os.getcwd(), 'res/iperf')
+            self.push(path, '/system/bin')
+            self.checkoutput('chmod a+x /system/bin/iperf')
+        return None
+
+    def _run_iperf_server_on_device(self, command: str, *, start_background, extend_logs, encoding: str):
+        cmd_parts = command.split()
+        cmd_list = ["adb", "-s", self.serialnumber, "shell", *cmd_parts]
+        return start_background(cmd_list, "server adb command:")
+
+    def _run_iperf_client_on_device(self, command: str, *, run_blocking, encoding: str):
+        cmd_parts = command.split()
+        cmd_list = ["adb", "-s", self.serialnumber, "shell", *cmd_parts]
+        run_blocking(cmd_list, "client adb command:")
+        return None
+
+    def _iperf_client_post_delay_seconds(self) -> int:
+        return 0
     def set_status_on(self):
         """
         Set status on.
@@ -153,7 +210,7 @@ class adb(dut):
             self.live = False
             logging.debug('Adb status is Off')
 
-    def u(self, type="u2"):
+    def _u_impl(self, *, type="u2"):
         """
         U.
 
@@ -253,7 +310,7 @@ class adb(dut):
             size = int(float(size)) / 1024
         return int(float(size))
 
-    def keyevent(self, keycode):
+    def _keyevent_impl(self, keycode):
         """
         Keyevent.
 
@@ -308,7 +365,7 @@ class adb(dut):
         self.checkoutput(
             f'sendevent /dev/input/event5 4 4 786501;sendevent /dev/input/event5 1 {key} 0;sendevent  /dev/input/event5 0 0 0;')
 
-    def home(self):
+    def _home_impl(self):
         """
         Home.
 
@@ -370,7 +427,7 @@ class adb(dut):
         """
         self.command_runner.run('adb remount', shell=True)
 
-    def reboot(self):
+    def _reboot_impl(self):
         """
         Reboot.
 
@@ -386,7 +443,7 @@ class adb(dut):
         self.checkoutput_shell('reboot')
         self.wait_devices()
 
-    def back(self):
+    def _back_impl(self):
         """
         Back.
 
@@ -401,7 +458,7 @@ class adb(dut):
         """
         self.keyevent("KEYCODE_BACK")
 
-    def app_switch(self):
+    def _app_switch_impl(self):
         """
         App switch.
 
@@ -416,7 +473,7 @@ class adb(dut):
         """
         self.keyevent("KEYCODE_APP_SWITCH")
 
-    def app_stop(self, app_name):
+    def _app_stop_impl(self, app_name):
         """
         App stop.
 
@@ -460,7 +517,7 @@ class adb(dut):
         """
         self.checkoutput(f"pm clear {app_name}")
 
-    def expand_logcat_capacity(self):
+    def _expand_logcat_capacity_impl(self):
         """
         Expand logcat capacity.
 
@@ -501,7 +558,7 @@ class adb(dut):
             self.keyevent("67 " * batch)
             remain -= batch
 
-    def tap(self, x, y):
+    def _tap_impl(self, x, y):
         """
         Tap.
 
@@ -525,7 +582,7 @@ class adb(dut):
         """
         self.checkoutput_term(self.ADB_S + self.serialnumber + " shell input tap " + str(x) + " " + str(y))
 
-    def swipe(self, x_start, y_start, x_end, y_end, duration):
+    def _swipe_impl(self, x_start, y_start, x_end, y_end, duration):
         """
         Swipe.
 
@@ -556,7 +613,7 @@ class adb(dut):
         self.checkoutput_term(self.ADB_S + self.serialnumber + " shell input swipe " + str(x_start) +
                               " " + str(y_start) + " " + str(x_end) + " " + str(y_end) + " " + str(duration))
 
-    def text(self, text):
+    def _text_impl(self, text):
         """
         Text.
 
@@ -580,7 +637,7 @@ class adb(dut):
             text = str(text)
         self.checkoutput_term(self.ADB_S + self.serialnumber + " shell input text " + text)
 
-    def clear_logcat(self):
+    def _clear_logcat_impl(self):
         """
         Clear logcat.
 
@@ -595,7 +652,7 @@ class adb(dut):
         """
         self.checkoutput_term(self.ADB_S + self.serialnumber + " logcat -b all -c")
 
-    def save_logcat(self, filepath, tag=''):
+    def _save_logcat_impl(self, filepath, *, tag=''):
         """
         Save logcat.
 
@@ -635,7 +692,7 @@ class adb(dut):
             )
         return log, logcat_file
 
-    def stop_save_logcat(self, log, filepath):
+    def _stop_save_logcat_impl(self, log, filepath):
         """
         Stop save logcat.
 
@@ -657,18 +714,12 @@ class adb(dut):
         Any
             The result produced by the function.
         """
-        if not isinstance(log, subprocess.Popen):
-            logging.warning('pls pass in the popen object')
-            return 'pls pass in the popen object'
-        if not isinstance(filepath, _io.TextIOWrapper):
-            logging.warning('pls pass in the stream object')
-            return 'pls pass int the stream object'
         self.filter_logcat_pid()
         log.terminate()
         log.send_signal(signal.SIGINT)
         filepath.close()
 
-    def filter_logcat_pid(self):
+    def _filter_logcat_pid_impl(self):
         """
         Filter logcat pid.
 
@@ -692,7 +743,7 @@ class adb(dut):
                         break
         return output
 
-    def start_activity(self, packageName, activityName, intentname=""):
+    def _start_activity_impl(self, packageName, activityName, *, intentname=""):
         """
         Start activity.
 
@@ -946,7 +997,7 @@ class adb(dut):
         """
         self.checkoutput_term(self.ADB_S + self.serialnumber + " shell rm " + flags + " " + path)
 
-    def uiautomator_dump(self, filepath='', uiautomator_type='u2'):
+    def _uiautomator_dump_impl(self, *, filepath='', uiautomator_type='u2'):
         """
         Uiautomator dump.
 
@@ -1549,7 +1600,7 @@ class adb(dut):
             # time.sleep(10)
 
 
-    def kill_logcat_pid(self):
+    def _kill_logcat_pid_impl(self):
         """
         Kill logcat pid.
 
@@ -1872,7 +1923,8 @@ class adb(dut):
                     target = self.ip_target
                 else:
                     target = "."
-                if self.wait_for_wifi_address(cmd=command, target=target, lan=lan):
+                ok, _ = self.wifi_wait_ip(cmd=command, target=target, lan=lan)
+                if ok:
                     connect_status = True
                     break
             except Exception as exc:  # pragma: no cover - hardware dependent
@@ -2300,7 +2352,7 @@ class adb(dut):
                 else:
                     assert passwd in self.get_dump_info(), "passwd not currently"
         logging.info('check status done')
-        self.wait_for_wifi_address(target=target)
+        self.wifi_wait_ip(target=target)
         return True
 
     def connect_save_ssid(self, ssid, target=''):
@@ -2323,7 +2375,7 @@ class adb(dut):
         """
         self.find_ssid(ssid)
         self.wait_and_tap('Connect', 'text')
-        self.wait_for_wifi_address(target=target)
+        self.wifi_wait_ip(target=target)
         return True
 
     def forget_ssid(self, ssid):
@@ -2489,7 +2541,7 @@ class adb(dut):
                 self.enter()
             self.text(passwd)
             self.keyevent(66)
-        self.wait_for_wifi_address()
+        self.wifi_wait_ip()
         return True
 
     def open_wifi(self) -> None:
@@ -2656,7 +2708,7 @@ class adb(dut):
                 self.checkoutput(f'input text {ssid}')
             self.keyevent(66)
             self.wait_element('Hotspot name', 'text')
-            assert ssid == pytest.dut.u().d2(
+            assert ssid == self.u().d2(
                 resourceId="android:id/summary").get_text(), "ssid can't be set currently"
         if passwd:
             self.wait_and_tap('Hotspot password', 'text')
@@ -2768,12 +2820,11 @@ class adb(dut):
         unencrypted_labels = ['open', 'unencrypted', 'none', 'open system',
                               'unencrypted (allow all connections)']
         if router_info.security_mode.lower() in unencrypted_labels:
-            cmd = pytest.dut.CMD_WIFI_CONNECT.format(router_info.ssid, "open", "")
+            cmd = self.CMD_WIFI_CONNECT.format(router_info.ssid, "open", "")
         else:
-            cmd = pytest.dut.CMD_WIFI_CONNECT.format(router_info.ssid, type,
-                                                     router_info.password)
+            cmd = self.CMD_WIFI_CONNECT.format(router_info.ssid, type, router_info.password)
         # Hide SSID if the flag is set to a truthy value
         if router_info.hide_ssid in ('yes', 'true', True):
-            cmd += pytest.dut.CMD_WIFI_HIDE
+            cmd += self.CMD_WIFI_HIDE
         logging.info(f'conn wifi cmd :{cmd}')
         return cmd

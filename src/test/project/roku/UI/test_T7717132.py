@@ -45,4 +45,4 @@ def setup_teardown():
 
 
 def test_Scan_Connect():
-    pytest.dut.roku.wifi_conn()
+    pytest.dut.wifi_connect(ssid, password=passwd, security=router_2g.security_mode)

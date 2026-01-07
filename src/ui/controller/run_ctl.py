@@ -415,9 +415,7 @@ def _extract_project_relative_path(case_path: str) -> Path:
     raise ValueError(f"Path does not contain 'src/test/project': {case_path}")
 
 def _init_worker_env(
-        case_path: str,
-        q: multiprocessing.Queue,
-        log_file_path_str: str | None = None
+    case_path: str, q: multiprocessing.Queue, log_file_path_str: str | None
 ) -> "_WorkerContext":
     """Prepare logging, report directories, and pytest arguments."""
     session = _RunLogSession(q, log_file_path_str)
@@ -432,47 +430,38 @@ def _init_worker_env(
     with suppress(Exception):
         q.put(("report_dir", str(report_dir)))
     plugin = install_redactor_for_current_process()
-
-    # --- CORRECT PATH HANDLING (兼容开发/打包) ---
-    # --- 修复：正确处理相对路径和绝对路径 ---
-    input_path = Path(case_path)
-
-    if input_path.is_absolute():
-        # 绝对路径：直接解析
-        absolute_test_path = input_path.resolve()
-    else:
-        # 相对路径：默认是 project 测试，直接拼接到 src/test/project/
-        if getattr(sys, 'frozen', False):
-            base_dir = Path(sys._MEIPASS)
-        else:
-            base_dir = Path(__file__).resolve().parents[3]
-
-        # 关键修复：相对路径直接视为 project 测试
-        absolute_test_path = (base_dir / "src" / "test" / "project" / input_path).resolve()
-
-    if not absolute_test_path.exists():
-        raise FileNotFoundError(f"Test file not found: {absolute_test_path}")
-    # --- END PATH HANDLING ---
-
-    # Derive the path to pass to pytest (relative to CWD if possible)
-    try:
-        relative_path = absolute_test_path.relative_to(Path.cwd())
-        pytest_case_path = str(relative_path).replace("\\", "/")  # Use forward slashes for pytest
-    except ValueError:
-        # If outside project root, use absolute path
-        pytest_case_path = str(absolute_test_path)
-    # --- END PATH HANDLING ---
-
-    # --- Use pytest_case_path everywhere from now on ---
     pytest_args = [
         "--rootdir=.",
         "--import-mode=importlib",
         f"--resultpath={report_dir}",
-        pytest_case_path,
+        case_path,
     ]
+    from src.util.constants import load_config
 
-    # ✅ FIXED: Use pytest_case_path, NOT corrected_case_path
-    is_stability_case = is_stability_case_path(pytest_case_path)
+    cfg = load_config(refresh=True)
+    connect_cfg = cfg.get("connect_type") or {}
+    dut_type = connect_cfg.get("type")
+    match dut_type:
+        case "Android":
+            pytest_args.append("--dut-type=Android")
+            android_cfg = connect_cfg.get("Android") or {}
+            device = android_cfg.get("device")
+            if device:
+                pytest_args.append(f"--android-device={device}")
+        case "Linux":
+            pytest_args.append("--dut-type=Linux")
+            telnet_cfg = connect_cfg.get("Linux") or {}
+            ip = telnet_cfg.get("ip")
+            if ip:
+                pytest_args.append(f"--linux-ip={ip}")
+            project_cfg = cfg.get("project") or {}
+            customer = project_cfg.get("customer")
+            if customer:
+                pytest_args.append(f"--project-customer={customer}")
+
+    # Only apply stability retry/exit-first flags for stability cases.
+    is_stability_case = is_stability_case_path(case_path)
+
     plan = load_stability_plan() if is_stability_case else None
     pytest_args = _apply_exitfirst_flags(pytest_args, plan)
 

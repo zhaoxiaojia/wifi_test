@@ -14,7 +14,7 @@ import os
 import sys
 import re
 import shutil
-import subprocess
+from src.tools.connect_tool import command_batch as subprocess
 import logging
 import time
 from contextlib import suppress
@@ -25,13 +25,15 @@ from typing import Annotated
 import pytest
 import csv  # noqa: F401  (kept for potential future CSV export)
 
-from src.tools.connect_tool.adb import adb
-from src.tools.connect_tool.serial_tool import serial_tool
-from src.tools.connect_tool.telnet_tool import telnet_tool
+from src.tools.connect_tool.duts.android import android
+from src.tools.connect_tool.duts.linux import linux
+from src.tools.connect_tool.duts.onn_dut import onn_dut
+from src.tools.connect_tool.duts.roku_dut import roku
+from src.tools.connect_tool.transports.serial_tool import serial_tool
+from src.tools.connect_tool.transports.telnet_tool import telnet_tool
 from src.tools.connect_tool.local_os import LocalOS
 from src.tools.performance_result import PerformanceResult
 from src.util.constants import load_config
-from src.dut_control.roku_ctrl import roku_ctrl
 from src.tools.router_tool.Router import Router
 from src.tools.reporting import generate_project_report
 from src.test.pyqt_log import emit_pyqt_message
@@ -319,64 +321,55 @@ def pytest_sessionstart(session):
 
     # Connection type setup
     connect_cfg = pytest.config.get("connect_type") or {}
-    connect_type_value = connect_cfg.get('type', 'Android')
-    if isinstance(connect_type_value, str):
-        connect_type_value = connect_type_value.strip() or 'Android'
-        lowered = connect_type_value.lower()
-        if lowered == 'adb':
-            connect_type_value = 'Android'
-        elif lowered == 'telnet':
-            connect_type_value = 'Linux'
-    else:
-        connect_type_value = 'Android'
-    pytest.connect_type = connect_type_value
-    pytest.third_party_cfg = connect_cfg.get('third_party', {})
+    pytest.connect_type = session.config.getoption("--dut-type") or connect_cfg.get("type")
+    pytest.third_party_cfg = connect_cfg.get("third_party", {})
 
     # Serial (kernel log) setup
     rvr_cfg = pytest.config.get('rvr') or {}
     serial_cfg = pytest.config.get('serial_port') or {}
-    pytest.serial = None
+    serial_cfg["port"] = serial_cfg.get("port", "").split(" (", 1)[0]
     status = serial_cfg.get('status')
-    serial_enabled = status if isinstance(status, bool) else str(status).strip().lower() in {'1', 'true', 'yes', 'on'}
+    serial_enabled = status
+    serial_inst = None
     if serial_enabled:
-        try:
-            pytest.serial = serial_tool(
-                serial_port=serial_cfg.get('port', ''),
-                baud=serial_cfg.get('baud', '')
-            )
-            logging.info("Serial logging enabled; kernel_log.txt will be captured.")
-        except Exception:
-            logging.exception("Failed to initialize serial tool; serial logging disabled.")
+        serial_inst = serial_tool(
+            serial_port=serial_cfg.get('port', ''),
+            baud=serial_cfg.get('baud', ''),
+            enable_log=True,
+        )
+        logging.info("Serial logging enabled; kernel_log.txt will be captured.")
 
     # Repeat times
-    try:
-        repeat_times = int(rvr_cfg.get('repeat', 0) or 0)
-    except Exception:
-        repeat_times = 0
+    repeat_times = int(rvr_cfg.get('repeat', 0) or 0)
 
     # DUT connection
-    if pytest.connect_type == 'Android':
-        # Create adb obj
-        adb_cfg = connect_cfg.get('Android') or connect_cfg.get('adb') or {}
-        device = adb_cfg.get('device')
-        if device is None:
-            # Obtain the device number dynamically
-            info = subprocess.check_output("adb devices", shell=True, encoding='utf-8')
-            device = re.findall(r'\n(.*?)\s+device', info, re.S)
-        pytest.dut = adb(serialnumber=device if device else '')
-    elif pytest.connect_type == 'Linux':
-        # Create telnet obj
-        telnet_cfg = connect_cfg.get('Linux') or connect_cfg.get('telnet') or {}
-        telnet_ip = telnet_cfg.get('ip')
-        if not telnet_ip:
-            raise EnvironmentError("Not support connect type Linux: missing IP address")
-        pytest.dut = telnet_tool(telnet_ip)
-        project_cfg = pytest.config.get("project") or {}
-        customer = str(project_cfg.get("customer") or "").strip().upper()
-        if customer == "ROKU":
-            pytest.dut.roku = roku_ctrl(telnet_ip)
-    else:
-        raise EnvironmentError("Not support connect type %s" % pytest.connect_type)
+    match pytest.connect_type:
+        case "Android":
+            adb_cfg = connect_cfg.get("Android") or {}
+            device = session.config.getoption("--android-device") or adb_cfg.get("device") or ""
+            project_cfg = pytest.config.get("project") or {}
+            customer = session.config.getoption("--project-customer") or project_cfg.get("customer") or ""
+            customer = str(customer).strip().upper()
+            match customer:
+                case "ONN":
+                    pytest.dut = onn_dut(serialnumber=device)
+                case _:
+                    pytest.dut = android(serialnumber=device)
+        case "Linux":
+            telnet_cfg = connect_cfg.get("Linux") or {}
+            telnet_ip = session.config.getoption("--linux-ip") or telnet_cfg.get("ip")
+            project_cfg = pytest.config.get("project") or {}
+            customer = session.config.getoption("--project-customer") or project_cfg.get("customer") or ""
+            customer = str(customer).strip().upper()
+
+            match customer:
+                case "ROKU":
+                    pytest.dut = roku(telnet_ip, serial=serial_inst)
+                case _:
+                    pytest.dut = linux(serial=serial_inst, telnet=telnet_tool(telnet_ip))
+
+    if serial_inst is not None:
+        pytest.dut.serial = serial_inst
 
     # Artifact paths and state
     pytest._result_path = session.config.getoption("--resultpath") or os.getcwd()
@@ -398,6 +391,10 @@ def pytest_addoption(parser):
         --resultpath: Destination directory for log artifacts (debug.log, kernel.log, etc.).
     """
     parser.addoption("--resultpath", action="store", default=None, help="Test result path")
+    parser.addoption("--dut-type", action="store", default=None, help="DUT type: Android or Linux")
+    parser.addoption("--android-device", action="store", default=None, help="ADB serial number")
+    parser.addoption("--linux-ip", action="store", default=None, help="Linux DUT IP address")
+    parser.addoption("--project-customer", action="store", default=None, help="Project customer code (e.g. ROKU)")
 
 
 def pytest_collection_finish(session):

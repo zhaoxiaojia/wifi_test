@@ -9,7 +9,7 @@ import logging
 import copy
 import signal
 import tempfile
-import subprocess
+from src.tools.connect_tool import command_batch as subprocess
 import atexit
 from dataclasses import dataclass
 from datetime import datetime
@@ -586,6 +586,7 @@ class DebugFlags:
 
     database_mode: bool = False
     skip_router: bool = False
+    skip_connect: bool = False
     skip_corner_rf: bool = False
 
 
@@ -610,10 +611,12 @@ def get_debug_flags(
 
     database_mode = _coerce_truthy(debug_cfg.get("database_mode"))
     skip_router = database_mode or _coerce_truthy(debug_cfg.get("skip_router"))
+    skip_connect = database_mode or _coerce_truthy(debug_cfg.get("skip_connect"))
     skip_corner_rf = database_mode or _coerce_truthy(debug_cfg.get("skip_corner_rf"))
     return DebugFlags(
         database_mode=database_mode,
         skip_router=skip_router,
+        skip_connect=skip_connect,
         skip_corner_rf=skip_corner_rf,
     )
 

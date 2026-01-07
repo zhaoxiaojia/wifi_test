@@ -1,2 +1,2 @@
 band,ssid,wireless_mode,channel,bandwidth,security_mode,password,tx,rx
-2.4G,lalala,11ax,9,40 MHz,Open System,,0,1
+5G,Aml_AP_Comp_5G,auto,auto,20/40/80 MHz,WPA2-Personal,@Aml#*st271,1,1

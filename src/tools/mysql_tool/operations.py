@@ -1033,37 +1033,18 @@ def _build_dut_payload(config: Mapping[str, Any]) -> Dict[str, Any]:
     wifi_details = _resolve_wifi_product_details(config.get("project"))
     connect_type_value = _normalize_str_token(connect.get("type"))
     normalized_connect_type = _normalize_lower_token(connect_type_value)
-    if normalized_connect_type in {"android", "adb"}:
+    if normalized_connect_type == "android":
         connect_type_value = "Android"
-    elif normalized_connect_type in {"linux", "telnet"}:
+    elif normalized_connect_type == "linux":
         connect_type_value = "Linux"
 
     adb_device: Optional[str] = None
     telnet_ip: Optional[str] = None
 
-    if normalized_connect_type in {"android", "adb"}:
-        adb_device = _normalize_str_token(
-            _extract_first(connect, "Android", "device")
-            or _extract_first(connect, "adb", "device")
-        )
-    elif normalized_connect_type in {"linux", "telnet"}:
-        telnet_ip = _normalize_str_token(
-            _extract_first(connect, "Linux", "ip")
-            or _extract_first(connect, "telnet", "ip")
-        )
-    else:
-        adb_candidate = _normalize_str_token(
-            _extract_first(connect, "Android", "device")
-            or _extract_first(connect, "adb", "device")
-        )
-        telnet_candidate = _normalize_str_token(
-            _extract_first(connect, "Linux", "ip")
-            or _extract_first(connect, "telnet", "ip")
-        )
-        if adb_candidate and not telnet_candidate:
-            adb_device = adb_candidate
-        elif telnet_candidate and not adb_candidate:
-            telnet_ip = telnet_candidate
+    if normalized_connect_type == "android":
+        adb_device = _normalize_str_token(_extract_first(connect, "Android", "device"))
+    elif normalized_connect_type == "linux":
+        telnet_ip = _normalize_str_token(_extract_first(connect, "Linux", "ip"))
 
     return {
         "software_version": _extract_first(software, "software_version"),
@@ -1156,8 +1137,6 @@ def sync_configuration(config: dict | None) -> Optional[Any]:
     """
     Sync configuration.
 
-    Logs informational messages and errors for debugging purposes.
-
     Parameters
     ----------
     config : Any
@@ -1170,35 +1149,22 @@ def sync_configuration(config: dict | None) -> Optional[Any]:
     """
 
     if not isinstance(config, Mapping) or not config:
-        logging.debug("sync_configuration: skipped, config missing or invalid (%s)", type(config))
         return None
 
     try:
         from src.tools.db_config_sync import ConfigDatabaseSync
     except Exception:
-        logging.exception("sync_configuration: failed to import ConfigDatabaseSync")
         return None
 
     dut_payload = _build_dut_payload(config)
     execution_payload = _build_execution_payload(config)
-    logging.debug(
-        "sync_configuration: dut_payload=%s execution_payload=%s",
-        dut_payload,
-        execution_payload,
-    )
 
     try:
         with ConfigDatabaseSync() as syncer:
             result = syncer.sync_config(dut_payload, execution_payload)
     except Exception:
-        logging.exception("sync_configuration: failed to persist configuration payloads")
         return None
 
-    logging.info(
-        "Configuration synced successfully (dut_id=%s, shielded_id=%s)",
-        getattr(result, "dut_id", None),
-        getattr(result, "shielded_id", None),
-    )
     return result
 
 

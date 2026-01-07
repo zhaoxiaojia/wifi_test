@@ -12,7 +12,7 @@ from typing import Union
 
 from src.tools.router_tool.RouterControl import ConfigError
 from src.tools.router_tool.AsusRouter.AsusBaseControl import AsusBaseControl
-from src.tools.connect_tool.telnet_common import TelnetSession
+from src.tools.connect_tool.transports.telnet_tool import TelnetSession
 
 
 class AsusTelnetNvramControl(AsusBaseControl):

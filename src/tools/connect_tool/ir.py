@@ -1,5 +1,5 @@
 """
-Infrared control utilities.
+Infrared (IR) control utilities.
 
 This module defines a simple wrapper class around pytest's ``irsend`` fixture
 for sending infrared (IR) codes.  It exposes an :class:`Ir` class that holds

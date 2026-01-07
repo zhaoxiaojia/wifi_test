@@ -19,6 +19,7 @@ rf_solution:
 text_case: test/stability/test_soft_reboot_str.py
 debug:
   database_mode: false
-  skip_router: false
+  skip_router: true
   skip_corner_rf: false
+  skip_connect: false
 csv_path: performance_test_csv/ai_wifi_scenarios.csv

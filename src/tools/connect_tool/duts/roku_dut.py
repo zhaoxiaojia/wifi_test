@@ -18,12 +18,14 @@ from urllib.parse import quote_plus
 from xml.etree import ElementTree as ET
 from typing import Optional
 
-import pytest
 import requests
 from roku import Roku
 
-from src.tools.connect_tool.serial_tool import serial_tool
-from src.tools.connect_tool.telnet_tool import telnet_tool
+from src.tools.connect_tool.transports.serial_tool import serial_tool
+from src.tools.connect_tool.transports.telnet_tool import telnet_tool
+from src.tools.connect_tool.duts.linux import linux
+from src.tools.connect_tool.mixins.dut_mixins import WifiConnectParams
+from src.tools.connect_tool.roku_wpa import roku_wpa
 from src.util.constants import load_config
 from src.util.constants import RokuConst
 from typing import Annotated
@@ -34,9 +36,8 @@ def _get_roku_ip() -> Optional[str]:
     Load the latest Roku IP address from the configuration.
 
     This helper refreshes the configuration using :func:`load_config` and
-    returns the IP address defined under the ``connect_type`` section.  It
-    looks for ``Linux`` settings first, falling back to ``telnet`` if
-    necessary, and logs the result for debugging purposes.
+    returns the IP address defined under the ``connect_type`` section and logs
+    the result for debugging purposes.
 
     Returns
     -------
@@ -45,7 +46,7 @@ def _get_roku_ip() -> Optional[str]:
     """
     cfg = load_config(refresh=True) or {}
     connect_cfg = cfg.get("connect_type", {})
-    linux_cfg = connect_cfg.get("Linux") or connect_cfg.get("telnet") or {}
+    linux_cfg = connect_cfg.get("Linux") or {}
     ip = linux_cfg.get("ip")
     logging.info(f"Read ROKU IP: {ip}")
     return ip
@@ -122,7 +123,7 @@ class roku_ctrl(Roku):
                                     r'pause failure:\d+|parse ac4 fail|frame too big \d+|header too big \d+|'
                                     r'trans mode write fail \d+/\d+|drop data \d+/\d+|null pointer')
 
-    def __init__(self, ip: Optional[str] = None):
+    def __init__(self, ip: Optional[str] = None, *, telnet=None):
         """
         Initialize the class instance, set up internal state and construct UI elements if needed.
 
@@ -133,12 +134,13 @@ class roku_ctrl(Roku):
             ip = _get_roku_ip()
         super().__init__(ip)
         self.ip = ip
+        self.telnet = telnet
         self.ptc_size, self.ptc_mode = '', ''
         self.current_target_array = 'launcher'
         self._layout_init()
         self.ir_current_location = ''
         self.logcat_check = False
-        self._ser = ''
+        self._ser = None
 
         logging.info('roku init done')
 
@@ -153,6 +155,9 @@ class roku_ctrl(Roku):
             if 'amp;' in value:
                 value = value.replace('amp;', '')
         self.__dict__[key] = value
+
+    def checkoutput(self, cmd, wildcard=""):
+        return self.telnet.checkoutput(cmd, wildcard=wildcard)
 
     def _layout_init(self):
         """
@@ -524,7 +529,6 @@ class roku_ctrl(Roku):
                                 node_list.append([child_2.attrib['text']])
         return node_list
 
-    @classmethod
     def switch_ir(self, status):
         """
         Execute the switch ir routine.
@@ -537,7 +541,7 @@ class roku_ctrl(Roku):
             'off': 'echo 0x2 > /sys/class/remote/amremote/protocol'
         }
         logging.info(f'Set roku ir {status}')
-        pytest.dut.checkoutput(ir_command[status])
+        self.checkoutput(ir_command[status])
 
     def set_display_size(self, size):
         """
@@ -684,9 +688,9 @@ class roku_ctrl(Roku):
         Refer to the implementation for details on parameters and return values.
         """
         with open('dmesg.log', 'a') as f:
-            info = pytest.dut.checkoutput('dmesg')
+            info = self.checkoutput('dmesg')
             f.write(info)
-        pytest.dut.checkoutput('dmesg -c')
+        self.checkoutput('dmesg -c')
 
     def get_kernel_log(self, filename='kernel.log'):
         """
@@ -737,9 +741,9 @@ class roku_ctrl(Roku):
         import copy
 
         target_list = copy.deepcopy(re_list)
-        pytest.dut.checkoutput('\x03')
-        pytest.dut.checkoutput('\x03')
-        pytest.dut.checkoutput('logcat')
+        self.checkoutput('\x03')
+        self.checkoutput('\x03')
+        self.checkoutput('logcat')
         self._capture_logcat_stream(timeout)
 
         with open('logcat.log', 'r') as handle:
@@ -756,7 +760,7 @@ class roku_ctrl(Roku):
         start = time.time()
         buffer: list[str] = []
         while time.time() - start < timeout:
-            data = pytest.dut.tn.read_eager()
+            data = self.telnet.tn.read_eager()
             if not data:
                 continue
             try:
@@ -799,7 +803,7 @@ class roku_ctrl(Roku):
         Refer to the implementation for details on parameters and return values.
         """
         count = 0
-        while pytest.light_sensor.check_backlight():
+        while self.light_sensor.check_backlight():
             # shut down the dut before test
             self.send('power', 10)
             if count > 5:
@@ -846,7 +850,7 @@ class roku_ctrl(Roku):
         """Poll the HDMI RX info sysfs node and return its contents."""
         for _ in range(3):
             try:
-                info = pytest.dut.checkoutput('cat /sys/class/hdmirx/hdmirx0/info')
+                info = self.checkoutput('cat /sys/class/hdmirx/hdmirx0/info')
             except Exception:
                 info = ''
             if 'HDCP1.4 secure' in info:
@@ -991,7 +995,8 @@ class roku_ctrl(Roku):
         This method encapsulates the logic necessary to perform its function.
         Refer to the implementation for details on parameters and return values.
         """
-        if self._ser == '': self._ser = serial_tool()
+        if self._ser is None:
+            self._ser = serial_tool()
         return self._ser
 
     def wifi_conn(self, ssid, pwd='', band=5):
@@ -1024,15 +1029,16 @@ class roku_ctrl(Roku):
             time.sleep(1)
             ip = self.ser.get_ip_address('wlan0')
             if ip:
-                pytest.dut = telnet_tool(ip)
-                pytest.dut.roku = roku_ctrl(ip)
                 self.ip = ip
+                Roku.__init__(self, ip)
                 logging.info(f'roku ip {self.ip}')
                 break
-        pytest.dut.roku.home(time=3)
-        pytest.dut.roku.home(time=3)
-        pytest.dut.roku.home(time=3)
-        return True
+        if not ip:
+            return ""
+        self.home(time=3)
+        self.home(time=3)
+        self.home(time=3)
+        return ip
 
     def flush_ip(self):
         """
@@ -1042,10 +1048,11 @@ class roku_ctrl(Roku):
         Refer to the implementation for details on parameters and return values.
         """
         ip = self.ser.get_ip_address('wlan0')
-        if ip:
-            pytest.dut = telnet_tool(ip)
-            pytest.dut.roku = roku_ctrl(ip)
-            return True
+        if not ip:
+            return ""
+        self.ip = ip
+        Roku.__init__(self, ip)
+        return ip
 
     def remote(self, button_list, idle=1):
         """
@@ -1061,3 +1068,37 @@ class roku_ctrl(Roku):
                 getattr(self, button_dict[i])(time=idle)
             else:
                 logging.info(f'{i} not in button_dict .pls check again')
+
+
+class roku(linux):
+    def __init__(self, telnet_ip: str, *, serial=None) -> None:
+        super().__init__(serial=serial, telnet=telnet_tool(telnet_ip))
+        self.roku = roku_ctrl(telnet_ip, telnet=self.telnet)
+        if serial is not None:
+            self.roku._ser = serial
+        self.wpa = roku_wpa(self.roku.ser)
+
+    def _refresh_ip(self, ip: str) -> None:
+        self.telnet = telnet_tool(ip)
+        self.dut_ip = ip
+        self.roku = roku_ctrl(ip, telnet=self.telnet)
+
+    def flush_ip(self) -> bool:
+        ip = self.roku.flush_ip()
+        if not ip:
+            return False
+        self._refresh_ip(ip)
+        return True
+
+    def _wifi_connect_impl(self, params: WifiConnectParams) -> bool:
+        ip = self.roku.wifi_conn(params.ssid, params.password)
+        if not ip:
+            return False
+        self._refresh_ip(ip)
+        return True
+
+    def _wifi_scan_impl(self, ssid: str, *, attempts: int, scan_wait: int, interval: float) -> bool:
+        return self.roku.wifi_scan(ssid)
+
+    def _wifi_forget_impl(self):
+        return None
