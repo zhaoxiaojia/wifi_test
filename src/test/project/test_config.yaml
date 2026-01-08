@@ -4,8 +4,15 @@ version: 1.0
 scripts:
     - path: stb/test_check_wifi_status.py
       priority: P1
-      suite: Status Check
+      module: Status Check
+      TCID: WiFi-STA-FDF0001
+      description : Check Default Wi-Fi Setting
+      Tag: Common Case
+
 
     - path: stb/test_wifi_connection.py
       priority: P2
-      suite: Mode
+      module: SSID
+      TCID: WiFi-STA-FSSID0001
+      description: Check Wi-Fi SSID Connection.
+      Tag: Common Case

@@ -7,8 +7,8 @@ import sys
 # 添加项目路径
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
-from src.dut_control.roku_ctrl import roku_ctrl
-from src.tools.connect_tool.telnet_tool import telnet_tool
+#from src.dut_control.roku_ctrl import roku_ctrl
+from src.tools.connect_tool.transports.telnet_tool import telnet_tool
 from src.util.constants import load_config
 
 
@@ -17,7 +17,8 @@ def _create_device_connection(device_info: dict):
     ip = device_info.get("ip")
     logging.info(f"Establishing device connection (type: {control_type})")
     if control_type == "roku":
-        return roku_ctrl(ip)
+        #return roku_ctrl(ip)
+        return telnet_tool(ip)
     elif control_type == "linux":
         return telnet_tool(ip)
     else:

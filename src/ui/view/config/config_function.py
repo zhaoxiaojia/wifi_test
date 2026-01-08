@@ -1,9 +1,10 @@
 # src/ui/view/config/function_config_form.py
-from PyQt5.QtWidgets import ( QWidget, QVBoxLayout, QHBoxLayout, QSplitter, QGroupBox, QRadioButton, QButtonGroup, QListWidget, QListWidgetItem, QAbstractItemView, QCheckBox, QSizePolicy, QLabel, QFileDialog, QMessageBox)
-from qfluentwidgets import BodyLabel, PrimaryPushButton
+from PyQt5.QtWidgets import ( QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QButtonGroup, QListWidget, QTableWidget, QTableWidgetItem, QSpacerItem,
+                              QListWidgetItem, QAbstractItemView, QCheckBox, QSizePolicy, QLabel, QFileDialog, QMessageBox, QPushButton)
+from qfluentwidgets import PushButton, CardWidget, ComboBox, FluentIcon as FIcon
 from pathlib import Path
-from PyQt5.QtCore import Qt, QEvent
-from PyQt5.QtGui import QFont, QColor
+from PyQt5.QtCore import Qt, QEvent, QSize
+from PyQt5.QtGui import QFont, QColor, QPalette
 import yaml
 import re, os
 from pathlib import Path
@@ -11,16 +12,30 @@ import pandas as pd
 from datetime import datetime
 from src.util.constants import get_config_base
 
+# 在 config_function.py 顶部添加
+from PyQt5.QtWidgets import QStyledItemDelegate, QApplication
+from PyQt5.QtCore import Qt, QRect
+from PyQt5.QtGui import QPainter, QColor
+from src.ui.view import FormListPage
+
 class FunctionConfigForm(QWidget):
     """STB 功能测试配置表单组件"""
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setup_ui()
+        self.test_script_items = []
 
-        self.save_plan_btn = PrimaryPushButton("Save Test Plan")
-        self.save_plan_btn.clicked.connect(self.on_save_plan_clicked)
-        self.load_plan_btn = PrimaryPushButton("Load Test Plan")
-        self.load_plan_btn.clicked.connect(self.on_load_plan_clicked)
+        self.all_rows = []
+        self.priority_options = set()
+        self.tag_options = set()
+        self.module_options = set()
+
+        self.setup_ui()
+        self.load_test_case_files()
+
+        self.priority_combo.currentTextChanged.connect(self.apply_filters)
+        self.tag_combo.currentTextChanged.connect(self.apply_filters)
+        self.module_combo.currentTextChanged.connect(self.apply_filters)
+        self.reset_btn.clicked.connect(self.on_reset_clicked)
 
     def setup_ui(self):
         """Set up the UI."""
@@ -29,135 +44,267 @@ class FunctionConfigForm(QWidget):
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
-        # 标题：移除默认边距
-        title_label = QLabel("Function Case Selection")
-        title_label.setStyleSheet("""
-        QLabel {
-            font-size: 14px;
-            font-weight: bold;
-            padding: 0px;
-            margin: 0px;
-        }
-        """)
-        title_label.setContentsMargins(0, 0, 0, 0)
-        title_label.setAlignment(Qt.AlignTop | Qt.AlignLeft)
-        main_layout.addWidget(title_label)
-        # 分割器：左右可调
-        splitter = QSplitter(Qt.Horizontal)
-        splitter.setHandleWidth(0)  # 消除分割器手柄宽度
-        splitter.setContentsMargins(0, 0, 0, 0)
-        # ===== 左侧：测试配置 =====
-        left_widget = QWidget()
-        left_widget.setStyleSheet("padding: 0px; margin: 0px;")
-        left_widget.setContentsMargins(0, 0, 0, 0)
-        # 设置左侧宽度约束，防止被挤压
-        left_widget.setMinimumWidth(220)
-        left_widget.setMaximumWidth(300)
-        left_layout = QVBoxLayout(left_widget)
-        left_layout.setContentsMargins(0, 0, 0, 0)
-        left_layout.setSpacing(8)
-        left_layout.setAlignment(Qt.AlignTop)
-        # Test Priority
-        priority_group = QGroupBox("Test Priority")
-        priority_group.setStyleSheet("""
-        QGroupBox {
-            padding: 0px;
-            margin: 0px;
-            border: 1px solid #ccc;
-            font-weight: bold;
-        }
-        QGroupBox::title {
-            subcontrol-origin: margin;
-            subcontrol-position: top left;
-            padding: 0 5px;
-            margin: 0px;
-        }
-        """)
-        priority_layout = QVBoxLayout(priority_group)
-        priority_layout.setContentsMargins(8, 20, 8, 8)  # 调整内边距
-        self.priority_buttons = QButtonGroup(self)
-        for text in ["All", "P1", "P2", "P3"]:
-            rb = QRadioButton(text)
-            self.priority_buttons.addButton(rb)
-            priority_layout.addWidget(rb)
-        self.priority_buttons.buttons()[0].setChecked(True)
-        left_layout.addWidget(priority_group)
-        for rb in self.priority_buttons.buttons():
-            rb.toggled.connect(self.apply_filters)
-        # WiFi Test Module (多选)
-        module_group = QGroupBox("WiFi Test Suite")
-        module_group.setStyleSheet("""
-        QGroupBox {
-            padding: 0px;
-            margin: 0px;
-            border: 1px solid #ccc;
-            font-weight: bold;
-        }
-        QGroupBox::title {
-            subcontrol-origin: margin;
-            subcontrol-position: top left;
-            padding: 0 5px;
-            margin: 0px;
-        }
-        """)
-        module_layout = QVBoxLayout(module_group)
-        module_layout.setContentsMargins(8, 20, 8, 8)  # 调整内边距
-        self.module_checkboxes = []
-        modules = ["Status Check", "SSID", "Mode", "Channel", "Bandwidth", "Security Mode"]
-        for name in modules:
-            cb = QCheckBox(name)
-            module_layout.addWidget(cb)
-            self.module_checkboxes.append(cb)
-        for cb in self.module_checkboxes:
-            cb.setChecked(True)
-        left_layout.addWidget(module_group)
-        for cb in self.module_checkboxes:
-            cb.stateChanged.connect(self.apply_filters)
-        splitter.addWidget(left_widget)
-        # ===== 右侧：文件列表 =====
-        right_widget = QWidget()
-        right_layout = QVBoxLayout(right_widget)
-        right_layout.setContentsMargins(12, 0, 12, 8)
-        right_layout.setSpacing(8)
-        file_label = BodyLabel("Test Script")
-        right_layout.addWidget(file_label)
-        self.file_list = QListWidget()
-        self.file_list.setSelectionMode(QAbstractItemView.NoSelection)
-        self.file_list.setAlternatingRowColors(True)
-        right_layout.addWidget(self.file_list, 1)  # stretch factor 为 1，占据剩余空间
-        # ===== 右侧底部：操作按钮 =====
-        # 创建两个按钮（仅保留 Save Plan 和 Reset）
-        self.save_plan_btn = PrimaryPushButton("Save Plan")
-        self.reset_btn = PrimaryPushButton("Reset")
-        self.load_plan_btn = PrimaryPushButton("Load Test Plan")
 
-        # 连接信号到槽（目前是占位符，后面需要实现具体逻辑）
+        # ===== 使用 CardWidget 包裹内容以匹配 compatibility 风格 =====
+        card = CardWidget(self)
+        card.setObjectName("functionConfigCard")  # 可选：用于自定义样式
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(16, 16, 16, 16)  # 内边距，与 compatibility 风格一致
+        card_layout.setSpacing(12)
+
+        # 标题
+        title_label = QLabel("Function Case Selection")
+        title_label.setStyleSheet("font-size: 10pt; font-weight: normal; color: #e0e0e0;")
+        title_label.setAlignment(Qt.AlignTop | Qt.AlignLeft)
+        card_layout.addWidget(title_label)
+
+        # ===== 过滤栏：专业优化版 =====
+        filter_layout = QHBoxLayout()
+        filter_layout.setSpacing(8)  # 缩小间距，更紧凑
+        filter_layout.setContentsMargins(0, 10, 0, 10)  # 上下留白
+
+        # Filter 总标签
+        filter_label = QLabel("Filter:", self)
+        filter_label.setFixedWidth(60)
+        filter_label.setStyleSheet("""
+            font-weight: bold;
+            color: #cccccc;
+            font-size: 10pt;
+        """)
+        filter_layout.addWidget(filter_label)
+        spacer1 = QSpacerItem(20, 0, QSizePolicy.Fixed, QSizePolicy.Minimum)
+        filter_layout.addItem(spacer1)
+
+        # Priority 组合
+        priority_label = QLabel("Priority:", self)
+        priority_label.setStyleSheet("font-weight: bold; color: #cccccc; font-size: 10pt;")
+        priority_label.setFixedWidth(80)
+        filter_layout.addWidget(priority_label)
+
+        self.priority_combo = ComboBox(self)
+        self.priority_combo.addItems(["All"])
+        self.priority_combo.setFixedWidth(120)
+        self.priority_combo.setStyleSheet("""
+            background-color: #2a2a2a;
+            border: 1px solid #555;
+            border-radius: 4px;
+            padding: 3px;
+            color: white;
+            font-size: 9pt;
+        """)
+        filter_layout.addWidget(self.priority_combo)
+        spacer2 = QSpacerItem(20, 0, QSizePolicy.Fixed, QSizePolicy.Minimum)
+        filter_layout.addItem(spacer2)
+
+        # Test_Module 组合
+        module_label = QLabel("Module:", self)
+        module_label.setStyleSheet("font-weight: bold; color: #cccccc; font-size: 10pt;")
+        module_label.setFixedWidth(80)
+        filter_layout.addWidget(module_label)
+
+        self.module_combo = ComboBox(self)
+        self.module_combo.addItems(["All"])
+        self.module_combo.setFixedWidth(120)
+        self.module_combo.setStyleSheet("""
+            background-color: #2a2a2a;
+            border: 1px solid #555;
+            border-radius: 4px;
+            padding: 3px;
+            color: white;
+            font-size: 9pt;
+        """)
+        filter_layout.addWidget(self.module_combo)
+        spacer3 = QSpacerItem(20, 0, QSizePolicy.Fixed, QSizePolicy.Minimum)
+        filter_layout.addItem(spacer3)
+
+        # Tag 组合
+        tag_label = QLabel("Tag:", self)
+        tag_label.setStyleSheet("font-weight: bold; color: #cccccc; font-size: 10pt;")
+        tag_label.setFixedWidth(80)
+        filter_layout.addWidget(tag_label)
+
+        self.tag_combo = ComboBox(self)
+        self.tag_combo.addItems(["All"])
+        self.tag_combo.setFixedWidth(120)
+        self.tag_combo.setStyleSheet("""
+            background-color: #2a2a2a;
+            border: 1px solid #555;
+            border-radius: 4px;
+            padding: 3px;
+            color: white;
+            font-size: 9pt;
+        """)
+        filter_layout.addWidget(self.tag_combo)
+
+        spacer4 = QSpacerItem(20, 0, QSizePolicy.Fixed, QSizePolicy.Minimum)
+        filter_layout.addItem(spacer4)
+
+        # --- Reset 按钮 ---
+        self.reset_btn = PushButton("Reset")
+        self.reset_btn.setIcon(FIcon.SYNC.icon())
+        self.reset_btn.setFixedSize(80, 28)  # 宽高
+        self.reset_btn.setPalette(QPalette(Qt.white))
+
+        # --- Save Test Plan 按钮 ---
+        self.save_plan_btn = PushButton("Save Test Plan")
+        self.save_plan_btn.setIcon(FIcon.SAVE.icon())
+        self.save_plan_btn.setFixedSize(120, 28)
+
+        # --- Load Test Plan 按钮 ---
+        self.load_plan_btn = PushButton("Load Test Plan")
+        self.load_plan_btn.setIcon(FIcon.FOLDER.icon())
+        self.load_plan_btn.setFixedSize(120, 28)
+        for btn in [self.reset_btn, self.save_plan_btn, self.load_plan_btn]:
+            btn.setIconSize(QSize(16, 16))
+            btn.setFixedHeight(28)
+            btn.setContentsMargins(6, 0, 6, 0)
+
+        self.reset_btn.setFixedWidth(90)
+        self.save_plan_btn.setFixedWidth(160)
+        self.load_plan_btn.setFixedWidth(160)
+
+        filter_layout.addWidget(self.reset_btn)
+        spacer_right5 = QSpacerItem(20, 0, QSizePolicy.Expanding, QSizePolicy.Minimum)
+        filter_layout.addItem(spacer_right5)
+
+        filter_layout.addWidget(self.save_plan_btn)
+        filter_layout.addWidget(self.load_plan_btn)
+
+        # 右侧伸缩
+        #filter_layout.addStretch(1)
+
+        card_layout.addLayout(filter_layout)
+
+        # ===== 表格区域 =====
+        headers = ["TCID", "Priority", "Tag", "Module", "Description", "Script"]
+        self.list_widget = FormListPage(
+            headers=headers,
+            rows=[],  # 初始空
+            checkable=True,  # ← 启用勾选列！
+            parent=self
+        )
+        self.list_widget.setSizePolicy(
+            self.list_widget.sizePolicy().horizontalPolicy(),
+            self.list_widget.sizePolicy().verticalPolicy()
+        )
+        card_layout.addWidget(self.list_widget, 1)
+
+
+        # 将卡片添加到主布局
+        main_layout.addWidget(card)
+
         self.save_plan_btn.clicked.connect(self.on_save_plan_clicked)
-        self.reset_btn.clicked.connect(self.on_reset_clicked)
         self.load_plan_btn.clicked.connect(self.on_load_plan_clicked)
 
-        # 创建一个水平布局来容纳按钮（每行两个，现在只有一行）
-        button_row = QHBoxLayout()
-        button_row.setSpacing(8)
-        button_row.addWidget(self.save_plan_btn)
-        button_row.addWidget(self.load_plan_btn)
-        button_row.addWidget(self.reset_btn)
-
-        # 将水平布局添加到右侧的垂直布局中
-        right_layout.addLayout(button_row)
-        splitter.addWidget(right_widget)
-        # 设置初始比例和 stretch factor
-        splitter.setSizes([250, 400])
-        splitter.setStretchFactor(0, 0)  # 左侧不扩展
-        splitter.setStretchFactor(1, 1)  # 右侧可扩展
-        # 将 splitter 添加到主布局，stretch factor 为 1 占据剩余空间
-        main_layout.addWidget(splitter, 1)
         # 加载文件
-        self.load_test_files()
+        #self.load_test_files()
+
+    def load_test_case_files(self):
+        """从 test_config.yaml 加载测试脚本信息并填入 FormListPage"""
+        current_file = Path(__file__).resolve()
+        project_root = current_file.parent.parent.parent.parent
+        config_path = project_root / "test" / "project" / "test_config.yaml"
+
+        # 重置选项集合
+        self.priority_options.clear()
+        self.tag_options.clear()
+        self.module_options.clear()
+        print("Type of priority_options:", type(self.priority_options))
+        self.all_rows.clear()
+
+        if not config_path.exists():
+            print(f"❌ Config file not found: {config_path}")
+            self.list_widget.set_rows([])  # 清空
+            return
+
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = yaml.safe_load(f)
+        except Exception as e:
+            print(f"❌ Failed to load YAML: {e}")
+            self.list_widget.set_rows([])
+            return
+
+        scripts = config.get("scripts", [])
+        if not isinstance(scripts, list):
+            print("❌ 'scripts' is not a list in YAML!")
+            self.list_widget.set_rows([])
+            return
+
+        rows = [] # 局部列表用于传给 list_widget
+        for script in scripts:
+            if not isinstance(script, dict):
+                continue
+            # 提取字段
+            tcid = str(script.get("TCID", ""))
+            priority = str(script.get("priority", "P2"))
+            module = str(script.get("module", ""))
+            description = str(script.get("description", ""))
+            script_path = str(script.get("path", ""))
+            tag = str(script.get("Tag", ""))  # ← 新增 tag 字段
+
+            # 跳过无效行
+            if not (tcid or script_path):
+                continue
+
+            # 收集筛选选项
+            if priority:
+                self.priority_options.add(priority)
+            if tag:
+                self.tag_options.add(tag)
+            if module:
+                self.module_options.add(module)
+
+            row_data = {
+                "TCID": tcid,
+                "Priority": priority,
+                "Module": module,
+                "Tag": tag,
+                "Description": description,
+                "Script": script_path,
+                "_checked": True
+            }
+            rows.append(row_data)  # ← 新增：添加到 rows
+            self.all_rows.append(row_data)
+
+        # ✅ 关键：先清空再设置
+        print(f"[DEBUG] Loading {len(rows)} valid rows into FormListPage")
+        print(f"[DEBUG] Found {len(scripts)} scripts")
+        print(f"[DEBUG] Loaded {len(rows)} valid rows")
+        print(f"[DEBUG] Priority options: {self.priority_options}")
+        print(f"[DEBUG] Tag options: {self.tag_options}")
+        print(f"[DEBUG] Module options: {self.module_options}")
+        self.list_widget.set_rows([])
+        self.list_widget.set_rows(rows)
+
+        # # 排序选项
+        # self.priority_options = sorted(self.priority_options)
+        # self.tag_options = sorted(self.tag_options)
+        # self.module_options = sorted(self.module_options)
+
+        # === 新增：更新 ComboBox 选项 ===
+        self.priority_combo.clear()
+        self.priority_combo.addItems(["All"] + sorted(self.priority_options))
+        self.module_combo.clear()
+        self.module_combo.addItems(["All"] + sorted(self.module_options))
+        self.tag_combo.clear()
+        self.tag_combo.addItems(["All"] + sorted(self.tag_options))
+
+        # 首次加载全部
+        self.apply_filters()
+
+    def get_case_config(self) -> dict:
+        """返回所有被勾选的脚本路径"""
+        selected_paths = []
+        for row in self.list_widget.rows:
+            if row.get("_checked", False):  # ← 关键：读 _checked 字段
+                selected_paths.append(row["Script"])
+        return {"selected_files": selected_paths}
 
     def load_test_files(self):
         """从 test_config.yaml 加载测试脚本"""
-        self.file_list.clear()
+        self.test_script_items = []
+        #self.file_list.clear()
         # 定位到 project 目录下的 test_config.yaml
         current_file = Path(__file__).resolve()
         src_dir = Path(__file__).parent.parent.parent.parent.resolve()
@@ -198,8 +345,7 @@ class FunctionConfigForm(QWidget):
             if not path or not path.endswith(".py") or not path.startswith("stb/"):
                 print(f"⚠️ Skip invalid path: {path}")
                 continue
-            normalized_path = path.replace("\\", "/")
-            display_path = f"project/{normalized_path}"
+            display_path = f"project/{path.replace('\\', '/')}"
             meta = {
                 'display_path': display_path,
                 'priority': priority,
@@ -250,12 +396,10 @@ class FunctionConfigForm(QWidget):
         from pathlib import Path
         import pandas as pd
 
-        # 1. 确定默认打开目录 (dist/)
+        # 1. 确定默认打开目录
         default_dist_dir = get_config_base()
-        #default_dist_dir = project_root / "dist"
-
         if not default_dist_dir.exists():
-            default_dist_dir = Path.home()  # 如果 dist 不存在，回退到用户主目录
+            default_dist_dir = Path.home()
 
         # 2. 打开文件选择对话框
         file_path, _ = QFileDialog.getOpenFileName(
@@ -264,62 +408,45 @@ class FunctionConfigForm(QWidget):
             str(default_dist_dir),
             "Excel Files (*.xlsx)"
         )
-
         if not file_path:
-            return  # 用户取消了操作
+            return
 
         try:
             # 3. 读取 Excel 文件
             df = pd.read_excel(file_path)
             if "Script Path" not in df.columns:
                 raise ValueError("Excel file must contain a 'Script Path' column.")
-
             selected_script_paths = df["Script Path"].dropna().tolist()
 
-            # 4. 构建一个快速查找字典，用于匹配 test_config.yaml 中的脚本
-            # 假设 self.all_script_items 已经通过 load_test_files() 加载
-            script_meta_dict = {meta['original_path']: meta for meta in getattr(self, 'all_script_items', [])}
+            # 4. 先将所有行设为未勾选
+            for row in self.all_rows:
+                row["_checked"] = False
 
-            # 5. 重置所有复选框为未选中状态
-            for i in range(self.file_list.count()):
-                item = self.file_list.item(i)
-                item.setCheckState(Qt.Unchecked)
-
-            # 6. 遍历 Excel 中的脚本，如果在 test_config.yaml 中找到，则勾选
+            # 5. 根据 Excel 内容勾选匹配的行
             found_count = 0
-            for script_path in selected_script_paths:
-                if script_path in script_meta_dict:
-                    # 我们需要在 UI 列表中找到对应的项并勾选
-                    # 由于 apply_filters 会根据当前筛选条件显示/隐藏项，
-                    # 最可靠的方式是重新应用过滤器，并在过程中标记应勾选的项。
-                    pass  # 我们将在下一步处理
+            selected_set = set(selected_script_paths)
+            for row in self.all_rows:
+                if row["Script"] in selected_set:
+                    row["_checked"] = True
+                    found_count += 1
 
-            # 7. 【关键】为了正确勾选，我们需要临时记住要勾选的路径
-            self._paths_to_check_on_load = set(selected_script_paths) & set(script_meta_dict.keys())
-            found_count = len(self._paths_to_check_on_load)
-
-            # 8. 重新应用过滤器，这会刷新列表，并在 apply_filters 中处理勾选
+            # 6. 刷新 UI（应用当前筛选条件 + 更新勾选状态）
             self.apply_filters()
 
-            # 9. 清理临时变量
-            delattr(self, '_paths_to_check_on_load')
-
-            # 10. 保存 last_function_plan.txt
+            # 7. 保存最后加载的路径
             config_base = get_config_base()
             config_base.mkdir(exist_ok=True)
-
             last_plan_file = config_base / "last_function_plan.txt"
             with open(last_plan_file, 'w', encoding='utf-8') as f:
                 f.write(str(Path(file_path).resolve()))
 
-            # 11. 给用户反馈
+            # 8. 用户反馈
             QMessageBox.information(
                 self,
                 "Load Successful",
                 f"Successfully loaded {found_count} out of {len(selected_script_paths)} test cases from:\n{file_path}"
             )
             print(f"✅ Test plan loaded from: {file_path}")
-            print(f"📝 Last function plan path saved to: {last_plan_file}")
 
         except Exception as e:
             error_msg = f"Failed to load test plan: {e}"
@@ -327,97 +454,60 @@ class FunctionConfigForm(QWidget):
             QMessageBox.critical(self, "Load Error", error_msg)
 
     def apply_filters(self):
-        #self.file_list.clear()
-        # 获取当前选择的优先级
-        selected_priority = "All"
-        for btn in self.priority_buttons.buttons():
-            if btn.isChecked():
-                selected_priority = btn.text()
-                break
-        # 获取当前选中的测试套件
-        selected_suites = set()
-        for cb in self.module_checkboxes:
-            if cb.isChecked():
-                selected_suites.add(cb.text())  # "Status Check", "Mode"
-        # 清空列表
-        self.file_list.clear()
+        """根据 ComboBox 的选择过滤显示行"""
+        selected_priority = self.priority_combo.currentText()
+        selected_module = self.module_combo.currentText()
+        selected_tag = self.tag_combo.currentText()
 
-        # --- 260105 新增：检查是否存在待勾选的路径 ---
-        paths_to_check = getattr(self, '_paths_to_check_on_load', None)
-
-        # 过滤并添加
-        for meta in getattr(self, 'all_script_items', []):
-            # --- 新增：防御性检查 ---
-            raw_display_path = meta.get('display_path', '')
-            if not isinstance(raw_display_path, str):
-                raw_display_path = str(raw_display_path)
-            display_path = raw_display_path.strip()
-            # 跳过明显无效的路径
-            if not display_path or display_path == "project/":
-                print(f"⚠️ Warning: Skipping invalid display_path: '{raw_display_path}'")
+        filtered_rows = []
+        for row in self.all_rows:
+            # Priority 过滤
+            if selected_priority != "All" and row["Priority"] != selected_priority:
                 continue
-            # 优先级匹配
-            if selected_priority != "All" and meta['priority'] != selected_priority:
+            # Tag 过滤
+            if selected_tag != "All" and row["Tag"] != selected_tag:
                 continue
-            # 套件匹配：只要有一个选中 suite 在脚本的 suites 中即可
-            if selected_suites and not (selected_suites & meta['suites']):
+            # Module 过滤（字段名必须一致！）
+            if selected_module != "All" and row["Module"] != selected_module:
                 continue
+            filtered_rows.append(row)
 
-            item = QListWidgetItem(meta['display_path'])
-            # 🟩 关键修复：显式设置前景色（文字）和背景色
-            item.setForeground(QColor(255, 255, 255))  # 白色文字
-            item.setBackground(QColor(42, 42, 42))  # 深灰色背景（#2a2a2a）
-            item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
-
-            # item.setCheckState(Qt.Checked)
-            # item.setData(Qt.UserRole, meta)
-            # self.file_list.addItem(item)
-            # item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
-            # item.setCheckState(Qt.Checked)  # 可选：存 meta 供后续使用
-            # --- 关键修改：根据上下文决定初始勾选状态 ---
-            if paths_to_check is not None:
-                # 处于 "Load Plan" 流程中
-                is_checked = meta['original_path'] in paths_to_check
-            else:
-                # 正常流程（如 Reset 或初始加载），默认全选
-                is_checked = True
-
-            item.setCheckState(Qt.Checked if is_checked else Qt.Unchecked)
-            item.setData(Qt.UserRole, meta)
-            self.file_list.addItem(item)
+        # 直接更新 FormListPage
+        self.list_widget.set_rows(filtered_rows)
 
     def on_save_plan_clicked(self):
         """槽函数：当 'Save Plan' 按钮被点击时调用"""
-        # 1. 收集当前所有被勾选的文件路径
+        # 1. 收集当前所有被勾选的文件路径（从 FormListPage）
         selected_paths = []
-        for i in range(self.file_list.count()):
-            item = self.file_list.item(i)
-            if item.checkState() == Qt.Checked:
-                meta = item.data(Qt.UserRole)
-                original_path = meta.get('original_path', '')
-                if original_path:
-                    selected_paths.append(original_path)
+        for row in self.list_widget.rows:
+            if row.get("_checked", False):
+                script_path = row.get("Script", "")
+                if script_path:
+                    selected_paths.append(script_path)
+
         if not selected_paths:
             print("No test files are selected to save.")
             return
+
         # 2. 打开文件保存对话框
-        # --- 关键修改1: 确定默认的“起始目录”为项目根目录下的 dist ---
         default_dist_dir = get_config_base()
-        default_dist_dir.mkdir(exist_ok=True)  # 确保 dist 目录存在
-        # --- 关键修改2: 弹出保存对话框 ---
+        default_dist_dir.mkdir(exist_ok=True)
         default_filename = f"Function_test_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
         default_filepath = default_dist_dir / default_filename
+
         file_path, _ = QFileDialog.getSaveFileName(
-            self, "Save Test Plan",  # 对话框标题
-            str(default_filepath),  # 默认路径和文件名
-            "Excel Files (*.xlsx)"  # 文件过滤器
+            self,
+            "Save Test Plan",
+            str(default_filepath),
+            "Excel Files (*.xlsx)"
         )
-        if not file_path:  # 用户点击了取消
+        if not file_path:
             return
-        # 3. 确保文件扩展名为 .xlsx
+
         if not file_path.lower().endswith('.xlsx'):
             file_path += '.xlsx'
-        # 4. 创建 DataFrame 并保存为 Excel
+
+        # 3. 创建 DataFrame 并保存
         try:
             data = []
             for path in selected_paths:
@@ -429,14 +519,14 @@ class FunctionConfigForm(QWidget):
                     "Duration (s)": "",
                     "Log/Report": ""
                 })
+
             df = pd.DataFrame(data)
             df.to_excel(file_path, index=False, engine='openpyxl')
             print(f"✅ Test plan saved successfully to: {file_path}")
-            # TODO: 可以在这里弹出一个成功的提示框 (QMessageBox)
 
-            # --- 关键新增：保存路径到 last_function_plan.txt ---
+            # 保存最后路径
             config_base = get_config_base()
-            config_base.mkdir(exist_ok=True)  # 确保 config 目录存在
+            config_base.mkdir(exist_ok=True)
             last_plan_file = config_base / "last_function_plan.txt"
             with open(last_plan_file, 'w', encoding='utf-8') as f:
                 f.write(str(Path(file_path).resolve()))
@@ -444,14 +534,20 @@ class FunctionConfigForm(QWidget):
 
         except Exception as e:
             print(f"❌ Failed to save test plan: {e}")
-            # TODO: 可以在这里弹出一个错误提示框 (QMessageBox)
-
-
+            QMessageBox.critical(self, "Save Error", f"Failed to save test plan:\n{str(e)}")
 
     def on_reset_clicked(self):
-        """槽函数：当 'Reset' 按钮被点击时调用"""
-        print("Reset clicked!")
-        # 重置功能就是重新从 test_config.yaml 加载所有脚本，并恢复所有勾选状态
-        self.load_test_files()
+        """重置所有筛选条件，并恢复所有用例为勾选状态"""
+        # 1. 重置 ComboBox 为 "All"
+        self.priority_combo.setCurrentText("All")
+        self.module_combo.setCurrentText("All")
+        self.tag_combo.setCurrentText("All")
+
+        # 2. 将所有行设为勾选
+        for row in self.all_rows:
+            row["_checked"] = True
+
+        # 3. 刷新表格（显示全部且全选）
+        self.list_widget.set_rows(self.all_rows)
 
     # --- 移除了 _on_plan_finished 方法 ---
