@@ -383,7 +383,6 @@ class CaseRunner(QThread):
         return messages
 
 def _is_project_test_script(case_path: str) -> bool:
-    """判断是否为 project/ 下的功能测试脚本"""
     parts = Path(case_path).resolve().parts
     for i in range(len(parts) - 2):
         if (str(parts[i]).lower() == "src" and
@@ -394,21 +393,16 @@ def _is_project_test_script(case_path: str) -> bool:
 
 
 def _extract_project_relative_path(case_path: str) -> Path:
-    """
-    从完整路径中提取相对于 'src/test/project/' 的部分
-    例如: C:/.../src/test/project/stb/test.py → stb/test.py
-    前提: 调用者需确保路径确实是 project 测试（即 _is_project_test_script 返回 True）
-    """
     p = Path(case_path).resolve()
     parts = p.parts
 
-    # 查找连续的 src/test/project
+    # 查找连续�?src/test/project
     for i in range(len(parts) - 2):
         if (str(parts[i]).lower() == "src" and
                 str(parts[i + 1]).lower() == "test" and
                 str(parts[i + 2]).lower() == "project"):
-            # 返回 project/ 之后的所有部分
-            relative_parts = parts[i + 3:]  # 注意是 i+3，跳过 src/test/project
+            # 返回 project/ 之后的所有部�?
+            relative_parts = parts[i + 3:]  # 注意�?i+3，跳�?src/test/project
             return Path(*relative_parts)
 
     # 理论上不会执行到这里（因为调用前已判断）
@@ -466,7 +460,7 @@ def _init_worker_env(
     pytest_args = _apply_exitfirst_flags(pytest_args, plan)
 
     return _WorkerContext(
-        case_path=pytest_case_path,  # ✅ Consistent
+        case_path=case_path,
         queue=q,
         pytest_args=pytest_args,
         report_dir=report_dir,
@@ -671,7 +665,7 @@ class ExcelPlanRunner(QThread):
         root_logger = logging.getLogger()
         self.old_handlers = root_logger.handlers[:]
         self.old_level = root_logger.level
-        # 清空处理器，防止日志污染主进程
+        # 清空处理器，防止日志污染主进�?
         root_logger.handlers.clear()
         # --- End of new block ---
 
@@ -733,9 +727,9 @@ class ExcelPlanRunner(QThread):
                             if item.name == "debug":
                                 continue
 
-                            # --- 关键修改：特殊处理 python.log ---
+                            # --- 关键修改：特殊处�?python.log ---
                             if item.name == "python.log" and item.is_file():
-                                # 将此 Case 的 python.log 内容追加到主日志文件
+                                # 将此 Case �?python.log 内容追加到主日志文件
                                 try:
                                     with open(item, 'r', encoding='utf-8') as src_log, \
                                             open(main_python_log, 'a', encoding='utf-8') as dst_log:
@@ -749,13 +743,13 @@ class ExcelPlanRunner(QThread):
                                         f"<b style='color:orange;'>Failed to append log from {item}: {e}</b>")
                                 continue  # 处理完就跳过下面的通用复制逻辑
 
-                                # --- 新增：处理 debug.log ---
+                                # --- 新增：处�?debug.log ---
                             elif item.name == "debug.log" and item.is_file():
-                                # 将此 Case 的 debug.log 内容追加到主 debug.log 文件
+                                # 将此 Case �?debug.log 内容追加到主 debug.log 文件
                                 try:
                                     with open(item, 'r', encoding='utf-8') as src_log, \
                                             open(main_debug_log, 'a', encoding='utf-8') as dst_log:
-                                        # 添加分隔符
+                                        # 添加分隔�?
                                         dst_log.write(f"\n\n{'=' * 80}\n")
                                         dst_log.write(f"DEBUG LOG FROM CASE: {script_path}\n")
                                         dst_log.write(f"{'=' * 80}\n\n")
@@ -780,7 +774,7 @@ class ExcelPlanRunner(QThread):
                                 else:
                                     shutil.copytree(item, dest, dirs_exist_ok=True)
 
-                    # --- 260105 新增：清理 CaseRunner 生成的临时报告目录 ---
+                    # --- 260105 新增：清�?CaseRunner 生成的临时报告目�?---
                     if runner._report_dir:
                         case_report_dir = Path(runner._report_dir)
                         if case_report_dir.exists():
@@ -805,9 +799,9 @@ class ExcelPlanRunner(QThread):
             # --- 260105 新增：恢复根日志记录器的处理器和级别 ---
             import logging
             root_logger = logging.getLogger()
-            # 清理当前可能存在的处理器（由子 CaseRunner 添加的）
+            # 清理当前可能存在的处理器（由�?CaseRunner 添加的）
             root_logger.handlers.clear()
-            # 恢复原始的处理器和日志级别
+            # 恢复原始的处理器和日志级�?
             for handler in getattr(self, 'old_handlers', []):
                 root_logger.addHandler(handler)
             root_logger.setLevel(getattr(self, 'old_level', logging.WARNING))
@@ -824,7 +818,7 @@ class ExcelPlanRunner(QThread):
         except Exception as e:
             self.log_signal.emit(f"<b style='color:orange;'>Failed to update Excel: {e}</b>")
 
-    # --- 在 ExcelPlanRunner 类中新增方法 ---
+    # --- �?ExcelPlanRunner 类中新增方法 ---
     def _merge_directories(self, src: Path, dst: Path):
         """
         Recursively merge the contents of src directory into dst directory.
@@ -841,7 +835,7 @@ class ExcelPlanRunner(QThread):
     def stop(self) -> None:
         """Stop the runner and its current child CaseRunner if any."""
         self.requestInterruption()
-        # 260105 如果有正在运行的子 CaseRunner，也尝试停止它
+        # 260105 如果有正在运行的�?CaseRunner，也尝试停止�?
         if self._current_case_runner is not None:
             try:
                 self._current_case_runner.stop()

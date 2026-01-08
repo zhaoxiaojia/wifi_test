@@ -47,6 +47,7 @@ from src.ui.view.config.config_compatibility import (
 )
 
 from src.ui.view.config.config_function import FunctionConfigForm
+from src.ui.view.run import apply_run_action_button_style
 
 
 class RvrWifiConfigPage(CardWidget):
@@ -141,6 +142,12 @@ class RvrWifiConfigPage(CardWidget):
         # Hidden by default until the Config page decides which mode
         # should be active for the selected testcase.
         self._content.setVisible(False)
+
+        self.run_btn = PushButton("Run", self)
+        apply_run_action_button_style(self.run_btn)
+        self.run_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.run_btn.clicked.connect(self._on_run_clicked)
+        outer.addWidget(self.run_btn, 0)
 
     def set_case_content_visible(self, visible: bool) -> None:
         """Show or hide the RvR Wi-Fi UI for the current case."""
@@ -238,6 +245,11 @@ class RvrWifiConfigPage(CardWidget):
                 setattr(cfg_page, "_refreshing", False)
             except Exception:
                 pass
+
+    def _on_run_clicked(self) -> None:
+        main_window = self.window()
+        if hasattr(main_window, "caseConfigPage"):
+            main_window.caseConfigPage.config_ctl.on_run()
 
     # --- router / CSV helpers -------------------------------------------------
 

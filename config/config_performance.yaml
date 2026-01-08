@@ -16,10 +16,10 @@ rf_solution:
     channels: 1,2,3,8
   model: LDA-908V-8
   step: ''
-text_case: test/stability/test_soft_reboot_str.py
+text_case: test/performance/test_wifi_peak_throughput.py
 debug:
   database_mode: false
   skip_router: true
   skip_corner_rf: false
-  skip_connect: false
-csv_path: performance_test_csv/ai_wifi_scenarios.csv
+  skip_connect: true
+csv_path: performance_test_csv/xiaomi_rvr_wifi5.csv

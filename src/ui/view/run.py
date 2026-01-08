@@ -24,7 +24,7 @@ from qfluentwidgets import CardWidget, PushButton, StrongBodyLabel
 from PyQt5 import sip
 
 from src.util.constants import get_src_base, Paths
-from src.ui.controller.run_ctl import CaseRunner
+from src.ui.controller.run_ctl import CaseRunner, ExcelPlanRunner
 from src.ui.view.theme import ACCENT_COLOR, CONTROL_HEIGHT, FONT_FAMILY, apply_theme, format_log_html
 from src.ui.view.common import animate_progress_fill, attach_view_to_page
 from qfluentwidgets import MessageBox
@@ -43,6 +43,38 @@ def _is_project_test_script(case_path: str) -> bool:
                 str(parts[i + 2]).lower() == "project"):
             return True
     return False
+
+
+def apply_run_action_button_style(button: PushButton) -> None:
+    button.setObjectName("actionBtn")
+    button.setStyleSheet(
+        f"""
+        #actionBtn {{
+            background-color: {ACCENT_COLOR};
+            color: white;
+            border: none;
+            border-radius: 4px;
+            height: {CONTROL_HEIGHT}px;
+            font-family: {FONT_FAMILY};
+            padding: 0 20px;
+        }}
+        #actionBtn:hover {{
+            background-color: #0b5ea8;
+        }}
+        #actionBtn:pressed {{
+            background-color: #084a85;
+        }}
+        #actionBtn:disabled {{
+            background-color: rgba(0,103,192,0.35);
+            color: rgba(255,255,255,0.6);
+        }}
+        """
+    )
+    if hasattr(button, "setUseRippleEffect"):
+        button.setUseRippleEffect(True)
+    if hasattr(button, "setUseStateEffect"):
+        button.setUseStateEffect(True)
+    button.setFixedHeight(CONTROL_HEIGHT)
 
 class RunView(CardWidget):
     """Pure UI view for executing and monitoring test runs."""
@@ -169,35 +201,7 @@ class RunView(CardWidget):
 
         # Action button
         self.action_btn = PushButton(self)
-        self.action_btn.setObjectName("actionBtn")
-        self.action_btn.setStyleSheet(
-            f"""
-            #actionBtn {{
-                background-color: {ACCENT_COLOR};
-                color: white;
-                border: none;
-                border-radius: 4px;
-                height: {CONTROL_HEIGHT}px;
-                font-family: {FONT_FAMILY};
-                padding: 0 20px;
-            }}
-            #actionBtn:hover {{
-                background-color: #0b5ea8;
-            }}
-            #actionBtn:pressed {{
-                background-color: #084a85;
-            }}
-            #actionBtn:disabled {{
-                background-color: rgba(0,103,192,0.35);
-                color: rgba(255,255,255,0.6);
-            }}
-            """
-        )
-        if hasattr(self.action_btn, "setUseRippleEffect"):
-            self.action_btn.setUseRippleEffect(True)
-        if hasattr(self.action_btn, "setUseStateEffect"):
-            self.action_btn.setUseStateEffect(True)
-        self.action_btn.setFixedHeight(CONTROL_HEIGHT)
+        apply_run_action_button_style(self.action_btn)
         layout.addWidget(self.action_btn)
 
         # Logical control map
@@ -702,4 +706,4 @@ class RunPage(CardWidget):
 
 
 
-__all__ = ["RunView", "RunPage"]
+__all__ = ["RunView", "RunPage", "apply_run_action_button_style"]

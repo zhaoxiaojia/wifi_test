@@ -624,7 +624,7 @@ class ConfigController(
 
     def _on_action_run(self, event: UiEvent) -> None:
         _ = event
-        self.on_run()  # type: ignore[call-arg]
+        self.on_create_case()  # type: ignore[call-arg]
 
     # ------------------------------------------------------------------
     # FPGA helpers
@@ -1474,6 +1474,54 @@ class ConfigController(
                 "Pls select a test case before test",
                 duration=1800,
             )
+
+    def on_create_case(self) -> None:
+        """Prepare config state and open the Case page without starting a run."""
+        page = self.page
+        if not self.validate_first_page():
+            page.stack.setCurrentIndex(0)
+            return
+
+        page.config = self.load_initial_config()
+        self.capture_preselected_csv()
+        self.sync_widgets_to_config()
+        if not self.validate_test_str_requirements():
+            return
+
+        base = Path(self.get_application_base())
+        case_path = page.config.get("text_case", "")
+        abs_case_path = (base / case_path).resolve().as_posix() if case_path else ""
+
+        proxy_idx = page.case_tree.currentIndex()
+        model = page.case_tree.model()
+        src_idx = (
+            model.mapToSource(proxy_idx)
+            if isinstance(model, QSortFilterProxyModel)
+            else proxy_idx
+        )
+        selected_path = page.fs_model.filePath(src_idx)
+        if os.path.isfile(selected_path) and selected_path.endswith(".py"):
+            abs_path = Path(selected_path).resolve()
+            display_path = os.path.relpath(abs_path, base)
+            case_path = Path(display_path).as_posix()
+            abs_case_path = abs_path.as_posix()
+            page.config["text_case"] = case_path
+
+        self.save_config()
+
+        if not (os.path.isfile(abs_case_path) and abs_case_path.endswith(".py")):
+            show_info_bar(
+                page,
+                "warning",
+                "Hint",
+                "Please select a test case before creating a case.",
+                duration=1800,
+            )
+            return
+
+        main_window = page.window()
+        if hasattr(main_window, "rvr_wifi_config_page"):
+            main_window.setCurrentIndex(main_window.rvr_wifi_config_page)
 
 
 
