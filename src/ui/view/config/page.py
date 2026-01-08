@@ -251,8 +251,8 @@ class ConfigView(CardWidget):
 
     def _create_run_button(self, parent: QWidget) -> PushButton:
         """Create a Run button for the page (UI only)."""
-        button = PushButton("Run", parent)
-        button.setIcon(FluentIcon.PLAY)
+        button = PushButton("Create Case", parent)
+        button.setIcon(FluentIcon.ADD)
         if hasattr(button, "setUseRippleEffect"):
             button.setUseRippleEffect(True)
         if hasattr(button, "setUseStateEffect"):
