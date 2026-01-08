@@ -185,6 +185,7 @@ class CaseRunner(QThread):
     log_signal = pyqtSignal(str)
     progress_signal = pyqtSignal(int)
     report_dir_signal = pyqtSignal(str)
+    finished_signal = pyqtSignal()
 
     def __init__(self, case_path: str, account_name: str | None = None, display_case_path: str | None = None, parent=None):
         super().__init__(parent)
@@ -263,6 +264,7 @@ class CaseRunner(QThread):
         self.log_signal.emit(queue_msg)
         for message in self._try_copy_python_log():
             self.log_signal.emit(message)
+        self.finished_signal.emit()
 
     def stop(self) -> None:
         """Request the worker process to terminate."""
@@ -409,7 +411,9 @@ def _extract_project_relative_path(case_path: str) -> Path:
     raise ValueError(f"Path does not contain 'src/test/project': {case_path}")
 
 def _init_worker_env(
-    case_path: str, q: multiprocessing.Queue, log_file_path_str: str | None
+        case_path: str,
+        q: multiprocessing.Queue,
+        log_file_path_str: str | None = None
 ) -> "_WorkerContext":
     """Prepare logging, report directories, and pytest arguments."""
     session = _RunLogSession(q, log_file_path_str)
@@ -424,11 +428,42 @@ def _init_worker_env(
     with suppress(Exception):
         q.put(("report_dir", str(report_dir)))
     plugin = install_redactor_for_current_process()
+
+    # --- CORRECT PATH HANDLING (兼容开发/打包) ---
+    input_path = Path(case_path)
+    if input_path.is_absolute():
+        absolute_test_path = input_path.resolve()
+    else:
+        # --- 智能定位 base_dir ---
+        if getattr(sys, 'frozen', False):
+            # 打包模式 (PyInstaller): 资源在临时目录 _MEIPASS 中
+            base_dir = Path(sys._MEIPASS)
+        else:
+            # 开发模式: 从当前文件回溯到项目根目录
+            # run_ctl.py 路径: .../src/ui/controller/run_ctl.py
+            base_dir = Path(__file__).resolve().parents[3]  # -> 项目根目录
+        # --- 构建测试脚本的绝对路径 ---
+        absolute_test_path = base_dir / "src/test/project" / case_path
+
+    if not absolute_test_path.exists():
+        raise FileNotFoundError(f"Test file not found: {absolute_test_path}")
+    # --- END PATH HANDLING ---
+
+    # Derive the path to pass to pytest (relative to CWD if possible)
+    try:
+        relative_path = absolute_test_path.relative_to(Path.cwd())
+        pytest_case_path = str(relative_path).replace("\\", "/")  # Use forward slashes for pytest
+    except ValueError:
+        # If outside project root, use absolute path
+        pytest_case_path = str(absolute_test_path)
+    # --- END PATH HANDLING ---
+
+    # --- Use pytest_case_path everywhere from now on ---
     pytest_args = [
         "--rootdir=.",
         "--import-mode=importlib",
         f"--resultpath={report_dir}",
-        case_path,
+        pytest_case_path,
     ]
     from src.util.constants import load_config
 
@@ -455,12 +490,11 @@ def _init_worker_env(
 
     # Only apply stability retry/exit-first flags for stability cases.
     is_stability_case = is_stability_case_path(case_path)
-
     plan = load_stability_plan() if is_stability_case else None
     pytest_args = _apply_exitfirst_flags(pytest_args, plan)
 
     return _WorkerContext(
-        case_path=case_path,
+        case_path=pytest_case_path,  # ✅ Consistent
         queue=q,
         pytest_args=pytest_args,
         report_dir=report_dir,
@@ -665,7 +699,8 @@ class ExcelPlanRunner(QThread):
         root_logger = logging.getLogger()
         self.old_handlers = root_logger.handlers[:]
         self.old_level = root_logger.level
-        # 清空处理器，防止日志污染主进�?
+
+        # 清空处理器，防止日志污染主进程
         root_logger.handlers.clear()
         # --- End of new block ---
 
@@ -727,9 +762,9 @@ class ExcelPlanRunner(QThread):
                             if item.name == "debug":
                                 continue
 
-                            # --- 关键修改：特殊处�?python.log ---
+                            # --- 关键修改：特殊处理 python.log ---
                             if item.name == "python.log" and item.is_file():
-                                # 将此 Case �?python.log 内容追加到主日志文件
+                                # 将此 Case 的 python.log 内容追加到主日志文件
                                 try:
                                     with open(item, 'r', encoding='utf-8') as src_log, \
                                             open(main_python_log, 'a', encoding='utf-8') as dst_log:
@@ -742,14 +777,13 @@ class ExcelPlanRunner(QThread):
                                     self.log_signal.emit(
                                         f"<b style='color:orange;'>Failed to append log from {item}: {e}</b>")
                                 continue  # 处理完就跳过下面的通用复制逻辑
-
-                                # --- 新增：处�?debug.log ---
+                                # --- 新增：处理 debug.log ---
                             elif item.name == "debug.log" and item.is_file():
-                                # 将此 Case �?debug.log 内容追加到主 debug.log 文件
+                                # 将此 Case 的 debug.log 内容追加到主 debug.log 文件
                                 try:
                                     with open(item, 'r', encoding='utf-8') as src_log, \
                                             open(main_debug_log, 'a', encoding='utf-8') as dst_log:
-                                        # 添加分隔�?
+                                        # 添加分隔符
                                         dst_log.write(f"\n\n{'=' * 80}\n")
                                         dst_log.write(f"DEBUG LOG FROM CASE: {script_path}\n")
                                         dst_log.write(f"{'=' * 80}\n\n")
@@ -774,7 +808,7 @@ class ExcelPlanRunner(QThread):
                                 else:
                                     shutil.copytree(item, dest, dirs_exist_ok=True)
 
-                    # --- 260105 新增：清�?CaseRunner 生成的临时报告目�?---
+                    # --- 260105 新增：清理 CaseRunner 生成的临时报告目录 ---
                     if runner._report_dir:
                         case_report_dir = Path(runner._report_dir)
                         if case_report_dir.exists():
@@ -799,9 +833,9 @@ class ExcelPlanRunner(QThread):
             # --- 260105 新增：恢复根日志记录器的处理器和级别 ---
             import logging
             root_logger = logging.getLogger()
-            # 清理当前可能存在的处理器（由�?CaseRunner 添加的）
+            # 清理当前可能存在的处理器（由子 CaseRunner 添加的）
             root_logger.handlers.clear()
-            # 恢复原始的处理器和日志级�?
+            # 恢复原始的处理器和日志级别
             for handler in getattr(self, 'old_handlers', []):
                 root_logger.addHandler(handler)
             root_logger.setLevel(getattr(self, 'old_level', logging.WARNING))
@@ -818,7 +852,7 @@ class ExcelPlanRunner(QThread):
         except Exception as e:
             self.log_signal.emit(f"<b style='color:orange;'>Failed to update Excel: {e}</b>")
 
-    # --- �?ExcelPlanRunner 类中新增方法 ---
+    # --- 在 ExcelPlanRunner 类中新增方法 ---
     def _merge_directories(self, src: Path, dst: Path):
         """
         Recursively merge the contents of src directory into dst directory.
@@ -835,7 +869,8 @@ class ExcelPlanRunner(QThread):
     def stop(self) -> None:
         """Stop the runner and its current child CaseRunner if any."""
         self.requestInterruption()
-        # 260105 如果有正在运行的�?CaseRunner，也尝试停止�?
+
+        # 260105 如果有正在运行的子 CaseRunner，也尝试停止它
         if self._current_case_runner is not None:
             try:
                 self._current_case_runner.stop()
@@ -843,3 +878,4 @@ class ExcelPlanRunner(QThread):
                 logging.warning("Failed to stop child CaseRunner: %s", e)
 
 __all__ = ["reset_wizard_after_run", "LiveLogWriter", "CaseRunner", "ExcelPlanRunner"]
+
