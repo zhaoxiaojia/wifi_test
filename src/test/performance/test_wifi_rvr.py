@@ -41,7 +41,9 @@ def setup_attenuation(request, setup_router):
     db_set = request.param
     router_info, connect_status = setup_router
     rf_tool.execute_rf_cmd(db_set)
-    logging.info("Set attenuation: %s dB", rf_tool.get_rf_current_value())
+    current_value = rf_tool.get_rf_current_value()
+    print(f"[DEBUG_RF] setup_attenuation db_set={db_set} current={current_value}")
+    logging.info("Set attenuation: %s dB", current_value)
     pytest.dut.get_rssi()
     yield connect_status, router_info, db_set
     pytest.dut.kill_iperf()

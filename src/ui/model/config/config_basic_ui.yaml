@@ -39,11 +39,11 @@ panels:
             label: "Control Type"
             choices: ["Android", "Linux"]
           - key: connect_type.Android.device
-            widget: line_edit
+            widget: combo_box
             label: "Android Device"
             placeholder: "adb device identifier"
           - key: connect_type.Linux.ip
-            widget: line_edit
+            widget: combo_box
             label: "Linux IP"
             placeholder: "192.168.x.x"
           - key: connect_type.third_party.enabled
@@ -123,7 +123,7 @@ panels:
           - key: router.name
             widget: combo_box
             label: "Router"
-            choices: ["asusax88u", "asusax88upro", "asusax86u","ximaobe3600", "ximaobe7000"]
+            choices: ["asusax88u", "asusax88upro", "asusax86u","xiaomibe7000", "xiaomiax3600"]
           - key: router.address
             widget: line_edit
             label: "Router IP"

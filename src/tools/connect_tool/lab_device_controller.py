@@ -94,6 +94,7 @@ class LabDeviceController:
         if int(value) < 0 or int(value) > 110:
             assert 0, 'value must be in range 1-110'
         logging.info(f'Set rf value to {value}')
+        print(f"[DEBUG_RF] execute_rf_cmd model={self.model} value={value}")
         action = self._schedule_action(value)
         action()
         self._perform_cleanup()
@@ -136,13 +137,19 @@ class LabDeviceController:
         if self.model == 'RC4DAT-8G-95':
             self.tn.write("ATT?;".encode('ascii') + b'\r')
             res = self.tn.read_some().decode('ascii')
-            return res.split()[0]
+            print(f"[DEBUG_RF] RC4DAT ATT? raw={res!r}")
+            parsed = res.split()[0] if res.split() else ""
+            print(f"[DEBUG_RF] RC4DAT ATT? parsed={parsed!r}")
+            return parsed
         else:
             if not self.tn:
                 raise RuntimeError('Telnet connection not initialized')
             self.tn.write("ATT".encode('ascii') + b'\r\n')
             res = self.tn.read_some().decode('utf-8')
-            return list(map(int, re.findall(r'\s(\d+);', res)))
+            print(f"[DEBUG_RF] ATT raw={res!r}")
+            parsed = list(map(int, re.findall(r'\s(\d+);', res)))
+            print(f"[DEBUG_RF] ATT parsed={parsed!r}")
+            return parsed
 
     def _run_curl_command(self, endpoint, params):
         """

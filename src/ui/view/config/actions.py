@@ -912,6 +912,41 @@ def init_fpga_dropdowns(view: Any) -> None:
         logging.warning("[DEBUG_FPGA] init_fpga_dropdowns: required combos missing, abort")
         return
 
+    def _set_combo_text(combo: Any, text: str) -> None:
+        """Set combo selection with case-insensitive match when possible."""
+        if not text:
+            if combo.count():
+                combo.setCurrentIndex(0)
+            else:
+                combo.setCurrentIndex(-1)
+            return
+        target = str(text).strip()
+        if not target:
+            if combo.count():
+                combo.setCurrentIndex(0)
+            else:
+                combo.setCurrentIndex(-1)
+            return
+        try:
+            idx = combo.findText(target)
+        except Exception:
+            idx = -1
+        if idx < 0:
+            upper = target.upper()
+            try:
+                for i in range(combo.count()):
+                    if str(combo.itemText(i)).strip().upper() == upper:
+                        idx = i
+                        break
+            except Exception:
+                idx = -1
+        if idx >= 0:
+            combo.setCurrentIndex(idx)
+        elif combo.count():
+            combo.setCurrentIndex(0)
+        else:
+            combo.setCurrentIndex(-1)
+
     setattr(view, "fpga_customer_combo", customer_combo)
     setattr(view, "fpga_product_combo", product_combo)
     setattr(view, "fpga_project_combo", project_combo)
@@ -945,17 +980,17 @@ def init_fpga_dropdowns(view: Any) -> None:
 
     target_customer = str(project_cfg.get("customer") or customer_combo.currentText() or "").strip()
     if target_customer:
-        customer_combo.setCurrentText(target_customer)
+        _set_combo_text(customer_combo, target_customer)
     refresh_fpga_product_lines(view, target_customer)
 
     target_product = str(project_cfg.get("product_line") or product_combo.currentText() or "").strip()
     if target_product:
-        product_combo.setCurrentText(target_product)
+        _set_combo_text(product_combo, target_product)
     refresh_fpga_projects(view, target_customer, target_product)
 
     target_project = str(project_cfg.get("project") or project_combo.currentText() or "").strip()
     if target_project:
-        project_combo.setCurrentText(target_project)
+        _set_combo_text(project_combo, target_project)
 
     update_fpga_hidden_fields(view)
 
@@ -969,7 +1004,12 @@ def refresh_fpga_product_lines(view: Any, customer: str) -> None:
         logging.warning("[DEBUG_FPGA] refresh_fpga_product_lines: no fpga_product_combo")
         return
     customer_upper = (customer or "").strip().upper()
-    product_lines = WIFI_PRODUCT_PROJECT_MAP.get(customer_upper, {}) if customer_upper else {}
+    product_lines: dict[str, Any] = {}
+    if customer_upper:
+        for name, lines in WIFI_PRODUCT_PROJECT_MAP.items():
+            if str(name).strip().upper() == customer_upper:
+                product_lines = lines
+                break
     combo.clear()
     for product_name in product_lines.keys():
         combo.addItem(product_name)
@@ -987,7 +1027,14 @@ def refresh_fpga_projects(view: Any, customer: str, product_line: str) -> None:
     product_upper = (product_line or "").strip().upper()
     projects: dict[str, Any] = {}
     if customer_upper:
-        projects = WIFI_PRODUCT_PROJECT_MAP.get(customer_upper, {}).get(product_upper, {})
+        for customer_name, product_lines in WIFI_PRODUCT_PROJECT_MAP.items():
+            if str(customer_name).strip().upper() != customer_upper:
+                continue
+            for product_name, project_map in product_lines.items():
+                if str(product_name).strip().upper() == product_upper:
+                    projects = project_map
+                    break
+            break
     elif product_upper:
         for product_lines in WIFI_PRODUCT_PROJECT_MAP.values():
             if product_upper in product_lines:
@@ -1059,6 +1106,35 @@ def update_fpga_hidden_fields(page: Any) -> None:
     config = getattr(page, "config", None)
     if isinstance(config, dict):
         config["project"] = dict(normalized)
+
+    has_project = bool(project)
+    ecosystem = ""
+    if info:
+        ecosystem = str(info.get("ecosystem") or "").strip()
+    connect_combo = getattr(page, "connect_type_combo", None)
+    if ecosystem:
+        target_type = "Linux" if ecosystem.lower() == "linux" else "Android"
+        if isinstance(config, dict):
+            connect_cfg = config.setdefault("connect_type", {})
+            if isinstance(connect_cfg, dict):
+                connect_cfg["type"] = target_type
+        if connect_combo is not None:
+            set_connect_type_combo_selection(page, target_type)
+            try:
+                connect_combo.setCurrentText(target_type)
+            except Exception:
+                logging.debug("Failed to set connect_type text", exc_info=True)
+        try:
+            setattr(page, "_current_connect_type", lambda: target_type)
+        except Exception:
+            logging.debug("Failed to set _current_connect_type override", exc_info=True)
+        if connect_combo is not None:
+            handle_connect_type_changed(page, target_type)
+    if connect_combo is not None:
+        try:
+            connect_combo.setEnabled(not has_project)
+        except Exception:
+            logging.debug("Failed to toggle connect_type combo", exc_info=True)
 
     field_widgets = getattr(page, "field_widgets", {}) or {}
     for key, field_key in (

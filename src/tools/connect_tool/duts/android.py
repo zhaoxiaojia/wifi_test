@@ -117,6 +117,7 @@ class android(linux):
             self.remount()
 
     def _wifi_connect_impl(self, params: WifiConnectParams) -> bool:
+        self.wifi_forget()
         return bool(
             self._android_connect_wifi(
                 params.ssid,
@@ -144,12 +145,12 @@ class android(linux):
             logging.debug("has no wifi connect")
             return None
 
-        network_id = re.findall("\n(.*?) ", output)
-        if network_id:
-            forget_wifi_cmd = "cmd wifi forget-network {}".format(int(network_id[0]))
+        network_ids = re.findall(r"\n(\d+)\s", output)
+        for net_id in network_ids:
+            forget_wifi_cmd = "cmd wifi forget-network {}".format(int(net_id))
             output1 = self.checkoutput(forget_wifi_cmd)
             if "successful" in output1:
-                logging.info(f"Network id {network_id[0]} closed")
+                logging.info(f"Network id {net_id} closed")
         return None
 
     def push_iperf(self):

@@ -329,6 +329,7 @@ class PerfMixin:
             interval_pattern = re.compile(r"(\d+(?:\.\d*)?)\s*-\s*(\d+(?:\.\d*)?)\s*sec", re.IGNORECASE)
             interval_throughput: dict[tuple[str, str], dict[str, float]] = {}
             summary_interval_key: Optional[tuple[str, str]] = None
+            sum_interval_values: list[float] = []
             udp_metrics_local: Optional[IperfMetrics] = None
             has_summary_line = False
 
@@ -378,6 +379,8 @@ class PerfMixin:
                 if start_time < 0.5 and duration > 1.5:
                     summary_interval_key = interval_key
                     has_summary_line = True
+                elif "[SUM]" in line:
+                    sum_interval_values.append(throughput)
 
             has_receiver = any("receiver" in role_map for role_map in interval_throughput.values())
             values: list[float] = []
@@ -400,6 +403,8 @@ class PerfMixin:
 
             if summary_value is not None:
                 throughput_value = summary_value
+            elif sum_interval_values:
+                throughput_value = sum(sum_interval_values) / len(sum_interval_values)
             elif values:
                 throughput_value = sum(values) / len(values)
             elif udp_metrics_local and udp_metrics_local.throughput_mbps is not None:
@@ -544,7 +549,7 @@ class PerfMixin:
             rx_metrics_list.append(IperfMetrics(simulated))
             mcs_rx = "DEBUG"
         else:
-            for c in range(self.repest_times + 1):
+            for c in range(self.repest_times + 2):
                 rx_result = 0
                 mcs_rx = 0
                 if self.rvr_tool == "iperf":
@@ -583,6 +588,8 @@ class PerfMixin:
                     except Exception:
                         throughput = None
                     metrics = IperfMetrics(throughput)
+                if c == 0 and metrics.throughput_mbps is None:
+                    continue
                 mcs_rx = self.get_mcs_rx()
                 rx_metrics_list.append(metrics)
                 if len(rx_metrics_list) > self.repest_times:
@@ -662,7 +669,7 @@ class PerfMixin:
             tx_metrics_list.append(IperfMetrics(simulated))
             mcs_tx = "DEBUG"
         else:
-            for c in range(self.repest_times + 1):
+            for c in range(self.repest_times + 2):
                 tx_result = 0
                 mcs_tx = 0
                 if self.rvr_tool == "iperf":
@@ -703,6 +710,8 @@ class PerfMixin:
                     except Exception:
                         throughput = None
                     metrics = IperfMetrics(throughput)
+                if c == 0 and metrics.throughput_mbps is None:
+                    continue
                 tx_metrics_list.append(metrics)
                 if len(tx_metrics_list) > self.repest_times:
                     break
