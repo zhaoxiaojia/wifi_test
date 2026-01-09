@@ -582,6 +582,7 @@ class ReportController(RvrChartLogic, QObject):
         widget = InteractiveChartLabel()
         widget.setPixmap(pixmap)
         points: list[dict[str, object]] = []
+        data_to_pixels = ax.transData.transform
         for line in ax.get_lines():
             if not isinstance(line, Line2D):
                 continue
@@ -592,8 +593,8 @@ class ReportController(RvrChartLogic, QObject):
                     continue
                 if not math.isfinite(y):
                     continue
-                x_px = canvas.renderer.points_to_pixels(x)
-                y_px = canvas.renderer.points_to_pixels(y)
+                x_px, y_px = data_to_pixels((x, y))
+                y_px = height - y_px
                 tooltip = self._make_tooltip_html(
                     title,
                     x_label="Step",
@@ -701,14 +702,15 @@ class ReportController(RvrChartLogic, QObject):
         widget = InteractiveChartLabel()
         widget.setPixmap(pixmap)
         points: list[dict[str, object]] = []
+        data_to_pixels = ax.transData.transform
         for series_label, values in channel_series:
             for angle_deg, throughput in zip(angle_values, values):
                 if throughput is None:
                     continue
                 angle_rad = math.radians(angle_deg)
-                x = (angle_rad / (2 * math.pi)) * width
                 radius = float(throughput)
-                y = height / 2 - (radius / max_value) * (height / 2) if max_value > 0 else height / 2
+                x, y = data_to_pixels((angle_rad, radius))
+                y = height - y
                 tooltip = self._make_tooltip_html(
                     series_label,
                     x_label="Angle (deg)",

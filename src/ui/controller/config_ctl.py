@@ -1150,12 +1150,22 @@ class ConfigController(
             focus_widget = focus_widget or page.connect_type_combo
         elif connect_type == "Android":
             android_device_edit = widgets["connect_type.Android.device"]
-            if not android_device_edit.text().strip():
+            android_text = (
+                android_device_edit.currentText().strip()
+                if hasattr(android_device_edit, "currentText")
+                else android_device_edit.text().strip()
+            )
+            if not android_text or android_text == "No devices":
                 errors.append("ADB device is required.")
                 focus_widget = focus_widget or android_device_edit
         elif connect_type == "Linux":
             telnet_ip_edit = widgets["connect_type.Linux.ip"]
-            if not telnet_ip_edit.text().strip():
+            telnet_text = (
+                telnet_ip_edit.currentText().strip()
+                if hasattr(telnet_ip_edit, "currentText")
+                else telnet_ip_edit.text().strip()
+            )
+            if not telnet_text or telnet_text == "No devices":
                 errors.append("Linux IP is required.")
                 focus_widget = focus_widget or telnet_ip_edit
             kernel_text = page.kernel_version_combo.currentText().strip()

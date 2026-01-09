@@ -754,22 +754,31 @@ CUSTOM_TESTCASE_UI_RULES.append(
             SimpleFieldEffect(
                 target_field="connect_type.type",
                 action="enable",
-                condition=lambda values: True,
+                condition=lambda values: not str(values.get("project.project") or "").strip(),
             ),
             SimpleFieldEffect(
                 target_field="connect_type.Android.device",
                 action="enable",
-                condition=lambda values: True,
+                condition=lambda values: normalize_connect_type_label(
+                    str(values.get("connect_type.type") or "")
+                )
+                == "Android",
             ),
             SimpleFieldEffect(
                 target_field="connect_type.Linux.ip",
                 action="enable",
-                condition=lambda values: True,
+                condition=lambda values: normalize_connect_type_label(
+                    str(values.get("connect_type.type") or "")
+                )
+                == "Linux",
             ),
             SimpleFieldEffect(
                 target_field="connect_type.Linux.wildcard",
                 action="enable",
-                condition=lambda values: True,
+                condition=lambda values: normalize_connect_type_label(
+                    str(values.get("connect_type.type") or "")
+                )
+                == "Linux",
             ),
             SimpleFieldEffect(
                 target_field="connect_type.third_party.enabled",

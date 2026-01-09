@@ -9,6 +9,9 @@ utility modules.
 from __future__ import annotations
 
 from typing import Callable, Iterable, Sequence
+import concurrent.futures
+import socket
+import subprocess
 
 from src.tools.router_tool.router_factory import router_list
 from src.util.constants import (
@@ -62,6 +65,90 @@ def _fpga_customer_choices() -> Sequence[str]:
     return _sorted_unique(WIFI_PRODUCT_PROJECT_MAP.keys())
 
 
+def _adb_device_choices() -> Sequence[str]:
+    """Return connected ADB device serials from `adb devices` output."""
+
+    try:
+        proc = subprocess.run(
+            ["adb", "devices"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="ignore",
+            timeout=3,
+        )
+    except Exception:
+        return []
+    if proc.returncode != 0:
+        return []
+    devices: list[str] = []
+    for line in (proc.stdout or "").splitlines()[1:]:
+        parts = line.strip().split()
+        if len(parts) >= 2 and parts[1] == "device":
+            devices.append(parts[0])
+    choices = _sorted_unique(devices)
+    return choices if choices else ["No devices"]
+
+
+def _iter_ipv4_prefixes() -> list[str]:
+    prefixes: set[str] = set()
+    try:
+        import psutil  # type: ignore
+
+        addrs_by_name = psutil.net_if_addrs()
+        stats_by_name = psutil.net_if_stats()
+        for name, addrs in addrs_by_name.items():
+            stats = stats_by_name.get(name)
+            if stats is not None and not getattr(stats, "isup", False):
+                continue
+            for addr in addrs:
+                if getattr(addr, "family", None) != socket.AF_INET:
+                    continue
+                ip = str(getattr(addr, "address", "") or "")
+                if not ip or ip.startswith("127."):
+                    continue
+                parts = ip.split(".")
+                if len(parts) == 4:
+                    prefixes.add(".".join(parts[:3]))
+    except Exception:
+        return []
+    return sorted(prefixes)
+
+
+def _ping_host(ip: str) -> bool:
+    try:
+        proc = subprocess.run(
+            ["ping", "-n", "1", "-w", "150", ip],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="ignore",
+            timeout=2,
+        )
+        return proc.returncode == 0
+    except Exception:
+        return False
+
+
+def _linux_ip_choices() -> Sequence[str]:
+    """Return pingable IPs in each local /24 network."""
+
+    prefixes = _iter_ipv4_prefixes()
+    if not prefixes:
+        return ["No devices"]
+    live: list[str] = []
+    for prefix in prefixes:
+        candidates = [f"{prefix}.{i}" for i in range(2, 256)]
+        with concurrent.futures.ThreadPoolExecutor(max_workers=64) as executor:
+            future_map = {executor.submit(_ping_host, ip): ip for ip in candidates}
+            for future in concurrent.futures.as_completed(future_map):
+                ip = future_map[future]
+                if future.result():
+                    live.append(ip)
+    choices = _sorted_unique(live)
+    return choices if choices else ["No devices"]
+
+
 _FIELD_CHOICE_SOURCES: dict[str, Callable[[], Sequence[str]]] = {
     # Android / kernel system fields (support both legacy and new keys)
     "android_system.version": _android_version_choices,
@@ -75,6 +162,9 @@ _FIELD_CHOICE_SOURCES: dict[str, Callable[[], Sequence[str]]] = {
     # Project / Wi-Fi chipset customer selection (product line / project
     # remain driven by WIFI_PRODUCT_PROJECT_MAP).
     "project.customer": _fpga_customer_choices,
+    # Android / Linux connect targets
+    "connect_type.Android.device": _adb_device_choices,
+    "connect_type.Linux.ip": _linux_ip_choices,
 }
 
 

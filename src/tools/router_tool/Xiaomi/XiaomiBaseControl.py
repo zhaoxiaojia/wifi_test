@@ -160,7 +160,7 @@ class XiaomiBaseControl(RouterTools):
             primary_band = router.band
             secondary_band = self.BAND_5 if primary_band == self.BAND_2 else self.BAND_2
 
-            secondary_ssid = f"{router.ssid}_bat"
+            secondary_ssid = f"{router.ssid}bat"
 
             self.driver.find_element(By.XPATH, self.xpath["ssid_element"][primary_band]).clear()
             self.driver.find_element(By.XPATH, self.xpath["ssid_element"][primary_band]).send_keys(router.ssid)
