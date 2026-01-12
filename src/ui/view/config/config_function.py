@@ -209,7 +209,6 @@ class FunctionConfigForm(QWidget):
         self.priority_options.clear()
         self.tag_options.clear()
         self.module_options.clear()
-        print("Type of priority_options:", type(self.priority_options))
         self.all_rows.clear()
 
         if not config_path.exists():
@@ -268,12 +267,6 @@ class FunctionConfigForm(QWidget):
             self.all_rows.append(row_data)
 
         # ✅ 关键：先清空再设置
-        print(f"[DEBUG] Loading {len(rows)} valid rows into FormListPage")
-        print(f"[DEBUG] Found {len(scripts)} scripts")
-        print(f"[DEBUG] Loaded {len(rows)} valid rows")
-        print(f"[DEBUG] Priority options: {self.priority_options}")
-        print(f"[DEBUG] Tag options: {self.tag_options}")
-        print(f"[DEBUG] Module options: {self.module_options}")
         self.list_widget.set_rows([])
         self.list_widget.set_rows(rows)
 
@@ -310,12 +303,6 @@ class FunctionConfigForm(QWidget):
         src_dir = Path(__file__).parent.parent.parent.parent.resolve()
         config_path = (src_dir / "test" / "project" / "test_config.yaml").resolve()
         #config_path = Path(r"D:\wifi_test12\src\test\project\test_config.yaml")
-        # print(f"📍 路径: {config_path}")
-        # print(f"🔍 exists(): {config_path.exists()}")
-        # print(f"📄 is_file(): {config_path.is_file()}")
-        # # print(f"📍 路径: {config_path}")
-        # print(f"🔍 exists(): {config_path.exists()}")
-        # 现在不会报错了
         if not config_path.exists():
             item = QListWidgetItem("❌ test_config.yaml not found!")
             self.file_list.addItem(item)
@@ -476,17 +463,23 @@ class FunctionConfigForm(QWidget):
         self.list_widget.set_rows(filtered_rows)
 
     def on_save_plan_clicked(self):
-        """槽函数：当 'Save Plan' 按钮被点击时调用"""
-        # 1. 收集当前所有被勾选的文件路径（从 FormListPage）
-        selected_paths = []
+        """槽函数：当 'Save Test Plan' 按钮被点击时调用"""
+        # 1. 收集当前所有被勾选的完整行数据
+        selected_rows = []
         for row in self.list_widget.rows:
             if row.get("_checked", False):
-                script_path = row.get("Script", "")
-                if script_path:
-                    selected_paths.append(script_path)
+                # 提取所有需要的字段，保持与 UI 列一致
+                selected_rows.append({
+                    "TCID": row.get("TCID", ""),
+                    "Priority": row.get("Priority", ""),
+                    "Tag": row.get("Tag", ""),
+                    "Module": row.get("Module", ""),
+                    "Description": row.get("Description", ""),
+                    "Script Path": row.get("Script", ""),  # 列名改为 "Script Path" 更清晰
+                })
 
-        if not selected_paths:
-            print("No test files are selected to save.")
+        if not selected_rows:
+            print("No test cases are selected to save.")
             return
 
         # 2. 打开文件保存对话框
@@ -503,24 +496,15 @@ class FunctionConfigForm(QWidget):
         )
         if not file_path:
             return
-
         if not file_path.lower().endswith('.xlsx'):
             file_path += '.xlsx'
 
         # 3. 创建 DataFrame 并保存
         try:
-            data = []
-            for path in selected_paths:
-                case_name = Path(path).stem.replace("test_", "")
-                data.append({
-                    "Script Path": path,
-                    "Case Name": case_name,
-                    "Status": "Pending",
-                    "Duration (s)": "",
-                    "Log/Report": ""
-                })
-
-            df = pd.DataFrame(data)
+            df = pd.DataFrame(selected_rows)
+            # 确保列顺序与 UI 一致
+            column_order = ["TCID", "Priority", "Tag", "Module", "Description", "Script Path"]
+            df = df[column_order]  # 重排顺序
             df.to_excel(file_path, index=False, engine='openpyxl')
             print(f"✅ Test plan saved successfully to: {file_path}")
 
@@ -532,9 +516,13 @@ class FunctionConfigForm(QWidget):
                 f.write(str(Path(file_path).resolve()))
             print(f"📝 Last function plan path saved to: {last_plan_file}")
 
+            # 可选：弹出成功提示
+            QMessageBox.information(self, "Save Successful", f"Test plan saved to:\n{file_path}")
+
         except Exception as e:
-            print(f"❌ Failed to save test plan: {e}")
-            QMessageBox.critical(self, "Save Error", f"Failed to save test plan:\n{str(e)}")
+            error_msg = f"Failed to save test plan: {e}"
+            print(f"❌ {error_msg}")
+            QMessageBox.critical(self, "Save Error", error_msg)
 
     def on_reset_clicked(self):
         """重置所有筛选条件，并恢复所有用例为勾选状态"""

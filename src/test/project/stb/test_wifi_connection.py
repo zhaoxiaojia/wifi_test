@@ -3,6 +3,7 @@ import os
 import time
 from typing import Mapping
 import sys
+import hashlib
 
 # 添加项目路径
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..'))
@@ -44,7 +45,8 @@ def _check_network_status(dut, router_ip: str):
         raise AssertionError("Failed to ping router")
 
 
-def test_soft_reboot_str():
+def test_soft_reboot_wifi_connection():
+
     # === 1. 加载全局配置（来自 UI）===
     base_config = load_config(refresh=True)
     logging.info(f"Loaded base_config keys: {list(base_config.keys())}")
@@ -57,6 +59,7 @@ def test_soft_reboot_str():
     router_ip = basic_router.get("address") or basic_router.get("ip")
     ssid_24g = basic_router.get("24g_ssid")
     ssid_5g = basic_router.get("5g_ssid")
+
 
     # === 3. 构造 device_info 从 connect_type ===
     connect_type_cfg = base_config.get("connect_type", {})

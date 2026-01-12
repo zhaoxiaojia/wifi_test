@@ -11,7 +11,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from PyQt5.QtCore import QThread, pyqtSignal
+from PyQt5.QtCore import QThread, pyqtSignal, Qt
 
 from src.util.constants import Paths
 from src.ui.view.theme import STYLE_BASE, TEXT_COLOR
@@ -25,6 +25,10 @@ from src.util.pytest_redact import install_redactor_for_current_process
 import pytest, os, sys
 import pandas as pd
 
+try:
+    from src.test.conftest import _generate_allure_report_cli
+except ImportError:
+    _generate_allure_report_cli = None
 
 def reset_wizard_after_run(page: Any) -> None:
     """Reset Config wizard state after a successful run.
@@ -187,12 +191,17 @@ class CaseRunner(QThread):
     report_dir_signal = pyqtSignal(str)
     finished_signal = pyqtSignal()
 
-    def __init__(self, case_path: str, account_name: str | None = None, display_case_path: str | None = None, parent=None):
+    def __init__(self, case_path: str, account_name: str | None = None, display_case_path: str | None = None, shared_allure_results_dir: str | Path | None = None,
+                 shared_pytest_log_file: str | Path | None = None, parent=None):
         super().__init__(parent)
         self.case_path = case_path
         self.account_name = (account_name or "").strip()
         self.display_case_path = display_case_path or case_path
         self.last_exit_code: int = 0
+        # 存储共享路径（可能为 None）
+        self._shared_allure_results_dir = Path(shared_allure_results_dir) if shared_allure_results_dir else None
+        self._shared_pytest_log_file = Path(shared_pytest_log_file) if shared_pytest_log_file else None
+
         self._ctx = multiprocessing.get_context("spawn")
         self._queue = self._ctx.Queue()
         self._proc: multiprocessing.Process | None = None
@@ -280,7 +289,14 @@ class CaseRunner(QThread):
         """Create and start the subprocess that executes pytest."""
         proc = self._ctx.Process(
             target=worker,
-            args=(self.case_path, self._queue, python_log_path),
+            args=(
+                self.case_path,
+                self._queue,
+                python_log_path,
+                # 传递共享路径
+                str(self._shared_allure_results_dir) if self._shared_allure_results_dir else None,
+                str(self._shared_pytest_log_file) if self._shared_pytest_log_file else None,
+            ),
         )
         proc.start()
         return proc
@@ -358,29 +374,44 @@ class CaseRunner(QThread):
         if not src.exists():
             self._python_log_copied = True
             return messages
-        target_dir = Path(self._report_dir) if self._report_dir else Path(Paths.BASE_DIR) / "report"
-        try:
-            target_dir.mkdir(parents=True, exist_ok=True)
-        except Exception:
-            self._python_log_copied = True
-            return messages
-        target = target_dir / "python.log"
-        if target.exists():
-            import datetime
 
-            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-            target = target_dir / f"python_{timestamp}.log"
+        # 优先使用共享日志文件路径
+        if self._shared_pytest_log_file:
+            target = self._shared_pytest_log_file
+        else:
+            # 原有逻辑：使用自己的报告目录
+            target_dir = Path(self._report_dir) if self._report_dir else Path(Paths.BASE_DIR) / "report"
+            try:
+                target_dir.mkdir(parents=True, exist_ok=True)
+            except Exception:
+                self._python_log_copied = True
+                return messages
+            target = target_dir / "python.log"
+            if target.exists():
+                import datetime
+                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+                target = target_dir / f"python_{timestamp}.log"
+
         try:
-            shutil.copy2(src, target)
+            # --- 【关键修改】改为追加模式，而不是复制 ---
+            with open(src, 'r', encoding='utf-8') as f_src:
+                content = f_src.read()
+            with open(target, 'a', encoding='utf-8') as f_target:
+                f_target.write("\n" + "=" * 50 + "\n")
+                f_target.write(f"Logs from case runner (PID: {os.getpid()})\n")
+                f_target.write("=" * 50 + "\n")
+                f_target.write(content)
+            # --- 【关键修改】结束 ---
         except Exception as exc:
             messages.append(
-                f"<b style='{STYLE_BASE} color:red;'>Failed to copy python.log: {exc}</b>"
+                f"<b style='{STYLE_BASE} color:red;'>Failed to append case log to {target}: {exc}</b>"
             )
             self._python_log_copied = True
             return messages
+
         self._python_log_copied = True
         messages.append(
-            f"<span style='{STYLE_BASE} color:{TEXT_COLOR};'>Python log saved to {target}</span>"
+            f"<span style='{STYLE_BASE} color:{TEXT_COLOR};'>Case log appended to {target}</span>"
         )
         return messages
 
@@ -411,22 +442,51 @@ def _extract_project_relative_path(case_path: str) -> Path:
     raise ValueError(f"Path does not contain 'src/test/project': {case_path}")
 
 def _init_worker_env(
-        case_path: str,
-        q: multiprocessing.Queue,
-        log_file_path_str: str | None = None
+    case_path: str,
+    q: multiprocessing.Queue,
+    log_file_path_str: str | None = None,
+    shared_allure_results_dir: str | None = None,  # 新增参数
+    shared_pytest_log_file: str | None = None,     # 新增参数
 ) -> "_WorkerContext":
     """Prepare logging, report directories, and pytest arguments."""
     session = _RunLogSession(q, log_file_path_str)
-    import random, datetime
+    import os, sys,  random, subprocess, tempfile
+    from datetime import datetime
     from pathlib import Path
 
-    timestamp = datetime.datetime.now().strftime("%Y.%m.%d_%H.%M.%S")
-    timestamp = f"{timestamp}_{random.randint(1000, 9999)}"
-    report_dir = (Path.cwd() / "report" / timestamp).resolve()
-    report_dir.mkdir(parents=True, exist_ok=True)
+    # --- 【关键】判断是否为共享模式 (ExcelPlanRunner) ---
+    in_shared_mode = bool(shared_allure_results_dir)
+    # ---
+
+    if in_shared_mode:
+        # ========== ExcelPlanRunner 共享模式 ==========
+        allure_results_dir = Path(shared_allure_results_dir).resolve()
+        report_dir = allure_results_dir.parent  # 主报告目录
+        # 日志路径：优先使用传入的共享日志文件，否则在主报告目录下创建
+        effective_log_path = (
+            shared_pytest_log_file
+            or report_dir / "pytest.log"
+        )
+    else:
+        # ========== 单 Case 独立模式（完全保留原始逻辑）==========
+        timestamp = datetime.now().strftime("%Y.%m.%d_%H.%M.%S")
+        pid = os.getpid()
+        timestamp = f"{timestamp}_{random.randint(1000, 9999)}"
+        report_dir = (Path.cwd() / "report" / timestamp).resolve()
+        report_dir.mkdir(parents=True, exist_ok=True)
+        allure_results_dir = report_dir / "allure_report"
+        effective_log_path = log_file_path_str or str(report_dir / "python.log")
+    # ============================================
+
+    # --- 【关键修改】将 effective_log_path 传给 _RunLogSession ---
+    session = _RunLogSession(q, str(effective_log_path))
+
+    # --- 通知队列报告目录 ---
     from contextlib import suppress
     with suppress(Exception):
         q.put(("report_dir", str(report_dir)))
+    # ---
+
     plugin = install_redactor_for_current_process()
 
     # --- CORRECT PATH HANDLING (兼容开发/打包) ---
@@ -434,39 +494,34 @@ def _init_worker_env(
     if input_path.is_absolute():
         absolute_test_path = input_path.resolve()
     else:
-        # --- 智能定位 base_dir ---
-        if getattr(sys, 'frozen', False):
-            # 打包模式 (PyInstaller): 资源在临时目录 _MEIPASS 中
+        if getattr(sys, 'frozen', False):  # 打包模式
             base_dir = Path(sys._MEIPASS)
-        else:
-            # 开发模式: 从当前文件回溯到项目根目录
-            # run_ctl.py 路径: .../src/ui/controller/run_ctl.py
-            base_dir = Path(__file__).resolve().parents[3]  # -> 项目根目录
-        # --- 构建测试脚本的绝对路径 ---
+        else:  # 开发模式
+            base_dir = Path(__file__).resolve().parents[3]
         absolute_test_path = base_dir / "src/test/project" / case_path
+        if not absolute_test_path.exists():
+            raise FileNotFoundError(f"Test file not found: {absolute_test_path}")
 
-    if not absolute_test_path.exists():
-        raise FileNotFoundError(f"Test file not found: {absolute_test_path}")
-    # --- END PATH HANDLING ---
-
-    # Derive the path to pass to pytest (relative to CWD if possible)
     try:
         relative_path = absolute_test_path.relative_to(Path.cwd())
-        pytest_case_path = str(relative_path).replace("\\", "/")  # Use forward slashes for pytest
+        pytest_case_path = str(relative_path).replace("\\", "/")
     except ValueError:
-        # If outside project root, use absolute path
         pytest_case_path = str(absolute_test_path)
     # --- END PATH HANDLING ---
 
-    # --- Use pytest_case_path everywhere from now on ---
+    # --- 构建 pytest 参数 ---
     pytest_args = [
         "--rootdir=.",
         "--import-mode=importlib",
         f"--resultpath={report_dir}",
+        #f"--alluredir={allure_results_dir}",
+        "--alluredir", str(allure_results_dir),
         pytest_case_path,
     ]
-    from src.util.constants import load_config
+    # ---
 
+    # --- 添加 DUT 配置 ---
+    from src.util.constants import load_config
     cfg = load_config(refresh=True)
     connect_cfg = cfg.get("connect_type") or {}
     dut_type = connect_cfg.get("type")
@@ -483,18 +538,20 @@ def _init_worker_env(
             ip = telnet_cfg.get("ip")
             if ip:
                 pytest_args.append(f"--linux-ip={ip}")
-            project_cfg = cfg.get("project") or {}
-            customer = project_cfg.get("customer")
-            if customer:
-                pytest_args.append(f"--project-customer={customer}")
+    project_cfg = cfg.get("project") or {}
+    customer = project_cfg.get("customer")
+    if customer:
+        pytest_args.append(f"--project-customer={customer}")
+    # ---
 
-    # Only apply stability retry/exit-first flags for stability cases.
+    # --- 处理稳定性测试 ---
     is_stability_case = is_stability_case_path(case_path)
     plan = load_stability_plan() if is_stability_case else None
     pytest_args = _apply_exitfirst_flags(pytest_args, plan)
+    # ---
 
     return _WorkerContext(
-        case_path=pytest_case_path,  # ✅ Consistent
+        case_path=pytest_case_path,
         queue=q,
         pytest_args=pytest_args,
         report_dir=report_dir,
@@ -502,6 +559,8 @@ def _init_worker_env(
         is_stability_case=is_stability_case,
         plan=plan if is_stability_case else None,
         log_session=session,
+        # --- 传递日志路径给 _RunLogSession ---
+        #effective_log_path=str(effective_log_path),
     )
 
 def _apply_exitfirst_flags(pytest_args: list[str], plan) -> list[str]:
@@ -610,7 +669,12 @@ def _stream_pytest_events(ctx: "_WorkerContext") -> None:
         )
         last_exit_code = result["exit_code"]
     else:
-        exit_code = pytest.main(ctx.pytest_args, plugins=[ctx.plugin])
+        #exit_code = pytest.main(ctx.pytest_args, plugins=[ctx.plugin])
+        plugins_to_load = [ctx.plugin, 'allure_pytest']
+        if getattr(sys, 'frozen', False):
+            plugins_to_load = [ctx.plugin, 'allure_pytest.plugin']
+        exit_code = pytest.main(ctx.pytest_args, plugins=plugins_to_load)
+        print(f"[PYTEST ARGS] {ctx.pytest_args}")
         last_exit_code = exit_code
         if exit_code != 0:
             failure_msg = (
@@ -627,7 +691,7 @@ def _stream_pytest_events(ctx: "_WorkerContext") -> None:
             )
         )
 
-
+    q.put(("exit_code", last_exit_code))
 def _finalize_run(ctx: "_WorkerContext") -> None:
     """Restore stdout/loggers and emit the python log path event."""
     ctx.log_session.close()
@@ -637,12 +701,25 @@ def _pytest_worker(
     case_path: str,
     q: multiprocessing.Queue,
     log_file_path_str: str | None = None,
-    ctx: "_WorkerContext" | None = None
+    shared_allure_results_dir: str | None = None,
+    shared_pytest_log_file: str | None = None,
 ) -> None:
     """Spawned multiprocessing entrypoint that runs pytest and streams logs."""
+    # ctx = _init_worker_env(
+    #     case_path, q, log_file_path_str,
+    #     shared_allure_results_dir,
+    #     shared_pytest_log_file,
+    # )
+    ctx = None
 
     try:
-        ctx = _init_worker_env(case_path, q, log_file_path_str)
+        #ctx = _init_worker_env(case_path, q, log_file_path_str)
+        ctx = _init_worker_env(
+            case_path, q,
+            log_file_path_str=log_file_path_str,  # 原始参数
+            shared_allure_results_dir=shared_allure_results_dir,
+            shared_pytest_log_file=shared_pytest_log_file,
+        )
         _stream_pytest_events(ctx)
     except Exception as exc:  # pragma: no cover - defensive logging in worker
         import traceback as _tb
@@ -688,6 +765,7 @@ class ExcelPlanRunner(QThread):
     progress_signal = pyqtSignal(int)
     report_dir_signal = pyqtSignal(str)
     finished_signal = pyqtSignal()
+    case_report_ready_signal = pyqtSignal(str)
 
     def __init__(self, excel_path: str, parent=None):
         super().__init__(parent)
@@ -706,146 +784,110 @@ class ExcelPlanRunner(QThread):
 
     def run(self):
         try:
-            # --- 1. Create a TOP-LEVEL report directory for the entire PLAN ---
-            plan_timestamp = datetime.now().strftime("%Y.%m.%d_%H.%M.%S")
-            plan_report_dir = Path(Paths.BASE_DIR) / "report" / f"Func_log_{plan_timestamp}"
-            plan_report_dir.mkdir(parents=True, exist_ok=True)
-            self.report_dir_signal.emit(str(plan_report_dir))
+            # --- 1. 创建主报告目录 ---
+            timestamp = datetime.now().strftime("%Y.%m.%d_%H.%M.%S")
+            self._plan_report_dir = Path("report") / f"{timestamp}_{os.getpid()}"
+            self._plan_report_dir.mkdir(parents=True, exist_ok=True)
+            self.log_signal.emit(f"<b>计划报告目录已创建: {self._plan_report_dir}</b>")
+            self.report_dir_signal.emit(str(self._plan_report_dir))
+            print(f"[DEBUG ExcelPlanRunner] Emitted report dir: {self._plan_report_dir}")
 
-            # --- 260105 新增：创建主 python.log and debug.log 文件路径 ---
-            main_python_log = plan_report_dir / "python.log"
-            main_python_log.touch(exist_ok=True)  # 创建空文件（如果不存在）
-            main_debug_log = plan_report_dir / "debug.log"
-            main_debug_log.touch(exist_ok=True)
+            # --- 2. 创建共享资源 ---
+            self._shared_allure_dir = self._plan_report_dir / "allure_report"
+            self._shared_allure_dir.mkdir(parents=True, exist_ok=True)
+            self._shared_pytest_log = self._plan_report_dir / "pytest.log"
+            # ---
+            self.report_dir_signal.emit(str(self._plan_report_dir))
 
+
+            # 读取 Excel
             df = pd.read_excel(self.excel_path)
             if "Script Path" not in df.columns:
                 raise ValueError("Excel file must contain a 'Script Path' column.")
-
             script_paths = df["Script Path"].dropna().tolist()
             total_cases = len(script_paths)
             if total_cases == 0:
                 self.log_signal.emit("<b>No test cases to run.</b>")
                 return
 
-            self.log_signal.emit(f"<b>Starting plan with {total_cases} case(s)... Report dir: {plan_report_dir}</b>")
+            self.log_signal.emit(f"<b>Starting plan with {total_cases} case(s)...</b>")
 
             for idx, script_path in enumerate(script_paths):
-                # --- 新增：检查是否被请求中断 ---
                 if self.isInterruptionRequested():
                     self.log_signal.emit("<b style='color:red;'>Execution stopped by user.</b>")
                     break
 
-                self.log_signal.emit(f"<br><b>Running: {script_path}</b>")
+                self.log_signal.emit(f"<br><b>▶️ Still Running: {script_path} ({idx + 1}/{total_cases})</b>")
 
-                # Use the existing CaseRunner
-                runner = CaseRunner(case_path=str(script_path))
-                # Connect its signals directly to this runner's signals
+                # --- 【核心】创建 CaseRunner 并传入共享路径 ---
+                runner = CaseRunner(
+                    case_path=str(script_path),
+                    shared_allure_results_dir=self._shared_allure_dir,
+                    shared_pytest_log_file=self._shared_pytest_log,
+                )
+                # ---
+
+                # === 新增：监听子用例完成，更新实时报告 ===
+                # def make_handler(index=idx, runner_ref=runner):
+                #     def handler():
+                #         # 更新 Excel 状态（原有逻辑）
+                #         exit_code = runner_ref.last_exit_code
+                #         status = "Passed" if exit_code == 0 else "Failed"
+                #         print(f"[ExcelPlanRunner DEBUG] Case {index}: exit_code={exit_code}, status={status}")
+                #         self._update_excel_result(index, status)
+                #         # 👇 新增：生成实时 Allure 报告
+                #         self._safe_generate_allure_report()
+                #
+                #     return handler
+
+                #runner.finished_signal.connect(make_handler())
+
+                # 连接信号
+                runner.report_dir_signal.connect(self.case_report_ready_signal, Qt.DirectConnection)
                 runner.log_signal.connect(self.log_signal)
-                runner.report_dir_signal.connect(self.report_dir_signal)
-                self._current_case_runner = runner #Add for case status record, 260105
+                #runner.log_signal.connect(self.log_signal, Qt.QueuedConnection)
+                #runner.report_dir_signal.connect(self.report_dir_signal)
+                self._current_case_runner = runner
 
                 runner.start()
-                runner.wait()  # Wait for this case to finish
-                self._current_case_runner = None #260105 clear status after case finish
+                runner.wait()  # 等待当前用例完成
+                self._current_case_runner = None
 
-                # Determine status based on exit code
+                # 更新 Excel 状态
+                exit_code = runner.last_exit_code
                 status = "Passed" if runner.last_exit_code == 0 else "Failed"
+                print(f"[RELIABLE DEBUG] Row {idx}: exit_code={exit_code}, status={status}")
                 self._update_excel_result(idx, status)
 
-                # --- 在循环内部，runner.wait() 之后，添加以下新代码 ---
-                # --- 2. NEW: Aggregate all case reports directly into the main plan directory ---
-                if runner._report_dir:
-                    case_report_dir = Path(runner._report_dir)
-                    if case_report_dir.exists():
-                        for item in case_report_dir.iterdir():
-                            if item.name == "debug":
-                                continue
-
-                            # --- 关键修改：特殊处理 python.log ---
-                            if item.name == "python.log" and item.is_file():
-                                # 将此 Case 的 python.log 内容追加到主日志文件
-                                try:
-                                    with open(item, 'r', encoding='utf-8') as src_log, \
-                                            open(main_python_log, 'a', encoding='utf-8') as dst_log:
-                                        # 可以选择性地添加分隔符，方便区分不同 Case
-                                        dst_log.write(f"\n\n{'=' * 80}\n")
-                                        dst_log.write(f"LOG FROM CASE: {script_path}\n")
-                                        dst_log.write(f"{'=' * 80}\n\n")
-                                        shutil.copyfileobj(src_log, dst_log)
-                                except Exception as e:
-                                    self.log_signal.emit(
-                                        f"<b style='color:orange;'>Failed to append log from {item}: {e}</b>")
-                                continue  # 处理完就跳过下面的通用复制逻辑
-                                # --- 新增：处理 debug.log ---
-                            elif item.name == "debug.log" and item.is_file():
-                                # 将此 Case 的 debug.log 内容追加到主 debug.log 文件
-                                try:
-                                    with open(item, 'r', encoding='utf-8') as src_log, \
-                                            open(main_debug_log, 'a', encoding='utf-8') as dst_log:
-                                        # 添加分隔符
-                                        dst_log.write(f"\n\n{'=' * 80}\n")
-                                        dst_log.write(f"DEBUG LOG FROM CASE: {script_path}\n")
-                                        dst_log.write(f"{'=' * 80}\n\n")
-                                        shutil.copyfileobj(src_log, dst_log)
-                                except Exception as e:
-                                    self.log_signal.emit(
-                                        f"<b style='color:orange;'>Failed to append debug log from {item}: {e}</b>")
-                                continue  # 跳过通用复制逻辑
-
-                            # --- 其他文件和目录的处理逻辑保持不变 ---
-                            dest = plan_report_dir / item.name
-                            if item.is_file():
-                                if dest.exists():
-                                    timestamp_suffix = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-                                    new_dest = plan_report_dir / f"{item.stem}_{timestamp_suffix}{item.suffix}"
-                                    shutil.copy2(item, new_dest)
-                                else:
-                                    shutil.copy2(item, dest)
-                            elif item.is_dir():
-                                if dest.exists() and dest.is_dir():
-                                    self._merge_directories(item, dest)
-                                else:
-                                    shutil.copytree(item, dest, dirs_exist_ok=True)
-
-                    # --- 260105 新增：清理 CaseRunner 生成的临时报告目录 ---
-                    if runner._report_dir:
-                        case_report_dir = Path(runner._report_dir)
-                        if case_report_dir.exists():
-                            try:
-                                shutil.rmtree(case_report_dir, ignore_errors=True)
-                                self.log_signal.emit(
-                                    f"<span style='color:gray;'>Temporary report for {script_path} cleaned up.</span>")
-                            except Exception as e:
-                                self.log_signal.emit(
-                                    f"<b style='color:orange;'>Failed to clean up {case_report_dir}: {e}</b>")
-                # Emit overall progress
+                # 发射整体进度
                 self.progress_signal.emit(int((idx + 1) / total_cases * 100))
-            self.log_signal.emit(f"<b>All tests completed! Full report at: {plan_report_dir}</b>")
 
-            self.log_signal.emit("<b>All tests completed!</b>")
+            self.log_signal.emit(f"<b>✅ 所有用例执行完毕！完整报告位于: {self._plan_report_dir}</b>")
+            self.finished_signal.emit()
 
         except Exception as e:
+            error_msg = f"<b style='color:red;'>Plan runner error: {e}</b>"
+            self.log_signal.emit(error_msg)
             import traceback
-            self.log_signal.emit(f"<b style='color:red;'>Error: {e}</b>")
+            self.log_signal.emit(f"<b style='color:red;'>Error in ExcelPlanRunner: {e}</b>")
             self.log_signal.emit(f"<pre>{traceback.format_exc()}</pre>")
+            self.finished_signal.emit()
         finally:
-            # --- 260105 新增：恢复根日志记录器的处理器和级别 ---
+            # 恢复根日志记录器（您原有的代码）
             import logging
             root_logger = logging.getLogger()
-            # 清理当前可能存在的处理器（由子 CaseRunner 添加的）
             root_logger.handlers.clear()
-            # 恢复原始的处理器和日志级别
             for handler in getattr(self, 'old_handlers', []):
                 root_logger.addHandler(handler)
             root_logger.setLevel(getattr(self, 'old_level', logging.WARNING))
-            # --- End of new block ---
-
             self.finished_signal.emit()
 
     def _update_excel_result(self, row_index: int, status: str):
         """Update the 'Status' column in the Excel file."""
         try:
+            exit_code = self._current_case_runner.last_exit_code if self._current_case_runner else "N/A"
+            print(f"[DEBUG] Row {row_index}: exit_code={exit_code}, status={status}")
+
             df = pd.read_excel(self.excel_path)
             df.loc[row_index, "Status"] = status
             df.to_excel(self.excel_path, index=False, engine='openpyxl')
@@ -865,6 +907,35 @@ class ExcelPlanRunner(QThread):
                 self._merge_directories(item, dest_item)
             else:
                 shutil.copy2(item, dest_item)
+
+    def _safe_generate_allure_report(self) -> bool:
+        """
+        Safely generate Allure HTML report from shared allure_report directory.
+        Only used in ExcelPlanRunner for real-time preview.
+        Does NOT affect CaseRunner's own report generation.
+        """
+        if _generate_allure_report_cli is None:
+            print("[WARN] conftest._generate_allure_report_cli not available")
+            return False
+
+        if not hasattr(self, '_plan_report_dir'):
+            return False
+
+        input_dir = self._plan_report_dir / "allure_report"
+        output_dir = self._plan_report_dir / "allure_results"  # 连字符，区别于单例模式
+
+        # 必须存在 .json 文件才生成
+        if not input_dir.exists() or not any(input_dir.glob("*.json")):
+            return False
+
+        try:
+            # 调用原始函数（与最终报告生成逻辑完全一致）
+            _generate_allure_report_cli(input_dir, output_dir)
+            print(f"[ExcelPlanRunner] Real-time Allure report updated: {output_dir}")
+            return True
+        except Exception as e:
+            print(f"[ERROR] Failed to generate real-time Allure report: {e}")
+            return False
 
     def stop(self) -> None:
         """Stop the runner and its current child CaseRunner if any."""

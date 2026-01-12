@@ -10,7 +10,7 @@ a Wi‑Fi performance report at session end for specific customers.
 
 from __future__ import annotations
 
-import os
+import os, json
 import sys
 import re
 import shutil
@@ -50,6 +50,18 @@ if not logging.getLogger().handlers:
         format="%(asctime)s | %(levelname)s | %(filename)s:%(funcName)s(line:%(lineno)d) |  %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
+
+# ------------------------------------# Helpers# -----------------------------
+def get_resource_path(relative_path: str) -> Path:
+    """获取资源绝对路径（兼容开发环境和 PyInstaller 打包）"""
+    import sys
+    if getattr(sys, 'frozen', False):
+        # 打包后的 EXE：资源在 _MEIPASS 下
+        base_path = Path(sys._MEIPASS)
+    else:
+        # 开发环境：资源在项目根目录（conftest.py 的上两级）
+        base_path = Path(__file__).parent.parent
+    return base_path / relative_path
 
 # ----------------------------------------------------------------------------
 # Globals (Annotated)
@@ -126,78 +138,206 @@ def _derive_test_category_from_session(session: pytest.Session) -> Path:
 
 def _generate_allure_report(session: pytest.Session, destination_dir: Path | None) -> None:
     """
-    Best-effort Allure report generation with per-category history.
-
-    - Uses ``allure_results`` as the shared result directory (configured via pytest.ini).
-    - Derives a history root under ``report/allure_history/<src/test/...>``.
-    - Copies history into the results dir before generation and back out
-      after generation so that each test category has its own timeline.
-    - Places the HTML report under ``destination_dir / 'allure-report'``
-      when a result path is configured by the UI controller.
+    Generates a static Allure HTML report.
+    - Input: The directory containing Allure .json result files.
+    - Output: A static HTML report in the 'allure-report' subdirectory of destination_dir.
     """
-    results_dir = Path("allure_results")
-    if not results_dir.exists() or not results_dir.is_dir():
-        logging.debug("Allure results directory %s missing; skip Allure report", results_dir)
+    if destination_dir is None:
+        logging.warning("No destination_dir provided for Allure report generation.")
         return
+
+    # --- 关键修改 1: 正确推断输入目录 ---
+    # 假设您的 .json 文件就直接放在 destination_dir 下 (即 report/2026.01.08_.../)
+    input_dir = destination_dir / "allure_report"
+    # --- 关键修复：增加重试机制 ---
+    max_retries = 5
+    retry_delay = 1  # 秒
+
+    for attempt in range(max_retries):
+        if not input_dir.exists():
+            logging.debug(f"[Attempt {attempt + 1}] Allure dir not found: {input_dir}")
+            time.sleep(retry_delay)
+            continue
+
+        json_files = list(input_dir.glob("*.json"))
+        logging.debug(f"[Attempt {attempt + 1}] Found {len(json_files)} .json files: {[f.name for f in json_files]}")
+        print(f"[DEBUG] Found json files in : {json_files}")
+        if json_files:
+            logging.info("Allure result files found. Proceeding to generate report.")
+            break  # 找到文件，跳出循环
+
+        logging.debug(f"No .json files found on attempt {attempt + 1}. Retrying...")
+        time.sleep(retry_delay)
+    else:
+        # 所有重试都失败了
+        logging.warning(
+            "Allure input directory is empty after %d retries: %s. "
+            "Directory contents: %s",
+            max_retries,
+            input_dir,
+            [f.name for f in input_dir.iterdir()] if input_dir.exists() else "DIR NOT FOUND"
+        )
+        return
+
+    # --- 关键修改 2: 设置正确的输出目录 ---
+    output_dir = destination_dir / "allure-report"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    # --- 修改 2 结束 ---
 
     allure_exe = _find_allure_executable()
     if allure_exe is None:
-        logging.debug("Allure CLI not found on PATH; skip Allure report generation")
+        logging.error("Allure CLI not found. Please ensure 'allure' is in your PATH.")
         return
 
-    # When running via the UI, ``destination_dir`` is the per-run report dir.
-    if destination_dir is None:
-        logging.debug("No destination_dir for Allure report; skip HTML generation")
+    try:
+        # 构建并执行命令
+        cmd = [
+            allure_exe,
+            "generate",
+            str(input_dir.resolve()),  # 输入目录
+            "-o", str(output_dir.resolve()), # 输出目录
+            "--clean" # 清理旧报告
+        ]
+        logging.info("Executing command: %s", " ".join(cmd))
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        logging.info("Allure report generated successfully at: %s", output_dir)
+
+        # 报告生成成功后，删除原始的 JSON 数据目录
+        # if input_dir.exists():
+        #     shutil.rmtree(input_dir)
+        #     logging.info("Cleaned up original Allure results directory: %s", input_dir)
+    except subprocess.CalledProcessError as e:
+        logging.error("Failed to generate Allure report. Command: %s\nStdout: %s\nStderr: %s",
+                      " ".join(cmd), e.stdout, e.stderr)
+    except Exception as e:
+        logging.error("Unexpected error during Allure report generation: %s", e)
+
+
+def _generate_allure_report_cli(input_dir: Path, output_dir: Path) -> None:
+    """
+    Generates a static Allure HTML report from a given input directory.
+
+    This is a more flexible version of the original _generate_allure_report,
+    designed to work with both single-case and ExcelPlanRunner modes.
+
+    Args:
+        input_dir (Path): Directory containing Allure .json result files.
+        output_dir (Path): Directory where the static HTML report will be generated.
+    """
+
+    if not input_dir.exists():
+        logging.warning("Allure input directory does not exist: %s", input_dir)
         return
 
-    category_rel = _derive_test_category_from_session(session)
-    history_root = Path("report") / "allure_history"
-    category_dir = (history_root / category_rel).resolve()
-
-    try:
-        category_dir.mkdir(parents=True, exist_ok=True)
-    except Exception:
-        logging.debug("Failed to ensure Allure history directory %s", category_dir, exc_info=True)
-
-    # Inject per-category history into the current results so that Allure
-    # can compute trends.
-    history_src = category_dir / "history"
-    history_dst = results_dir / "history"
-    if history_src.exists() and history_src.is_dir():
-        try:
-            shutil.copytree(history_src, history_dst, dirs_exist_ok=True)
-        except Exception:
-            logging.debug("Failed to copy Allure history from %s to %s", history_src, history_dst, exc_info=True)
-
-    output_dir = (destination_dir / "allure-report").resolve()
-    try:
-        output_dir.mkdir(parents=True, exist_ok=True)
-    except Exception:
-        logging.debug("Failed to ensure Allure output directory %s", output_dir, exc_info=True)
-
-    try:
-        cmd = [allure_exe, "generate", str(results_dir.resolve()), "-o", str(output_dir), "--clean"]
-        subprocess.run(
-            cmd,
-            check=True,
-        )
-    except Exception:
-        logging.warning("Allure report generation failed; see debug logs for details", exc_info=True)
+    json_files = list(input_dir.glob("*.json"))
+    if not json_files:
+        logging.warning("No .json files found in Allure input directory: %s", input_dir)
         return
 
-    # Persist the refreshed history for this category for the next run.
-    history_from_report = output_dir / "history"
-    if history_from_report.exists() and history_from_report.is_dir():
-        try:
-            shutil.copytree(history_from_report, history_src, dirs_exist_ok=True)
-        except Exception:
-            logging.debug(
-                "Failed to update Allure history cache from %s to %s",
-                history_from_report,
-                history_src,
-                exc_info=True,
-            )
+    logging.info("Found %d Allure result files. Generating report...", len(json_files))
+    output_dir.mkdir(parents=True, exist_ok=True)
 
+    allure_exe = _find_allure_executable()
+    if allure_exe is None:
+        logging.error("Allure CLI not found. Please ensure 'allure' is in your PATH.")
+        return
+
+    try:
+        cmd = [
+            allure_exe,
+            "generate",
+            str(input_dir.resolve()),
+            "-o",
+            str(output_dir.resolve()),
+            "--clean"
+        ]
+        logging.info("Executing command: %s", " ".join(cmd))
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        logging.info("Allure report generated successfully at: %s", output_dir)
+
+        # 注意：不再自动删除 input_dir，因为 ExcelPlanRunner 需要它持续存在
+        # if input_dir.exists():
+        #     shutil.rmtree(input_dir)
+        #     logging.info("Cleaned up original Allure results directory: %s", input_dir)
+
+    except subprocess.CalledProcessError as e:
+        logging.error("Failed to generate Allure report. Command: %s\nStdout: %s\nStderr: %s", " ".join(cmd),
+                      e.stdout, e.stderr)
+    except Exception as e:
+        logging.error("Unexpected error during Allure report generation: %s", e)
+
+def _generate_allure_report_offline(input_dir: Path, output_dir: Path) -> None:
+    """
+    【智能模式】自动选择 Allure 生成方式：
+    1. 优先使用 EXE 内嵌的 Allure + JRE（PyInstaller 模式）
+    2. 若内嵌缺失，则回退到系统 PATH 中的 'allure' 命令
+    """
+    logger = logging.getLogger(__name__)
+    input_dir = input_dir.resolve()
+    output_dir = output_dir.resolve()
+
+    if not input_dir.exists():
+        logger.error("❌ Allure input directory does NOT exist: %s", input_dir)
+        return
+
+    json_files = sorted(input_dir.glob("*.json"))
+    if not json_files:
+        logger.warning("⚠️ No .json files found in Allure input directory: %s", input_dir)
+        return
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # --- 尝试 1: 使用内嵌 Allure (PyInstaller 模式) ---
+    meipass = getattr(sys, '_MEIPASS', '')
+    if meipass:
+        allure_exe = Path(meipass) / "allure" / "bin" / "allure.bat"
+        jre_home = Path(meipass) / "jre"
+
+        if allure_exe.exists() and (jre_home / "bin" / "java.exe").exists():
+            logger.info("🔧 Using embedded Allure from PyInstaller bundle...")
+            cmd = [str(allure_exe), "generate", str(input_dir), "-o", str(output_dir), "--clean"]
+            env = os.environ.copy()
+            env["JAVA_HOME"] = str(jre_home)
+            env["PATH"] = str(jre_home / "bin") + os.pathsep + env["PATH"]
+            try:
+                result = subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=60)
+                if result.returncode == 0:
+                    logger.info("✅ Embedded Allure report generated successfully at: %s", output_dir)
+                    return  # 成功，直接返回
+                else:
+                    logger.warning("⚠️ Embedded Allure failed, falling back to system 'allure'...")
+            except Exception as e:
+                logger.warning("⚠️ Embedded Allure execution error, falling back: %s", e)
+
+    # --- 尝试 2: 回退到系统 PATH 中的 'allure' ---
+    logger.info("🔄 Falling back to system-installed 'allure' command...")
+    allure_cmd = shutil.which("allure")
+    if not allure_cmd:
+        logger.error("❌ Allure CLI not found in system PATH and no embedded version available.")
+        return
+
+    cmd = [allure_cmd, "generate", str(input_dir), "-o", str(output_dir), "--clean"]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        if result.returncode == 0:
+            logger.info("✅ System Allure report generated successfully at: %s", output_dir)
+        else:
+            logger.error("❌ System Allure failed. Stderr: %s", result.stderr)
+    except subprocess.TimeoutExpired:
+        logger.error("⏰ Allure command timed out after 60 seconds.")
+    except Exception as e:
+        logger.exception("💥 Unexpected error during system Allure report generation: %s", e)
+
+
+# ----------------------------------------------------------------------------#
+# Public API for external report generation (e.g., ExcelPlanRunner)
+# ----------------------------------------------------------------------------#
+def generate_allure_html_report(input_dir: Path, output_dir: Path) -> None:
+    """
+    Public wrapper for _generate_allure_report_v2.
+    Generates Allure HTML report from input_dir (.json files) to output_dir.
+    """
+    _generate_allure_report_cli(input_dir, output_dir)
 
 def _sanitize_filename_component(value) -> str:
     """
@@ -558,15 +698,10 @@ def record_test_data(request):
     if compat_compare is not None:
         record["compat_compare"] = compat_compare
 
-    test_results.append({test_name: record})
 
 def pytest_sessionfinish(session, exitstatus):
-    """
-    Finalize session artifacts and optionally generate a performance report.
-
-    - Copies `pytest.log` -> `debug.log` and `kernel_log.txt` -> `kernel.log`
-      into `--resultpath` when provided.
-
+    """ Finalize session artifacts and optionally generate a performance report.
+    - Copies `pytest.log` -> `debug.log` and `kernel_log.txt` -> `kernel.log` into `--resultpath` when provided.
     Args:
         session (pytest.Session): The pytest session (unused beyond state read).
         exitstatus (int): Pytest exit status code.
@@ -576,10 +711,12 @@ def pytest_sessionfinish(session, exitstatus):
         pytest._session_duration_seconds = max(0.0, time.time() - float(getattr(pytest, "_session_start_ts", time.time())))
     except Exception:
         pytest._session_duration_seconds = None
+
     destination_dir: Path | None = None
     csv_file = "test_results.csv"
     logging.info(test_results)
 
+    # --- [原有逻辑] 处理兼容性结果 ---
     compatibility_results = []
     for record in test_results:
         if not isinstance(record, dict) or not record:
@@ -598,56 +735,83 @@ def pytest_sessionfinish(session, exitstatus):
         with suppress(Exception):
             destination_dir.mkdir(parents=True, exist_ok=True)
 
-    # For compatibility cases, archive the CSV into the report directory and
-    # sync both CSV + router catalogue into MySQL (best effort).
-    csv_path_for_db = Path(csv_file).resolve()
-    if compatibility_results and destination_dir:
-        target_csv = destination_dir / csv_file
-        shutil.copy(Path(csv_file), target_csv)
-        csv_path_for_db = target_csv.resolve()
+        # For compatibility cases, archive the CSV into the report directory and
+        # sync both CSV + router catalogue into MySQL (best effort).
+        csv_path_for_db = Path(csv_file).resolve()
+        if compatibility_results and destination_dir:
+            target_csv = destination_dir / csv_file
+            shutil.copy(Path(csv_file), target_csv)
+            csv_path_for_db = target_csv.resolve()
 
-    if compatibility_results:
-        from src.tools.mysql_tool.operations import sync_compatibility_artifacts_to_db
-        from src.util.constants import load_config
-
-        config = load_config(refresh=True) or {}
-        router_json = str((Path.cwd() / "config" / "compatibility_router.json").resolve())
-        case_path_hint = None
-        try:
-            args = getattr(session.config, "args", None) or []
-            if args:
-                case_path_hint = str(args[-1])
-        except Exception:
+        if compatibility_results:
+            from src.tools.mysql_tool.operations import sync_compatibility_artifacts_to_db
+            from src.util.constants import load_config
+            config = load_config(refresh=True) or {}
+            router_json = str((Path.cwd() / "config" / "compatibility_router.json").resolve())
             case_path_hint = None
+            try:
+                args = getattr(session.config, "args", None) or []
+                if args:
+                    case_path_hint = str(args[-1])
+            except Exception:
+                case_path_hint = None
+            sync_compatibility_artifacts_to_db(
+                config,
+                csv_file=str(csv_path_for_db),
+                router_json=router_json,
+                case_path=case_path_hint,
+                duration_seconds=getattr(pytest, "_session_duration_seconds", None),
+            )
 
-        sync_compatibility_artifacts_to_db(
-            config,
-            csv_file=str(csv_path_for_db),
-            router_json=router_json,
-            case_path=case_path_hint,
-            duration_seconds=getattr(pytest, "_session_duration_seconds", None),
-        )
+        # --- [原有逻辑] 复制日志文件 ---
+        src_log = Path("pytest.log")
+        if destination_dir and src_log.exists():
+            shutil.copy(src_log, destination_dir / "debug.log")
 
-    src_log = Path("pytest.log")
-    if destination_dir and src_log.exists():
-        shutil.copy(src_log, destination_dir / "debug.log")
+        ser_log = Path("kernel_log.txt")
+        if destination_dir and ser_log.exists():
+            try:
+                shutil.copy(ser_log, destination_dir / "kernel.log")
+            except Exception as exc:
+                logging.warning("Failed to copy kernel_log.txt to %s: %s", destination_dir, exc)
+    # --- [原有逻辑结束] ---
 
-    ser_log = Path("kernel_log.txt")
-    if destination_dir and ser_log.exists():
-        try:
-            shutil.copy(ser_log, destination_dir / "kernel.log")
-        except Exception as exc:
-            logging.warning("Failed to copy kernel_log.txt to %s: %s", destination_dir, exc)
-
+    # --- 【新增】处理项目性能报告 (XIAOMI) ---
     test_result = getattr(pytest, "testResult", None)
     if isinstance(test_result, PerformanceResult):
         _maybe_generate_project_report()
+    # --- 【新增结束】---
 
-    # Generate an Allure HTML report under the per-run report directory when
-    # available, using a history cache derived from the src/test subpath so
-    # that each testcase family (peak/RVR/RVO/compatibility/etc.) maintains
-    # its own historical trend.
-    try:
-        _generate_allure_report(session, destination_dir)
-    except Exception:
-        logging.debug("Allure report generation skipped/failed", exc_info=True)
+    # --- 【关键修改】智能生成 Allure 报告 ---
+    # 默认行为：destination_dir 是单 Case 的报告目录，input_dir 是其下的 allure_report
+    input_dir_for_allure = None
+    output_dir_for_allure = None
+
+    if destination_dir is not None:
+        # 检查是否存在共享的 allure_results 目录 (ExcelPlanRunner 模式)
+        shared_allure_results = destination_dir / "allure_report"
+        if shared_allure_results.exists() and any(shared_allure_results.iterdir()):
+            # ========== ExcelPlanRunner 共享模式 ==========
+            # 输入：共享的 allure_results 目录
+            input_dir_for_allure = shared_allure_results
+            # 输出：在同一个主报告目录下生成 allure-report
+            output_dir_for_allure = destination_dir / "allure_results"
+            logging.info("Detected ExcelPlanRunner mode. Generating report from shared 'allure_results'.")
+        else:
+            # ========== 单 Case 独立模式 (保持原样) ==========
+            # 输入：原有的 allure_report 目录
+            input_dir_for_allure = destination_dir / "allure_report"
+            # 输出：在同一个 Case 报告目录下生成 allure-report
+            output_dir_for_allure = destination_dir / "allure_results"
+
+    # 调用通用的报告生成函数
+    if input_dir_for_allure is not None and output_dir_for_allure is not None:
+        # 智能选择生成方式：本地用 CLI，打包用离线
+        import sys
+        if getattr(sys, 'frozen', False):
+            _generate_allure_report_offline(input_dir_for_allure, output_dir_for_allure)
+        else:
+            _generate_allure_report_cli(input_dir_for_allure, output_dir_for_allure)
+    else:
+        logging.warning("Could not determine Allure input/output directories.")
+    # --- 【关键修改结束】---

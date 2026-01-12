@@ -11,17 +11,19 @@ from __future__ import annotations
 
 import socket
 from src.tools.connect_tool import command_batch as subprocess
-import subprocess
+import subprocess, threading
 import sys
 from pathlib import Path
 from contextlib import suppress
-import logging
+import logging, time
 import json
+from collections import deque
 
 from PyQt5.QtCore import QEvent, Qt, QTimer, QEasingCurve, QUrl, QPoint, QSize
 from PyQt5.QtGui import QTextCursor, QDesktopServices, QIcon
 from PyQt5.QtWidgets import QApplication, QFrame, QHBoxLayout, QLabel, QTextEdit, QVBoxLayout
 from qfluentwidgets import CardWidget, PushButton, StrongBodyLabel, MessageBox
+from http.server import HTTPServer, SimpleHTTPRequestHandler
 from PyQt5 import sip
 from src.util.constants import get_src_base, Paths
 from src.ui.controller.run_ctl import CaseRunner, ExcelPlanRunner
@@ -236,28 +238,48 @@ class RunView(CardWidget):
     def _on_open_allure_clicked(self) -> None:
         if not self._allure_report_dir:
             return
+
         base = Path(self._allure_report_dir)
-        report_root = (base / "allure-report").resolve()
+        report_root = (base / "allure_results").resolve()
         index_path = report_root / "index.html"
         if not report_root.exists() or not index_path.exists():
+            MessageBox("Error", "Allure report files not found!", self).exec()
             return
 
-        if self._allure_server_proc is not None and self._allure_server_proc.poll() is None and self._allure_server_url:
+        # 如果已有服务器且目录相同，直接打开
+        if hasattr(self, '_allure_httpd') and self._allure_served_dir == report_root:
             QDesktopServices.openUrl(QUrl(self._allure_server_url))
             return
 
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            sock.bind(("127.0.0.1", 0))
-            port = sock.getsockname()[1]
+        # 停止旧服务器
+        if hasattr(self, '_allure_httpd'):
+            self._allure_httpd.shutdown()
+            self._allure_httpd.server_close()
 
-        proc = subprocess.Popen(
-            [sys.executable, "-m", "http.server", str(port), "--bind", "127.0.0.1"],
-            cwd=str(report_root),
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        self._allure_server_proc = proc
-        self._allure_server_url = f"http://127.0.0.1:{port}/index.html"
+        # 找一个空闲端口
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind(("127.0.0.1", 0))
+            port = s.getsockname()[1]
+
+        # 切换到报告目录并启动服务器
+        class Handler(SimpleHTTPRequestHandler):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, directory=str(report_root), **kwargs)
+
+        httpd = HTTPServer(("127.0.0.1", port), Handler)
+        self._allure_httpd = httpd
+        self._allure_served_dir = report_root
+        self._allure_server_url = f"http://127.0.0.1:{port}/"
+
+        # 在后台线程运行
+        server_thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+        server_thread.start()
+
+        # 等待服务就绪（可选）
+        import time
+        time.sleep(0.1)
+
+        # 打开浏览器
         QDesktopServices.openUrl(QUrl(self._allure_server_url))
 
 
@@ -307,11 +329,15 @@ class RunPage(CardWidget):
         self._progress_animation = None
         self._current_percent = 0
 
+        #allure init
+        self._allure_server_proc: subprocess.Popen | None = None
+        self._allure_server_url: str | None = None
+        self._allure_served_dir: Path | None = None
+
         #260105 For function test; Auto-load last function plan
         try:
             from src.util.constants import get_config_base
             context_file = get_config_base() / "last_function_plan.txt"
-            #print(f"[DEBUG] Looking for last plan at: {context_file}")
             try:
                 with open(context_file, 'r', encoding='utf-8') as f:
                     excel_path = f.read().strip()
@@ -322,8 +348,6 @@ class RunPage(CardWidget):
 
                 # --- Step 2: 验证并设置路径 ---
             if excel_path and Path(excel_path).exists():
-                print(f"[DEBUG] Found plan path in file: '{excel_path}'")
-                print(f"[DEBUG] Plan file exists on disk. Setting it.")
                 self.set_excel_plan_path(excel_path)
 
                 # --- Step 3: 尝试删除（增加安全措施）---
@@ -397,6 +421,22 @@ class RunPage(CardWidget):
             return
         if msg.strip() == "KeyboardInterrupt":
             return
+
+        # ========== 【精准去重】仅在 ExcelRunner 场景下启用 ==========
+        if self.excel_plan_path is not None:
+            current_time = time.time()
+            if not hasattr(self, '_excel_log_cache'):
+                # 使用 (msg, timestamp) 的元组，保留最近20条记录
+                self._excel_log_cache = deque(maxlen=20)
+
+            # 检查在过去 0.1 秒内是否出现过完全相同的日志
+            for cached_msg, cached_time in self._excel_log_cache:
+                if cached_msg == msg and (current_time - cached_time) < 0.1:
+                    return  # 重复日志，丢弃
+
+            # 记录当前日志
+            self._excel_log_cache.append((msg, current_time))
+
         # Extract raw PYQT markers from log lines that include timestamps/prefixes.
         marker_index = msg.find("[PYQT_")
         marker = msg[marker_index:] if marker_index != -1 else msg
@@ -552,9 +592,12 @@ class RunPage(CardWidget):
         self._set_action_button("run")
         self.action_btn.setEnabled(True)
 
+        # reset report status
+        self._last_report_dir = None
+        self.view.set_allure_report_dir(None)
+
     def run_case(self) -> None:
         print(f"[DEBUG] run_case() called.")
-        print(f"[DEBUG] Current state - case_path: '{self.case_path}', excel_plan_path: '{self.excel_plan_path}'")
 
         self.reset()
         self._set_action_button("stop")
@@ -653,7 +696,17 @@ class RunPage(CardWidget):
                 self._append_log(f"<b style='color:red;'>Failed to create ExcelPlanRunner: {e}</b>")
                 self._set_action_button("run")
                 return
-            # ----------------------------
+
+            # 连接日志和进度信号（原有）
+            self.runner.log_signal.connect(self._append_log)
+            self.runner.progress_signal.connect(self.update_progress)
+
+            # 【新增】连接新的 case_report_ready_signal
+            # 一旦收到任何单个 case 的报告目录，就立即设置并启用按钮
+            self.runner.case_report_ready_signal.connect(self._on_excel_case_report_ready)
+
+            # 连接最终完成信号（原有）
+            self.runner.finished_signal.connect(self._finalize_runner)
         else:
             # --- Mode 2: Run Single Case (Original Logic) ---
             print(f"[DEBUG] Branch taken: Creating CaseRunner for '{self.case_path}'")
@@ -664,7 +717,7 @@ class RunPage(CardWidget):
             )
         #self.runner = CaseRunner(self.case_path, account_name=account_name, display_case_path=self.display_case_path)
 
-        # Connect signals for both runners
+        # # Connect signals for both runners
         self.runner.log_signal.connect(self._append_log)
         self.runner.progress_signal.connect(self.update_progress)
         with suppress(Exception):
@@ -677,6 +730,20 @@ class RunPage(CardWidget):
             raise TypeError(f"Unknown runner type: {type(self.runner)}")
         print(f"[DEBUG] Starting runner: {type(self.runner).__name__}")
         self.runner.start()
+
+    def _on_excel_case_report_ready(self, report_dir: str):
+        """
+        槽函数：当 ExcelPlanRunner 中的任何一个 Case 完成并生成报告后调用。
+        立即启用 "Open Allure Report" 按钮。
+        """
+        # 只要收到一次，就设置报告目录并启用按钮
+        # （后续的信号可以忽略，因为按钮已经启用了）
+        if not self.view.open_allure_btn.isEnabled():
+            #self._last_report_dir = report_dir
+            #self.view.set_allure_report_dir(report_dir)
+            self.view.open_allure_btn.setEnabled(True)
+            if self.runner and hasattr(self.runner, '_plan_report_dir'):
+                self._last_report_dir = str(self.runner._plan_report_dir)
 
     # 260104 For function test;
     def set_excel_plan_path(self, path: str) -> None:
@@ -705,10 +772,9 @@ class RunPage(CardWidget):
                 signal.disconnect(slot)
         with suppress((TypeError, RuntimeError)):
             runner.report_dir_signal.disconnect(self._on_report_dir_ready)
-        with suppress((TypeError, RuntimeError)):
-            runner.finished.disconnect(self._finalize_runner)
-
-            # --- 新增：按类型断开 finished 信号 ---
+        # with suppress((TypeError, RuntimeError)):
+        #     runner.finished.disconnect(self._finalize_runner)
+        # 按类型断开 finished 信号
         if isinstance(runner, ExcelPlanRunner):
             with suppress((TypeError, RuntimeError)):
                 runner.finished_signal.disconnect(self._finalize_runner)
@@ -718,11 +784,33 @@ class RunPage(CardWidget):
 
         runner.deleteLater()
         self.runner = None
+
+        if self._last_report_dir:
+            self.view.set_allure_report_dir(self._last_report_dir)
+        else:
+            final_report_dir = None
+            if isinstance(runner, ExcelPlanRunner):
+                final_report_dir = getattr(runner, '_plan_report_dir', None)
+                if final_report_dir is not None:
+                    final_report_dir = str(final_report_dir)
+            elif isinstance(runner, CaseRunner):
+                # 直接从 CaseRunner 实例获取其 report_dir 属性
+                final_report_dir = getattr(runner, 'report_dir', None)
+
+                # 只要拿到了有效的目录，就更新 UI
+            if final_report_dir:
+                self._last_report_dir = final_report_dir
+                self.view.set_allure_report_dir(final_report_dir)
+                # 如果需要，也可以通知主窗口
+                # self.main_window.enable_report_page(final_report_dir)
+
         self.on_runner_finished()
 
     def _on_report_dir_ready(self, path: str) -> None:
-        self._last_report_dir = path
-        self.main_window.enable_report_page(path)
+        if not self._last_report_dir:
+            self._last_report_dir = path
+            self.main_window.enable_report_page(path)
+            self.view.set_allure_report_dir(path)
 
     def cleanup(self, disconnect_page: bool = True) -> None:
         stack = self.main_window.stackedWidget
@@ -791,11 +879,8 @@ class RunPage(CardWidget):
         if self._last_report_dir:
             self.view.set_allure_report_dir(self._last_report_dir)
 
-        # --- 260106 新增：通知主应用重置向导状态 ---
-        print("[DEBUG] About to call reset_wizard_after_run")
         from src.ui.controller.run_ctl import reset_wizard_after_run
         reset_wizard_after_run(self)
-        print("[DEBUG] reset_wizard_after_run called")
 
     def on_stop(self) -> None:
         self._append_log("on_stop entered")
@@ -809,7 +894,6 @@ class RunPage(CardWidget):
         current_file_dir = Path(__file__).resolve().parent
         # Go up: .../src/ui/view -> .../src/ui -> .../src -> project_root
         project_root = current_file_dir.parent.parent.parent
-        print(f"[DEBUG] Calculated project root as: {project_root}")  # For verification
         return project_root
 
     def _calc_display_path(self, case_path: str, display_case_path: str | None) -> str:
