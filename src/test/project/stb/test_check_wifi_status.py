@@ -1,132 +1,145 @@
 import logging
 import os
-import time
-from typing import Mapping
 import sys
+import time
+from typing import Dict, Any
 
-# 添加项目路径
+import allure  # ← Allure 核心模块
+
+# 添加项目根路径（兼容 PyInstaller 打包）
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
-#from src.dut_control.roku_ctrl import roku_ctrl
 from src.tools.connect_tool.transports.telnet_tool import telnet_tool
 from src.util.constants import load_config
 
 
-def _create_device_connection(device_info: dict):
-    control_type = device_info.get("control_type", "").lower()
-    ip = device_info.get("ip")
-    logging.info(f"Establishing device connection (type: {control_type})")
-    if control_type == "roku":
-        #return roku_ctrl(ip)
-        return telnet_tool(ip)
-    elif control_type == "linux":
+@allure.step("创建 DUT 连接 [类型: {control_type}, IP: {ip}]")
+def _create_device_connection(control_type: str, ip: str):
+    """建立 Telnet 连接到 DUT"""
+    logging.info(f"Establishing {control_type} connection to {ip}")
+    if control_type in ("roku", "linux"):
         return telnet_tool(ip)
     else:
         raise ValueError(f"Unsupported control_type: {control_type}")
 
 
-def _reboot_dut(dut, control_type: str):
-    logging.info("Sending soft reboot command")
+@allure.step("发送软重启命令")
+def _send_reboot_command(dut) -> str:
+    """向 DUT 发送 reboot 命令"""
     output = dut.checkoutput('reboot')
-    logging.info(f"Reboot shell output: {output}")
+    logging.info(f"Reboot command output:\n{output}")
+    return output
 
 
-def _check_network_status(dut, router_ip: str):
-    logging.info("Executing ifconfig to check network interface")
-    if_output = dut.checkoutput("ifconfig")
-    logging.info(f"ifconfig output:\n{if_output}")
-    if "eth0" not in if_output or "inet" not in if_output:
-        raise AssertionError("eth0 interface or IP address not found")
-    logging.info(f"Pinging router ({router_ip}) to verify connectivity")
+@allure.step("验证网络连通性 [路由器 IP: {router_ip}]")
+def _verify_network_connectivity(dut, router_ip: str):
+    """检查 eth0 是否有 IP，并 ping 路由器"""
+    # 检查接口
+    ifconfig_output = dut.checkoutput("ifconfig")
+    logging.info(f"ifconfig output:\n{ifconfig_output}")
+
+    if "eth0" not in ifconfig_output or "inet " not in ifconfig_output:
+        raise AssertionError("eth0 interface or IP address missing")
+
+    # Ping 路由器
     ping_output = dut.checkoutput(f"ping -c 4 {router_ip}")
     logging.info(f"Ping result:\n{ping_output}")
+
     if "0% packet loss" not in ping_output and "4 received" not in ping_output:
-        raise AssertionError("Failed to ping router")
+        raise AssertionError("Ping to router failed")
 
 
-def test_soft_reboot_str():
-    # === 1. 加载全局配置（来自 UI）===
-    base_config = load_config(refresh=True)
-    logging.info(f"Loaded base_config keys: {list(base_config.keys())}")
+@allure.title("Wi-Fi Check Wi-Fi Status")
+@allure.description("Check Wi-Fi Status after Reboot")
+def test_check_wifi_status():
+    """
+    主测试用例：软重启 + 网络验证
+    """
+    # === 1. 加载配置 ===
+    base_config: Dict[str, Any] = load_config(refresh=True)
+    logging.info(f"Loaded config keys: {list(base_config.keys())}")
 
-    # === 2. 提取测试参数 ===
-    basic_test_duration = base_config.get("duration_control", {})
-    loop_count = int(basic_test_duration.get("loop", "1"))
+    # === 2. 提取参数 ===
+    duration_cfg = base_config.get("duration_control", {})
+    loop_count = int(duration_cfg.get("loop", "1") or "1")  # 防空字符串
 
-    basic_router = base_config.get("router", {})
-    router_ip = basic_router.get("address") or basic_router.get("ip")
-    ssid_24g = basic_router.get("24g_ssid")
-    ssid_5g = basic_router.get("5g_ssid")
+    router_cfg = base_config.get("router", {})
+    router_ip = router_cfg.get("address") or router_cfg.get("ip")
+    ssid_24g = router_cfg.get("24g_ssid")
+    ssid_5g = router_cfg.get("5g_ssid")
 
-    # === 3. 构造 device_info 从 connect_type ===
-    connect_type_cfg = base_config.get("connect_type", {})
-    ctrl_type_raw = connect_type_cfg.get("type", "Unknown")
-    control_type = ctrl_type_raw.lower()
+    connect_cfg = base_config.get("connect_type", {})
+    control_type_raw = connect_cfg.get("type", "Unknown")
+    control_type = control_type_raw.lower()
 
-    device_info = {"control_type": control_type}
+    # 构造 device_info
     if control_type == "linux":
-        linux_cfg = connect_type_cfg.get("Linux", {})
-        device_info["ip"] = linux_cfg.get("ip", "")
-        device_info["wildcard"] = linux_cfg.get("wildcard", "None")
-    elif control_type == "android":
-        android_cfg = connect_type_cfg.get("Android", {})
-        device_info["device"] = android_cfg.get("device", "Unknown")
+        linux_cfg = connect_cfg.get("Linux", {})
+        dut_ip = linux_cfg.get("ip", "")
+    elif control_type == "roku":
+        roku_cfg = connect_cfg.get("Roku", {})
+        dut_ip = roku_cfg.get("ip", "")
+    else:
+        raise RuntimeError(f"Unsupported DUT type: {control_type}")
 
-    # === 4. 参数校验 ===
-    if not all([router_ip, ssid_24g, ssid_5g]):
-        raise RuntimeError("Basic Router configuration incomplete")
+    # === 3. 参数校验 ===
+    if not all([router_ip, ssid_24g, ssid_5g, dut_ip]):
+        missing = [k for k, v in {
+            "router_ip": router_ip,
+            "ssid_24g": ssid_24g,
+            "ssid_5g": ssid_5g,
+            "dut_ip": dut_ip
+        }.items() if not v]
+        raise RuntimeError(f"Missing required config: {missing}")
 
-    if control_type not in ("linux", "roku"):
-        raise RuntimeError(f"Unsupported control_type: {control_type}")
-
-    if not device_info.get("ip"):
-        raise RuntimeError("Device IP is required for Linux-type DUT")
-
-    # === 5. 开始测试 ===
-    logging.info(f"Starting Soft Reboot Stability Test - {loop_count} Loops")
-    logging.info(f"Router: {router_ip}, DUT IP: {device_info['ip']}")
+    logging.info(f"Starting test: {loop_count} loops | DUT={dut_ip} | Router={router_ip}")
 
     dut = None
     total_failures = 0
 
     try:
-        logging.info("Initializing device connection")
-        dut = _create_device_connection(device_info)
+        with allure.step("Init DUT Connected"):
+            dut = _create_device_connection(control_type, dut_ip)
 
         for current_loop in range(1, loop_count + 1):
-            logging.info(f"\n===== Starting Loop {current_loop}/{loop_count} =====")
-            try:
-                _reboot_dut(dut, control_type)
-                time.sleep(60)
+            with allure.step(f" {current_loop}/{loop_count} testing"):
 
-                # Reconnect after reboot
-                if hasattr(dut, 'close'):
-                    dut.close()
-                dut = _create_device_connection(device_info)
-                time.sleep(5)
+                # 执行软重启
+                _send_reboot_command(dut)
+                time.sleep(60)  # 等待重启
 
-                _check_network_status(dut, router_ip)
-                time.sleep(60)
-
-                os.environ["SOFT_REBOOT_COMPLETED_LOOPS"] = str(current_loop)
-                logging.info(f"✅ Loop {current_loop} completed successfully")
-
-            except Exception as e:
-                total_failures += 1
-                logging.error(f"Loop {current_loop} failed: {e}", exc_info=True)
-                # Recovery attempt
-                try:
-                    if dut and hasattr(dut, 'close'):
+                # 重新连接
+                with allure.step("Re-Connect after Reboot"):
+                    if hasattr(dut, 'close'):
                         dut.close()
-                    dut = _create_device_connection(device_info)
-                except Exception:
-                    pass
+                    dut = _create_device_connection(control_type, dut_ip)
+                    time.sleep(5)
 
-        summary = f"Total loops: {loop_count}\nTotal failures: {total_failures}"
-        logging.info(f"\n===== Test Completed =====\n{summary}")
-        if total_failures > 0:
-            raise RuntimeError(f"Test completed with {total_failures} failure(s)")
+                # 验证网络
+                _verify_network_connectivity(dut, router_ip)
+                time.sleep(60)
+
+                # 记录成功轮次（可用于恢复）
+                os.environ["SOFT_REBOOT_COMPLETED_LOOPS"] = str(current_loop)
+                logging.info(f"✅ Loop {current_loop} passed")
+
+    except Exception as e:
+        total_failures += 1
+        logging.error(f"Test failed at loop {current_loop}: {e}", exc_info=True)
+
+        # 附加错误到 Allure 报告
+        allure.attach(
+            str(e),
+            name="Exception Details",
+            attachment_type=allure.attachment_type.TEXT
+        )
+        raise
 
     finally:
         if dut and hasattr(dut, 'close'):
-            dut.close()
+            with allure.step("Close DUT Connection"):
+                dut.close()
+
+    # 最终断言
+    if total_failures > 0:
+        raise AssertionError(f"Test completed with {total_failures} failure(s)")
