@@ -95,15 +95,25 @@ class LocalOS:
 
         return found_fallback
 
-    def dynamic_flush_network_card(self, net_card=''):
-        disable_cmd = f'netsh interface set interface "{net_card}" disable'
-        enable_cmd = f'netsh interface set interface "{net_card}" enable'
-        self.checkoutput(disable_cmd)
-        self.checkoutput(enable_cmd)
+    def dynamic_flush_network_card(self, net_card='', max_retries=3):
+        #Try interface down max 3 times, and wait max 30 seconds after down/up
+        for retry in range(max_retries):
+            print(f"[Retry {retry + 1}/{max_retries}] Disabling/enabling NIC '{net_card}'...")
 
-        for _ in range(30):
+            #self.checkoutput(f'netsh interface set interface "{net_card}" disable')
+            self.checkoutput(f'ipconfig /release "{net_card}"')
+            time.sleep(2)
+            self.checkoutput(f'ipconfig /renew "{net_card}"')
+            #self.checkoutput(f'netsh interface set interface "{net_card}" enable')
             time.sleep(5)
-            ip = self.get_ipaddress(net_card)
-            if ip:
-                self.ip = ip
-                return self.ip
+
+            for _ in range(6):
+                time.sleep(5)
+                ip = self.get_ipaddress(net_card)
+                if ip:
+                    self.ip = ip
+                    return ip
+
+        self.ip = None
+        logging.error(f"Failed to renew IP for '{net_card}' after {max_retries} retries")
+        return None

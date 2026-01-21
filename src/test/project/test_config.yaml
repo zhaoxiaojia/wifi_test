@@ -2,17 +2,25 @@
 version: 1.0
 
 scripts:
-    - path: stb/test_check_wifi_status.py
-      priority: P1
+    - path: stb/test_wifi_initial_state.py
+      priority: P2
       module: Status Check
       TCID: WiFi-STA-FDF0001
-      description : Check Default Wi-Fi Setting
+      description : Validate default Wi-Fi setting
       Tag: Common Case
 
 
-    - path: stb/test_wifi_connection.py
+    - path: stb/test_wifi_initial_state_after_reboot.py
+      priority: P0
+      module: Status Check
+      TCID: WiFi-STA-FDF0002
+      description: Validate default Wi-Fi setting after reboot
+      Tag: Common Case
+
+
+    - path: stb/test_wifi_state_after_switch.py
       priority: P2
-      module: SSID
-      TCID: WiFi-STA-FSSID0001
-      description: Check Wi-Fi SSID Connection.
+      module: Status Check
+      TCID: WiFi-STA-FMN0003
+      description: Validate Wi-Fi Scan after WiFi ON/OFF
       Tag: Common Case

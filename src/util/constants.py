@@ -976,9 +976,15 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, str]]]]]
     },
     "Roku": {
         "TV": {
-            "Blueplanet": {
-                "main_chip": "T963D4",
-                "wifi_module": "W2",
+            "Sandia": {
+                "main_chip": "TR964",
+                "wifi_module": "W2L",
+                "interface": "USB",
+                "ecosystem": "Linux",
+            },
+            "Roxton": {
+                "main_chip": "T950R4",
+                "wifi_module": "W1U",
                 "interface": "USB",
                 "ecosystem": "Linux",
             },
@@ -989,6 +995,16 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, str]]]]]
             "KitKat513": {
                 "main_chip": "C302X",
                 "wifi_module": "W1U",
+                "interface": "USB",
+                "ecosystem": "Android",
+            },
+        },
+    },
+    "Common": {
+        "STB": {
+            "Android_DUT": {
+                "main_chip": "905X5M",
+                "wifi_module": "W2",
                 "interface": "USB",
                 "ecosystem": "Android",
             },
