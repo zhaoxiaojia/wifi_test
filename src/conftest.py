@@ -346,6 +346,16 @@ def generate_allure_html_report(input_dir: Path, output_dir: Path) -> None:
     """
     _generate_allure_report_cli(input_dir, output_dir)
 
+# ----------------------------------------------------------------------------#
+# Public API for external report generation (e.g., ExcelPlanRunner)
+# ----------------------------------------------------------------------------#
+def generate_allure_html_report(input_dir: Path, output_dir: Path) -> None:
+    """
+    Public wrapper for _generate_allure_report_v2.
+    Generates Allure HTML report from input_dir (.json files) to output_dir.
+    """
+    _generate_allure_report_cli(input_dir, output_dir)
+
 def _sanitize_filename_component(value) -> str:
     """
     Convert an arbitrary value (e.g., project name) into a safe filename component.
@@ -706,7 +716,6 @@ def record_test_data(request):
     if compat_compare is not None:
         record["compat_compare"] = compat_compare
 
-    test_results.append({test_name: record})
 
 def pytest_sessionfinish(session, exitstatus):
     """ Finalize session artifacts and optionally generate a performance report.

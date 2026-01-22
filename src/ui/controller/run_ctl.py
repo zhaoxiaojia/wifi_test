@@ -832,6 +832,21 @@ class ExcelPlanRunner(QThread):
                 )
                 # ---
 
+                # === 新增：监听子用例完成，更新实时报告 ===
+                # def make_handler(index=idx, runner_ref=runner):
+                #     def handler():
+                #         # 更新 Excel 状态（原有逻辑）
+                #         exit_code = runner_ref.last_exit_code
+                #         status = "Passed" if exit_code == 0 else "Failed"
+                #         print(f"[ExcelPlanRunner DEBUG] Case {index}: exit_code={exit_code}, status={status}")
+                #         self._update_excel_result(index, status)
+                #         # 👇 新增：生成实时 Allure 报告
+                #         self._safe_generate_allure_report()
+                #
+                #     return handler
+
+                #runner.finished_signal.connect(make_handler())
+
                 # 连接信号
                 runner.report_dir_signal.connect(self.case_report_ready_signal, Qt.DirectConnection)
                 runner.log_signal.connect(self.log_signal)
