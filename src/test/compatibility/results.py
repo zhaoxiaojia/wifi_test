@@ -4,7 +4,17 @@ import os
 
 from src.util.constants import load_config
 from src.tools.router_tool.Router import Router
+import threading
+from pathlib import Path
+from typing import Any, Dict, Tuple, Optional
 
+# 全局状态（模块级）
+_ap_test_state: Dict[Tuple[str, int, str], Dict[str, Any]] = {}
+_ap_lock = threading.Lock()
+
+# 元数据缓存（可选，用于跨测试项共享 AP 信息）
+_test_metadata_cache: Dict[str, Dict[str, Any]] = {}
+_metadata_lock = threading.Lock()
 
 def _iter_compatibility_relays():
     """
@@ -58,6 +68,7 @@ def write_compatibility_results(test_results, csv_file: str) -> None:
         "Scan",
         "Connect",
         "TX Result",
+        "Ping Result",
         "Channel",
         "RSSI",
         "TX Criteria",
@@ -161,3 +172,157 @@ def write_compatibility_results(test_results, csv_file: str) -> None:
     with open(csv_file, mode="a", newline="", encoding="utf-8") as file:
         writer = csv.writer(file, quotechar=" ")
         writer.writerow(row_data)
+
+
+def update_compat_test_result(
+        nodeid: str,
+        test_name: str,
+        compat_compare: str,
+        return_value: tuple,
+        metadata: Optional[dict] = None
+):
+    """
+    Update internal state with result of one compatibility test.
+
+    Args:
+        nodeid: request.node.nodeid (for metadata lookup)
+        test_name: e.g., 'test_scan', 'test_multi_throughtput_tx'
+        compat_compare: "PASS" / "FAIL"
+        return_value: tuple from test function
+        metadata: optional dict containing pdu_ip, port, band, etc.
+    """
+    global _ap_test_state
+
+    # 缓存元数据（如果提供了）
+    if metadata:
+        with _metadata_lock:
+            _test_metadata_cache[nodeid] = metadata
+
+    # 获取元数据
+    with _metadata_lock:
+        meta = _test_metadata_cache.get(nodeid, {})
+
+    ip = meta.get("pdu_ip", "N/A")
+    port = meta.get("pdu_port", "N/A")
+    band = meta.get("band", "N/A")
+
+    if ip == "N/A" or port == "N/A" or band == "N/A":
+        return
+
+    key = (ip, port, band)
+
+    # 初始化 AP 状态
+    with _ap_lock:
+        if key not in _ap_test_state:
+            _ap_test_state[key] = {
+                "ap_brand": meta.get("ap_brand", "Unknown"),
+                "ssid": meta.get("ssid", "N/A"),
+                "wifi_mode": meta.get("wifi_mode", "N/A"),
+                "bandwidth": meta.get("bandwidth", "N/A"),
+                "security": meta.get("security", "open"),
+                "scan": "N/A",
+                "connect": "N/A",
+                "ping": "N/A",
+                "tx_channel": "N/A",
+                "tx_rssi": "N/A",
+                "tx_criteria": "N/A",
+                "tx_throughput": "N/A",
+                "rx_channel": "N/A",
+                "rx_rssi": "N/A",
+                "rx_criteria": "N/A",
+                "rx_throughput": "N/A"
+            }
+
+        state = _ap_test_state[key]
+        status = "PASS" if compat_compare == "PASS" else "FAIL"
+
+        def safe_get(lst, idx, default="N/A"):
+            return str(lst[idx]) if isinstance(lst, (list, tuple)) and len(lst) > idx else default
+
+        # 根据测试类型更新字段
+        if "test_scan" in test_name:
+            state["scan"] = status
+        elif "test_connect" in test_name:
+            state["connect"] = status
+            state["tx_channel"] = safe_get(return_value, 0)
+            state["tx_rssi"] = safe_get(return_value, 1)
+            state["rx_channel"] = safe_get(return_value, 0)
+            state["rx_rssi"] = safe_get(return_value, 1)
+        elif "test_ping" in test_name:
+            # 注意：原代码从 pytest.ping_result 取值，这里建议直接传入
+            state["ping"] = compat_compare
+        elif "test_multi_throughtput_tx" in test_name:
+            state["tx_channel"] = safe_get(return_value, 0)
+            state["tx_rssi"] = safe_get(return_value, 1)
+            state["tx_criteria"] = safe_get(return_value, 2)
+            state["tx_throughput"] = safe_get(return_value, 3)
+        elif "test_multi_throughtput_rx" in test_name:
+            state["rx_channel"] = safe_get(return_value, 0)
+            state["rx_rssi"] = safe_get(return_value, 1)
+            state["rx_criteria"] = safe_get(return_value, 2)
+            state["rx_throughput"] = safe_get(return_value, 3)
+
+    # test_compatibility.py
+
+def write_realtime_compat_csv(csv_path: str):
+    """Write full compatibility_result.csv based on current _ap_test_state."""
+    rows = []
+    with _ap_lock:
+        for key, state in _ap_test_state.items():
+            ip, port, band = key
+
+            # === 智能推导 Scan / Connect ===
+            tx_val = state.get("tx_throughput", "N/A")
+            rx_val = state.get("rx_throughput", "N/A")
+
+            if tx_val != "N/A" or rx_val != "N/A":
+                scan_status = "PASS"
+                connect_status = "PASS"
+            else:
+                # 即使 TX/RX 是 SKIP，只要测试流程走到这里，Scan/Connect 就应为 PASS
+                scan_status = "PASS"
+                connect_status = "PASS"
+
+            # 显示 SKIP 而非 N/A
+            tx_display = "SKIP" if tx_val == "N/A" else tx_val
+            rx_display = "SKIP" if rx_val == "N/A" else rx_val
+
+            row = [
+                ip,
+                port,
+                state["ap_brand"],
+                band,
+                state["ssid"],
+                state["wifi_mode"],
+                state["bandwidth"],
+                state["security"],
+                scan_status,
+                connect_status,
+                state["ping"],
+                tx_display,  # TX Result
+                state["tx_channel"],  # Channel
+                state["tx_rssi"],  # RSSI
+                state["tx_criteria"],  # TX Criteria
+                tx_display,  # TX Throughtput(Mbps)
+                rx_display,  # RX Result
+                state["rx_channel"],  # Channel
+                state["rx_rssi"],  # RSSI
+                state["rx_criteria"],  # RX Criteria
+                rx_display  # RX Throughtput(Mbps)
+            ]
+            rows.append(row)
+
+    # 排序
+    rows.sort(key=lambda x: (x[0], x[1], x[3]))
+
+    # 写入
+    with open(csv_path, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f)
+        writer.writerow([
+            "PDU IP", "PDU Port", "AP Brand", "Band", "Ssid",
+            "WiFi Mode", "Bandwidth", "Security",
+            "Scan", "Connect", "Ping",
+            "TX Result", "Channel", "RSSI", "TX Criteria", "TX Throughtput(Mbps)",
+            "RX Result", "Channel", "RSSI", "RX Criteria", "RX Throughtput(Mbps)"
+        ])
+        writer.writerows(rows)

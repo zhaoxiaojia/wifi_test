@@ -21,6 +21,8 @@ from contextlib import suppress
 from datetime import datetime
 from pathlib import Path
 from typing import Annotated
+import pandas as pd
+from openpyxl.styles import Font
 
 import pytest
 import csv  # noqa: F401  (kept for potential future CSV export)
@@ -38,6 +40,7 @@ from src.tools.router_tool.Router import Router
 from src.tools.reporting import generate_project_report
 from src.test.pyqt_log import emit_pyqt_message
 from src.test.compatibility.results import write_compatibility_results
+from collections import defaultdict
 
 # ----------------------------------------------------------------------------
 # Logging
@@ -50,6 +53,10 @@ if not logging.getLogger().handlers:
         format="%(asctime)s | %(levelname)s | %(filename)s:%(funcName)s(line:%(lineno)d) |  %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
+
+# Step_Result：{ test_case_id -> [ (step_desc, status, details), ... ] }
+if not hasattr(pytest, "test_step_results"):
+    pytest.test_step_results = defaultdict(list)
 
 # ------------------------------------# Helpers# -----------------------------
 def get_resource_path(relative_path: str) -> Path:
@@ -328,6 +335,16 @@ def _generate_allure_report_offline(input_dir: Path, output_dir: Path) -> None:
     except Exception as e:
         logger.exception("💥 Unexpected error during system Allure report generation: %s", e)
 
+
+# ----------------------------------------------------------------------------#
+# Public API for external report generation (e.g., ExcelPlanRunner)
+# ----------------------------------------------------------------------------#
+def generate_allure_html_report(input_dir: Path, output_dir: Path) -> None:
+    """
+    Public wrapper for _generate_allure_report_v2.
+    Generates Allure HTML report from input_dir (.json files) to output_dir.
+    """
+    _generate_allure_report_cli(input_dir, output_dir)
 
 # ----------------------------------------------------------------------------#
 # Public API for external report generation (e.g., ExcelPlanRunner)
@@ -641,7 +658,7 @@ def pytest_runtest_makereport(item, call):
         if report.failed:
             item._store['test_result'] = "FAIL"
     elif report.when == 'call':
-        item._store['test_result'] = "PASS" if report.passed else "FAIL" if report.failed else "SKIPP"
+        item._store['test_result'] = "PASS" if report.passed else "FAIL" if report.failed else "SKIP"
         if not report.failed:
             return_value = getattr(call, "result", None) or item._store.get("return_value", None)
             logging.info('record return value: %s', getattr(call, "result", None))
@@ -667,6 +684,7 @@ def pytest_runtest_teardown(item, nextitem):
     total = getattr(session, "total_test_count", None) or len(session.items)
     emit_pyqt_message("PROGRESS", f" {session.pyqt_finished}/{total}")
     item._pyqt_progress_recorded = True
+
 
 @pytest.fixture(autouse=True)
 def record_test_data(request):
@@ -717,6 +735,9 @@ def pytest_sessionfinish(session, exitstatus):
     logging.info(test_results)
 
     # --- [原有逻辑] 处理兼容性结果 ---
+    logging.info(f"🔍 Total test_results count: {len(test_results)}")
+    logging.info(f"🔍 Raw test_results: {test_results}")
+
     compatibility_results = []
     for record in test_results:
         if not isinstance(record, dict) or not record:
@@ -724,11 +745,19 @@ def pytest_sessionfinish(session, exitstatus):
         test_name = next(iter(record))
         data = record[test_name]
         fixtures = data.get("fixtures", {})
+        if "event_loop_policy" in fixtures:
+            del fixtures["event_loop_policy"]
+
         if "router_setting" in fixtures or "power_setting" in fixtures:
             compatibility_results.append(record)
 
+    logging.info(f"✅ Final compatibility_results count: {len(compatibility_results)}")
+
     if compatibility_results:
         write_compatibility_results(compatibility_results, csv_file)
+        logging.info(f"✅ Wrote test_results.csv with {len(compatibility_results)} records")
+    else:
+        logging.warning("⚠️ No compatibility results found! Skipping test_results.csv")
 
     if result_path:
         destination_dir = Path(result_path)
@@ -815,3 +844,82 @@ def pytest_sessionfinish(session, exitstatus):
     else:
         logging.warning("Could not determine Allure input/output directories.")
     # --- 【关键修改结束】---
+
+    # --- 【新增】通用测试步骤报告写入 ---
+    if hasattr(pytest, "test_step_results") and pytest.test_step_results:
+        for tcid, steps in pytest.test_step_results.items():
+            # 聚合所有步骤为多行文本
+            step_messages = []
+            all_passed = True
+
+            for desc, status, details in steps:
+                emoji = "✅" if status == "PASS" else ("❌" if status == "FAIL" else "⚠️")
+                msg = f"{emoji} {desc}"
+                if details:
+                    msg += f": {details}"
+                step_messages.append(msg)
+
+                if status != "PASS":
+                    all_passed = False
+
+            final_status = "Passed" if all_passed else "Failed"
+            step_details = "\n".join(step_messages)
+
+            # 调用现有 Excel 写入函数（需确保它支持通用 TCID）
+            _update_excel_with_tcid_result(tcid, final_status, step_details)
+
+def record_test_step(tcid: str, step_desc: str, status: str, details: str = ""):
+    """
+    供测试脚本调用，记录单个测试步骤结果。
+
+    Args:
+        tcid: 测试用例 ID，如 "TC_WIFI_INIT_001"
+        step_desc: 步骤描述，如 "Wi-Fi enabled"
+        status: "PASS" / "FAIL" / "SKIP"
+        details: 附加信息（可选）
+    """
+    pytest.test_step_results[tcid].append((step_desc, status, details))
+    logging.info(f"Test step {tcid + ' ' + step_desc}: {step_desc}")
+
+
+def _update_excel_with_tcid_result(tcid: str, final_status: str, step_details: str):
+    """
+    根据 TCID 更新 test_result.xlsx 中的状态和步骤详情。
+
+    Args:
+        tcid (str): 测试用例 ID，如 "WiFi-STA-FDF0001"
+        final_status (str): 最终状态，如 "Passed" / "Failed"
+        step_details (str): 多行字符串，包含每个步骤的 emoji + 描述
+    """
+    # 获取报告目录（从环境变量）
+    report_dir = os.getenv("PYTEST_REPORT_DIR")
+    if not report_dir:
+        logging.warning("PYTEST_REPORT_DIR not set, skipping Excel update.")
+        return
+
+    excel_path = Path(report_dir) / "test_result.xlsx"
+    if not excel_path.exists():
+        logging.error(f"Excel file not found: {excel_path}")
+        return
+
+    try:
+        # 读取 Excel（确保 TCID 列为字符串）
+        df = pd.read_excel(excel_path, dtype={"TCID": str})
+
+        # 查找匹配的 TCID 行（忽略前后空格）
+        mask = df["TCID"].astype(str).str.strip() == tcid.strip()
+        if not mask.any():
+            logging.warning(f"TCID '{tcid}' not found in Excel.")
+            return
+
+        # 更新第一匹配行（通常唯一）
+        idx = mask.idxmax()
+        df.loc[idx, "Status"] = final_status
+        df.loc[idx, "Step_Details"] = str(step_details)[:32767]
+
+        # 写回文件（使用 openpyxl 引擎保持格式）
+        df.to_excel(excel_path, index=False, engine='openpyxl')
+        logging.info(f"✅ Updated Excel for TCID={tcid}: {final_status}")
+
+    except Exception as e:
+        logging.error(f"❌ Failed to update Excel for TCID={tcid}: {e}")

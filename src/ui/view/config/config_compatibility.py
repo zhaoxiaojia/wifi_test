@@ -29,6 +29,9 @@ from PyQt5.QtWidgets import (
     QSizePolicy,
     QFormLayout,
     QGroupBox,
+    QLabel,
+    QCheckBox,
+    QSpacerItem
 )
 from qfluentwidgets import CardWidget, ComboBox, LineEdit, PushButton
 
@@ -68,6 +71,8 @@ class CompatibilityRouterRow:
         sec_5g = str(b5.get("security_mode", "") or "")
         bw_5g = str(b5.get("bandwidth", "") or "")
         key = f"{ip}:{port}" if ip or port else model
+
+
         return cls(
             key=key,
             ip=ip,
@@ -84,6 +89,7 @@ class CompatibilityRouterRow:
 
     def to_row(self) -> dict[str, str]:
         return {
+            "key": self.key,
             "ip": self.ip,
             "port": self.port,
             "brand": self.brand,
@@ -272,18 +278,99 @@ class CompatibilityConfigPage(CardWidget):
         headers, catalog = load_compatibility_router_catalog()
         self._catalog: list[CompatibilityRouterRow] = catalog
         self._header_labels: list[str] = headers
+        self._global_checked = {row.key: True for row in self._catalog}
+        self._has_initialized_selection = False
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
 
-        rows = [row.to_row() for row in self._catalog]
-        self.list = FormListPage(headers=self._header_labels, rows=rows, checkable=True, parent=self)
+        #self._select_all_mode = True
+        rows = []
+        for row in self._catalog:
+            r = row.to_row()
+            r["_checked"] = True  # default all selected
+            rows.append(r)
+        self.list = FormListPage(headers=headers, rows=rows, checkable=True, parent=self)
+
+        # ===== Filter bar =====
+        filter_layout = QHBoxLayout()
+        filter_layout.setSpacing(8)
+        filter_layout.setContentsMargins(0, 10, 0, 10)
+
+        filter_label = QLabel("Filter", self)
+        filter_label.setFixedWidth(60)
+        LABEL_STYLE = """
+            font-weight: bold;
+            color: #cccccc;
+            font-size: 10pt;
+        """
+        filter_label.setStyleSheet(LABEL_STYLE)
+        filter_layout.addWidget(filter_label)
+
+        spacer1 = QSpacerItem(20, 0, QSizePolicy.Fixed, QSizePolicy.Minimum)
+        filter_layout.addItem(spacer1)
+
+        # Relay IP filter (ComboBox with all unique IPs, placed before Brand)
+        relay_ip_label = QLabel("Relay IP:", self)
+        relay_ip_label.setFixedWidth(80)
+        #relay_ip_label.setStyleSheet(LABEL_STYLE)
+        filter_layout.addWidget(relay_ip_label)
+
+        self.relay_ip_combo = ComboBox(self)
+        unique_ips = sorted({row.ip for row in self._catalog if row.ip.strip()})
+        self.relay_ip_combo.addItems(["All"] + unique_ips)
+        self.relay_ip_combo.setFixedWidth(180)
+        filter_layout.addWidget(self.relay_ip_combo)
+
+        # Brand filter
+        brand_label = QLabel("Brand:", self)
+        brand_label.setFixedWidth(80)
+        #brand_label.setStyleSheet(LABEL_STYLE)
+        filter_layout.addWidget(brand_label)
+
+        self.brand_combo = ComboBox(self)
+        brand_items = ["All"] + sorted({row.brand for row in self._catalog if row.brand})
+        self.brand_combo.addItems(brand_items)
+        self.brand_combo.setFixedWidth(180)
+        filter_layout.addWidget(self.brand_combo)
+
+        spacer2 = QSpacerItem(20, 0, QSizePolicy.Fixed, QSizePolicy.Minimum)
+        filter_layout.addItem(spacer2)
+
+        self.select_all_checkbox = QCheckBox("Select All", self)
+        self.select_all_checkbox.setChecked(True)
+        filter_layout.addWidget(self.select_all_checkbox)
+
+        COMBO_STYLE = """
+            background-color: #2a2a2a;
+            border: 1px solid #555;
+            border-radius: 4px;
+            padding: 3px;
+            color: white;
+            font-size: 9pt;
+        """
+        self.relay_ip_combo.setStyleSheet(COMBO_STYLE)
+        self.brand_combo.setStyleSheet(COMBO_STYLE)
+
+        filter_layout.addStretch(1)
+        outer.addLayout(filter_layout)
+        # =============================================================
+
+        #self.list = FormListPage(headers=self._header_labels, rows=rows, checkable=True, parent=self)
         self.list.setSizePolicy(QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding))
         outer.addWidget(self.list, 1)
 
         self.list.checkToggled.connect(self._on_check_toggled)
 
+        self.select_all_checkbox.stateChanged.connect(self._on_select_all_changed)
+        self.relay_ip_combo.currentTextChanged.connect(self._apply_filters)
+        self.brand_combo.currentTextChanged.connect(self._apply_filters)
+
+
+        # Initial load
+        self._apply_filters()
+        self.select_all_checkbox.setChecked(True)
     # ------------------------------------------------------------------
     # Public API used by controllers
     # ------------------------------------------------------------------
@@ -299,23 +386,49 @@ class CompatibilityConfigPage(CardWidget):
                 selected.add(self._catalog[index].key)
         return selected
 
+    # def set_selected_keys(self, keys: Iterable[str]) -> None:
+    #     """Update checkboxes based on persisted selection keys."""
+    #     key_set = {str(k) for k in keys}
+    #     logging.debug("compat set_selected_keys: %s", key_set)
+    #     changed = False
+    #     for index, row in enumerate(self.list.rows):
+    #         target = False
+    #         if 0 <= index < len(self._catalog):
+    #             target = self._catalog[index].key in key_set
+    #         if bool(row.get("_checked")) != target:
+    #             row["_checked"] = target
+    #             changed = True
+    #     if changed:
+    #         self.list.set_rows(self.list.rows)
+    #         logging.debug("compat rows updated with _checked flags")
+    #         self.selectionChanged.emit()
     def set_selected_keys(self, keys: Iterable[str]) -> None:
-        """Update checkboxes based on persisted selection keys."""
-        key_set = {str(k) for k in keys}
-        logging.debug("compat set_selected_keys: %s", key_set)
-        changed = False
-        for index, row in enumerate(self.list.rows):
-            target = False
-            if 0 <= index < len(self._catalog):
-                target = self._catalog[index].key in key_set
-            if bool(row.get("_checked")) != target:
-                row["_checked"] = target
-                changed = True
-        if changed:
-            self.list.set_rows(self.list.rows)
-            logging.debug("compat rows updated with _checked flags")
-            self.selectionChanged.emit()
+        """Restore selection from persisted config."""
+        """Restore selection from persisted config."""
+        keys = list(keys) if keys is not None else []
 
+        if not self._has_initialized_selection:
+            # 首次初始化：空输入 → 默认全选
+            if not keys:
+                key_set = set(self._global_checked.keys())
+            else:
+                key_set = {str(k) for k in keys}
+            self._has_initialized_selection = True  # 标记已完成初始化
+        else:
+            key_set = {str(k) for k in keys}
+
+        # 更新全局状态
+        for key in self._global_checked:
+            self._global_checked[key] = (key in key_set)
+
+        # 刷新视图
+        self._apply_filters()
+
+        # 更新 Select All checkbox 状态
+        all_checked = all(self._global_checked.values())
+        self.select_all_checkbox.setChecked(all_checked)
+
+        self.selectionChanged.emit()
     # ------------------------------------------------------------------
     # Internal callbacks
     # ------------------------------------------------------------------
@@ -323,6 +436,51 @@ class CompatibilityConfigPage(CardWidget):
     def _on_check_toggled(self, index: int, checked: bool) -> None:  # noqa: ARG002
         self.selectionChanged.emit()
 
+    def _apply_filters(self):
+        selected_ip = self.relay_ip_combo.currentText()
+        selected_brand = self.brand_combo.currentText()
+
+        # ===== 修正：通过内部 table 获取滚动条 =====
+        table_widget = getattr(self.list, 'table', None)  # 假设内部叫 table
+        if table_widget is None:
+            # 如果找不到，尝试其他常见命名
+            table_widget = getattr(self.list, '_table', None)
+
+        scroll_pos = 0
+        if table_widget and hasattr(table_widget, 'verticalScrollBar'):
+            vbar = table_widget.verticalScrollBar()
+            if vbar:
+                scroll_pos = vbar.value()
+
+        filtered_rows = []
+        for row in self._catalog:
+            if selected_ip != "All" and row.ip != selected_ip:
+                continue
+            if selected_brand != "All" and row.brand != selected_brand:
+                continue
+
+            r = row.to_row()
+            # 从全局状态读取，不修改！
+            r["_checked"] = self._global_checked.get(row.key, False)
+            filtered_rows.append(r)
+
+        self.list.set_rows(filtered_rows)
+        if table_widget and hasattr(table_widget, 'verticalScrollBar'):
+            vbar = table_widget.verticalScrollBar()
+            if vbar and vbar.maximum() > 0:
+                vbar.setValue(min(scroll_pos, vbar.maximum()))
+
+    def _on_select_all_changed(self, state):
+        check_state = (state == Qt.Checked)
+
+        # 更新全局状态
+        for key in self._global_checked:
+            self._global_checked[key] = check_state
+
+        # refresh UI
+        self._apply_filters()
+
+        self.selectionChanged.emit()
 
 class CompatibilityRelayEditor(QWidget):
     """Composite editor for multiple power relays (IP + ports)."""

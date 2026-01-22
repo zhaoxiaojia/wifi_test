@@ -7,7 +7,7 @@ import multiprocessing, subprocess
 import queue
 import shutil
 import tempfile
-import time
+import time, json
 from datetime import datetime
 from pathlib import Path
 
@@ -507,6 +507,7 @@ def _init_worker_env(
         pytest_case_path = str(relative_path).replace("\\", "/")
     except ValueError:
         pytest_case_path = str(absolute_test_path)
+    os.environ["PYTEST_REPORT_DIR"] = str(report_dir)
     # --- END PATH HANDLING ---
 
     # --- 构建 pytest 参数 ---
@@ -770,7 +771,7 @@ class ExcelPlanRunner(QThread):
     def __init__(self, excel_path: str, parent=None):
         super().__init__(parent)
         self.excel_path = excel_path
-        self._current_case_runner = None #Add for case status record, 260105
+        self._current_case_runner = None
 
         # --- 260105 新增：保存并接管根日志记录器的处理器 ---
         import logging
@@ -791,6 +792,10 @@ class ExcelPlanRunner(QThread):
             self.log_signal.emit(f"<b>计划报告目录已创建: {self._plan_report_dir}</b>")
             self.report_dir_signal.emit(str(self._plan_report_dir))
             print(f"[DEBUG ExcelPlanRunner] Emitted report dir: {self._plan_report_dir}")
+            # --- 新增：复制主 Excel 计划到报告目录 ---
+            self._local_excel_path = self._plan_report_dir / "test_result.xlsx"
+            shutil.copy2(self.excel_path, self._local_excel_path)
+            self.log_signal.emit(f"<b>测试计划已复制到: {self._local_excel_path}</b>")
 
             # --- 2. 创建共享资源 ---
             self._shared_allure_dir = self._plan_report_dir / "allure_report"
@@ -850,7 +855,8 @@ class ExcelPlanRunner(QThread):
                 self._current_case_runner = runner
 
                 runner.start()
-                runner.wait()  # 等待当前用例完成
+                runner.wait()
+
                 self._current_case_runner = None
 
                 # 更新 Excel 状态

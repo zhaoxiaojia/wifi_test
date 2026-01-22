@@ -1,6 +1,6 @@
 # src/ui/view/config/function_config_form.py
 from PyQt5.QtWidgets import ( QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QButtonGroup, QListWidget, QTableWidget, QTableWidgetItem, QSpacerItem,
-                              QListWidgetItem, QAbstractItemView, QCheckBox, QSizePolicy, QLabel, QFileDialog, QMessageBox, QPushButton)
+                              QListWidgetItem, QAbstractItemView, QCheckBox, QSizePolicy, QLabel, QFileDialog, QMessageBox, QPushButton, QHeaderView)
 from qfluentwidgets import PushButton, CardWidget, ComboBox, FluentIcon as FIcon
 from pathlib import Path
 from PyQt5.QtCore import Qt, QEvent, QSize
@@ -189,6 +189,29 @@ class FunctionConfigForm(QWidget):
         )
         card_layout.addWidget(self.list_widget, 1)
 
+        # === 新增：通过 .table 访问内部 TableWidget ===
+        table = self.list_widget.table  # ← 关键！获取内部表格
+        header = table.horizontalHeader()
+
+        # 允许用户拖动调整列宽
+        header.setSectionResizeMode(QHeaderView.Interactive)
+
+        # 设置各列初始宽度
+        initial_widths = {
+            "TCID": 200,
+            "Priority": 150,
+            "Tag": 200,
+            "Module": 150,
+            "Description": 400,  # 给描述留足空间
+            "Script": 400
+        }
+
+        for i, col_name in enumerate(headers):
+            width = initial_widths.get(col_name, 100)
+            table.setColumnWidth(i + (1 if self.list_widget.checkable else 0), width)
+
+        # 让最后一列自动拉伸（可选）
+        header.setStretchLastSection(True)
 
         # 将卡片添加到主布局
         main_layout.addWidget(card)
