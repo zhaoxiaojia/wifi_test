@@ -86,9 +86,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     config, result = bootstrap_mysql_environment(refresh_config=args.refresh_config or bool(args.log_file))
     if result:
         logging.info(
-            "Configuration synced (dut_id=%s, shielded_id=%s)",
-            result.dut_id,
-            result.shielded_id,
+            "Configuration synced (project_id=%s)",
+            result.project_id,
         )
     else:
         logging.warning("Configuration sync skipped or failed; continuing with best effort.")

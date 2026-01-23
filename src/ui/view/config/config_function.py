@@ -332,7 +332,8 @@ class FunctionConfigForm(QWidget):
             if not path or not path.endswith(".py") or not path.startswith("stb/"):
                 print(f"⚠️ Skip invalid path: {path}")
                 continue
-            display_path = f"project/{path.replace('\\', '/')}"
+            normalized_path = path.replace("\\", "/")
+            display_path = f"project/{normalized_path}"
             meta = {
                 'display_path': display_path,
                 'priority': priority,

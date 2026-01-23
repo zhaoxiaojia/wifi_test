@@ -168,20 +168,14 @@ class TelnetSession:
             raise RuntimeError("TelnetSession is not connected")
 
         async def _read_until():
-            if hasattr(self._reader, "readuntil"):
-                return await self._reader.readuntil(expected.decode(self.encoding, "ignore"))
-            buffer = ""
-            needle = expected.decode(self.encoding, "ignore")
-            while needle not in buffer:
-                chunk = await self._reader.read(1024)
-                if not chunk:
-                    break
-                buffer += chunk
-            return buffer
+            data = await self._reader.readuntil(expected)
+            if isinstance(data, bytes):
+                return data
+            return data.encode(self.encoding, "ignore")
 
         with self._use_loop():
             data = self._loop.run_until_complete(asyncio.wait_for(_read_until(), timeout=timeout))
-        return data.encode(self.encoding, "ignore")
+        return data
 
     def read_some(self) -> bytes:
         if not self.is_connected():

@@ -8,9 +8,9 @@ system:
   kernel_version: Kernel 6.1
 connect_type:
   Android:
-    device: No devices
+    device: ''
   Linux:
-    ip: 192.168.2.100
+    ip: 192.168.208.89
     wildcard: ''
   third_party:
     enabled: false
@@ -26,7 +26,7 @@ project:
 serial_port:
   baud: '921600'
   port: COM14 (蓝牙链接上的标准串行 (COM14))
-  status: true
+  status: false
 rvr:
   iperf:
     path: ''
@@ -44,6 +44,6 @@ duration_control:
   retry_limit: '0'
 router:
   name: asusax88u
-  address: 192.168.50.1
+  address: 192.168.5.1
   24g_ssid: 24G
   5g_ssid: 5G
