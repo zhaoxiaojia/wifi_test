@@ -6,7 +6,7 @@ import re
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Mapping, Callable
+from typing import Any, Dict, List, Optional, Sequence, Mapping, Callable, Tuple
 
 from .client import MySqlClient
 from .schema import (
@@ -20,6 +20,7 @@ from src.util.constants import (
     TURN_TABLE_FIELD_MODEL,
     TURN_TABLE_SECTION_KEY,
     WIFI_PRODUCT_PROJECT_MAP,
+    load_config,
     get_debug_flags,
 )
 
@@ -32,6 +33,11 @@ __all__ = [
 ]
 
 ColumnNormalizer = Callable[[Any], Any]
+
+
+@dataclass(frozen=True)
+class ConfigSyncResult:
+    project_id: int
 
 
 @dataclass(frozen=True)
@@ -267,7 +273,7 @@ class PerformanceTableManager:
     REPORT_TABLE_NAME = "test_report"
 
     _BASE_COLUMNS: Sequence[tuple[str, str]] = (
-        ("test_report_id", "INT NOT NULL"),
+        ("execution_id", "INT NOT NULL"),
         ("csv_name", "VARCHAR(255) NOT NULL"),
         ("data_type", "VARCHAR(64) NULL DEFAULT NULL"),
     )
@@ -613,53 +619,20 @@ class PerformanceTableManager:
         comment = column.original.replace("'", "''")
         return f"{column.sql_type} NULL DEFAULT NULL COMMENT '{comment}'"
 
-    def _resolve_shielded_id(self, case_path: Optional[str]) -> Optional[int]:
-        """
-        Resolve shielded ID.
-
-        Logs informational messages and errors for debugging purposes.
-
-        Parameters
-        ----------
-        case_path : Any
-            Path used to derive the target table name for test data.
-
-        Returns
-        -------
-        Optional[int]
-            A value of type ``Optional[int]``.
-        """
-        if not case_path:
-            return None
-        try:
-            row = self._client.query_one(
-                "SELECT id FROM `shielded` WHERE case_path = %s ORDER BY id DESC LIMIT 1",
-                (case_path,),
-            )
-        except Exception:
-            logging.debug(
-                "Failed to resolve shielded id via case_path=%s",
-                case_path,
-                exc_info=True,
-            )
-            return None
-        if row and "id" in row and row["id"] is not None:
-            return int(row["id"])
-        return None
-
-    def _register_test_report(
+    def _register_execution(
             self,
             *,
+            project_payload: Mapping[str, Any],
+            execution_payload: Mapping[str, Any],
             csv_name: str,
             csv_path: str,
             data_type: Optional[str],
             case_path: Optional[str],
-            shielded_id: Optional[int],
-            dut_id: Optional[int],
+            run_source: str,
             duration_seconds: Optional[float] = None,
     ) -> int:
         """
-        Register test report.
+        Register execution.
 
         Inserts rows into the database and returns the last inserted ID.
         Reads data from a CSV file and processes each row.
@@ -674,25 +647,19 @@ class PerformanceTableManager:
         int
             A value of type ``int``.
         """
-        resolved_shielded_id = shielded_id
-        if resolved_shielded_id is None:
-            resolved_shielded_id = self._resolve_shielded_id(case_path)
-        insert_sql = (
-            "INSERT INTO `test_report` "
-            "(`shielded_id`, `dut_id`, `csv_name`, `csv_path`, `data_type`, `case_path`, `duration_seconds`) "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s)"
-        )
-        return self._client.insert(
-            insert_sql,
-            (
-                resolved_shielded_id,
-                dut_id,
-                csv_name,
-                csv_path,
-                data_type,
-                case_path,
-                int(duration_seconds) if duration_seconds is not None else None,
-            ),
+        execution_type = (data_type or "PERFORMANCE").strip().upper()
+        report_name = execution_type
+        return register_execution(
+            self._client,
+            project_payload=project_payload,
+            report_name=report_name,
+            case_path=case_path,
+            execution_type=execution_type,
+            execution_payload=execution_payload,
+            csv_name=csv_name,
+            csv_path=csv_path,
+            run_source=run_source,
+            duration_seconds=duration_seconds,
         )
 
     def ensure_schema_initialized(self) -> None:
@@ -724,8 +691,8 @@ class PerformanceTableManager:
             data_type: Optional[str],
             run_source: str,
             case_path: Optional[str],
-            shielded_id: Optional[int] = None,
-            dut_id: Optional[int] = None,
+            project_payload: Mapping[str, Any],
+            execution_payload: Mapping[str, Any],
             duration_seconds: Optional[float] = None,
     ) -> int:
         """
@@ -754,16 +721,17 @@ class PerformanceTableManager:
 
         self.ensure_schema_initialized()
 
-        report_id = self._register_test_report(
+        execution_id = self._register_execution(
+            project_payload=project_payload,
+            execution_payload=execution_payload,
             csv_name=csv_name,
             csv_path=csv_path,
             data_type=data_type,
             case_path=case_path,
-            shielded_id=shielded_id,
-            dut_id=dut_id,
+            run_source=run_source,
             duration_seconds=duration_seconds,
         )
-        logging.debug("Created test_report entry id=%s", report_id)
+        logging.debug("Created execution entry id=%s", execution_id)
 
         insert_columns = [name for name, _ in self._BASE_COLUMNS]
         insert_columns.extend(column.name for column in self._STATIC_COLUMNS)
@@ -774,7 +742,7 @@ class PerformanceTableManager:
         values: List[List[Any]] = []
         for row in rows:
             row_values: List[Any] = [
-                report_id,
+                execution_id,
                 csv_name,
                 data_type,
             ]
@@ -951,6 +919,7 @@ def _resolve_wifi_product_details(fpga_section: Any) -> Dict[str, Optional[str]]
         "main_chip": None,
         "wifi_module": None,
         "interface": None,
+        "ecosystem": None,
     }
 
     if isinstance(fpga_section, Mapping):
@@ -1007,30 +976,151 @@ def _resolve_wifi_product_details(fpga_section: Any) -> Dict[str, Optional[str]]
             details["wifi_module"] = _normalize_upper_token(info.get("wifi_module"))
         if not details["interface"]:
             details["interface"] = _normalize_upper_token(info.get("interface"))
+        if not details["ecosystem"]:
+            details["ecosystem"] = _normalize_upper_token(info.get("ecosystem"))
 
     return details
 
 
-def _build_dut_payload(config: Mapping[str, Any]) -> Dict[str, Any]:
-    """
-    Build dut payload.
+def _build_project_payload(config: Mapping[str, Any]) -> Dict[str, Any]:
+    fpga_section = _extract_first(config, "project", "fpga")
+    wifi_details = _resolve_wifi_product_details(fpga_section)
+    payload_json = json.dumps(wifi_details, ensure_ascii=True, separators=(",", ":"))
+    return {
+        "brand": wifi_details.get("customer"),
+        "product_line": wifi_details.get("product_line"),
+        "project_name": wifi_details.get("project"),
+        "main_chip": wifi_details.get("main_chip"),
+        "wifi_module": wifi_details.get("wifi_module"),
+        "interface": wifi_details.get("interface"),
+        "ecosystem": wifi_details.get("ecosystem"),
+        "payload_json": payload_json,
+    }
 
-    Parameters
-    ----------
-    config : Any
-        Dictionary containing MySQL configuration parameters.
 
-    Returns
-    -------
-    Dict[str, Any]
-        A value of type ``Dict[str, Any]``.
-    """
-    software = _extract_first(config, "software_info") or _extract_first(config, "software")
-    hardware = _extract_first(config, "hardware_info") or _extract_first(config, "hardware")
-    android = _extract_first(config, "android_system") or _extract_first(config, "android")
-    connect_section = _extract_first(config, "connect_type")
+def ensure_project(client: MySqlClient, project_payload: Mapping[str, Any]) -> int:
+    insert_sql = (
+        "INSERT INTO `project` "
+        "(`brand`, `product_line`, `project_name`, `main_chip`, `wifi_module`, `interface`, `ecosystem`, `payload_json`) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) "
+        "ON DUPLICATE KEY UPDATE "
+        "`id`=LAST_INSERT_ID(`id`), "
+        "`main_chip`=VALUES(`main_chip`), "
+        "`wifi_module`=VALUES(`wifi_module`), "
+        "`interface`=VALUES(`interface`), "
+        "`ecosystem`=VALUES(`ecosystem`), "
+        "`payload_json`=VALUES(`payload_json`)"
+    )
+    return client.insert(
+        insert_sql,
+        (
+            project_payload.get("brand"),
+            project_payload.get("product_line"),
+            project_payload.get("project_name"),
+            project_payload.get("main_chip"),
+            project_payload.get("wifi_module"),
+            project_payload.get("interface"),
+            project_payload.get("ecosystem"),
+            project_payload.get("payload_json"),
+        ),
+    )
+
+
+def ensure_test_report(
+    client: MySqlClient,
+    *,
+    project_id: int,
+    report_name: str,
+    case_path: Optional[str],
+) -> int:
+    insert_sql = (
+        "INSERT INTO `test_report` "
+        "(`project_id`, `report_name`, `case_path`) "
+        "VALUES (%s, %s, %s) "
+        "ON DUPLICATE KEY UPDATE "
+        "`id`=LAST_INSERT_ID(`id`), "
+        "`case_path`=VALUES(`case_path`)"
+    )
+    return client.insert(insert_sql, (project_id, report_name, case_path))
+
+
+def register_execution(
+    client: MySqlClient,
+    *,
+    project_payload: Mapping[str, Any],
+    report_name: str,
+    case_path: Optional[str],
+    execution_type: str,
+    execution_payload: Mapping[str, Any],
+    csv_name: str,
+    csv_path: str,
+    run_source: str,
+    duration_seconds: Optional[float] = None,
+) -> int:
+    project_id = ensure_project(client, project_payload)
+    test_report_id = ensure_test_report(
+        client,
+        project_id=project_id,
+        report_name=report_name,
+        case_path=case_path,
+    )
+    insert_sql = (
+        "INSERT INTO `execution` "
+        "(`test_report_id`, `execution_type`, `serial_number`, `connect_type`, `adb_device`, `telnet_ip`, "
+        "`software_version`, `driver_version`, `hardware_version`, `android_version`, `kernel_version`, "
+        "`router_name`, `router_address`, `rf_model`, `corner_model`, `lab_name`, "
+        "`csv_name`, `csv_path`, `run_source`, `duration_seconds`, `payload_json`) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+    )
+    payload_json = json.dumps(dict(execution_payload), ensure_ascii=True, separators=(",", ":"))
+    return client.insert(
+        insert_sql,
+        (
+            test_report_id,
+            execution_type,
+            execution_payload.get("serial_number"),
+            execution_payload.get("connect_type"),
+            execution_payload.get("adb_device"),
+            execution_payload.get("telnet_ip"),
+            execution_payload.get("software_version"),
+            execution_payload.get("driver_version"),
+            execution_payload.get("hardware_version"),
+            execution_payload.get("android_version"),
+            execution_payload.get("kernel_version"),
+            execution_payload.get("router_name"),
+            execution_payload.get("router_address"),
+            execution_payload.get("rf_model"),
+            execution_payload.get("corner_model"),
+            execution_payload.get("lab_name"),
+            csv_name,
+            csv_path,
+            run_source,
+            int(duration_seconds) if duration_seconds is not None else None,
+            payload_json,
+        ),
+    )
+
+
+def _extract_serial_number(config: Mapping[str, Any]) -> Optional[str]:
+    hardware_section = _extract_first(config, "hardware_info", "hardware")
+    hardware = hardware_section if isinstance(hardware_section, Mapping) else {}
+    return _normalize_str_token(
+        _extract_first(hardware, "serial_number", "serial", "sn", "serialnumber")
+        or config.get("serial_number")
+        or config.get("serial")
+    )
+
+
+def _build_execution_device_payload(config: Mapping[str, Any]) -> Dict[str, Any]:
+    software_section = _extract_first(config, "software_info", "software")
+    software = software_section if isinstance(software_section, Mapping) else {}
+    hardware_section = _extract_first(config, "hardware_info", "hardware")
+    hardware = hardware_section if isinstance(hardware_section, Mapping) else {}
+    android_section = _extract_first(config, "android_system", "system", "android")
+    android = android_section if isinstance(android_section, Mapping) else {}
+    connect_section = _extract_first(config, "connect_type", "connect")
     connect = connect_section if isinstance(connect_section, Mapping) else {}
-    wifi_details = _resolve_wifi_product_details(config.get("project"))
+
     connect_type_value = _normalize_str_token(connect.get("type"))
     normalized_connect_type = _normalize_lower_token(connect_type_value)
     if normalized_connect_type == "android":
@@ -1047,6 +1137,7 @@ def _build_dut_payload(config: Mapping[str, Any]) -> Dict[str, Any]:
         telnet_ip = _normalize_str_token(_extract_first(connect, "Linux", "ip"))
 
     return {
+        "serial_number": _extract_serial_number(config),
         "software_version": _extract_first(software, "software_version"),
         "driver_version": _extract_first(software, "driver_version"),
         "hardware_version": _extract_first(hardware, "hardware_version"),
@@ -1055,41 +1146,15 @@ def _build_dut_payload(config: Mapping[str, Any]) -> Dict[str, Any]:
         "connect_type": connect_type_value,
         "adb_device": adb_device,
         "telnet_ip": telnet_ip,
-        "product_line": wifi_details.get("product_line"),
-        "project": wifi_details.get("project"),
-        "main_chip": wifi_details.get("main_chip"),
-        "wifi_module": wifi_details.get("wifi_module"),
-        "interface": wifi_details.get("interface"),
     }
 
 
-def _build_execution_payload(config: Mapping[str, Any]) -> Dict[str, Any]:
-    """
-    Build execution payload.
-
-    Parameters
-    ----------
-    config : Any
-        Dictionary containing MySQL configuration parameters.
-
-    Returns
-    -------
-    Dict[str, Any]
-        A value of type ``Dict[str, Any]``.
-    """
+def _build_execution_lab_payload(config: Mapping[str, Any]) -> Dict[str, Any]:
     router_section = _extract_first(config, "router")
     router = router_section if isinstance(router_section, Mapping) else {}
     rf_solution = config.get("rf_solution") if isinstance(config, Mapping) else {}
-    corner_cfg = (
-        config.get(TURN_TABLE_SECTION_KEY) if isinstance(config, Mapping) else {}
-    )
+    corner_cfg = config.get(TURN_TABLE_SECTION_KEY) if isinstance(config, Mapping) else {}
     lab_info = config.get("lab") if isinstance(config, Mapping) else {}
-    case_path = _normalize_str_token(
-        config.get("case_path")
-        or config.get("test_case")
-        or config.get("text_case")
-        or config.get("testcase")
-    )
     flags = get_debug_flags(config=config) if isinstance(config, Mapping) else None
     skip_router = bool(getattr(flags, "skip_router", False))
     skip_corner_rf = bool(getattr(flags, "skip_corner_rf", False))
@@ -1123,14 +1188,28 @@ def _build_execution_payload(config: Mapping[str, Any]) -> Dict[str, Any]:
         lab_name = None
 
     return {
-        "case_path": case_path,
-        "case_root": None,  # derive later inside sync_config
         "router_name": router_name,
         "router_address": router_address,
         "rf_model": rf_model,
         "corner_model": corner_model,
         "lab_name": lab_name,
     }
+
+
+def _build_execution_payload(config: Mapping[str, Any]) -> Dict[str, Any]:
+    payload: Dict[str, Any] = {}
+    payload.update(_build_execution_device_payload(config))
+    payload.update(_build_execution_lab_payload(config))
+    return payload
+
+
+def _resolve_case_path(config: Mapping[str, Any]) -> Optional[str]:
+    return _normalize_str_token(
+        config.get("case_path")
+        or config.get("test_case")
+        or config.get("text_case")
+        or config.get("testcase")
+    )
 
 
 def sync_configuration(config: dict | None) -> Optional[Any]:
@@ -1150,22 +1229,11 @@ def sync_configuration(config: dict | None) -> Optional[Any]:
 
     if not isinstance(config, Mapping) or not config:
         return None
-
-    try:
-        from src.tools.db_config_sync import ConfigDatabaseSync
-    except Exception:
-        return None
-
-    dut_payload = _build_dut_payload(config)
-    execution_payload = _build_execution_payload(config)
-
-    try:
-        with ConfigDatabaseSync() as syncer:
-            result = syncer.sync_config(dut_payload, execution_payload)
-    except Exception:
-        return None
-
-    return result
+    project_payload = _build_project_payload(config)
+    with MySqlClient() as client:
+        ensure_report_tables(client)
+        project_id = ensure_project(client, project_payload)
+    return ConfigSyncResult(project_id=project_id)
 
 
 def sync_test_result_to_db(
@@ -1200,9 +1268,7 @@ def sync_test_result_to_db(
         active_config = config
     else:
         try:
-            from src.tools import config_loader  # Imported lazily to avoid circular deps
-
-            active_config = config_loader.load_config(refresh=True)
+            active_config = load_config(refresh=True)
         except Exception:
             logging.debug(
                 "sync_test_result_to_db: failed to load configuration for persistence",
@@ -1211,13 +1277,14 @@ def sync_test_result_to_db(
             active_config = None
 
     if active_config:
-        sync_result = sync_configuration(active_config)
+        project_payload = _build_project_payload(active_config)
+        execution_payload = _build_execution_payload(active_config)
+        resolved_case_path = case_path or _resolve_case_path(active_config)
     else:
         logging.debug("sync_test_result_to_db: no configuration available for database sync.")
-        sync_result = None
-
-    shielded_hint = getattr(sync_result, "shielded_id", None)
-    dut_hint = getattr(sync_result, "dut_id", None)
+        project_payload = {}
+        execution_payload = {}
+        resolved_case_path = case_path
 
     file_path = Path(log_file)
     if not file_path.is_file():
@@ -1282,12 +1349,11 @@ def sync_test_result_to_db(
                 rows=rows,
                 data_type=normalized_data_type,
                 run_source=normalized_source,
-                case_path=case_path,
-                shielded_id=shielded_hint,
-                dut_id=dut_hint,
+                case_path=resolved_case_path,
+                project_payload=project_payload,
+                execution_payload=execution_payload,
                 duration_seconds=duration_seconds,
             )
-            _sync_test_history_into_test_report(client)
         return affected
     except Exception:
         logging.exception("Failed to sync CSV results into performance table")
@@ -1306,303 +1372,156 @@ def sync_compatibility_artifacts_to_db(
     """
     Sync compatibility CSV + router catalogue into database.
 
-    Inserts/updates router entries into `router`, registers the CSV into
-    `test_report` with data_type='compatibility', then bulk inserts rows
-    into `compatibility` linked by `test_report_id` and `router_id`.
+    Inserts/updates router entries into `router`, registers an execution,
+    then bulk inserts rows into `compatibility` linked by `execution_id`
+    and `router_id`.
     """
     if not isinstance(config, Mapping) or not config:
         logging.debug("sync_compatibility_artifacts_to_db: skipped, config missing")
         return 0
+    project_payload = _build_project_payload(config)
+    execution_payload = _build_execution_payload(config)
+    resolved_case_path = case_path or _resolve_case_path(config)
+    normalized_source = (run_source or "local").strip().upper()[:32]
 
-    sync_result = sync_configuration(config)
-    shielded_id = getattr(sync_result, "shielded_id", None) if sync_result else None
-    dut_id = getattr(sync_result, "dut_id", None) if sync_result else None
+    with MySqlClient() as client:
+        ensure_report_tables(client)
 
-    try:
-        with MySqlClient() as client:
-            ensure_report_tables(client)
+        with open(router_json, "r", encoding="utf-8") as handle:
+            router_entries = json.load(handle) or []
 
-            # --- upsert router catalogue ---
-            try:
-                with open(router_json, "r", encoding="utf-8") as handle:
-                    router_entries = json.load(handle) or []
-            except Exception as exc:
-                logging.warning("Failed to load router JSON %s: %s", router_json, exc)
-                router_entries = []
+        upsert_sql = (
+            "INSERT INTO `router` (`ip`, `port`, `brand`, `model`, `payload_json`) "
+            "VALUES (%s, %s, %s, %s, %s) "
+            "ON DUPLICATE KEY UPDATE "
+            "`brand`=VALUES(`brand`), `model`=VALUES(`model`), `payload_json`=VALUES(`payload_json`)"
+        )
+        router_rows = []
+        for entry in router_entries:
+            ip = str(entry.get("ip") or "").strip()
+            port = int(str(entry.get("port") or "0").strip() or 0)
+            if not ip or port <= 0:
+                continue
+            brand = str(entry.get("brand") or "").strip()
+            model = str(entry.get("model") or "").strip()
+            payload_json = json.dumps(entry, ensure_ascii=True, separators=(",", ":"))
+            router_rows.append((ip, port, brand, model, payload_json))
+        if router_rows:
+            client.executemany(upsert_sql, router_rows)
 
-            upsert_sql = (
-                "INSERT INTO `router` (`ip`, `port`, `brand`, `model`, `payload_json`) "
-                "VALUES (%s, %s, %s, %s, %s) "
-                "ON DUPLICATE KEY UPDATE "
-                "`brand`=VALUES(`brand`), `model`=VALUES(`model`), `payload_json`=VALUES(`payload_json`)"
-            )
-            router_rows = []
-            for entry in router_entries:
-                try:
-                    ip = str(entry.get("ip") or "").strip()
-                    port = int(str(entry.get("port") or "0").strip() or 0)
-                except Exception:
-                    continue
-                if not ip or port <= 0:
-                    continue
-                brand = str(entry.get("brand") or "").strip()
-                model = str(entry.get("model") or "").strip()
-                payload_json = json.dumps(entry, ensure_ascii=False)
-                router_rows.append((ip, port, brand, model, payload_json))
-            if router_rows:
-                client.executemany(upsert_sql, router_rows)
+        routers = client.query_all("SELECT id, ip, port FROM `router`")
+        router_id_by_key = {
+            (str(r.get("ip") or "").strip(), int(r.get("port") or 0)): int(r["id"])
+            for r in routers
+            if r.get("id") is not None
+        }
 
-            routers = client.query_all("SELECT id, ip, port FROM `router`")
-            router_id_by_key = {
-                (str(r.get("ip") or "").strip(), int(r.get("port") or 0)): int(r["id"])
-                for r in routers
-                if r.get("id") is not None
-            }
+        execution_id = register_execution(
+            client,
+            project_payload=project_payload,
+            report_name="COMPATIBILITY",
+            case_path=resolved_case_path,
+            execution_type="COMPATIBILITY",
+            execution_payload=execution_payload,
+            csv_name=Path(csv_file).name,
+            csv_path=str(Path(csv_file).resolve()),
+            run_source=normalized_source,
+            duration_seconds=duration_seconds,
+        )
 
-            # --- register test_report for compatibility CSV ---
-            csv_name = Path(csv_file).name
-            csv_path = str(Path(csv_file).resolve())
-            insert_report_sql = (
-                "INSERT INTO `test_report` "
-                "(`shielded_id`, `dut_id`, `csv_name`, `csv_path`, `data_type`, `case_path`, `duration_seconds`) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s)"
-            )
-            try:
-                report_id = client.insert(
-                    insert_report_sql,
-                    (
-                        shielded_id,
-                        dut_id,
-                        csv_name,
-                        csv_path,
-                        "compatibility",
-                        case_path,
-                        int(duration_seconds) if duration_seconds is not None else None,
-                    ),
-                )
-            except Exception:
-                existing = client.query_one(
-                    "SELECT id FROM `test_report` WHERE `shielded_id` <=> %s AND `csv_name`=%s ORDER BY id DESC LIMIT 1",
-                    (shielded_id, csv_name),
-                )
-                report_id = int(existing["id"]) if existing and existing.get("id") else 0
-
-            # --- parse compatibility CSV ---
-            try:
-                with open(csv_file, "r", encoding="utf-8") as handle:
-                    reader = csv.reader(handle)
-                    rows = list(reader)
-            except Exception as exc:
-                logging.warning("Failed to read compatibility CSV %s: %s", csv_file, exc)
-                return 0
-
-            if not rows or len(rows) < 2:
-                return 0
-
-            data_rows = rows[1:]
-            insert_cols = [
-                "test_report_id",
-                "router_id",
-                "pdu_ip",
-                "pdu_port",
-                "ap_brand",
-                "band",
-                "ssid",
-                "wifi_mode",
-                "bandwidth",
-                "security",
-                "scan_result",
-                "connect_result",
-                "tx_result",
-                "tx_channel",
-                "tx_rssi",
-                "tx_criteria",
-                "tx_throughput_mbps",
-                "rx_result",
-                "rx_channel",
-                "rx_rssi",
-                "rx_criteria",
-                "rx_throughput_mbps",
-            ]
-            placeholders = ", ".join(["%s"] * len(insert_cols))
-            insert_sql = f"INSERT INTO `compatibility` ({', '.join(f'`{c}`' for c in insert_cols)}) VALUES ({placeholders})"
-
-            compat_rows = []
-            for r in data_rows:
-                if not r or len(r) < 4:
-                    continue
-                # Title order from write_compatibility_results.
-                try:
-                    pdu_ip = str(r[0]).strip()
-                    pdu_port = int(str(r[1]).strip() or 0)
-                except Exception:
-                    continue
-                ap_brand = str(r[2]).strip() if len(r) > 2 else ""
-                band = str(r[3]).strip() if len(r) > 3 else ""
-                ssid = str(r[4]).strip() if len(r) > 4 else ""
-                wifi_mode = str(r[5]).strip() if len(r) > 5 else ""
-                bandwidth = str(r[6]).strip() if len(r) > 6 else ""
-                security = str(r[7]).strip() if len(r) > 7 else ""
-                scan_result = str(r[8]).strip() if len(r) > 8 else ""
-                connect_result = str(r[9]).strip() if len(r) > 9 else ""
-                tx_result = str(r[10]).strip() if len(r) > 10 else ""
-                tx_channel = str(r[11]).strip() if len(r) > 11 else ""
-                tx_rssi = str(r[12]).strip() if len(r) > 12 else ""
-                tx_criteria = str(r[13]).strip() if len(r) > 13 else ""
-                tx_thr = str(r[14]).strip() if len(r) > 14 else ""
-                rx_result = str(r[15]).strip() if len(r) > 15 else ""
-                rx_channel = str(r[16]).strip() if len(r) > 16 else ""
-                rx_rssi = str(r[17]).strip() if len(r) > 17 else ""
-                rx_criteria = str(r[18]).strip() if len(r) > 18 else ""
-                rx_thr = str(r[19]).strip() if len(r) > 19 else ""
-
-                router_id = router_id_by_key.get((pdu_ip, pdu_port))
-                compat_rows.append(
-                    (
-                        report_id,
-                        router_id,
-                        pdu_ip,
-                        pdu_port,
-                        ap_brand,
-                        band,
-                        ssid,
-                        wifi_mode,
-                        bandwidth,
-                        security,
-                        scan_result,
-                        connect_result,
-                        tx_result,
-                        tx_channel,
-                        tx_rssi,
-                        tx_criteria,
-                        tx_thr,
-                        rx_result,
-                        rx_channel,
-                        rx_rssi,
-                        rx_criteria,
-                        rx_thr,
-                    )
-                )
-
-            if not compat_rows:
-                return 0
-            affected = client.executemany(insert_sql, compat_rows)
-            logging.info("Synced %s compatibility rows into DB", affected)
-            _sync_test_history_into_test_report(client)
-            return affected
-    except Exception:
-        logging.exception("sync_compatibility_artifacts_to_db: failed")
-        return 0
-
-
-def _parse_duration_hh_mm_to_seconds(value: str) -> int:
-    try:
-        parts = str(value).strip().split(":")
-        if len(parts) != 2:
-            return 0
-        hours = int(parts[0])
-        minutes = int(parts[1])
-        if hours < 0 or minutes < 0:
-            return 0
-        return hours * 3600 + minutes * 60
-    except Exception:
-        return 0
-
-
-def _sync_test_history_into_test_report(client: MySqlClient) -> int:
-    """Best-effort sync config/test_history.csv durations into test_report."""
-    try:
-        from src.util.test_history import get_history_path, TEST_HISTORY_HEADERS
-
-        csv_path = get_history_path()
-    except Exception:
-        csv_path = Path.cwd() / "config" / "test_history.csv"
-        TEST_HISTORY_HEADERS = ("account", "start_time", "test_case", "duration")  # type: ignore
-
-    if not csv_path.exists():
-        return 0
-
-    try:
-        with csv_path.open("r", newline="", encoding="utf-8") as handle:
+        with open(csv_file, "r", encoding="utf-8") as handle:
             reader = csv.reader(handle)
             rows = list(reader)
-    except Exception as exc:
-        logging.debug("Failed to read test history CSV %s: %s", csv_path, exc)
-        return 0
 
-    if not rows:
-        return 0
+        if not rows or len(rows) < 2:
+            return 0
 
-    data_rows = rows
-    if rows and tuple(rows[0]) == tuple(TEST_HISTORY_HEADERS):
         data_rows = rows[1:]
+        insert_cols = [
+            "execution_id",
+            "router_id",
+            "pdu_ip",
+            "pdu_port",
+            "ap_brand",
+            "band",
+            "ssid",
+            "wifi_mode",
+            "bandwidth",
+            "security",
+            "scan_result",
+            "connect_result",
+            "tx_result",
+            "tx_channel",
+            "tx_rssi",
+            "tx_criteria",
+            "tx_throughput_mbps",
+            "rx_result",
+            "rx_channel",
+            "rx_rssi",
+            "rx_criteria",
+            "rx_throughput_mbps",
+        ]
+        placeholders = ", ".join(["%s"] * len(insert_cols))
+        insert_sql = f"INSERT INTO `compatibility` ({', '.join(f'`{c}`' for c in insert_cols)}) VALUES ({placeholders})"
 
-    updated = 0
-    for row in data_rows:
-        if not row or len(row) < 4:
-            continue
-        test_case = str(row[2]).strip()
-        duration_hh_mm = str(row[3]).strip()
-        if not test_case:
-            continue
-        duration_seconds = _parse_duration_hh_mm_to_seconds(duration_hh_mm)
-        try:
-            shielded_row = client.query_one(
-                "SELECT id FROM `shielded` WHERE `case_path`=%s ORDER BY `id` DESC LIMIT 1",
-                (test_case,),
+        compat_rows = []
+        for row in data_rows:
+            if not row or len(row) < 4:
+                continue
+            pdu_ip = str(row[0]).strip()
+            pdu_port = int(str(row[1]).strip() or 0)
+            ap_brand = str(row[2]).strip() if len(row) > 2 else ""
+            band = str(row[3]).strip() if len(row) > 3 else ""
+            ssid = str(row[4]).strip() if len(row) > 4 else ""
+            wifi_mode = str(row[5]).strip() if len(row) > 5 else ""
+            bandwidth = str(row[6]).strip() if len(row) > 6 else ""
+            security = str(row[7]).strip() if len(row) > 7 else ""
+            scan_result = str(row[8]).strip() if len(row) > 8 else ""
+            connect_result = str(row[9]).strip() if len(row) > 9 else ""
+            tx_result = str(row[10]).strip() if len(row) > 10 else ""
+            tx_channel = str(row[11]).strip() if len(row) > 11 else ""
+            tx_rssi = str(row[12]).strip() if len(row) > 12 else ""
+            tx_criteria = str(row[13]).strip() if len(row) > 13 else ""
+            tx_thr = str(row[14]).strip() if len(row) > 14 else ""
+            rx_result = str(row[15]).strip() if len(row) > 15 else ""
+            rx_channel = str(row[16]).strip() if len(row) > 16 else ""
+            rx_rssi = str(row[17]).strip() if len(row) > 17 else ""
+            rx_criteria = str(row[18]).strip() if len(row) > 18 else ""
+            rx_thr = str(row[19]).strip() if len(row) > 19 else ""
+
+            router_id = router_id_by_key.get((pdu_ip, pdu_port))
+            compat_rows.append(
+                (
+                    execution_id,
+                    router_id,
+                    pdu_ip,
+                    pdu_port,
+                    ap_brand,
+                    band,
+                    ssid,
+                    wifi_mode,
+                    bandwidth,
+                    security,
+                    scan_result,
+                    connect_result,
+                    tx_result,
+                    tx_channel,
+                    tx_rssi,
+                    tx_criteria,
+                    tx_thr,
+                    rx_result,
+                    rx_channel,
+                    rx_rssi,
+                    rx_criteria,
+                    rx_thr,
+                )
             )
-            shielded_id = int(shielded_row["id"]) if shielded_row and shielded_row.get("id") else None
 
-            affected = 0
-            if shielded_id is not None:
-                affected = client.execute(
-                    "UPDATE `test_report` SET `duration_seconds`=%s "
-                    "WHERE `shielded_id`=%s ORDER BY `id` DESC LIMIT 1",
-                    (duration_seconds, shielded_id),
-                )
-            if not affected:
-                # Fallback: update latest report by case_path if any.
-                affected = client.execute(
-                    "UPDATE `test_report` SET `duration_seconds`=%s "
-                    "WHERE `case_path`=%s ORDER BY `id` DESC LIMIT 1",
-                    (duration_seconds, test_case),
-                )
-            if not affected:
-                # No existing report row -> insert a history-only report.
-                tool_guess = "unknown"
-                try:
-                    normalized = test_case.replace("\\", "/").lower()
-                    if "/test/" in normalized:
-                        tool_guess = normalized.split("/test/", 1)[1].split("/", 1)[0] or "unknown"
-                    elif normalized.startswith("test/"):
-                        tool_guess = normalized.split("/", 2)[1] or "unknown"
-                except Exception:
-                    tool_guess = "unknown"
-                history_name = f"history_{tool_guess}_{duration_hh_mm}_{updated}.csv"
-                insert_sql = (
-                    "INSERT INTO `test_report` "
-                    "(`shielded_id`, `dut_id`, `csv_name`, `csv_path`, `data_type`, `case_path`, `duration_seconds`) "
-                    "VALUES (%s, %s, %s, %s, %s, %s, %s)"
-                )
-                client.insert(
-                    insert_sql,
-                    (
-                        shielded_id,
-                        None,
-                        history_name,
-                        None,
-                        tool_guess.upper(),
-                        test_case,
-                        duration_seconds,
-                    ),
-                )
-                affected = 1
-
-            updated += affected
-        except Exception:
-            logging.debug("Failed to update duration for case_path=%s", test_case, exc_info=True)
-            continue
-    return updated
+        if not compat_rows:
+            return 0
+        affected = client.executemany(insert_sql, compat_rows)
+        logging.info("Synced %s compatibility rows into DB", affected)
+        return affected
 
 
 def sync_file_to_db(

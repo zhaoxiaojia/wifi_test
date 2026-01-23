@@ -70,7 +70,8 @@ class HtmlFileHandler(FileHandler):
             html_entry = f'        <div class="log-entry {level}">\n'
             html_entry += f'            <span class="log-level">{level}</span>\n'
             html_entry += f'            <span class="log-time">{log_time}</span>\n'
-            html_entry += f'            <div class="log-message">{msg.replace("\n", "<br>")}</div>\n'
+            msg_html = msg.replace("\n", "<br>")
+            html_entry += f'            <div class="log-message">{msg_html}</div>\n'
             html_entry += '        </div>\n'
             self.stream.write(html_entry)
             self.flush()
