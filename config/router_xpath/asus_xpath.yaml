@@ -2,7 +2,7 @@
 
 asus:
   account: admin
-  passwd: admin12345^
+  passwd: 12345678
   username_element: login_username
   password_element: login_passwd
   signin_element:
@@ -95,4 +95,5 @@ asus:
     asus_86u: /html/body/form/div/div/div[1]/div[2]
     asus_88u: /html/body/form/div/div/div[2]
     asus_88u_pro: /html/body/form/div/div/div[2]
+
 
