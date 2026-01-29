@@ -139,7 +139,7 @@ def test_scan(router_setting, request):
 
     except Exception as e:
         logging.error(f"Scan failed: {e}")
-        # failed and record
+        # failed and record891a80fdb51f230438d52f26a19845523a0b05c1
         request.node._store['return_value'] = ("N/A", "N/A", "N/A", "FAIL")
         request.node._store['compat_compare'] = "FAIL"
         pytest.fail(f"Scan test failed: {e}")

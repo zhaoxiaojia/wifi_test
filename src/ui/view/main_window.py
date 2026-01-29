@@ -9,6 +9,7 @@ layer so that ``main.py`` can focus on application bootstrap only.
 from __future__ import annotations
 
 from pathlib import Path
+import os
 import traceback
 import logging
 from contextlib import suppress
@@ -16,16 +17,21 @@ from typing import Annotated
 
 from PyQt5.QtWidgets import (
     QAbstractButton,
+    QAction,
+    QActionGroup,
     QGraphicsOpacityEffect,
+    QMenu,
     QMessageBox,
 )
-from PyQt5.QtGui import QGuiApplication
+from PyQt5.QtGui import QGuiApplication, QIcon
 from PyQt5.QtCore import (
     QCoreApplication,
     QPropertyAnimation,
     QEasingCurve,
     QParallelAnimationGroup,
     QPoint,
+    QTimer,
+    Qt,
 )
 import sip
 from qfluentwidgets import FluentIcon, FluentWindow, NavigationItemPosition
@@ -48,8 +54,13 @@ from src.ui.controller.account_ctl import (
 )
 from src.ui.controller import set_run_locked
 from src.ui.model.tools_registry import load_tools_registry
-from src.ui.view.tools_global import GlobalToolsBar, GlobalToolsPanel
+from src.ui.view.theme import BACKGROUND_COLOR, TEXT_COLOR
 from src.ui.controller.tools_ctl import GlobalToolsController
+from src.ui.view.toolbar.tool_bar import GlobalToolsChrome
+from src.ui.view.titlebar.menu_title_bar import MenuTitleBar
+from src.ui.controller.titlebar.import_ctl import ImportController
+from src.tools.mysql_tool import MySqlClient
+from src.tools.mysql_tool.schema import ensure_report_tables
 
 
 def log_exception(exc_type, exc_value, exc_tb) -> None:
@@ -74,7 +85,9 @@ class MainWindow(FluentWindow):
 
     def __init__(self) -> None:
         super().__init__()
-        self.setWindowTitle("FAE-QA  Wi-Fi Test Tool")
+        self.setTitleBar(MenuTitleBar(self))
+        self.setWindowIcon(QIcon("res/logo/wifi.ico"))
+        self.setWindowTitle("")
         screen = QGuiApplication.primaryScreen().availableGeometry()
         width = int(screen.width() * 0.7)
         height = int(screen.height() * 0.7)
@@ -82,11 +95,10 @@ class MainWindow(FluentWindow):
         self.setMinimumSize(width, height)
         # Global tools (toolbar + side panel)
         tool_specs = load_tools_registry()
-        # Parent on the central content stack so that tools live
-        # alongside pages but occupy their own reserved area.
-        self.global_tools_bar = GlobalToolsBar(tool_specs, parent=self.stackedWidget)
-        self.global_tools_panel = GlobalToolsPanel(parent=self.stackedWidget)
-        self.global_tools_panel.hide()
+        self._tools_chrome = GlobalToolsChrome(self.stackedWidget, tool_specs)
+        self.global_tools_bar_frame = self._tools_chrome.bar_frame
+        self.global_tools_bar = self._tools_chrome.bar
+        self.global_tools_panel = self._tools_chrome.panel
         self.global_tools_controller = GlobalToolsController(
             self, self.global_tools_bar, self.global_tools_panel, tool_specs
         )
@@ -246,6 +258,15 @@ class MainWindow(FluentWindow):
         }
         self._initialize_login_state()
 
+        self.import_ctl = ImportController(self)
+
+        self._menu_actions: dict[str, QAction] = {}
+        self._theme_key = "dark"
+        self._language_key = "zh"
+        self._init_menu_bar()
+
+        QTimer.singleShot(0, self._silent_init_mysql)
+
         # Backward compatibility fields
         self._run_nav_button = self.run_nav_button
         self._rvr_nav_button = self.rvr_nav_button
@@ -259,6 +280,152 @@ class MainWindow(FluentWindow):
         # Position global tools after initial layout
         self._update_global_tools_geometry()
 
+    def _init_menu_bar(self) -> None:
+        menu_bar = self.titleBar.menu_bar
+        file_menu = menu_bar.addMenu("File")
+        theme_menu = menu_bar.addMenu("Theme")
+        view_menu = menu_bar.addMenu("View")
+        settings_menu = menu_bar.addMenu("Settings")
+        help_menu = menu_bar.addMenu("Help")
+
+        self._add_menu_action(file_menu, "file.import", "Import...", shortcut="Ctrl+O")
+        self._add_menu_action(file_menu, "file.export", "Export...", shortcut="Ctrl+S")
+        file_menu.addSeparator()
+        self._add_menu_action(file_menu, "file.exit", "Exit", shortcut="Alt+F4")
+
+        theme_group = QActionGroup(self)
+        theme_group.setExclusive(True)
+        self._add_menu_action(
+            theme_menu,
+            "theme.dark",
+            "Dark",
+            checkable=True,
+            checked=(self._theme_key == "dark"),
+            group=theme_group,
+        )
+        self._add_menu_action(
+            theme_menu,
+            "theme.light",
+            "Light",
+            checkable=True,
+            checked=(self._theme_key == "light"),
+            group=theme_group,
+        )
+
+        self._add_menu_action(
+            view_menu,
+            "view.toggle_tools_panel",
+            "Tools Panel",
+            checkable=True,
+            checked=self.global_tools_panel.isVisible(),
+        )
+        self._add_menu_action(
+            view_menu,
+            "view.toggle_tools_bar",
+            "Tools Bar",
+            checkable=True,
+            checked=self.global_tools_bar_frame.isVisible(),
+        )
+
+        language_menu = settings_menu.addMenu("Language")
+        language_group = QActionGroup(self)
+        language_group.setExclusive(True)
+        self._add_menu_action(
+            language_menu,
+            "settings.language.zh",
+            "Chinese",
+            checkable=True,
+            checked=(self._language_key == "zh"),
+            group=language_group,
+        )
+        self._add_menu_action(
+            language_menu,
+            "settings.language.en",
+            "English",
+            checkable=True,
+            checked=(self._language_key == "en"),
+            group=language_group,
+        )
+
+        self._add_menu_action(help_menu, "help.about", "About")
+
+        # DEBUG_MENU: remove later
+        print("[DEBUG_MENU] MenuBar initialized")
+
+    def _add_menu_action(
+        self,
+        menu: QMenu,
+        command_id: str,
+        title: str,
+        *,
+        shortcut: str | None = None,
+        checkable: bool = False,
+        checked: bool = False,
+        group: QActionGroup | None = None,
+    ) -> QAction:
+        action = QAction(title, self)
+        action.setObjectName(command_id.replace(".", "_"))
+        if shortcut:
+            action.setShortcut(shortcut)
+        action.setCheckable(checkable)
+        if checkable:
+            action.setChecked(checked)
+        action.triggered.connect(lambda _checked=False, cid=command_id: self._on_menu_command(cid))
+        if group is not None:
+            group.addAction(action)
+        menu.addAction(action)
+        self._menu_actions[command_id] = action
+        return action
+
+    def _on_menu_command(self, command_id: str) -> None:
+        # DEBUG_MENU: remove later
+        print("[DEBUG_MENU] command:", command_id)
+        if command_id == "file.import":
+            self.import_ctl.run_import()
+            return
+        if command_id == "file.export":
+            # DEBUG_MENU: remove later
+            print("[DEBUG_MENU] file.export not implemented")
+            return
+        if command_id == "view.toggle_tools_panel":
+            visible = not self.global_tools_panel.isVisible()
+            self.global_tools_panel.setVisible(visible)
+            self._menu_actions[command_id].setChecked(visible)
+            self._update_global_tools_geometry()
+            return
+        if command_id == "view.toggle_tools_bar":
+            visible = not self.global_tools_bar_frame.isVisible()
+            self.global_tools_bar_frame.setVisible(visible)
+            self._menu_actions[command_id].setChecked(visible)
+            self._update_global_tools_geometry()
+            return
+        if command_id == "help.about":
+            self.setCurrentIndex(self.about_page)
+            return
+        if command_id == "file.exit":
+            QCoreApplication.quit()
+            return
+        if command_id == "theme.dark":
+            self._theme_key = "dark"
+            return
+        if command_id == "theme.light":
+            self._theme_key = "light"
+            return
+        if command_id == "settings.language.zh":
+            self._language_key = "zh"
+            return
+        if command_id == "settings.language.en":
+            self._language_key = "en"
+            return
+
+    def _silent_init_mysql(self) -> None:
+        """Best-effort MySQL schema initialization without UI prompts."""
+        try:
+            with MySqlClient() as client:
+                ensure_report_tables(client)
+        except Exception:
+            logging.debug("Silent MySQL init failed", exc_info=True)
+            return
     # ------------------------------------------------------------------
     # Navigation button helpers
     # ------------------------------------------------------------------
@@ -638,48 +805,7 @@ class MainWindow(FluentWindow):
 
     def _update_global_tools_geometry(self) -> None:
         """Place the global tools bar and panel relative to the content area."""
-        content = self.stackedWidget
-        width = content.width()
-        height = content.height()
-        margin = 8
-
-        bar = self.global_tools_bar
-        if not bar:
-            return
-
-        bar_height = bar.sizeHint().height()
-        bar_width = bar.sizeHint().width()
-
-        # Reserve a fixed strip at the top of the content area
-        # so that pages never overlap the toolbar, similar to
-        # how the left navigation bar is always visible.
-        top_margin = bar_height + margin
-
-        panel = self.global_tools_panel
-        panel_width = 0
-        if panel and panel.isVisible():
-            # Reserve space on the right for the tools panel when visible
-            panel_width = max(int(width * 0.3), 320)
-
-        # Apply margins so pages are laid out below the toolbar
-        # and not underneath the right-hand panel.
-        content.setContentsMargins(0, top_margin, panel_width, 0)
-
-        # Position toolbar inside the reserved top strip, aligned to the
-        # outer right edge of the content area (independent of the tools
-        # panel width) so that icons always sit at the far right.
-        bar_x = max(0, width - bar_width - margin)
-        bar_y = max(0, (top_margin - bar_height) // 2)
-        bar.setGeometry(bar_x, bar_y, bar_width, bar_height)
-        bar.raise_()
-
-        # Position the tools panel as a fixed right-hand column that
-        # starts below the toolbar and has the reserved width.
-        if panel and panel.isVisible():
-            panel_x = max(0, width - panel_width)
-            panel_y = top_margin
-            panel_height = max(0, height - panel_y)
-            panel.setGeometry(panel_x, panel_y, panel_width, panel_height)
+        self._tools_chrome.update_geometry()
 
     def setCurrentIndex(self, page_widget, ssid: str | None = None, passwd: str | None = None):
         """Switch the active page with a cross-fade animation."""

@@ -81,3 +81,11 @@ panels:
           - key: csv_path
             widget: combo_box
             label: "Select config csv file"
+
+      - id: mode
+        label: "Mode"
+        fields:
+          - key: mode
+            widget: combo_box
+            label: "Mode"
+            choices: ["Wi-Fi Only", "Wi-Fi BLE", "Wi-Fi BLE CLASSIC"]

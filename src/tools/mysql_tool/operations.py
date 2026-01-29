@@ -985,11 +985,14 @@ def _resolve_wifi_product_details(fpga_section: Any) -> Dict[str, Optional[str]]
 def _build_project_payload(config: Mapping[str, Any]) -> Dict[str, Any]:
     fpga_section = _extract_first(config, "project", "fpga")
     wifi_details = _resolve_wifi_product_details(fpga_section)
+    hardware_section = _extract_first(config, "hardware_info", "hardware")
+    hardware = hardware_section if isinstance(hardware_section, Mapping) else {}
     payload_json = json.dumps(wifi_details, ensure_ascii=True, separators=(",", ":"))
     return {
         "brand": wifi_details.get("customer"),
         "product_line": wifi_details.get("product_line"),
         "project_name": wifi_details.get("project"),
+        "hardware_version": _extract_first(hardware, "hardware_version") or "",
         "main_chip": wifi_details.get("main_chip"),
         "wifi_module": wifi_details.get("wifi_module"),
         "interface": wifi_details.get("interface"),
@@ -1001,10 +1004,11 @@ def _build_project_payload(config: Mapping[str, Any]) -> Dict[str, Any]:
 def ensure_project(client: MySqlClient, project_payload: Mapping[str, Any]) -> int:
     insert_sql = (
         "INSERT INTO `project` "
-        "(`brand`, `product_line`, `project_name`, `main_chip`, `wifi_module`, `interface`, `ecosystem`, `payload_json`) "
-        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) "
+        "(`brand`, `product_line`, `project_name`, `hardware_version`, `main_chip`, `wifi_module`, `interface`, `ecosystem`, `payload_json`) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) "
         "ON DUPLICATE KEY UPDATE "
         "`id`=LAST_INSERT_ID(`id`), "
+        "`hardware_version`=VALUES(`hardware_version`), "
         "`main_chip`=VALUES(`main_chip`), "
         "`wifi_module`=VALUES(`wifi_module`), "
         "`interface`=VALUES(`interface`), "
@@ -1017,6 +1021,7 @@ def ensure_project(client: MySqlClient, project_payload: Mapping[str, Any]) -> i
             project_payload.get("brand"),
             project_payload.get("product_line"),
             project_payload.get("project_name"),
+            project_payload.get("hardware_version") or "",
             project_payload.get("main_chip"),
             project_payload.get("wifi_module"),
             project_payload.get("interface"),
@@ -1032,16 +1037,35 @@ def ensure_test_report(
     project_id: int,
     report_name: str,
     case_path: Optional[str],
+    is_golden: bool = False,
+    report_type: Optional[str] = None,
+    golden_group: Optional[str] = None,
+    notes: Optional[str] = None,
 ) -> int:
     insert_sql = (
         "INSERT INTO `test_report` "
-        "(`project_id`, `report_name`, `case_path`) "
-        "VALUES (%s, %s, %s) "
+        "(`project_id`, `report_name`, `case_path`, `is_golden`, `report_type`, `golden_group`, `notes`) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s) "
         "ON DUPLICATE KEY UPDATE "
         "`id`=LAST_INSERT_ID(`id`), "
-        "`case_path`=VALUES(`case_path`)"
+        "`case_path`=VALUES(`case_path`), "
+        "`is_golden`=VALUES(`is_golden`), "
+        "`report_type`=VALUES(`report_type`), "
+        "`golden_group`=VALUES(`golden_group`), "
+        "`notes`=VALUES(`notes`)"
     )
-    return client.insert(insert_sql, (project_id, report_name, case_path))
+    return client.insert(
+        insert_sql,
+        (
+            project_id,
+            report_name,
+            case_path,
+            1 if is_golden else 0,
+            report_type,
+            golden_group,
+            notes,
+        ),
+    )
 
 
 def register_execution(
@@ -1063,14 +1087,16 @@ def register_execution(
         project_id=project_id,
         report_name=report_name,
         case_path=case_path,
+        is_golden=False,
+        notes=None,
     )
     insert_sql = (
         "INSERT INTO `execution` "
         "(`test_report_id`, `execution_type`, `serial_number`, `connect_type`, `adb_device`, `telnet_ip`, "
-        "`software_version`, `driver_version`, `hardware_version`, `android_version`, `kernel_version`, "
+        "`software_version`, `driver_version`, `android_version`, `kernel_version`, "
         "`router_name`, `router_address`, `rf_model`, `corner_model`, `lab_name`, "
         "`csv_name`, `csv_path`, `run_source`, `duration_seconds`, `payload_json`) "
-        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
     )
     payload_json = json.dumps(dict(execution_payload), ensure_ascii=True, separators=(",", ":"))
     return client.insert(
@@ -1084,7 +1110,6 @@ def register_execution(
             execution_payload.get("telnet_ip"),
             execution_payload.get("software_version"),
             execution_payload.get("driver_version"),
-            execution_payload.get("hardware_version"),
             execution_payload.get("android_version"),
             execution_payload.get("kernel_version"),
             execution_payload.get("router_name"),
@@ -1140,7 +1165,6 @@ def _build_execution_device_payload(config: Mapping[str, Any]) -> Dict[str, Any]
         "serial_number": _extract_serial_number(config),
         "software_version": _extract_first(software, "software_version"),
         "driver_version": _extract_first(software, "driver_version"),
-        "hardware_version": _extract_first(hardware, "hardware_version"),
         "android_version": _extract_first(android, "version"),
         "kernel_version": _extract_first(android, "kernel_version"),
         "connect_type": connect_type_value,

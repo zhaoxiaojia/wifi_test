@@ -46,6 +46,7 @@ PERFORMANCE_STATIC_COLUMNS: Tuple[Tuple[str, str, str], ...] = (
     ("phy_rate_mbps", "DECIMAL(10,3)", "Data_Rate"),
     ("center_freq_mhz", "SMALLINT", "CH_Freq_MHz"),
     ("protocol", "VARCHAR(255)", "Protocol"),
+    ("mode", "VARCHAR(64)", "Mode"),
     ("direction", "ENUM('uplink','downlink','bi')", "Direction"),
     ("total_path_loss", "DECIMAL(6,2)", "Total_Path_Loss"),
     ("path_loss_db", "DECIMAL(6,2)", "DB"),
@@ -160,6 +161,7 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
             ColumnDefinition("brand", "VARCHAR(64) NOT NULL"),
             ColumnDefinition("product_line", "VARCHAR(64) NOT NULL"),
             ColumnDefinition("project_name", "VARCHAR(128) NOT NULL"),
+            ColumnDefinition("hardware_version", "VARCHAR(128) NOT NULL DEFAULT ''"),
             ColumnDefinition("main_chip", "VARCHAR(64)"),
             ColumnDefinition("wifi_module", "VARCHAR(64)"),
             ColumnDefinition("interface", "VARCHAR(64)"),
@@ -169,13 +171,13 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
         indexes=(
             TableIndex(
                 "idx_project_identity",
-                "INDEX idx_project_identity (`brand`, `product_line`, `project_name`)",
+                "INDEX idx_project_identity (`brand`, `product_line`, `project_name`, `hardware_version`)",
             ),
         ),
         constraints=(
             TableConstraint(
                 "uq_project_identity",
-                "CONSTRAINT uq_project_identity UNIQUE (`brand`, `product_line`, `project_name`)",
+                "CONSTRAINT uq_project_identity UNIQUE (`brand`, `product_line`, `project_name`, `hardware_version`)",
             ),
         ),
     ),
@@ -184,12 +186,19 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
             ColumnDefinition("project_id", "INT NOT NULL"),
             ColumnDefinition("report_name", "VARCHAR(255) NOT NULL"),
             ColumnDefinition("case_path", "VARCHAR(512)"),
+            ColumnDefinition("is_golden", "TINYINT(1) NOT NULL DEFAULT 0"),
+            ColumnDefinition("report_type", "VARCHAR(64)"),
+            ColumnDefinition("golden_group", "VARCHAR(32)"),
             ColumnDefinition("notes", "TEXT"),
         ),
         indexes=(
             TableIndex(
                 "idx_test_report_project",
                 "INDEX idx_test_report_project (`project_id`)",
+            ),
+            TableIndex(
+                "idx_test_report_golden_group",
+                "INDEX idx_test_report_golden_group (`project_id`, `report_type`, `golden_group`)",
             ),
             TableIndex(
                 "idx_test_report_created_at",
@@ -200,6 +209,10 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
             TableConstraint(
                 "uq_test_report_project_name",
                 "CONSTRAINT uq_test_report_project_name UNIQUE (`project_id`, `report_name`)",
+            ),
+            TableConstraint(
+                "uq_test_report_project_type_golden",
+                "CONSTRAINT uq_test_report_project_type_golden UNIQUE (`project_id`, `report_type`, `golden_group`)",
             ),
             TableConstraint(
                 "fk_test_report_project",
@@ -217,7 +230,6 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
             ColumnDefinition("telnet_ip", "VARCHAR(128)"),
             ColumnDefinition("software_version", "VARCHAR(128)"),
             ColumnDefinition("driver_version", "VARCHAR(128)"),
-            ColumnDefinition("hardware_version", "VARCHAR(128)"),
             ColumnDefinition("android_version", "VARCHAR(64)"),
             ColumnDefinition("kernel_version", "VARCHAR(64)"),
             ColumnDefinition("router_name", "VARCHAR(128)"),
@@ -364,6 +376,36 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
             ),
         ),
     ),
+    "artifact": TableSpec(
+        columns=(
+            ColumnDefinition("test_report_id", "INT NOT NULL"),
+            ColumnDefinition("file_name", "VARCHAR(255) NOT NULL"),
+            ColumnDefinition("content_type", "VARCHAR(128) NOT NULL"),
+            ColumnDefinition("sha256", "CHAR(64) NOT NULL"),
+            ColumnDefinition("size_bytes", "INT NOT NULL"),
+            ColumnDefinition("content", "LONGBLOB NOT NULL"),
+        ),
+        indexes=(
+            TableIndex(
+                "idx_artifact_report",
+                "INDEX idx_artifact_report (`test_report_id`, `created_at`)",
+            ),
+            TableIndex(
+                "idx_artifact_sha",
+                "INDEX idx_artifact_sha (`sha256`)",
+            ),
+        ),
+        constraints=(
+            TableConstraint(
+                "uq_artifact_report",
+                "CONSTRAINT uq_artifact_report UNIQUE (`test_report_id`)",
+            ),
+            TableConstraint(
+                "fk_artifact_report",
+                "CONSTRAINT fk_artifact_report FOREIGN KEY (`test_report_id`) REFERENCES `test_report`(`id`) ON DELETE CASCADE",
+            ),
+        ),
+    ),
 }
 
 _VIEW_DEFINITIONS: Dict[str, str] = {
@@ -373,6 +415,7 @@ _VIEW_DEFINITIONS: Dict[str, str] = {
             p.brand,
             p.product_line,
             p.project_name,
+            p.hardware_version,
             p.main_chip,
             p.wifi_module,
             p.interface,
@@ -390,7 +433,6 @@ _VIEW_DEFINITIONS: Dict[str, str] = {
             ex.telnet_ip,
             ex.software_version,
             ex.driver_version,
-            ex.hardware_version,
             ex.android_version,
             ex.kernel_version,
             ex.router_name,
@@ -527,8 +569,30 @@ def ensure_table(client, table_name: str, spec: TableSpec) -> None:
         This function does not return a value.
     """
     if _table_exists(client, table_name):
+        _ensure_table_columns(client, table_name, spec)
         return
     _create_table(client, table_name, spec)
+
+
+def _ensure_table_columns(client, table_name: str, spec: TableSpec) -> None:
+    desired: list[ColumnDefinition] = []
+    desired.append(ColumnDefinition("id", "INT PRIMARY KEY AUTO_INCREMENT"))
+    desired.extend(spec.columns)
+    if spec.include_audit_columns:
+        desired.extend(_AUDIT_COLUMNS)
+
+    try:
+        rows = client.query_all(f"SHOW COLUMNS FROM `{table_name}`")
+    except Exception:
+        logging.debug("Failed to inspect columns for %s", table_name, exc_info=True)
+        return
+
+    existing = {str(row.get("Field") or "") for row in rows if isinstance(row, dict)}
+    for column in desired:
+        if column.name in existing:
+            continue
+        statement = f"ALTER TABLE `{table_name}` ADD COLUMN `{column.name}` {column.definition}"
+        client.execute(statement)
 
 
 def get_table_spec(table_name: str) -> TableSpec:
@@ -592,8 +656,12 @@ def ensure_report_tables(client) -> None:
     ensure_table(client, "execution", _TABLE_SPECS["execution"])
     ensure_table(client, "router", _TABLE_SPECS["router"])
     ensure_table(client, "performance", _TABLE_SPECS["performance"])
+    ensure_table(client, "artifact", _TABLE_SPECS["artifact"])
     ensure_table(client, "perf_metric_kv", _TABLE_SPECS["perf_metric_kv"])
     ensure_table(client, "compatibility", _TABLE_SPECS["compatibility"])
+    _migrate_project_table(client)
+    _migrate_execution_table(client)
+    _migrate_artifact_table(client)
     _ensure_table_indexes(client, "project", _TABLE_SPECS["project"].indexes)
     _ensure_table_constraints(client, "project", _TABLE_SPECS["project"].constraints)
     _ensure_table_indexes(client, "test_report", _TABLE_SPECS["test_report"].indexes)
@@ -604,11 +672,95 @@ def ensure_report_tables(client) -> None:
     _ensure_table_constraints(client, "router", _TABLE_SPECS["router"].constraints)
     _ensure_table_indexes(client, "performance", _TABLE_SPECS["performance"].indexes)
     _ensure_table_constraints(client, "performance", _TABLE_SPECS["performance"].constraints)
+    _ensure_table_indexes(client, "artifact", _TABLE_SPECS["artifact"].indexes)
+    _ensure_table_constraints(client, "artifact", _TABLE_SPECS["artifact"].constraints)
     _ensure_table_indexes(client, "perf_metric_kv", _TABLE_SPECS["perf_metric_kv"].indexes)
     _ensure_table_constraints(client, "perf_metric_kv", _TABLE_SPECS["perf_metric_kv"].constraints)
     _ensure_table_indexes(client, "compatibility", _TABLE_SPECS["compatibility"].indexes)
     _ensure_table_constraints(client, "compatibility", _TABLE_SPECS["compatibility"].constraints)
     _ensure_views(client)
+
+
+def _migrate_project_table(client) -> None:
+    """Migrate legacy project identity constraints to include hardware_version."""
+    try:
+        rows = client.query_all("SHOW INDEX FROM `project` WHERE Key_name = %s", ("uq_project_identity",))
+    except Exception:
+        logging.debug("project: failed to inspect uq_project_identity", exc_info=True)
+        return
+    columns = [str(row.get("Column_name") or "") for row in rows if isinstance(row, dict)]
+    if not columns:
+        return
+    if "hardware_version" in columns:
+        return
+    try:
+        client.execute("ALTER TABLE `project` DROP INDEX `uq_project_identity`")
+    except Exception:
+        logging.debug("project: failed to drop legacy uq_project_identity", exc_info=True)
+
+    try:
+        rows = client.query_all("SHOW INDEX FROM `project` WHERE Key_name = %s", ("idx_project_identity",))
+    except Exception:
+        logging.debug("project: failed to inspect idx_project_identity", exc_info=True)
+        return
+    columns = [str(row.get("Column_name") or "") for row in rows if isinstance(row, dict)]
+    if columns and "hardware_version" not in columns:
+        try:
+            client.execute("ALTER TABLE `project` DROP INDEX `idx_project_identity`")
+        except Exception:
+            logging.debug("project: failed to drop legacy idx_project_identity", exc_info=True)
+
+
+def _migrate_execution_table(client) -> None:
+    """Drop legacy execution.hardware_version after moving to project."""
+    try:
+        rows = client.query_all("SHOW COLUMNS FROM `execution`")
+    except Exception:
+        logging.debug("execution: failed to inspect columns", exc_info=True)
+        return
+    existing = {str(row.get("Field") or "") for row in rows if isinstance(row, dict)}
+    if "hardware_version" not in existing:
+        return
+    try:
+        client.execute("ALTER TABLE `execution` DROP COLUMN `hardware_version`")
+    except Exception:
+        logging.debug("execution: failed to drop legacy hardware_version column", exc_info=True)
+
+
+def _migrate_artifact_table(client) -> None:
+    """Migrate legacy artifact table columns/constraints."""
+    try:
+        rows = client.query_all("SHOW COLUMNS FROM `artifact`")
+    except Exception:
+        logging.debug("Failed to inspect artifact table columns", exc_info=True)
+        return
+
+    existing = {str(row.get("Field") or "") for row in rows if isinstance(row, dict)}
+    if "execution_id" in existing:
+        try:
+            client.execute("ALTER TABLE `artifact` DROP FOREIGN KEY `fk_artifact_execution`")
+        except Exception:
+            logging.debug("artifact: failed to drop fk_artifact_execution", exc_info=True)
+        try:
+            client.execute("ALTER TABLE `artifact` DROP INDEX `idx_artifact_execution`")
+        except Exception:
+            logging.debug("artifact: failed to drop idx_artifact_execution", exc_info=True)
+        try:
+            client.execute("ALTER TABLE `artifact` DROP COLUMN `execution_id`")
+        except Exception:
+            logging.debug("artifact: failed to drop legacy execution_id column", exc_info=True)
+
+    try:
+        rows = client.query_all(
+            "SHOW INDEX FROM `artifact` WHERE Key_name = %s",
+            ("uq_artifact_report_sha",),
+        )
+    except Exception:
+        logging.debug("artifact: failed to inspect uq_artifact_report_sha", exc_info=True)
+        rows = []
+    if rows:
+        client.execute("ALTER TABLE `artifact` DROP INDEX `uq_artifact_report_sha`")
+
 
 
 def _table_exists(client, table_name: str) -> bool:

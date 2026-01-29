@@ -1,2 +1,1 @@
 band,ssid,wireless_mode,channel,bandwidth,security_mode,password,tx,rx
-5G,ax99u_2g_5G,auto,auto,20/40/80 MHz,WPA2-Personal,12345678,1,1
