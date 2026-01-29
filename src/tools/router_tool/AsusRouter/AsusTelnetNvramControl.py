@@ -140,7 +140,18 @@ class AsusTelnetNvramControl(AsusBaseControl):
         self.telnet = TelnetSession(self.host, self.port, timeout=10)
 
         try:
-            self.telnet.open()
+            try:
+                self.telnet.open()
+            except TimeoutError as exc:
+                raise RuntimeError(
+                    f"Telnet connect timeout: {self.host}:{self.port}. "
+                    f"Check router IP (e.g. config_basic.yaml -> router.address) and that telnet is enabled."
+                ) from exc
+            except OSError as exc:
+                raise RuntimeError(
+                    f"Telnet connect error: {self.host}:{self.port}: {exc}. "
+                    f"Check router IP (e.g. config_basic.yaml -> router.address) and network reachability."
+                ) from exc
 
             login_banner = self.telnet.read_until(b"login:", timeout=10)
             if not login_banner.endswith(b"login:"):

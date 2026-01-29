@@ -1,7 +1,7 @@
 Turntable:
   Turntable: RS232Board5
   IP address: 192.168.5.156
-  Step: 0,1
+  Step: 0,360:30
   Static dB: ''
   Target RSSI: 45,60
 rf_solution:
@@ -23,3 +23,4 @@ debug:
   skip_corner_rf: false
   skip_connect: false
 csv_path: performance_test_csv/ai_wifi_scenarios.csv
+mode: Wi-Fi Only

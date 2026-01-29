@@ -43,6 +43,8 @@ class GlobalToolsBar(QWidget):
 
     def __init__(self, tools: Sequence[ToolSpec], parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self.setObjectName("globalToolsBar")
+        self.setStyleSheet("background-color: transparent; border: none;")
         layout = QHBoxLayout(self)
         layout.setContentsMargins(2, 3, 2, 1)
         layout.setSpacing(2)
@@ -64,6 +66,7 @@ class GlobalToolsBar(QWidget):
             )
             self._buttons[spec.tool_id] = button
             layout.addWidget(button)
+
 
     def set_tools_enabled(self, enabled: bool, tool_ids: Iterable[str] | None = None) -> None:
         """Enable or disable the entire toolbar or a subset of tools."""

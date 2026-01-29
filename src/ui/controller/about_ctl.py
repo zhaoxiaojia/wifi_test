@@ -18,7 +18,11 @@ from PyQt5.QtWidgets import QMessageBox
 
 from src.util.constants import Paths, get_build_metadata
 from src.util.test_history import get_total_test_duration_hh_mm
-from src.ui.view.style import acknowledgements_from_readme, latest_version_from_changelog, normalize_data_source_label
+from src.ui.view.theme.style import (
+    acknowledgements_from_readme,
+    latest_version_from_changelog,
+    normalize_data_source_label,
+)
 
 
 class AboutController:

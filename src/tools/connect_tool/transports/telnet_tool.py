@@ -177,18 +177,27 @@ class TelnetSession:
             data = self._loop.run_until_complete(asyncio.wait_for(_read_until(), timeout=timeout))
         return data
 
-    def read_some(self) -> bytes:
+    def read_some(self, size: int = 1024, *, timeout: Optional[float] = None) -> bytes:
         if not self.is_connected():
             raise RuntimeError("TelnetSession is not connected")
 
         async def _read_some():
-            chunk = await self._reader.read(1024)
-            return chunk
+            return await self._reader.read(size)
 
         with self._use_loop():
-            data = self._loop.run_until_complete(_read_some())
-        if not data:
+            try:
+                if timeout is None:
+                    data = self._loop.run_until_complete(_read_some())
+                else:
+                    data = self._loop.run_until_complete(asyncio.wait_for(_read_some(), timeout=timeout))
+            except asyncio.TimeoutError:
+                return b""
+
+        if data in (b"", ""):
             raise EOFError("TelnetSession connection closed")
+
+        if isinstance(data, bytes):
+            return data
         return data.encode(self.encoding, "ignore")
 
 

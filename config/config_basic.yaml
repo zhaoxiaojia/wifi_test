@@ -8,9 +8,9 @@ system:
   kernel_version: Kernel 6.1
 connect_type:
   Android:
-    device: ''
+    device: No devices
   Linux:
-    ip: 192.168.208.89
+    ip: 192.168.50.12
     wildcard: ''
   third_party:
     enabled: false
@@ -19,9 +19,9 @@ connect_type:
 project:
   customer: Roku
   product_line: TV
-  project: Blueplanet
-  main_chip: T963D4
-  wifi_module: W2
+  project: Sandia
+  main_chip: TR964
+  wifi_module: W2L
   interface: USB
 serial_port:
   baud: '921600'
@@ -44,6 +44,6 @@ duration_control:
   retry_limit: '0'
 router:
   name: asusax88u
-  address: 192.168.5.1
+  address: 192.168.50.1
   24g_ssid: 24G
   5g_ssid: 5G
