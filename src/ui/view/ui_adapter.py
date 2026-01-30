@@ -38,6 +38,11 @@ class UiAdapter(QObject):
         super().__init__(page)
         self._page = page
         self._emit = emit
+        self._bound_fields: set[str] = set()
+        self._bound_case_tree = False
+        self._bound_csv_combo = False
+        self._bound_run_buttons: set[int] = set()
+        self._bound_tabs: set[str] = set()
 
     # ------------------------------------------------------------------
     # Public API
@@ -74,6 +79,9 @@ class UiAdapter(QObject):
         config widgets share a single, predictable signal → event path.
         """
         for field_id, widget in self._iter_field_widgets().items():
+            if field_id in self._bound_fields:
+                continue
+            self._bound_fields.add(field_id)
 
             def _handler(fid: str = field_id) -> None:
                 value = self._extract_widget_value(widget)
@@ -122,6 +130,9 @@ class UiAdapter(QObject):
     # ------------------------------------------------------------------
 
     def _bind_case_tree(self) -> None:
+        if self._bound_case_tree:
+            return
+        self._bound_case_tree = True
         tree = self._page.case_tree
 
         def _on_clicked(proxy_idx) -> None:
@@ -162,6 +173,9 @@ class UiAdapter(QObject):
     # ------------------------------------------------------------------
 
     def _bind_csv_combo(self) -> None:
+        if self._bound_csv_combo:
+            return
+        self._bound_csv_combo = True
         csv_combo = self._page.csv_combo
 
         def _on_activated(index: int) -> None:
@@ -188,6 +202,10 @@ class UiAdapter(QObject):
 
     def _bind_run_buttons(self) -> None:
         for btn in self._page._run_buttons:
+            btn_id = id(btn)
+            if btn_id in self._bound_run_buttons:
+                continue
+            self._bound_run_buttons.add(btn_id)
             def _handler(_checked: bool = False, button=btn) -> None:
                 object_name = button.objectName() or "run_button"
                 self._emit_event(
@@ -204,6 +222,9 @@ class UiAdapter(QObject):
 
     def _bind_tabs(self) -> None:
         for key, lbl in self._page._page_buttons.items():
+            if key in self._bound_tabs:
+                continue
+            self._bound_tabs.add(key)
             def _on_clicked(page_key: str = key) -> None:
                 self._emit_event(
                     "tab.switch",

@@ -9,6 +9,7 @@ panels from YAML.
 from __future__ import annotations
 
 import logging
+import time
 import re
 from dataclasses import dataclass
 from typing import Any, Dict, Mapping
@@ -270,6 +271,7 @@ def build_groups_from_schema(
     sections = panel_spec.get("sections") or []
 
     for section in sections:
+        _t_section = time.perf_counter()
         section_id = str(section.get("id") or "")
         group_label = str(section.get("label") or section_id or "Section")
         fields = section.get("fields") or []
@@ -321,7 +323,7 @@ def build_groups_from_schema(
             if isinstance(widget, QCheckBox) and spec.widget == "checkbox":
                 layout.addRow(widget)
             else:
-                layout.addRow(QLabel(label_text, page), widget)
+                layout.addRow(label_text, widget)
 
             # Register widget in page.field_widgets.
             logical_key = key
@@ -354,6 +356,10 @@ def build_groups_from_schema(
         is_basic_panel = panel_key in {"basic", "dut"}
         target = page._basic_groups if is_basic_panel else page._other_groups
         target[section_id or group_label] = group
+
+        elapsed = time.perf_counter() - _t_section
+        if elapsed >= 0.2:
+            print(f"[STARTUP_TIME] build_groups_from_schema({panel_key}) section {section_id or group_label!r}: {elapsed:.3f}s")
 
     # Trigger a single rebalance for this panel if supported.
     if parent is not None:

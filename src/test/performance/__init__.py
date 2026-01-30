@@ -350,7 +350,9 @@ def get_corner_step_list():
     cfg = get_cfg()
     turntable_cfg = _turntable_section_from_config(cfg)
     raw_step = turntable_cfg.get(TURN_TABLE_FIELD_STEP, "")
-    bounds = _parse_turntable_step_bounds(raw_step)
+    bounds_part, sep, step_part = str(raw_step).replace("-", ",", 1).partition(":")
+    step = int(step_part.strip()) if sep else 45
+    bounds = _parse_turntable_step_bounds(bounds_part.strip())
     if bounds is None:
         logging.warning("Turntable step configuration %r is invalid", raw_step)
         return []
@@ -359,6 +361,8 @@ def get_corner_step_list():
         return [start]
     if start > stop:
         start, stop = stop, start
+    if sep:
+        return list(range(start, stop + 1, step))
     return [i for i in range(start, stop)][::45]
 
 

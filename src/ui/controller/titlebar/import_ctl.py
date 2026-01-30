@@ -791,7 +791,7 @@ class PerformanceExcelImporter:
             throughput_sheet = candidates[0] if candidates else None
 
         out: Dict[str, List[Dict[str, Any]]] = {}
-        missing: List[str] = []
+        issues: List[str] = []
 
         alias_map = {
             "PEAK": "PEAK_THROUGHPUT",
@@ -801,20 +801,43 @@ class PerformanceExcelImporter:
             key = alias_map.get(t, t)
             if key == "PEAK_THROUGHPUT":
                 if throughput_sheet is None:
-                    missing.append("PEAK_THROUGHPUT missing throughput sheet")
+                    issues.append("PEAK_THROUGHPUT: missing throughput sheet")
                     continue
-                rows, issues = self.build_peak_throughput_rows(workbook, sheet_name=throughput_sheet)
+                if throughput_sheet not in workbook.sheetnames:
+                    issues.append(f"PEAK_THROUGHPUT: worksheet {throughput_sheet!r} not found")
+                    continue
+                try:
+                    rows, row_issues = self.build_peak_throughput_rows(workbook, sheet_name=throughput_sheet)
+                except Exception as exc:
+                    issues.append(f"PEAK_THROUGHPUT: parse failed ({exc})")
+                    continue
             elif key == "RVR":
-                rows, issues = self.build_rvr_rows(workbook)
+                if "RVR" not in workbook.sheetnames:
+                    issues.append("RVR: worksheet 'RVR' not found")
+                    continue
+                try:
+                    rows, row_issues = self.build_rvr_rows(workbook)
+                except Exception as exc:
+                    issues.append(f"RVR: parse failed ({exc})")
+                    continue
             elif key == "RVO":
-                rows, issues = self.build_rvo_rows(workbook)
+                if "RVO" not in workbook.sheetnames:
+                    issues.append("RVO: worksheet 'RVO' not found")
+                    continue
+                try:
+                    rows, row_issues = self.build_rvo_rows(workbook)
+                except Exception as exc:
+                    issues.append(f"RVO: parse failed ({exc})")
+                    continue
             else:
-                missing.append(f"Unknown import type: {t}")
+                issues.append(f"Unknown import type: {t}")
                 continue
             out[key] = rows
-            missing.extend(issues)
+            if not rows:
+                issues.append(f"{key}: no rows parsed")
+            issues.extend(row_issues)
 
-        return out, missing
+        return out, issues
 
 
 class ImportController:
@@ -839,13 +862,32 @@ class ImportController:
             return
 
         importer = PerformanceExcelImporter()
-        extracted, missing = importer.build_rows(file_path, types=selected_types)
-        if missing:
-            details = "\n".join(missing[:20])
-            if len(missing) > 20:
-                details += f"\n... ({len(missing) - 20} more)"
-            MessageBox("Import failed", details, self._main).exec()
+        try:
+            extracted, issues = importer.build_rows(file_path, types=selected_types)
+        except Exception as exc:
+            MessageBox("Import failed", str(exc), self._main).exec()
             return
+
+        non_empty = {k: v for k, v in extracted.items() if v}
+        if issues:
+            selected = ", ".join(selected_types)
+            will_import = ", ".join(sorted(non_empty.keys())) if non_empty else "(none)"
+            details = [f"Selected: {selected}", f"Will import: {will_import}", "", "Issues:"]
+            details.extend(f"- {item}" for item in issues[:30])
+            if len(issues) > 30:
+                details.append(f"... ({len(issues) - 30} more)")
+
+            if not non_empty:
+                MessageBox("Import failed", "\n".join(details), self._main).exec()
+                return
+
+            box = MessageBox("Import validation", "\n".join(details), self._main)
+            box.yesButton.setText("Import available")
+            box.cancelButton.setText("Cancel")
+            box.exec()
+            if box.result() != QDialog.Accepted:
+                return
+
         if not any(extracted.values()):
             MessageBox("Import failed", "No rows matched the import filters.", self._main).exec()
             return
@@ -857,11 +899,11 @@ class ImportController:
             MessageBox("Import failed", str(exc), self._main).exec()
             return
 
-        MessageBox(
-            "Import completed",
-            f"Inserted {inserted} performance row(s).",
-            self._main,
-        ).exec()
+        summary_lines = [f"Inserted {inserted} performance row(s)."]
+        if issues:
+            summary_lines.append("")
+            summary_lines.append("Some selected types were skipped/failed. See validation details above.")
+        MessageBox("Import completed", "\n".join(summary_lines), self._main).exec()
 
     def _collect_default_config(self) -> dict[str, str]:
         view = self._main.caseConfigPage

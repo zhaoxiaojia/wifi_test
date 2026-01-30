@@ -381,15 +381,26 @@ def apply_run_lock_ui_state(page: Any, locked: bool) -> None:
                 pass
 
 
-def refresh_config_page_controls(page: Any) -> None:
+def refresh_config_page_controls(
+    page: Any,
+    *,
+    panel_keys: Sequence[str] | None = None,
+    clear_existing: bool = True,
+) -> None:
     """Build and refresh all controls on the Config page (including FPGA mapping)."""
+    selected = {str(k) for k in panel_keys} if panel_keys is not None else None
+
+    def _want(key: str) -> bool:
+        return True if selected is None else key in selected
+
     # Clear cached groups so rebuilding the UI does not accumulate stale widgets.
-    if hasattr(page, "_basic_groups"):
-        page._basic_groups.clear()
-    if hasattr(page, "_dut_groups"):
-        page._dut_groups.clear()
-    if hasattr(page, "_other_groups"):
-        page._other_groups.clear()
+    if clear_existing:
+        if hasattr(page, "_basic_groups"):
+            page._basic_groups.clear()
+        if hasattr(page, "_dut_groups"):
+            page._dut_groups.clear()
+        if hasattr(page, "_other_groups"):
+            page._other_groups.clear()
 
     config = getattr(page, "config", None)
     if not isinstance(config, dict):
@@ -454,13 +465,14 @@ def refresh_config_page_controls(page: Any) -> None:
     # Build panels from YAML schemas.  Parent all groups directly
     # to the corresponding ConfigGroupPanel so that layout is fully
     # owned by the view layer.
-    basic_schema = load_ui_schema("basic")
-    basic_panel = getattr(page, "_basic_panel", None) or getattr(page, "_dut_panel", None)
-    build_groups_from_schema(page, config, basic_schema, panel_key="basic", parent=basic_panel)
+    if _want("basic"):
+        basic_schema = load_ui_schema("basic")
+        basic_panel = getattr(page, "_basic_panel", None) or getattr(page, "_dut_panel", None)
+        build_groups_from_schema(page, config, basic_schema, panel_key="basic", parent=basic_panel)
 
     # Compatibility Settings live on their own panel so that they can
     # behave as a dedicated Settings tab for compatibility testcases.
-    compat_schema = load_ui_schema("compatibility")
+    compat_schema = load_ui_schema("compatibility") if _want("compatibility") else None
     if compat_schema:
         compat_panel = getattr(page, "_compatibility_panel", None)
         build_groups_from_schema(page, config, compat_schema, panel_key="compatibility", parent=compat_panel)
@@ -535,45 +547,54 @@ def refresh_config_page_controls(page: Any) -> None:
         except Exception:
             logging.debug("Failed to initialise Compatibility relay editor", exc_info=True)
 
-    exec_schema = load_ui_schema("execution")
-    exec_panel = getattr(page, "_execution_panel", None)
-    build_groups_from_schema(page, config, exec_schema, panel_key="execution", parent=exec_panel)
-    # Bind main Performance CSV combo (Execution panel) and log RvR widgets.
-    field_widgets = getattr(page, "field_widgets", {}) or {}
-    csv_widget = field_widgets.get("csv_path")
-    if csv_widget is not None:
-        setattr(page, "csv_combo", csv_widget)
-    rvr_tool = field_widgets.get("rvr.tool") or field_widgets.get("rvr.tool_name")
-    ix_path = field_widgets.get("rvr.ixchariot.path")
-    try:
-        ix_enabled = ix_path.isEnabled() if ix_path is not None else None
-    except Exception:
-        ix_enabled = None
+    if _want("execution"):
+        exec_schema = load_ui_schema("execution")
+        exec_panel = getattr(page, "_execution_panel", None)
+        build_groups_from_schema(page, config, exec_schema, panel_key="execution", parent=exec_panel)
+        # Bind main Performance CSV combo (Execution panel) and log RvR widgets.
+        field_widgets = getattr(page, "field_widgets", {}) or {}
+        csv_widget = field_widgets.get("csv_path")
+        if csv_widget is not None:
+            setattr(page, "csv_combo", csv_widget)
+        rvr_tool = field_widgets.get("rvr.tool") or field_widgets.get("rvr.tool_name")
+        ix_path = field_widgets.get("rvr.ixchariot.path")
+        try:
+            ix_enabled = ix_path.isEnabled() if ix_path is not None else None
+        except Exception:
+            ix_enabled = None
 
-    stability_cfg = config.get("stability") or {}
-    stab_schema = load_ui_schema("stability")
-    stab_panel = getattr(page, "_stability_panel", None)
-    build_groups_from_schema(page, stability_cfg, stab_schema, panel_key="stability", parent=stab_panel)
-    # Bind common stability groups (Duration Control / Check Point).
-    try:
-        from src.ui.view.config import init_stability_common_groups
+    if _want("stability"):
+        stability_cfg = config.get("stability") or {}
+        stab_schema = load_ui_schema("stability")
+        stab_panel = getattr(page, "_stability_panel", None)
+        build_groups_from_schema(page, stability_cfg, stab_schema, panel_key="stability", parent=stab_panel)
+        # Bind common stability groups (Duration Control / Check Point).
+        try:
+            from src.ui.view.config import init_stability_common_groups
 
-        init_stability_common_groups(page)
-    except Exception:
-        logging.debug("Failed to initialise stability common groups", exc_info=True)
+            init_stability_common_groups(page)
+        except Exception:
+            logging.debug("Failed to initialise stability common groups", exc_info=True)
 
     # Wire FPGA dropdowns + Control Type / Third‑party / Stability wiring.
-    init_fpga_dropdowns(page)
-    init_connect_type_actions(page)
-    init_system_version_actions(page)
-    init_stability_actions(page)
-    init_switch_wifi_actions(page)
+    if not getattr(page, "_config_common_actions_initialized", False):
+        init_fpga_dropdowns(page)
+        init_connect_type_actions(page)
+        init_system_version_actions(page)
+        setattr(page, "_config_common_actions_initialized", True)
+
+    if _want("stability") and not getattr(page, "_config_stability_actions_initialized", False):
+        init_stability_actions(page)
+        init_switch_wifi_actions(page)
+        setattr(page, "_config_stability_actions_initialized", True)
 
     # Bind declarative view events for the Config page.
-    try:
-        bind_view_events(page, "config", handle_config_event)
-    except Exception:
-        logging.debug("bind_view_events(config) failed", exc_info=True)
+    if not getattr(page, "_config_view_events_bound", False):
+        try:
+            bind_view_events(page, "config", handle_config_event)
+            setattr(page, "_config_view_events_bound", True)
+        except Exception:
+            logging.debug("bind_view_events(config) failed", exc_info=True)
 
 def set_available_pages(page: Any, page_keys: list[str]) -> None:
     """Delegate logical page selection to the Config page implementation."""

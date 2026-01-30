@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence, Dict
+import time
 
 from PyQt5.QtCore import (
     Qt,
@@ -364,21 +365,27 @@ class CaseConfigPage(ConfigView):
     csvFileChanged = pyqtSignal(str)
 
     def __init__(self, on_run_callback) -> None:
+        _t0 = time.perf_counter()
         super().__init__(parent=None)
         self.setObjectName("caseConfigPage")
         self.on_run_callback = on_run_callback
+        print(f"[STARTUP_TIME] CaseConfigPage.__init__ start: 0.000s")
 
         # Backward-compatible attribute: older helpers expect a page.view
         # pointing at the ConfigView instance used for tab switching.
         self.view = self
 
         # Controller responsible for config lifecycle/normalisation.
+        _t = time.perf_counter()
         self.config_ctl = ConfigController(self)
+        print(f"[STARTUP_TIME] CaseConfigPage.ConfigController: {time.perf_counter() - _t:.3f}s")
 
         # Load the persisted tool configuration and restore CSV selection.
         # load_initial_config populates ``self.config`` and, when possible,
         # initialises ``self.selected_csv_path`` from the stored csv_path.
+        _t = time.perf_counter()
         self.config: dict[str, Any] = self.config_ctl.load_initial_config()
+        print(f"[STARTUP_TIME] CaseConfigPage.load_initial_config: {time.perf_counter() - _t:.3f}s")
 
         # Transient state flags used during refreshes and selections.
         # Do not clobber selected_csv_path here so that any value restored
@@ -438,16 +445,23 @@ class CaseConfigPage(ConfigView):
         # refresh_config_page_controls populates field_widgets.
         self._field_map: dict[str, QWidget] = {}
 
-        # Render form fields from YAML and initialise script groups.
-        refresh_config_page_controls(self)
-        initialize_script_config_groups(self)
+        # Render form fields from YAML.
+        _t = time.perf_counter()
+        refresh_config_page_controls(self, panel_keys=("basic", "execution"), clear_existing=True)
+        self._lazy_panels_built: set[str] = {"basic", "execution"}
+        self._script_groups_initialized = False
+        print(f"[STARTUP_TIME] CaseConfigPage.refresh_controls: {time.perf_counter() - _t:.3f}s")
         # Bind UI events via the adapter so that all interactions flow
         # into a unified UiEvent pipeline handled by the controller.
         self._ui_adapter = UiAdapter(self, self._emit_ui_event)
         try:
+            _t = time.perf_counter()
             self._ui_adapter.bind_all()
+            print(f"[STARTUP_TIME] CaseConfigPage.UiAdapter.bind_all: {time.perf_counter() - _t:.3f}s")
         except Exception:
             self._ui_adapter = None
+
+        self.stack.currentChanged.connect(self._on_config_tab_changed)
 
         # ------------------------------------------------------------------
         # Simple rules integration
@@ -465,10 +479,12 @@ class CaseConfigPage(ConfigView):
 
         # Initialise case tree using src/test as root (non-fatal on failure).
         try:
+            _t = time.perf_counter()
             base = Path(self.config_ctl.get_application_base())
             test_root = base / "test"
             if test_root.exists():
                 self.config_ctl.init_case_tree(test_root)
+            print(f"[STARTUP_TIME] CaseConfigPage.init_case_tree: {time.perf_counter() - _t:.3f}s")
         except Exception:
             pass
 
@@ -476,12 +492,16 @@ class CaseConfigPage(ConfigView):
         try:
             from src.ui.model.rules import evaluate_all_rules
 
+            _t = time.perf_counter()
             evaluate_all_rules(self, None)
+            print(f"[STARTUP_TIME] CaseConfigPage.evaluate_all_rules: {time.perf_counter() - _t:.3f}s")
         except Exception:
             pass
 
         # CSV/router updates.
+        _t = time.perf_counter()
         self.config_ctl.update_csv_options()
+        print(f"[STARTUP_TIME] CaseConfigPage.update_csv_options: {time.perf_counter() - _t:.3f}s")
 
         # Connect signals after UI ready.
         self.case_tree.setFocusPolicy(Qt.FocusPolicy.NoFocus)
@@ -489,6 +509,27 @@ class CaseConfigPage(ConfigView):
             0,
             lambda: apply_ui(self, getattr(self, "_current_case_path", "") or ""),
         )
+        print(f"[STARTUP_TIME] CaseConfigPage.__init__ end: {time.perf_counter() - _t0:.3f}s")
+
+    def _on_config_tab_changed(self, index: int) -> None:
+        keys = getattr(self, "_current_page_keys", []) or []
+        if not (0 <= index < len(keys)):
+            return
+        self._ensure_panel_built(str(keys[index]))
+
+    def _ensure_panel_built(self, key: str) -> None:
+        if not key or key in getattr(self, "_lazy_panels_built", set()):
+            return
+        refresh_config_page_controls(self, panel_keys=(key,), clear_existing=False)
+        if key == "stability" and not getattr(self, "_script_groups_initialized", False):
+            initialize_script_config_groups(self)
+            self._script_groups_initialized = True
+        if self._ui_adapter is not None:
+            try:
+                self._ui_adapter.bind_all()
+            except Exception:
+                pass
+        self._lazy_panels_built.add(key)
 
     # ------------------------------------------------------------------
     # UiAdapter integration

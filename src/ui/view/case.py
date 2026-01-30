@@ -17,6 +17,7 @@ from __future__ import annotations
 import logging
 from contextlib import ExitStack, suppress
 import csv
+import time
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -56,14 +57,24 @@ class RvrWifiConfigPage(CardWidget):
     dataChanged = pyqtSignal()
 
     def __init__(self) -> None:
+        _t0 = time.perf_counter()
         super().__init__()
+        print(f"[STARTUP_TIME] RvrWifiConfigPage.__init__ start: 0.000s")
+        _t = time.perf_counter()
         apply_theme(self)
+        print(f"[STARTUP_TIME] RvrWifiConfigPage.apply_theme: {time.perf_counter() - _t:.3f}s")
         self.setObjectName("rvrWifiConfigPage")
 
         # Compute CSV path and load router/rows.
+        _t = time.perf_counter()
         self.csv_path = self._compute_csv_path()
+        print(f"[STARTUP_TIME] RvrWifiConfigPage.compute_csv_path: {time.perf_counter() - _t:.3f}s")
+        _t = time.perf_counter()
         self.router, self.router_name = self._load_router()
+        print(f"[STARTUP_TIME] RvrWifiConfigPage.load_router: {time.perf_counter() - _t:.3f}s")
+        _t = time.perf_counter()
         self.headers, self.rows = self._load_csv()
+        print(f"[STARTUP_TIME] RvrWifiConfigPage.load_csv: {time.perf_counter() - _t:.3f}s")
 
         # Outer layout holds both the RvR Wi‑Fi editor and, for
         # compatibility testcases, a CompatibilityConfigPage that shows
@@ -148,6 +159,7 @@ class RvrWifiConfigPage(CardWidget):
         self.run_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.run_btn.clicked.connect(self._on_run_clicked)
         outer.addWidget(self.run_btn, 0)
+        print(f"[STARTUP_TIME] RvrWifiConfigPage.__init__ end: {time.perf_counter() - _t0:.3f}s")
 
     def set_case_content_visible(self, visible: bool) -> None:
         """Show or hide the RvR Wi-Fi UI for the current case."""

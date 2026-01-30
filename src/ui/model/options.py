@@ -9,7 +9,6 @@ utility modules.
 from __future__ import annotations
 
 from typing import Callable, Iterable, Sequence
-import concurrent.futures
 import socket
 import subprocess
 
@@ -115,37 +114,19 @@ def _iter_ipv4_prefixes() -> list[str]:
     return sorted(prefixes)
 
 
-def _ping_host(ip: str) -> bool:
-    try:
-        proc = subprocess.run(
-            ["ping", "-n", "1", "-w", "150", ip],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="ignore",
-            timeout=2,
-        )
-        return proc.returncode == 0
-    except Exception:
-        return False
-
-
 def _linux_ip_choices() -> Sequence[str]:
-    """Return pingable IPs in each local /24 network."""
+    """Return fast local /24 candidates (no ping scan)."""
 
     prefixes = _iter_ipv4_prefixes()
     if not prefixes:
         return ["No devices"]
-    live: list[str] = []
+
+    candidates: list[str] = []
     for prefix in prefixes:
-        candidates = [f"{prefix}.{i}" for i in range(2, 256)]
-        with concurrent.futures.ThreadPoolExecutor(max_workers=64) as executor:
-            future_map = {executor.submit(_ping_host, ip): ip for ip in candidates}
-            for future in concurrent.futures.as_completed(future_map):
-                ip = future_map[future]
-                if future.result():
-                    live.append(ip)
-    choices = _sorted_unique(live)
+        for suffix in (1, 2, 10, 11, 12, 100, 101, 200):
+            candidates.append(f"{prefix}.{suffix}")
+
+    choices = _sorted_unique(candidates)
     return choices if choices else ["No devices"]
 
 
