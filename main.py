@@ -20,6 +20,7 @@ from pathlib import Path
 import logging
 import os
 import multiprocessing
+import time
 
 from PyQt5.QtWidgets import QApplication
 from qfluentwidgets import setTheme, Theme
@@ -40,15 +41,21 @@ multiprocessing.freeze_support()
 
 
 if __name__ == "__main__":
+    _t0 = time.perf_counter()
     logging.basicConfig(
         level=logging.WARNING,
         format="%(asctime)s - %(levelname)s - %(message)s",
     )
     try:
+        print(f"[STARTUP_TIME] start: 0.000s")
         app = QApplication(sys.argv)
+        print(f"[STARTUP_TIME] QApplication: {time.perf_counter() - _t0:.3f}s")
         setTheme(Theme.DARK)
+        print(f"[STARTUP_TIME] setTheme: {time.perf_counter() - _t0:.3f}s")
         window = MainWindow()
+        print(f"[STARTUP_TIME] MainWindow(): {time.perf_counter() - _t0:.3f}s")
         window.show()
+        print(f"[STARTUP_TIME] show(): {time.perf_counter() - _t0:.3f}s")
         sys.exit(app.exec())
     finally:
         cleanup_temp_dir()

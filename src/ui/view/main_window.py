@@ -12,6 +12,7 @@ from pathlib import Path
 import os
 import traceback
 import logging
+import time
 from contextlib import suppress
 from typing import Annotated
 
@@ -22,6 +23,8 @@ from PyQt5.QtWidgets import (
     QGraphicsOpacityEffect,
     QMenu,
     QMessageBox,
+    QVBoxLayout,
+    QWidget,
 )
 from PyQt5.QtGui import QGuiApplication, QIcon
 from PyQt5.QtCore import (
@@ -34,7 +37,7 @@ from PyQt5.QtCore import (
     Qt,
 )
 import sip
-from qfluentwidgets import FluentIcon, FluentWindow, NavigationItemPosition
+from qfluentwidgets import FluentIcon, FluentWindow, NavigationItemPosition, SubtitleLabel
 
 from src.ui import SIDEBAR_PAGE_LABELS, SIDEBAR_PAGE_KEYS
 from src.ui.view.case import RvrWifiConfigPage
@@ -58,9 +61,6 @@ from src.ui.view.theme import BACKGROUND_COLOR, TEXT_COLOR
 from src.ui.controller.tools_ctl import GlobalToolsController
 from src.ui.view.toolbar.tool_bar import GlobalToolsChrome
 from src.ui.view.titlebar.menu_title_bar import MenuTitleBar
-from src.ui.controller.titlebar.import_ctl import ImportController
-from src.tools.mysql_tool import MySqlClient
-from src.tools.mysql_tool.schema import ensure_report_tables
 
 
 def log_exception(exc_type, exc_value, exc_tb) -> None:
@@ -84,7 +84,10 @@ class MainWindow(FluentWindow):
     """
 
     def __init__(self) -> None:
+        self._startup_t0 = time.perf_counter()
         super().__init__()
+        print(f"[STARTUP_TIME] MainWindow.__init__ start: 0.000s")
+        self._deferred_init_done = False
         self.setTitleBar(MenuTitleBar(self))
         self.setWindowIcon(QIcon("res/logo/wifi.ico"))
         self.setWindowTitle("")
@@ -93,17 +96,18 @@ class MainWindow(FluentWindow):
         height = int(screen.height() * 0.7)
         self.resize(width, height)
         self.setMinimumSize(width, height)
-        # Global tools (toolbar + side panel)
-        tool_specs = load_tools_registry()
-        self._tools_chrome = GlobalToolsChrome(self.stackedWidget, tool_specs)
-        self.global_tools_bar_frame = self._tools_chrome.bar_frame
-        self.global_tools_bar = self._tools_chrome.bar
-        self.global_tools_panel = self._tools_chrome.panel
-        self.global_tools_controller = GlobalToolsController(
-            self, self.global_tools_bar, self.global_tools_panel, tool_specs
-        )
         self.center_window()
-        self.show()
+        print(f"[STARTUP_TIME] MainWindow.geometry: {time.perf_counter() - self._startup_t0:.3f}s")
+
+        self._loading_page = QWidget(self)
+        loading_layout = QVBoxLayout(self._loading_page)
+        loading_layout.setContentsMargins(24, 24, 24, 24)
+        loading_layout.addStretch(1)
+        loading_layout.addWidget(SubtitleLabel("Loading...", self._loading_page), alignment=Qt.AlignCenter)
+        loading_layout.addStretch(1)
+        self.stackedWidget.addWidget(self._loading_page)
+        self.stackedWidget.setCurrentWidget(self._loading_page)
+        print(f"[STARTUP_TIME] MainWindow.loading_page: {time.perf_counter() - self._startup_t0:.3f}s")
 
         self._active_account: dict | None = None
 
@@ -138,15 +142,47 @@ class MainWindow(FluentWindow):
             self.setWindowOpacity(1)
 
         self._show_group.finished.connect(_restore)
+        # Start the animation once the window is shown (see showEvent).
+        print(f"[STARTUP_TIME] MainWindow.__init__ end: {time.perf_counter() - self._startup_t0:.3f}s")
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        if self._deferred_init_done:
+            return
+        self._deferred_init_done = True
         self._show_group.start()
+        print(f"[STARTUP_TIME] MainWindow.showEvent: {time.perf_counter() - self._startup_t0:.3f}s")
+        QTimer.singleShot(0, self._deferred_init)
+
+    def _deferred_init(self) -> None:
+        """Initialize heavyweight UI pieces after the window is visible."""
+        t_step = time.perf_counter()
+        # Global tools (toolbar + side panel)
+        tool_specs = load_tools_registry()
+        print(f"[STARTUP_TIME] load_tools_registry: {time.perf_counter() - t_step:.3f}s")
+        t_step = time.perf_counter()
+        self._tools_chrome = GlobalToolsChrome(self.stackedWidget, tool_specs)
+        print(f"[STARTUP_TIME] GlobalToolsChrome: {time.perf_counter() - t_step:.3f}s")
+        self.global_tools_bar_frame = self._tools_chrome.bar_frame
+        self.global_tools_bar = self._tools_chrome.bar
+        self.global_tools_panel = self._tools_chrome.panel
+        t_step = time.perf_counter()
+        self.global_tools_controller = GlobalToolsController(
+            self, self.global_tools_bar, self.global_tools_panel, tool_specs
+        )
+        print(f"[STARTUP_TIME] GlobalToolsController: {time.perf_counter() - t_step:.3f}s")
 
         # Pages
+        t_step = time.perf_counter()
         self.login_page = CompanyLoginPage(self)
         self.login_page.loginResult.connect(self._on_login_result)
         self.login_page.logoutRequested.connect(self._on_logout_requested)
+        print(f"[STARTUP_TIME] CompanyLoginPage: {time.perf_counter() - t_step:.3f}s")
 
+        t_step = time.perf_counter()
         self.caseConfigPage = CaseConfigPage(self.on_run)
         self.rvr_wifi_config_page = RvrWifiConfigPage()
+        print(f"[STARTUP_TIME] CaseConfigPage+RvrWifiConfigPage: {time.perf_counter() - t_step:.3f}s")
 
         # Keep RvR Wi‑Fi Case page in sync with the selected CSV from
         # the Config page.
@@ -162,6 +198,7 @@ class MainWindow(FluentWindow):
         # Report page (disabled until report_dir created)
         self.report_view = ReportView(self)
         self.report_ctl = ReportController(self.report_view)
+        print(f"[STARTUP_TIME] Pages (run+report): {time.perf_counter() - self._startup_t0:.3f}s")
 
         # Navigation buttons
         # Logical sidebar keys (top -> bottom): account, config, case, run, report, about
@@ -257,15 +294,14 @@ class MainWindow(FluentWindow):
             self.sidebar_nav_buttons["about"]: True,
         }
         self._initialize_login_state()
-
-        self.import_ctl = ImportController(self)
+        self.import_ctl = None
 
         self._menu_actions: dict[str, QAction] = {}
         self._theme_key = "dark"
         self._language_key = "zh"
         self._init_menu_bar()
 
-        QTimer.singleShot(0, self._silent_init_mysql)
+        QTimer.singleShot(500, self._silent_init_mysql)
 
         # Backward compatibility fields
         self._run_nav_button = self.run_nav_button
@@ -279,6 +315,7 @@ class MainWindow(FluentWindow):
         self.setMicaEffectEnabled(True)
         # Position global tools after initial layout
         self._update_global_tools_geometry()
+        print(f"[STARTUP_TIME] MainWindow.deferred_init done: {time.perf_counter() - self._startup_t0:.3f}s")
 
     def _init_menu_bar(self) -> None:
         menu_bar = self.titleBar.menu_bar
@@ -381,6 +418,10 @@ class MainWindow(FluentWindow):
         # DEBUG_MENU: remove later
         print("[DEBUG_MENU] command:", command_id)
         if command_id == "file.import":
+            if self.import_ctl is None:
+                from src.ui.controller.titlebar.import_ctl import ImportController
+
+                self.import_ctl = ImportController(self)
             self.import_ctl.run_import()
             return
         if command_id == "file.export":
@@ -421,6 +462,9 @@ class MainWindow(FluentWindow):
     def _silent_init_mysql(self) -> None:
         """Best-effort MySQL schema initialization without UI prompts."""
         try:
+            from src.tools.mysql_tool import MySqlClient
+            from src.tools.mysql_tool.schema import ensure_report_tables
+
             with MySqlClient() as client:
                 ensure_report_tables(client)
         except Exception:
@@ -805,6 +849,8 @@ class MainWindow(FluentWindow):
 
     def _update_global_tools_geometry(self) -> None:
         """Place the global tools bar and panel relative to the content area."""
+        if not hasattr(self, "_tools_chrome"):
+            return
         self._tools_chrome.update_geometry()
 
     def setCurrentIndex(self, page_widget, ssid: str | None = None, passwd: str | None = None):
