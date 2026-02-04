@@ -161,23 +161,23 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
             ColumnDefinition("brand", "VARCHAR(64) NOT NULL"),
             ColumnDefinition("product_line", "VARCHAR(64) NOT NULL"),
             ColumnDefinition("project_name", "VARCHAR(128) NOT NULL"),
-            ColumnDefinition("hardware_version", "VARCHAR(128) NOT NULL DEFAULT ''"),
             ColumnDefinition("main_chip", "VARCHAR(64)"),
             ColumnDefinition("wifi_module", "VARCHAR(64)"),
             ColumnDefinition("interface", "VARCHAR(64)"),
             ColumnDefinition("ecosystem", "VARCHAR(64)"),
+            ColumnDefinition("mass_production_status", "JSON"),
             ColumnDefinition("payload_json", "JSON"),
         ),
         indexes=(
             TableIndex(
-                "idx_project_identity",
-                "INDEX idx_project_identity (`brand`, `product_line`, `project_name`, `hardware_version`)",
+                "idx_project_name",
+                "INDEX idx_project_name (`project_name`)",
             ),
         ),
         constraints=(
             TableConstraint(
-                "uq_project_identity",
-                "CONSTRAINT uq_project_identity UNIQUE (`brand`, `product_line`, `project_name`, `hardware_version`)",
+                "uq_project_name",
+                "CONSTRAINT uq_project_name UNIQUE (`project_name`)",
             ),
         ),
     ),
@@ -415,11 +415,11 @@ _VIEW_DEFINITIONS: Dict[str, str] = {
             p.brand,
             p.product_line,
             p.project_name,
-            p.hardware_version,
             p.main_chip,
             p.wifi_module,
             p.interface,
             p.ecosystem,
+            p.mass_production_status,
             tr.id AS test_report_id,
             tr.report_name,
             tr.case_path AS report_case_path,
@@ -682,33 +682,33 @@ def ensure_report_tables(client) -> None:
 
 
 def _migrate_project_table(client) -> None:
-    """Migrate legacy project identity constraints to include hardware_version."""
+    """Drop legacy hardware_version column and legacy identity indexes."""
     try:
-        rows = client.query_all("SHOW INDEX FROM `project` WHERE Key_name = %s", ("uq_project_identity",))
+        rows = client.query_all("SHOW COLUMNS FROM `project`")
     except Exception:
-        logging.debug("project: failed to inspect uq_project_identity", exc_info=True)
+        logging.debug("project: failed to inspect columns", exc_info=True)
         return
-    columns = [str(row.get("Column_name") or "") for row in rows if isinstance(row, dict)]
-    if not columns:
-        return
-    if "hardware_version" in columns:
-        return
-    try:
-        client.execute("ALTER TABLE `project` DROP INDEX `uq_project_identity`")
-    except Exception:
-        logging.debug("project: failed to drop legacy uq_project_identity", exc_info=True)
-
-    try:
-        rows = client.query_all("SHOW INDEX FROM `project` WHERE Key_name = %s", ("idx_project_identity",))
-    except Exception:
-        logging.debug("project: failed to inspect idx_project_identity", exc_info=True)
-        return
-    columns = [str(row.get("Column_name") or "") for row in rows if isinstance(row, dict)]
-    if columns and "hardware_version" not in columns:
+    existing = {str(row.get("Field") or "") for row in rows if isinstance(row, dict)}
+    if "hardware_version" in existing:
         try:
-            client.execute("ALTER TABLE `project` DROP INDEX `idx_project_identity`")
+            client.execute("ALTER TABLE `project` DROP COLUMN `hardware_version`")
         except Exception:
-            logging.debug("project: failed to drop legacy idx_project_identity", exc_info=True)
+            logging.debug("project: failed to drop hardware_version column", exc_info=True)
+
+    for index_name in ("uq_project_identity", "idx_project_identity"):
+        try:
+            rows = client.query_all(
+                "SHOW INDEX FROM `project` WHERE Key_name = %s",
+                (index_name,),
+            )
+        except Exception:
+            logging.debug("project: failed to inspect %s", index_name, exc_info=True)
+            continue
+        if rows:
+            try:
+                client.execute(f"ALTER TABLE `project` DROP INDEX `{index_name}`")
+            except Exception:
+                logging.debug("project: failed to drop legacy index %s", index_name, exc_info=True)
 
 
 def _migrate_execution_table(client) -> None:

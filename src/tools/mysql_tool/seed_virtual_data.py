@@ -350,7 +350,6 @@ def _generate_dut_rows(count: int, rng: random.Random) -> Sequence[Sequence[obje
     version_map = {
         "software_version": ["Sahara", "Mirage", "Aurora"],
         "driver_version": ["5.10", "6.3", "7.1"],
-        "hardware_version": ["EVT", "DVT", "PVT"],
         "android_version": ["Android 13", "Android 14", "Android 15"],
         "kernel_version": ["5.10", "5.15", "6.1"],
     }

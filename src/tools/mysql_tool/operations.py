@@ -860,7 +860,7 @@ def _guess_product_by_mapping(
         wifi_module: Optional[str],
         interface: Optional[str],
         main_chip: Optional[str],
-) -> tuple[Optional[str], Optional[str], Optional[str], Optional[dict[str, str]]]:
+) -> tuple[Optional[str], Optional[str], Optional[str], Optional[dict[str, Any]]]:
     """
     Guess product by mapping.
 
@@ -898,7 +898,7 @@ def _guess_product_by_mapping(
     return None, None, None, None
 
 
-def _resolve_wifi_product_details(fpga_section: Any) -> Dict[str, Optional[str]]:
+def _resolve_wifi_product_details(fpga_section: Any) -> Dict[str, Any]:
     """
     Resolve wifi product details.
 
@@ -912,7 +912,7 @@ def _resolve_wifi_product_details(fpga_section: Any) -> Dict[str, Optional[str]]
     Dict[str, Optional[str]]
         A value of type ``Dict[str, Optional[str]]``.
     """
-    details: Dict[str, Optional[str]] = {
+    details: Dict[str, Any] = {
         "customer": None,
         "product_line": None,
         "project": None,
@@ -920,6 +920,7 @@ def _resolve_wifi_product_details(fpga_section: Any) -> Dict[str, Optional[str]]
         "wifi_module": None,
         "interface": None,
         "ecosystem": None,
+        "mass_production_status": [],
     }
 
     if isinstance(fpga_section, Mapping):
@@ -931,12 +932,13 @@ def _resolve_wifi_product_details(fpga_section: Any) -> Dict[str, Optional[str]]
             fpga_section.get("wifi_module") or fpga_section.get("series")
         )
         details["interface"] = _normalize_upper_token(fpga_section.get("interface"))
+        details["mass_production_status"] = list(fpga_section.get("mass_production_status") or [])
     else:
         wifi_module, interface = _split_fpga(fpga_section)
         details["wifi_module"] = wifi_module
         details["interface"] = interface
 
-    info: Optional[dict[str, str]] = None
+    info: Optional[dict[str, Any]] = None
     if details["customer"] and details["product_line"] and details["project"]:
         info = (
             WIFI_PRODUCT_PROJECT_MAP.get(details["customer"], {})
@@ -978,6 +980,8 @@ def _resolve_wifi_product_details(fpga_section: Any) -> Dict[str, Optional[str]]
             details["interface"] = _normalize_upper_token(info.get("interface"))
         if not details["ecosystem"]:
             details["ecosystem"] = _normalize_upper_token(info.get("ecosystem"))
+        if not details["mass_production_status"]:
+            details["mass_production_status"] = list(info.get("mass_production_status") or [])
 
     return details
 
@@ -985,18 +989,16 @@ def _resolve_wifi_product_details(fpga_section: Any) -> Dict[str, Optional[str]]
 def _build_project_payload(config: Mapping[str, Any]) -> Dict[str, Any]:
     fpga_section = _extract_first(config, "project", "fpga")
     wifi_details = _resolve_wifi_product_details(fpga_section)
-    hardware_section = _extract_first(config, "hardware_info", "hardware")
-    hardware = hardware_section if isinstance(hardware_section, Mapping) else {}
     payload_json = json.dumps(wifi_details, ensure_ascii=True, separators=(",", ":"))
     return {
         "brand": wifi_details.get("customer"),
         "product_line": wifi_details.get("product_line"),
         "project_name": wifi_details.get("project"),
-        "hardware_version": _extract_first(hardware, "hardware_version") or "",
         "main_chip": wifi_details.get("main_chip"),
         "wifi_module": wifi_details.get("wifi_module"),
         "interface": wifi_details.get("interface"),
         "ecosystem": wifi_details.get("ecosystem"),
+        "mass_production_status": wifi_details.get("mass_production_status") or [],
         "payload_json": payload_json,
     }
 
@@ -1004,15 +1006,17 @@ def _build_project_payload(config: Mapping[str, Any]) -> Dict[str, Any]:
 def ensure_project(client: MySqlClient, project_payload: Mapping[str, Any]) -> int:
     insert_sql = (
         "INSERT INTO `project` "
-        "(`brand`, `product_line`, `project_name`, `hardware_version`, `main_chip`, `wifi_module`, `interface`, `ecosystem`, `payload_json`) "
+        "(`brand`, `product_line`, `project_name`, `main_chip`, `wifi_module`, `interface`, `ecosystem`, `mass_production_status`, `payload_json`) "
         "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) "
         "ON DUPLICATE KEY UPDATE "
         "`id`=LAST_INSERT_ID(`id`), "
-        "`hardware_version`=VALUES(`hardware_version`), "
+        "`brand`=VALUES(`brand`), "
+        "`product_line`=VALUES(`product_line`), "
         "`main_chip`=VALUES(`main_chip`), "
         "`wifi_module`=VALUES(`wifi_module`), "
         "`interface`=VALUES(`interface`), "
         "`ecosystem`=VALUES(`ecosystem`), "
+        "`mass_production_status`=VALUES(`mass_production_status`), "
         "`payload_json`=VALUES(`payload_json`)"
     )
     return client.insert(
@@ -1021,14 +1025,67 @@ def ensure_project(client: MySqlClient, project_payload: Mapping[str, Any]) -> i
             project_payload.get("brand"),
             project_payload.get("product_line"),
             project_payload.get("project_name"),
-            project_payload.get("hardware_version") or "",
             project_payload.get("main_chip"),
             project_payload.get("wifi_module"),
             project_payload.get("interface"),
             project_payload.get("ecosystem"),
+            json.dumps(project_payload.get("mass_production_status") or [], ensure_ascii=False),
             project_payload.get("payload_json"),
         ),
     )
+
+
+_PROJECT_CATALOG_SYNCED = False
+
+
+def sync_project_catalog(client: MySqlClient) -> None:
+    global _PROJECT_CATALOG_SYNCED
+    if _PROJECT_CATALOG_SYNCED:
+        return
+    insert_sql = (
+        "INSERT INTO `project` "
+        "(`brand`, `product_line`, `project_name`, `main_chip`, `wifi_module`, `interface`, `ecosystem`, `mass_production_status`, `payload_json`) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) "
+        "ON DUPLICATE KEY UPDATE "
+        "`brand`=VALUES(`brand`), "
+        "`product_line`=VALUES(`product_line`), "
+        "`main_chip`=VALUES(`main_chip`), "
+        "`wifi_module`=VALUES(`wifi_module`), "
+        "`interface`=VALUES(`interface`), "
+        "`ecosystem`=VALUES(`ecosystem`), "
+        "`mass_production_status`=VALUES(`mass_production_status`), "
+        "`payload_json`=VALUES(`payload_json`)"
+    )
+    rows = []
+    for customer_name, product_lines in WIFI_PRODUCT_PROJECT_MAP.items():
+        for product_line, projects in product_lines.items():
+            for project_name, info in projects.items():
+                payload = {
+                    "customer": _normalize_upper_token(customer_name),
+                    "product_line": _normalize_upper_token(product_line),
+                    "project": _normalize_upper_token(project_name),
+                    "main_chip": _normalize_upper_token(info.get("main_chip")),
+                    "wifi_module": _normalize_upper_token(info.get("wifi_module")),
+                    "interface": _normalize_upper_token(info.get("interface")),
+                    "ecosystem": _normalize_upper_token(info.get("ecosystem")),
+                    "mass_production_status": list(info.get("mass_production_status") or []),
+                }
+                rows.append(
+                    (
+                        payload.get("customer"),
+                        payload.get("product_line"),
+                        payload.get("project"),
+                        payload.get("main_chip"),
+                        payload.get("wifi_module"),
+                        payload.get("interface"),
+                        payload.get("ecosystem"),
+                        json.dumps(payload.get("mass_production_status") or [], ensure_ascii=False),
+                        json.dumps(payload, ensure_ascii=True, separators=(",", ":")),
+                    )
+                )
+    if rows:
+        client.executemany(insert_sql, rows)
+    _PROJECT_CATALOG_SYNCED = True
 
 
 def ensure_test_report(
@@ -1256,6 +1313,7 @@ def sync_configuration(config: dict | None) -> Optional[Any]:
     project_payload = _build_project_payload(config)
     with MySqlClient() as client:
         ensure_report_tables(client)
+        sync_project_catalog(client)
         project_id = ensure_project(client, project_payload)
     return ConfigSyncResult(project_id=project_id)
 
@@ -1366,6 +1424,7 @@ def sync_test_result_to_db(
         with MySqlClient() as client:
             manager = PerformanceTableManager(client)
             manager.ensure_schema_initialized()
+            sync_project_catalog(client)
             affected = manager.replace_with_csv(
                 csv_name=file_path.name,
                 csv_path=str(file_path),
@@ -1410,6 +1469,7 @@ def sync_compatibility_artifacts_to_db(
 
     with MySqlClient() as client:
         ensure_report_tables(client)
+        sync_project_catalog(client)
 
         with open(router_json, "r", encoding="utf-8") as handle:
             router_entries = json.load(handle) or []

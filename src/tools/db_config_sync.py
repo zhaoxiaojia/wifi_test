@@ -404,7 +404,6 @@ class ConfigDatabaseSync:
                 dut_columns = [
                     "software_version",
                     "driver_version",
-                    "hardware_version",
                     "android_version",
                     "kernel_version",
                     "connect_type",
@@ -419,7 +418,6 @@ class ConfigDatabaseSync:
                 dut_values = [
                     dut_payload.get("software_version"),
                     dut_payload.get("driver_version"),
-                    dut_payload.get("hardware_version"),
                     dut_payload.get("android_version"),
                     dut_payload.get("kernel_version"),
                     dut_payload.get("connect_type"),

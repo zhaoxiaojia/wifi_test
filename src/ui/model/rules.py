@@ -901,11 +901,6 @@ CUSTOM_TESTCASE_UI_RULES.append(
                 condition=lambda values: True,
             ),
             SimpleFieldEffect(
-                target_field="hardware_info.hardware_version",
-                action="disable",
-                condition=lambda values: True,
-            ),
-            SimpleFieldEffect(
                 target_field="project.main_chip",
                 action="disable",
                 condition=lambda values: True,

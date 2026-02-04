@@ -464,9 +464,11 @@ class MainWindow(FluentWindow):
         try:
             from src.tools.mysql_tool import MySqlClient
             from src.tools.mysql_tool.schema import ensure_report_tables
+            from src.tools.mysql_tool.operations import sync_project_catalog
 
             with MySqlClient() as client:
                 ensure_report_tables(client)
+                sync_project_catalog(client)
         except Exception:
             logging.debug("Silent MySQL init failed", exc_info=True)
             return

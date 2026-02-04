@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import QFileDialog, QDialog
 from qfluentwidgets import MessageBox
 
 from src.tools.mysql_tool import MySqlClient
-from src.tools.mysql_tool.operations import ensure_project, ensure_test_report
+from src.tools.mysql_tool.operations import ensure_project, ensure_test_report, sync_project_catalog
 from src.tools.mysql_tool.operations import PerformanceTableManager
 from src.tools.mysql_tool.schema import ensure_report_tables
 from src.tools.mysql_tool.sql_writer import SqlWriter
@@ -916,7 +916,6 @@ class ImportController:
             "main_chip": field_widgets["project.main_chip"].text(),
             "wifi_module": field_widgets["project.wifi_module"].text(),
             "interface": field_widgets["project.interface"].text(),
-            "hardware_version": field_widgets["hardware_info.hardware_version"].text(),
             "software_version": field_widgets["software_info.software_version"].text(),
             "driver_version": field_widgets["software_info.driver_version"].text(),
             "android_version": field_widgets["system.version"].currentText(),
@@ -933,7 +932,6 @@ class ImportController:
             "brand": payload.get("brand") or "",
             "product_line": payload.get("product_line") or "",
             "project_name": payload.get("project_name") or "",
-            "hardware_version": payload.get("hardware_version") or "",
             "main_chip": payload.get("main_chip") or "",
             "wifi_module": payload.get("wifi_module") or "",
             "interface": payload.get("interface") or "",
@@ -944,6 +942,7 @@ class ImportController:
 
         with MySqlClient() as client:
             ensure_report_tables(client)
+            sync_project_catalog(client)
             project_id = ensure_project(client, project_payload)
             manager = PerformanceTableManager(client)
             inserted_total = 0
