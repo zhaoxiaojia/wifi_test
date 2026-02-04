@@ -13,14 +13,6 @@ panels:
             label: "Driver Version"
             placeholder: "Driver build"
 
-      - id: hardware_info
-        label: "Hardware Info"
-        fields:
-          - key: hardware_info.hardware_version
-            widget: line_edit
-            label: "Hardware Version"
-            placeholder: "PCB revision / BOM"
-
       - id: system
         label: "System"
         fields:
@@ -76,6 +68,9 @@ panels:
           - key: project.interface
             widget: line_edit
             label: "Interface"
+          - key: project.mass_production_status
+            widget: combo_box
+            label: "Mass Production Status"
 
       - id: serial_port
         label: "Serial Port"

@@ -936,8 +936,8 @@ class RouterConst:
     }
 
 
-# TODO: 后续补充更多产品线和项目映射
-WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, str]]]]] = {
+# TODO: Extend product/project mapping as needed.
+WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]] = {
     "XIAOMI": {
         "TV": {
             "Blueplanet": {
@@ -945,6 +945,7 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, str]]]]]
                 "wifi_module": "W2",
                 "interface": "USB",
                 "ecosystem": "Android",
+                "mass_production_status": ['P0','P1','P1.1','OFFSET_HIGH','OFFSET_LOW','MP'],
             },
         },
         "OTT": {
@@ -953,24 +954,28 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, str]]]]]
                 "wifi_module": "W2",
                 "interface": "USB",
                 "ecosystem": "Android",
+                "mass_production_status": ['P0','P1','P1.1','OFFSET_HIGH','OFFSET_LOW','MP'],
             },
             "OB2": {
                 "main_chip": "905X5M",
                 "wifi_module": "W2",
                 "interface": "USB",
                 "ecosystem": "Android",
+                "mass_production_status": ['P0','P1','P1.1','OFFSET_HIGH','OFFSET_LOW','MP'],
             },
             "OB6": {
                 "main_chip": "905X5M",
                 "wifi_module": "W2",
                 "interface": "USB",
                 "ecosystem": "Android",
+                "mass_production_status": ['P0','P1','P1.1','OFFSET_HIGH','OFFSET_LOW','MP'],
             },
             "OB7": {
                 "main_chip": "S805X3",
                 "wifi_module": "W1U",
                 "interface": "SDIO",
                 "ecosystem": "Android",
+                "mass_production_status": ['P0','P1','P1.1','OFFSET_HIGH','OFFSET_LOW','MP'],
             },
         },
     },
@@ -981,12 +986,14 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, str]]]]]
                 "wifi_module": "W2L",
                 "interface": "USB",
                 "ecosystem": "Linux",
+                "mass_production_status": [],
             },
             "Roxton": {
                 "main_chip": "T950R4",
                 "wifi_module": "W1U",
                 "interface": "USB",
                 "ecosystem": "Linux",
+                "mass_production_status": [],
             },
         },
     },
@@ -997,6 +1004,7 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, str]]]]]
                 "wifi_module": "W1U",
                 "interface": "USB",
                 "ecosystem": "Android",
+                "mass_production_status": [],
             },
         },
     },
@@ -1007,6 +1015,7 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, str]]]]]
                 "wifi_module": "W2",
                 "interface": "USB",
                 "ecosystem": "Android",
+                "mass_production_status": [],
             },
         },
     },

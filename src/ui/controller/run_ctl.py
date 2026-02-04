@@ -441,6 +441,19 @@ def _extract_project_relative_path(case_path: str) -> Path:
     # 理论上不会执行到这里（因为调用前已判断）
     raise ValueError(f"Path does not contain 'src/test/project': {case_path}")
 
+
+def _find_pytest_root(start_path: Path) -> Path | None:
+    current = start_path.resolve()
+    if current.is_file():
+        current = current.parent
+    for parent in (current, *current.parents):
+        if (parent / "pytest.ini").exists():
+            return parent
+        if (parent / "conftest.py").exists():
+            return parent
+    return None
+
+
 def _init_worker_env(
     case_path: str,
     q: multiprocessing.Queue,
@@ -502,8 +515,9 @@ def _init_worker_env(
         if not absolute_test_path.exists():
             raise FileNotFoundError(f"Test file not found: {absolute_test_path}")
 
+    pytest_rootdir = _find_pytest_root(absolute_test_path) or Path.cwd()
     try:
-        relative_path = absolute_test_path.relative_to(Path.cwd())
+        relative_path = absolute_test_path.relative_to(pytest_rootdir)
         pytest_case_path = str(relative_path).replace("\\", "/")
     except ValueError:
         pytest_case_path = str(absolute_test_path)
@@ -512,7 +526,7 @@ def _init_worker_env(
 
     # --- 构建 pytest 参数 ---
     pytest_args = [
-        "--rootdir=.",
+        f"--rootdir={pytest_rootdir}",
         "--import-mode=importlib",
         f"--resultpath={report_dir}",
         #f"--alluredir={allure_results_dir}",

@@ -59,9 +59,20 @@ def _turntable_model_choices() -> Sequence[str]:
 
 
 def _fpga_customer_choices() -> Sequence[str]:
-    """Return known FPGA customer names from the Wi‑Fi project map."""
+    """Return known FPGA customer names from the Wi-Fi project map."""
 
     return _sorted_unique(WIFI_PRODUCT_PROJECT_MAP.keys())
+
+
+def _mass_production_status_choices() -> Sequence[str]:
+    values: list[str] = []
+    for product_lines in WIFI_PRODUCT_PROJECT_MAP.values():
+        for projects in product_lines.values():
+            for info in projects.values():
+                entries = info.get("mass_production_status") or []
+                for entry in entries:
+                    values.append(str(entry))
+    return _sorted_unique(values)
 
 
 def _adb_device_choices() -> Sequence[str]:
@@ -123,7 +134,7 @@ def _linux_ip_choices() -> Sequence[str]:
 
     candidates: list[str] = []
     for prefix in prefixes:
-        for suffix in (1, 2, 10, 11, 12, 100, 101, 200):
+        for suffix in (2, 10, 11, 12, 100, 101, 166, 200):
             candidates.append(f"{prefix}.{suffix}")
 
     choices = _sorted_unique(candidates)
@@ -143,6 +154,7 @@ _FIELD_CHOICE_SOURCES: dict[str, Callable[[], Sequence[str]]] = {
     # Project / Wi-Fi chipset customer selection (product line / project
     # remain driven by WIFI_PRODUCT_PROJECT_MAP).
     "project.customer": _fpga_customer_choices,
+    "project.mass_production_status": _mass_production_status_choices,
     # Android / Linux connect targets
     "connect_type.Android.device": _adb_device_choices,
     "connect_type.Linux.ip": _linux_ip_choices,

@@ -10,7 +10,7 @@ connect_type:
   Android:
     device: No devices
   Linux:
-    ip: 192.168.1.184
+    ip: 192.168.1.166
     wildcard: ''
   third_party:
     enabled: false
@@ -23,6 +23,7 @@ project:
   main_chip: 905X5M
   wifi_module: W2
   interface: USB
+  mass_production_status: ''
 serial_port:
   baud: '921600'
   port: COM14 (蓝牙链接上的标准串行 (COM14))

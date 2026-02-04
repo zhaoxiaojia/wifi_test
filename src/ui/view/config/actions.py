@@ -1104,6 +1104,16 @@ def update_fpga_hidden_fields(page: Any) -> None:
             return config_ctl.normalize_fpga_token(value)  # type: ignore[attr-defined]
         return str(value or "").strip().upper()
 
+    mass_status: list[str] = []
+    if info:
+        mass_status = [str(v) for v in info.get("mass_production_status") or [] if str(v).strip()]
+    current_status = ""
+    config = getattr(page, "config", None)
+    if isinstance(config, dict):
+        project_cfg = config.get("project") or {}
+        if isinstance(project_cfg, dict):
+            current_status = str(project_cfg.get("mass_production_status") or "").strip()
+
     if product and project and info:
         normalized = {
             "customer": customer,
@@ -1112,7 +1122,12 @@ def update_fpga_hidden_fields(page: Any) -> None:
             "main_chip": _norm(info.get("main_chip")),
             "wifi_module": _norm(info.get("wifi_module")),
             "interface": _norm(info.get("interface")),
+            "mass_production_status": "",
         }
+        if current_status and current_status in mass_status:
+            normalized["mass_production_status"] = current_status
+        elif mass_status:
+            normalized["mass_production_status"] = mass_status[0]
     else:
         normalized = {
             "customer": customer,
@@ -1121,6 +1136,7 @@ def update_fpga_hidden_fields(page: Any) -> None:
             "main_chip": "",
             "wifi_module": "",
             "interface": "",
+            "mass_production_status": "",
         }
 
     setattr(page, "_fpga_details", normalized)
@@ -1166,6 +1182,21 @@ def update_fpga_hidden_fields(page: Any) -> None:
         widget = field_widgets.get(field_key)
         if widget is not None and hasattr(widget, "setText"):
             widget.setText(normalized.get(key, "") or "")
+
+    status_widget = field_widgets.get("project.mass_production_status")
+    if status_widget is not None and hasattr(status_widget, "clear"):
+        status_widget.clear()
+        for item in mass_status:
+            status_widget.addItem(item)
+        if mass_status:
+            target = normalized.get("mass_production_status") or ""
+            if target:
+                try:
+                    status_widget.setCurrentText(target)
+                except Exception:
+                    status_widget.setCurrentIndex(0)
+            else:
+                status_widget.setCurrentIndex(0)
 
 
 def apply_connect_type_ui_state(page: Any, connect_type: str) -> None:
