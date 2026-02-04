@@ -15,13 +15,13 @@ connect_type:
   third_party:
     enabled: false
     wait_seconds: 45
-  type: Linux
+  type: Android
 project:
-  customer: Roku
-  product_line: TV
-  project: Sandia
-  main_chip: TR964
-  wifi_module: W2L
+  customer: XIAOMI
+  product_line: OTT
+  project: OB1
+  main_chip: 905X5M
+  wifi_module: W2
   interface: USB
   mass_production_status: ''
 serial_port:
