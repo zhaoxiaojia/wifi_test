@@ -299,16 +299,12 @@ def write_realtime_compat_csv(csv_path: str):
                 scan_status,
                 connect_status,
                 state["ping"],
-                tx_display,  # TX Result
                 state["tx_channel"],  # Channel
                 state["tx_rssi"],  # RSSI
-                state["tx_criteria"],  # TX Criteria
                 tx_display,  # TX Throughtput(Mbps)
-                rx_display,  # RX Result
-                state["rx_channel"],  # Channel
-                state["rx_rssi"],  # RSSI
+                state["tx_criteria"],  # TX Criteria rx_display,  # RX Result state["rx_channel"],  # Channe state["rx_rssi"],  # RSSI
+                rx_display,  # RX Throughtput(Mbps)
                 state["rx_criteria"],  # RX Criteria
-                rx_display  # RX Throughtput(Mbps)
             ]
             rows.append(row)
 
@@ -322,7 +318,7 @@ def write_realtime_compat_csv(csv_path: str):
             "PDU IP", "PDU Port", "AP Brand", "Band", "Ssid",
             "WiFi Mode", "Bandwidth", "Security",
             "Scan", "Connect", "Ping",
-            "TX Result", "Channel", "RSSI", "TX Criteria", "TX Throughtput(Mbps)",
-            "RX Result", "Channel", "RSSI", "RX Criteria", "RX Throughtput(Mbps)"
+            "Channel", "RSSI",  "TX Throughtput(Mbps)","TX Criteria",
+            "RX Throughtput(Mbps)", "RX Criteria"
         ])
         writer.writerows(rows)
