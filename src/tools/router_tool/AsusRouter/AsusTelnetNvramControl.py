@@ -59,12 +59,15 @@ class AsusTelnetNvramControl(AsusBaseControl):
         '20MHZ': ('0', '20'),
         '40MHZ': ('1', '40'),
         '80MHZ': ('2', '80'),
-        '160MHZ': ('3', '160'),
         '20/40/80MHZ': ('2', '80'),
         '20/40MHZ': ('1', '40'),
-        '20/40/80/160MHZ': ('3', '160'),
+        '20/40/80/160MHZ': ('3', '80'),
     }
 
+    WIRELESS_2 = ['auto', '11n', '11g', '11b', '11ax', 'Legacy']
+    WIRELESS_5 = ['auto', '11a', '11n', '11ac', '11ax', 'Legacy']
+    BANDWIDTH_2 = ['20/40', '20', '40',]
+    
     TELNET_PORT = 23
     TELNET_USER = 'admin'
 
@@ -106,14 +109,13 @@ class AsusTelnetNvramControl(AsusBaseControl):
             self.host,
             self.prompt,
         )
-        if self.router_info in {'asus_88u', 'asus_88u_pro'}:
+        if self.router_info in {'asus_88u', 'asus_88u_pro', 'asus_86u',}:
             self._wl1_bandwidth_map.update({
                 '20MHZ': ('1', '20'),
                 '40MHZ': ('2', '40'),
                 '80MHZ': ('3', '80'),
-                '160MHZ': ('5', '160'),
                 '20/40/80MHZ': ('0', '80'),
-                '20/40/80/160MHZ': ('0', '160'),
+                '20/40/80/160MHZ': ('0', '80'),
             })
 
     def _login(self) -> None:
@@ -458,8 +460,8 @@ class AsusTelnetNvramControl(AsusBaseControl):
             'auto': 'nvram set wl1_11ax=1;nvram set wl1_nmode_x=0;',
             '11a': 'nvram set wl1_11ax=0;nvram set wl1_nmode_x=7;',
             '11n': 'nvram set wl1_11ax=0;nvram set wl1_nmode_x=1;',
-            '11ac': 'nvram set wl1_11ax=0;nvram set wl1_nmode_x=3;',
-            '11ax': 'nvram set wl1_11ax=1;nvram set wl1_nmode_x=0;',
+            '11ac': 'nvram set wl1_11ax=0;nvram set wl1_nmode_x=0;', #3
+            '11ax': 'nvram set wl1_11ax=1;nvram set wl1_nmode_x=9;',
             'Legacy': 'nvram set wl1_he_features=0;nvram set wl1_nmode_x=2;',
         }
         if mode not in self.WIRELESS_5:
@@ -828,3 +830,122 @@ class AsusTelnetNvramControl(AsusBaseControl):
         finally:
             logging.info("Router change_setting cleanup: quit telnet")
             self.quit()
+    
+    def set_hidden_ssid(self, hide_2g: bool = False, hide_5g: bool = False) -> None:
+        """
+        Hiddle 2.4G or 5G SSID
+
+        Parameters
+        ----------
+        hide_2g : bool
+            True means 2.4G SSID（AX86U_24G）
+        hide_5g : bool
+            True means 5G SSID（AX86U_5G）
+        """
+        # hiddle: wlX_closed
+        logging.info(f"set_hidden_ssid called with hide_2g={hide_2g}, hide_5g={hide_5g}")
+        self.telnet_write(f"nvram set wl0_closed={'1' if hide_2g else '0'};")
+        self.telnet_write(f"nvram set wl1_closed={'1' if hide_5g else '0'};")
+
+        # commit
+        self.telnet_write("nvram commit;", wait_prompt=True, timeout=60)
+
+        # restart wireless
+        self.telnet_write("restart_wireless &", wait_prompt=False)
+
+        # wait restart_wireless
+        output = self._wait_restart_wireless_output(timeout=180, idle_window=3)
+        logging.info(
+            "===== restart_wireless output (hidden SSID applied) begin =====\n%s\n===== end =====",
+            output,
+        )
+
+    def set_wep_mode_dual_band(
+            self,
+            key_type: str = '64-bit',
+            wep_key: Optional[str] = None,
+            bands: List[str] = ['2g', '5g']
+    ) -> None:
+        """
+        Configure both 2.4GHz and/or 5GHz Wi-Fi in WEP Shared Key mode.
+
+        Args:
+            key_type: '64-bit' or '128-bit'
+            wep_key: WEP key (10 hex chars for 64-bit, 26 for 128-bit)
+            bands: List of bands to configure, e.g., ['2g'], ['5g'], or ['2g', '5g']
+        """
+        logging.info(f"🔧 Setting WEP mode ({key_type}) on bands: {bands}")
+
+        # Validate inputs
+        crypto_map = {'64-bit': 'wep64', '128-bit': 'wep128'}
+        if key_type not in crypto_map:
+            raise ValueError(f"Unsupported key type: {key_type}. Use '64-bit' or '128-bit'")
+
+        expected_len = 10 if key_type == '64-bit' else 26
+        if wep_key and len(wep_key) != expected_len:
+            raise ValueError(f"WEP key must be {expected_len} hex characters for {key_type}")
+
+        # Map bands to nvram prefixes
+        band_map = {
+            '2g': 'wl0',
+            '5g': 'wl1'
+        }
+
+        # Apply configuration to selected bands
+        for band in bands:
+            if band not in band_map:
+                logging.warning(f"Skipping unsupported band: {band}")
+                continue
+
+            prefix = band_map[band]
+            logging.info(f"  → Configuring {band.upper()} ({prefix})")
+
+            self.telnet_write(f'nvram set {prefix}_auth_mode_x=shared;')
+            self.telnet_write(f'nvram set {prefix}_wep=enabled;')
+            self.telnet_write(f'nvram set {prefix}_crypto={crypto_map[key_type]};')
+            if wep_key:
+                self.telnet_write(f'nvram set {prefix}_wep_key={wep_key};')
+
+        # Commit and restart wireless
+        self.telnet_write('nvram commit;')
+        self.telnet_write('service restart_wireless;')
+
+        logging.info("✅ Dual-band WEP configuration completed")
+
+    def set_pmf(self, band: str, mode: str) -> None:
+        """
+        Set PMF mode for the specified band and immediately commit & apply.
+        This function always commits the change and restarts wireless service.
+        """
+        # --- 参数校验 ---
+        band_map = {'2g': 'wl0', '5g': 'wl1'}
+        wl_prefix = band_map.get(band.lower())
+        if wl_prefix is None:
+            raise ConfigError(f"Invalid band: {band}. Use '2g' or '5g'.")
+
+        pmf_map = {
+            '0': '0', 'disabled': '0',
+            '1': '1', 'optional': '1',
+            '2': '2', 'required': '2'
+        }
+        nvram_value = pmf_map.get(mode.lower())
+        if nvram_value is None:
+            raise ConfigError(f'Invalid PMF mode: {mode}. Use "disabled", "optional", or "required".')
+
+        nvram_key = f'{wl_prefix}_pmf'
+        radio_key = f'{wl_prefix}_radio'
+
+        try:
+            self.telnet_write(f'nvram set {nvram_key}={nvram_value}')
+            self.telnet_write(f'nvram set {radio_key}=1')
+            self.telnet_write('nvram commit')
+            self.telnet_write('restart_wireless')
+
+            logging.info(f"PMF for {band} set to '{mode}' and applied successfully.")
+        except Exception as e:
+            logging.error(f"Failed to set and commit PMF for {band}: {e}")
+            raise
+
+        self.telnet.close()
+        self._logged_in = False
+        time.sleep(10)

@@ -1,6 +1,8 @@
 # src/ui/view/config/function_config_form.py
-from PyQt5.QtWidgets import ( QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QButtonGroup, QListWidget, QTableWidget, QTableWidgetItem, QSpacerItem,
-                              QListWidgetItem, QAbstractItemView, QCheckBox, QSizePolicy, QLabel, QFileDialog, QMessageBox, QPushButton, QHeaderView)
+from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QButtonGroup, QListWidget, QTableWidget,
+                             QTableWidgetItem, QSpacerItem,
+                             QListWidgetItem, QAbstractItemView, QCheckBox, QSizePolicy, QLabel, QFileDialog,
+                             QMessageBox, QPushButton, QHeaderView)
 from qfluentwidgets import PushButton, CardWidget, ComboBox, FluentIcon as FIcon
 from pathlib import Path
 from PyQt5.QtCore import Qt, QEvent, QSize
@@ -18,8 +20,10 @@ from PyQt5.QtCore import Qt, QRect
 from PyQt5.QtGui import QPainter, QColor
 from src.ui.view import FormListPage
 
+
 class FunctionConfigForm(QWidget):
     """STB 功能测试配置表单组件"""
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.test_script_items = []
@@ -35,6 +39,7 @@ class FunctionConfigForm(QWidget):
         self.priority_combo.currentTextChanged.connect(self.apply_filters)
         self.tag_combo.currentTextChanged.connect(self.apply_filters)
         self.module_combo.currentTextChanged.connect(self.apply_filters)
+        self.select_all_checkbox.stateChanged.connect(self._on_select_all_changed)
         self.reset_btn.clicked.connect(self.on_reset_clicked)
 
     def setup_ui(self):
@@ -65,25 +70,33 @@ class FunctionConfigForm(QWidget):
 
         # Filter 总标签
         filter_label = QLabel("Filter:", self)
-        filter_label.setFixedWidth(60)
-        filter_label.setStyleSheet("""
-            font-weight: bold;
-            color: #cccccc;
-            font-size: 10pt;
-        """)
+        filter_label.setFixedWidth(80)
+        filter_label.setFixedHeight(25)
+        LABEL_STYLE = """
+            background-color: #2a2a2a;
+            border: 1px solid #555;
+            border-radius: 4px;
+            padding: 3px 5px;
+            color: white;
+            font-size: 9pt;
+        """
+        filter_label.setStyleSheet(LABEL_STYLE)
         filter_layout.addWidget(filter_label)
         spacer1 = QSpacerItem(20, 0, QSizePolicy.Fixed, QSizePolicy.Minimum)
         filter_layout.addItem(spacer1)
 
         # Priority 组合
         priority_label = QLabel("Priority:", self)
-        priority_label.setStyleSheet("font-weight: bold; color: #cccccc; font-size: 10pt;")
+        # priority_label.setStyleSheet("font-weight: bold; color: #cccccc; font-size: 10pt;")
         priority_label.setFixedWidth(80)
+        priority_label.setFixedHeight(25)
+        priority_label.setStyleSheet(LABEL_STYLE)
         filter_layout.addWidget(priority_label)
 
         self.priority_combo = ComboBox(self)
         self.priority_combo.addItems(["All"])
         self.priority_combo.setFixedWidth(120)
+        self.priority_combo.setFixedHeight(25)
         self.priority_combo.setStyleSheet("""
             background-color: #2a2a2a;
             border: 1px solid #555;
@@ -91,6 +104,7 @@ class FunctionConfigForm(QWidget):
             padding: 3px;
             color: white;
             font-size: 9pt;
+            text-align: left;
         """)
         filter_layout.addWidget(self.priority_combo)
         spacer2 = QSpacerItem(20, 0, QSizePolicy.Fixed, QSizePolicy.Minimum)
@@ -98,13 +112,16 @@ class FunctionConfigForm(QWidget):
 
         # Test_Module 组合
         module_label = QLabel("Module:", self)
-        module_label.setStyleSheet("font-weight: bold; color: #cccccc; font-size: 10pt;")
+        # module_label.setStyleSheet("font-weight: bold; color: #cccccc; font-size: 10pt;")
+        module_label.setStyleSheet(LABEL_STYLE)
         module_label.setFixedWidth(80)
+        module_label.setFixedHeight(25)
         filter_layout.addWidget(module_label)
 
         self.module_combo = ComboBox(self)
         self.module_combo.addItems(["All"])
         self.module_combo.setFixedWidth(120)
+        self.module_combo.setFixedHeight(25)
         self.module_combo.setStyleSheet("""
             background-color: #2a2a2a;
             border: 1px solid #555;
@@ -112,6 +129,7 @@ class FunctionConfigForm(QWidget):
             padding: 3px;
             color: white;
             font-size: 9pt;
+            text-align: left;
         """)
         filter_layout.addWidget(self.module_combo)
         spacer3 = QSpacerItem(20, 0, QSizePolicy.Fixed, QSizePolicy.Minimum)
@@ -119,13 +137,16 @@ class FunctionConfigForm(QWidget):
 
         # Tag 组合
         tag_label = QLabel("Tag:", self)
-        tag_label.setStyleSheet("font-weight: bold; color: #cccccc; font-size: 10pt;")
+        # tag_label.setStyleSheet("font-weight: bold; color: #cccccc; font-size: 10pt;")
+        tag_label.setStyleSheet(LABEL_STYLE)
         tag_label.setFixedWidth(80)
+        tag_label.setFixedHeight(25)
         filter_layout.addWidget(tag_label)
 
         self.tag_combo = ComboBox(self)
         self.tag_combo.addItems(["All"])
         self.tag_combo.setFixedWidth(120)
+        self.tag_combo.setFixedHeight(25)
         self.tag_combo.setStyleSheet("""
             background-color: #2a2a2a;
             border: 1px solid #555;
@@ -133,27 +154,37 @@ class FunctionConfigForm(QWidget):
             padding: 3px;
             color: white;
             font-size: 9pt;
+            text-align: left;
         """)
         filter_layout.addWidget(self.tag_combo)
 
         spacer4 = QSpacerItem(20, 0, QSizePolicy.Fixed, QSizePolicy.Minimum)
         filter_layout.addItem(spacer4)
 
+        # Select All button
+        self.select_all_checkbox = QCheckBox("Select All", self)
+        self.select_all_checkbox.setChecked(True)
+        filter_layout.addWidget(self.select_all_checkbox)
+        self.select_all_checkbox.setFixedWidth(100)
+        self.select_all_checkbox.setFixedHeight(25)
+        spacer = QSpacerItem(12, 0, QSizePolicy.Fixed, QSizePolicy.Minimum)
+        filter_layout.addItem(spacer)
+
         # --- Reset 按钮 ---
         self.reset_btn = PushButton("Reset")
         self.reset_btn.setIcon(FIcon.SYNC.icon())
-        self.reset_btn.setFixedSize(80, 28)  # 宽高
+        self.reset_btn.setFixedSize(80, 20)  # 宽高
         self.reset_btn.setPalette(QPalette(Qt.white))
 
         # --- Save Test Plan 按钮 ---
         self.save_plan_btn = PushButton("Save Test Plan")
         self.save_plan_btn.setIcon(FIcon.SAVE.icon())
-        self.save_plan_btn.setFixedSize(120, 28)
+        self.save_plan_btn.setFixedSize(120, 20)
 
         # --- Load Test Plan 按钮 ---
         self.load_plan_btn = PushButton("Load Test Plan")
         self.load_plan_btn.setIcon(FIcon.FOLDER.icon())
-        self.load_plan_btn.setFixedSize(120, 28)
+        self.load_plan_btn.setFixedSize(120, 20)
         for btn in [self.reset_btn, self.save_plan_btn, self.load_plan_btn]:
             btn.setIconSize(QSize(16, 16))
             btn.setFixedHeight(28)
@@ -164,14 +195,14 @@ class FunctionConfigForm(QWidget):
         self.load_plan_btn.setFixedWidth(160)
 
         filter_layout.addWidget(self.reset_btn)
-        spacer_right5 = QSpacerItem(20, 0, QSizePolicy.Expanding, QSizePolicy.Minimum)
-        filter_layout.addItem(spacer_right5)
+        spacer_right6 = QSpacerItem(20, 0, QSizePolicy.Expanding, QSizePolicy.Minimum)
+        filter_layout.addItem(spacer_right6)
 
         filter_layout.addWidget(self.save_plan_btn)
         filter_layout.addWidget(self.load_plan_btn)
 
         # 右侧伸缩
-        #filter_layout.addStretch(1)
+        # filter_layout.addStretch(1)
 
         card_layout.addLayout(filter_layout)
 
@@ -198,10 +229,10 @@ class FunctionConfigForm(QWidget):
 
         # 设置各列初始宽度
         initial_widths = {
-            "TCID": 200,
+            "TCID": 250,
             "Priority": 150,
             "Tag": 200,
-            "Module": 150,
+            "Module": 160,
             "Description": 400,  # 给描述留足空间
             "Script": 400
         }
@@ -220,7 +251,7 @@ class FunctionConfigForm(QWidget):
         self.load_plan_btn.clicked.connect(self.on_load_plan_clicked)
 
         # 加载文件
-        #self.load_test_files()
+        # self.load_test_files()
 
     def load_test_case_files(self):
         """从 test_config.yaml 加载测试脚本信息并填入 FormListPage"""
@@ -253,7 +284,7 @@ class FunctionConfigForm(QWidget):
             self.list_widget.set_rows([])
             return
 
-        rows = [] # 局部列表用于传给 list_widget
+        rows = []  # 局部列表用于传给 list_widget
         for script in scripts:
             if not isinstance(script, dict):
                 continue
@@ -320,12 +351,12 @@ class FunctionConfigForm(QWidget):
     def load_test_files(self):
         """从 test_config.yaml 加载测试脚本"""
         self.test_script_items = []
-        #self.file_list.clear()
+        # self.file_list.clear()
         # 定位到 project 目录下的 test_config.yaml
         current_file = Path(__file__).resolve()
         src_dir = Path(__file__).parent.parent.parent.parent.resolve()
         config_path = (src_dir / "test" / "project" / "test_config.yaml").resolve()
-        #config_path = Path(r"D:\wifi_test12\src\test\project\test_config.yaml")
+        # config_path = Path(r"D:\wifi_test12\src\test\project\test_config.yaml")
         if not config_path.exists():
             item = QListWidgetItem("❌ test_config.yaml not found!")
             self.file_list.addItem(item)
@@ -355,8 +386,8 @@ class FunctionConfigForm(QWidget):
             if not path or not path.endswith(".py") or not path.startswith("stb/"):
                 print(f"⚠️ Skip invalid path: {path}")
                 continue
-            normalized_path = path.replace("\\", "/")
-            display_path = f"project/{normalized_path}"
+
+            display_path = f"project/{path.replace('\\', '/')}"
             meta = {
                 'display_path': display_path,
                 'priority': priority,
@@ -547,6 +578,39 @@ class FunctionConfigForm(QWidget):
             error_msg = f"Failed to save test plan: {e}"
             print(f"❌ {error_msg}")
             QMessageBox.critical(self, "Save Error", error_msg)
+
+    def _on_select_all_changed(self, state):
+        """Handle 'Select All' checkbox toggle."""
+        check_state = (state == Qt.Checked)
+
+        # update all_rows
+        for row in self.all_rows:
+            row["_checked"] = check_state
+
+        # refresh
+        self.apply_filters()
+
+    def apply_filters(self):
+        """根据 ComboBox 的选择过滤显示行"""
+        selected_priority = self.priority_combo.currentText()
+        selected_module = self.module_combo.currentText()
+        selected_tag = self.tag_combo.currentText()
+
+        filtered_rows = []
+        for row in self.all_rows:
+            # Priority 过滤
+            if selected_priority != "All" and row["Priority"] != selected_priority:
+                continue
+            # Tag 过滤
+            if selected_tag != "All" and row["Tag"] != selected_tag:
+                continue
+            # Module 过滤（字段名必须一致！）
+            if selected_module != "All" and row["Module"] != selected_module:
+                continue
+            filtered_rows.append(row)
+
+        # Update FormListPage
+        self.list_widget.set_rows(filtered_rows)
 
     def on_reset_clicked(self):
         """重置所有筛选条件，并恢复所有用例为勾选状态"""

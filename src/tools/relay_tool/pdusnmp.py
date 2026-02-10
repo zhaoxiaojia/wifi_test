@@ -20,6 +20,7 @@ class power_ctrl(Relay):
 
     SWITCH_CMD = 'snmpset -v1 -c private {} .1.3.6.1.4.1.23280.9.1.2.{} i {}'
     SET_CMD = 'snmpset -v1 -c private {} 1.3.6.1.4.1.23273.4.4{}.0 i 255'
+    Relay_IP = ['192.168.200.3', '192.168.200.4', '192.168.200.5', '192.168.200.6', '192.168.200.7', '192.168.200.8']
 
     def __init__(self, default_port: tuple[str, int] | Sequence[Any] | None = None) -> None:
         """Load SNMP relay config and optional default port.
@@ -132,7 +133,7 @@ class power_ctrl(Relay):
         Returns:
             None
         """
-        for k in ['192.168.200.3', '192.168.200.4', '192.168.200.5', '192.168.200.6']:
+        for k in self.Relay_IP:
             cmd = self.SET_CMD.format(k, 0 if status else 1)
             self.check_output(cmd)
 

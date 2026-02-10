@@ -1,11 +1,15 @@
 # build.spec
 import os
 import sys
+from PyInstaller.utils.hooks import collect_data_files
+
 def get_requirements():
     with open('requirements.txt', 'r', encoding='utf-8') as f:
         return [line.strip().split('==')[0] for line in f if line.strip() and not line.startswith('#')]
 
 requirements = get_requirements()
+u2_datas = collect_data_files('uiautomator2')
+
 a = Analysis(
     ['main.py'],
     pathex=['.'],
@@ -20,7 +24,7 @@ a = Analysis(
         ('config/config_compatibility.yaml', 'config'),
         ('config/config_tool.yaml', 'config'),
         ('config/config_toolbar.yaml', 'config'),
-    ],
+    ] + u2_datas,
     hiddenimports=[
         'PyQt5',
         'PyQt5.QtWidgets',

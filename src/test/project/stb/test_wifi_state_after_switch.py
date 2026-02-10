@@ -15,7 +15,7 @@ TCID = "WiFi-STA-FMN0003"
 @allure.description(
     "1. Disable Wi-Fi and verify no networks are detected. 2. Enable Wi-Fi and verify networks are detected.")
 def test_wifi_state_after_switch(wifi_adb_device):
-    dut, serial, logdir = wifi_adb_device
+    dut, serial, logdir, _  = wifi_adb_device
     all_steps_passed = True
 
     # ==============================

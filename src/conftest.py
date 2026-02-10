@@ -921,5 +921,34 @@ def _update_excel_with_tcid_result(tcid: str, final_status: str, step_details: s
         df.to_excel(excel_path, index=False, engine='openpyxl')
         logging.info(f"✅ Updated Excel for TCID={tcid}: {final_status}")
 
+        # 260210新增：清理 report 目录下的所有 ui_dump_*.xml 文件
+        try:
+            report_dir = os.getenv("PYTEST_REPORT_DIR")
+            if report_dir:
+                report_path = Path(report_dir)
+                if report_path.exists():
+                    for xml_file in report_path.glob("ui_dump_*.xml"):
+                        deleted = False
+                        # 最多重试3次，应对Windows杀软锁定
+                        for attempt in range(3):
+                            try:
+                                xml_file.unlink()
+                                deleted = True
+                                break
+                            except (OSError, PermissionError):
+                                if attempt < 2:
+                                    time.sleep(0.1)  # 等待100ms
+                                else:
+                                    logging.warning(f"Failed to delete UI dump file after retries: {xml_file}")
+                            except FileNotFoundError:
+                                # 文件已被删除，正常情况
+                                deleted = True
+                                break
+                        if deleted:
+                            logging.debug(f"Cleaned up UI dump: {xml_file}")
+        except Exception as e:
+            # 任何清理异常都不应影响主流程
+            logging.debug(f"UI dump cleanup skipped: {e}")
+
     except Exception as e:
         logging.error(f"❌ Failed to update Excel for TCID={tcid}: {e}")
