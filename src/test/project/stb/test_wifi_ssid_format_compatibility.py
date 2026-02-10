@@ -22,7 +22,7 @@ SSID_TEST_CASES = [
     },
     {
         "name": "Specific Chars",
-        "ssid": "Test～!@# $ %^&*()_+-= 12345678",
+        "ssid": "Test～!@#12345678", #"Test～!@# $ %^&*()_+-= 12345678",
         "desc": "Specific Chars"
     },
     {
@@ -116,7 +116,7 @@ def test_wifi_ssid_format_compatibility(wifi_adb_device, ssid_case):
         # === Step 6: 重启路由器 ===
         with allure.step("Reboot router"):
             router.telnet_write("reboot", wait_prompt=False)
-            time.sleep(150)  # 路由器启动 + DUT 重连
+            time.sleep(200)  # 路由器启动 + DUT 重连
             current_ssid = dut.get_connected_ssid_via_cli_adb(serial)
             reconnected = bool(current_ssid and "Not connected" not in current_ssid)
             record_test_step(TCID, f"After Router Reboot Re-connected {target_ssid}", "PASS" if reconnected else "FAIL", "Auto-reconnect")

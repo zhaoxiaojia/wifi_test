@@ -1565,7 +1565,7 @@ class UiAutomationMixin:
                 )
                 # 检查是否收到回复（典型成功输出包含 "bytes from 8.8.8.8"）
                 if "bytes from 8.8.8.8" in output or "64 bytes from" in output:
-                    logging.info("Ping succeeded")
+                    logging.info(f"Ping succeeded, {output}")
                     return True
                 else:
                     logging.warning(f"Ping failed (attempt {attempt + 1}), output:\n{output}")

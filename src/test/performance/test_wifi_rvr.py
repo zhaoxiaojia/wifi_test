@@ -9,7 +9,7 @@ version    : python 3.9
 Description:
 """
 
-import logging
+import logging,time
 
 import pytest
 
@@ -27,8 +27,11 @@ rf_tool = init_rf()
 def setup_router(request):
     router_info = request.param
     router = init_router()
-    common_setup(router, router_info)
     rf_tool.execute_rf_cmd(0)
+    current_value = rf_tool.get_rf_current_value()
+    print(f"[DEBUG_RF] Init setup_attenuation db_set={0} current={current_value}")
+    logging.info("Init attenuation: %s dB", current_value)
+    common_setup(router, router_info)
     connect_status = wait_connect(router_info)
     yield router_info, connect_status
     pytest.dut.kill_iperf()
