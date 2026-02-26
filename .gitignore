@@ -20,9 +20,10 @@ dist/
 
 # Reports / outputs
 report/
+!src/util/report/
+!src/util/report/**
 test_results.csv
 *.xlsx
-*.png
 
 # Secrets
 config/ai_keys.json

@@ -387,7 +387,8 @@ class FunctionConfigForm(QWidget):
                 print(f"⚠️ Skip invalid path: {path}")
                 continue
 
-            display_path = f"project/{path.replace('\\', '/')}"
+            clean_path = path.replace("\\", '/')
+            display_path = f'project/{clean_path}'
             meta = {
                 'display_path': display_path,
                 'priority': priority,

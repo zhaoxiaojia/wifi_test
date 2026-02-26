@@ -1181,6 +1181,8 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
                 "wifi_module": "EA6652",
                 "interface": "USB",
                 "ecosystem": "Android",
+                # Todo
+                "ODM":"",
                 "mass_production_status": ["MP"],
             },
         },
