@@ -14,9 +14,13 @@ TCID = "WiFi-STA-FDF0002"
 @allure.title("Wi-Fi Initial State Validation")
 @allure.description("Reboot DUT, then verify Wi-Fi initial state.")
 def test_wifi_initial_state(wifi_adb_device):
-    dut, serial, logdir = wifi_adb_device
+    dut, serial, logdir, _  = wifi_adb_device
     all_steps_passed = True
     step_results = []
+    # --- Step 0: clear currect connected and save SSID ---
+    UiAutomationMixin._clear_saved_wifi_networks(serial)
+    dut._forget_wifi_via_ui(serial)
+    time.sleep(2)
 
     # ==============================
     # 🔁 STEP 1: Reboot DUT

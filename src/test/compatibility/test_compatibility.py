@@ -21,7 +21,7 @@ _ap_test_state = {}
 _ap_test_lock = threading.Lock()
 _test_metadata_cache = {}
 _metadata_lock = threading.Lock()
-
+_last_known_pc_ip = None
 
 power_delay = power_ctrl()
 # power_delay.shutdown()
@@ -55,15 +55,15 @@ def initialize_all_relays():
     all_relays = temp.ctrl
     temp.shutdown()
 
-    logging.info("🔌 [COMPAT] Powering OFF all relay ports before compatibility tests...")
-    for ip, port in all_relays:
-        pdu = PduSnmpCtrl()
-        try:
-            pdu.switch(ip, port, 0)  # 断电
-            logging.info(f"  → OFF: {ip}:{port}")
-        finally:
-            if hasattr(pdu, 'shutdown'):
-                pdu.shutdown()
+    # logging.info("🔌 [COMPAT] Powering OFF all relay ports before compatibility tests...")
+    # for ip, port in all_relays:
+    #     pdu = PduSnmpCtrl()
+    #     try:
+    #         pdu.switch(ip, port, 0)  # 断电
+    #         logging.info(f"  → OFF: {ip}:{port}")
+    #     finally:
+    #         if hasattr(pdu, 'shutdown'):
+    #             pdu.shutdown()
     logging.info("✅ All relays powered OFF. Ready for compatibility testing.")
     return "PDU initialized"
 
@@ -82,6 +82,9 @@ def power_setting(request):
         ]
         if not info:
             raise RuntimeError(f"Router info not found for ip={ip} port={port}")
+
+        current_ap_key = f"{ip}:{port}"
+        pytest.current_target_ap = current_ap_key
         yield info[0]
     finally:
         logging.info('test done shutdown the router')
@@ -91,25 +94,78 @@ def power_setting(request):
 
 @pytest.fixture(scope='module', autouse=True, params=['2.4G', '5G'], ids=['2.4G', '5G'])
 def router_setting(power_setting, request):
+    global _last_known_pc_ip
+    band = request.param
     if not power_setting:
         raise ValueError("Pls check pdu ip address and router port")
-    try:
-        nic = load_config(refresh=True).get("compatibility", {}).get("nic") or "eth1"
-    except Exception:
-        nic = "eth1"
-    pytest.dut.pc_ip = pytest.host_os.dynamic_flush_network_card(nic)
-    if pytest.dut.pc_ip is None:
-        error_msg = f"Can't get PC IP address on NIC: {nic}"
-        logging.error(error_msg)
-        request.node._store['return_value'] = ("N/A", "N/A", "N/A", "FAIL")
-        request.node._store['compat_compare'] = "FAIL"
-        pytest.fail(f"PC can't get  IP address ")
 
-        assert False, "Can't get pc ip address"
+    current_ap_key = getattr(pytest, 'current_target_ap', 'unknown_ap')
+    # --- 【关键】从全局缓存中读取 *当前 AP* 的已知 IP ---
+    # 我们用一个字典来存储每个 AP 的有效 IP
+    ap_ip_cache = getattr(pytest, '_ap_ip_cache', {})
+    last_known_ip_for_this_ap = ap_ip_cache.get(current_ap_key)
+    pc_ip = None
+    # 获取上一个 AP 的 IP，用于对比
+    last_tested_ap = getattr(pytest, '_last_tested_ap', None)
+    last_ap_ip = ap_ip_cache.get(last_tested_ap) if last_tested_ap else None
+
+    if last_known_ip_for_this_ap:
+        pc_ip = last_known_ip_for_this_ap
+        logging.info(f"[{band}] Reusing cached PC IP for AP {current_ap_key}: {pc_ip}")
+    else:
+        try:
+            nic = load_config(refresh=True).get("compatibility", {}).get("nic") or "eth1"
+        except Exception:
+            nic = "eth1"
+
+        max_retries = 3
+        current_retry = 0
+        pc_ip = None
+
+        while current_retry < max_retries:
+            current_retry += 1
+            logging.info(f"[{band} | {current_ap_key}] Attempt {current_retry}/{max_retries} on NIC: {nic}")
+            pc_ip = pytest.host_os.dynamic_flush_network_card(nic)
+
+            if pc_ip is None:
+                logging.warning(f"[{band}] Failed to get IP...")
+                if current_retry < max_retries:
+                    time.sleep(5)
+                continue
+
+            # --- 【核心逻辑】---
+            # 对于 *同一个 AP*，如果已经有一个有效的 IP，并且新拿到的 IP 和它一样，
+            # 这是完全正常的！直接接受。
+            if last_known_ip_for_this_ap and pc_ip == last_known_ip_for_this_ap:
+                logging.info(f"[{band}] Reusing valid IP for this AP ({current_ap_key}): {pc_ip}")
+                break
+
+            if last_ap_ip and pc_ip == last_ap_ip:
+                logging.warning(
+                    f"[{band}] Got SAME IP ({pc_ip}) as last AP ({last_tested_ap}). "
+                    f"Network may not have switched! Retrying..."
+                )
+                if current_retry < max_retries:
+                    time.sleep(5)
+                continue
+
+            break
+
+        else:
+            pytest.fail(f"[{band}] Failed to get PC IP for AP {current_ap_key}.")
+
+    # --- 【关键】将有效的 IP 缓存到 *当前 AP* 的名下 ---
+    ap_ip_cache[current_ap_key] = pc_ip
+    pytest._ap_ip_cache = ap_ip_cache
+    pytest._last_tested_ap = current_ap_key
+    pytest.dut.pc_ip = pc_ip
+    logging.info(f'✅ [{band}] PC IP for {current_ap_key}: {pc_ip}')
+    logging.info(f'pc_ip {pytest.dut.pc_ip}')
+
+    logging.info(f'✅ [{band}] PC IP for {current_ap_key}: {pc_ip}')
 
     logging.info(f'pc_ip {pytest.dut.pc_ip}')
     router_set = power_setting
-    band = request.param
     expect_tx = perf_handle_expectdata(router_set, band, 'UL', pytest.chip_info)
     expect_rx = perf_handle_expectdata(router_set, band, 'DL', pytest.chip_info)
     router_obj = Router(

@@ -1914,10 +1914,11 @@ class android(linux):
             command += self.CMD_WIFI_HIDE
 
         connect_status = False
-        for _ in range(5):
+        #260209 For DFS channle maybe need over 10 minutes to gets up, need more time to try.
+        for _ in range(30):
             try:
                 self.checkoutput(command)
-                time.sleep(10)
+                time.sleep(15)
                 if lan:
                     if not getattr(self, "ip_target", ""):
                         _ = self.pc_ip

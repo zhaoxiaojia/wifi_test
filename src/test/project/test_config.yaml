@@ -24,3 +24,670 @@ scripts:
       TCID: WiFi-STA-FMN0003
       description: Validate Wi-Fi Scan after WiFi ON/OFF
       Tag: Common Case
+
+    - path: stb/test_wifi_check_mac_address.py
+      priority: P2
+      module: Status Check
+      TCID: WiFi-STA-FDF0004
+      description: Wi-Fi MAC Address Persistence After Reboot
+      Tag: Common Case
+
+    - path: stb/test_wifi_watchdog_recovery.py
+      priority: P2
+      module: Status Check
+      TCID: WiFi-STA-FSR0003
+      description: Wi-Fi Watchdog Recovery with YouTube Playback
+      Tag: Common Case
+
+    - path: stb/test_wifi_ssid_signal.py
+      priority: P1
+      module: Status Check
+      TCID: WiFi-STA-FLST0001
+      description: Wi-Fi SSID List Sorted by Signal Strength
+      Tag: Common Case
+
+    - path: stb/test_wifi_24g_80211b_connectivity.py
+      priority: P2
+      module: Wireless Mode
+      TCID: WiFi-STA-FMD0001
+      description: Wi-Fi 2.4G 802.11b Mode Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_24g_80211g_connectivity.py
+      priority: P2
+      module: Wireless Mode
+      TCID: WiFi-STA-FMD0002
+      description: Wi-Fi 2.4G 802.11g Mode Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_24g_80211n_connectivity.py
+      priority: P0
+      module: Wireless Mode
+      TCID: WiFi-STA-FMD0003
+      description: Wi-Fi 2.4G 802.11n Mode Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_24g_80211bg_mixed_connectivity.py
+      priority: P0
+      module: Wireless Mode
+      TCID: WiFi-STA-FMD0004
+      description: Wi-Fi 2.4G 802.11bg Mode Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_24g_80211bgn_mixed_connectivity.py
+      priority: P2
+      module: Wireless Mode
+      TCID: WiFi-STA-FMD0005
+      description: Wi-Fi 2.4G 802.11bgn Mode Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_24g_80211bgn_ax_mixed_connectivity.py
+      priority: P2
+      module: Wireless Mode
+      TCID: WiFi-STA-FMD0006
+      description: Wi-Fi 2.4G 802.11bgn and AX Mode Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_24g_80211ax_only_connectivity.py
+      priority: P0
+      module: Wireless Mode
+      TCID: WiFi-STA-FMD0007
+      description: Wi-Fi 2.4G 802.11ax Only Mode Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_24g_80211_auto_connectivity.py
+      priority: P0
+      module: Wireless Mode
+      TCID: WiFi-STA-FMD0008
+      description: Wi-Fi 2.4G 802.11 Auto Mode Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_80211n_connectivity.py
+      priority: P0
+      module: Wireless Mode
+      TCID: WiFi-STA-FMD0009
+      description: Wi-Fi 5G 802.11n Mode Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_80211a_connectivity.py
+      priority: P0
+      module: Wireless Mode
+      TCID: WiFi-STA-FMD0010
+      description: Wi-Fi 5G 802.11a Mode Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_80211ac_connectivity.py
+      priority: P0
+      module: Wireless Mode
+      TCID: WiFi-STA-FMD0011
+      description: Wi-Fi 5G 802.11ac Mode Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_80211ax_connectivity.py
+      priority: P0
+      module: Wireless Mode
+      TCID: WiFi-STA-FMD0012
+      description: Wi-Fi 5G 802.11ax Mode Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_80211an_mixed_connectivity.py
+      priority: P0
+      module: Wireless Mode
+      TCID: WiFi-STA-FMD0013
+      description: Wi-Fi 5G 802.11an Mode Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_80211anac_mixed_connectivity.py
+      priority: P0
+      module: Wireless Mode
+      TCID: WiFi-STA-FMD0014
+      description: Wi-Fi 5G 802.11an_ac Mixed Mode Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_80211anacax_mixed_connectivity.py
+      priority: P0
+      module: Wireless Mode
+      TCID: WiFi-STA-FMD0015
+      description: Wi-Fi 5G 802.11an_ac_ax Mixed Mode Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_auto_mode_connectivity.py
+      priority: P0
+      module: Wireless Mode
+      TCID: WiFi-STA-FMD0016
+      description: Wi-Fi 5G Auto Mode Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_24g_channel1_connectivity.py
+      priority: P0
+      module: Channel
+      TCID: WiFi-STA-FCH0001
+      description: Wi-Fi 2.4GHz Channel 1 Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_24g_channel3_connectivity.py
+      priority: P0
+      module: Channel
+      TCID: WiFi-STA-FCH0002
+      description: Wi-Fi 2.4GHz Channel 3 Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_24g_channel6_connectivity.py
+      priority: P0
+      module: Channel
+      TCID: WiFi-STA-FCH0003
+      description: Wi-Fi 2.4GHz Channel 6 Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_24g_channel7_connectivity.py
+      priority: P0
+      module: Channel
+      TCID: WiFi-STA-FCH0004
+      description: Wi-Fi 2.4GHz Channel 7 Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_24g_channel11_connectivity.py
+      priority: P0
+      module: Channel
+      TCID: WiFi-STA-FCH0005
+      description: Wi-Fi 2.4GHz Channel 11 Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_24g_channel14_connectivity.py
+      priority: P2
+      module: Channel
+      TCID: WiFi-STA-FCH0006
+      description: Wi-Fi 2.4GHz Channel 14 Connectivity Test
+      Tag: Japan Only
+
+    - path: stb/test_wifi_5g_channel36_connectivity.py
+      priority: P0
+      module: Channel
+      TCID: WiFi-STA-FCH0007
+      description: Wi-Fi 5GHz Channel 36 Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_channel44_connectivity.py
+      priority: P1
+      module: Channel
+      TCID: WiFi-STA-FCH0008
+      description: Wi-Fi 5GHz Channel 44 Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_channel52_connectivity.py
+      priority: P0
+      module: Channel
+      TCID: WiFi-STA-FCH0009
+      description: Wi-Fi 5GHz Channel 52 Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_channel64_connectivity.py
+      priority: P1
+      module: Channel
+      TCID: WiFi-STA-FCH0010
+      description: Wi-Fi 5GHz Channel 64 Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_channel100_connectivity.py
+      priority: P1
+      module: Channel
+      TCID: WiFi-STA-FCH0011
+      description: Wi-Fi 5GHz Channel 100 Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_channel108_connectivity.py
+      priority: P1
+      module: Channel
+      TCID: WiFi-STA-FCH0012
+      description: Wi-Fi 5GHz Channel 108 Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_channel120_connectivity.py
+      priority: P1
+      module: Channel
+      TCID: WiFi-STA-FCH0013
+      description: Wi-Fi 5GHz Channel 120 Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_channel132_connectivity.py
+      priority: P1
+      module: Channel
+      TCID: WiFi-STA-FCH0014
+      description: Wi-Fi 5GHz Channel 132 Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_channel149_connectivity.py
+      priority: P1
+      module: Channel
+      TCID: WiFi-STA-FCH0015
+      description: Wi-Fi 5GHz Channel 149 Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_channel161_connectivity.py
+      priority: P1
+      module: Channel
+      TCID: WiFi-STA-FCH0016
+      description: Wi-Fi 5GHz Channel 161 Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_channel165_connectivity.py
+      priority: P1
+      module: Channel
+      TCID: WiFi-STA-FCH0017
+      description: Wi-Fi 5GHz Channel 165 Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_80211n_channel36_connectivity.py
+      priority: P0
+      module: Channel
+      TCID: WiFi-STA-FCH0018
+      description: Wi-Fi 5GHz 802.11n Channel 36 Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_80211n_channel44_connectivity.py
+      priority: P1
+      module: Channel
+      TCID: WiFi-STA-FCH0019
+      description: Wi-Fi 5GHz 802.11n Channel 44 Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_80211n_channel52_connectivity.py
+      priority: P0
+      module: Channel
+      TCID: WiFi-STA-FCH0020
+      description: Wi-Fi 5GHz 802.11n Channel 52 Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_80211n_channel64_connectivity.py
+      priority: P1
+      module: Channel
+      TCID: WiFi-STA-FCH0021
+      description: Wi-Fi 5GHz 802.11n Channel 64 Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_80211n_channel100_connectivity.py
+      priority: P1
+      module: Channel
+      TCID: WiFi-STA-FCH0022
+      description: Wi-Fi 5GHz 802.11n Channel 100 Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_80211n_channel108_connectivity.py
+      priority: P1
+      module: Channel
+      TCID: WiFi-STA-FCH0023
+      description: Wi-Fi 5GHz 802.11n Channel 108 Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_80211n_channel120_connectivity.py
+      priority: P1
+      module: Channel
+      TCID: WiFi-STA-FCH0024
+      description: Wi-Fi 5GHz 802.11n Channel 120 Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_80211n_channel132_connectivity.py
+      priority: P1
+      module: Channel
+      TCID: WiFi-STA-FCH0025
+      description: Wi-Fi 5GHz 802.11n Channel 132 Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_80211n_channel149_connectivity.py
+      priority: P0
+      module: Channel
+      TCID: WiFi-STA-FCH0026
+      description: Wi-Fi 5GHz 802.11n Channel 149 Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_80211n_channel161_connectivity.py
+      priority: P1
+      module: Channel
+      TCID: WiFi-STA-FCH0027
+      description: Wi-Fi 5GHz 802.11n Channel 161 Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_80211n_ht20_channel165_connectivity.py
+      priority: P1
+      module: Channel
+      TCID: WiFi-STA-FCH0028
+      description: Wi-Fi 5GHz 802.11n Channel 165 Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_80211ac_channel36_connectivity.py
+      priority: P0
+      module: Channel
+      TCID: WiFi-STA-FCH0029
+      description: Wi-Fi 5GHz 802.11ac Channel 36 Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_80211ac_ht40_channel44_connectivity.py
+      priority: P1
+      module: Channel
+      TCID: WiFi-STA-FCH0030
+      description: Wi-Fi 5GHz 802.11ac HT40 Channel 44 Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_80211ac_ht20_channel52_connectivity.py
+      priority: P0
+      module: Channel
+      TCID: WiFi-STA-FCH0031
+      description: Wi-Fi 5GHz 802.11ac HT20 Channel 52 Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_80211ac_channel64_connectivity.py
+      priority: P1
+      module: Channel
+      TCID: WiFi-STA-FCH0032
+      description: Wi-Fi 5GHz 802.11ac Channel 64 Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_80211ac_channel100_connectivity.py
+      priority: P1
+      module: Channel
+      TCID: WiFi-STA-FCH0033
+      description: Wi-Fi 5GHz 802.11ac Channel 100 Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_80211ac_channel120_connectivity.py
+      priority: P1
+      module: Channel
+      TCID: WiFi-STA-FCH0034
+      description: Wi-Fi 5GHz 802.11ac Channel 120 Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_80211ac_channel132_connectivity.py
+      priority: P1
+      module: Channel
+      TCID: WiFi-STA-FCH0035
+      description: Wi-Fi 5GHz 802.11ac Channel 132 Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_80211ac_channel140_connectivity.py
+      priority: P1
+      module: Channel
+      TCID: WiFi-STA-FCH0036
+      description: Wi-Fi 5GHz 802.11ac Channel 140 Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_80211ac_channel144_connectivity.py
+      priority: P1
+      module: Channel
+      TCID: WiFi-STA-FCH0037
+      description: Wi-Fi 5GHz 802.11ac Channel 144 Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_80211ac_channel149_connectivity.py
+      priority: P0
+      module: Channel
+      TCID: WiFi-STA-FCH0038
+      description: Wi-Fi 5GHz 802.11ac Channel 149 Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_80211ac_channel161_connectivity.py
+      priority: P1
+      module: Channel
+      TCID: WiFi-STA-FCH0039
+      description: Wi-Fi 5GHz 802.11ac Channel 161 Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_80211ac_ht20_channel165_connectivity.py
+      priority: P1
+      module: Channel
+      TCID: WiFi-STA-FCH0040
+      description: Wi-Fi 5GHz 802.11ac HT20 Channel 161 Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_80211ax_channel36_connectivity.py
+      priority: P0
+      module: Channel
+      TCID: WiFi-STA-FCH0041
+      description: Wi-Fi 5GHz 802.11ax Channel 36 Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_80211ax_he40_channel44_connectivity.py
+      priority: P1
+      module: Channel
+      TCID: WiFi-STA-FCH0042
+      description: Wi-Fi 5GHz 802.11ax HE40 Channel 44 Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_80211ax_he20_channel52_connectivity.py
+      priority: P0
+      module: Channel
+      TCID: WiFi-STA-FCH0043
+      description: Wi-Fi 5GHz 802.11ax HE20 Channel 52 Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_80211ax_channel60_connectivity.py
+      priority: P1
+      module: Channel
+      TCID: WiFi-STA-FCH0044
+      description: Wi-Fi 5GHz 802.11ax Channel 60 Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_80211ax_channel64_connectivity.py
+      priority: P1
+      module: Channel
+      TCID: WiFi-STA-FCH0045
+      description: Wi-Fi 5GHz 802.11ax Channel 64 Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_80211ax_channel100_connectivity.py
+      priority: P1
+      module: Channel
+      TCID: WiFi-STA-FCH0046
+      description: Wi-Fi 5GHz 802.11ax Channel 100 Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_80211ax_channel120_connectivity.py
+      priority: P1
+      module: Channel
+      TCID: WiFi-STA-FCH0047
+      description: Wi-Fi 5GHz 802.11ax Channel 120 Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_80211ax_channel132_connectivity.py
+      priority: P1
+      module: Channel
+      TCID: WiFi-STA-FCH0048
+      description: Wi-Fi 5GHz 802.11ax Channel 132 Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_80211ax_channel136_connectivity.py
+      priority: P1
+      module: Channel
+      TCID: WiFi-STA-FCH0049
+      description: Wi-Fi 5GHz 802.11ax Channel 136 Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_80211ax_channel144_connectivity.py
+      priority: P1
+      module: Channel
+      TCID: WiFi-STA-FCH0050
+      description: Wi-Fi 5GHz 802.11ax Channel 144 Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_80211ax_channel149_connectivity.py
+      priority: P0
+      module: Channel
+      TCID: WiFi-STA-FCH0051
+      description: Wi-Fi 5GHz 802.11ax Channel 149 Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_80211ax_channel161_connectivity.py
+      priority: P2
+      module: Channel
+      TCID: WiFi-STA-FCH0052
+      description: Wi-Fi 5GHz 802.11ax Channel 161 Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_80211ax_he20_channel165_connectivity.py
+      priority: P1
+      module: Channel
+      TCID: WiFi-STA-FCH0053
+      description: Wi-Fi 5GHz 802.11ax HE20 Channel 165 Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_multi_channel_rssi_stability.py
+      priority: P0
+      module: Channel
+      TCID: WiFi-STA-FCH0056
+      description: Wi-Fi 5GHz Multi-Channel RSSI Stability Test (CH36 → CH64/100/149/161)
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_80211ax_channel36_bandwidth_switching.py
+      priority: P0
+      module: Bandwidth
+      TCID: WiFi-STA-FBW0001
+      description: Wi-Fi 5GHz 802.11ax Channel 36 Bandwidth Switching (20/40/80MHz) Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_80211ax_channel52_bandwidth_switching.py
+      priority: P0
+      module: Bandwidth
+      TCID: WiFi-STA-FBW0002
+      description: Wi-Fi 5GHz 802.11ax Channel 52 Bandwidth Switching (20/40/80MHz) Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_80211ax_channel100_bandwidth_switching.py
+      priority: P0
+      module: Bandwidth
+      TCID: WiFi-STA-FBW0003
+      description: Wi-Fi 5GHz 802.11ax Channel 100 Bandwidth Switching (20/40/80MHz) Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_80211ax_channel149_bandwidth_switching.py
+      priority: P0
+      module: Bandwidth
+      TCID: WiFi-STA-FBW0004
+      description: Wi-Fi 5GHz 802.11ax Channel 149 Bandwidth Switching (20/40/80MHz) Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_24g_80211n_bandwidth_switch_connectivity.py
+      priority: P0
+      module: Bandwidth
+      TCID: WiFi-STA-FBW0005
+      description: Wi-Fi 2.4GHz 802.11n Bandwidth Switch (Auto/20M/40M) Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_24g_80211ax_bandwidth_switch_connectivity.py
+      priority: P0
+      module: Bandwidth
+      TCID: WiFi-STA-FBW0006
+      description: Wi-Fi 2.4GHz 802.11ax Bandwidth Switch (Auto/20M/40M) Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_80211n_bandwidth_switching_connectivity.py
+      priority: P0
+      module: Bandwidth
+      TCID: WiFi-STA-FBW0007
+      description: Wi-Fi 5GHz 802.11n Bandwidth Switch (Auto/20M/40M) Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_80211ac_bandwidth_switching_connectivity.py
+      priority: P0
+      module: Bandwidth
+      TCID: WiFi-STA-FBW0008
+      description: Wi-Fi 5GHz 802.11ac Bandwidth Switch (Auto/20M/40M) Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_80211ax_bandwidth_switching_connectivity.py
+      priority: P0
+      module: Bandwidth
+      TCID: WiFi-STA-FBW0009
+      description: Wi-Fi 5GHz 802.11ax Bandwidth Switch (Auto/20M/40M) Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_80211ac_vht80_channel_switching_connectivity.py
+      priority: P0
+      module: Bandwidth
+      TCID: WiFi-STA-FBW0010
+      description: Wi-Fi 5GHz 802.11ac VHT80 Channel Switching (CH36/52/100/149) Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_80211ax_he80_channel_switching_connectivity.py
+      priority: P0
+      module: Bandwidth
+      TCID: WiFi-STA-FBW0011
+      description: Wi-Fi 5GHz 802.11ax HE80 Channel Switching (CH36/52/100/149) Connectivity Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_24g_wpa2_aes_connectivity.py
+      priority: P0
+      module: Security Mode
+      TCID: WiFi-STA-FSM00181
+      description: Wi-Fi 2.4G WPA2-PSK & AES  Connectivity Test"
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_wpa2_aes_connectivity.py
+      priority: P0
+      module: Security Mode
+      TCID: WiFi-STA-FSM00182
+      description: Wi-Fi 5G WPA2-PSK & AES  Connectivity Test"
+      Tag: Common Case
+
+    - path: stb/test_wifi_24g_wpa_wpa2_aes_connectivity.py
+      priority: P0
+      module: Security Mode
+      TCID: WiFi-STA-FSM00211
+      description: Wi-Fi 2.4G WPA_WPA2-PSK & AES  Connectivity Test"
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_wpa_wpa2_aes_connectivity.py
+      priority: P0
+      module: Security Mode
+      TCID: WiFi-STA-FSM00212
+      description: Wi-Fi 5G WPA_WPA2-PSK & AES  Connectivity Test"
+      Tag: Common Case
+
+    - path: stb/test_wifi_24g_wpa3_sae_connectivity.py
+      priority: P2
+      module: Security Mode
+      TCID: WiFi-STA-FSM00231
+      description: Wi-Fi 2.4G WPA3 & SAE Connectivity Test"
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_wpa3_sae_connectivity.py
+      priority: P2
+      module: Security Mode
+      TCID: WiFi-STA-FSM00232
+      description: Wi-Fi 5G WPA3 & SAE Connectivity Test"
+      Tag: Common Case
+
+    - path: stb/test_wifi_24g_wpa2_wpa3_sae_connectivity.py
+      priority: P2
+      module: Security Mode
+      TCID: WiFi-STA-FSM00261
+      description: Wi-Fi 2.4G WPA2_WPA3 & SAE Connectivity Test"
+      Tag: Common Case
+
+    - path: stb/test_wifi_5g_wpa2_wpa3_sae_connectivity.py
+      priority: P2
+      module: Security Mode
+      TCID: WiFi-STA-FSM00262
+      description: Wi-Fi 5G WPA2_WPA3 & SAE Connectivity Test"
+      Tag: Common Case
+
+    - path: stb/test_wifi_ssid_format_compatibility.py
+      priority: P0
+      module: SSID
+      TCID: WiFi-STA-FSSID0001
+      description: Wi-Fi SSID Format Compatibility Test
+      Tag: Common Case
+
+    - path: stb/test_wifi_same_ssid_roaming.py
+      priority: P0
+      module: SSID
+      TCID: WiFi-STA-FSSID0002
+      description: Wi-Fi Same SSID Roaming Between 2.4G & 5G
+      Tag: Common Case
+
+#    - path: stb/test_wifi_hidden_ssid_security_modes.py
+#      priority: P1
+#      module: SSID
+#      TCID: WiFi-STA-FSSID0004
+#      description: Wi-Fi Hidden SSID with Security Mode Cycling
+#      Tag: Common Case
+
+

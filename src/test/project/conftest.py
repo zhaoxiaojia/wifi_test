@@ -1,11 +1,11 @@
 # src/test/wifi/conftest.py
 
 import pytest
-import os
+import os,logging,time
 from pathlib import Path
 from src.util.constants import load_config
 from src.tools.connect_tool.duts.android import android
-
+from src.tools.connect_tool.mixins.ui_mixin import UiAutomationMixin
 
 @pytest.fixture
 def wifi_adb_device():
@@ -19,7 +19,7 @@ def wifi_adb_device():
     logdir.mkdir(exist_ok=True)
 
     dut = android(serialnumber=serial, logdir=str(logdir))
-    yield dut, serial, logdir
+    yield dut, serial, logdir, cfg
 
     # Teardown: 回主界面（Wi-Fi 测试通用清理）
-    os.system(f"adb -s {serial} shell input keyevent KEYCODE_HOME")
+    UiAutomationMixin._go_to_home(serial)

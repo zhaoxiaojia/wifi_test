@@ -15,9 +15,13 @@ TCID = "WiFi-STA-FDF0001"
 @allure.title("Wi-Fi Initial State Validation")
 @allure.description("Verify that Wi-Fi is enabled, not connected to any network, and can detect available networks.")
 def test_wifi_initial_state(wifi_adb_device):
-    dut, serial, logdir = wifi_adb_device
+    dut, serial, logdir, _ = wifi_adb_device
     all_steps_passed = True
     step_results = []
+    # --- Step 0: clear currect connected and save SSID ---
+    UiAutomationMixin._clear_saved_wifi_networks(serial)
+    dut._forget_wifi_via_ui(serial)
+    time.sleep(2)
 
     # --- Step 1: Wi-Fi enabled ---
     with allure.step("Check if Wi-Fi is enabled"):
