@@ -25,10 +25,10 @@ rf_tool = init_rf()
 @pytest.fixture(scope="session", params=_test_data, ids=[router_str(i) for i in _test_data])
 @log_fixture_params()
 def setup_router(request):
+    rf_tool.execute_rf_cmd(0)
     router_info = request.param
     router = init_router()
     common_setup(router, router_info)
-    rf_tool.execute_rf_cmd(0)
     connect_status = wait_connect(router_info)
     yield router_info, connect_status
     pytest.dut.kill_iperf()

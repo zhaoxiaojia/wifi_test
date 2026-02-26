@@ -515,7 +515,12 @@ def _init_worker_env(
         if not absolute_test_path.exists():
             raise FileNotFoundError(f"Test file not found: {absolute_test_path}")
 
-    pytest_rootdir = _find_pytest_root(absolute_test_path) or Path.cwd()
+    # Ensure `src/conftest.py` is within the discovery scope so custom options
+    # like `--resultpath/--dut-type/...` are registered.
+    if getattr(sys, "frozen", False):
+        pytest_rootdir = Path(sys._MEIPASS)
+    else:
+        pytest_rootdir = Path(__file__).resolve().parents[3]
     try:
         relative_path = absolute_test_path.relative_to(pytest_rootdir)
         pytest_case_path = str(relative_path).replace("\\", "/")
@@ -819,11 +824,9 @@ class ExcelPlanRunner(QThread):
             self.report_dir_signal.emit(str(self._plan_report_dir))
 
 
-            # 读取 Excel
-            df = pd.read_excel(self.excel_path)
-            if "Script Path" not in df.columns:
-                raise ValueError("Excel file must contain a 'Script Path' column.")
-            script_paths = df["Script Path"].dropna().tolist()
+            from src.util.report.excel.plan import read_script_paths
+
+            script_paths = read_script_paths(self.excel_path)
             total_cases = len(script_paths)
             if total_cases == 0:
                 self.log_signal.emit("<b>No test cases to run.</b>")
@@ -907,10 +910,9 @@ class ExcelPlanRunner(QThread):
         try:
             exit_code = self._current_case_runner.last_exit_code if self._current_case_runner else "N/A"
             print(f"[DEBUG] Row {row_index}: exit_code={exit_code}, status={status}")
+            from src.util.report.excel.plan import update_row_status
 
-            df = pd.read_excel(self.excel_path)
-            df.loc[row_index, "Status"] = status
-            df.to_excel(self.excel_path, index=False, engine='openpyxl')
+            update_row_status(self.excel_path, row_index=row_index, status=status)
         except Exception as e:
             self.log_signal.emit(f"<b style='color:orange;'>Failed to update Excel: {e}</b>")
 

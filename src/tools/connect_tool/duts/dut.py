@@ -450,4 +450,52 @@ class dut(WifiMixin, PerfMixin, SystemMixin, InputMixin, AppMixin, UiAutomationM
             self.freq_num = -1
         return self.rssi_num
 
+    # --- MCS helpers ----------------------------------------------------
+
+    def get_mcs_tx(self):
+        """Return TX MCS/rate info if available for the DUT.
+
+        Template method:
+        - Base class owns retry + error handling + return normalization.
+        - Subclasses override `_get_mcs_tx_impl()` when the command/path differs
+          (e.g. Roku devices that don't support the default iwpriv commands).
+        """
+
+        return self._get_mcs_common(direction="tx")
+
+    def get_mcs_rx(self):
+        """Return RX MCS info if available for the DUT.
+
+        See `get_mcs_tx()` for the template-method contract.
+        """
+
+        return self._get_mcs_common(direction="rx")
+
+    def _get_mcs_common(self, *, direction: str):
+        # Keep this tolerant: MCS is auxiliary metadata; throughput should still
+        # be recorded even when MCS queries fail.
+        impl = self._get_mcs_tx_impl if direction.lower() == "tx" else self._get_mcs_rx_impl
+        for attempt in range(1, 4):
+            try:
+                value = impl()
+            except Exception as exc:
+                logging.debug("Failed to query MCS (%s) attempt=%d: %s", direction, attempt, exc)
+                value = None
+            if value is None:
+                time.sleep(0.2)
+                continue
+            text = str(value).strip()
+            return text if text else None
+        return None
+
+    def _get_mcs_tx_impl(self):
+        """DUT-specific TX MCS implementation hook (override in subclasses)."""
+
+        return self.checkoutput(self.MCS_TX_GET_COMMAND)
+
+    def _get_mcs_rx_impl(self):
+        """DUT-specific RX MCS implementation hook (override in subclasses)."""
+
+        return self.checkoutput(self.MCS_RX_GET_COMMAND)
+
     step = staticmethod(step)

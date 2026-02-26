@@ -384,7 +384,7 @@ def _maybe_generate_project_report() -> None:
     Conditionally generate a Wi‑Fi performance Excel report at session end.
 
     Behavior:
-        - Only runs when pytest.config['project']['customer'] is 'XIAOMI' (case‑insensitive).
+        - Runs for performance sessions when a result CSV is available.
         - If a single Wi‑Fi test type was selected (RVR/RVO/PERFORMANCE), force the
           report to that type for clearer labeling.
 
@@ -394,10 +394,6 @@ def _maybe_generate_project_report() -> None:
     """
     config = getattr(pytest, "config", {}) or {}
     fpga_cfg = config.get("project") or {}
-    customer = str(fpga_cfg.get("customer", "")).strip().upper()
-    if customer != "XIAOMI":
-        return
-
     test_result = getattr(pytest, "testResult", None)
     if test_result is None:
         logging.warning("Skip project report: missing testResult handle")
@@ -417,6 +413,9 @@ def _maybe_generate_project_report() -> None:
 
     logdir = Path(getattr(test_result, "logdir", "") or ".").resolve()
     result_file = Path(getattr(test_result, "log_file", "") or "")
+    if not result_file.exists():
+        logging.warning("Skip project report: result CSV missing (%s)", result_file)
+        return
     software_info = config.get("software_info") or {}
     hardware_info = config.get("hardware_info") or {}
 
@@ -903,22 +902,17 @@ def _update_excel_with_tcid_result(tcid: str, final_status: str, step_details: s
         return
 
     try:
-        # 读取 Excel（确保 TCID 列为字符串）
-        df = pd.read_excel(excel_path, dtype={"TCID": str})
+        from src.util.report.excel.update import update_test_result_by_tcid
 
-        # 查找匹配的 TCID 行（忽略前后空格）
-        mask = df["TCID"].astype(str).str.strip() == tcid.strip()
-        if not mask.any():
+        updated = update_test_result_by_tcid(
+            excel_path,
+            tcid=tcid,
+            final_status=final_status,
+            step_details=str(step_details),
+        )
+        if not updated:
             logging.warning(f"TCID '{tcid}' not found in Excel.")
             return
-
-        # 更新第一匹配行（通常唯一）
-        idx = mask.idxmax()
-        df.loc[idx, "Status"] = final_status
-        df.loc[idx, "Step_Details"] = str(step_details)[:32767]
-
-        # 写回文件（使用 openpyxl 引擎保持格式）
-        df.to_excel(excel_path, index=False, engine='openpyxl')
         logging.info(f"✅ Updated Excel for TCID={tcid}: {final_status}")
 
     except Exception as e:

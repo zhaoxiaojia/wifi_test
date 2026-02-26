@@ -1,6 +1,13 @@
 panels:
   execution:
     sections:
+      - id: lab
+        label: "Lab"
+        fields:
+          - key: lab.name
+            widget: combo_box
+            label: "Lab"
+
       - id: Turntable
         label: "Turntable"
         fields:

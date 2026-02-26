@@ -58,7 +58,7 @@ from src.util.constants import (
     TEST_TYPE_ORDER,
     TEST_TYPE_ORDER_MAP,
 )
-from src.util.rvr_chart_logic import RvrChartLogic
+from src.util.report.rvr_chart_facade import RvrChartLogic
 
 
 class InteractiveChartLabel(QLabel):
@@ -241,7 +241,9 @@ class ReportController(RvrChartLogic, QObject):
         self.file_list.itemSelectionChanged.connect(self._on_file_selected)
 
         self._view_mode: str = "text"  # 'text' or 'chart'
-        self._rvr_last_mtime: float | None = None  # last chart render time
+        # Use (mtime_ns, size) so we still refresh on Windows when timestamp
+        # resolution is coarse and the file is appended rapidly.
+        self._rvr_last_sig: tuple[int, int] | None = None  # last chart render signature
 
         # Track show/hide so we can start/stop tailing.
         self.view.installEventFilter(self)
@@ -286,7 +288,7 @@ class ReportController(RvrChartLogic, QObject):
         if previous is None or p != previous:
             self._stop_tail()
             self._current_file = None
-            self._rvr_last_mtime = None
+            self._rvr_last_sig = None
             self.viewer.clear()
             self.chart_tabs.clear()
             self.viewer_stack.setCurrentWidget(self.viewer)
@@ -405,14 +407,18 @@ class ReportController(RvrChartLogic, QObject):
     def _render_rvr_charts(self, path: Path, fallback_to_text: bool) -> bool:
         """Create/refresh chart tabs for an RVR/RVO file."""
         try:
-            mtime = path.stat().st_mtime
+            stat_result = path.stat()
+            mtime_ns = getattr(stat_result, "st_mtime_ns", None)
+            if mtime_ns is None:
+                mtime_ns = int(stat_result.st_mtime * 1_000_000_000)
+            sig = (int(mtime_ns), int(stat_result.st_size))
         except FileNotFoundError:
             if fallback_to_text:
                 self.viewer_stack.setCurrentWidget(self.viewer)
                 self.viewer.clear()
                 self.viewer.setPlainText("RVR result file not found")
                 self._view_mode = "text"
-                self._rvr_last_mtime = None
+                self._rvr_last_sig = None
             return False
         except Exception as exc:
             logging.exception("Failed to stat RVR file: %s", exc)
@@ -421,7 +427,7 @@ class ReportController(RvrChartLogic, QObject):
                 self.viewer.clear()
                 self.viewer.setPlainText(f"Failed to read RVR file: {exc}")
                 self._view_mode = "text"
-                self._rvr_last_mtime = None
+                self._rvr_last_sig = None
             return False
         charts = self._build_rvr_charts(path)
         if not charts:
@@ -430,7 +436,7 @@ class ReportController(RvrChartLogic, QObject):
                 self.viewer.clear()
                 self.viewer.setPlainText("No RVR data available for charting")
                 self._view_mode = "text"
-                self._rvr_last_mtime = None
+                self._rvr_last_sig = None
             return False
         current_index = self.chart_tabs.currentIndex()
         charts_for_view = [
@@ -445,7 +451,7 @@ class ReportController(RvrChartLogic, QObject):
             for title, widget in charts_for_view:
                 if widget is not None:
                     self.chart_tabs.addTab(widget, title)
-        self._rvr_last_mtime = mtime
+        self._rvr_last_sig = sig
         return True
 
     def _refresh_rvr_charts(self) -> None:
@@ -453,10 +459,14 @@ class ReportController(RvrChartLogic, QObject):
         if not self._current_file or not self._current_file.exists():
             return
         try:
-            mtime = self._current_file.stat().st_mtime
+            stat_result = self._current_file.stat()
+            mtime_ns = getattr(stat_result, "st_mtime_ns", None)
+            if mtime_ns is None:
+                mtime_ns = int(stat_result.st_mtime * 1_000_000_000)
+            sig = (int(mtime_ns), int(stat_result.st_size))
         except Exception:
             return
-        if self._rvr_last_mtime is not None and mtime <= self._rvr_last_mtime:
+        if self._rvr_last_sig is not None and sig <= self._rvr_last_sig:
             return
         self._render_rvr_charts(self._current_file, fallback_to_text=False)
 
@@ -844,7 +854,7 @@ class ReportController(RvrChartLogic, QObject):
         if force_view:
             self.viewer_stack.setCurrentWidget(self.viewer)
             self._view_mode = "text"
-            self._rvr_last_mtime = None
+            self._rvr_last_sig = None
         self._current_file = path
         self.viewer.clear()
         try:

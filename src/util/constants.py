@@ -58,7 +58,9 @@ def get_src_base() -> Path:
     if getattr(sys, "frozen", False):
         if _SRC_TEMP_DIR is None:
             tmp_root = Path(tempfile.mkdtemp(prefix="wifi_src_"))
-            shutil.copytree(Path(sys._MEIPASS) / "src", tmp_root / "src", dirs_exist_ok=True)
+            shutil.copytree(
+                Path(sys._MEIPASS) / "src", tmp_root / "src", dirs_exist_ok=True
+            )
             if str(tmp_root) not in sys.path:
                 sys.path.insert(0, str(tmp_root))
 
@@ -84,6 +86,7 @@ def cleanup_temp_dir() -> None:
 
 class Paths:
     """Project path constants"""
+
     if getattr(sys, "frozen", False):
         # sys.executable points into a temporary _MEI directory; use sys.argv[0] for the real executable path
         BASE_DIR: Final[str] = os.path.dirname(os.path.abspath(sys.argv[0]))
@@ -109,21 +112,23 @@ _DEFAULT_METADATA = {
 BASIC_CONFIG_FILENAME: Final[str] = "config_basic.yaml"
 DUT_CONFIG_FILENAME: Final[str] = BASIC_CONFIG_FILENAME
 EXECUTION_CONFIG_FILENAME: Final[str] = "config_performance.yaml"
-BASIC_SECTION_KEYS: Final[frozenset[str]] = frozenset({
-    "connect_type",
-    # Project / Wi‑Fi chipset configuration (formerly "fpga").
-    "project",
-    "serial_port",
-    "software_info",
-    "hardware_info",
-    # Support both legacy and new naming for the system section.
-    "android_system",
-    "system",
-    "duration_control",
-    "router",
-    # Shared throughput generator configuration.
-    "rvr",
-})
+BASIC_SECTION_KEYS: Final[frozenset[str]] = frozenset(
+    {
+        "connect_type",
+        # Project / Wi‑Fi chipset configuration (formerly "fpga").
+        "project",
+        "serial_port",
+        "software_info",
+        "hardware_info",
+        # Support both legacy and new naming for the system section.
+        "android_system",
+        "system",
+        "duration_control",
+        "router",
+        # Shared throughput generator configuration.
+        "rvr",
+    }
+)
 DUT_SECTION_KEYS = BASIC_SECTION_KEYS
 CONFIG_KEY_ALIASES: Final[dict[str, str]] = {
     "dut": "connect_type",
@@ -137,24 +142,31 @@ TOOLBAR_SECTION_KEY: Final[str] = "toolbar"
 TOOLBAR_CONFIG_FILENAME: Final[str] = "config_toolbar.yaml"
 STABILITY_CONFIG_FILENAME: Final[str] = "config_stability.yaml"
 COMPATIBILITY_CONFIG_FILENAME: Final[str] = "config_compatibility.yaml"
-STABILITY_SECTION_KEYS: Final[frozenset[str]] = frozenset({
-    "stability",
-    "check_point",
-    "cases",
-})
-COMPATIBILITY_SECTION_KEYS: Final[frozenset[str]] = frozenset({
-    "compatibility",
-})
-PERFORMANCE_SECTION_KEYS: Final[frozenset[str]] = frozenset({
-    "Turntable",
-    "rf_solution",
-    "router",
-    "text_case",
-    "debug",
-    "check_point",
-    "cases",
-    "csv_path",
-})
+STABILITY_SECTION_KEYS: Final[frozenset[str]] = frozenset(
+    {
+        "stability",
+        "check_point",
+        "cases",
+    }
+)
+COMPATIBILITY_SECTION_KEYS: Final[frozenset[str]] = frozenset(
+    {
+        "compatibility",
+    }
+)
+PERFORMANCE_SECTION_KEYS: Final[frozenset[str]] = frozenset(
+    {
+        "Turntable",
+        "lab",
+        "rf_solution",
+        "router",
+        "text_case",
+        "debug",
+        "check_point",
+        "cases",
+        "csv_path",
+    }
+)
 
 # UI theme defaults
 FONT_SIZE: Final[int] = 14
@@ -178,11 +190,21 @@ BANDWIDTH_ORDER: Final[tuple[str, ...]] = ("20MHz", "40MHz", "80MHz", "160MHz")
 FREQ_BAND_ORDER: Final[tuple[str, ...]] = ("2.4G", "5G", "6G")
 TEST_TYPE_ORDER: Final[tuple[str, ...]] = ("RVR", "PEAK_THROUGHPUT", "RVO")
 DIRECTION_ORDER: Final[tuple[str, ...]] = ("TX", "RX")
-STANDARD_ORDER_MAP: Final[dict[str, int]] = {value.lower(): index for index, value in enumerate(STANDARD_ORDER)}
-BANDWIDTH_ORDER_MAP: Final[dict[str, int]] = {value.lower(): index for index, value in enumerate(BANDWIDTH_ORDER)}
-FREQ_BAND_ORDER_MAP: Final[dict[str, int]] = {value.lower(): index for index, value in enumerate(FREQ_BAND_ORDER)}
-TEST_TYPE_ORDER_MAP: Final[dict[str, int]] = {value.upper(): index for index, value in enumerate(TEST_TYPE_ORDER)}
-DIRECTION_ORDER_MAP: Final[dict[str, int]] = {value.upper(): index for index, value in enumerate(DIRECTION_ORDER)}
+STANDARD_ORDER_MAP: Final[dict[str, int]] = {
+    value.lower(): index for index, value in enumerate(STANDARD_ORDER)
+}
+BANDWIDTH_ORDER_MAP: Final[dict[str, int]] = {
+    value.lower(): index for index, value in enumerate(BANDWIDTH_ORDER)
+}
+FREQ_BAND_ORDER_MAP: Final[dict[str, int]] = {
+    value.lower(): index for index, value in enumerate(FREQ_BAND_ORDER)
+}
+TEST_TYPE_ORDER_MAP: Final[dict[str, int]] = {
+    value.upper(): index for index, value in enumerate(TEST_TYPE_ORDER)
+}
+DIRECTION_ORDER_MAP: Final[dict[str, int]] = {
+    value.upper(): index for index, value in enumerate(DIRECTION_ORDER)
+}
 
 # Wi-Fi authentication options
 AUTH_OPTIONS: Final[tuple[str, ...]] = (
@@ -226,6 +248,59 @@ TURN_TABLE_MODEL_CHOICES: Final[tuple[str, ...]] = (
     TURN_TABLE_MODEL_OTHER,
 )
 
+# RF solution models and defaults.
+RF_SOLUTION_SECTION_KEY: Final[str] = "rf_solution"
+RF_MODEL_RS232: Final[str] = TURN_TABLE_MODEL_RS232
+RF_MODEL_RADIORACK_4_220: Final[str] = "RADIORACK-4-220"
+RF_MODEL_RC4DAT_8G_95: Final[str] = "RC4DAT-8G-95"
+RF_MODEL_LDA_908V_8: Final[str] = "LDA-908V-8"
+RF_MODEL_CHOICES: Final[tuple[str, ...]] = (
+    RF_MODEL_RADIORACK_4_220,
+    RF_MODEL_RC4DAT_8G_95,
+    RF_MODEL_RS232,
+    RF_MODEL_LDA_908V_8,
+)
+RF_ATTENUATION_MIN_DB: Final[int] = 0
+RF_ATTENUATION_MAX_DB: Final[int] = 110
+
+# Lab selection keys shared between the UI and YAML files.
+LAB_SECTION_KEY: Final[str] = "lab"
+LAB_FIELD_NAME: Final[str] = "name"
+
+# Lab catalog. Each entry defines supported performance capabilities and the
+# fixed equipment models used in that lab. Editable parameters (IP address,
+# attenuation steps, vendor/product IDs, etc.) remain user-controlled via YAML.
+LAB_CATALOG: Final[dict[str, dict[str, Any]]] = {
+    "SH Full-wave anechoic chamber#2": {
+        "capabilities": {"rvr", "rvo", "peak_throughput"},
+        "equipment": {
+            "turntable_model": TURN_TABLE_MODEL_RS232,
+            "rf_model": RF_MODEL_RS232,
+        },
+    },
+    "SH Shielded box": {
+        "capabilities": {"rvr", "peak_throughput"},
+        "equipment": {
+            "turntable_model": None,
+            "rf_model": RF_MODEL_RADIORACK_4_220,
+        },
+    },
+    "SZ Venus": {
+        "capabilities": {"rvo", "rvr", "peak_throughput"},
+        "equipment": {
+            "turntable_model": TURN_TABLE_MODEL_OTHER,
+            "rf_model": RF_MODEL_RADIORACK_4_220,
+        },
+    },
+    "SZ Shielded box": {
+        "capabilities": {"rvr", "peak_throughput"},
+        "equipment": {
+            "turntable_model": None,
+            "rf_model": RF_MODEL_LDA_908V_8,
+        },
+    },
+}
+
 # Android version defaults
 DEFAULT_ANDROID_VERSION_CHOICES: Final[tuple[str, ...]] = (
     "Android 15",
@@ -243,7 +318,9 @@ ANDROID_KERNEL_MAP: Final[dict[str, str]] = {
     "Android 11": "Kernel 5.4",
     "Android 10": "Kernel 4.14",
 }
-DEFAULT_KERNEL_VERSION_CHOICES: Final[tuple[str, ...]] = tuple(sorted(set(ANDROID_KERNEL_MAP.values())))
+DEFAULT_KERNEL_VERSION_CHOICES: Final[tuple[str, ...]] = tuple(
+    sorted(set(ANDROID_KERNEL_MAP.values()))
+)
 
 # Telnet connection defaults
 DEFAULT_CONNECT_MINWAIT: Final[float] = 0.1
@@ -297,11 +374,11 @@ def _normalize_turntable_section(data: Mapping[str, Any] | None) -> dict[str, An
         or ""
     )
     step_value = source.get("step") or source.get(TURN_TABLE_FIELD_STEP) or ""
-    static_value = source.get("static_db") or source.get(TURN_TABLE_FIELD_STATIC_DB) or ""
+    static_value = (
+        source.get("static_db") or source.get(TURN_TABLE_FIELD_STATIC_DB) or ""
+    )
     target_value = (
-        source.get("target_rssi")
-        or source.get(TURN_TABLE_FIELD_TARGET_RSSI)
-        or ""
+        source.get("target_rssi") or source.get(TURN_TABLE_FIELD_TARGET_RSSI) or ""
     )
 
     model_text = str(model_value).strip() if model_value is not None else ""
@@ -488,14 +565,18 @@ def _read_yaml_dict(path: Path) -> dict[str, Any]:
         return {}
     try:
         content = path.read_text(encoding="utf-8")
-    except Exception as exc:  # pragma: no cover - file permission issues are environment-dependent
+    except (
+        Exception
+    ) as exc:  # pragma: no cover - file permission issues are environment-dependent
         raise RuntimeError(f"Failed to read config file {path}: {exc}") from exc
     try:
         data = yaml.safe_load(content) or {}
     except yaml.YAMLError as exc:
         raise RuntimeError(f"Failed to parse YAML file {path}: {exc}") from exc
     if not isinstance(data, Mapping):
-        raise RuntimeError(f"Config file {path} must contain a mapping, got {type(data).__name__}")
+        raise RuntimeError(
+            f"Config file {path} must contain a mapping, got {type(data).__name__}"
+        )
     return dict(data)
 
 
@@ -649,7 +730,9 @@ def save_config_sections(
     toolbar_path = config_base / TOOLBAR_CONFIG_FILENAME
     _write_yaml_dict(basic_path, _normalize_config_keys_for_save(basic_section))
     _write_yaml_dict(execution_path, _normalize_config_keys_for_save(execution_section))
-    stability_payload = stability_section if isinstance(stability_section, Mapping) else {}
+    stability_payload = (
+        stability_section if isinstance(stability_section, Mapping) else {}
+    )
     _write_yaml_dict(stability_path, stability_payload)
     compatibility_payload = (
         compatibility_section if isinstance(compatibility_section, Mapping) else {}
@@ -697,7 +780,7 @@ def get_telnet_connect_window(
     except Exception:
         logging.debug("Falling back to default telnet wait window", exc_info=True)
         return DEFAULT_CONNECT_MINWAIT, DEFAULT_CONNECT_MAXWAIT
-    connect_cfg = (config.get("connect_type") or {})
+    connect_cfg = config.get("connect_type") or {}
     telnet_cfg = connect_cfg.get("Linux") or connect_cfg.get("telnet") or {}
     minwait = telnet_cfg.get("connect_minwait", DEFAULT_CONNECT_MINWAIT)
     maxwait = telnet_cfg.get("connect_maxwait", DEFAULT_CONNECT_MAXWAIT)
@@ -720,8 +803,6 @@ def get_telnet_connect_window(
         )
         maxwait_val = minwait_val
     return minwait_val, maxwait_val
-
-
 
 
 def _format_timestamp(ts: float | int | None) -> str:
@@ -803,7 +884,9 @@ def _get_git_metadata(repo_path: Path) -> tuple[dict[str, str], list[str]]:
         try:
             info.setdefault(
                 "build_time",
-                datetime.fromisoformat(commit_date.replace("Z", "+00:00")).astimezone().strftime("%Y-%m-%d %H:%M:%S"),
+                datetime.fromisoformat(commit_date.replace("Z", "+00:00"))
+                .astimezone()
+                .strftime("%Y-%m-%d %H:%M:%S"),
             )
         except Exception:
             pass
@@ -829,7 +912,14 @@ def _read_version_file(base_dir: Path) -> tuple[dict[str, str], list[str]]:
             if path.suffix.lower() == ".json":
                 payload = json.loads(path.read_text(encoding="utf-8"))
                 if isinstance(payload, dict):
-                    for key in ("version", "build_time", "commit_hash", "commit_author", "commit_date", "branch"):
+                    for key in (
+                        "version",
+                        "build_time",
+                        "commit_hash",
+                        "commit_author",
+                        "commit_date",
+                        "branch",
+                    ):
                         if key in payload and payload[key]:
                             info[key] = str(payload[key])
             else:
@@ -842,7 +932,14 @@ def _read_version_file(base_dir: Path) -> tuple[dict[str, str], list[str]]:
                         k, v = line.split("=", 1)
                         k = k.strip().lower()
                         v = v.strip()
-                        if k in {"version", "build_time", "commit_hash", "commit_author", "commit_date", "branch"}:
+                        if k in {
+                            "version",
+                            "build_time",
+                            "commit_hash",
+                            "commit_author",
+                            "commit_date",
+                            "branch",
+                        }:
                             info[k] = v
                     elif "version" not in info:
                         info["version"] = line
@@ -874,7 +971,9 @@ def _load_metadata_cache(base_dir: Path) -> dict[str, str] | None:
 def _store_metadata_cache(base_dir: Path, metadata: dict[str, str]) -> None:
     cache_path = _metadata_cache_path(base_dir)
     try:
-        cache_path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
+        cache_path.write_text(
+            json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
     except Exception:
         pass
 
@@ -906,30 +1005,52 @@ def get_build_metadata() -> dict[str, str]:
             sources.append("Cache")
 
     if sources and "Cache" not in sources:
-        _store_metadata_cache(base_dir, {k: v for k, v in metadata.items() if k != "data_source"})
+        _store_metadata_cache(
+            base_dir, {k: v for k, v in metadata.items() if k != "data_source"}
+        )
 
-    metadata["data_source"] = "、".join(dict.fromkeys(sources)) if sources else "Unknown"
+    metadata["data_source"] = (
+        "、".join(dict.fromkeys(sources)) if sources else "Unknown"
+    )
     return metadata
 
 
 class RouterConst:
     """路由器相关常量"""
-    RUN_SETTING_ACTIVITY: Final[str] = 'am start -n com.android.tv.settings/.MainSettings'
+
+    RUN_SETTING_ACTIVITY: Final[str] = (
+        "am start -n com.android.tv.settings/.MainSettings"
+    )
     fields: Final[list[str]] = [
-        'band', 'ssid', 'wireless_mode', 'channel', 'bandwidth', 'security_mode',
-        'password', 'tx', 'rx', 'expected_rate', 'wifi6', 'wep_encrypt',
-        'hide_ssid', 'hide_type', 'wpa_encrypt', 'passwd_index', 'protect_frame',
-        'smart_connect', 'country_code'
+        "band",
+        "ssid",
+        "wireless_mode",
+        "channel",
+        "bandwidth",
+        "security_mode",
+        "password",
+        "tx",
+        "rx",
+        "expected_rate",
+        "wifi6",
+        "wep_encrypt",
+        "hide_ssid",
+        "hide_type",
+        "wpa_encrypt",
+        "passwd_index",
+        "protect_frame",
+        "smart_connect",
+        "country_code",
     ]
     FPGA_CONFIG: Final[dict] = {
-        'W1': {'mimo': '1X1', '2.4G': '11N', '5G': '11AC'},
-        'W1U': {'mimo': '1X1', '2.4G': '11N', '5G': '11AC'},
-        'W2': {'mimo': '2X2', '2.4G': '11AX', '5G': '11AX'},
-        'W2U': {'mimo': '2X2', '2.4G': '11AX', '5G': '11AX'},
-        'W2L': {'mimo': '2X2', '2.4G': '11AX', '5G': '11AX'}
+        "W1": {"mimo": "1X1", "2.4G": "11N", "5G": "11AC"},
+        "W1U": {"mimo": "1X1", "2.4G": "11N", "5G": "11AC"},
+        "W2": {"mimo": "2X2", "2.4G": "11AX", "5G": "11AX"},
+        "W2U": {"mimo": "2X2", "2.4G": "11AX", "5G": "11AX"},
+        "W2L": {"mimo": "2X2", "2.4G": "11AX", "5G": "11AX"},
     }
-    INTERFACE_CONFIG = ['SDIO', 'PCIE', 'USB']
-    dut_wifichip: Final[str] = 'w2_sdio'
+    INTERFACE_CONFIG = ["SDIO", "PCIE", "USB"]
+    dut_wifichip: Final[str] = "w2_sdio"
     DEFAULT_WIRELESS_MODES: Final[dict[str, list[str]]] = {
         "2.4G": ["auto", "11n", "11b", "11g", "11ax"],
         "5G": ["auto", "11n", "11ac", "11ax"],
@@ -945,7 +1066,28 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
                 "wifi_module": "W2",
                 "interface": "USB",
                 "ecosystem": "Android",
-                "mass_production_status": ['P0','P1','P1.1','OFFSET_HIGH','OFFSET_LOW','MP'],
+                "mass_production_status": [
+                    "P0",
+                    "P1",
+                    "P1.1",
+                    "OFFSET_HIGH",
+                    "OFFSET_LOW",
+                    "MP",
+                ],
+            },
+            "Heidi": {
+                "main_chip": "T966D5",
+                "wifi_module": "W2",
+                "interface": "USB",
+                "ecosystem": "Android",
+                "mass_production_status": [
+                    "P0",
+                    "P1",
+                    "P1.1",
+                    "OFFSET_HIGH",
+                    "OFFSET_LOW",
+                    "MP",
+                ],
             },
         },
         "OTT": {
@@ -954,28 +1096,56 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
                 "wifi_module": "W2",
                 "interface": "USB",
                 "ecosystem": "Android",
-                "mass_production_status": ['P0','P1','P1.1','OFFSET_HIGH','OFFSET_LOW','MP'],
+                "mass_production_status": [
+                    "P0",
+                    "P1",
+                    "P1.1",
+                    "OFFSET_HIGH",
+                    "OFFSET_LOW",
+                    "MP",
+                ],
             },
             "OB2": {
                 "main_chip": "905X5M",
                 "wifi_module": "W2",
                 "interface": "USB",
                 "ecosystem": "Android",
-                "mass_production_status": ['P0','P1','P1.1','OFFSET_HIGH','OFFSET_LOW','MP'],
+                "mass_production_status": [
+                    "P0",
+                    "P1",
+                    "P1.1",
+                    "OFFSET_HIGH",
+                    "OFFSET_LOW",
+                    "MP",
+                ],
             },
             "OB6": {
                 "main_chip": "905X5M",
                 "wifi_module": "W2",
                 "interface": "USB",
                 "ecosystem": "Android",
-                "mass_production_status": ['P0','P1','P1.1','OFFSET_HIGH','OFFSET_LOW','MP'],
+                "mass_production_status": [
+                    "P0",
+                    "P1",
+                    "P1.1",
+                    "OFFSET_HIGH",
+                    "OFFSET_LOW",
+                    "MP",
+                ],
             },
             "OB7": {
                 "main_chip": "S805X3",
                 "wifi_module": "W1U",
                 "interface": "SDIO",
                 "ecosystem": "Android",
-                "mass_production_status": ['P0','P1','P1.1','OFFSET_HIGH','OFFSET_LOW','MP'],
+                "mass_production_status": [
+                    "P0",
+                    "P1",
+                    "P1.1",
+                    "OFFSET_HIGH",
+                    "OFFSET_LOW",
+                    "MP",
+                ],
             },
         },
     },
@@ -994,6 +1164,24 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
                 "interface": "USB",
                 "ecosystem": "Linux",
                 "mass_production_status": [],
+            },
+        },
+    },
+    "Hisense": {
+        "TV": {
+            "65D50S": {
+                "main_chip": "T963D4",
+                "wifi_module": "EA6621",
+                "interface": "USB",
+                "ecosystem": "Android",
+                "mass_production_status": ["MP"],
+            },
+            "55A6Q": {
+                "main_chip": "T963D4",
+                "wifi_module": "EA6652",
+                "interface": "USB",
+                "ecosystem": "Android",
+                "mass_production_status": ["MP"],
             },
         },
     },
@@ -1019,12 +1207,12 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
             },
         },
     },
-
 }
 
 
 class RokuConst:
     """Roku 控制常量"""
+
     COMMANDS: Final[dict[str, str]] = {
         # Standard Keys
         "home": "Home",
@@ -1065,5 +1253,8 @@ class RokuConst:
         "poweron": "PowerOn",
     }
     SENSORS: Final[tuple[str, ...]] = (
-        "acceleration", "magnetic", "orientation", "rotation"
+        "acceleration",
+        "magnetic",
+        "orientation",
+        "rotation",
     )

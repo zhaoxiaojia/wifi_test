@@ -1091,14 +1091,29 @@ class roku(linux):
         return True
 
     def _wifi_connect_impl(self, params: WifiConnectParams) -> bool:
-        ip = self.roku.wifi_conn(params.ssid, params.password)
-        if not ip:
-            return False
-        self._refresh_ip(ip)
+        # Todo 逻辑待优化
+        # ip = self.roku.wifi_conn(params.ssid, params.password)
+        # if not ip:
+        #     return False
+        # self._refresh_ip(ip)
         return True
 
     def _wifi_scan_impl(self, ssid: str, *, attempts: int, scan_wait: int, interval: float) -> bool:
         return self.roku.wifi_scan(ssid)
 
     def _wifi_forget_impl(self):
+        return None
+
+    def _get_mcs_tx_impl(self):
+        # Roku devices may not support the default iwpriv commands; the telnet
+        # transport provides the best-effort MCS hooks when available.
+        telnet = getattr(self, "telnet", None)
+        if telnet is not None and hasattr(telnet, "get_mcs_tx"):
+            return telnet.get_mcs_tx()
+        return None
+
+    def _get_mcs_rx_impl(self):
+        telnet = getattr(self, "telnet", None)
+        if telnet is not None and hasattr(telnet, "get_mcs_rx"):
+            return telnet.get_mcs_rx()
         return None

@@ -13,7 +13,7 @@ import pandas as pd
 from matplotlib.lines import Line2D
 
 from src.util.constants import CHART_DPI
-from src.util.rvr_chart_logic import RvrChartLogic
+from src.util.report.rvr_chart_facade import RvrChartLogic
 
 
 class PerformanceRvrChartGenerator(RvrChartLogic):
