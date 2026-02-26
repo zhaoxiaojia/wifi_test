@@ -10,6 +10,12 @@ from urllib.request import urlopen
 import pytest
 
 from src.tools.connect_tool.transports.telnet_tool import TelnetSession
+from src.util.constants import (
+    RF_ATTENUATION_MAX_DB,
+    RF_ATTENUATION_MIN_DB,
+    RF_MODEL_LDA_908V_8,
+    RF_MODEL_RC4DAT_8G_95,
+)
 
 
 class LabDeviceController:
@@ -91,8 +97,8 @@ class LabDeviceController:
         """
         if isinstance(value, int):
             value = str(value)
-        if int(value) < 0 or int(value) > 110:
-            assert 0, 'value must be in range 1-110'
+        if int(value) < RF_ATTENUATION_MIN_DB or int(value) > RF_ATTENUATION_MAX_DB:
+            assert 0, f'value must be in range {RF_ATTENUATION_MIN_DB}-{RF_ATTENUATION_MAX_DB}'
         logging.info(f'Set rf value to {value}')
         print(f"[DEBUG_RF] execute_rf_cmd model={self.model} value={value}")
         action = self._schedule_action(value)
@@ -112,7 +118,7 @@ class LabDeviceController:
         Any
             The result produced by the function.
         """
-        if self.model == 'LDA-908V-8':
+        if self.model == RF_MODEL_LDA_908V_8:
             channels_to_query = self._last_used_channels or self.lda_channels
             results = {}
             for channel in channels_to_query:
@@ -134,7 +140,7 @@ class LabDeviceController:
             if len(results) == 1:
                 return next(iter(results.values()))
             return results
-        if self.model == 'RC4DAT-8G-95':
+        if self.model == RF_MODEL_RC4DAT_8G_95:
             self.tn.write("ATT?;".encode('ascii') + b'\r')
             res = self.tn.read_some().decode('ascii')
             print(f"[DEBUG_RF] RC4DAT ATT? raw={res!r}")
@@ -247,7 +253,7 @@ class LabDeviceController:
 
     def _select_device(self) -> None:
         """Initialise telnet or HTTP controllers based on the configured model."""
-        if self.model == 'LDA-908V-8':
+        if self.model == RF_MODEL_LDA_908V_8:
             lda_config = pytest.config['rf_solution'].get('LDA-908V-8', {})
             raw_channels = lda_config.get('channels')
             if raw_channels is None and 'ports' in lda_config:
@@ -275,9 +281,9 @@ class LabDeviceController:
 
     def _schedule_action(self, value: str):
         """Return a callable that applies attenuation for the current model."""
-        if self.model == 'LDA-908V-8':
+        if self.model == RF_MODEL_LDA_908V_8:
             return lambda: self._apply_lda_attenuation(value)
-        if self.model == 'RC4DAT-8G-95':
+        if self.model == RF_MODEL_RC4DAT_8G_95:
             return lambda: self._write_telnet(f":CHAN:1:2:3:4:SETATT:{value};", read_response=True)
         return lambda: self._write_telnet(f"ATT 1 {value};2 {value};3 {value};4 {value};")
 

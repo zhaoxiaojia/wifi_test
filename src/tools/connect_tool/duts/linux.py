@@ -76,19 +76,30 @@ class linux(dut):
         def telnet_iperf():
             logging.info(f"server telnet command: {command}")
             session = TelnetSession(self.dut_ip, port=23)
-            session.open()
-            session.write(command.encode("ascii") + b"\n")
-            while True:
+            try:
+                session.open()
+                session.write(command.encode("ascii") + b"\n")
+                while True:
+                    try:
+                        chunk = session.read_until(b"\n", timeout=1)
+                    except EOFError:
+                        break
+                    except asyncio.TimeoutError:
+                        # No output yet; keep polling without killing the thread.
+                        continue
+                    except Exception as exc:
+                        logging.debug("iperf server telnet read failed: %s", exc)
+                        break
+                    if not chunk:
+                        continue
+                    line = chunk.decode(encoding, "ignore").strip()
+                    if line:
+                        extend_logs(self.iperf_server_log_list, [line], "iperf server telnet:")
+            finally:
                 try:
-                    chunk = session.read_until(b"\n", timeout=1)
-                except EOFError:
-                    break
-                if not chunk:
-                    continue
-                line = chunk.decode(encoding, "ignore").strip()
-                if line:
-                    extend_logs(self.iperf_server_log_list, [line], "iperf server telnet:")
-            session.close()
+                    session.close()
+                except Exception:
+                    pass
 
         Thread(target=telnet_iperf, daemon=True).start()
         return None

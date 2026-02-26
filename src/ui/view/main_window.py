@@ -163,9 +163,16 @@ class MainWindow(FluentWindow):
         t_step = time.perf_counter()
         self._tools_chrome = GlobalToolsChrome(self.stackedWidget, tool_specs)
         print(f"[STARTUP_TIME] GlobalToolsChrome: {time.perf_counter() - t_step:.3f}s")
+        print(
+            "[DEBUG_TOOLBAR] tools_loaded=%s bar_visible=%s panel_visible=%s"
+            % (len(tool_specs), self._tools_chrome.bar_frame.isVisible(), self._tools_chrome.panel.isVisible())
+        )
         self.global_tools_bar_frame = self._tools_chrome.bar_frame
         self.global_tools_bar = self._tools_chrome.bar
         self.global_tools_panel = self._tools_chrome.panel
+        self.global_tools_bar_frame.show()
+        self.global_tools_bar_frame.raise_()
+        self._update_global_tools_geometry()
         t_step = time.perf_counter()
         self.global_tools_controller = GlobalToolsController(
             self, self.global_tools_bar, self.global_tools_panel, tool_specs
@@ -294,6 +301,15 @@ class MainWindow(FluentWindow):
             self.sidebar_nav_buttons["about"]: True,
         }
         self._initialize_login_state()
+        self._update_global_tools_geometry()
+        print(
+            "[DEBUG_TOOLBAR] after_login_state bar_visible=%s bar_geom=%s content_margins=%s"
+            % (
+                self.global_tools_bar_frame.isVisible(),
+                self.global_tools_bar_frame.geometry(),
+                self.stackedWidget.contentsMargins(),
+            )
+        )
         self.import_ctl = None
 
         self._menu_actions: dict[str, QAction] = {}
@@ -902,6 +918,7 @@ class MainWindow(FluentWindow):
 
         fade_in.finished.connect(_clear_new_effect)
         logging.debug("Switched widget to %s", page_widget)
+        self._update_global_tools_geometry()
 
     # ------------------------------------------------------------------
     # Run orchestration

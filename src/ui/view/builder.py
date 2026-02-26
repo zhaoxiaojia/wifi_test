@@ -17,7 +17,11 @@ from typing import Any, Dict, Mapping
 from PyQt5.QtWidgets import QCheckBox, QGroupBox, QFormLayout, QSpinBox, QWidget, QLabel
 from qfluentwidgets import ComboBox, LineEdit
 
-from src.util.constants import get_model_config_base, get_model_toolbar_base, TURN_TABLE_MODEL_RS232
+from src.util.constants import (
+    RF_MODEL_RS232,
+    get_model_config_base,
+    get_model_toolbar_base,
+)
 from src.ui.model.options import get_field_choices
 from src.ui.view.common import RfStepSegmentsWidget
 
@@ -302,8 +306,8 @@ def build_groups_from_schema(
                     for model_key in rf_cfg.keys()
                     if model_key not in {"model", "step"}
                 ]
-                if TURN_TABLE_MODEL_RS232 not in derived:
-                    derived.append(TURN_TABLE_MODEL_RS232)
+                if RF_MODEL_RS232 not in derived:
+                    derived.append(RF_MODEL_RS232)
                 if derived:
                     choices = sorted(derived)
 

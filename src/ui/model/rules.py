@@ -26,7 +26,13 @@ import os
 
 from PyQt5.QtCore import QSignalBlocker
 
-from src.util.constants import TURN_TABLE_MODEL_OTHER
+from src.util.constants import (
+    LAB_CATALOG,
+    RF_MODEL_LDA_908V_8,
+    RF_MODEL_RADIORACK_4_220,
+    RF_MODEL_RC4DAT_8G_95,
+    TURN_TABLE_MODEL_OTHER,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -72,6 +78,37 @@ def needs_throughput(values: Mapping[str, Any]) -> bool:
         or values.get("testcase.is_stability")
         or values.get("testcase.is_compatibility")
     )
+
+def _current_lab_choices(values: Dict[str, Any]) -> List[str]:
+    if values.get("testcase.is_peak_throughput"):
+        capability = "peak_throughput"
+    elif values.get("testcase.is_rvo"):
+        capability = "rvo"
+    elif values.get("testcase.is_rvr"):
+        capability = "rvr"
+    else:
+        return []
+
+    choices: List[str] = []
+    for name, spec in (LAB_CATALOG or {}).items():
+        caps = spec.get("capabilities") or set()
+        if not capability or capability in caps:
+            choices.append(str(name))
+    return sorted({c for c in choices if str(c).strip()})
+
+
+def _lab_equipment(values: Dict[str, Any]) -> Dict[str, Any]:
+    lab_name = str(values.get("lab.name") or "").strip()
+    spec = (LAB_CATALOG or {}).get(lab_name) or {}
+    equipment = spec.get("equipment") or {}
+    return dict(equipment)
+
+def _normalized_lab_selection(values: Dict[str, Any]) -> str:
+    choices = _current_lab_choices(values)
+    current = str(values.get("lab.name") or "").strip()
+    if current and current in choices:
+        return current
+    return choices[0] if choices else ""
 
 
 def _value_as_bool(values: Dict[str, Any], key: str) -> bool:
@@ -199,64 +236,64 @@ CUSTOM_SIMPLE_UI_RULES.append(
             SimpleFieldEffect(
                 target_field="rf_solution.RC4DAT-8G-95.idVendor",
                 action="show",
-                condition=lambda values: values.get("rf_solution.model") == "RC4DAT-8G-95",
+                condition=lambda values: values.get("rf_solution.model") == RF_MODEL_RC4DAT_8G_95,
             ),
             SimpleFieldEffect(
                 target_field="rf_solution.RC4DAT-8G-95.idVendor",
                 action="hide",
-                condition=lambda values: values.get("rf_solution.model") != "RC4DAT-8G-95",
+                condition=lambda values: values.get("rf_solution.model") != RF_MODEL_RC4DAT_8G_95,
             ),
             SimpleFieldEffect(
                 target_field="rf_solution.RC4DAT-8G-95.idProduct",
                 action="show",
-                condition=lambda values: values.get("rf_solution.model") == "RC4DAT-8G-95",
+                condition=lambda values: values.get("rf_solution.model") == RF_MODEL_RC4DAT_8G_95,
             ),
             SimpleFieldEffect(
                 target_field="rf_solution.RC4DAT-8G-95.idProduct",
                 action="hide",
-                condition=lambda values: values.get("rf_solution.model") != "RC4DAT-8G-95",
+                condition=lambda values: values.get("rf_solution.model") != RF_MODEL_RC4DAT_8G_95,
             ),
             SimpleFieldEffect(
                 target_field="rf_solution.RC4DAT-8G-95.ip_address",
                 action="show",
-                condition=lambda values: values.get("rf_solution.model") == "RC4DAT-8G-95",
+                condition=lambda values: values.get("rf_solution.model") == RF_MODEL_RC4DAT_8G_95,
             ),
             SimpleFieldEffect(
                 target_field="rf_solution.RC4DAT-8G-95.ip_address",
                 action="hide",
-                condition=lambda values: values.get("rf_solution.model") != "RC4DAT-8G-95",
+                condition=lambda values: values.get("rf_solution.model") != RF_MODEL_RC4DAT_8G_95,
             ),
             # RADIORACK-4-220 field
             SimpleFieldEffect(
                 target_field="rf_solution.RADIORACK-4-220.ip_address",
                 action="show",
-                condition=lambda values: values.get("rf_solution.model") == "RADIORACK-4-220",
+                condition=lambda values: values.get("rf_solution.model") == RF_MODEL_RADIORACK_4_220,
             ),
             SimpleFieldEffect(
                 target_field="rf_solution.RADIORACK-4-220.ip_address",
                 action="hide",
-                condition=lambda values: values.get("rf_solution.model") != "RADIORACK-4-220",
+                condition=lambda values: values.get("rf_solution.model") != RF_MODEL_RADIORACK_4_220,
             ),
             # LDA-908V-8 fields
             SimpleFieldEffect(
                 target_field="rf_solution.LDA-908V-8.ip_address",
                 action="show",
-                condition=lambda values: values.get("rf_solution.model") == "LDA-908V-8",
+                condition=lambda values: values.get("rf_solution.model") == RF_MODEL_LDA_908V_8,
             ),
             SimpleFieldEffect(
                 target_field="rf_solution.LDA-908V-8.ip_address",
                 action="hide",
-                condition=lambda values: values.get("rf_solution.model") != "LDA-908V-8",
+                condition=lambda values: values.get("rf_solution.model") != RF_MODEL_LDA_908V_8,
             ),
             SimpleFieldEffect(
                 target_field="rf_solution.LDA-908V-8.channels",
                 action="show",
-                condition=lambda values: values.get("rf_solution.model") == "LDA-908V-8",
+                condition=lambda values: values.get("rf_solution.model") == RF_MODEL_LDA_908V_8,
             ),
             SimpleFieldEffect(
                 target_field="rf_solution.LDA-908V-8.channels",
                 action="hide",
-                condition=lambda values: values.get("rf_solution.model") != "LDA-908V-8",
+                condition=lambda values: values.get("rf_solution.model") != RF_MODEL_LDA_908V_8,
             ),
         ],
     )
@@ -287,6 +324,26 @@ CUSTOM_SIMPLE_UI_RULES.append(
                 target_field="Turntable.ip_address",
                 action="disable",
                 condition=lambda values: values.get("Turntable.model") != TURN_TABLE_MODEL_OTHER,
+            ),
+        ],
+    )
+)
+
+CUSTOM_SIMPLE_UI_RULES.append(
+    SimpleRuleSpec(
+        trigger_field="lab.name",
+        effects=[
+            SimpleFieldEffect(
+                target_field="Turntable.model",
+                action="set_value",
+                value=lambda values: _lab_equipment(values).get("turntable_model", ""),
+                condition=lambda values: bool(_lab_equipment(values).get("turntable_model")),
+            ),
+            SimpleFieldEffect(
+                target_field="rf_solution.model",
+                action="set_value",
+                value=lambda values: _lab_equipment(values).get("rf_model", ""),
+                condition=lambda values: bool(_lab_equipment(values).get("rf_model")),
             ),
         ],
     )
@@ -1019,11 +1076,52 @@ CUSTOM_TESTCASE_UI_RULES.append(
             # ------------------------------------------------------------------
             # RF solution / Turntable fields: RvO and RvR cases.
             # ------------------------------------------------------------------
+            # Lab selection: only available for RF-driven performance cases.
+            SimpleFieldEffect(
+                target_field="lab.name",
+                action="set_options",
+                value=_current_lab_choices,
+                condition=lambda values: bool(values.get("testcase.is_performance")),
+            ),
+            SimpleFieldEffect(
+                target_field="lab.name",
+                action="set_value",
+                value=_normalized_lab_selection,
+                condition=lambda values: bool(values.get("testcase.is_performance")),
+            ),
+            SimpleFieldEffect(
+                target_field="lab.name",
+                action="enable",
+                condition=lambda values: bool(
+                    values.get("testcase.is_rvo") or values.get("testcase.is_rvr")
+                ),
+            ),
+            SimpleFieldEffect(
+                target_field="lab.name",
+                action="show",
+                condition=lambda values: bool(
+                    values.get("testcase.is_rvo") or values.get("testcase.is_rvr")
+                ),
+            ),
+            SimpleFieldEffect(
+                target_field="lab.name",
+                action="disable",
+                condition=lambda values: not bool(
+                    values.get("testcase.is_rvo") or values.get("testcase.is_rvr")
+                ),
+            ),
+            SimpleFieldEffect(
+                target_field="lab.name",
+                action="hide",
+                condition=lambda values: not bool(
+                    values.get("testcase.is_rvo") or values.get("testcase.is_rvr")
+                ),
+            ),
             # Turntable fields: only RvO cases.
             SimpleFieldEffect(
                 target_field="Turntable.model",
-                action="enable",
-                condition=lambda values: bool(values.get("testcase.is_rvo")),
+                action="hide",
+                condition=lambda values: True,
             ),
             SimpleFieldEffect(
                 target_field="Turntable.ip_address",
@@ -1048,7 +1146,7 @@ CUSTOM_TESTCASE_UI_RULES.append(
             SimpleFieldEffect(
                 target_field="Turntable.model",
                 action="disable",
-                condition=lambda values: not bool(values.get("testcase.is_rvo")),
+                condition=lambda values: True,
             ),
             SimpleFieldEffect(
                 target_field="Turntable.ip_address",
@@ -1080,10 +1178,8 @@ CUSTOM_TESTCASE_UI_RULES.append(
             ),
             SimpleFieldEffect(
                 target_field="rf_solution.model",
-                action="enable",
-                condition=lambda values: bool(
-                    values.get("testcase.is_rvo") or values.get("testcase.is_rvr")
-                ),
+                action="hide",
+                condition=lambda values: True,
             ),
             SimpleFieldEffect(
                 target_field="rf_solution.RC4DAT-8G-95.idVendor",
@@ -1137,9 +1233,7 @@ CUSTOM_TESTCASE_UI_RULES.append(
             SimpleFieldEffect(
                 target_field="rf_solution.model",
                 action="disable",
-                condition=lambda values: not bool(
-                    values.get("testcase.is_rvo") or values.get("testcase.is_rvr")
-                ),
+                condition=lambda values: True,
             ),
             SimpleFieldEffect(
                 target_field="rf_solution.RC4DAT-8G-95.idVendor",

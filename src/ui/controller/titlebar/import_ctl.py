@@ -782,37 +782,56 @@ class PerformanceExcelImporter:
         throughput_sheet_name: Optional[str] = None,
     ) -> Tuple[Dict[str, List[Dict[str, Any]]], List[str]]:
         workbook = self._load_workbook(path)
-        selected = [t.strip().upper() for t in types if str(t).strip()]
-
-        throughput_sheet = throughput_sheet_name
-        if throughput_sheet is None:
-            excluded = {"Summary", "Test Setup", "RVR", "RVO", "MI_HW_cases-65", "BT-distance"}
-            candidates = [name for name in workbook.sheetnames if name not in excluded]
-            throughput_sheet = candidates[0] if candidates else None
-
-        out: Dict[str, List[Dict[str, Any]]] = {}
-        issues: List[str] = []
+        sheetnames = set(workbook.sheetnames)
 
         alias_map = {
             "PEAK": "PEAK_THROUGHPUT",
             "THROUGHPUT": "PEAK_THROUGHPUT",
         }
-        for t in selected:
-            key = alias_map.get(t, t)
+        selected: list[str] = []
+        seen: set[str] = set()
+        for raw in types:
+            text = str(raw).strip().upper()
+            if not text:
+                continue
+            key = alias_map.get(text, text)
+            if key not in seen:
+                selected.append(key)
+                seen.add(key)
+
+        def _resolve_peak_sheet() -> Optional[str]:
+            if throughput_sheet_name:
+                return throughput_sheet_name
+            if "Peak Throughput" in sheetnames:
+                return "Peak Throughput"
+            excluded = {"Summary", "Test Setup", "RVR", "RVO", "MI_HW_cases-65", "BT-distance"}
+            for name in workbook.sheetnames:
+                if name not in excluded:
+                    return name
+            return None
+
+        out: Dict[str, List[Dict[str, Any]]] = {}
+        issues: List[str] = []
+        peak_sheet: Optional[str] = None
+        if "PEAK_THROUGHPUT" in selected:
+            peak_sheet = _resolve_peak_sheet()
+            if not peak_sheet:
+                issues.append("PEAK_THROUGHPUT: missing throughput sheet")
+            elif peak_sheet not in sheetnames:
+                issues.append(f"PEAK_THROUGHPUT: worksheet {peak_sheet!r} not found")
+                peak_sheet = None
+
+        for key in selected:
             if key == "PEAK_THROUGHPUT":
-                if throughput_sheet is None:
-                    issues.append("PEAK_THROUGHPUT: missing throughput sheet")
-                    continue
-                if throughput_sheet not in workbook.sheetnames:
-                    issues.append(f"PEAK_THROUGHPUT: worksheet {throughput_sheet!r} not found")
+                if not peak_sheet:
                     continue
                 try:
-                    rows, row_issues = self.build_peak_throughput_rows(workbook, sheet_name=throughput_sheet)
+                    rows, row_issues = self.build_peak_throughput_rows(workbook, sheet_name=peak_sheet)
                 except Exception as exc:
                     issues.append(f"PEAK_THROUGHPUT: parse failed ({exc})")
                     continue
             elif key == "RVR":
-                if "RVR" not in workbook.sheetnames:
+                if "RVR" not in sheetnames:
                     issues.append("RVR: worksheet 'RVR' not found")
                     continue
                 try:
@@ -821,7 +840,7 @@ class PerformanceExcelImporter:
                     issues.append(f"RVR: parse failed ({exc})")
                     continue
             elif key == "RVO":
-                if "RVO" not in workbook.sheetnames:
+                if "RVO" not in sheetnames:
                     issues.append("RVO: worksheet 'RVO' not found")
                     continue
                 try:
@@ -830,8 +849,9 @@ class PerformanceExcelImporter:
                     issues.append(f"RVO: parse failed ({exc})")
                     continue
             else:
-                issues.append(f"Unknown import type: {t}")
+                issues.append(f"Unknown import type: {key}")
                 continue
+
             out[key] = rows
             if not rows:
                 issues.append(f"{key}: no rows parsed")

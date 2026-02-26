@@ -16,6 +16,8 @@ from src.tools.router_tool.router_factory import router_list
 from src.util.constants import (
     DEFAULT_ANDROID_VERSION_CHOICES,
     DEFAULT_KERNEL_VERSION_CHOICES,
+    LAB_CATALOG,
+    RF_MODEL_CHOICES,
     TURN_TABLE_MODEL_CHOICES,
     WIFI_PRODUCT_PROJECT_MAP,
 )
@@ -57,11 +59,21 @@ def _turntable_model_choices() -> Sequence[str]:
 
     return list(TURN_TABLE_MODEL_CHOICES)
 
+def _rf_model_choices() -> Sequence[str]:
+    """Return available RF solution model identifiers."""
+
+    return list(RF_MODEL_CHOICES)
+
 
 def _fpga_customer_choices() -> Sequence[str]:
     """Return known FPGA customer names from the Wi-Fi project map."""
 
     return _sorted_unique(WIFI_PRODUCT_PROJECT_MAP.keys())
+
+def _lab_name_choices() -> Sequence[str]:
+    """Return known lab names from the lab catalog."""
+
+    return _sorted_unique(LAB_CATALOG.keys())
 
 
 def _mass_production_status_choices() -> Sequence[str]:
@@ -149,6 +161,10 @@ _FIELD_CHOICE_SOURCES: dict[str, Callable[[], Sequence[str]]] = {
     "system.kernel_version": _kernel_version_choices,
     # Turntable models
     "Turntable.model": _turntable_model_choices,
+    # Lab selection
+    "lab.name": _lab_name_choices,
+    # RF solution models
+    "rf_solution.model": _rf_model_choices,
     # Router selection
     "router.name": _router_name_choices,
     # Project / Wi-Fi chipset customer selection (product line / project

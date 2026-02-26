@@ -186,7 +186,7 @@ class PerformanceResult:
                 + time.asctime().replace(" ", "_").replace(":", "_")
                 + ".csv",
             )
-            with open(self.log_file, "a", encoding="gb2312") as f:
+            with open(self.log_file, "a", encoding="utf-8-sig") as f:
                 f.write(",".join(self._headers))
                 f.write("\n")
 
@@ -205,7 +205,7 @@ class PerformanceResult:
         mode, value = self._get_active_profile_columns()
         scenario_key = self._get_scenario_group_key()
         line = f"{result},{mode},{value},{scenario_key}"
-        with open(self.log_file, "a") as f:
+        with open(self.log_file, "a", encoding="utf-8-sig") as f:
             f.write(line)
             f.write("\n")
         logging.info("Write done")

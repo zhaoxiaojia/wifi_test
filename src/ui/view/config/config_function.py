@@ -436,7 +436,7 @@ class FunctionConfigForm(QWidget):
         """槽函数：当 'Load Test Plan' 按钮被点击时调用"""
         from PyQt5.QtWidgets import QFileDialog, QMessageBox
         from pathlib import Path
-        import pandas as pd
+        from src.util.report.excel.plan import read_script_paths
 
         # 1. 确定默认打开目录
         default_dist_dir = get_config_base()
@@ -455,10 +455,7 @@ class FunctionConfigForm(QWidget):
 
         try:
             # 3. 读取 Excel 文件
-            df = pd.read_excel(file_path)
-            if "Script Path" not in df.columns:
-                raise ValueError("Excel file must contain a 'Script Path' column.")
-            selected_script_paths = df["Script Path"].dropna().tolist()
+            selected_script_paths = read_script_paths(file_path)
 
             # 4. 先将所有行设为未勾选
             for row in self.all_rows:
@@ -554,13 +551,20 @@ class FunctionConfigForm(QWidget):
         if not file_path.lower().endswith('.xlsx'):
             file_path += '.xlsx'
 
-        # 3. 创建 DataFrame 并保存
+        # 3. 创建并保存
         try:
-            df = pd.DataFrame(selected_rows)
-            # 确保列顺序与 UI 一致
-            column_order = ["TCID", "Priority", "Tag", "Module", "Description", "Script Path"]
-            df = df[column_order]  # 重排顺序
-            df.to_excel(file_path, index=False, engine='openpyxl')
+            from src.util.report.excel.plan import write_plan
+            from src.util.report.excel.schemas import PLAN_COLS
+
+            column_order = [
+                PLAN_COLS.TCID,
+                PLAN_COLS.PRIORITY,
+                PLAN_COLS.TAG,
+                PLAN_COLS.MODULE,
+                PLAN_COLS.DESCRIPTION,
+                PLAN_COLS.SCRIPT_PATH,
+            ]
+            write_plan(file_path, rows=selected_rows, column_order=column_order)
             print(f"✅ Test plan saved successfully to: {file_path}")
 
             # 保存最后路径

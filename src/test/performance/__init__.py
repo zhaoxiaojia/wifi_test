@@ -22,6 +22,10 @@ from src.tools.rs_test import rs
 from src.util.constants import (
     DEFAULT_RF_STEP_SPEC,
     IDENTIFIER_SANITIZE_PATTERN,
+    RF_ATTENUATION_MAX_DB,
+    RF_ATTENUATION_MIN_DB,
+    RF_MODEL_CHOICES,
+    RF_MODEL_RS232,
     get_debug_flags,
     TURN_TABLE_FIELD_IP_ADDRESS,
     TURN_TABLE_FIELD_MODEL,
@@ -195,16 +199,16 @@ def init_rf():
     cfg = get_cfg()
     rf_solution = cfg['rf_solution']
     model = rf_solution['model']
-    if model not in ['RADIORACK-4-220', 'RC4DAT-8G-95', 'RS232Board5', 'LDA-908V-8']:
+    if model not in RF_MODEL_CHOICES:
         raise EnvironmentError("Doesn't support this model")
-    if model == 'RS232Board5':
+    if model == RF_MODEL_RS232:
         rf_tool = rs()
     else:
         rf_ip = rf_solution[model]['ip_address']
         rf_tool = LabDeviceController(rf_ip)
         logging.info(f'rf_ip {rf_ip}')
     logging.info('Reset rf value')
-    rf_tool.execute_rf_cmd(0)
+    rf_tool.execute_rf_cmd(RF_ATTENUATION_MIN_DB)
     time.sleep(3)
     return rf_tool
 
@@ -386,7 +390,7 @@ def get_rvo_static_db_list():
             item,
             field_name=f'{TURN_TABLE_SECTION_KEY}.{TURN_TABLE_FIELD_STATIC_DB}',
             min_value=0,
-            max_value=110,
+            max_value=RF_ATTENUATION_MAX_DB,
         )
         if parsed is not None:
             parsed_values.append(parsed)
