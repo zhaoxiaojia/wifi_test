@@ -270,7 +270,7 @@ class PerformanceTableManager:
     """
 
     TABLE_NAME = "performance"
-    REPORT_TABLE_NAME = "test_report"
+    REPORT_TABLE_NAME = "test_case"
 
     _BASE_COLUMNS: Sequence[tuple[str, str]] = (
         ("execution_id", "INT NOT NULL"),
@@ -1100,7 +1100,7 @@ def ensure_test_report(
     notes: Optional[str] = None,
 ) -> int:
     insert_sql = (
-        "INSERT INTO `test_report` "
+        "INSERT INTO `test_case` "
         "(`project_id`, `report_name`, `case_path`, `is_golden`, `report_type`, `golden_group`, `notes`) "
         "VALUES (%s, %s, %s, %s, %s, %s, %s) "
         "ON DUPLICATE KEY UPDATE "
@@ -1147,13 +1147,41 @@ def register_execution(
         is_golden=False,
         notes=None,
     )
+
+    dut_payload = {
+        "serial_number": execution_payload.get("serial_number"),
+        "connect_type": execution_payload.get("connect_type"),
+        "adb_device": execution_payload.get("adb_device"),
+        "telnet_ip": execution_payload.get("telnet_ip"),
+        "software_version": execution_payload.get("software_version"),
+        "driver_version": execution_payload.get("driver_version"),
+        "android_version": execution_payload.get("android_version"),
+        "kernel_version": execution_payload.get("kernel_version"),
+    }
+    dut_id = client.insert(
+        "INSERT INTO `dut` "
+        "(`serial_number`, `connect_type`, `adb_device`, `telnet_ip`, "
+        "`software_version`, `driver_version`, `android_version`, `kernel_version`, `payload_json`) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+        (
+            dut_payload.get("serial_number"),
+            dut_payload.get("connect_type"),
+            dut_payload.get("adb_device"),
+            dut_payload.get("telnet_ip"),
+            dut_payload.get("software_version"),
+            dut_payload.get("driver_version"),
+            dut_payload.get("android_version"),
+            dut_payload.get("kernel_version"),
+            json.dumps(dut_payload, ensure_ascii=True, separators=(",", ":")),
+        ),
+    )
     insert_sql = (
-        "INSERT INTO `execution` "
-        "(`test_report_id`, `execution_type`, `serial_number`, `connect_type`, `adb_device`, `telnet_ip`, "
-        "`software_version`, `driver_version`, `android_version`, `kernel_version`, "
+        "INSERT INTO `test_run` "
+        "(`test_case_id`, `run_type`, `dut_id`, "
         "`router_name`, `router_address`, `rf_model`, `corner_model`, `lab_name`, "
+        "`bt_mode`, `bt_ble_alias`, `bt_classic_alias`, "
         "`csv_name`, `csv_path`, `run_source`, `duration_seconds`, `payload_json`) "
-        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
     )
     payload_json = json.dumps(dict(execution_payload), ensure_ascii=True, separators=(",", ":"))
     return client.insert(
@@ -1161,19 +1189,15 @@ def register_execution(
         (
             test_report_id,
             execution_type,
-            execution_payload.get("serial_number"),
-            execution_payload.get("connect_type"),
-            execution_payload.get("adb_device"),
-            execution_payload.get("telnet_ip"),
-            execution_payload.get("software_version"),
-            execution_payload.get("driver_version"),
-            execution_payload.get("android_version"),
-            execution_payload.get("kernel_version"),
+            int(dut_id),
             execution_payload.get("router_name"),
             execution_payload.get("router_address"),
             execution_payload.get("rf_model"),
             execution_payload.get("corner_model"),
             execution_payload.get("lab_name"),
+            execution_payload.get("bt_mode"),
+            execution_payload.get("bt_ble_alias"),
+            execution_payload.get("bt_classic_alias"),
             csv_name,
             csv_path,
             run_source,
@@ -1281,6 +1305,11 @@ def _build_execution_payload(config: Mapping[str, Any]) -> Dict[str, Any]:
     payload: Dict[str, Any] = {}
     payload.update(_build_execution_device_payload(config))
     payload.update(_build_execution_lab_payload(config))
+    payload["bt_mode"] = _normalize_str_token(config.get("mode"))
+    bt_section = config.get("bt") if isinstance(config, Mapping) else {}
+    bt_data = bt_section if isinstance(bt_section, Mapping) else {}
+    payload["bt_ble_alias"] = _normalize_str_token(bt_data.get("ble_alias"))
+    payload["bt_classic_alias"] = _normalize_str_token(bt_data.get("classic_alias"))
     return payload
 
 

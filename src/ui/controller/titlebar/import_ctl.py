@@ -23,7 +23,7 @@ from src.util.constants import IDENTIFIER_SANITIZE_PATTERN
 def _store_excel_artifact(
     client: MySqlClient,
     *,
-    test_report_id: int,
+    test_case_id: int,
     excel_path: str,
 ) -> int:
     content = Path(excel_path).read_bytes()
@@ -34,14 +34,14 @@ def _store_excel_artifact(
 
     insert_sql = (
         "INSERT INTO `artifact` "
-        "(`test_report_id`, `file_name`, `content_type`, `sha256`, `size_bytes`, `content`) "
+        "(`test_case_id`, `file_name`, `content_type`, `sha256`, `size_bytes`, `content`) "
         "VALUES (%s, %s, %s, %s, %s, %s) "
         "ON DUPLICATE KEY UPDATE `id`=LAST_INSERT_ID(`id`)"
     )
     artifact_id = client.insert(
         insert_sql,
         (
-            int(test_report_id),
+            int(test_case_id),
             file_name,
             content_type,
             digest,
@@ -980,7 +980,7 @@ class ImportController:
                     continue
                 if existing:
                     client.execute(
-                        "DELETE FROM `test_report` WHERE `id`=%s",
+                        "DELETE FROM `test_case` WHERE `id`=%s",
                         (int(existing["test_report_id"]),),
                     )
 
@@ -998,12 +998,12 @@ class ImportController:
                 )
                 _store_excel_artifact(
                     client,
-                    test_report_id=int(report_id),
+                    test_case_id=int(report_id),
                     excel_path=excel_path,
                 )
                 execution_id = self._insert_execution(
                     client,
-                    test_report_id=int(report_id),
+                    test_case_id=int(report_id),
                     execution_type=data_type,
                     csv_name=f"{Path(excel_path).name}:{data_type}",
                     csv_path=excel_path,
@@ -1035,8 +1035,8 @@ class ImportController:
             "SELECT "
             "tr.id AS test_report_id, tr.report_name, tr.created_at, tr.updated_at, "
             "a.file_name, a.created_at AS artifact_created_at "
-            "FROM test_report AS tr "
-            "LEFT JOIN artifact AS a ON a.test_report_id = tr.id "
+            "FROM test_case AS tr "
+            "LEFT JOIN artifact AS a ON a.test_case_id = tr.id "
             "WHERE tr.project_id = %s AND tr.is_golden = 1 "
             "AND tr.report_type = %s AND tr.golden_group = %s "
             "ORDER BY tr.updated_at DESC, tr.id DESC "
@@ -1050,13 +1050,13 @@ class ImportController:
             "SELECT "
             "tr.id AS test_report_id, tr.report_name, tr.created_at, tr.updated_at, "
             "a.file_name, a.created_at AS artifact_created_at, "
-            "GROUP_CONCAT(DISTINCT ex.execution_type ORDER BY ex.execution_type) AS execution_types "
-            "FROM test_report AS tr "
-            "JOIN execution AS ex ON ex.test_report_id = tr.id "
-            "LEFT JOIN artifact AS a ON a.test_report_id = tr.id "
+            "GROUP_CONCAT(DISTINCT ex.run_type ORDER BY ex.run_type) AS execution_types "
+            "FROM test_case AS tr "
+            "JOIN test_run AS ex ON ex.test_case_id = tr.id "
+            "LEFT JOIN artifact AS a ON a.test_case_id = tr.id "
             "WHERE tr.project_id = %s AND tr.is_golden = 1 "
             "AND (tr.report_type IS NULL OR tr.report_type = '') "
-            "AND ex.execution_type = %s "
+            "AND ex.run_type = %s "
             "GROUP BY tr.id "
             "ORDER BY tr.updated_at DESC, tr.id DESC "
             "LIMIT 1"
@@ -1098,7 +1098,7 @@ class ImportController:
         self,
         client: MySqlClient,
         *,
-        test_report_id: int,
+        test_case_id: int,
         execution_type: str,
         csv_name: str,
         csv_path: str,
@@ -1106,28 +1106,48 @@ class ImportController:
         payload: Mapping[str, Any],
         duration_seconds: Optional[float] = None,
     ) -> int:
+        ui_payload = payload.get("ui_payload", {}) or {}
+        dut_payload = {
+            "serial_number": None,
+            "connect_type": None,
+            "adb_device": None,
+            "telnet_ip": None,
+            "software_version": ui_payload.get("software_version"),
+            "driver_version": ui_payload.get("driver_version"),
+            "android_version": ui_payload.get("android_version"),
+            "kernel_version": ui_payload.get("kernel_version"),
+        }
+        dut_id = client.insert(
+            "INSERT INTO `dut` "
+            "(`serial_number`, `connect_type`, `adb_device`, `telnet_ip`, "
+            "`software_version`, `driver_version`, `android_version`, `kernel_version`, `payload_json`) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            (
+                dut_payload.get("serial_number"),
+                dut_payload.get("connect_type"),
+                dut_payload.get("adb_device"),
+                dut_payload.get("telnet_ip"),
+                dut_payload.get("software_version"),
+                dut_payload.get("driver_version"),
+                dut_payload.get("android_version"),
+                dut_payload.get("kernel_version"),
+                json.dumps(dut_payload, ensure_ascii=True, separators=(",", ":")),
+            ),
+        )
         insert_sql = (
-            "INSERT INTO `execution` "
-            "(`test_report_id`, `execution_type`, `serial_number`, `connect_type`, `adb_device`, `telnet_ip`, "
-            "`software_version`, `driver_version`, `android_version`, `kernel_version`, "
+            "INSERT INTO `test_run` "
+            "(`test_case_id`, `run_type`, `dut_id`, "
             "`router_name`, `router_address`, `rf_model`, `corner_model`, `lab_name`, "
             "`csv_name`, `csv_path`, `run_source`, `duration_seconds`, `payload_json`) "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
         )
         payload_json = json.dumps(dict(payload), ensure_ascii=True, separators=(",", ":"))
         return client.insert(
             insert_sql,
             (
-                test_report_id,
+                test_case_id,
                 execution_type,
-                None,
-                None,
-                None,
-                None,
-                payload.get("ui_payload", {}).get("software_version"),
-                payload.get("ui_payload", {}).get("driver_version"),
-                payload.get("ui_payload", {}).get("android_version"),
-                payload.get("ui_payload", {}).get("kernel_version"),
+                int(dut_id),
                 None,
                 None,
                 None,

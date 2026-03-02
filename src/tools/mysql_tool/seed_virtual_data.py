@@ -468,7 +468,7 @@ def _generate_test_reports(
     Sequence[Sequence[object]]
         A value of type ``Sequence[Sequence[object]]``.
     """
-    columns = _build_column_specs("test_report")
+    columns = _build_column_specs("test_case")
     combinations = list(itertools.product(shielded_ids, dut_ids))
     rng.shuffle(combinations)
     selected = combinations[: max(min_reports, 1)]
@@ -654,7 +654,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--truncate",
         action="store_true",
-        help="注入前清空 performance/test_report/shielded/dut 表",
+        help="注入前清空 performance/test_case/shielded/dut 表",
     )
     parser.add_argument(
         "--seed",
@@ -696,7 +696,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     with MySqlClient() as client:
         ensure_report_tables(client)
         if args.truncate:
-            _truncate_tables(client, ("performance", "test_report", "shielded", "dut"))
+            _truncate_tables(client, ("performance", "test_case", "shielded", "dut"))
 
         dut_rows = _generate_dut_rows(args.dut_count, rng)
         dut_ids = _insert_with_ids(client, "dut", _build_column_specs("dut"), dut_rows)
@@ -714,7 +714,7 @@ def main(argv: Sequence[str] | None = None) -> None:
             min_reports=min_reports,
         )
         report_ids = _insert_with_ids(
-            client, "test_report", _build_column_specs("test_report"), report_rows
+            client, "test_case", _build_column_specs("test_case"), report_rows
         )
 
         performance_rows = _generate_performance_rows(args.performance_count, report_ids, rng)
@@ -727,7 +727,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         )
 
     LOGGER.info(
-        "虚拟数据注入完成：dut=%d shielded=%d test_report=%d performance=%d",
+        "虚拟数据注入完成：dut=%d shielded=%d test_case=%d performance=%d",
         len(dut_rows),
         len(shielded_rows),
         len(report_rows),

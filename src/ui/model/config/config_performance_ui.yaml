@@ -96,3 +96,11 @@ panels:
             widget: combo_box
             label: "Mode"
             choices: ["Wi-Fi Only", "Wi-Fi BLE", "Wi-Fi BLE CLASSIC"]
+          - key: bt.ble_alias
+            widget: line_edit
+            label: "BLE alias"
+            placeholder: "BLE device alias"
+          - key: bt.classic_alias
+            widget: line_edit
+            label: "Classic alias"
+            placeholder: "Classic device alias"

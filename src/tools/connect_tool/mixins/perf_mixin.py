@@ -175,7 +175,7 @@ class PerfMixin:
         return values
 
     def _normalize_throughput_cells(self, entries: list[str]) -> list[str]:
-        total_runs = max(1, self.repest_times + 1)
+        total_runs = max(1, int(self.repest_times))
         sanitized = entries[:total_runs]
         while len(sanitized) < total_runs:
             sanitized.append("")
@@ -549,27 +549,32 @@ class PerfMixin:
             rx_metrics_list.append(IperfMetrics(simulated))
             mcs_rx = "DEBUG"
         else:
-            for c in range(self.repest_times + 2):
+            desired_runs = max(1, int(self.repest_times))
+            for _attempt in range(desired_runs + 2):
                 rx_result = 0
                 mcs_rx = 0
-                if self.rvr_tool == "iperf":
-                    self.kill_iperf()
-                    terminal = self.run_iperf(self.tool_path + self.iperf_server_cmd, self.serialnumber)
-                    time.sleep(1)
-                    client_cmd = self.iperf_client_cmd.replace("{ip}", self.dut_ip)
-                    self.run_iperf(client_cmd, "")
-                    delay = self._iperf_client_post_delay_seconds()
-                    if delay:
-                        time.sleep(delay)
-                    rx_result = self.get_logcat()
-                    self.rvr_result = None
-                    if terminal:
-                        terminal.terminate()
-                elif self.rvr_tool == "ixchariot":
-                    ix.ep1 = self.pc_ip
-                    ix.ep2 = self.dut_ip
-                    ix.pair = self.pair
-                    rx_result = ix.run_rvr()
+                try:
+                    if self.rvr_tool == "iperf":
+                        self.kill_iperf()
+                        terminal = self.run_iperf(self.tool_path + self.iperf_server_cmd, self.serialnumber)
+                        time.sleep(1)
+                        client_cmd = self.iperf_client_cmd.replace("{ip}", self.dut_ip)
+                        self.run_iperf(client_cmd, "")
+                        delay = self._iperf_client_post_delay_seconds()
+                        if delay:
+                            time.sleep(delay)
+                        rx_result = self.get_logcat()
+                        self.rvr_result = None
+                        if terminal:
+                            terminal.terminate()
+                    elif self.rvr_tool == "ixchariot":
+                        ix.ep1 = self.pc_ip
+                        ix.ep2 = self.dut_ip
+                        ix.pair = self.pair
+                        rx_result = ix.run_rvr()
+                except subprocess.TimeoutExpired:
+                    logging.warning("iperf RX timed out; record 0 and continue retry")
+                    rx_result = None
 
                 if rx_result is False:
                     if self.rvr_tool == "ixchariot":
@@ -588,11 +593,11 @@ class PerfMixin:
                     except Exception:
                         throughput = None
                     metrics = IperfMetrics(throughput)
-                if c == 0 and metrics.throughput_mbps is None:
+                if not rx_metrics_list and metrics.throughput_mbps is None:
                     continue
                 mcs_rx = self.get_mcs_rx()
                 rx_metrics_list.append(metrics)
-                if len(rx_metrics_list) > self.repest_times:
+                if len(rx_metrics_list) >= desired_runs:
                     break
 
         if rx_metrics_list:
@@ -669,29 +674,34 @@ class PerfMixin:
             tx_metrics_list.append(IperfMetrics(simulated))
             mcs_tx = "DEBUG"
         else:
-            for c in range(self.repest_times + 2):
+            desired_runs = max(1, int(self.repest_times))
+            for _attempt in range(desired_runs + 2):
                 tx_result = 0
                 mcs_tx = 0
-                if self.rvr_tool == "iperf":
-                    self.kill_iperf()
-                    time.sleep(1)
-                    terminal = self.run_iperf(self.iperf_server_cmd, "")
-                    time.sleep(1)
-                    client_cmd = self.iperf_client_cmd.replace("{ip}", self.pc_ip)
-                    self.run_iperf(self.tool_path + client_cmd, self.serialnumber)
-                    delay = self._iperf_client_post_delay_seconds()
-                    if delay:
-                        time.sleep(delay)
-                    time.sleep(3)
-                    tx_result = self.get_logcat()
-                    self.rvr_result = None
-                    if terminal:
-                        terminal.terminate()
-                elif self.rvr_tool == "ixchariot":
-                    ix.ep1 = self.dut_ip
-                    ix.ep2 = self.pc_ip
-                    ix.pair = self.pair
-                    tx_result = ix.run_rvr()
+                try:
+                    if self.rvr_tool == "iperf":
+                        self.kill_iperf()
+                        time.sleep(1)
+                        terminal = self.run_iperf(self.iperf_server_cmd, "")
+                        time.sleep(1)
+                        client_cmd = self.iperf_client_cmd.replace("{ip}", self.pc_ip)
+                        self.run_iperf(self.tool_path + client_cmd, self.serialnumber)
+                        delay = self._iperf_client_post_delay_seconds()
+                        if delay:
+                            time.sleep(delay)
+                        time.sleep(3)
+                        tx_result = self.get_logcat()
+                        self.rvr_result = None
+                        if terminal:
+                            terminal.terminate()
+                    elif self.rvr_tool == "ixchariot":
+                        ix.ep1 = self.dut_ip
+                        ix.ep2 = self.pc_ip
+                        ix.pair = self.pair
+                        tx_result = ix.run_rvr()
+                except subprocess.TimeoutExpired:
+                    logging.warning("iperf TX timed out; record 0 and continue retry")
+                    tx_result = None
 
                 if tx_result is False:
                     if self.rvr_tool == "ixchariot":
@@ -710,10 +720,10 @@ class PerfMixin:
                     except Exception:
                         throughput = None
                     metrics = IperfMetrics(throughput)
-                if c == 0 and metrics.throughput_mbps is None:
+                if not tx_metrics_list and metrics.throughput_mbps is None:
                     continue
                 tx_metrics_list.append(metrics)
-                if len(tx_metrics_list) > self.repest_times:
+                if len(tx_metrics_list) >= desired_runs:
                     break
 
         if tx_metrics_list:
