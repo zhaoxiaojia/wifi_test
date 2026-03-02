@@ -21,7 +21,7 @@ _ap_test_state = {}
 _ap_test_lock = threading.Lock()
 _test_metadata_cache = {}
 _metadata_lock = threading.Lock()
-_last_known_pc_ip = None
+# _last_known_pc_ip = None
 
 power_delay = power_ctrl()
 # power_delay.shutdown()
@@ -94,7 +94,7 @@ def power_setting(request):
 
 @pytest.fixture(scope='module', autouse=True, params=['2.4G', '5G'], ids=['2.4G', '5G'])
 def router_setting(power_setting, request):
-    global _last_known_pc_ip
+    # global _last_known_pc_ip
     band = request.param
     if not power_setting:
         raise ValueError("Pls check pdu ip address and router port")
