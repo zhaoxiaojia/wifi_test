@@ -312,7 +312,7 @@ def test_multi_throughtput_tx(router_setting, request):
     request.node._store['compat_compare'] = compare_pass if isinstance(compare_pass, str) else (
         "PASS" if compare_pass else "FAIL")
     request.node._store['return_value'] = (pytest.dut.channel, pytest.dut.rssi_num, expect_data, tx_result)
-    logging.info(f'request.node._store {request.node._store['return_value']}')
+    logging.info(f"request.node._store {request.node._store['return_value']}")
 
 
 @pytest.mark.dependency(depends=["connect"])
@@ -344,7 +344,7 @@ def test_multi_throughtput_rx(router_setting, request):
     request.node._store['compat_compare'] = compare_pass if isinstance(compare_pass, str) else (
         "PASS" if compare_pass else "FAIL")
     request.node._store['return_value'] = (pytest.dut.channel, pytest.dut.rssi_num, expect_data, rx_result)
-    logging.info(f'request.node._store {request.node._store['return_value']}')
+    logging.info(f"request.node._store {request.node._store['return_value']}")
 
 from src.test.compatibility.results import update_compat_test_result, write_realtime_compat_csv
 @pytest.fixture(autouse=True)

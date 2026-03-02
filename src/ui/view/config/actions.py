@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 from PyQt5.QtCore import QSignalBlocker, QTimer
 from PyQt5.QtWidgets import QWidget, QCheckBox, QSpinBox

@@ -1265,15 +1265,8 @@ def drop_and_create_table(
         f"CREATE TABLE `{table_name}` (",
         "    id INT PRIMARY KEY AUTO_INCREMENT,",
     ]
-    statements.extend(f"    {line}," for line in column_lines)
-    if spec.include_audit_columns:
-        statements.extend(
-            [
-                "    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,",
-                "    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
-            ]
-        )
-    statements.append(f") ENGINE={spec.engine} DEFAULT CHARSET={spec.charset};")
+    statements.extend(f"    `{column.name}` {column.definition}," for column in columns)
+    statements.append(") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;")
     create_sql = "\n".join(statements)
     client.execute(create_sql)
 
