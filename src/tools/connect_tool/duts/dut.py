@@ -5,6 +5,7 @@ import time
 import random
 import pytest
 from src.util.constants import load_config
+from src.tools.ixchariot import ix
 from src.tools.connect_tool.command_batch import CommandBatch, CommandRunner, CommandExecutionError, CommandTimeoutError
 from src.tools.connect_tool.mixins.app_mixin import AppMixin
 from src.tools.connect_tool.mixins.dut_mixins import WifiMixin

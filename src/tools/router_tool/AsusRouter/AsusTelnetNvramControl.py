@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Union
+from typing import List, Optional, Union
 
 from src.tools.router_tool.RouterControl import ConfigError
 from src.tools.router_tool.AsusRouter.AsusBaseControl import AsusBaseControl

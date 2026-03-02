@@ -191,7 +191,6 @@ def update_compat_test_result(
         return_value: tuple from test function
         metadata: optional dict containing pdu_ip, port, band, etc.
     """
-    global _ap_test_state
 
     # 缓存元数据（如果提供了）
     if metadata:

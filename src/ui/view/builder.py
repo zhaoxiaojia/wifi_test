@@ -12,6 +12,7 @@ import logging
 import time
 import re
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Dict, Mapping
 
 from PyQt5.QtWidgets import QCheckBox, QGroupBox, QFormLayout, QSpinBox, QWidget, QLabel

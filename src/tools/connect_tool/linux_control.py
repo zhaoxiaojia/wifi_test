@@ -232,9 +232,10 @@ class LinuxController:
             return True, output
         except paramiko.SSHException as e:
             self.logger.error(f"SSH command execution error: {final_cmd}, reason: {str(e)}")
+            return False, str(e)
         except Exception as e:
             self.logger.error(f"Command execution exception: {final_cmd}, exception: {str(e)}")
-        return False, str(e)
+            return False, str(e)
 
     def get_remote_wifi_interface(self) -> Optional[str]:
         """Automatically identify WiFi network card name of remote host"""
