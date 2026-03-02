@@ -145,8 +145,8 @@ class PerformanceResult:
             repeated runs, or ``Throughput n`` for each run where n
             increments from 1 to the total number of runs.
         """
-        total_runs = self._repeat_times + 1
-        if total_runs <= 1:
+        total_runs = max(1, int(self._repeat_times))
+        if total_runs == 1:
             return ["Throughput"]
         return [f"Throughput {index}" for index in range(1, total_runs + 1)]
 

@@ -33,9 +33,6 @@ class GlobalToolsChrome:
         self.panel = GlobalToolsPanel(parent=content)
         self.panel.hide()
 
-        # DEBUG_TOOLBAR_CONTAINER: remove later
-        print("[DEBUG_TOOLBAR_CONTAINER] GlobalToolsChrome initialized")
-
     def update_geometry(self) -> None:
         width = self._content.width()
         height = self._content.height()
@@ -57,10 +54,6 @@ class GlobalToolsChrome:
             bar_y = max(0, (top_strip_height - bar_height) // 2)
             self.bar_frame.setGeometry(bar_x, bar_y, bar_width, bar_height)
             self.bar_frame.raise_()
-            print(
-                "[DEBUG_TOOLBAR] update_geometry width=%s height=%s bar_geom=%s bar_visible=%s panel_visible=%s"
-                % (width, height, self.bar_frame.geometry(), self.bar_frame.isVisible(), self.panel.isVisible())
-            )
 
         if self.panel.isVisible():
             panel_x = max(0, width - panel_width)

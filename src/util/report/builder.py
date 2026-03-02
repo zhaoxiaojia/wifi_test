@@ -143,7 +143,10 @@ def _normalize_test_type(value: Optional[str]) -> str:
     text = str(value or "").strip()
     if not text:
         return ""
-    return text.upper()
+    upper = text.upper()
+    if upper in {"PEAK", "PEAK_THROUGHPUT", "PEAK THROUGHPUT"}:
+        return "PEAK_THROUGHPUT"
+    return upper
 
 
 def _detect_row_test_type(row: dict[str, object]) -> str:
@@ -489,6 +492,129 @@ def _configure_sheet(ws: Worksheet) -> None:
 
 def _merge(ws: Worksheet, range_string: str) -> None:
     ws.merge_cells(range_string)
+
+
+def _write_peak_section(
+    ws: Worksheet,
+    *,
+    start_row: int,
+    section_title: str,
+    repeat_count: int,
+    last_column: str,
+) -> int:
+    from src.util.constants import load_config  # local import to avoid UI cycles
+
+    config = load_config(refresh=True) or {}
+    lab_name = str((config.get("lab") or {}).get("name") or "").strip()
+    ui_mode = str(config.get("mode") or "").strip()
+
+    title_row = start_row
+    _merge(ws, f"A{title_row}:{last_column}{title_row}")
+    ws.row_dimensions[title_row].height = 24
+    style.apply_section_header(ws, row=title_row, end_col_letter=last_column, text=section_title)
+
+    header_row_1 = title_row + 1
+    header_row_2 = title_row + 2
+    ws.row_dimensions[header_row_1].height = 20
+    ws.row_dimensions[header_row_2].height = 20
+
+    def _header_cell(row: int, col: int, text: str) -> None:
+        ws.cell(row=row, column=col, value=text)
+        style.set_brand_header(ws, row, col, text)
+
+    col = 1
+    _merge(ws, f"A{header_row_1}:A{header_row_2}")
+    _header_cell(header_row_1, col, "Lab")
+    style.set_body_center(ws, header_row_2 + 1, col, lab_name)
+    col += 1
+
+    _merge(ws, f"B{header_row_1}:B{header_row_2}")
+    _header_cell(header_row_1, col, "Scenario")
+    col += 1
+
+    _merge(ws, f"C{header_row_1}:C{header_row_2}")
+    _header_cell(header_row_1, col, "UI Mode")
+    style.set_body_center(ws, header_row_2 + 1, col, ui_mode)
+    col += 1
+
+    for label in ("WiFi Mode", "Mode", "Protocol", "Bandwidth", "Tx/Rx", "AP Channel", "RSSI (dBm)"):
+        _merge(ws, f"{get_column_letter(col)}{header_row_1}:{get_column_letter(col)}{header_row_2}")
+        _header_cell(header_row_1, col, label)
+        col += 1
+
+    run_start = col
+    run_count = max(1, int(repeat_count))
+    run_end = run_start + run_count - 1
+    _merge(ws, f"{get_column_letter(run_start)}{header_row_1}:{get_column_letter(run_end)}{header_row_1}")
+    _header_cell(header_row_1, run_start, "Throughput (Mbit/sec)")
+    for idx in range(run_count):
+        _header_cell(header_row_2, run_start + idx, f"{idx+1}")
+
+    avg_col = run_end + 1
+    _merge(ws, f"{get_column_letter(avg_col)}{header_row_1}:{get_column_letter(avg_col)}{header_row_2}")
+    _header_cell(header_row_1, avg_col, "avg")
+
+    tail_labels = ("Remark", "Customer Spec (New)", "Customer Spec (Old)", "AML Spec", "Pass/Fail")
+    tail_start = avg_col + 1
+    for offset, label in enumerate(tail_labels):
+        c = tail_start + offset
+        _merge(ws, f"{get_column_letter(c)}{header_row_1}:{get_column_letter(c)}{header_row_2}")
+        _header_cell(header_row_1, c, label)
+
+    return header_row_2
+
+
+def _write_peak_rows(
+    ws: Worksheet,
+    *,
+    group: ScenarioGroup,
+    repeat_count: int,
+    start_row: int,
+) -> int:
+    from src.util.constants import load_config  # local import to avoid UI cycles
+
+    config = load_config(refresh=True) or {}
+    lab_name = str((config.get("lab") or {}).get("name") or "").strip()
+    ui_mode = str(config.get("mode") or "").strip()
+
+    current = start_row
+    run_count = max(1, int(repeat_count))
+    for scenario in group.channels:
+        for direction, values, rssi_values in (
+            ("RX", scenario.rx_values, scenario.rssi_rx),
+            ("TX", scenario.tx_values, scenario.rssi_tx),
+        ):
+            if not values:
+                continue
+            style.set_body_center(ws, current, 1, lab_name)
+            style.set_body_center(ws, current, 2, group.key)
+            style.set_body_center(ws, current, 3, ui_mode)
+            style.set_body_center(ws, current, 4, scenario.standard)
+            style.set_body_center(ws, current, 5, "")
+            style.set_body_center(ws, current, 6, "TCP")
+            style.set_body_center(ws, current, 7, scenario.bandwidth)
+            style.set_body_center(ws, current, 8, direction)
+            style.set_body_center(ws, current, 9, scenario.channel_label)
+            rssi = None
+            if rssi_values:
+                rssi = rssi_values.get(min(rssi_values.keys()))
+            if rssi is not None:
+                style.set_body_center(ws, current, 10, float(rssi))
+
+            run_start_col = 11
+            run_vals: list[float] = []
+            for idx in range(1, run_count + 1):
+                val = values.get(float(idx))
+                if val is None:
+                    continue
+                style.set_body_center(ws, current, run_start_col + idx - 1, float(val))
+                run_vals.append(float(val))
+            avg_col = run_start_col + run_count
+            if run_vals:
+                style.set_body_center(ws, current, avg_col, sum(run_vals) / float(len(run_vals)))
+                style.set_body_center(ws, current, avg_col + 5, "Pass")
+            current += 1
+    return current - 1
 
 # ---------------------------------------------------------------------------
 # Standard text helpers
@@ -1727,18 +1853,31 @@ def _load_scenario_groups(result_file: Path | str, *, test_type: str | None = No
     try:
         with path.open('r', encoding='utf-8-sig', newline='') as handle:
             reader = csv.DictReader(handle)
+            fieldnames = [str(name or "").strip() for name in (reader.fieldnames or [])]
+            throughput_cols = [name for name in fieldnames if name.startswith("Throughput")]
+            def _throughput_col_key(name: str) -> tuple[int, str]:
+                tail = name[len("Throughput") :].strip()
+                if tail.isdigit():
+                    return int(tail), name
+                return 1, name
+            throughput_cols = sorted(throughput_cols, key=_throughput_col_key)
             for row in reader:
                 if not row:
                     continue
                 total_rows += 1
-                row_type = _detect_row_test_type(row)
+                row_type = normalized_filter if normalized_filter == "PEAK_THROUGHPUT" else _detect_row_test_type(row)
                 type_counts[row_type] += 1
                 if normalized_filter and row_type != normalized_filter:
                     filtered_rows += 1
                     continue
                 matched_rows += 1
                 raw_key = row.get('Scenario_Group_Key')
-                base_key = _group_base_key(raw_key)
+                freq_for_peak = str(row.get('Freq_Band') or '').strip()
+                standard_for_peak = str(row.get('Standard') or '').strip()
+                if normalized_filter == "PEAK_THROUGHPUT":
+                    base_key = f"PEAK|BAND={freq_for_peak or 'N/A'}|STANDARD={standard_for_peak or 'N/A'}"
+                else:
+                    base_key = _group_base_key(raw_key)
                 bucket = buckets.setdefault(
                     base_key,
                     {
@@ -1758,10 +1897,10 @@ def _load_scenario_groups(result_file: Path | str, *, test_type: str | None = No
                 bucket['raw_keys'].add(_normalize_scenario_key(raw_key))
                 bucket['test_type'][row_type] += 1
 
-                freq = str(row.get('Freq_Band') or '').strip()
+                freq = freq_for_peak if normalized_filter == "PEAK_THROUGHPUT" else str(row.get('Freq_Band') or '').strip()
                 if freq:
                     bucket['freq'][freq] += 1
-                standard = str(row.get('Standard') or '').strip()
+                standard = standard_for_peak if normalized_filter == "PEAK_THROUGHPUT" else str(row.get('Standard') or '').strip()
                 if standard:
                     bucket['standard'][standard] += 1
                 bandwidth_raw = row.get('BW') or row.get('Bandwidth')
@@ -1771,6 +1910,46 @@ def _load_scenario_groups(result_file: Path | str, *, test_type: str | None = No
                 angle = _format_angle(row.get('Angel') or row.get('Angle'))
                 if angle:
                     bucket['angle'][angle] += 1
+
+                if normalized_filter == "PEAK_THROUGHPUT":
+                    channel_label = _format_channel(row.get('CH_Freq_MHz') or row.get('CH') or row.get('Channel'))
+                    scenario_id = f"{bandwidth}|{channel_label}"
+                    channels = bucket['channels']
+                    channel_bucket = channels.setdefault(
+                        scenario_id,
+                        {
+                            'scenario_key': _normalize_scenario_key(raw_key),
+                            'bandwidth': bandwidth,
+                            'channel_label': channel_label,
+                            'rx': {},
+                            'tx': {},
+                            'rssi_rx': {},
+                            'rssi_tx': {},
+                            'attenuations': set(),
+                            'angle_order': [],
+                            'rvo_rx': {},
+                            'rvo_tx': {},
+                            'rvo_rssi_rx': {},
+                            'rvo_rssi_tx': {},
+                        },
+                    )
+                    if scenario_id not in bucket['channel_order']:
+                        bucket['channel_order'].append(scenario_id)
+                    direction = str(row.get('Direction') or '').upper()
+                    throughput_map = channel_bucket['rx'] if direction in {'DL', 'RX'} else channel_bucket['tx']
+                    rssi_map = channel_bucket['rssi_rx'] if direction in {'DL', 'RX'} else channel_bucket['rssi_tx']
+                    rssi = _sanitize_number(row.get('RSSI'))
+                    for run_index, col in enumerate(throughput_cols, start=1):
+                        throughput = _sanitize_number(row.get(col))
+                        if throughput is None:
+                            continue
+                        key = float(run_index)
+                        bucket['attenuations'].add(key)
+                        channel_bucket['attenuations'].add(key)
+                        throughput_map[key] = throughput
+                        if rssi is not None:
+                            rssi_map[key] = rssi
+                    continue
 
                 channel_label = _format_channel(row.get('CH_Freq_MHz') or row.get('Channel'))
                 channels = bucket['channels']
@@ -1844,8 +2023,11 @@ def _load_scenario_groups(result_file: Path | str, *, test_type: str | None = No
     for base_key, bucket in buckets.items():
         attenuation_steps = sorted(bucket['attenuations'])
         group_attenuations = attenuation_steps if attenuation_steps else DEFAULT_ATTENUATIONS.copy()
+        group_key = base_key
+        if normalized_filter == "PEAK_THROUGHPUT":
+            group_key = f"{_most_common(bucket['freq'], default='N/A').upper()} {_most_common(bucket['standard'], default='N/A').upper()}"
         group = ScenarioGroup(
-            key=base_key,
+            key=group_key,
             freq=_most_common(bucket['freq'], default='5G'),
             standard=_most_common(bucket['standard'], default='Auto'),
             bandwidth=_most_common(bucket['bandwidth'], default='20/40/80 MHz'),
@@ -1887,8 +2069,8 @@ def _load_scenario_groups(result_file: Path | str, *, test_type: str | None = No
                 key=channel_bucket.get('scenario_key') or base_key,
                 freq=group.freq,
                 standard=group.standard,
-                bandwidth=group.bandwidth,
-                channel_label=channel_label,
+                bandwidth=channel_bucket.get('bandwidth') or group.bandwidth,
+                channel_label=channel_bucket.get('channel_label') or channel_label,
                 angle_label=group.angle_label,
                 attenuation_steps=channel_atts if channel_atts else group_attenuations.copy(),
                 step_summary=group.step_summary,
@@ -2159,6 +2341,79 @@ class _ThroughputReportStrategy(_ReportStrategy):
         return max(base_next_row, last_row + 6)
 
 
+class _PeakThroughputReportStrategy(_ReportStrategy):
+    name = "PEAK_THROUGHPUT"
+
+    def __init__(self) -> None:
+        self._repeat_count: int = 1
+
+    def prepare(
+        self,
+        *,
+        result_file: Path | str,
+        groups: Sequence[ScenarioGroup],
+        actual_type: str,
+    ) -> _StrategyRuntime:
+        path = Path(result_file)
+        with path.open("r", encoding="utf-8-sig", newline="") as handle:
+            reader = csv.reader(handle)
+            headers = next(reader, [])
+        throughput_cols = [str(name or "").strip() for name in headers if str(name or "").strip().startswith("Throughput")]
+
+        def _key(name: str) -> tuple[int, str]:
+            tail = name[len("Throughput") :].strip()
+            if tail.isdigit():
+                return int(tail), name
+            return 1, name
+
+        throughput_cols = sorted(throughput_cols, key=_key)
+        self._repeat_count = max(1, len(throughput_cols))
+        LOGGER.info(
+            "Peak report context | repeat_cols=%d throughput_cols=%s source=%s",
+            self._repeat_count,
+            ", ".join(throughput_cols) if throughput_cols else "Throughput",
+            path,
+        )
+        last_col_index = 16 + self._repeat_count
+        return _StrategyRuntime(report_last_column_letter=get_column_letter(last_col_index))
+
+    def build_group_tables(
+        self,
+        builder: "ProjectReportBuilder",
+        *,
+        group: ScenarioGroup,
+        header_row: int,
+    ) -> "ProjectReportBuilder.GroupBuildResult":
+        ctx: _ProjectReportContext = builder._ctx
+        section_title = f"{group.freq.upper()} Wi-Fi Peak Throughput ({group.standard.upper()})"
+        header_end = _write_peak_section(
+            builder.sheet,
+            start_row=header_row,
+            section_title=section_title,
+            repeat_count=self._repeat_count,
+            last_column=ctx.report_last_column_letter,
+        )
+        data_end = _write_peak_rows(
+            builder.sheet,
+            group=group,
+            repeat_count=self._repeat_count,
+            start_row=header_end + 1,
+        )
+        return ProjectReportBuilder.GroupBuildResult(
+            kind="PEAK_TABLE",
+            table_end_row=data_end,
+        )
+
+    def build_group_charts(
+        self,
+        builder: "ProjectReportBuilder",
+        *,
+        group: ScenarioGroup,
+        table_result: "ProjectReportBuilder.GroupBuildResult",
+    ) -> int:
+        return table_result.table_end_row + 1
+
+
 class ProjectReportBuilder:
     """Build the project Excel report using explicit step methods.
 
@@ -2186,12 +2441,18 @@ class ProjectReportBuilder:
             test_type=self.normalized_type,
         )
         self.actual_type: str = self.normalized_type or (self.groups[0].test_type if self.groups else "RVR")
-        self._strategy: _ReportStrategy = _RvoReportStrategy() if self.actual_type == "RVO" else _ThroughputReportStrategy()
+        if self.actual_type == "RVO":
+            self._strategy = _RvoReportStrategy()
+        elif self.actual_type == "PEAK_THROUGHPUT":
+            self._strategy = _PeakThroughputReportStrategy()
+        else:
+            self._strategy = _ThroughputReportStrategy()
         self.workbook = Workbook()
         self.sheet = self.workbook.active
 
     def build(self) -> Path:
         ctx = self._prepare_context()
+        self._ctx = ctx
         self._configure_sheet(ctx)
         self.build_cover(ctx)
         self.build_summary(ctx)

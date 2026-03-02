@@ -1,9 +1,9 @@
 Turntable:
   Turntable: RS232Board5
   IP address: 192.168.5.156
-  Step: 0,360:30
+  Step: 0,360:45
   Static dB: ''
-  Target RSSI: 45,60
+  Target RSSI: ''
 rf_solution:
   RADIORACK-4-220:
     ip_address: 192.168.1.230
@@ -15,7 +15,7 @@ rf_solution:
     ip_address: 192.168.10.43
     channels: 1,2,3,8
   model: RS232Board5
-  step: 0,5:3
+  step: 0,75:3
 text_case: test/performance/test_wifi_peak_throughput.py
 debug:
   database_mode: false
@@ -23,6 +23,9 @@ debug:
   skip_corner_rf: false
   skip_connect: false
 csv_path: performance_test_csv/ai_wifi_scenarios.csv
-mode: Wi-Fi Only
+mode: Wi-Fi BLE CLASSIC
+bt:
+  ble_alias: Remote
+  classic_alias: JBL
 lab:
-  name: SH Shielded box
+  name: SH Full-wave anechoic chamber#2
