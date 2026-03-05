@@ -5,8 +5,9 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence
 
 import pymysql
 from pymysql.cursors import DictCursor
+from pymysql.err import OperationalError
 
-from .config import ensure_database_exists, load_mysql_config
+from .config import ensure_database_exists, load_mysql_config, get_tool_config_path
 
 
 class MySqlClient:
@@ -48,16 +49,28 @@ class MySqlClient:
         if not self._config or not self._config.get("host"):
             raise RuntimeError("Missing MySQL connection parameters.")
         ensure_database_exists(self._config)
-        self._connection = pymysql.connect(
-            host=self._config.get("host"),
-            port=int(self._config.get("port", 3306)),
-            user=self._config.get("user"),
-            password=self._config.get("password"),
-            database=self._config.get("database"),
-            charset=self._config.get("charset", "utf8mb4"),
-            autocommit=autocommit,
-            cursorclass=DictCursor,
-        )
+        host = self._config.get("host")
+        port = int(self._config.get("port", 3306))
+        user = self._config.get("user")
+        database = self._config.get("database")
+        try:
+            self._connection = pymysql.connect(
+                host=host,
+                port=port,
+                user=user,
+                password=self._config.get("password"),
+                database=database,
+                charset=self._config.get("charset", "utf8mb4"),
+                autocommit=autocommit,
+                cursorclass=DictCursor,
+            )
+        except OperationalError as exc:
+            config_path = get_tool_config_path()
+            raise RuntimeError(
+                "MySQL connection failed. "
+                f"config={config_path} host={host}:{port} user={user} database={database}. "
+                f"Original error: {exc}"
+            ) from exc
 
     @property
     def connection(self):

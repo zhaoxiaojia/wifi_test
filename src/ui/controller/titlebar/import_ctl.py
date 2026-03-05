@@ -55,6 +55,7 @@ def _store_excel_artifact(
 def _insert_performance_rows(
     manager: PerformanceTableManager,
     *,
+    test_report_id: int,
     execution_id: int,
     csv_name: str,
     data_type: str,
@@ -76,6 +77,7 @@ def _insert_performance_rows(
     values: List[List[Any]] = []
     for row in rows:
         row_values: List[Any] = [
+            test_report_id,
             execution_id,
             csv_name,
             data_type,
@@ -135,6 +137,7 @@ DEFAULT_SCENARIOS: Tuple[ScenarioSpec, ...] = (
     ScenarioSpec("2.4G", "ax3600_2g", "11ax", 6, "40 MHz", "Open System", "", 1, 1),
     ScenarioSpec("2.4G", "ax3600_2g", "11ax", 11, "40 MHz", "Open System", "", 1, 1),
     ScenarioSpec("5G", "ax3600_5g", "11ax", 36, "80 MHz", "Open System", "", 1, 1),
+    ScenarioSpec("5G", "ax3600_5g", "11ax", 52, "80 MHz", "Open System", "", 1, 1),
     ScenarioSpec("5G", "ax3600_5g", "11ax", 64, "80 MHz", "Open System", "", 1, 1),
     ScenarioSpec("5G", "ax3600_5g", "11ax", 149, "80 MHz", "Open System", "", 1, 1),
     ScenarioSpec("5G", "ax3600_5g", "11ax", 161, "80 MHz", "Open System", "", 1, 1),
@@ -933,6 +936,7 @@ class ImportController:
             "brand": field_widgets["project.customer"].currentText(),
             "product_line": field_widgets["project.product_line"].currentText(),
             "project_name": field_widgets["project.project"].currentText(),
+            "odm": field_widgets["project.odm"].currentText(),
             "main_chip": field_widgets["project.main_chip"].text(),
             "wifi_module": field_widgets["project.wifi_module"].text(),
             "interface": field_widgets["project.interface"].text(),
@@ -1017,6 +1021,7 @@ class ImportController:
                 )
                 inserted_total += _insert_performance_rows(
                     manager,
+                    test_report_id=int(report_id),
                     execution_id=execution_id,
                     csv_name=Path(excel_path).name,
                     data_type=data_type,
@@ -1110,27 +1115,31 @@ class ImportController:
         dut_payload = {
             "serial_number": None,
             "connect_type": None,
+            "mac_address": None,
             "adb_device": None,
             "telnet_ip": None,
             "software_version": ui_payload.get("software_version"),
             "driver_version": ui_payload.get("driver_version"),
             "android_version": ui_payload.get("android_version"),
             "kernel_version": ui_payload.get("kernel_version"),
+            "odm": ui_payload.get("odm"),
         }
         dut_id = client.insert(
             "INSERT INTO `dut` "
-            "(`serial_number`, `connect_type`, `adb_device`, `telnet_ip`, "
-            "`software_version`, `driver_version`, `android_version`, `kernel_version`, `payload_json`) "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            "(`serial_number`, `connect_type`, `mac_address`, `adb_device`, `telnet_ip`, "
+            "`software_version`, `driver_version`, `android_version`, `kernel_version`, `odm`, `payload_json`) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
             (
                 dut_payload.get("serial_number"),
                 dut_payload.get("connect_type"),
+                dut_payload.get("mac_address"),
                 dut_payload.get("adb_device"),
                 dut_payload.get("telnet_ip"),
                 dut_payload.get("software_version"),
                 dut_payload.get("driver_version"),
                 dut_payload.get("android_version"),
                 dut_payload.get("kernel_version"),
+                dut_payload.get("odm"),
                 json.dumps(dut_payload, ensure_ascii=True, separators=(",", ":")),
             ),
         )

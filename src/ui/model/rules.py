@@ -418,6 +418,11 @@ CUSTOM_SIMPLE_UI_RULES.append(
     SimpleRuleSpec(
         trigger_field="connect_type.type",
         effects=[
+            SimpleFieldEffect(
+                target_field="connect_type.type",
+                action="disable",
+                condition=lambda values: True,
+            ),
             # Android branch
             SimpleFieldEffect(
                 target_field="connect_type.Android.device",
