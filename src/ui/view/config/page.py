@@ -1,0 +1,710 @@
+"""View + page implementation for the Config sidebar (Basic/Performance/Stability)."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any, Callable, Mapping, Sequence, Dict
+import time
+
+from PyQt5.QtCore import (
+    Qt,
+    QTimer,
+    pyqtSignal,
+    QPropertyAnimation,
+    QParallelAnimationGroup,
+    QObject,
+    pyqtProperty,
+)
+from PyQt5.QtWidgets import (
+    QGroupBox,
+    QHBoxLayout,
+    QSplitter,
+    QStackedWidget,
+    QVBoxLayout,
+    QWidget,
+    QSizePolicy,
+    QLabel,
+)
+from qfluentwidgets import CardWidget, ComboBox, PushButton, ScrollArea, FluentIcon, TreeView
+
+from src.ui.controller.config_ctl import ConfigController
+from src.ui.view.common import ConfigGroupPanel, EditableInfo, ScriptConfigEntry, PAGE_CONTENT_MARGIN
+from src.ui.view.theme import (
+    CASE_TREE_FONT_SIZE_PX,
+    apply_font_and_selection,
+    apply_theme,
+    apply_settings_tab_label_style,
+)
+from src.ui.view.config.actions import refresh_config_page_controls, apply_ui
+from src.ui.view.ui_adapter import UiAdapter, UiEvent
+from src.ui.view.config import (
+    create_test_switch_wifi_str_config_entry_from_schema,
+    initialize_script_config_groups,
+)
+from src.util.constants import (
+    DEFAULT_ANDROID_VERSION_CHOICES,
+    DEFAULT_KERNEL_VERSION_CHOICES,
+)
+from src.ui.controller.case_ctl import _register_switch_wifi_csv_combo as _reg_sw_csv
+
+
+class _RowHeightWrapper(QObject):
+    """
+    Helper object that bridges a single index's row height to a Qt property.
+
+    The wrapper allows using :class:`QPropertyAnimation` on a per-index basis.
+    It stores and retrieves heights in the parent tree's private height map
+    (``tree._row_heights``), then triggers geometry updates on change.
+    """
+
+    def __init__(self, tree: "AnimatedTreeView", index) -> None:
+        super().__init__(tree)
+        self._tree = tree
+        self._index = index
+
+    def _set_height(self, height: int) -> None:
+        self._tree._row_heights[self._index] = height
+        self._tree.updateGeometries()
+
+    def _get_height(self) -> int:
+        return self._tree._row_heights.get(self._index, 0)
+
+    #: Qt property used by QPropertyAnimation.
+    height = pyqtProperty(int, fset=_set_height, fget=_get_height)
+
+
+class AnimatedTreeView(TreeView):
+    """
+    A TreeView with expand animation for child rows.
+
+    Behavior
+    --------
+    - When expanding an index, the control pre-expands the node (so children
+      exist), then animates each direct child's row height from 0 to its native
+      size hint using a parallel animation group.
+    - While the animation runs, :meth:`indexRowSizeHint` serves the temporary
+      heights from ``_row_heights`` so the viewport progressively reveals rows.
+    - After the animation finishes, temporary overrides are cleared, updates are
+      re-enabled, and the viewport is repainted once.
+    """
+
+    ANIMATION_DURATION = 180  # ms
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self._row_heights: dict[object, int] = {}
+
+    def indexRowSizeHint(self, index):  # noqa: N802 (Qt naming convention)
+        """Return row height for ``index`` honoring active animations."""
+        return self._row_heights.get(index, super().indexRowSizeHint(index))
+
+    def setExpanded(self, index, expand):  # noqa: D401, N802
+        """Reimplemented to animate child rows on expand."""
+        model = self.model()
+        if expand and model is not None:
+            self.setUpdatesEnabled(False)
+            super().setExpanded(index, expand)
+            group = QParallelAnimationGroup(self)
+            for row in range(model.rowCount(index)):
+                child = model.index(row, 0, index)
+                target = super().indexRowSizeHint(child)
+                self._row_heights[child] = 0
+                wrapper = _RowHeightWrapper(self, child)
+                anim = QPropertyAnimation(wrapper, b"height", self)
+                anim.setDuration(self.ANIMATION_DURATION)
+                anim.setStartValue(0)
+                anim.setEndValue(target)
+                group.addAnimation(anim)
+
+            def _on_finished() -> None:
+                for row in range(model.rowCount(index)):
+                    child = model.index(row, 0, index)
+                    self._row_heights.pop(child, None)
+                self.setUpdatesEnabled(True)
+                self.viewport().update()
+
+            group.finished.connect(_on_finished)
+            group.start(QPropertyAnimation.DeleteWhenStopped)
+        else:
+            super().setExpanded(index, expand)
+
+
+class _ConfigTabLabel(QLabel):
+    """Clickable label used for Basic/Performance/Stability tabs."""
+
+    clicked = pyqtSignal()
+
+    def mousePressEvent(self, event) -> None:  # type: ignore[override]
+        if event.button() == Qt.LeftButton:
+            self.clicked.emit()
+        super().mousePressEvent(event)
+
+
+class ConfigView(CardWidget):
+    """Pure UI view for the Config page (no business logic)."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        apply_theme(self)
+
+        # Left/right splitter
+        self.splitter = QSplitter(Qt.Horizontal, self)
+        self.splitter.setChildrenCollapsible(False)
+
+        # Left: case tree
+        self.case_tree = AnimatedTreeView(self)
+        apply_theme(self.case_tree)
+        apply_font_and_selection(self.case_tree, size_px=CASE_TREE_FONT_SIZE_PX)
+        self.splitter.addWidget(self.case_tree)
+
+        # Right: scroll area with stacked pages
+        scroll_area = ScrollArea(self)
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setContentsMargins(0, 0, 0, 0)
+        self.scroll_area = scroll_area
+
+        container = QWidget()
+        right = QVBoxLayout(container)
+        right.setContentsMargins(0, 0, 0, 0)
+        right.setSpacing(10)
+
+        # Track which logical pages are currently available
+        self._current_page_keys: list[str] = []
+
+        # Simple tab row for Basic / Performance / Stability / Compatibility
+        self._page_label_map: dict[str, str] = {
+            "basic": "Basic",
+            "execution": "Performance",
+            "stability": "Stability",
+            "compatibility": "Compatibility",
+        }
+        self._page_buttons: dict[str, _ConfigTabLabel] = {}
+        tabs_row = QHBoxLayout()
+        tabs_row.setContentsMargins(PAGE_CONTENT_MARGIN, PAGE_CONTENT_MARGIN, PAGE_CONTENT_MARGIN, 0)
+        tabs_row.setSpacing(8)
+        for key in ("basic", "execution", "stability", "compatibility"):
+            lbl = _ConfigTabLabel(self._page_label_map[key], self)
+            apply_settings_tab_label_style(lbl, active=(key == "basic"))
+            self._page_buttons[key] = lbl
+            tabs_row.addWidget(lbl)
+        tabs_row.addStretch(1)
+        right.addLayout(tabs_row)
+
+        self.stack = QStackedWidget(self)
+        right.addWidget(self.stack, 1)
+
+        self._page_panels: dict[str, ConfigGroupPanel] = {
+            "basic": ConfigGroupPanel(self),
+            "execution": ConfigGroupPanel(self),
+            # 稳定性页使用两列布局：左侧给脚本用例（如 test_switch_wifi）更多空间，
+            # 右侧堆叠 Duration / Check Point / Selected Test Case。
+            "stability": ConfigGroupPanel(self, columns=2),
+        }
+        # Backward-compatible attributes expected by existing actions/helpers.
+        # These aliases allow refresh_config_page_controls (and related helpers)
+        # to treat the panels as dedicated attributes while the view internally
+        # tracks them in a dictionary.
+        self._basic_panel = self._page_panels["basic"]
+        self._dut_panel = self._basic_panel
+        self._execution_panel = self._page_panels["execution"]
+        self._stability_panel = self._page_panels["stability"]
+        # Additional panel used for folder-based Compatibility Settings.
+        # Use a two-column layout so that the Compatibility Settings group
+        # can occupy the wider left column, similar to Stability scripts.
+        self._page_panels["compatibility"] = ConfigGroupPanel(self, columns=2)
+        self._compatibility_panel = self._page_panels["compatibility"]
+        self._page_widgets: dict[str, QWidget] = {}
+        self._run_buttons: list[PushButton] = []
+
+        for key in ("basic", "execution", "stability", "compatibility"):
+            panel = self._page_panels[key]
+            page = QWidget()
+            page.setObjectName(f"config_{key}_page")
+            page_layout = QVBoxLayout(page)
+            page_layout.setContentsMargins(
+                PAGE_CONTENT_MARGIN,
+                PAGE_CONTENT_MARGIN,
+                PAGE_CONTENT_MARGIN,
+                PAGE_CONTENT_MARGIN,
+            )
+            page_layout.setSpacing(PAGE_CONTENT_MARGIN)
+            page_layout.addWidget(panel, 1)
+            run_btn = self._create_run_button(page)
+            page_layout.addWidget(run_btn, 0)
+            self._page_widgets[key] = page
+
+        # Initialise stack and step view with the default page selection.
+        self.set_available_pages(["basic"])
+
+        scroll_area.setWidget(container)
+        self.splitter.addWidget(scroll_area)
+        # Keep tree (left) : form (right) width ratio close to 3:7.
+        self.splitter.setStretchFactor(0, 3)
+        self.splitter.setStretchFactor(1, 7)
+
+        # Flag used by resizeEvent to apply an initial 3:7 ratio once.
+        self._splitter_initialized = False
+
+        main_layout = QHBoxLayout(self)
+        main_layout.setSpacing(10)
+        main_layout.setContentsMargins(5, 5, 5, 5)
+        main_layout.addWidget(self.splitter)
+
+    def _create_run_button(self, parent: QWidget) -> PushButton:
+        """Create a Run button for the page (UI only)."""
+        button = PushButton("Create Case", parent)
+        button.setIcon(FluentIcon.ADD)
+        if hasattr(button, "setUseRippleEffect"):
+            button.setUseRippleEffect(True)
+        if hasattr(button, "setUseStateEffect"):
+            button.setUseStateEffect(True)
+        button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self._run_buttons.append(button)
+        return button
+
+    # Public API used by controllers
+    # ------------------------------------------------------------------
+
+    def set_available_pages(self, page_keys: Sequence[str]) -> None:
+        """Show the given logical pages in the stacked widget."""
+        normalized: list[str] = []
+        for key in page_keys:
+            if key not in self._page_widgets:
+                continue
+            if key not in normalized:
+                normalized.append(key)
+        if "basic" not in normalized:
+            normalized.insert(0, "basic")
+        if normalized == getattr(self, "_current_page_keys", []):
+            return
+
+        current_widget = self.stack.currentWidget() if self.stack.count() else None
+        current_key: str | None = None
+        if current_widget is not None:
+            for key, widget in self._page_widgets.items():
+                if widget is current_widget:
+                    current_key = key
+                    break
+
+        # Rebuild stack order to match normalized keys.
+        while self.stack.count():
+            widget = self.stack.widget(0)
+            self.stack.removeWidget(widget)
+        for key in normalized:
+            self.stack.addWidget(self._page_widgets[key])
+
+        self._current_page_keys = normalized
+
+        # Update tab visibility based on available pages.
+        for key, lbl in self._page_buttons.items():
+            lbl.setVisible(key in normalized)
+
+        # Preserve current page when possible.
+        target_index = 0
+        if current_key in normalized:
+            target_index = normalized.index(current_key)
+        self.stack.setCurrentIndex(target_index)
+        self._update_tab_checked(target_index)
+
+    # ------------------------------------------------------------------
+    # Tab helpers
+    # ------------------------------------------------------------------
+
+    def _update_tab_checked(self, index: int) -> None:
+        """Update which tab button appears active."""
+        if not (0 <= index < len(self._current_page_keys)):
+            return
+        active_key = self._current_page_keys[index]
+        for key, lbl in self._page_buttons.items():
+            apply_settings_tab_label_style(lbl, active=(key == active_key))
+
+    def set_current_page(self, key: str) -> None:
+        """Public helper to switch to a logical page key."""
+        if key not in self._current_page_keys:
+            return
+        index = self._current_page_keys.index(key)
+        self.stack.setCurrentIndex(index)
+        self._update_tab_checked(index)
+
+    # ------------------------------------------------------------------
+    # Size handling
+    # ------------------------------------------------------------------
+
+    def resizeEvent(self, event) -> None:  # noqa: D401  (Qt override)
+        """Reimplemented to apply an initial tree/form ratio once.
+
+        Qt's splitter layout can override :meth:`setSizes` during the
+        first layout pass. To keep behaviour consistent with the legacy
+        implementation (approximately 3:7 for tree vs. config form),
+        this override applies a 30%/70% split the first time the view
+        receives a resize event, then lets user resizing take over.
+        """
+        super().resizeEvent(event)
+        if getattr(self, "_splitter_initialized", False):
+            return
+        if not hasattr(self, "splitter") or self.splitter.count() < 2:
+            return
+        total = max(self.splitter.width(), 10)
+        left = max(int(total * 0.25), 1)
+        right = max(total - left, 1)
+        self.splitter.setSizes([left, right])
+        sizes = self.splitter.sizes()
+        span = max(sum(sizes), 1)
+        ratio = sizes[0] / span
+        self._splitter_initialized = True
+
+
+class CaseConfigPage(ConfigView):
+    """Controller+view wrapper for the Config page.
+
+    This merges the previous :class:`CaseConfigPage` implementation from
+    ``src.ui.case_config_page`` with :class:`ConfigView` so that the page
+    can be used directly without a separate wrapper module.
+    """
+
+    csvFileChanged = pyqtSignal(str)
+
+    def __init__(self, on_run_callback) -> None:
+        _t0 = time.perf_counter()
+        super().__init__(parent=None)
+        self.setObjectName("caseConfigPage")
+        self.on_run_callback = on_run_callback
+        print(f"[STARTUP_TIME] CaseConfigPage.__init__ start: 0.000s")
+
+        # Backward-compatible attribute: older helpers expect a page.view
+        # pointing at the ConfigView instance used for tab switching.
+        self.view = self
+
+        # Controller responsible for config lifecycle/normalisation.
+        _t = time.perf_counter()
+        self.config_ctl = ConfigController(self)
+        print(f"[STARTUP_TIME] CaseConfigPage.ConfigController: {time.perf_counter() - _t:.3f}s")
+
+        # Load the persisted tool configuration and restore CSV selection.
+        # load_initial_config populates ``self.config`` and, when possible,
+        # initialises ``self.selected_csv_path`` from the stored csv_path.
+        _t = time.perf_counter()
+        self.config: dict[str, Any] = self.config_ctl.load_initial_config()
+        print(f"[STARTUP_TIME] CaseConfigPage.load_initial_config: {time.perf_counter() - _t:.3f}s")
+
+        # Transient state flags used during refreshes and selections.
+        # Do not clobber selected_csv_path here so that any value restored
+        # from config remains available for initial combo population.
+        self.selected_csv_path: str | None = getattr(self, "selected_csv_path", None)
+        self._refreshing = False
+        self._pending_path: str | None = None
+
+        # Mapping from config field keys (e.g. "android_system.version") to widgets.
+        self.field_widgets: dict[str, QWidget] = {}
+
+        # Mapping from logical UI identifiers (config_panel_group_field_type) to widgets.
+        self.config_controls: dict[str, QWidget] = {}
+
+        self._duration_control_group: QGroupBox | None = None
+        self._check_point_group: QGroupBox | None = None
+
+        self.router_obj: Any | None = None
+        self._enable_rvr_wifi: bool = False
+        self._router_config_active: bool = False
+        self._run_locked: bool = False
+        self._ui_adapter: UiAdapter | None = None
+        self._locked_fields: set[str] | None = None
+        # Preserve any _current_case_path set by the controller during
+        # load_initial_config; default to empty string otherwise.
+        self._current_case_path: str = getattr(self, "_current_case_path", "")
+        self._last_editable_info: EditableInfo | None = None
+
+        # Switch‑Wi‑Fi CSV combo management.
+        self._switch_wifi_csv_combos: list[ComboBox] = []
+        self.register_switch_wifi_csv_combo = lambda combo: _reg_sw_csv(self, combo)
+
+        # Track Android/kernel version options.
+        self._android_versions = list(DEFAULT_ANDROID_VERSION_CHOICES)
+        self._kernel_versions = list(DEFAULT_KERNEL_VERSION_CHOICES)
+
+        # Logical page tracking from the controller perspective.
+        self._current_page_keys = ["basic"]
+
+        self._script_config_factories: dict[
+            str, Callable[[Any, str, str, Mapping[str, Any]], ScriptConfigEntry]
+        ] = {
+            # Merged stability script combining STR relay and Wi‑Fi switching.
+            "test/stability/test_switch_wifi_str.py": create_test_switch_wifi_str_config_entry_from_schema,
+        }
+        self._script_groups: dict[str, ScriptConfigEntry] = {}
+        self._active_script_case: str | None = None
+
+        self._config_panels = tuple(self._page_panels[key] for key in ("basic", "execution", "stability"))
+
+        # Containers for groups discovered from the YAML schema.
+        self._basic_groups: dict[str, QWidget] = {}
+        self._dut_groups = self._basic_groups
+        self._other_groups: dict[str, QWidget] = {}
+        # Field map used by the simple rule engine; initialised to an empty
+        # mapping so that early rule evaluations can safely access it before
+        # refresh_config_page_controls populates field_widgets.
+        self._field_map: dict[str, QWidget] = {}
+
+        # Render form fields from YAML.
+        _t = time.perf_counter()
+        refresh_config_page_controls(self, panel_keys=("basic", "execution"), clear_existing=True)
+        self._lazy_panels_built: set[str] = {"basic", "execution"}
+        self._script_groups_initialized = False
+        print(f"[STARTUP_TIME] CaseConfigPage.refresh_controls: {time.perf_counter() - _t:.3f}s")
+        # Bind UI events via the adapter so that all interactions flow
+        # into a unified UiEvent pipeline handled by the controller.
+        self._ui_adapter = UiAdapter(self, self._emit_ui_event)
+        try:
+            _t = time.perf_counter()
+            self._ui_adapter.bind_all()
+            print(f"[STARTUP_TIME] CaseConfigPage.UiAdapter.bind_all: {time.perf_counter() - _t:.3f}s")
+        except Exception:
+            self._ui_adapter = None
+
+        self.stack.currentChanged.connect(self._on_config_tab_changed)
+
+        # ------------------------------------------------------------------
+        # Simple rules integration
+        #
+        # Build a field map that maps dotted field identifiers to widgets.
+        # This map is used by the simple rule engine (see src/ui/model/rules.py)
+        # to look up widgets and apply actions such as show/hide and enable/disable.
+        # The field_widgets dictionary is populated by refresh_config_page_controls.
+        self._field_map = getattr(self, "field_widgets", {}) or {}
+
+        # Connect triggers for custom simple rules.  Only a subset of fields
+        # currently participate in the simple rule engine, so connections are
+        # registered conditionally.  See _connect_simple_rules for details.
+        self._connect_simple_rules()
+
+        # Initialise case tree using src/test as root (non-fatal on failure).
+        try:
+            _t = time.perf_counter()
+            base = Path(self.config_ctl.get_application_base())
+            test_root = base / "test"
+            if test_root.exists():
+                self.config_ctl.init_case_tree(test_root)
+            print(f"[STARTUP_TIME] CaseConfigPage.init_case_tree: {time.perf_counter() - _t:.3f}s")
+        except Exception:
+            pass
+
+        # Apply initial UI rules/state via the unified rule engine.
+        try:
+            from src.ui.model.rules import evaluate_all_rules
+
+            _t = time.perf_counter()
+            evaluate_all_rules(self, None)
+            print(f"[STARTUP_TIME] CaseConfigPage.evaluate_all_rules: {time.perf_counter() - _t:.3f}s")
+        except Exception:
+            pass
+
+        # CSV/router updates.
+        _t = time.perf_counter()
+        self.config_ctl.update_csv_options()
+        print(f"[STARTUP_TIME] CaseConfigPage.update_csv_options: {time.perf_counter() - _t:.3f}s")
+
+        # Connect signals after UI ready.
+        self.case_tree.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        QTimer.singleShot(
+            0,
+            lambda: apply_ui(self, getattr(self, "_current_case_path", "") or ""),
+        )
+        print(f"[STARTUP_TIME] CaseConfigPage.__init__ end: {time.perf_counter() - _t0:.3f}s")
+
+    def _on_config_tab_changed(self, index: int) -> None:
+        keys = getattr(self, "_current_page_keys", []) or []
+        if not (0 <= index < len(keys)):
+            return
+        self._ensure_panel_built(str(keys[index]))
+
+    def _ensure_panel_built(self, key: str) -> None:
+        if not key or key in getattr(self, "_lazy_panels_built", set()):
+            return
+        refresh_config_page_controls(self, panel_keys=(key,), clear_existing=False)
+        if key == "stability" and not getattr(self, "_script_groups_initialized", False):
+            initialize_script_config_groups(self)
+            self._script_groups_initialized = True
+        if self._ui_adapter is not None:
+            try:
+                self._ui_adapter.bind_all()
+            except Exception:
+                pass
+        self._lazy_panels_built.add(key)
+
+    # ------------------------------------------------------------------
+    # UiAdapter integration
+    # ------------------------------------------------------------------
+
+    def _emit_ui_event(self, event: UiEvent) -> None:
+        """Forward UiAdapter events to the config controller."""
+        self.config_ctl.handle_ui_event(event)  # type: ignore[arg-type]
+
+    # ------------------------------------------------------------------
+    # Helpers used by controller / actions
+    # ------------------------------------------------------------------
+
+    def _determine_pages_for_case(self, case_path: str, info: EditableInfo) -> list[str]:
+        """Delegate page-key computation to the config controller."""
+        return self.config_ctl.determine_pages_for_case(case_path, info)
+
+    def set_fields_editable(self, fields: set[str]) -> None:
+        """Enable or disable config widgets based on the given editable field keys."""
+        from src.ui.view.config.actions import set_fields_editable as _set_fields
+
+        _set_fields(self, fields)
+
+    # ------------------------------------------------------------------
+    # Simple rule integration methods
+    # ------------------------------------------------------------------
+
+    def _connect_simple_rules(self) -> None:
+        """
+        Initialise the simple rule engine for the current field map.
+
+        Field change signals are routed through the UiAdapter into
+        ConfigController._on_field_change, which in turn calls
+        evaluate_all_rules. This helper only needs to ensure that the
+        field map is populated and that an initial rules pass is run
+        so the UI reflects the current config state.
+        """
+        from src.ui.model.rules import evaluate_all_rules
+
+        self._field_map = self.field_widgets or {}
+        evaluate_all_rules(self, None)
+
+    def on_field_changed(self, field_id: str, value: Any) -> None:
+        """
+        Respond to a change in a field value by evaluating all UI rules.
+
+        This delegates to :func:`evaluate_all_rules` in the rules module so
+        that all simple per-field rules are applied through a single entry
+        point.
+        """
+        try:
+            from src.ui.model.rules import evaluate_all_rules  # type: ignore
+        except Exception:
+            return
+        evaluate_all_rules(self, field_id)
+
+    def _collect_values(self) -> Dict[str, Any]:
+        """
+        Return a mapping of all field identifiers to their current values.
+
+        This helper inspects every widget in ``self._field_map`` and extracts
+        its current value based on common widget APIs.  Checkboxes yield
+        boolean values, combo boxes and other widgets yield their current
+        textual representation, and line edits return their plain text.
+        """
+        values: Dict[str, Any] = {}
+        for key, widget in (self._field_map or {}).items():
+            try:
+                # QCheckBox has isChecked
+                if hasattr(widget, "isChecked"):
+                    values[key] = bool(widget.isChecked())
+                # QSpinBox / QDoubleSpinBox have value() but treat as numeric
+                elif hasattr(widget, "value") and not hasattr(widget, "currentText"):
+                    values[key] = widget.value()
+                # ComboBox (and similar) have currentText
+                elif hasattr(widget, "currentText"):
+                    values[key] = str(widget.currentText())
+                # LineEdit (and similar) have text
+                elif hasattr(widget, "text"):
+                    values[key] = str(widget.text())
+            except Exception:
+                values[key] = None
+        return values
+
+    # ------------------------------------------------------------------
+    # UIAdapter methods for simple rule engine
+    # ------------------------------------------------------------------
+    def _get_field_widget(self, field_id: str) -> QWidget | None:
+        """Return the widget associated with a dotted field identifier."""
+        return (self._field_map or {}).get(field_id)
+
+    def show(self, field_id: str) -> None:  # noqa: D401 (UIAdapter)
+        widget = self._get_field_widget(field_id)
+        if widget is None:
+            return
+        try:
+            widget.setVisible(True)
+            # Also show the label when the widget lives in a QFormLayout row.
+            parent = widget.parent()
+            from PyQt5.QtWidgets import QFormLayout  # type: ignore
+
+            if hasattr(parent, "layout"):
+                layout = parent.layout()
+                if isinstance(layout, QFormLayout):
+                    label = layout.labelForField(widget)
+                    if label is not None and hasattr(label, "setVisible"):
+                        label.setVisible(True)
+        except Exception:
+            pass
+
+    def hide(self, field_id: str) -> None:  # noqa: D401 (UIAdapter)
+        widget = self._get_field_widget(field_id)
+        if widget is None:
+            return
+        try:
+            widget.setVisible(False)
+            # Also hide the label when the widget lives in a QFormLayout row.
+            parent = widget.parent()
+            from PyQt5.QtWidgets import QFormLayout  # type: ignore
+
+            if hasattr(parent, "layout"):
+                layout = parent.layout()
+                if isinstance(layout, QFormLayout):
+                    label = layout.labelForField(widget)
+                    if label is not None and hasattr(label, "setVisible"):
+                        label.setVisible(False)
+        except Exception:
+            pass
+
+    def enable(self, field_id: str) -> None:  # noqa: D401 (UIAdapter)
+        widget = self._get_field_widget(field_id)
+        if widget is None:
+            return
+        try:
+            widget.setEnabled(True)
+        except Exception:
+            pass
+
+    def disable(self, field_id: str) -> None:  # noqa: D401 (UIAdapter)
+        widget = self._get_field_widget(field_id)
+        if widget is None:
+            return
+        try:
+            widget.setEnabled(False)
+        except Exception:
+            pass
+
+    def set_value(self, field_id: str, value: Any) -> None:  # noqa: D401 (UIAdapter)
+        widget = self._get_field_widget(field_id)
+        if widget is None:
+            return
+        try:
+            # Checkboxes: expect a boolean
+            if hasattr(widget, "setChecked") and isinstance(value, (bool, type(None))):
+                widget.setChecked(bool(value))
+                return
+            # Spin boxes: numeric
+            if hasattr(widget, "setValue") and isinstance(value, (int, float)):
+                widget.setValue(value)
+                return
+            # Combo boxes: select by text
+            if hasattr(widget, "setCurrentText"):
+                widget.setCurrentText(str(value) if value is not None else "")
+                return
+            # Line edits: set plain text
+            if hasattr(widget, "setText"):
+                widget.setText(str(value) if value is not None else "")
+                return
+        except Exception:
+            pass
+
+    # Note: `set_options` was removed. The rule engine will update combo
+    # widgets directly via a fallback when the adapter does not implement
+    # `set_options`, preventing import cycles and centralising option
+    # population in rules.
+
+
+__all__ = ["ConfigView", "CaseConfigPage"]

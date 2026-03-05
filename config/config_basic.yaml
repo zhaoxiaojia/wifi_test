@@ -1,0 +1,50 @@
+software_info:
+  software_version: ''
+  driver_version: ''
+hardware_info:
+  hardware_version: ''
+system:
+  version: Android 15
+  kernel_version: Kernel 6.1
+connect_type:
+  Android:
+    device: ''
+  Linux:
+    ip: 192.168.1.166
+    wildcard: ''
+  third_party:
+    enabled: false
+    wait_seconds: 45
+  type: Linux
+project:
+  customer: Roku
+  product_line: TV
+  project: Sandia
+  main_chip: TR964
+  wifi_module: W2L
+  interface: USB
+  mass_production_status: ''
+serial_port:
+  baud: '921600'
+  port: COM14 (蓝牙链接上的标准串行 (COM14))
+  status: false
+rvr:
+  iperf:
+    path: ''
+    server_cmd: iperf -s -i 1
+    client_cmd: iperf -c {ip} -i 1 -t 5 -P 1
+  ixchariot:
+    path: D:/Program Files (x86)/Ixia/IxChariot
+  repeat: '0'
+  throughput_threshold: '0'
+  tool: iperf
+duration_control:
+  loop: '2'
+  duration_hours: '1.0'
+  exitfirst: false
+  retry_limit: '0'
+router:
+  name: asusax88u
+  address: 192.168.50.1
+  24g_ssid: 2.4G
+  5g_ssid: 5G

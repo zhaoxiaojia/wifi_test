@@ -1,0 +1,31 @@
+﻿# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# pytest / logs
+.pytest_cache/
+pytest.log
+*.log
+
+# IDE
+.idea/
+.vscode/
+
+# Build artifacts
+build/
+dist/
+*.spec
+
+# Reports / outputs
+report/
+!src/util/report/
+!src/util/report/**
+test_results.csv
+*.xlsx
+
+# Secrets
+config/ai_keys.json
+.env
+.env.*

@@ -1,0 +1,3 @@
+[console_scripts]
+mcp-windows-server = mcp_windows_automation:main
+unified-server = unified_server:main

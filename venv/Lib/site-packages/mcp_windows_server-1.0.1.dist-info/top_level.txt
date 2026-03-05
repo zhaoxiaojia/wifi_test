@@ -1,0 +1,3 @@
+mcp_windows_automation
+office_mcp_server
+unified_server

@@ -1,0 +1,148 @@
+panels:
+  basic:
+    sections:
+      - id: software_info
+        label: "Software Info"
+        fields:
+          - key: software_info.software_version
+            widget: line_edit
+            label: "Software Version"
+            placeholder: "e.g. V1.2.3"
+          - key: software_info.driver_version
+            widget: line_edit
+            label: "Driver Version"
+            placeholder: "Driver build"
+
+      - id: system
+        label: "System"
+        fields:
+          - key: system.version
+            widget: combo_box
+            label: "Android Version"
+          - key: system.kernel_version
+            widget: combo_box
+            label: "Kernel Version"
+
+      - id: connect_type
+        label: "Control Type"
+        fields:
+          - key: connect_type.type
+            widget: combo_box
+            label: "Control Type"
+            choices: ["Android", "Linux"]
+          - key: connect_type.Android.device
+            widget: combo_box
+            label: "Android Device"
+            placeholder: "adb device identifier"
+          - key: connect_type.Linux.ip
+            widget: combo_box
+            label: "Linux IP"
+            placeholder: "192.168.x.x"
+          - key: connect_type.third_party.enabled
+            widget: checkbox
+            label: "Enable third-party control"
+          - key: connect_type.third_party.wait_seconds
+            widget: int
+            label: "Wait seconds"
+            minimum: 1
+            maximum: 999999
+
+      - id: project
+        label: "Project"
+        fields:
+          - key: project.customer
+            widget: combo_box
+            label: "Customer"
+          - key: project.product_line
+            widget: combo_box
+            label: "Product Line"
+          - key: project.project
+            widget: combo_box
+            label: "Project"
+          - key: project.main_chip
+            widget: line_edit
+            label: "Main Chip"
+          - key: project.wifi_module
+            widget: line_edit
+            label: "Wi-Fi Module"
+          - key: project.interface
+            widget: line_edit
+            label: "Interface"
+          - key: project.mass_production_status
+            widget: combo_box
+            label: "Mass Production Status"
+
+      - id: serial_port
+        label: "Serial Port"
+        fields:
+          - key: serial_port.status
+            widget: checkbox
+            label: "Enable Serial Port"
+          - key: serial_port.port
+            widget: combo_box
+            label: "Port"
+          - key: serial_port.baud
+            widget: combo_box
+            label: "Baud Rate"
+            choices: ["9600", "19200", "38400", "57600", "115200", "921600"]
+      - id: throughput
+        label: "Throughput Generator"
+        fields:
+          - key: rvr.tool
+            widget: combo_box
+            label: "Throughput Tool"
+            choices: ["iperf", "ixchariot"]
+          - key: rvr.iperf.path
+            widget: line_edit
+            label: "iperf path (DUT)"
+          - key: rvr.iperf.server_cmd
+            widget: line_edit
+            label: "iperf server cmd"
+          - key: rvr.iperf.client_cmd
+            widget: line_edit
+            label: "iperf client cmd"
+          - key: rvr.ixchariot.path
+            widget: line_edit
+            label: "IxChariot path"
+          - key: rvr.repeat
+            widget: line_edit
+            label: "Repeat"
+            placeholder: "0"
+          - key: rvr.throughput_threshold
+            widget: line_edit
+            label: "Zero Point Threshold"
+            placeholder: "0"
+      - id: router
+        label: "Router"
+        fields:
+          - key: router.name
+            widget: combo_box
+            label: "Router"
+            choices: ["asusax88u", "asusax88upro", "asusax86u","xiaomibe7000", "xiaomiax3600"]
+          - key: router.address
+            widget: line_edit
+            label: "Router IP"
+            placeholder: "192.168.x.x"
+          - key: router.24g_ssid
+            widget: line_edit
+            label: "2.4G SSID"
+            placeholder: "24G"
+          - key: router.5g_ssid
+            widget: line_edit
+            label: "5G SSID"
+            placeholder: "5G"
+      - id: duration_control
+        label: "Test Duration"
+        fields:
+          - key: duration_control.loop
+            widget: line_edit
+            label: "Loop count"
+          - key: duration_control.duration_hours
+            widget: line_edit
+            label: "Duration (hours)"
+          - key: duration_control.exitfirst
+            widget: checkbox
+            label: "Stop immediately on failure (exitfirst)"
+          - key: duration_control.retry_limit
+            widget: line_edit
+            label: "Retry count"

@@ -1,0 +1,38 @@
+# This is yaml for h3c router xpath info
+
+h3c:
+  passwd: 12345678
+  password_element: psd
+  signin_element: login
+  signin_done_element: go
+
+#  band_element: //*[@id="wl_unit_field"]/td/select
+  wireless_mode_element:
+        h3c_bx54: //*[@id="wlanMode"]
+  ssid_element_2g: wifi_name_admin
+  ssid_element_5g: wifi_name_admin_5g
+
+  #  //*[@id="WLgeneral"]/tbody/tr[11]/td/select/option[4]
+  channel_regu_element:
+    h3c_bx54: //*[@id="wlanChannel"]/option[{}]
+  bandwidth_element: //*[@id="wlanWidth"]
+  authentication_regu_element:
+    h3c_bx54: //*[@id="ssid_enc"]/option[{}]
+  passwd_element: wpa_key
+  wep_encrypt_regu_element: //*[@id="WLgeneral"]/tbody/tr[16]/td/select/option[{}]
+  wpa_encrypt_regu_element: //*[@id="WLgeneral"]/tbody/tr[14]/td/select/option[{}]
+  passwd_index_regu_element: //*[@id="WLgeneral"]/tbody/tr[17]/td/select/option[{}]
+
+  wep_passwd_element: wpa_key
+
+  wpa_passwd_element:
+    asus_86u: //*[@id="wpa_psk_key_field"]/td/div/div[1]/input
+    asus_88u: //*[@id="WLgeneral"]/tbody/tr[15]/td/input
+  protect_frame_regu_element: //*[@id="WLgeneral"]/tbody/tr[26]/td/select/option[{}]
+
+  apply_element: applyButton
+  setting_load_element: //*[@id="loadingBlock"]/tbody/tr/td[2]
+
+  wait_reboot_element:
+    asus_86u: /html/body/form/div/div/div[1]/div[2]
+    asus_88u: /html/body/form/div/div/div[2]
