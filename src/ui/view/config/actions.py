@@ -1105,25 +1105,35 @@ def update_fpga_hidden_fields(page: Any) -> None:
         return str(value or "").strip().upper()
 
     mass_status: list[str] = []
+    odm_choices: list[str] = []
     if info:
         mass_status = [str(v) for v in info.get("mass_production_status") or [] if str(v).strip()]
+        odm_raw = info.get("odm", info.get("ODM")) or []
+        odm_choices = [str(v) for v in odm_raw if str(v).strip()]
     current_status = ""
+    current_odm = ""
     config = getattr(page, "config", None)
     if isinstance(config, dict):
         project_cfg = config.get("project") or {}
         if isinstance(project_cfg, dict):
             current_status = str(project_cfg.get("mass_production_status") or "").strip()
+            current_odm = str(project_cfg.get("odm") or "").strip()
 
     if product and project and info:
         normalized = {
             "customer": customer,
             "product_line": product,
             "project": project,
+            "odm": "",
             "main_chip": _norm(info.get("main_chip")),
             "wifi_module": _norm(info.get("wifi_module")),
             "interface": _norm(info.get("interface")),
             "mass_production_status": "",
         }
+        if current_odm and current_odm in odm_choices:
+            normalized["odm"] = current_odm
+        elif odm_choices:
+            normalized["odm"] = odm_choices[0]
         if current_status and current_status in mass_status:
             normalized["mass_production_status"] = current_status
         elif mass_status:
@@ -1133,6 +1143,7 @@ def update_fpga_hidden_fields(page: Any) -> None:
             "customer": customer,
             "product_line": product,
             "project": project,
+            "odm": current_odm,
             "main_chip": "",
             "wifi_module": "",
             "interface": "",
@@ -1197,6 +1208,21 @@ def update_fpga_hidden_fields(page: Any) -> None:
                     status_widget.setCurrentIndex(0)
             else:
                 status_widget.setCurrentIndex(0)
+
+    odm_widget = field_widgets.get("project.odm")
+    if odm_widget is not None and hasattr(odm_widget, "clear"):
+        odm_widget.clear()
+        for item in odm_choices:
+            odm_widget.addItem(item)
+        if odm_choices:
+            target = normalized.get("odm") or ""
+            if target:
+                try:
+                    odm_widget.setCurrentText(target)
+                except Exception:
+                    odm_widget.setCurrentIndex(0)
+            else:
+                odm_widget.setCurrentIndex(0)
 
 
 def apply_connect_type_ui_state(page: Any, connect_type: str) -> None:

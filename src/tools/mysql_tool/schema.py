@@ -124,6 +124,7 @@ _AUDIT_COLUMNS: Tuple[ColumnDefinition, ...] = (
 )
 
 _PERFORMANCE_BASE_COLUMNS: Tuple[ColumnDefinition, ...] = (
+    ColumnDefinition("test_report_id", "INT NOT NULL"),
     ColumnDefinition("execution_id", "INT NOT NULL"),
     ColumnDefinition("csv_name", "VARCHAR(255) NOT NULL"),
     ColumnDefinition("data_type", "VARCHAR(64)"),
@@ -224,12 +225,19 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
         columns=(
             ColumnDefinition("serial_number", "VARCHAR(255)"),
             ColumnDefinition("connect_type", "VARCHAR(64)"),
+            ColumnDefinition("mac_address", "VARCHAR(64)"),
             ColumnDefinition("adb_device", "VARCHAR(128)"),
             ColumnDefinition("telnet_ip", "VARCHAR(128)"),
             ColumnDefinition("software_version", "VARCHAR(128)"),
             ColumnDefinition("driver_version", "VARCHAR(128)"),
             ColumnDefinition("android_version", "VARCHAR(64)"),
             ColumnDefinition("kernel_version", "VARCHAR(64)"),
+            ColumnDefinition("product_line", "VARCHAR(64)"),
+            ColumnDefinition("project", "VARCHAR(128)"),
+            ColumnDefinition("main_chip", "VARCHAR(64)"),
+            ColumnDefinition("wifi_module", "VARCHAR(64)"),
+            ColumnDefinition("interface", "VARCHAR(64)"),
+            ColumnDefinition("odm", "VARCHAR(64)"),
             ColumnDefinition("payload_json", "JSON"),
         ),
         indexes=(
@@ -359,6 +367,10 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
                 "idx_performance_report", "INDEX idx_performance_report (`execution_id`)"
             ),
             TableIndex(
+                "idx_performance_test_report",
+                "INDEX idx_performance_test_report (`test_report_id`)",
+            ),
+            TableIndex(
                 "idx_performance_band",
                 "INDEX idx_performance_band (`band`, `bandwidth_mhz`, `standard`)",
             ),
@@ -371,6 +383,10 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
             TableConstraint(
                 "fk_performance_report",
                 "CONSTRAINT fk_performance_report FOREIGN KEY (`execution_id`) REFERENCES `test_run`(`id`) ON DELETE CASCADE",
+            ),
+            TableConstraint(
+                "fk_performance_test_report",
+                "CONSTRAINT fk_performance_test_report FOREIGN KEY (`test_report_id`) REFERENCES `test_case`(`id`) ON DELETE CASCADE",
             ),
         ),
     ),

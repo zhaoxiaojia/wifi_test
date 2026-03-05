@@ -698,6 +698,7 @@ class ConfigController(
             "customer": "",
             "product_line": "",
             "project": "",
+            "odm": "",
             "main_chip": "",
             "wifi_module": "",
             "interface": "",
@@ -707,6 +708,7 @@ class ConfigController(
             customer = self.normalize_fpga_token(raw_value.get("customer"))
             product_line = self.normalize_fpga_token(raw_value.get("product_line"))
             project = self.normalize_fpga_token(raw_value.get("project"))
+            odm = str(raw_value.get("odm") or "").strip()
             mass_value = raw_value.get("mass_production_status")
             if isinstance(mass_value, (list, tuple)):
                 mass_status = str(mass_value[0]) if mass_value else ""
@@ -717,6 +719,7 @@ class ConfigController(
                     "customer": customer,
                     "product_line": product_line,
                     "project": project,
+                    "odm": odm,
                     "mass_production_status": mass_status,
                 }
             )

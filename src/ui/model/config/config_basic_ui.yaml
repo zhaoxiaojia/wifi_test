@@ -30,6 +30,10 @@ panels:
             widget: combo_box
             label: "Control Type"
             choices: ["Android", "Linux"]
+          - key: connect_type.mac_address
+            widget: line_edit
+            label: "MAC Address"
+            placeholder: "AA:BB:CC:DD:EE:FF"
           - key: connect_type.Android.device
             widget: combo_box
             label: "Android Device"
@@ -59,6 +63,9 @@ panels:
           - key: project.project
             widget: combo_box
             label: "Project"
+          - key: project.odm
+            widget: combo_box
+            label: "ODM"
           - key: project.main_chip
             widget: line_edit
             label: "Main Chip"
