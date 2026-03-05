@@ -1059,39 +1059,105 @@ class RouterConst:
 
 # TODO: Extend product/project mapping as needed.
 WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]] = {
-    "XIAOMI": {
-        "TV": {
-            "Blueplanet": {
-                "main_chip": "T963D4",
-                "wifi_module": "W2",
-                "interface": "USB",
-                "ecosystem": "Android",
-                "mass_production_status": [
-                    "P0",
-                    "P1",
-                    "P1.1",
-                    "OFFSET_HIGH",
-                    "OFFSET_LOW",
-                    "MP",
-                ],
-            },
-            "Heidi": {
-                "main_chip": "T966D5",
-                "wifi_module": "W2",
-                "interface": "USB",
-                "ecosystem": "Android",
-                "mass_production_status": [
-                    "P0",
-                    "P1",
-                    "P1.1",
-                    "OFFSET_HIGH",
-                    "OFFSET_LOW",
-                    "MP",
-                ],
-            },
+    "TV":{
+        "Blueplanet": {
+            "ProjectID": "None",
+            "ODM": "XIAOMI",
+            "main_chip": "T963D4",
+            "wifi_module": "W2",
+            "interface": "USB",
+            "ecosystem": "Android",
+            "mass_production_status": [
+                "P0",
+                "P1",
+                "P1.1",
+                "OFFSET_HIGH",
+                "OFFSET_LOW",
+                "MP",
+            ],
         },
-        "OTT": {
+        "Heidi": {
+            "ProjectID": "None",
+            "ODM": "XIAOMI",
+            "main_chip": "T966D5",
+            "wifi_module": "W2",
+            "interface": "USB",
+            "ecosystem": "Android",
+            "mass_production_status": [
+                "P0",
+                "P1",
+                "P1.1",
+                "OFFSET_HIGH",
+                "OFFSET_LOW",
+                "MP",
+            ],
+        },
+        "Sandia": {
+            "ProjectID": "None",
+            "ODM": "Roku",
+            "main_chip": "TR964",
+            "wifi_module": "W2L",
+            "interface": "USB",
+            "ecosystem": "Linux",
+            "mass_production_status": [
+                "P0",
+                "P1",
+                "P1.1",
+                "OFFSET_HIGH",
+                "OFFSET_LOW",
+                "DVT",
+            ],
+        },
+        "Roxton": {
+            "ProjectID": "None",
+            "ODM": "Roku",
+            "main_chip": "T950R4",
+            "wifi_module": "W1U",
+            "interface": "USB",
+            "ecosystem": "Linux",
+            "mass_production_status": [
+                "P0",
+                "P1",
+                "P1.1",
+                "OFFSET_HIGH",
+                "OFFSET_LOW",
+                "DVT",
+            ],
+        },
+        "65D50S": {
+            "ProjectID": "None",
+            "ODM": "Hisense",
+            "main_chip": "T963D4",
+            "wifi_module": "EA6621",
+            "interface": "USB",
+            "ecosystem": "Android",
+            "mass_production_status": [
+                "P0",
+                "P1",
+                "P1.1",
+                "OFFSET_HIGH",
+                "OFFSET_LOW",
+                "DVT",
+            ],
+        },
+        "55A6Q": {
+            "ProjectID": "None",
+            "ODM": "Hisense",
+            "main_chip": "T963D4",
+            "wifi_module": "EA6652",
+            "interface": "USB",
+            "ecosystem": "Android",
+            # Todo
+            "mass_production_status": ["MP"],
+        },
+
+    },
+
+    "STB": {
+        "OTT":{
             "OB1": {
+                "ProjectID": "None",
+                "ODM": "XIAOMI",
                 "main_chip": "905X5M",
                 "wifi_module": "W2",
                 "interface": "USB",
@@ -1106,6 +1172,8 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
                 ],
             },
             "OB2": {
+                "ProjectID": "None",
+                "ODM": "XIAOMI",
                 "main_chip": "905X5M",
                 "wifi_module": "W2",
                 "interface": "USB",
@@ -1120,6 +1188,8 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
                 ],
             },
             "OB6": {
+                "ProjectID": "None",
+                "ODM": "XIAOMI",
                 "main_chip": "905X5M",
                 "wifi_module": "W2",
                 "interface": "USB",
@@ -1134,6 +1204,8 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
                 ],
             },
             "OB7": {
+                "ProjectID": "None",
+                "ODM": "XIAOMI",
                 "main_chip": "S805X3",
                 "wifi_module": "W1U",
                 "interface": "SDIO",
@@ -1147,70 +1219,126 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
                     "MP",
                 ],
             },
-        },
-    },
-    "Roku": {
-        "TV": {
-            "Sandia": {
-                "main_chip": "TR964",
-                "wifi_module": "W2L",
-                "interface": "USB",
-                "ecosystem": "Linux",
-                "mass_production_status": [],
-            },
-            "Roxton": {
-                "main_chip": "T950R4",
-                "wifi_module": "W1U",
-                "interface": "USB",
-                "ecosystem": "Linux",
-                "mass_production_status": [],
-            },
-        },
-    },
-    "Hisense": {
-        "TV": {
-            "65D50S": {
-                "main_chip": "T963D4",
-                "wifi_module": "EA6621",
-                "interface": "USB",
-                "ecosystem": "Android",
-                "mass_production_status": ["MP"],
-            },
-            "55A6Q": {
-                "main_chip": "T963D4",
-                "wifi_module": "EA6652",
-                "interface": "USB",
-                "ecosystem": "Android",
-                # Todo
-                "ODM":"",
-                "mass_production_status": ["MP"],
-            },
-        },
-    },
-    "ONN": {
-        "IPC": {
             "KitKat513": {
+                "ProjectID": "None",
+                "ODM": "None",
                 "main_chip": "C302X",
                 "wifi_module": "W1U",
                 "interface": "USB",
                 "ecosystem": "Android",
-                "mass_production_status": [],
+                "mass_production_status": [
+                ],
             },
-        },
-    },
-    "Common": {
-        "STB": {
-            "Android_DUT": {
-                "main_chip": "905X5M",
-                "wifi_module": "W2",
-                "interface": "USB",
+            "Jarvis2": {
+                "ProjectID": "BM20CS-S905X5M",
+                "ODM": "SDMC",
+                "main_chip": "S905X5M",
+                "wifi_module": "W265S2M",
+                "interface": "SDIO",
                 "ecosystem": "Android",
-                "mass_production_status": [],
+                "mass_production_status": [
+                    "P0",
+                    "P1",
+                    "P1.1",
+                    "OFFSET_HIGH",
+                    "OFFSET_LOW",
+                    "MP",
+                ],
+            },
+            "JIO": {
+                "ProjectID": "BL20B9-S905X5",
+                "ODM": "SDMC",
+                "main_chip": "S905X5",
+                "wifi_module": "W265S1",
+                "interface": "SDIO",
+                "ecosystem": "Android",
+                "mass_production_status": [
+                    "P0",
+                    "P1",
+                    "P1.1",
+                    "OFFSET_HIGH",
+                    "OFFSET_LOW",
+                    "DVT",
+                ],
+            },
+            "Airtel": {
+                "ProjectID": "BH20AF-S905Y5",
+                "ODM": "SDMC",
+                "main_chip": "S905Y5",
+                "wifi_module": "W265S1",
+                "interface": "SDIO",
+                "ecosystem": "Android",
+                "mass_production_status": [
+                    "P0",
+                    "P1",
+                    "P1.1",
+                    "OFFSET_HIGH",
+                    "OFFSET_LOW",
+                    "MP",
+                ],
+            },
+            "Coffey": {
+                "ProjectID": "None",
+                "ODM": "SDMC",
+                "main_chip": "S905X5M",
+                "wifi_module": "W265S2M",
+                "interface": "SDIO",
+                "ecosystem": "Android",
+                "mass_production_status": [
+                    "P0",
+                    "P1",
+                    "P1.1",
+                    "OFFSET_HIGH",
+                    "OFFSET_LOW",
+                    "EVT",
+                ],
+            },
+            "Viettel": {
+                "ProjectID": "BH20BJ-S905Y5",
+                "ODM": "ZTE",
+                "main_chip": "S905Y5",
+                "wifi_module": "W265S2M",
+                "interface": "SDIO",
+                "ecosystem": "Android",
+                "mass_production_status": [
+                    "P0",
+                    "P1",
+                    "P1.1",
+                    "OFFSET_HIGH",
+                    "OFFSET_LOW",
+                    "EVT",
+                ],
             },
         },
-    },
-}
 
+        "Dongle":{
+            "Airtel": {
+                "ProjectID": "BM20CQ-S905X5M",
+                "ODM": "SEI",
+                "main_chip": "S905X5M",
+                "wifi_module": "W265S1",
+                "interface": "SDIO",
+                "ecosystem": "Android",
+                # Todo
+                "mass_production_status": ["MP"],
+            },
+        },
+
+        "Public": {
+            "ProjectID": "None",
+            "ODM": "None",
+            "main_chip": "905X5M",
+            "wifi_module": "W2",
+            "interface": "USB",
+            "ecosystem": "Android",
+            "mass_production_status": [],
+        },
+
+    },
+    "IPTV":{
+
+    }
+}
 
 class RokuConst:
     """Roku 控制常量"""
