@@ -1065,6 +1065,7 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
                 "main_chip": "T963D4",
                 "wifi_module": "W2",
                 "interface": "USB",
+                "odm": ['华为','三星'],
                 "ecosystem": "Android",
                 "mass_production_status": [
                     "P0",
@@ -1079,6 +1080,7 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
                 "main_chip": "T966D5",
                 "wifi_module": "W2",
                 "interface": "USB",
+                "odm": [],
                 "ecosystem": "Android",
                 "mass_production_status": [
                     "P0",
@@ -1095,6 +1097,7 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
                 "main_chip": "905X5M",
                 "wifi_module": "W2",
                 "interface": "USB",
+                "odm": [],
                 "ecosystem": "Android",
                 "mass_production_status": [
                     "P0",
@@ -1109,6 +1112,7 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
                 "main_chip": "905X5M",
                 "wifi_module": "W2",
                 "interface": "USB",
+                "odm": [],
                 "ecosystem": "Android",
                 "mass_production_status": [
                     "P0",
@@ -1123,6 +1127,7 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
                 "main_chip": "905X5M",
                 "wifi_module": "W2",
                 "interface": "USB",
+                "odm": [],
                 "ecosystem": "Android",
                 "mass_production_status": [
                     "P0",

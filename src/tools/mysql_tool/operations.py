@@ -273,6 +273,7 @@ class PerformanceTableManager:
     REPORT_TABLE_NAME = "test_case"
 
     _BASE_COLUMNS: Sequence[tuple[str, str]] = (
+        ("test_report_id", "INT NOT NULL"),
         ("execution_id", "INT NOT NULL"),
         ("csv_name", "VARCHAR(255) NOT NULL"),
         ("data_type", "VARCHAR(64) NULL DEFAULT NULL"),
@@ -1151,27 +1152,31 @@ def register_execution(
     dut_payload = {
         "serial_number": execution_payload.get("serial_number"),
         "connect_type": execution_payload.get("connect_type"),
+        "mac_address": execution_payload.get("mac_address"),
         "adb_device": execution_payload.get("adb_device"),
         "telnet_ip": execution_payload.get("telnet_ip"),
         "software_version": execution_payload.get("software_version"),
         "driver_version": execution_payload.get("driver_version"),
         "android_version": execution_payload.get("android_version"),
         "kernel_version": execution_payload.get("kernel_version"),
+        "odm": execution_payload.get("odm"),
     }
     dut_id = client.insert(
         "INSERT INTO `dut` "
-        "(`serial_number`, `connect_type`, `adb_device`, `telnet_ip`, "
-        "`software_version`, `driver_version`, `android_version`, `kernel_version`, `payload_json`) "
-        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+        "(`serial_number`, `connect_type`, `mac_address`, `adb_device`, `telnet_ip`, "
+        "`software_version`, `driver_version`, `android_version`, `kernel_version`, `odm`, `payload_json`) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
         (
             dut_payload.get("serial_number"),
             dut_payload.get("connect_type"),
+            dut_payload.get("mac_address"),
             dut_payload.get("adb_device"),
             dut_payload.get("telnet_ip"),
             dut_payload.get("software_version"),
             dut_payload.get("driver_version"),
             dut_payload.get("android_version"),
             dut_payload.get("kernel_version"),
+            dut_payload.get("odm"),
             json.dumps(dut_payload, ensure_ascii=True, separators=(",", ":")),
         ),
     )
@@ -1226,6 +1231,8 @@ def _build_execution_device_payload(config: Mapping[str, Any]) -> Dict[str, Any]
     android = android_section if isinstance(android_section, Mapping) else {}
     connect_section = _extract_first(config, "connect_type", "connect")
     connect = connect_section if isinstance(connect_section, Mapping) else {}
+    project_section = _extract_first(config, "project", "fpga")
+    project = project_section if isinstance(project_section, Mapping) else {}
 
     connect_type_value = _normalize_str_token(connect.get("type"))
     normalized_connect_type = _normalize_lower_token(connect_type_value)
@@ -1249,8 +1256,10 @@ def _build_execution_device_payload(config: Mapping[str, Any]) -> Dict[str, Any]
         "android_version": _extract_first(android, "version"),
         "kernel_version": _extract_first(android, "kernel_version"),
         "connect_type": connect_type_value,
+        "mac_address": _normalize_str_token(_extract_first(connect, "mac_address")),
         "adb_device": adb_device,
         "telnet_ip": telnet_ip,
+        "odm": _normalize_str_token(project.get("odm")),
     }
 
 

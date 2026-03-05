@@ -100,9 +100,9 @@ def _adb_device_choices() -> Sequence[str]:
             timeout=3,
         )
     except Exception:
-        return []
+        return ["No devices"]
     if proc.returncode != 0:
-        return []
+        return ["No devices"]
     devices: list[str] = []
     for line in (proc.stdout or "").splitlines()[1:]:
         parts = line.strip().split()
