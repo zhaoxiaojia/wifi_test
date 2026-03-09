@@ -8,7 +8,7 @@ system:
   kernel_version: Kernel 6.1
 connect_type:
   Android:
-    device: '63597700090000108'
+    device: No devices
   Linux:
     ip: 192.168.1.10
     wildcard: ''
@@ -18,14 +18,14 @@ connect_type:
     wait_seconds: 45
   type: Android
 project:
-  customer: XIAOMI
+  customer: Hisense
   product_line: TV
-  project: Blueplanet
-  odm: 华为
+  project: 65D50S
+  odm: Hisense
   main_chip: T963D4
-  wifi_module: W2
+  wifi_module: EA6621
   interface: USB
-  mass_production_status: MP
+  mass_production_status: P0
 serial_port:
   baud: '921600'
   port: COM14 (蓝牙链接上的标准串行 (COM14))

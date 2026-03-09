@@ -1058,7 +1058,7 @@ class RouterConst:
 
 
 # TODO: Extend product/project mapping as needed.
-WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]] = {
+WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, Any]]]] = {
     "TV":{
         "Blueplanet": {
             "ProjectID": "None",
@@ -1323,13 +1323,15 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
     },
 
     "Public": {
-        "ProjectID": "None",
-        "ODM": "None",
-        "main_chip": "905X5M",
-        "wifi_module": "W2",
-        "interface": "USB",
-        "ecosystem": "Android",
-        "mass_production_status": [],
+        "Public": {
+            "ProjectID": "None",
+            "ODM": "None",
+            "main_chip": "905X5M",
+            "wifi_module": "W2",
+            "interface": "USB",
+            "ecosystem": "Android",
+            "mass_production_status": [],
+        },
     },
 
     "IPTV":{
