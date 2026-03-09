@@ -635,7 +635,7 @@ class ConfigController(
         """Coerce FPGA metadata tokens into normalised uppercase strings."""
         if value is None:
             return ""
-        return str(value).strip().upper()
+        return str(value)
 
     @staticmethod
     def _split_legacy_fpga_value(raw: str) -> tuple[str, str]:
@@ -643,7 +643,7 @@ class ConfigController(
         parts = raw.split("_", 1)
         wifi_module = parts[0] if parts and parts[0] else ""
         interface = parts[1] if len(parts) > 1 and parts[1] else ""
-        return wifi_module.upper(), interface.upper()
+        return wifi_module, interface
 
     def _find_project_in_map(
         self,
@@ -656,34 +656,25 @@ class ConfigController(
         project: str = "",
     ) -> tuple[str, str, str, Optional[dict[str, Any]]]:
         """Resolve project metadata from WIFI_PRODUCT_PROJECT_MAP."""
-        wifi_upper = wifi_module.strip().upper()
-        interface_upper = interface.strip().upper()
-        chip_upper = main_chip.strip().upper()
-        customer_upper = customer.strip().upper()
-        product_upper = product_line.strip().upper()
-        project_upper = project.strip().upper()
-        for customer_name, product_lines in WIFI_PRODUCT_PROJECT_MAP.items():
-            customer_name_upper = self.normalize_fpga_token(customer_name)
-            if customer_upper and customer_name_upper != customer_upper:
+        for product_name, projects in WIFI_PRODUCT_PROJECT_MAP.items():
+            if product_line and product_name != product_line:
                 continue
-            for product_name, projects in product_lines.items():
-                product_name_upper = self.normalize_fpga_token(product_name)
-                if product_upper and product_name_upper != product_upper:
+            for project_name, info in projects.items():
+                if project and project_name != project:
                     continue
-                for project_name, info in projects.items():
-                    project_name_upper = self.normalize_fpga_token(project_name)
-                    if project_upper and project_name_upper != project_upper:
-                        continue
-                    info_wifi = self.normalize_fpga_token(info.get("wifi_module"))
-                    info_if = self.normalize_fpga_token(info.get("interface"))
-                    info_chip = self.normalize_fpga_token(info.get("main_chip"))
-                    if wifi_upper and info_wifi and info_wifi != wifi_upper:
-                        continue
-                    if interface_upper and info_if and info_if != interface_upper:
-                        continue
-                    if chip_upper and info_chip and info_chip != chip_upper:
-                        continue
-                    return customer_name, product_name, project_name, info
+                info_customer = info["ODM"]
+                if customer and info_customer != customer:
+                    continue
+                info_wifi = info["wifi_module"]
+                info_if = info["interface"]
+                info_chip = info["main_chip"]
+                if wifi_module and info_wifi != wifi_module:
+                    continue
+                if interface and info_if != interface:
+                    continue
+                if main_chip and info_chip != main_chip:
+                    continue
+                return info_customer, product_name, project_name, info
         return "", "", "", None
 
     def normalize_project_section(self, raw_value: Any) -> dict[str, str]:
@@ -708,12 +699,12 @@ class ConfigController(
             customer = self.normalize_fpga_token(raw_value.get("customer"))
             product_line = self.normalize_fpga_token(raw_value.get("product_line"))
             project = self.normalize_fpga_token(raw_value.get("project"))
-            odm = str(raw_value.get("odm") or "").strip()
+            odm = str(raw_value.get("odm") or "")
             mass_value = raw_value.get("mass_production_status")
             if isinstance(mass_value, (list, tuple)):
                 mass_status = str(mass_value[0]) if mass_value else ""
             else:
-                mass_status = str(mass_value or "").strip()
+                mass_status = str(mass_value or "")
             normalized.update(
                 {
                     "customer": customer,
@@ -734,9 +725,9 @@ class ConfigController(
                 project=project,
             )
             if info:
-                normalized["main_chip"] = self.normalize_fpga_token(info.get("main_chip"))
-                normalized["wifi_module"] = self.normalize_fpga_token(info.get("wifi_module"))
-                normalized["interface"] = self.normalize_fpga_token(info.get("interface"))
+                normalized["main_chip"] = info["main_chip"]
+                normalized["wifi_module"] = info["wifi_module"]
+                normalized["interface"] = info["interface"]
                 if not normalized["mass_production_status"]:
                     choices = list(info.get("mass_production_status") or [])
                     normalized["mass_production_status"] = str(choices[0]) if choices else ""
@@ -755,9 +746,9 @@ class ConfigController(
             if project:
                 normalized["project"] = project
             if info:
-                normalized["main_chip"] = self.normalize_fpga_token(info.get("main_chip"))
-                normalized["wifi_module"] = self.normalize_fpga_token(info.get("wifi_module"))
-                normalized["interface"] = self.normalize_fpga_token(info.get("interface"))
+                normalized["main_chip"] = info["main_chip"]
+                normalized["wifi_module"] = info["wifi_module"]
+                normalized["interface"] = info["interface"]
                 choices = list(info.get("mass_production_status") or [])
                 normalized["mass_production_status"] = str(choices[0]) if choices else ""
         return normalized
