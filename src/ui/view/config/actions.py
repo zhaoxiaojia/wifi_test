@@ -109,6 +109,53 @@ def set_refresh_ui_locked(page: Any, locked: bool) -> None:
     except Exception:
         logging.debug("set_refresh_ui_locked: failed to toggle updates", exc_info=True)
 
+def _notify_rvr_wifi_page_for_function_cases(page: Any, case_path: str) -> None:
+    """
+    Helper function to notify the RvrWifiConfigPage to load function test cases
+    when a project-related case path is selected.
+    """
+    if not case_path:
+        return
+
+    try:
+        from pathlib import Path
+
+        # Get the application's base path
+        config_ctl = getattr(page, "config_ctl", None)
+        if config_ctl is None or not hasattr(config_ctl, "get_application_base"):
+            return
+
+        app_base = Path(config_ctl.get_application_base())
+        project_root = app_base / "test" / "project"
+        case_path_obj = Path(case_path).resolve()
+
+        # Check if the selected path is under 'test/project/'
+        if project_root in case_path_obj.parents:
+            # Extract the target directory name (e.g., 'android', 'region')
+            rel_path = case_path_obj.relative_to(project_root)
+            if case_path_obj.is_file() and case_path_obj.suffix == '.py':
+                target_dir = rel_path.parent.name
+            elif case_path_obj.is_dir():
+                target_dir = rel_path.name
+            else:
+                return
+
+            # Find the main window and the RvrWifiConfigPage
+            main_window = page.window()
+            rvr_page = getattr(main_window, "rvr_wifi_config_page", None)
+            if rvr_page is not None and hasattr(rvr_page, "load_function_cases_from_dirs"):
+                rvr_page.load_function_cases_from_dirs([target_dir])
+                logging.debug(f"Notified RvrWifiConfigPage to load from: {target_dir}")
+        else:
+            # If the selection is outside 'test/project/', reset the RvrWifiConfigPage
+            main_window = page.window()
+            rvr_page = getattr(main_window, "rvr_wifi_config_page", None)
+            if rvr_page is not None and hasattr(rvr_page, "reset_function_cases"):
+                rvr_page.reset_function_cases()
+                logging.debug("Reset RvrWifiConfigPage as selection is outside project/")
+
+    except Exception as e:
+        logging.debug(f"Failed to notify RvrWifiConfigPage: {e}", exc_info=True)
 
 def _refresh_case_page_compatibility(page: Any) -> None:
     """Refresh the Case-page compatibility selection to mirror config state."""
@@ -249,7 +296,7 @@ def apply_ui(page: Any, case_path: str) -> None:
         page._pending_path = None
         QTimer.singleShot(0, lambda: apply_ui(page, path))
 
-
+    _notify_rvr_wifi_page_for_function_cases(page, case_path)
 
 def _rebalance_panel(panel: Any) -> None:
     """Request a layout rebalance on a ConfigGroupPanel, if available."""

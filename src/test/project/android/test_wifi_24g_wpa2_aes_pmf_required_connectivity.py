@@ -19,7 +19,7 @@ from src.tools.router_tool.router_telnet_control import (
     restore_ap_default_wireless
 )
 
-TCID = "WiFi-STA-FSM00181"
+TCID = "WiFi-STA-FSM00372"
 PASSWORD = "88888888"  # 10-digit hex key for WEP-64
 
 
@@ -60,7 +60,7 @@ def test_wifi_24g_wpa2_aes_pmf_required_connectivity(wifi_adb_device):
                 time.sleep(2)
 
             # === Step 1: Configure Router for WPA2-PSK&AES  ===
-            with allure.step(f"Configure AP {band} with WPA2-PSK&AES security"):
+            with allure.step(f"Configure AP {band} with WPA2-PSK&AES and PMF Required security"):
                 # Set SSID and channel first, Need Legacy mode to enable WEP setting
                 configure_ap_wireless_mode(
                     router, band=band, mode='auto', ssid=ssid_list[band], password=password
@@ -71,11 +71,12 @@ def test_wifi_24g_wpa2_aes_pmf_required_connectivity(wifi_adb_device):
                     router,
                     band=band,
                     security_mode='WPA2-Personal',
-                    password=password
+                    password=password,
+                    pmf=2
                 )
-                router.set_pmf('2g', 'disabled')
+                #router.set_pmf('2g', 'disabled')
 
-                time.sleep(10)  # Give AP time to broadcast the new WEP network
+                time.sleep(60)  # Give AP time to broadcast the new WEP network
 
             # === Step 2: Connect DUT via UI ===
             with allure.step("Connect DUT to WPA2-PSK&AES network via UI"):
@@ -99,11 +100,11 @@ def test_wifi_24g_wpa2_aes_pmf_required_connectivity(wifi_adb_device):
                 rssi = dut.get_rssi() if connected else "N/A"
                 record_test_step(
                     TCID,
-                    f"Connect to WPA2-PSK&AES {ssid_list[band]}",
+                    f"Connect to WPA2-PSK&AES and PMF Required {ssid_list[band]}",
                     "PASS" if connected else "FAIL",
                     f"RSSI={rssi}"
                 )
-                assert connected, f"Failed to connect to WPA2-PSK&AES: {ssid_list[band]}"
+                assert connected, f"Failed to connect to WPA2-PSK&AES and PMF Required: {ssid_list[band]}"
 
             # === Step 3: Verify Internet Connectivity ===
             with allure.step("Play online video to verify internet connectivity"):
@@ -124,11 +125,18 @@ def test_wifi_24g_wpa2_aes_pmf_required_connectivity(wifi_adb_device):
     finally:
         # === Step 4: Cleanup - Restore AP to default ===
         with allure.step("Restore AP to default settings"):
-            router.set_pmf('2g', 'optional')
+            #router.set_pmf('2g', 'optional')
             restore_ap_default_wireless(
                 router,
                 band=band,
                 original_ssid=ssid_list[band],
                 original_password=password
+            )
+            configure_ap_security_universal(
+                router,
+                band=band,
+                security_mode='WPA2-Personal',
+                password=password,
+                pmf=1
             )
             router.quit()

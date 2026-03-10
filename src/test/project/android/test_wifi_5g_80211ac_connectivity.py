@@ -27,6 +27,7 @@ def test_wifi_5g_80211ac_connectivity(wifi_adb_device):
 
     # === 从配置中提取路由器参数 ===
     wifi_config = cfg.get("router", {})
+    loop_config = cfg.get("duration_control", {})
     ssid = wifi_config.get("5g_ssid")  # 👈 使用 5G SSID
     password = wifi_config.get("password", "88888888")
     security = wifi_config.get("security_mode", "WPA2-Personal")

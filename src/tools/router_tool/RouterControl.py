@@ -171,12 +171,32 @@ class RouterTools(RouterControl):
     COUNTRY_CODE = {
         '亚洲': '1',
         '中国 (默认值)': '2',
-        '欧洲': '3',
+        '欧洲': '2',
         '韩国': '4',
         '俄罗斯': '5',
         '新加坡': '6',
         '美国': '7',
         '澳大利亚': '8'
+    }
+    COUNTRY_DISPLAY_NAMES = {
+        'CN': {'zh': '中国 (默认值)', 'en': 'China (Default)'},
+        'US': {'zh': '美国', 'en': 'United States'},
+        'EU': {'zh': '欧洲', 'en': 'Europe'},
+        'KR': {'zh': '韩国', 'en': 'Korea'},
+        'RU': {'zh': '俄罗斯', 'en': 'Russia'},
+        'SG': {'zh': '新加坡', 'en': 'Singapore'},
+        'AU': {'zh': '澳大利亚', 'en': 'Australia'},
+        'ASIA': {'zh': '亚洲', 'en': 'Asia'}
+    }
+    UI_TO_DRIVER_COUNTRY_MAP = {
+        'US': 'US',  # 美国 → US
+        'CN': 'CN',  # 中国 → CN
+        'EU': 'E0',  # 欧洲 → E0 (华硕自定义)
+        'KR': 'KR',  # 韩国 → KR
+        'RU': 'RU',  # 俄罗斯 → RU
+        'SG': 'SG',  # 新加坡 → SG
+        'AU': 'AU',  # 澳大利亚 → AU
+        'ASIA': 'AS',  # 亚洲 → AS (需确认，部分固件用 'AS')
     }
 
     def __init__(self, router_info, display=True, address: str | None = None):
@@ -670,5 +690,17 @@ class RouterTools(RouterControl):
 
         return False
 
+    def close_browser(self):
+        """
+        显式关闭浏览器和 WebDriver 进程
+        安全：可重复调用，不会报错
+        """
+        if hasattr(self, 'driver') and self.driver:
+            try:
+                self.driver.quit()  # 完全退出 Chrome + chromedriver
+            except Exception as e:
+                logging.warning(f"Warning: Failed to quit WebDriver: {e}")
+            finally:
+                self.driver = None
 
 

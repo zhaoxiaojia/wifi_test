@@ -9,7 +9,7 @@ version    : python 3.9
 Description:
 """
 
-import logging,time
+import logging
 
 import pytest
 
@@ -45,6 +45,7 @@ def setup_attenuation(request, setup_router):
     print(f"[DEBUG_RF] setup_attenuation db_set={db_set} current={current_value}")
     logging.info("Set attenuation: %s dB", current_value)
     pytest.dut.get_rssi()
+    #pytest.dut.get_extended_rssi()
     yield connect_status, router_info, db_set
     pytest.dut.kill_iperf()
 
@@ -62,9 +63,25 @@ def test_rvr(setup_attenuation, performance_sync_manager):
             if int(router_info.tx):
                 logging.info("RSSI during TX: %s", pytest.dut.rssi_num)
                 pytest.dut.get_tx_rate(router_info, "TCP", db_set=db_set)
+
+                ext_rssi = getattr(pytest.dut, '_extended_rssi_result', None)
+                mcs_tx = getattr(pytest.dut, '_mcs_tx_result', "N/A")
+                mcs_rx = getattr(pytest.dut, '_mcs_rx_result', "N/A")
+
+                if ext_rssi:
+                    bcn, wf0, wf1 = ext_rssi
+                    logging.info(f"TX Extended RSSI => bcn: {bcn}, wf0: {wf0}, wf1: {wf1}")
+
             if int(router_info.rx):
                 logging.info("RSSI during RX: %s", pytest.dut.rssi_num)
                 pytest.dut.get_rx_rate(router_info, "TCP", db_set=db_set)
+                ext_rssi = getattr(pytest.dut, '_extended_rssi_result', None)
+                mcs_tx = getattr(pytest.dut, '_mcs_tx_result', "N/A")
+                mcs_rx = getattr(pytest.dut, '_mcs_rx_result', "N/A")
+
+                if ext_rssi:
+                    bcn, wf0, wf1 = ext_rssi
+                    logging.info(f"TX Extended RSSI => bcn: {bcn}, wf0: {wf0}, wf1: {wf1}")
 
     performance_sync_manager(
         "RVR",
