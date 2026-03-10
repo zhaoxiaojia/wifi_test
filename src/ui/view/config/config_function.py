@@ -253,83 +253,196 @@ class FunctionConfigForm(QWidget):
         # 加载文件
         # self.load_test_files()
 
-    def load_test_case_files(self):
-        """从 test_config.yaml 加载测试脚本信息并填入 FormListPage"""
-        current_file = Path(__file__).resolve()
-        project_root = current_file.parent.parent.parent.parent
-        config_path = project_root / "test" / "project" / "test_config.yaml"
+    # def load_test_case_files(self):
+    #     """从 test_config.yaml 加载测试脚本信息并填入 FormListPage"""
+    #     current_file = Path(__file__).resolve()
+    #     project_root = current_file.parent.parent.parent.parent
+    #     config_path = project_root / "test" / "project" / "test_config.yaml"
+    #
+    #     # 重置选项集合
+    #     self.priority_options.clear()
+    #     self.tag_options.clear()
+    #     self.module_options.clear()
+    #     self.all_rows.clear()
+    #
+    #     if not config_path.exists():
+    #         print(f"❌ Config file not found: {config_path}")
+    #         self.list_widget.set_rows([])  # 清空
+    #         return
+    #
+    #     try:
+    #         with open(config_path, 'r', encoding='utf-8') as f:
+    #             config = yaml.safe_load(f)
+    #     except Exception as e:
+    #         print(f"❌ Failed to load YAML: {e}")
+    #         self.list_widget.set_rows([])
+    #         return
+    #
+    #     scripts = config.get("scripts", [])
+    #     if not isinstance(scripts, list):
+    #         print("❌ 'scripts' is not a list in YAML!")
+    #         self.list_widget.set_rows([])
+    #         return
+    #
+    #     rows = []  # 局部列表用于传给 list_widget
+    #     for script in scripts:
+    #         if not isinstance(script, dict):
+    #             continue
+    #         # 提取字段
+    #         tcid = str(script.get("TCID", ""))
+    #         priority = str(script.get("priority", "P2"))
+    #         module = str(script.get("module", ""))
+    #         description = str(script.get("description", ""))
+    #         script_path = str(script.get("path", ""))
+    #         tag = str(script.get("Tag", ""))  # ← 新增 tag 字段
+    #
+    #         # 跳过无效行
+    #         if not (tcid or script_path):
+    #             continue
+    #
+    #         # 收集筛选选项
+    #         if priority:
+    #             self.priority_options.add(priority)
+    #         if tag:
+    #             self.tag_options.add(tag)
+    #         if module:
+    #             self.module_options.add(module)
+    #
+    #         row_data = {
+    #             "TCID": tcid,
+    #             "Priority": priority,
+    #             "Module": module,
+    #             "Tag": tag,
+    #             "Description": description,
+    #             "Script": script_path,
+    #             "_checked": True
+    #         }
+    #         rows.append(row_data)  # ← 新增：添加到 rows
+    #         self.all_rows.append(row_data)
+    #
+    #     # ✅ 关键：先清空再设置
+    #     self.list_widget.set_rows([])
+    #     self.list_widget.set_rows(rows)
+    #
+    #     # # 排序选项
+    #     # self.priority_options = sorted(self.priority_options)
+    #     # self.tag_options = sorted(self.tag_options)
+    #     # self.module_options = sorted(self.module_options)
+    #
+    #     # === 新增：更新 ComboBox 选项 ===
+    #     self.priority_combo.clear()
+    #     self.priority_combo.addItems(["All"] + sorted(self.priority_options))
+    #     self.module_combo.clear()
+    #     self.module_combo.addItems(["All"] + sorted(self.module_options))
+    #     self.tag_combo.clear()
+    #     self.tag_combo.addItems(["All"] + sorted(self.tag_options))
+    #
+    #     # 首次加载全部
+    #     self.apply_filters()
 
-        # 重置选项集合
+    # config_function.py
+
+    def load_test_case_files(self, target_dirs=None):
+        """
+        从指定文件夹的 test_config.yaml 中加载测试用例。
+        此函数假设每个 target_dir 下都有一个 test_config.yaml 文件，
+        且该文件的 'scripts' 列表完整定义了该目录下的所有用例。
+
+        Args:
+            target_dirs (list[str], optional): 要加载的目标文件夹列表（相对于 test/project/）。
+                                              如果为 None，则尝试加载所有直接子目录。
+        """
+        from pathlib import Path
+        import yaml
+
+        current_file = Path(__file__).resolve()
+        test_project_root = current_file.parent.parent.parent.parent / "test" / "project"
+
+        # --- 确定要加载的目录 ---
+        if target_dirs is None:
+            # 回退逻辑：加载 project 下所有直接子目录
+            dirs_to_load = [d for d in test_project_root.iterdir() if d.is_dir()]
+        else:
+            # 加载指定的目录，并进行路径规范化
+            normalized_dirs = []
+            for d in target_dirs:
+                # 将 "android", "./android", "android/" 等统一规范化为 "android"
+                clean_dir_name = Path(d).name
+                normalized_dirs.append(clean_dir_name)
+            dirs_to_load = [test_project_root / d for d in normalized_dirs]
+
+
+        all_rows = []
         self.priority_options.clear()
         self.tag_options.clear()
         self.module_options.clear()
-        self.all_rows.clear()
 
-        if not config_path.exists():
-            print(f"❌ Config file not found: {config_path}")
-            self.list_widget.set_rows([])  # 清空
-            return
-
-        try:
-            with open(config_path, 'r', encoding='utf-8') as f:
-                config = yaml.safe_load(f)
-        except Exception as e:
-            print(f"❌ Failed to load YAML: {e}")
-            self.list_widget.set_rows([])
-            return
-
-        scripts = config.get("scripts", [])
-        if not isinstance(scripts, list):
-            print("❌ 'scripts' is not a list in YAML!")
-            self.list_widget.set_rows([])
-            return
-
-        rows = []  # 局部列表用于传给 list_widget
-        for script in scripts:
-            if not isinstance(script, dict):
-                continue
-            # 提取字段
-            tcid = str(script.get("TCID", ""))
-            priority = str(script.get("priority", "P2"))
-            module = str(script.get("module", ""))
-            description = str(script.get("description", ""))
-            script_path = str(script.get("path", ""))
-            tag = str(script.get("Tag", ""))  # ← 新增 tag 字段
-
-            # 跳过无效行
-            if not (tcid or script_path):
+        # --- 遍历每个目标目录，读取其 YAML 配置 ---
+        for folder_path in dirs_to_load:
+            print(f"--- Processing: {folder_path} ---")
+            if not folder_path.exists():
                 continue
 
-            # 收集筛选选项
-            if priority:
-                self.priority_options.add(priority)
-            if tag:
-                self.tag_options.add(tag)
-            if module:
-                self.module_options.add(module)
+            config_path = folder_path / "test_config.yaml"
+            print(f"📄 Looking for config: {config_path}")
+            if not config_path.exists():
+                continue
 
-            row_data = {
-                "TCID": tcid,
-                "Priority": priority,
-                "Module": module,
-                "Tag": tag,
-                "Description": description,
-                "Script": script_path,
-                "_checked": True
-            }
-            rows.append(row_data)  # ← 新增：添加到 rows
-            self.all_rows.append(row_data)
+            try:
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    config = yaml.safe_load(f)
+            except Exception as e:
+                print(f"❌ Failed to load YAML {config_path}: {e}")
+                continue
 
-        # ✅ 关键：先清空再设置
-        self.list_widget.set_rows([])
-        self.list_widget.set_rows(rows)
+            scripts = config.get("scripts", [])
+            if not isinstance(scripts, list):
+                continue
 
-        # # 排序选项
-        # self.priority_options = sorted(self.priority_options)
-        # self.tag_options = sorted(self.tag_options)
-        # self.module_options = sorted(self.module_options)
+            print(f"📋 Found {len(scripts)} scripts in {config_path}")
+            # --- 处理 YAML 中的每个脚本条目 ---
+            for script in scripts:
+                if not isinstance(script, dict):
+                    continue
 
-        # === 新增：更新 ComboBox 选项 ===
+                # 提取字段
+                tcid = str(script.get("TCID", ""))
+                priority = str(script.get("priority", "P2"))
+                module = str(script.get("module", ""))
+                description = str(script.get("description", ""))
+                # 关键：script_path 是相对于 test/project/ 的路径
+                script_path = str(script.get("path", ""))
+                tag = str(script.get("Tag", ""))
+
+                # 跳过无效行
+                if not script_path:
+                    continue
+
+                # 收集筛选选项
+                if priority:
+                    self.priority_options.add(priority)
+                if tag:
+                    self.tag_options.add(tag)
+                if module:
+                    self.module_options.add(module)
+
+                # 构建行数据
+                row_data = {
+                    "TCID": tcid,
+                    "Priority": priority,
+                    "Module": module,
+                    "Tag": tag,
+                    "Description": description,
+                    "Script": script_path,  # 这个路径将用于后续执行和保存计划
+                    "_checked": True
+                }
+                all_rows.append(row_data)
+
+        # --- 更新 UI ---
+        self.all_rows = all_rows
+        self.list_widget.set_rows(all_rows)
+
+        # 更新筛选下拉框
         self.priority_combo.clear()
         self.priority_combo.addItems(["All"] + sorted(self.priority_options))
         self.module_combo.clear()
@@ -337,8 +450,7 @@ class FunctionConfigForm(QWidget):
         self.tag_combo.clear()
         self.tag_combo.addItems(["All"] + sorted(self.tag_options))
 
-        # 首次加载全部
-        self.apply_filters()
+        print(f"✅ Loaded {len(all_rows)} test cases from {len(dirs_to_load)} directories.")
 
     def get_case_config(self) -> dict:
         """返回所有被勾选的脚本路径"""
@@ -619,6 +731,9 @@ class FunctionConfigForm(QWidget):
 
     def on_reset_clicked(self):
         """重置所有筛选条件，并恢复所有用例为勾选状态"""
+        # 0. 调用无参数的 load_test_case_files 来加载所有子目录
+        self.load_test_case_files()
+
         # 1. 重置 ComboBox 为 "All"
         self.priority_combo.setCurrentText("All")
         self.module_combo.setCurrentText("All")
@@ -631,4 +746,12 @@ class FunctionConfigForm(QWidget):
         # 3. 刷新表格（显示全部且全选）
         self.list_widget.set_rows(self.all_rows)
 
-    # --- 移除了 _on_plan_finished 方法 ---
+    # --- 在 FunctionConfigForm 类中新增方法 ---
+    def load_cases_from_dirs(self, target_dirs: list[str]):
+        """
+        根据外部传入的目录列表，动态加载并显示对应的测试用例。
+
+        Args:
+            target_dirs (list[str]): 要加载的目录名称列表，例如 ["region"] 或 ["android"]。
+        """
+        self.load_test_case_files(target_dirs=target_dirs)

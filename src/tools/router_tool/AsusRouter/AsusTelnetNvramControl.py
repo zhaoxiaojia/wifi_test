@@ -36,9 +36,9 @@ class AsusTelnetNvramControl(AsusBaseControl):
         '4': '4l',
         '5': '5l',
         '6': '6l',
-        '7': '7l',
-        '8': '8l',
-        '9': '9l',
+        '7': '7u',
+        '8': '8u',
+        '9': '9u',
         '10': '10u',
         '11': '11u',
         '12': '12u',
@@ -296,7 +296,7 @@ class AsusTelnetNvramControl(AsusBaseControl):
         channel = self._wl0_channel or 'auto'
         if channel not in self.CHANNEL_2:
             raise ConfigError('channel element error')
-        if self._wl0_bandwidth == '40MHZ':
+        if self._wl0_bandwidth == '40':
             return self.CHANNEL_2_CHANSPEC_MAP[channel]
         return '0' if channel == 'auto' else channel
 
@@ -949,3 +949,85 @@ class AsusTelnetNvramControl(AsusBaseControl):
         self.telnet.close()
         self._logged_in = False
         time.sleep(10)
+
+    def configure_and_verify_country_code(self, country_code: str) -> dict:
+        """
+        Arris-specific implementation of country code configuration and verification.
+        This method first SETS the country code, then performs thorough verification
+        by checking both NVRAM and the wireless driver's active state.
+
+        Returns unified result dict matching the ASUS interface.
+        """
+        from src.tools.router_tool.RouterControl import RouterTools
+        import re
+
+        result = {
+            'country_code_set': False,
+            'verified_country_code': "",
+            '2g_channels': [],
+            '5g_channels': []
+        }
+
+        try:
+            # === Step 1: SET the country code ===
+            self.set_country(country_code)
+            self.commit()
+            import time
+            time.sleep(2)  # Allow driver to apply new regulatory domain
+
+            # === Step 2: THOROUGH VERIFICATION (mirroring ASUS logic) ===
+            # Get NVRAM country code (for reference)
+            raw_cc_nvram = self.telnet_write("nvram get wl0_country_code").strip()
+            verified_cc_nvram = re.sub(r'\s+', '', raw_cc_nvram)
+
+            # Get DRIVER-LEVEL country code from the primary wireless interface (wl0)
+            # This is the most critical check, as it reflects the actual regulatory rules in effect.
+            raw_cc_driver = self.telnet_write("wl -i wl0 country").strip()
+            cc_match = re.search(r'^([A-Z]{2})', raw_cc_driver)
+            if cc_match:
+                verified_cc_driver = cc_match.group(1)
+            else:
+                # Fallback: try to extract the first two uppercase letters
+                verified_cc_driver = re.sub(r'\s+', '', raw_cc_driver.split()[0] if raw_cc_driver.split() else "")
+
+            logging.info(f"Country code set to {verified_cc_driver} (Driver), NVRAM: {verified_cc_nvram}")
+
+            # --- Perform validation checks (copied from ASUS logic) ---
+            expected_driver_code = RouterTools.UI_TO_DRIVER_COUNTRY_MAP.get(country_code, country_code)
+
+            if country_code == 'EU':
+                # EU region has special driver codes like 'E0' or 'DE'
+                if verified_cc_driver not in ('E0', 'DE'):
+                    error_msg = f"EU region expected 'E0' or 'DE', got '{verified_cc_driver}'"
+                    logging.error(error_msg)
+                    raise RuntimeError(error_msg)
+            elif verified_cc_driver != expected_driver_code:
+                # For all other regions, driver code must match the expected code
+                error_msg = f"Driver country code mismatch: expected '{expected_driver_code}', got '{verified_cc_driver}'"
+                logging.error(error_msg)
+                raise RuntimeError(error_msg)
+
+            # --- Finalize result ---
+            # Use the driver-level code as the verified code, as it's the source of truth
+            result['verified_country_code'] = verified_cc_driver
+
+            # If we reached here, the validation passed
+            result['country_code_set'] = True
+
+            # --- Get channel lists ---
+            chlist_2g_str = self.telnet_write("wl -i wl0 chanspec -b").strip()
+            chlist_5g_str = self.telnet_write("wl -i wl1 chanspec -b").strip()
+            result['2g_channels'] = self._parse_chanspec_output(chlist_2g_str)
+            result['5g_channels'] = self._parse_chanspec_output(chlist_5g_str)
+
+            logging.info(
+                f"✅ Country code verified as '{verified_cc_driver}'. "
+                f"2.4G Channels: {result['2g_channels']}, "
+                f"5G Channels: {result['5g_channels']}"
+            )
+
+        except Exception as e:
+            logging.error(f"Arris country code configuration/verification failed: {e}", exc_info=True)
+            raise
+
+        return result

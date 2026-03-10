@@ -4,6 +4,7 @@ import re
 import time
 import random
 import pytest
+import threading
 from src.util.constants import load_config
 from src.tools.ixchariot import ix
 from src.tools.connect_tool.command_batch import CommandBatch, CommandRunner, CommandExecutionError, CommandTimeoutError
@@ -32,8 +33,10 @@ class dut(WifiMixin, PerfMixin, SystemMixin, InputMixin, AppMixin, UiAutomationM
         This class does not return a value.
     """
     count = 0
+    RealValue_GET_WAIT = 10
     DMESG_COMMAND = 'dmesg -S'
     CLEAR_DMESG_COMMAND = 'dmesg -c'
+    DMESG_COMMAND_TAIL = 'dmesg | tail -n 35'
 
     SETTING_ACTIVITY_TUPLE = 'com.android.tv.settings', '.MainSettings'
     MORE_SETTING_ACTIVITY_TUPLE = 'com.droidlogic.tv.settings', '.more.MorePrefFragmentActivity'
@@ -49,6 +52,8 @@ class dut(WifiMixin, PerfMixin, SystemMixin, InputMixin, AppMixin, UiAutomationM
     CMD_WIFI_STOP_SAP = 'cmd wifi stop-softsap'
     CMD_WIFI_LIST_NETWORK = "cmd wifi list-networks |grep -v Network |awk '{print $1}'"
     CMD_WIFI_FORGET_NETWORK = 'cmd wifi forget-network {}'
+    CMD_WIFI_BEACON_RSSI= 'iwpriv wlan0 get_bcn_rssi |dmesg | grep "bcn_rssi:"'
+    CMD_WIFI_BEACON_RSSI2 = 'iwpriv wlan0 get_rssi |dmesg | grep "rssi:"'
 
     CMD_PING = 'ping -n {}'
     SVC_WIFI_DISABLE = 'svc wifi disable'
@@ -122,6 +127,10 @@ class dut(WifiMixin, PerfMixin, SystemMixin, InputMixin, AppMixin, UiAutomationM
         self._current_udp_mode = False
         encoding = 'gb2312' if getattr(pytest, "win_flag", False) else "utf-8"
         self.command_runner = CommandRunner(encoding=encoding)
+        self._extended_rssi_result = None
+        self._mcs_tx_result = None
+        self._mcs_rx_result = None
+        self._rssi_sampled_event = threading.Event()
         if self.rvr_tool == 'iperf':
             cmds = f"{self.iperf_server_cmd} {self.iperf_client_cmd}"
             self.test_tool = 'iperf3' if 'iperf3' in cmds else 'iperf'
@@ -388,6 +397,18 @@ class dut(WifiMixin, PerfMixin, SystemMixin, InputMixin, AppMixin, UiAutomationM
             return None
     @step
     def get_rx_rate(self, router_info, type='TCP', corner_tool=None, db_set='', debug=False):
+        # 【新增】重置状态并启动后台 RSSI 采样
+        self._extended_rssi_result = None
+        self._mcs_tx_result = None
+        self._mcs_rx_result = None
+        self._rssi_sampled_event.clear()
+        rssi_thread = threading.Thread(
+            target=self._sample_extended_rssi_after_delay,
+            args=(10,),
+            daemon=True
+        )
+        rssi_thread.start()
+
         return super().get_rx_rate(
             router_info,
             type=type,
@@ -398,6 +419,18 @@ class dut(WifiMixin, PerfMixin, SystemMixin, InputMixin, AppMixin, UiAutomationM
 
     @step
     def get_tx_rate(self, router_info, type='TCP', corner_tool=None, db_set='', debug=False):
+        # 【新增】重置状态并启动后台 RSSI 采样
+        self._extended_rssi_result = None
+        self._mcs_tx_result = None
+        self._mcs_rx_result = None
+        self._rssi_sampled_event.clear()
+        rssi_thread = threading.Thread(
+            target=self._sample_extended_rssi_after_delay,
+            args=(10,),  # 10秒后采样
+            daemon=True  # 主线程结束，子线程自动销毁
+        )
+        rssi_thread.start()
+
         return super().get_tx_rate(
             router_info,
             type=type,
@@ -498,5 +531,127 @@ class dut(WifiMixin, PerfMixin, SystemMixin, InputMixin, AppMixin, UiAutomationM
         """DUT-specific RX MCS implementation hook (override in subclasses)."""
 
         return self.checkoutput(self.MCS_RX_GET_COMMAND)
+
+    #Get WF0/1 Beacon RSSI
+    import re
+    import time
+
+    @step
+    def get_extended_rssi(self):
+        """
+        Retrieve beacon RSSI and per-chain RSSI (wf0, wf1) using iwpriv commands.
+        Sets:
+            self.bcn_rssi   -> int (e.g., -30)
+            self.wf0_rssi   -> int (e.g., -27)
+            self.wf1_rssi   -> int (e.g., -27)
+        Returns:
+            tuple: (bcn_rssi, wf0_rssi, wf1_rssi)
+        """
+        # 初始化默认值（表示未获取到）
+        self.bcn_rssi = -1
+        self.wf0_rssi = -1
+        self.wf1_rssi = -1
+
+        if self._is_performance_debug_enabled():
+            # 模拟调试模式
+            import random
+            self.bcn_rssi = -random.randint(30, 80)
+            self.wf0_rssi = self.bcn_rssi + random.randint(0, 3)
+            self.wf1_rssi = self.bcn_rssi + random.randint(0, 3)
+            logging.info("Debug mode: simulated extended RSSI = bcn:%d, wf0:%d, wf1:%d",
+                         self.bcn_rssi, self.wf0_rssi, self.wf1_rssi)
+            return (self.bcn_rssi, self.wf0_rssi, self.wf1_rssi)
+
+        try:
+            # Step 1: 清除上一次接收记录
+            last_rx_info = self.checkoutput("iwpriv clear_last_rx;sleep 1;iwpriv wlan0 get_last_rx")
+            logging.info(f"Last RX Info: {last_rx_info}")
+            time.sleep(1)
+
+            # Step 2: 获取最后一次接收的 RSSI（可选，按需保留）
+            # last_rx_output = self.checkoutput("iwpriv wlan0 get_last_rx")
+
+            # Step 3: 获取 beacon RSSI 并触发 dmesg 输出
+            self.checkoutput(self.CLEAR_DMESG_COMMAND)
+            dmesg_output = self.checkoutput(self.CMD_WIFI_BEACON_RSSI)
+            if not dmesg_output or 'bcn_rssi:' not in dmesg_output:
+                dmesg_output = self.checkoutput(self.CMD_WIFI_BEACON_RSSI2)
+            logging.info(f"BEACON RSSI Info: {dmesg_output}")
+
+            if not dmesg_output.strip():
+                logging.warning("No 'bcn_rssi' found in dmesg output.")
+                return (self.bcn_rssi, self.wf0_rssi, self.wf1_rssi)
+
+            # 支持两种日志格式：
+            # [76495.945681@3]  [wlan][  IWPRIV] [aml_get_rssi 1957]bcn_rssi: -30 dbm, (wf0: -27 dbm, wf1: -27 dbm)
+            # [46487.239822] bcn_rssi: -25 dbm, (wf0: -23 dbm, wf1: -22 dbm)
+            pattern = r"bcn_rssi:\s*(-?\d+)\s+dbm.*wf0:\s*(-?\d+)\s+dbm.*wf1:\s*(-?\d+)\s+dbm"
+
+            match = re.search(pattern, dmesg_output, re.IGNORECASE)
+            if match:
+                self.bcn_rssi = int(match.group(1))
+                self.wf0_rssi = int(match.group(2))
+                self.wf1_rssi = int(match.group(3))
+                logging.info("Extended RSSI parsed: bcn=%d, wf0=%d, wf1=%d",
+                             self.bcn_rssi, self.wf0_rssi, self.wf1_rssi)
+            else:
+                logging.warning("Failed to parse bcn_rssi from dmesg: %s", dmesg_output)
+
+        except Exception as e:
+            logging.error("Error in get_extended_rssi: %s", str(e))
+            # 保持默认值 -1
+
+        return (self.bcn_rssi, self.wf0_rssi, self.wf1_rssi)
+
+    def _sample_extended_rssi_after_delay(self, delay_seconds: int = 10):
+        """
+        在指定延迟后采样扩展 RSSI，并存储结果。
+        通常由后台线程调用。
+        """
+        try:
+            time.sleep(delay_seconds)
+            logging.info(f"📢 Sampling extended RSSI after {delay_seconds}s...")
+
+            #Get Beacon RSSI
+            rssi_result = self.get_extended_rssi()
+            self._extended_rssi_result = rssi_result
+            logging.info(f"✅ Extended RSSI sampled: {rssi_result}")
+
+            #Get realtime MCS
+            try:
+                # 直接调用方法，不依赖 @step 捕获
+                mcs_tx = self.get_mcs_tx()
+                self._mcs_tx_result = mcs_tx
+                logging.info(f"✅ MCS TX: {mcs_tx}")
+            except Exception as e:
+                logging.error(f"❌ MCS TX failed: {e}")
+                self._mcs_tx_result = "N/A"
+
+            try:
+                mcs_rx = self.get_mcs_rx()
+                self._mcs_rx_result = mcs_rx
+                logging.info(f"✅ MCS RX: {mcs_rx}")
+            except Exception as e:
+                logging.error(f"❌ MCS RX failed: {e}")
+                self._mcs_rx_result = "N/A"
+
+            self._rssi_sampled_event.set()
+
+            #merge RSSI and MCS
+            self._extended_sampling_result = {
+                'rssi': rssi_result,
+                'mcs_tx': mcs_tx,
+                'mcs_rx': mcs_rx
+            }
+
+
+            self._rssi_sampled_event.set()
+
+        except Exception as e:
+            logging.error(f"❌ Failed to sample extended RSSI: {e}")
+            self._extended_rssi_result = ("N/A", "N/A", "N/A")
+            self._mcs_tx_result = "N/A"
+            self._mcs_rx_result = "N/A"
+            self._rssi_sampled_event.set()
 
     step = staticmethod(step)

@@ -1972,10 +1972,13 @@ class android(linux):
             The result produced by the function.
         """
         try:
+            self.checkoutput(self.CLEAR_DMESG_COMMAND)
             self.checkoutput(self.MCS_RX_GET_COMMAND)
             mcs_info = self.checkoutput(self.DMESG_COMMAND)
+            logging.info("mcs_rx all result: %s", mcs_info)
             result = re.findall(r'RX rate info for \w\w:\w\w:\w\w:\w\w:\w\w:\w\w:(.*?)Last received rate', mcs_info,
                                 re.S)
+            #logging.info("mcs_rx rate result: %s", result)
             result_list = []
             for i in result[0].split('\n'):
                 if ':' in i:
@@ -2004,21 +2007,82 @@ class android(linux):
             The result produced by the function.
         """
         try:
+            self.checkoutput(self.CLEAR_DMESG_COMMAND)
+            self.checkoutput(self.MCS_TX_GET_COMMAND)
             mcs_info = self.checkoutput(self.DMESG_COMMAND)
-            result = re.findall(r'TX rate info for \w\w:\w\w:\w\w:\w\w:\w\w:\w\w:(.*?)MPDUs AMPDUs AvLen trialP',
-                                mcs_info,
-                                re.S)
-            result_list = []
-            for i in result:
-                for j in i.split('\n'):
-                    if ' T ' in j:
-                        temp = re.findall(r'(MCS\d+\/\d+)', j)
-                        result_list.append(temp[0])
-                        break
-            counts = Counter(result_list)
-            return max(counts.keys(), key=counts.get)
+            logging.info("mcs_tx all result: %s", mcs_info)
+            result = re.findall(
+                #r'TX rate info for [\w:]+:\s*\n(.*?MPDUs AMPDUs AvLen trialP)',
+                r'(TX rate info for [\w:]+:\s*\n(?:\s*\[.*?\]\s*\[.*?\]\s*.*\n)+?)'
+                r'(?=\s*\[|\s*$)',
+                mcs_info,
+                re.DOTALL
+            )
+            #logging.info("mcs_tx rate result: %s", result)
+            # result_list = []
+            # for i in result:
+            #     for j in i.split('\n'):
+            #         if ' T ' in j:
+            #             temp = re.findall(r'(MCS\d+\/\d+)', j)
+            #             result_list.append(temp[0])
+            #             break
+            # counts = Counter(result_list)
+            # return max(counts.keys(), key=counts.get)
+            mcs_distribution = self.parse_mcs_distribution_from_blocks(result)
+            return mcs_distribution
         except Exception as e:
             return 'mcs_tx'
+
+    def parse_mcs_distribution_from_blocks(self, blocks):
+        """
+        Input: TX rate info MCS info
+        OutPut: "MCS4/2:24.8%|MCS6/2:24.8%|MCS7/2:20.7%"
+        """
+        from collections import defaultdict
+        if not blocks:
+            return "MCS_NO_BLOCK"
+
+        last_block_str = blocks[-1]
+        lines = last_block_str.strip().split('\n')
+
+        data_lines = []
+        for line in lines:
+            if 'TX rate info' in line or '# type' in line:
+                continue
+            if line.strip() and re.search(r'\[\d+\s+T\d+', line):
+                data_lines.append(line)
+
+        mcs_skipped = defaultdict(int)
+
+        # 提取每行的 MCS 和 skipped
+        for line in data_lines:
+            line = line.strip()
+            #logging.info(f"tx_MCS_data_line: {line}")
+            if not line:
+                continue
+            # 匹配 MCSx/y skipped
+            #match = re.search(r'(MCS\d+/\d+).*\s(\d+)\s*$', line)
+            match = re.search(r'(MCS\d+).*?\(\s*\d+\s*\)\s+(\d+)(?:\s+[A-Z])?$', line)
+            if match:
+                mcs = match.group(1)
+                skipped = int(match.group(2))
+                mcs_skipped[mcs] += skipped
+
+        if not mcs_skipped:
+            return "MCS_PARSE_FAIL"
+
+        # weight = 1 / (skipped + 1)
+        total_weight = 0.0
+        mcs_weights = {}
+        for mcs, skipped in mcs_skipped.items():
+            w = 1.0 / (skipped + 1)
+            mcs_weights[mcs] = w
+            total_weight += w
+
+        # to % and top3
+        sorted_mcs = sorted(mcs_weights.items(), key=lambda x: x[1], reverse=True)[:3]
+        parts = [f"{mcs}:{(w / total_weight) * 100:.1f}%" for mcs, w in sorted_mcs]
+        return "|".join(parts)
 
     def get_tx_bitrate(self):
         """

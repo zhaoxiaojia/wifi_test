@@ -35,12 +35,10 @@ os.chdir(Paths.BASE_DIR)
 
 # Route uncaught exceptions through the shared handler in the view layer.
 sys.excepthook = log_exception
-
-
-multiprocessing.freeze_support()
-
+#multiprocessing.freeze_support()
 
 if __name__ == "__main__":
+    multiprocessing.freeze_support()
     _t0 = time.perf_counter()
     logging.basicConfig(
         level=logging.WARNING,

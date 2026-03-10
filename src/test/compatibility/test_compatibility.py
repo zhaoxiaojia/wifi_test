@@ -51,20 +51,11 @@ def initialize_all_relays():
     仅当运行本文件中的测试时才会触发。
     """
     # 获取所有 relay 列表
+    logging.info("[COMPAT] Powering OFF all relay ports before compatibility tests...")
     temp = PduSnmpCtrl()
     all_relays = temp.ctrl
     temp.shutdown()
 
-    # logging.info("🔌 [COMPAT] Powering OFF all relay ports before compatibility tests...")
-    # for ip, port in all_relays:
-    #     pdu = PduSnmpCtrl()
-    #     try:
-    #         pdu.switch(ip, port, 0)  # 断电
-    #         logging.info(f"  → OFF: {ip}:{port}")
-    #     finally:
-    #         if hasattr(pdu, 'shutdown'):
-    #             pdu.shutdown()
-    logging.info("✅ All relays powered OFF. Ready for compatibility testing.")
     return "PDU initialized"
 
 @pytest.fixture(scope='module', autouse=True, params=power_ctrl, ids=[str(i) for i in power_ctrl])

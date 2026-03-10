@@ -422,3 +422,22 @@ class RvrWifiConfigPage(CardWidget):
         self.dataChanged.emit()
 
     # --- router / CSV helpers -------------------------------------------------
+    # --- 新增：供外部（如 CaseConfigPage）调用，以动态加载指定目录的用例 ---
+    def load_function_cases_from_dirs(self, target_dirs: list[str]) -> None:
+        """
+        Load function test cases from the specified directories.
+
+        Args:
+            target_dirs (list[str]): List of directory names relative to test/project/.
+        """
+        if self.func_form and hasattr(self.func_form, 'load_cases_from_dirs'):
+            self.func_form.load_cases_from_dirs(target_dirs)
+        else:
+            logging.warning("func_form or load_cases_from_dirs not available.")
+
+    def reset_function_cases(self) -> None:
+        """Reset function test cases to show all."""
+        if self.func_form and hasattr(self.func_form, 'on_reset_clicked'):
+            self.func_form.on_reset_clicked()
+        else:
+            logging.warning("func_form or on_reset_clicked not available.")
