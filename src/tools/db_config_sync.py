@@ -407,6 +407,7 @@ class ConfigDatabaseSync:
                     "android_version",
                     "kernel_version",
                     "connect_type",
+                    "mac_address",
                     "adb_device",
                     "telnet_ip",
                     "product_line",
@@ -414,6 +415,7 @@ class ConfigDatabaseSync:
                     "main_chip",
                     "wifi_module",
                     "interface",
+                    "odm",
                 ]
                 dut_values = [
                     dut_payload.get("software_version"),
@@ -421,6 +423,7 @@ class ConfigDatabaseSync:
                     dut_payload.get("android_version"),
                     dut_payload.get("kernel_version"),
                     dut_payload.get("connect_type"),
+                    dut_payload.get("mac_address"),
                     dut_payload.get("adb_device"),
                     dut_payload.get("telnet_ip"),
                     dut_payload.get("product_line"),
@@ -428,6 +431,7 @@ class ConfigDatabaseSync:
                     dut_payload.get("main_chip"),
                     dut_payload.get("wifi_module"),
                     dut_payload.get("interface"),
+                    dut_payload.get("odm"),
                 ]
                 existing_dut_id = self._find_existing_row_id(cursor, "dut", dut_columns, dut_values)
                 if existing_dut_id is not None:

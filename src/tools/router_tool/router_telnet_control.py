@@ -1,6 +1,50 @@
 import time,re
 import logging
+import traceback
 from src.tools.connect_tool.transports.telnet_tool import TelnetSession
+
+
+class TelnetVerifier:
+    """A simple, dedicated class for verifying router state via Telnet."""
+
+    def __init__(self, host: str, password: str):
+        self.host = host
+        self.password = password
+        self.session = None
+        self.prompt = b":/tmp/home/root#"
+
+    def __enter__(self):
+        self.session = TelnetSession(host=self.host, port=23, timeout=10)
+        self.session.open()
+
+        # Login sequence
+        self.session.read_until(b"login:", timeout=5)
+        self.session.write(b"admin\n")
+        self.session.read_until(b"Password:", timeout=5)
+        self.session.write(self.password.encode("ascii") + b"\n")
+        self.session.read_until(self.prompt, timeout=5)
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.session:
+            self.session.close()
+
+    def run_command(self, cmd: str, sleep_time: float = 0.5) -> str:
+        """
+        Execute a command and return the stripped output.
+        :param cmd: The command to execute.
+        :param sleep_time: Time to wait for the command to complete.
+        """
+        self.session.write((cmd + "\n").encode("ascii"))
+        time.sleep(sleep_time)  # Allow command to execute
+        raw_output = self.session.read_until(self.prompt, timeout=5)
+        output_str = raw_output.decode('utf-8', errors='ignore')
+        # Parse the output: find the last non-empty line that is not the prompt
+        lines = [line.strip() for line in output_str.splitlines() if line.strip()]
+        for line in reversed(lines):
+            if not line.endswith("#"):
+                return line
+        return ""
 
 # === 频段配置与模式映射 ===
 BAND_CONFIG = {
@@ -124,6 +168,8 @@ def configure_ap_wireless_mode(router, band='2g', mode='auto', ssid=None, passwo
     logging.info(
         f"[{band.upper()}] Wireless mode configured: semantic='{mode}' -> native='{native_mode}', SSID='{ssid or 'default'}'")
 
+
+# --- 替换整个 verify_ap_wireless_mode 函数 ---
 
 def verify_ap_wireless_mode(router, band='2g', expected_ssid='None', expected_mode='auto'):
     """
@@ -404,14 +450,10 @@ def configure_ap_bandwidth(router, band='2g', bandwidth='20MHZ'):
 
     logging.info(f"[{band.upper()}] Bandwidth configured to: {bandwidth} (native: {native_bandwidth if band == '2g' else bandwidth})")
 
-def verify_ap_channel_and_beacon(router, band='2g', expected_channel=1, expected_ssid=None):
-    """
-    验证 AP 信道和 Beacon 广播是否生效。
-    若验证失败，自动重启无线服务并重试一次。
+# --- 替换整个 verify_ap_channel_and_beacon 函数 ---
 
-    Returns:
-        bool: True 表示验证通过，False 表示失败
-    """
+def verify_ap_channel_and_beacon(router, band='2g', expected_channel=1, expected_ssid=None):
+    """ 验证 AP 信道和 Beacon 广播是否生效。 """
     max_retries = 2
     for attempt in range(max_retries):
         if attempt > 0:
@@ -427,91 +469,45 @@ def verify_ap_channel_and_beacon(router, band='2g', expected_channel=1, expected
         interface = 'eth6' if band == '2g' else 'eth7'
         expected_ssid = expected_ssid or f"AX86U_{band.upper()}"
 
-        session = None
         try:
-            session = TelnetSession(host=host, port=23, timeout=10)
-            session.open()
-            session.read_until(b"login:", timeout=5)
-            session.write(b"admin\n")
-            session.read_until(b"Password:", timeout=5)
-            session.write(password.encode("ascii") + b"\n")
-            prompt = b":/tmp/home/root#"
-            session.read_until(prompt, timeout=5)
+            with TelnetVerifier(host=host, password=password) as tv:
+                # --- 检查 1: BSS 是否激活 ---
+                bss_status = tv.run_command(f"wl -i {interface} bss")
+                valid = (bss_status == "up")
+                if not valid:
+                    logging.warning(f"[{band}] BSS is '{bss_status}' — Beacon NOT broadcasting!")
 
-            def safe_wl(cmd):
-                session.write((cmd + "\n").encode("ascii"))
-                time.sleep(0.3)
-                output = session.read_until(prompt, timeout=3).decode("utf-8", errors="ignore")
-                lines = [line.strip() for line in output.splitlines() if line.strip()]
-                if lines and not lines[-1].endswith("#"):
-                    return lines[-1]
-                return lines[-2] if len(lines) >= 2 else ""
+                # --- 检查 2: SSID 是否匹配 ---
+                ssid_raw = tv.run_command(f"wl -i {interface} ssid")
+                current_ssid = _extract_ssid_from_wl_output(ssid_raw) # 复用你已有的 extract_ssid 函数
+                if current_ssid != expected_ssid:
+                    logging.warning(f"[{band}] SSID mismatch: expected '{expected_ssid}', got '{current_ssid}'")
+                    valid = False
 
-            def extract_ssid(output: str) -> str:
-                match = re.search(r'Current SSID:\s*"([^"]*)"', output)
-                if match:
-                    return match.group(1)
-                if 'Current SSID:' in output:
-                    parts = output.split('"')
-                    return parts[1] if len(parts) >= 2 else output
-                return output.strip()
+                # --- 检查 3: 信道是否正确 ---
+                chanspec_out = tv.run_command(f"wl -i {interface} chanspec")
+                match = re.search(r'^\s*(\d+)', chanspec_out.strip())
+                actual_channel = match.group(1) if match else chanspec_out.split("/")[0].strip()
+                if str(expected_channel) != actual_channel:
+                    logging.warning(f"[{band}] Channel mismatch: expected {expected_channel}, got {actual_channel}")
+                    valid = False
 
-            # 检查 1: BSS 是否激活（Beacon 广播）
-            bss_status = safe_wl(f"wl -i {interface} bss")
-            if bss_status != "up":
-                logging.warning(f"[{band}] BSS is '{bss_status}' — Beacon NOT broadcasting!")
-                valid = False
-            else:
-                valid = True
-
-            # 检查 2: SSID 是否匹配
-            ssid_raw = safe_wl(f"wl -i {interface} ssid")
-            current_ssid = extract_ssid(ssid_raw)
-            if current_ssid != expected_ssid:
-                logging.warning(f"[{band}] SSID mismatch: expected '{expected_ssid}', got '{current_ssid}'")
-                valid = False
-
-            # 检查 3: 信道是否正确
-            chanspec_out = safe_wl(f"wl -i {interface} chanspec")
-            # 使用正则提取开头的连续数字（兼容 "1 (0x1001)"、"36/80"、"149" 等格式）
-            match = re.search(r'^\s*(\d+)', chanspec_out.strip())
-            if match:
-                actual_channel = match.group(1)
-            else:
-                # 退化处理：尝试 / 分割或直接使用
-                actual_channel = chanspec_out.split("/")[0].strip() if "/" in chanspec_out else chanspec_out.strip()
-
-            if str(expected_channel) != actual_channel:
-                logging.warning(
-                    f"[{band}] Channel mismatch: expected {expected_channel}, got {actual_channel} (raw: {chanspec_out})"
-                )
-                valid = False
-
-            if valid:
-                logging.info(f"✅ [{band}] Verified: channel={expected_channel}, SSID='{expected_ssid}', BSS=up")
-                return True
+                if valid:
+                    logging.info(f"✅ [{band}] Verified: channel={expected_channel}, SSID='{expected_ssid}', BSS=up")
+                    return True
 
         except Exception as e:
             logging.warning(f"Verification failed on attempt {attempt}: {e}")
-        finally:
-            if session:
-                try:
-                    session.close()
-                except:
-                    pass
 
-        # === 如果失败且还有重试机会，重启无线 ===
+        # === 重启无线服务 ===
         if attempt < max_retries - 1:
             logging.warning(f"[{band}] Verification failed. Restarting wireless service...")
             try:
                 router.telnet_write("restart_wireless &", wait_prompt=False)
-                # router.telnet_write("stop_wireless")
-                # time.sleep(5)
-                # router.telnet_write("start_wireless")
                 time.sleep(12)
             except Exception as e:
                 logging.error(f"Failed to restart wireless: {e}")
-                break  # 重启失败，不再重试
+                break
 
     return False
 
@@ -530,9 +526,9 @@ def restore_ap_default_wireless(router, band='2g', original_ssid=None, original_
         router.set_2g_channel("auto")
         configure_ap_bandwidth(router, band='2g', bandwidth='20/40MHZ')
     else:
-        router.set_5g_channel_bandwidth(channel="auto", bandwidth="20/40/80/160MHZ")
+        router.set_5g_channel_bandwidth(channel="auto", bandwidth="20/40/80MHZ")
 
-        # 2. 复用 configure_ap_wireless_mode 来设置其他参数（SSID, 密码, 模式为 'auto'）
+    # 2. 复用 configure_ap_wireless_mode 来设置其他参数（SSID, 密码, 模式为 'auto'）
     configure_ap_wireless_mode(
         router,
         band=band,
@@ -576,7 +572,7 @@ def _detect_wep_key_format(password: str):
 
     return key_type, wep_format
 
-def configure_ap_security_universal(router, band: str, security_mode: str, password: str) -> None:
+def configure_ap_security_universal(router, band: str, security_mode: str, password: str, encryption: str = "aes", pmf: int | None = None) -> None:
     """
     A universal function to configure AP security mode, mimicking the successful pattern from hidden_ssid tests.
 
@@ -605,11 +601,27 @@ def configure_ap_security_universal(router, band: str, security_mode: str, passw
         'WPA/WPA2-Personal',
         'WPA2/WPA3-Personal'
     }
+    _ENCRYPTION_MAP = {
+        "aes": "aes",  # 对应 nvram 的 'aes'
+        "tkip+aes": "tkip+aes"  # 对应 nvram 的 'tkip+aes'
+    }
 
     if security_mode not in SUPPORTED_MODES:
         raise ValueError(f"Unsupported security mode: '{security_mode}'. Supported: {SUPPORTED_MODES}")
 
-    logging.info(f"[{band.upper()}] Configuring security mode: '{security_mode}'")
+    _ENCRYPTION_MAP = {"aes": "aes", "tkip+aes": "tkip+aes"}
+    if encryption not in _ENCRYPTION_MAP:
+        raise ValueError(f"Unsupported encryption: '{encryption}'. Use 'aes' or 'tkip+aes'.")
+    crypto_value = _ENCRYPTION_MAP[encryption]
+
+    # Validate PMF value if provided
+    if pmf is not None and pmf not in (0, 1, 2):
+        raise ValueError("pmf must be 0 (disabled), 1 (optional), 2 (required), or None (skip).")
+
+    logging.info(f"[{band.upper()}] Configuring: mode='{security_mode}', "
+                 f"encryption='{encryption}', pmf={'set to ' + str(pmf) if pmf is not None else 'unchanged'}")
+
+    wl_prefix = "wl0_" if band == "2g" else "wl1_"
 
     # --- Special Case 1: WEP (Shared Key) ---
     if security_mode == 'Shared Key':
@@ -648,4 +660,139 @@ def configure_ap_security_universal(router, band: str, security_mode: str, passw
         router.set_5g_authentication(security_mode)
         router.set_5g_password(password)
 
-    logging.info(f"[{band.upper()}] Security mode '{security_mode}' with password configured successfully.")
+    # Set encryption
+    router.telnet_write(f"nvram set {wl_prefix}crypto={crypto_value}")
+
+    # ✅ Only set PMF if explicitly requested
+    if pmf is not None:
+        router.telnet_write(f"nvram set {wl_prefix}pmf={pmf}")
+        logging.debug(f"[{band.upper()}] PMF explicitly set to {pmf}.")
+
+    # 3. 提交更改
+    router.commit()
+
+    logging.info(f"[{band.upper()}] Security mode '{security_mode}' with password and encryption='{encryption}' configured.")
+
+
+# def configure_and_verify_ap_country_code(router, country_code="US"):
+#     """
+#     配置路由器的国家码 (Country Code)，并验证设置结果。
+#     如果设置成功，返回当前 AP 在 2.4G 和 5G 频段支持的信道列表。
+#
+#     Args:
+#         router: AsusTelnetNvramControl 实例（已连接）。
+#         country_code (str): 目标国家码，例如 'US', 'CN', 'JP'。
+#
+#     Returns:
+#         dict: 包含验证结果和支持信道的字典。
+#               {
+#                   'country_code_set': bool, # 国家码是否成功设置
+#                   'verified_country_code': str, # 验证后读取的实际国家码
+#                   '2g_channels': list[int], # 2.4G 支持的信道列表
+#                   '5g_channels': list[int]  # 5G 支持的信道列表
+#               }
+#     """
+#
+#     result = {
+#         'country_code_set': False,
+#         'verified_country_code': "",
+#         '2g_channels': [],
+#         '5g_channels': []
+#     }
+#
+#     try:
+#         host = router.host
+#         password = str(router.xpath["passwd"])
+#     except (AttributeError, KeyError) as e:
+#         logging.error(f"Failed to extract router credentials: {e}")
+#         return result
+#
+#     # === Step 1: 设置国家码 ===
+#     try:
+#         # 使用 router 对象的 API 设置国家码
+#         # router.telnet_write(f"nvram set wl_country_code={country_code}")
+#         # if country_code == "US":
+#         #     router.telnet_write(f"nvram set wl0_country_code={country_code}")
+#         #     router.telnet_write(f"nvram set wl1_country_code={country_code}")
+#         # router.commit() # nvram commit & restart_wireless
+#         router.change_country_v2(country_code)
+#         logging.info(f"Country code set to '{country_code}' via UI setting")
+#         time.sleep(180) # 等待无线服务完全启动
+#         router.close_browser()
+#     except Exception as e:
+#         logging.error(f"Failed to set country code '{country_code}': {e}")
+#         return result
+#
+#     session = None
+#
+#     try:
+#         with TelnetVerifier(host=host, password=password) as tv:
+#             # Verify country code
+#             # verified_cc = tv.run_command(f"nvram get wl_country_code").strip()
+#             # verified_cc2 = tv.run_command(f"wl -i eth6 country").strip()
+#             raw_cc = tv.run_command(f"nvram get wl_country_code")
+#             verified_cc = re.sub(r'\s+', '', raw_cc)
+#             raw_cc2 = tv.run_command(f"wl -i eth6 country")
+#
+#             cc2_match = re.search(r'^([A-Z]{2})', raw_cc2)
+#             if cc2_match:
+#                 verified_cc2 = cc2_match.group(1)
+#             else:
+#                 verified_cc2 = re.sub(r'\s+', '', raw_cc2.split()[0] if raw_cc2.split() else "")
+#
+#             logging.info(f"Country code set to  {verified_cc2}")
+#             expected_driver_code = RouterTools.UI_TO_DRIVER_COUNTRY_MAP.get(country_code, country_code)
+#             if country_code == 'EU':
+#                 if verified_cc2 not in ('E0', 'DE'):
+#                     error_msg = f"EU region expected 'E0' or 'DE', got '{verified_cc2}'"
+#                     logging.error(error_msg)
+#                     raise RuntimeError(error_msg)
+#             elif verified_cc2 != expected_driver_code:
+#                 error_msg = f"Driver country code mismatch: expected '{expected_driver_code}', got '{verified_cc2}'"
+#                 logging.error(error_msg)
+#                 raise RuntimeError(error_msg)
+#
+#             if verified_cc != country_code:
+#                 logging.warning(f"NVRAM country code ('{verified_cc}') differs from driver ('{verified_cc2}')")
+#             result['verified_country_code'] = verified_cc2
+#
+#             # Wait some minutes to makesure channel list takes affect, Get channel lists
+#             time.sleep(200)
+#             chlist_2g_str = tv.run_command("nvram get wl0_chlist").strip()
+#             chlist_5g_str = tv.run_command("nvram get wl1_chlist").strip()
+#
+#             # Convert space-separated string to list of ints
+#             result['2g_channels'] = [int(ch) for ch in chlist_2g_str.split() if ch.isdigit()]
+#             result['5g_channels'] = [int(ch) for ch in chlist_5g_str.split() if ch.isdigit()]
+#
+#             result['country_code_set'] = True
+#             logging.info(f"✅ Country code verified as '{verified_cc2}'. "
+#                          f"2.4G Channels: {result['2g_channels']}, "
+#                          f"5G Channels: {result['5g_channels']}")
+#
+#     except Exception as e:
+#         logging.error(f"Verification failed: {e}", exc_info=True)
+#         raise
+#
+#     return result
+def configure_and_verify_ap_country_code(router, country_code="US"):
+    """
+    Unified interface for country code configuration and verification.
+
+    This function delegates to the router-specific implementation.
+    All router control classes must implement:
+        configure_and_verify_country_code(country_code: str) -> dict
+    """
+    # 直接调用 router 对象的方法（多态）
+    return router.configure_and_verify_country_code(country_code)
+
+def _extract_ssid_from_wl_output(output: str) -> str:
+    """Extract SSID from 'wl -i <iface> ssid' command output."""
+    match = re.search(r'Current SSID:\s*"([^"]*)"', output)
+    if match:
+        return match.group(1)
+    # Fallback: clean up the raw output
+    cleaned = output.strip()
+    if cleaned.startswith("Current SSID:"):
+        cleaned = cleaned[len("Current SSID:"):].strip()
+    return cleaned.strip('" \n')

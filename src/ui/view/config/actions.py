@@ -109,6 +109,53 @@ def set_refresh_ui_locked(page: Any, locked: bool) -> None:
     except Exception:
         logging.debug("set_refresh_ui_locked: failed to toggle updates", exc_info=True)
 
+def _notify_rvr_wifi_page_for_function_cases(page: Any, case_path: str) -> None:
+    """
+    Helper function to notify the RvrWifiConfigPage to load function test cases
+    when a project-related case path is selected.
+    """
+    if not case_path:
+        return
+
+    try:
+        from pathlib import Path
+
+        # Get the application's base path
+        config_ctl = getattr(page, "config_ctl", None)
+        if config_ctl is None or not hasattr(config_ctl, "get_application_base"):
+            return
+
+        app_base = Path(config_ctl.get_application_base())
+        project_root = app_base / "test" / "project"
+        case_path_obj = Path(case_path).resolve()
+
+        # Check if the selected path is under 'test/project/'
+        if project_root in case_path_obj.parents:
+            # Extract the target directory name (e.g., 'android', 'region')
+            rel_path = case_path_obj.relative_to(project_root)
+            if case_path_obj.is_file() and case_path_obj.suffix == '.py':
+                target_dir = rel_path.parent.name
+            elif case_path_obj.is_dir():
+                target_dir = rel_path.name
+            else:
+                return
+
+            # Find the main window and the RvrWifiConfigPage
+            main_window = page.window()
+            rvr_page = getattr(main_window, "rvr_wifi_config_page", None)
+            if rvr_page is not None and hasattr(rvr_page, "load_function_cases_from_dirs"):
+                rvr_page.load_function_cases_from_dirs([target_dir])
+                logging.debug(f"Notified RvrWifiConfigPage to load from: {target_dir}")
+        else:
+            # If the selection is outside 'test/project/', reset the RvrWifiConfigPage
+            main_window = page.window()
+            rvr_page = getattr(main_window, "rvr_wifi_config_page", None)
+            if rvr_page is not None and hasattr(rvr_page, "reset_function_cases"):
+                rvr_page.reset_function_cases()
+                logging.debug("Reset RvrWifiConfigPage as selection is outside project/")
+
+    except Exception as e:
+        logging.debug(f"Failed to notify RvrWifiConfigPage: {e}", exc_info=True)
 
 def _refresh_case_page_compatibility(page: Any) -> None:
     """Refresh the Case-page compatibility selection to mirror config state."""
@@ -249,7 +296,7 @@ def apply_ui(page: Any, case_path: str) -> None:
         page._pending_path = None
         QTimer.singleShot(0, lambda: apply_ui(page, path))
 
-
+    _notify_rvr_wifi_page_for_function_cases(page, case_path)
 
 def _rebalance_panel(panel: Any) -> None:
     """Request a layout rebalance on a ConfigGroupPanel, if available."""
@@ -929,44 +976,9 @@ def init_fpga_dropdowns(view: Any) -> None:
         elif logical == "project.project":
             project_combo = widget
 
-    if not (customer_combo and product_combo and project_combo):
-        logging.warning("[DEBUG_FPGA] init_fpga_dropdowns: required combos missing, abort")
-        return
-
     def _set_combo_text(combo: Any, text: str) -> None:
-        """Set combo selection with case-insensitive match when possible."""
-        if not text:
-            if combo.count():
-                combo.setCurrentIndex(0)
-            else:
-                combo.setCurrentIndex(-1)
-            return
-        target = str(text).strip()
-        if not target:
-            if combo.count():
-                combo.setCurrentIndex(0)
-            else:
-                combo.setCurrentIndex(-1)
-            return
-        try:
-            idx = combo.findText(target)
-        except Exception:
-            idx = -1
-        if idx < 0:
-            upper = target.upper()
-            try:
-                for i in range(combo.count()):
-                    if str(combo.itemText(i)).strip().upper() == upper:
-                        idx = i
-                        break
-            except Exception:
-                idx = -1
-        if idx >= 0:
-            combo.setCurrentIndex(idx)
-        elif combo.count():
-            combo.setCurrentIndex(0)
-        else:
-            combo.setCurrentIndex(-1)
+        """Set combo selection by exact text match."""
+        combo.setCurrentIndex(combo.findText(text))
 
     setattr(view, "fpga_customer_combo", customer_combo)
     setattr(view, "fpga_product_combo", product_combo)
@@ -999,19 +1011,16 @@ def init_fpga_dropdowns(view: Any) -> None:
     config = getattr(view, "config", {}) or {}
     project_cfg = config.get("project") or {}
 
-    target_customer = str(project_cfg.get("customer") or customer_combo.currentText() or "").strip()
-    if target_customer:
-        _set_combo_text(customer_combo, target_customer)
+    target_customer = project_cfg.get("customer") or customer_combo.currentText() or ""
+    _set_combo_text(customer_combo, target_customer)
     refresh_fpga_product_lines(view, target_customer)
 
-    target_product = str(project_cfg.get("product_line") or product_combo.currentText() or "").strip()
-    if target_product:
-        _set_combo_text(product_combo, target_product)
+    target_product = project_cfg.get("product_line") or product_combo.currentText() or ""
+    _set_combo_text(product_combo, target_product)
     refresh_fpga_projects(view, target_customer, target_product)
 
-    target_project = str(project_cfg.get("project") or project_combo.currentText() or "").strip()
-    if target_project:
-        _set_combo_text(project_combo, target_project)
+    target_project = project_cfg.get("project") or project_combo.currentText() or ""
+    _set_combo_text(project_combo, target_project)
 
     update_fpga_hidden_fields(view)
 
@@ -1020,17 +1029,14 @@ def init_fpga_dropdowns(view: Any) -> None:
 
 def refresh_fpga_product_lines(view: Any, customer: str) -> None:
     """Populate the FPGA product-line combo for a given customer."""
-    combo = getattr(view, "fpga_product_combo", None)
-    if combo is None:
-        logging.warning("[DEBUG_FPGA] refresh_fpga_product_lines: no fpga_product_combo")
-        return
-    customer_upper = (customer or "").strip().upper()
+    combo = view.fpga_product_combo
     product_lines: dict[str, Any] = {}
-    if customer_upper:
-        for name, lines in WIFI_PRODUCT_PROJECT_MAP.items():
-            if str(name).strip().upper() == customer_upper:
-                product_lines = lines
-                break
+    if customer:
+        for product_name, projects in WIFI_PRODUCT_PROJECT_MAP.items():
+            for info in projects.values():
+                if info["ODM"] == customer:
+                    product_lines[product_name] = projects
+                    break
     combo.clear()
     for product_name in product_lines.keys():
         combo.addItem(product_name)
@@ -1040,27 +1046,21 @@ def refresh_fpga_product_lines(view: Any, customer: str) -> None:
 
 def refresh_fpga_projects(view: Any, customer: str, product_line: str) -> None:
     """Populate the FPGA project combo for a given customer/product-line."""
-    combo = getattr(view, "fpga_project_combo", None)
-    if combo is None:
-        logging.warning("[DEBUG_FPGA] refresh_fpga_projects: no fpga_project_combo")
-        return
-    customer_upper = (customer or "").strip().upper()
-    product_upper = (product_line or "").strip().upper()
+    combo = view.fpga_project_combo
     projects: dict[str, Any] = {}
-    if customer_upper:
-        for customer_name, product_lines in WIFI_PRODUCT_PROJECT_MAP.items():
-            if str(customer_name).strip().upper() != customer_upper:
+    if product_line:
+        for product_name, project_map in WIFI_PRODUCT_PROJECT_MAP.items():
+            if product_name != product_line:
                 continue
-            for product_name, project_map in product_lines.items():
-                if str(product_name).strip().upper() == product_upper:
-                    projects = project_map
-                    break
-            break
-    elif product_upper:
-        for product_lines in WIFI_PRODUCT_PROJECT_MAP.values():
-            if product_upper in product_lines:
-                projects = product_lines.get(product_upper, {})
+            if not customer:
+                projects = project_map
                 break
+            filtered: dict[str, Any] = {}
+            for project_name, info in project_map.items():
+                if info["ODM"] == customer:
+                    filtered[project_name] = info
+            projects = filtered
+            break
     combo.clear()
     for project_name in projects.keys():
         combo.addItem(project_name)
@@ -1076,9 +1076,9 @@ def update_fpga_hidden_fields(page: Any) -> None:
     if not (customer_combo and product_combo and project_combo):
         return
 
-    customer = (customer_combo.currentText() or "").strip().upper()
-    product = (product_combo.currentText() or "").strip().upper()
-    project = (project_combo.currentText() or "").strip().upper()
+    customer = customer_combo.currentText() or ""
+    product = product_combo.currentText() or ""
+    project = project_combo.currentText() or ""
 
     info: dict[str, Any] | None = None
     config_ctl = getattr(page, "config_ctl", None)
@@ -1100,30 +1100,37 @@ def update_fpga_hidden_fields(page: Any) -> None:
     config_ctl = getattr(page, "config_ctl", None)
 
     def _norm(value: Any) -> str:
-        if config_ctl is not None:
-            return config_ctl.normalize_fpga_token(value)  # type: ignore[attr-defined]
-        return str(value or "").strip().upper()
+        return str(value or "")
 
     mass_status: list[str] = []
+    odm_choices: list[str] = []
     if info:
-        mass_status = [str(v) for v in info.get("mass_production_status") or [] if str(v).strip()]
+        mass_status = list(info["mass_production_status"])
+        odm_choices = [info["ODM"]]
     current_status = ""
+    current_odm = ""
     config = getattr(page, "config", None)
     if isinstance(config, dict):
         project_cfg = config.get("project") or {}
         if isinstance(project_cfg, dict):
-            current_status = str(project_cfg.get("mass_production_status") or "").strip()
+            current_status = str(project_cfg.get("mass_production_status") or "")
+            current_odm = str(project_cfg.get("odm") or "")
 
     if product and project and info:
         normalized = {
             "customer": customer,
             "product_line": product,
             "project": project,
+            "odm": "",
             "main_chip": _norm(info.get("main_chip")),
             "wifi_module": _norm(info.get("wifi_module")),
             "interface": _norm(info.get("interface")),
             "mass_production_status": "",
         }
+        if current_odm and current_odm in odm_choices:
+            normalized["odm"] = current_odm
+        elif odm_choices:
+            normalized["odm"] = odm_choices[0]
         if current_status and current_status in mass_status:
             normalized["mass_production_status"] = current_status
         elif mass_status:
@@ -1133,6 +1140,7 @@ def update_fpga_hidden_fields(page: Any) -> None:
             "customer": customer,
             "product_line": product,
             "project": project,
+            "odm": current_odm,
             "main_chip": "",
             "wifi_module": "",
             "interface": "",
@@ -1147,10 +1155,10 @@ def update_fpga_hidden_fields(page: Any) -> None:
     has_project = bool(project)
     ecosystem = ""
     if info:
-        ecosystem = str(info.get("ecosystem") or "").strip()
+        ecosystem = info["ecosystem"]
     connect_combo = getattr(page, "connect_type_combo", None)
     if ecosystem:
-        target_type = "Linux" if ecosystem.lower() == "linux" else "Android"
+        target_type = "Linux" if ecosystem == "Linux" else "Android"
         if isinstance(config, dict):
             connect_cfg = config.setdefault("connect_type", {})
             if isinstance(connect_cfg, dict):
@@ -1197,6 +1205,21 @@ def update_fpga_hidden_fields(page: Any) -> None:
                     status_widget.setCurrentIndex(0)
             else:
                 status_widget.setCurrentIndex(0)
+
+    odm_widget = field_widgets.get("project.odm")
+    if odm_widget is not None and hasattr(odm_widget, "clear"):
+        odm_widget.clear()
+        for item in odm_choices:
+            odm_widget.addItem(item)
+        if odm_choices:
+            target = normalized.get("odm") or ""
+            if target:
+                try:
+                    odm_widget.setCurrentText(target)
+                except Exception:
+                    odm_widget.setCurrentIndex(0)
+            else:
+                odm_widget.setCurrentIndex(0)
 
 
 def apply_connect_type_ui_state(page: Any, connect_type: str) -> None:

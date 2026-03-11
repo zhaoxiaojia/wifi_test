@@ -964,6 +964,21 @@ def _update_excel_with_tcid_result(tcid: str, final_status: str, step_details: s
         logging.error(f"Excel file not found: {excel_path}")
         return
 
+    if re.match(r"^WiFi-STA-[A-Z0-9]+$", tcid):
+        try:
+            df_headers = pd.read_excel(excel_path, nrows=0)  # 只读表头
+            required_cols = ["Status", "Step_Details"]
+            missing = [col for col in required_cols if col not in df_headers.columns]
+            if missing:
+                logging.warning(f"Auto-adding missing columns to Excel: {missing}")
+                df = pd.read_excel(excel_path, dtype=str)
+                for col in missing:
+                    df[col] = ""  # 初始化为空
+                df.to_excel(excel_path, index=False)
+        except Exception as e:
+            logging.error(f"Failed to pre-repair Excel columns: {e}")
+            return
+
     try:
         from src.util.report.excel.update import update_test_result_by_tcid
 

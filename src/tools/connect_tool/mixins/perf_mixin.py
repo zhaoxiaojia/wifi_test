@@ -134,13 +134,16 @@ class PerfMixin:
     def _build_throughput_result_values(
         self,
         router_info,
+        corner: str,
         protocol: str,
         direction: str,
         db_set: str,
-        corner: str,
         mcs_value: Optional[str],
         throughput_values: Sequence[Optional[str]],
         expect_rate,
+        bcn_rssi: str,
+        wf0_rssi: str,
+        wf1_rssi: str,
         latency_value,
         packet_loss_value,
     ):
@@ -155,23 +158,28 @@ class PerfMixin:
             _first_token(router_info.bandwidth),
             "Rate_Adaptation",
             router_info.channel,
+            corner,
             protocol,
             direction,
             "NULL",
             db_set,
             self.rssi_num,
-            corner,
             mcs_value if mcs_value else "NULL",
         ]
         for entry in throughput_values:
             values.append("" if entry is None else entry)
-        values.extend(
-            [
-                expect_rate,
-                latency_value,
-                packet_loss_value,
-            ]
-        )
+
+        values.append(expect_rate)
+        values.extend([
+            bcn_rssi,
+            wf0_rssi,
+            wf1_rssi,
+        ])
+        values.extend([
+            latency_value,
+            packet_loss_value,
+        ])
+
         return values
 
     def _normalize_throughput_cells(self, entries: list[str]) -> list[str]:
@@ -519,18 +527,25 @@ class PerfMixin:
         }
         chip_info = getattr(pytest, "chip_info", None)
         expect_rate = handle_expectdata(router_cfg, router_info.band, "DL", chip_info)
+        for attr in ('bcn_rssi', 'wf0_rssi', 'wf1_rssi'):
+            if not hasattr(self, attr):
+                setattr(self, attr, "")
+
         if self.skip_rx:
             corner = corner_tool.get_turntanle_current_angle() if corner_tool else ""
             throughput_cells = self._normalize_throughput_cells(["0"])
             values = self._build_throughput_result_values(
                 router_info,
+                corner,
                 type,
                 "DL",
                 db_set,
-                corner,
                 None,
                 throughput_cells,
                 expect_rate,
+                getattr(self, 'bcn_rssi', ""),
+                getattr(self, 'wf0_rssi', ""),
+                getattr(self, 'wf1_rssi', ""),
                 None,
                 None,
             )
@@ -619,13 +634,16 @@ class PerfMixin:
         corner = corner_tool.get_turntanle_current_angle() if corner_tool else ""
         values = self._build_throughput_result_values(
             router_info,
+            corner,
             type,
             "DL",
             db_set,
-            corner,
             mcs_rx,
             throughput_cells,
             expect_rate,
+            getattr(self, 'bcn_rssi', ""),
+            getattr(self, 'wf0_rssi', ""),
+            getattr(self, 'wf1_rssi', ""),
             latency_value,
             packet_loss_value,
         )
@@ -644,18 +662,25 @@ class PerfMixin:
         }
         chip_info = getattr(pytest, "chip_info", None)
         expect_rate = handle_expectdata(router_cfg, router_info.band, "UL", chip_info)
+        for attr in ('bcn_rssi', 'wf0_rssi', 'wf1_rssi'):
+            if not hasattr(self, attr):
+                setattr(self, attr, "")
+
         if self.skip_tx:
             corner = corner_tool.get_turntanle_current_angle() if corner_tool else ""
             throughput_cells = self._normalize_throughput_cells(["0"])
             values = self._build_throughput_result_values(
                 router_info,
+                corner,
                 type,
                 "UL",
                 db_set,
-                corner,
                 None,
                 throughput_cells,
                 expect_rate,
+                getattr(self, 'bcn_rssi', ""),
+                getattr(self, 'wf0_rssi', ""),
+                getattr(self, 'wf1_rssi', ""),
                 None,
                 None,
             )
@@ -745,13 +770,16 @@ class PerfMixin:
         corner = corner_tool.get_turntanle_current_angle() if corner_tool else ""
         values = self._build_throughput_result_values(
             router_info,
+            corner,
             type,
             "UL",
             db_set,
-            corner,
             mcs_tx,
             throughput_cells,
             expect_rate,
+            getattr(self, 'bcn_rssi', ""),
+            getattr(self, 'wf0_rssi', ""),
+            getattr(self, 'wf1_rssi', ""),
             latency_value,
             packet_loss_value,
         )

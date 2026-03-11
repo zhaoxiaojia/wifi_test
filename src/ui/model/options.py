@@ -66,9 +66,13 @@ def _rf_model_choices() -> Sequence[str]:
 
 
 def _fpga_customer_choices() -> Sequence[str]:
-    """Return known FPGA customer names from the Wi-Fi project map."""
+    """Return known ODM names from the Wi-Fi project map."""
 
-    return _sorted_unique(WIFI_PRODUCT_PROJECT_MAP.keys())
+    values: list[str] = []
+    for projects in WIFI_PRODUCT_PROJECT_MAP.values():
+        for info in projects.values():
+            values.append(info["ODM"])
+    return _sorted_unique(values)
 
 def _lab_name_choices() -> Sequence[str]:
     """Return known lab names from the lab catalog."""
@@ -78,12 +82,11 @@ def _lab_name_choices() -> Sequence[str]:
 
 def _mass_production_status_choices() -> Sequence[str]:
     values: list[str] = []
-    for product_lines in WIFI_PRODUCT_PROJECT_MAP.values():
-        for projects in product_lines.values():
-            for info in projects.values():
-                entries = info.get("mass_production_status") or []
-                for entry in entries:
-                    values.append(str(entry))
+    for projects in WIFI_PRODUCT_PROJECT_MAP.values():
+        for info in projects.values():
+            entries = info["mass_production_status"]
+            for entry in entries:
+                values.append(str(entry))
     return _sorted_unique(values)
 
 
@@ -100,9 +103,9 @@ def _adb_device_choices() -> Sequence[str]:
             timeout=3,
         )
     except Exception:
-        return []
+        return ["No devices"]
     if proc.returncode != 0:
-        return []
+        return ["No devices"]
     devices: list[str] = []
     for line in (proc.stdout or "").splitlines()[1:]:
         parts = line.strip().split()

@@ -273,6 +273,7 @@ class PerformanceTableManager:
     REPORT_TABLE_NAME = "test_case"
 
     _BASE_COLUMNS: Sequence[tuple[str, str]] = (
+        ("test_report_id", "INT NOT NULL"),
         ("execution_id", "INT NOT NULL"),
         ("csv_name", "VARCHAR(255) NOT NULL"),
         ("data_type", "VARCHAR(64) NULL DEFAULT NULL"),
@@ -878,23 +879,19 @@ def _guess_product_by_mapping(
     tuple[Optional[str], Optional[str], Optional[str], Optional[dict[str, str]]]
         A value of type ``tuple[Optional[str], Optional[str], Optional[str], Optional[dict[str, str]]]``.
     """
-    wifi_upper = _normalize_upper_token(wifi_module)
-    interface_upper = _normalize_upper_token(interface)
-    chip_upper = _normalize_upper_token(main_chip)
-
-    for customer_name, product_lines in WIFI_PRODUCT_PROJECT_MAP.items():
-        for product_line, projects in product_lines.items():
-            for project_name, info in projects.items():
-                info_wifi = _normalize_upper_token(info.get("wifi_module"))
-                info_interface = _normalize_upper_token(info.get("interface"))
-                info_chip = _normalize_upper_token(info.get("main_chip"))
-                if wifi_upper and info_wifi and info_wifi != wifi_upper:
-                    continue
-                if interface_upper and info_interface and info_interface != interface_upper:
-                    continue
-                if chip_upper and info_chip and info_chip != chip_upper:
-                    continue
-                return customer_name, product_line, project_name, info
+    for product_line, projects in WIFI_PRODUCT_PROJECT_MAP.items():
+        for project_name, info in projects.items():
+            info_wifi = info["wifi_module"]
+            info_interface = info["interface"]
+            info_chip = info["main_chip"]
+            if wifi_module and info_wifi != wifi_module:
+                continue
+            if interface and info_interface != interface:
+                continue
+            if main_chip and info_chip != main_chip:
+                continue
+            customer = info["ODM"]
+            return customer, product_line, project_name, info
     return None, None, None, None
 
 
@@ -939,19 +936,22 @@ def _resolve_wifi_product_details(fpga_section: Any) -> Dict[str, Any]:
         details["interface"] = interface
 
     info: Optional[dict[str, Any]] = None
-    if details["customer"] and details["product_line"] and details["project"]:
-        info = (
-            WIFI_PRODUCT_PROJECT_MAP.get(details["customer"], {})
-            .get(details["product_line"], {})
-            .get(details["project"], {})
-        )
-    elif details["product_line"] and details["project"]:
-        for customer_name, product_lines in WIFI_PRODUCT_PROJECT_MAP.items():
-            project_info = product_lines.get(details["product_line"], {}).get(details["project"])
-            if project_info:
-                details["customer"] = customer_name
-                info = project_info
-                break
+    if details["product_line"] and details["project"]:
+        candidate = WIFI_PRODUCT_PROJECT_MAP[details["product_line"]][details["project"]]
+        if not details["customer"] or candidate["ODM"] == details["customer"]:
+            info = candidate
+            details["customer"] = candidate["ODM"]
+    elif details["project"]:
+        for product_line, projects in WIFI_PRODUCT_PROJECT_MAP.items():
+            if details["project"] not in projects:
+                continue
+            project_info = projects[details["project"]]
+            if details["customer"] and project_info["ODM"] != details["customer"]:
+                continue
+            details["product_line"] = product_line
+            details["customer"] = project_info["ODM"]
+            info = project_info
+            break
     if info is None:
         (
             guessed_customer,
@@ -973,15 +973,15 @@ def _resolve_wifi_product_details(fpga_section: Any) -> Dict[str, Any]:
 
     if info:
         if not details["main_chip"]:
-            details["main_chip"] = _normalize_upper_token(info.get("main_chip"))
+            details["main_chip"] = info["main_chip"]
         if not details["wifi_module"]:
-            details["wifi_module"] = _normalize_upper_token(info.get("wifi_module"))
+            details["wifi_module"] = info["wifi_module"]
         if not details["interface"]:
-            details["interface"] = _normalize_upper_token(info.get("interface"))
+            details["interface"] = info["interface"]
         if not details["ecosystem"]:
-            details["ecosystem"] = _normalize_upper_token(info.get("ecosystem"))
+            details["ecosystem"] = info["ecosystem"]
         if not details["mass_production_status"]:
-            details["mass_production_status"] = list(info.get("mass_production_status") or [])
+            details["mass_production_status"] = list(info["mass_production_status"])
 
     return details
 
@@ -1057,32 +1057,31 @@ def sync_project_catalog(client: MySqlClient) -> None:
         "`payload_json`=VALUES(`payload_json`)"
     )
     rows = []
-    for customer_name, product_lines in WIFI_PRODUCT_PROJECT_MAP.items():
-        for product_line, projects in product_lines.items():
-            for project_name, info in projects.items():
-                payload = {
-                    "customer": _normalize_upper_token(customer_name),
-                    "product_line": _normalize_upper_token(product_line),
-                    "project": _normalize_upper_token(project_name),
-                    "main_chip": _normalize_upper_token(info.get("main_chip")),
-                    "wifi_module": _normalize_upper_token(info.get("wifi_module")),
-                    "interface": _normalize_upper_token(info.get("interface")),
-                    "ecosystem": _normalize_upper_token(info.get("ecosystem")),
-                    "mass_production_status": list(info.get("mass_production_status") or []),
-                }
-                rows.append(
-                    (
-                        payload.get("customer"),
-                        payload.get("product_line"),
-                        payload.get("project"),
-                        payload.get("main_chip"),
-                        payload.get("wifi_module"),
-                        payload.get("interface"),
-                        payload.get("ecosystem"),
-                        json.dumps(payload.get("mass_production_status") or [], ensure_ascii=False),
-                        json.dumps(payload, ensure_ascii=True, separators=(",", ":")),
-                    )
+    for product_line, projects in WIFI_PRODUCT_PROJECT_MAP.items():
+        for project_name, info in projects.items():
+            payload = {
+                "customer": info["ODM"],
+                "product_line": product_line,
+                "project": project_name,
+                "main_chip": info["main_chip"],
+                "wifi_module": info["wifi_module"],
+                "interface": info["interface"],
+                "ecosystem": info["ecosystem"],
+                "mass_production_status": list(info["mass_production_status"]),
+            }
+            rows.append(
+                (
+                    payload.get("customer"),
+                    payload.get("product_line"),
+                    payload.get("project"),
+                    payload.get("main_chip"),
+                    payload.get("wifi_module"),
+                    payload.get("interface"),
+                    payload.get("ecosystem"),
+                    json.dumps(payload.get("mass_production_status") or [], ensure_ascii=False),
+                    json.dumps(payload, ensure_ascii=True, separators=(",", ":")),
                 )
+            )
     if rows:
         client.executemany(insert_sql, rows)
     _PROJECT_CATALOG_SYNCED = True
@@ -1151,27 +1150,31 @@ def register_execution(
     dut_payload = {
         "serial_number": execution_payload.get("serial_number"),
         "connect_type": execution_payload.get("connect_type"),
+        "mac_address": execution_payload.get("mac_address"),
         "adb_device": execution_payload.get("adb_device"),
         "telnet_ip": execution_payload.get("telnet_ip"),
         "software_version": execution_payload.get("software_version"),
         "driver_version": execution_payload.get("driver_version"),
         "android_version": execution_payload.get("android_version"),
         "kernel_version": execution_payload.get("kernel_version"),
+        "odm": execution_payload.get("odm"),
     }
     dut_id = client.insert(
         "INSERT INTO `dut` "
-        "(`serial_number`, `connect_type`, `adb_device`, `telnet_ip`, "
-        "`software_version`, `driver_version`, `android_version`, `kernel_version`, `payload_json`) "
-        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+        "(`serial_number`, `connect_type`, `mac_address`, `adb_device`, `telnet_ip`, "
+        "`software_version`, `driver_version`, `android_version`, `kernel_version`, `odm`, `payload_json`) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
         (
             dut_payload.get("serial_number"),
             dut_payload.get("connect_type"),
+            dut_payload.get("mac_address"),
             dut_payload.get("adb_device"),
             dut_payload.get("telnet_ip"),
             dut_payload.get("software_version"),
             dut_payload.get("driver_version"),
             dut_payload.get("android_version"),
             dut_payload.get("kernel_version"),
+            dut_payload.get("odm"),
             json.dumps(dut_payload, ensure_ascii=True, separators=(",", ":")),
         ),
     )
@@ -1226,6 +1229,8 @@ def _build_execution_device_payload(config: Mapping[str, Any]) -> Dict[str, Any]
     android = android_section if isinstance(android_section, Mapping) else {}
     connect_section = _extract_first(config, "connect_type", "connect")
     connect = connect_section if isinstance(connect_section, Mapping) else {}
+    project_section = _extract_first(config, "project", "fpga")
+    project = project_section if isinstance(project_section, Mapping) else {}
 
     connect_type_value = _normalize_str_token(connect.get("type"))
     normalized_connect_type = _normalize_lower_token(connect_type_value)
@@ -1249,8 +1254,10 @@ def _build_execution_device_payload(config: Mapping[str, Any]) -> Dict[str, Any]
         "android_version": _extract_first(android, "version"),
         "kernel_version": _extract_first(android, "kernel_version"),
         "connect_type": connect_type_value,
+        "mac_address": _normalize_str_token(_extract_first(connect, "mac_address")),
         "adb_device": adb_device,
         "telnet_ip": telnet_ip,
+        "odm": _normalize_str_token(project.get("odm")),
     }
 
 

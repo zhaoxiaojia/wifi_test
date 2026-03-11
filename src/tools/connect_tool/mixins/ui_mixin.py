@@ -974,7 +974,8 @@ class UiAutomationMixin:
                 f"adb -s {serial} shell am start -n com.google.android.youtube.tv/com.google.android.apps.youtube.tv.activity.ShellActivity"
             )
             time.sleep(8)
-            self._capture_screenshot(logdir, "tv_youtube_home")
+            #capture test picture and log
+            #self._capture_screenshot(logdir, "tv_youtube_home")
 
             # Navigate to Search (usually top-right)
             for _ in range(4):  # Move right to "Search"
@@ -989,7 +990,8 @@ class UiAutomationMixin:
             UiAutomationMixin._run_adb(f"adb -s {serial} shell input keyevent KEYCODE_ENTER")
             time.sleep(5)
 
-            self._capture_screenshot(logdir, "tv_search_results")
+            # capture test picture and log
+            #self._capture_screenshot(logdir, "tv_search_results")
             logging.info("✅ YouTube TV search completed.")
 
             logging.info("⬅️ Exiting Wi-Fi settings UI...")
@@ -1557,7 +1559,7 @@ class UiAutomationMixin:
            Returns:
                bool: True if ping succeeds in any attempt, False otherwise.
        """
-        for attempt in range(2):
+        for attempt in range(5):
             try:
                 output = UiAutomationMixin._run_adb_capture_output(
                     f"adb -s {serial} shell ping -c 10 8.8.8.8",
@@ -1573,7 +1575,7 @@ class UiAutomationMixin:
                 logging.warning(f"Ping command failed (attempt {attempt + 1}): {e}")
 
             if attempt == 0:
-                time.sleep(10)
+                time.sleep(30)
 
         return False
 
@@ -1664,3 +1666,78 @@ class UiAutomationMixin:
         # 直接复用已有的 _go_to_home 静态方法！
         logging.warning("[UI Reset] All Settings restart attempts failed. Falling back to Home.")
         return UiAutomationMixin._go_to_home(serial, timeout=timeout)
+
+    import re
+
+    @staticmethod
+    def get_wifi_country_code(serial: str, timeout: int = 8) -> str:
+        """
+        Get the effective Wi-Fi regulatory country code via 'iw reg get' on the device.
+
+        This reads the 'global' country from the Linux wireless regulatory database,
+        which reflects the actual country code used by the Wi-Fi driver.
+
+        Args:
+            serial (str): ADB serial number of the target device.
+            timeout (int): Command execution timeout in seconds.
+
+        Returns:
+            str: Country code (e.g., "US", "KR", "SG") if found, otherwise empty string.
+        """
+        try:
+            cmd = f"adb -s {serial} shell iw reg get"
+            logging.debug(f"Executing: {cmd}")
+            result = subprocess.run(
+                cmd,
+                shell=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                stdin=subprocess.DEVNULL,
+                text=True,
+                timeout=timeout,
+                encoding='utf-8',
+                errors='ignore'
+            )
+
+            if result.returncode != 0:
+                logging.error(f"Failed to run 'iw reg get' on {serial}: {result.stderr.strip()}")
+                return ""
+
+            output = result.stdout.strip()
+            logging.info(f"iw reg get info: {output}")
+            if not output:
+                logging.warning(f"'iw reg get' returned empty output on {serial}")
+                return ""
+
+            # Parse the output to find the global country line
+            # Example line: "global\ncountry US: DFS-FCC"
+            lines = output.splitlines()
+            in_global_section = False
+            for line in lines:
+                line = line.strip()
+                if line == "global":
+                    in_global_section = True
+                    continue
+                if in_global_section and line.startswith("country "):
+                    # Extract country code before ':' or space
+                    match = re.search(r'country\s+([A-Z]{2})', line)
+                    if match:
+                        country_code = match.group(1)
+                        logging.info(f"✅ Detected Wi-Fi country code via iw reg: {country_code} on {serial}")
+                        return country_code
+                    else:
+                        logging.warning(f"Unexpected country line format: {line}")
+                        return ""
+                # Stop after first non-global section (optional)
+                if line and not line.startswith("country ") and in_global_section:
+                    break
+
+            logging.warning(f"Could not find 'global country' line in 'iw reg get' output on {serial}")
+            return ""
+
+        except subprocess.TimeoutExpired:
+            logging.error(f"⏰ Timeout while running 'iw reg get' on {serial}")
+            return ""
+        except Exception as e:
+            logging.exception(f"💥 Exception in get_wifi_country_code_via_iw_reg on {serial}: {e}")
+            return ""
