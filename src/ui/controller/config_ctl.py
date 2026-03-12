@@ -656,25 +656,26 @@ class ConfigController(
         project: str = "",
     ) -> tuple[str, str, str, Optional[dict[str, Any]]]:
         """Resolve project metadata from WIFI_PRODUCT_PROJECT_MAP."""
-        for product_name, projects in WIFI_PRODUCT_PROJECT_MAP.items():
+        for product_name, odm_map in WIFI_PRODUCT_PROJECT_MAP.items():
             if product_line and product_name != product_line:
                 continue
-            for project_name, info in projects.items():
-                if project and project_name != project:
+            for odm_name, projects in odm_map.items():
+                if customer and odm_name != customer:
                     continue
-                info_customer = info["ODM"]
-                if customer and info_customer != customer:
-                    continue
-                info_wifi = info["wifi_module"]
-                info_if = info["interface"]
-                info_chip = info["main_chip"]
-                if wifi_module and info_wifi != wifi_module:
-                    continue
-                if interface and info_if != interface:
-                    continue
-                if main_chip and info_chip != main_chip:
-                    continue
-                return info_customer, product_name, project_name, info
+                for project_name, info in projects.items():
+                    if project and project_name != project:
+                        continue
+                    info_customer = odm_name
+                    info_wifi = info["wifi_module"]
+                    info_if = info["interface"]
+                    info_chip = info["main_chip"]
+                    if wifi_module and info_wifi != wifi_module:
+                        continue
+                    if interface and info_if != interface:
+                        continue
+                    if main_chip and info_chip != main_chip:
+                        continue
+                    return info_customer, product_name, project_name, info
         return "", "", "", None
 
     def normalize_project_section(self, raw_value: Any) -> dict[str, str]:

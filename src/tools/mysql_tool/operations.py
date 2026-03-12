@@ -17,9 +17,11 @@ from .schema import (
 )
 from .sql_writer import SqlWriter
 from src.util.constants import (
+    LAB_CATALOG,
     TURN_TABLE_FIELD_MODEL,
     TURN_TABLE_SECTION_KEY,
     WIFI_PRODUCT_PROJECT_MAP,
+    Paths,
     load_config,
     get_debug_flags,
 )
@@ -270,7 +272,7 @@ class PerformanceTableManager:
     """
 
     TABLE_NAME = "performance"
-    REPORT_TABLE_NAME = "test_case"
+    REPORT_TABLE_NAME = "test_report"
 
     _BASE_COLUMNS: Sequence[tuple[str, str]] = (
         ("test_report_id", "INT NOT NULL"),
@@ -879,19 +881,19 @@ def _guess_product_by_mapping(
     tuple[Optional[str], Optional[str], Optional[str], Optional[dict[str, str]]]
         A value of type ``tuple[Optional[str], Optional[str], Optional[str], Optional[dict[str, str]]]``.
     """
-    for product_line, projects in WIFI_PRODUCT_PROJECT_MAP.items():
-        for project_name, info in projects.items():
-            info_wifi = info["wifi_module"]
-            info_interface = info["interface"]
-            info_chip = info["main_chip"]
-            if wifi_module and info_wifi != wifi_module:
-                continue
-            if interface and info_interface != interface:
-                continue
-            if main_chip and info_chip != main_chip:
-                continue
-            customer = info["ODM"]
-            return customer, product_line, project_name, info
+    for product_line, odm_map in WIFI_PRODUCT_PROJECT_MAP.items():
+        for odm_name, projects in odm_map.items():
+            for project_name, info in projects.items():
+                info_wifi = info["wifi_module"]
+                info_interface = info["interface"]
+                info_chip = info["main_chip"]
+                if wifi_module and info_wifi != wifi_module:
+                    continue
+                if interface and info_interface != interface:
+                    continue
+                if main_chip and info_chip != main_chip:
+                    continue
+                return odm_name, product_line, project_name, info
     return None, None, None, None
 
 
@@ -937,21 +939,32 @@ def _resolve_wifi_product_details(fpga_section: Any) -> Dict[str, Any]:
 
     info: Optional[dict[str, Any]] = None
     if details["product_line"] and details["project"]:
-        candidate = WIFI_PRODUCT_PROJECT_MAP[details["product_line"]][details["project"]]
-        if not details["customer"] or candidate["ODM"] == details["customer"]:
+        if details["customer"]:
+            candidate = WIFI_PRODUCT_PROJECT_MAP[details["product_line"]][details["customer"]][
+                details["project"]
+            ]
             info = candidate
-            details["customer"] = candidate["ODM"]
+        else:
+            odm_map = WIFI_PRODUCT_PROJECT_MAP[details["product_line"]]
+            for odm_name, projects in odm_map.items():
+                if details["project"] not in projects:
+                    continue
+                details["customer"] = odm_name
+                info = projects[details["project"]]
+                break
     elif details["project"]:
-        for product_line, projects in WIFI_PRODUCT_PROJECT_MAP.items():
-            if details["project"] not in projects:
-                continue
-            project_info = projects[details["project"]]
-            if details["customer"] and project_info["ODM"] != details["customer"]:
-                continue
-            details["product_line"] = product_line
-            details["customer"] = project_info["ODM"]
-            info = project_info
-            break
+        for product_line, odm_map in WIFI_PRODUCT_PROJECT_MAP.items():
+            for odm_name, projects in odm_map.items():
+                if details["project"] not in projects:
+                    continue
+                if details["customer"] and odm_name != details["customer"]:
+                    continue
+                details["product_line"] = product_line
+                details["customer"] = odm_name
+                info = projects[details["project"]]
+                break
+            if info is not None:
+                break
     if info is None:
         (
             guessed_customer,
@@ -994,6 +1007,7 @@ def _build_project_payload(config: Mapping[str, Any]) -> Dict[str, Any]:
         "brand": wifi_details.get("customer"),
         "product_line": wifi_details.get("product_line"),
         "project_name": wifi_details.get("project"),
+        "project_display_name": None,
         "main_chip": wifi_details.get("main_chip"),
         "wifi_module": wifi_details.get("wifi_module"),
         "interface": wifi_details.get("interface"),
@@ -1006,12 +1020,13 @@ def _build_project_payload(config: Mapping[str, Any]) -> Dict[str, Any]:
 def ensure_project(client: MySqlClient, project_payload: Mapping[str, Any]) -> int:
     insert_sql = (
         "INSERT INTO `project` "
-        "(`brand`, `product_line`, `project_name`, `main_chip`, `wifi_module`, `interface`, `ecosystem`, `mass_production_status`, `payload_json`) "
-        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) "
+        "(`brand`, `product_line`, `project_name`, `project_display_name`, `main_chip`, `wifi_module`, `interface`, `ecosystem`, `mass_production_status`, `payload_json`) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
         "ON DUPLICATE KEY UPDATE "
         "`id`=LAST_INSERT_ID(`id`), "
         "`brand`=VALUES(`brand`), "
         "`product_line`=VALUES(`product_line`), "
+        "`project_display_name`=VALUES(`project_display_name`), "
         "`main_chip`=VALUES(`main_chip`), "
         "`wifi_module`=VALUES(`wifi_module`), "
         "`interface`=VALUES(`interface`), "
@@ -1025,6 +1040,7 @@ def ensure_project(client: MySqlClient, project_payload: Mapping[str, Any]) -> i
             project_payload.get("brand"),
             project_payload.get("product_line"),
             project_payload.get("project_name"),
+            project_payload.get("project_display_name"),
             project_payload.get("main_chip"),
             project_payload.get("wifi_module"),
             project_payload.get("interface"),
@@ -1036,6 +1052,142 @@ def ensure_project(client: MySqlClient, project_payload: Mapping[str, Any]) -> i
 
 
 _PROJECT_CATALOG_SYNCED = False
+_ROUTER_CATALOG_SYNCED = False
+_LAB_CATALOG_SYNCED = False
+
+
+def _load_router_catalog() -> list[dict[str, Any]]:
+    path = Path(Paths.CONFIG_DIR) / "compatibility_router.json"
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+    if not isinstance(raw, list):
+        return []
+    return [item for item in raw if isinstance(item, dict)]
+
+
+def sync_router_catalog(client: MySqlClient) -> None:
+    global _ROUTER_CATALOG_SYNCED
+    if _ROUTER_CATALOG_SYNCED:
+        return
+
+    entries = _load_router_catalog()
+    insert_sql = (
+        "INSERT INTO `router` (`ip`, `port`, `brand`, `model`, `payload_json`) "
+        "VALUES (%s, %s, %s, %s, %s) "
+        "ON DUPLICATE KEY UPDATE "
+        "`brand`=VALUES(`brand`), "
+        "`model`=VALUES(`model`), "
+        "`payload_json`=VALUES(`payload_json`)"
+    )
+    rows: list[tuple[Any, ...]] = []
+    expected_keys: set[tuple[str, int]] = set()
+    for entry in entries:
+        ip = str(entry.get("ip") or "").strip()
+        try:
+            port = int(str(entry.get("port") or "").strip())
+        except Exception:
+            continue
+        if not ip or port <= 0:
+            continue
+        brand = str(entry.get("brand") or "").strip()
+        model = str(entry.get("model") or "").strip()
+        payload_json = json.dumps(entry, ensure_ascii=True, separators=(",", ":"))
+        expected_keys.add((ip, port))
+        rows.append((ip, port, brand, model, payload_json))
+
+    if rows:
+        logging.info("Router catalog sync: upserting %d rows", len(rows))
+        client.executemany(insert_sql, rows)
+
+    existing = client.query_all("SELECT id, ip, port FROM `router`")
+    stale_ids: list[int] = []
+    for row in existing:
+        ip = str(row.get("ip") or "").strip()
+        try:
+            port = int(row.get("port") or 0)
+        except Exception:
+            port = 0
+        if (ip, port) not in expected_keys:
+            stale_ids.append(int(row["id"]))
+    logging.info("Router catalog sync: deleting %d stale rows", len(stale_ids))
+    for i in range(0, len(stale_ids), 500):
+        chunk = stale_ids[i : i + 500]
+        if not chunk:
+            continue
+        placeholders = ",".join(["%s"] * len(chunk))
+        client.execute(f"DELETE FROM `router` WHERE `id` IN ({placeholders})", chunk)
+
+    _ROUTER_CATALOG_SYNCED = True
+
+
+def sync_lab_catalog(client: MySqlClient) -> None:
+    global _LAB_CATALOG_SYNCED
+    if _LAB_CATALOG_SYNCED:
+        return
+
+    insert_sql = (
+        "INSERT INTO `lab` (`lab_name`, `capabilities`, `turntable_model`, `rf_model`, `payload_json`) "
+        "VALUES (%s, %s, %s, %s, %s) "
+        "ON DUPLICATE KEY UPDATE "
+        "`capabilities`=VALUES(`capabilities`), "
+        "`turntable_model`=VALUES(`turntable_model`), "
+        "`rf_model`=VALUES(`rf_model`), "
+        "`payload_json`=VALUES(`payload_json`)"
+    )
+
+    rows: list[tuple[Any, ...]] = []
+    expected_names: set[str] = set()
+    for lab_name, info in LAB_CATALOG.items():
+        expected_names.add(str(lab_name))
+        capabilities = sorted({str(x) for x in (info.get("capabilities") or [])})
+        equipment = info.get("equipment") if isinstance(info.get("equipment"), Mapping) else {}
+        turntable_model = equipment.get("turntable_model") if equipment else None
+        rf_model = equipment.get("rf_model") if equipment else None
+        payload = {
+            "capabilities": capabilities,
+            "equipment": {
+                "turntable_model": None if turntable_model is None else str(turntable_model),
+                "rf_model": None if rf_model is None else str(rf_model),
+            },
+        }
+        payload_json = json.dumps(payload, ensure_ascii=True, separators=(",", ":"))
+        rows.append(
+            (
+                str(lab_name),
+                json.dumps(capabilities, ensure_ascii=False),
+                None if turntable_model is None else str(turntable_model),
+                None if rf_model is None else str(rf_model),
+                payload_json,
+            )
+        )
+
+    if rows:
+        logging.info("Lab catalog sync: upserting %d rows", len(rows))
+        client.executemany(insert_sql, rows)
+
+    existing = client.query_all("SELECT id, lab_name FROM `lab`")
+    stale_ids: list[int] = []
+    for row in existing:
+        name = str(row.get("lab_name") or "")
+        if name not in expected_names:
+            stale_ids.append(int(row["id"]))
+    logging.info("Lab catalog sync: deleting %d stale rows", len(stale_ids))
+    for i in range(0, len(stale_ids), 500):
+        chunk = stale_ids[i : i + 500]
+        if not chunk:
+            continue
+        placeholders = ",".join(["%s"] * len(chunk))
+        client.execute(f"DELETE FROM `lab` WHERE `id` IN ({placeholders})", chunk)
+
+    _LAB_CATALOG_SYNCED = True
+
+
+def sync_catalogs(client: MySqlClient) -> None:
+    sync_project_catalog(client)
+    sync_router_catalog(client)
+    sync_lab_catalog(client)
 
 
 def sync_project_catalog(client: MySqlClient) -> None:
@@ -1044,11 +1196,12 @@ def sync_project_catalog(client: MySqlClient) -> None:
         return
     insert_sql = (
         "INSERT INTO `project` "
-        "(`brand`, `product_line`, `project_name`, `main_chip`, `wifi_module`, `interface`, `ecosystem`, `mass_production_status`, `payload_json`) "
-        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) "
+        "(`brand`, `product_line`, `project_name`, `project_display_name`, `main_chip`, `wifi_module`, `interface`, `ecosystem`, `mass_production_status`, `payload_json`) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
         "ON DUPLICATE KEY UPDATE "
         "`brand`=VALUES(`brand`), "
         "`product_line`=VALUES(`product_line`), "
+        "`project_display_name`=VALUES(`project_display_name`), "
         "`main_chip`=VALUES(`main_chip`), "
         "`wifi_module`=VALUES(`wifi_module`), "
         "`interface`=VALUES(`interface`), "
@@ -1057,33 +1210,51 @@ def sync_project_catalog(client: MySqlClient) -> None:
         "`payload_json`=VALUES(`payload_json`)"
     )
     rows = []
-    for product_line, projects in WIFI_PRODUCT_PROJECT_MAP.items():
-        for project_name, info in projects.items():
-            payload = {
-                "customer": info["ODM"],
-                "product_line": product_line,
-                "project": project_name,
-                "main_chip": info["main_chip"],
-                "wifi_module": info["wifi_module"],
-                "interface": info["interface"],
-                "ecosystem": info["ecosystem"],
-                "mass_production_status": list(info["mass_production_status"]),
-            }
-            rows.append(
-                (
-                    payload.get("customer"),
-                    payload.get("product_line"),
-                    payload.get("project"),
-                    payload.get("main_chip"),
-                    payload.get("wifi_module"),
-                    payload.get("interface"),
-                    payload.get("ecosystem"),
-                    json.dumps(payload.get("mass_production_status") or [], ensure_ascii=False),
-                    json.dumps(payload, ensure_ascii=True, separators=(",", ":")),
+    expected_keys: set[tuple[str, str, str]] = set()
+    for product_line, odm_map in WIFI_PRODUCT_PROJECT_MAP.items():
+        for odm_name, projects in odm_map.items():
+            for project_name, info in projects.items():
+                expected_keys.add((odm_name, product_line, project_name))
+                payload = {
+                    "customer": odm_name,
+                    "product_line": product_line,
+                    "project": project_name,
+                    "main_chip": info["main_chip"],
+                    "wifi_module": info["wifi_module"],
+                    "interface": info["interface"],
+                    "ecosystem": info["ecosystem"],
+                    "mass_production_status": list(info["mass_production_status"]),
+                }
+                rows.append(
+                    (
+                        payload.get("customer"),
+                        payload.get("product_line"),
+                        payload.get("project"),
+                        info["ProjectName"],
+                        payload.get("main_chip"),
+                        payload.get("wifi_module"),
+                        payload.get("interface"),
+                        payload.get("ecosystem"),
+                        json.dumps(
+                            payload.get("mass_production_status") or [], ensure_ascii=False
+                        ),
+                        json.dumps(payload, ensure_ascii=True, separators=(",", ":")),
+                    )
                 )
-            )
     if rows:
+        logging.info("Project catalog sync: upserting %d rows", len(rows))
         client.executemany(insert_sql, rows)
+        existing = client.query_all("SELECT id, brand, product_line, project_name FROM `project`")
+        stale_ids: list[int] = []
+        for row in existing:
+            key = (row.get("brand"), row.get("product_line"), row.get("project_name"))
+            if key not in expected_keys:
+                stale_ids.append(int(row["id"]))
+        logging.info("Project catalog sync: deleting %d stale rows", len(stale_ids))
+        for i in range(0, len(stale_ids), 500):
+            chunk = stale_ids[i : i + 500]
+            placeholders = ",".join(["%s"] * len(chunk))
+            client.execute(f"DELETE FROM `project` WHERE `id` IN ({placeholders})", chunk)
     _PROJECT_CATALOG_SYNCED = True
 
 
@@ -1099,7 +1270,7 @@ def ensure_test_report(
     notes: Optional[str] = None,
 ) -> int:
     insert_sql = (
-        "INSERT INTO `test_case` "
+        "INSERT INTO `test_report` "
         "(`project_id`, `report_name`, `case_path`, `is_golden`, `report_type`, `golden_group`, `notes`) "
         "VALUES (%s, %s, %s, %s, %s, %s, %s) "
         "ON DUPLICATE KEY UPDATE "
@@ -1157,13 +1328,12 @@ def register_execution(
         "driver_version": execution_payload.get("driver_version"),
         "android_version": execution_payload.get("android_version"),
         "kernel_version": execution_payload.get("kernel_version"),
-        "odm": execution_payload.get("odm"),
     }
     dut_id = client.insert(
         "INSERT INTO `dut` "
         "(`serial_number`, `connect_type`, `mac_address`, `adb_device`, `telnet_ip`, "
-        "`software_version`, `driver_version`, `android_version`, `kernel_version`, `odm`, `payload_json`) "
-        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+        "`software_version`, `driver_version`, `android_version`, `kernel_version`, `payload_json`) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
         (
             dut_payload.get("serial_number"),
             dut_payload.get("connect_type"),
@@ -1174,19 +1344,24 @@ def register_execution(
             dut_payload.get("driver_version"),
             dut_payload.get("android_version"),
             dut_payload.get("kernel_version"),
-            dut_payload.get("odm"),
             json.dumps(dut_payload, ensure_ascii=True, separators=(",", ":")),
         ),
     )
     insert_sql = (
-        "INSERT INTO `test_run` "
-        "(`test_case_id`, `run_type`, `dut_id`, "
-        "`router_name`, `router_address`, `rf_model`, `corner_model`, `lab_name`, "
+        "INSERT INTO `execution` "
+        "(`test_report_id`, `run_type`, `dut_id`, "
+        "`router_name`, `router_address`, `lab_id`, "
         "`bt_mode`, `bt_ble_alias`, `bt_classic_alias`, "
         "`csv_name`, `csv_path`, `run_source`, `duration_seconds`, `payload_json`) "
-        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
     )
     payload_json = json.dumps(dict(execution_payload), ensure_ascii=True, separators=(",", ":"))
+    lab_id: Optional[int] = None
+    lab_name = execution_payload.get("lab_name")
+    if isinstance(lab_name, str) and lab_name.strip():
+        rows = client.query_all("SELECT id FROM `lab` WHERE `lab_name`=%s LIMIT 1", (lab_name.strip(),))
+        if rows:
+            lab_id = int(rows[0]["id"])
     return client.insert(
         insert_sql,
         (
@@ -1195,9 +1370,7 @@ def register_execution(
             int(dut_id),
             execution_payload.get("router_name"),
             execution_payload.get("router_address"),
-            execution_payload.get("rf_model"),
-            execution_payload.get("corner_model"),
-            execution_payload.get("lab_name"),
+            lab_id,
             execution_payload.get("bt_mode"),
             execution_payload.get("bt_ble_alias"),
             execution_payload.get("bt_classic_alias"),
@@ -1349,7 +1522,7 @@ def sync_configuration(config: dict | None) -> Optional[Any]:
     project_payload = _build_project_payload(config)
     with MySqlClient() as client:
         ensure_report_tables(client)
-        sync_project_catalog(client)
+        sync_catalogs(client)
         project_id = ensure_project(client, project_payload)
     return ConfigSyncResult(project_id=project_id)
 
@@ -1460,7 +1633,7 @@ def sync_test_result_to_db(
         with MySqlClient() as client:
             manager = PerformanceTableManager(client)
             manager.ensure_schema_initialized()
-            sync_project_catalog(client)
+            sync_catalogs(client)
             affected = manager.replace_with_csv(
                 csv_name=file_path.name,
                 csv_path=str(file_path),
@@ -1505,7 +1678,7 @@ def sync_compatibility_artifacts_to_db(
 
     with MySqlClient() as client:
         ensure_report_tables(client)
-        sync_project_catalog(client)
+        sync_catalogs(client)
 
         with open(router_json, "r", encoding="utf-8") as handle:
             router_entries = json.load(handle) or []

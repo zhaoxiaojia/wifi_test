@@ -69,9 +69,9 @@ def _fpga_customer_choices() -> Sequence[str]:
     """Return known ODM names from the Wi-Fi project map."""
 
     values: list[str] = []
-    for projects in WIFI_PRODUCT_PROJECT_MAP.values():
-        for info in projects.values():
-            values.append(info["ODM"])
+    for odm_map in WIFI_PRODUCT_PROJECT_MAP.values():
+        for odm_name in odm_map.keys():
+            values.append(odm_name)
     return _sorted_unique(values)
 
 def _lab_name_choices() -> Sequence[str]:
@@ -82,11 +82,12 @@ def _lab_name_choices() -> Sequence[str]:
 
 def _mass_production_status_choices() -> Sequence[str]:
     values: list[str] = []
-    for projects in WIFI_PRODUCT_PROJECT_MAP.values():
-        for info in projects.values():
-            entries = info["mass_production_status"]
-            for entry in entries:
-                values.append(str(entry))
+    for odm_map in WIFI_PRODUCT_PROJECT_MAP.values():
+        for projects in odm_map.values():
+            for info in projects.values():
+                entries = info["mass_production_status"]
+                for entry in entries:
+                    values.append(str(entry))
     return _sorted_unique(values)
 
 

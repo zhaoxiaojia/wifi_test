@@ -6,7 +6,7 @@ import logging
 import re
 import textwrap
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, TYPE_CHECKING
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, TYPE_CHECKING, Mapping
 
 from .models import (
     ColumnDefinition,
@@ -30,6 +30,8 @@ __all__ = [
     "ensure_config_tables",
     "ensure_report_tables",
     "get_table_spec",
+    "get_schema_catalog",
+    "render_schema_markdown",
     "PERFORMANCE_STATIC_COLUMNS",
 ]
 
@@ -162,6 +164,7 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
             ColumnDefinition("brand", "VARCHAR(64) NOT NULL"),
             ColumnDefinition("product_line", "VARCHAR(64) NOT NULL"),
             ColumnDefinition("project_name", "VARCHAR(128) NOT NULL"),
+            ColumnDefinition("project_display_name", "VARCHAR(256)"),
             ColumnDefinition("main_chip", "VARCHAR(64)"),
             ColumnDefinition("wifi_module", "VARCHAR(64)"),
             ColumnDefinition("interface", "VARCHAR(64)"),
@@ -182,7 +185,7 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
             ),
         ),
     ),
-    "test_case": TableSpec(
+    "test_report": TableSpec(
         columns=(
             ColumnDefinition("project_id", "INT NOT NULL"),
             ColumnDefinition("report_name", "VARCHAR(255) NOT NULL"),
@@ -216,8 +219,8 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
                 "CONSTRAINT uq_test_case_project_type_golden UNIQUE (`project_id`, `report_type`, `golden_group`)",
             ),
             TableConstraint(
-                "fk_test_case_project",
-                "CONSTRAINT fk_test_case_project FOREIGN KEY (`project_id`) REFERENCES `project`(`id`) ON DELETE CASCADE",
+                "fk_test_report_project",
+                "CONSTRAINT fk_test_report_project FOREIGN KEY (`project_id`) REFERENCES `project`(`id`) ON DELETE CASCADE",
             ),
         ),
     ),
@@ -232,12 +235,6 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
             ColumnDefinition("driver_version", "VARCHAR(128)"),
             ColumnDefinition("android_version", "VARCHAR(64)"),
             ColumnDefinition("kernel_version", "VARCHAR(64)"),
-            ColumnDefinition("product_line", "VARCHAR(64)"),
-            ColumnDefinition("project", "VARCHAR(128)"),
-            ColumnDefinition("main_chip", "VARCHAR(64)"),
-            ColumnDefinition("wifi_module", "VARCHAR(64)"),
-            ColumnDefinition("interface", "VARCHAR(64)"),
-            ColumnDefinition("odm", "VARCHAR(64)"),
             ColumnDefinition("payload_json", "JSON"),
         ),
         indexes=(
@@ -245,16 +242,14 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
         ),
         constraints=(),
     ),
-    "test_run": TableSpec(
+    "execution": TableSpec(
         columns=(
-            ColumnDefinition("test_case_id", "INT NOT NULL"),
+            ColumnDefinition("test_report_id", "INT NOT NULL"),
             ColumnDefinition("run_type", "VARCHAR(64) NOT NULL"),
             ColumnDefinition("dut_id", "INT NOT NULL"),
             ColumnDefinition("router_name", "VARCHAR(128)"),
             ColumnDefinition("router_address", "VARCHAR(128)"),
-            ColumnDefinition("rf_model", "VARCHAR(128)"),
-            ColumnDefinition("corner_model", "VARCHAR(128)"),
-            ColumnDefinition("lab_name", "VARCHAR(128)"),
+            ColumnDefinition("lab_id", "INT NULL DEFAULT NULL"),
             ColumnDefinition("bt_mode", "VARCHAR(64)"),
             ColumnDefinition("bt_ble_alias", "VARCHAR(128)"),
             ColumnDefinition("bt_classic_alias", "VARCHAR(128)"),
@@ -267,7 +262,7 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
         indexes=(
             TableIndex(
                 "idx_test_run_case",
-                "INDEX idx_test_run_case (`test_case_id`)",
+                "INDEX idx_test_run_case (`test_report_id`)",
             ),
             TableIndex(
                 "idx_test_run_dut",
@@ -285,11 +280,15 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
         constraints=(
             TableConstraint(
                 "fk_test_run_case",
-                "CONSTRAINT fk_test_run_case FOREIGN KEY (`test_case_id`) REFERENCES `test_case`(`id`) ON DELETE CASCADE",
+                "CONSTRAINT fk_test_run_case FOREIGN KEY (`test_report_id`) REFERENCES `test_report`(`id`) ON DELETE CASCADE",
             ),
             TableConstraint(
                 "fk_test_run_dut",
                 "CONSTRAINT fk_test_run_dut FOREIGN KEY (`dut_id`) REFERENCES `dut`(`id`)",
+            ),
+            TableConstraint(
+                "fk_test_run_lab",
+                "CONSTRAINT fk_test_run_lab FOREIGN KEY (`lab_id`) REFERENCES `lab`(`id`)",
             ),
         ),
     ),
@@ -311,6 +310,27 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
             TableConstraint(
                 "uq_router_ip_port",
                 "CONSTRAINT uq_router_ip_port UNIQUE (`ip`, `port`)",
+            ),
+        ),
+    ),
+    "lab": TableSpec(
+        columns=(
+            ColumnDefinition("lab_name", "VARCHAR(255) NOT NULL"),
+            ColumnDefinition("capabilities", "JSON"),
+            ColumnDefinition("turntable_model", "VARCHAR(64)"),
+            ColumnDefinition("rf_model", "VARCHAR(64)"),
+            ColumnDefinition("payload_json", "JSON"),
+        ),
+        indexes=(
+            TableIndex(
+                "idx_lab_name",
+                "INDEX idx_lab_name (`lab_name`)",
+            ),
+        ),
+        constraints=(
+            TableConstraint(
+                "uq_lab_name",
+                "CONSTRAINT uq_lab_name UNIQUE (`lab_name`)",
             ),
         ),
     ),
@@ -352,7 +372,7 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
         constraints=(
             TableConstraint(
                 "fk_compat_report",
-                "CONSTRAINT fk_compat_report FOREIGN KEY (`execution_id`) REFERENCES `test_run`(`id`) ON DELETE CASCADE",
+                "CONSTRAINT fk_compat_report FOREIGN KEY (`execution_id`) REFERENCES `execution`(`id`) ON DELETE CASCADE",
             ),
             TableConstraint(
                 "fk_compat_router",
@@ -382,11 +402,11 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
         constraints=(
             TableConstraint(
                 "fk_performance_report",
-                "CONSTRAINT fk_performance_report FOREIGN KEY (`execution_id`) REFERENCES `test_run`(`id`) ON DELETE CASCADE",
+                "CONSTRAINT fk_performance_report FOREIGN KEY (`execution_id`) REFERENCES `execution`(`id`) ON DELETE CASCADE",
             ),
             TableConstraint(
                 "fk_performance_test_report",
-                "CONSTRAINT fk_performance_test_report FOREIGN KEY (`test_report_id`) REFERENCES `test_case`(`id`) ON DELETE CASCADE",
+                "CONSTRAINT fk_performance_test_report FOREIGN KEY (`test_report_id`) REFERENCES `test_report`(`id`) ON DELETE CASCADE",
             ),
         ),
     ),
@@ -409,13 +429,13 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
         constraints=(
             TableConstraint(
                 "fk_kv_report",
-                "CONSTRAINT fk_kv_report FOREIGN KEY (`execution_id`) REFERENCES `test_run`(`id`) ON DELETE CASCADE",
+                "CONSTRAINT fk_kv_report FOREIGN KEY (`execution_id`) REFERENCES `execution`(`id`) ON DELETE CASCADE",
             ),
         ),
     ),
     "artifact": TableSpec(
         columns=(
-            ColumnDefinition("test_case_id", "INT NOT NULL"),
+            ColumnDefinition("test_report_id", "INT NOT NULL"),
             ColumnDefinition("file_name", "VARCHAR(255) NOT NULL"),
             ColumnDefinition("content_type", "VARCHAR(128) NOT NULL"),
             ColumnDefinition("sha256", "CHAR(64) NOT NULL"),
@@ -425,7 +445,7 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
         indexes=(
             TableIndex(
                 "idx_artifact_report",
-                "INDEX idx_artifact_report (`test_case_id`, `created_at`)",
+                "INDEX idx_artifact_report (`test_report_id`, `created_at`)",
             ),
             TableIndex(
                 "idx_artifact_sha",
@@ -435,11 +455,11 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
         constraints=(
             TableConstraint(
                 "uq_artifact_report",
-                "CONSTRAINT uq_artifact_report UNIQUE (`test_case_id`)",
+                "CONSTRAINT uq_artifact_report UNIQUE (`test_report_id`)",
             ),
             TableConstraint(
                 "fk_artifact_report",
-                "CONSTRAINT fk_artifact_report FOREIGN KEY (`test_case_id`) REFERENCES `test_case`(`id`) ON DELETE CASCADE",
+                "CONSTRAINT fk_artifact_report FOREIGN KEY (`test_report_id`) REFERENCES `test_report`(`id`) ON DELETE CASCADE",
             ),
         ),
     ),
@@ -457,12 +477,12 @@ _VIEW_DEFINITIONS: Dict[str, str] = {
             p.interface,
             p.ecosystem,
             p.mass_production_status,
-            tc.id AS test_case_id,
+            tc.id AS test_report_id,
             tc.report_name AS case_name,
             tc.case_path AS case_path,
             tc.created_at AS case_created_at,
             tc.updated_at AS case_updated_at,
-            tr.id AS test_run_id,
+            tr.id AS execution_id,
             tr.run_type,
             d.serial_number,
             d.connect_type,
@@ -474,9 +494,9 @@ _VIEW_DEFINITIONS: Dict[str, str] = {
             d.kernel_version,
             tr.router_name,
             tr.router_address,
-            tr.rf_model,
-            tr.corner_model,
-            tr.lab_name,
+            l.rf_model,
+            l.turntable_model AS corner_model,
+            l.lab_name,
             tr.csv_name,
             tr.csv_path,
             tr.run_source,
@@ -487,9 +507,10 @@ _VIEW_DEFINITIONS: Dict[str, str] = {
             agg.throughput_avg_mean_mbps,
             agg.target_throughput_avg_mbps
         FROM project AS p
-        JOIN test_case AS tc ON tc.project_id = p.id
-        JOIN test_run AS tr ON tr.test_case_id = tc.id
+        JOIN test_report AS tc ON tc.project_id = p.id
+        JOIN execution AS tr ON tr.test_report_id = tc.id
         JOIN dut AS d ON d.id = tr.dut_id
+        LEFT JOIN lab AS l ON l.id = tr.lab_id
         LEFT JOIN (
             SELECT
                 execution_id,
@@ -540,8 +561,8 @@ _VIEW_DEFINITIONS: Dict[str, str] = {
                     ORDER BY p.created_at DESC, p.id DESC
                 ) AS rn
             FROM performance AS p
-            JOIN test_run AS ex ON ex.id = p.execution_id
-            JOIN test_case AS tr ON tr.id = ex.test_case_id
+            JOIN execution AS ex ON ex.id = p.execution_id
+            JOIN test_report AS tr ON tr.id = ex.test_report_id
         ) AS ranked
         WHERE ranked.rn = 1
     """,
@@ -650,8 +671,58 @@ def get_table_spec(table_name: str) -> TableSpec:
 
     try:
         return _TABLE_SPECS[table_name]
-    except KeyError as exc:  # pragma: no cover - defensive guard
+    except KeyError as exc:
         raise KeyError(f"Unknown table spec: {table_name}") from exc
+
+
+def get_schema_catalog() -> dict[str, Any]:
+    tables: dict[str, Any] = {}
+    for name, spec in _TABLE_SPECS.items():
+        tables[name] = {
+            "columns": [{"name": c.name, "definition": c.definition} for c in spec.columns],
+            "indexes": [{"name": i.name, "definition": i.definition} for i in spec.indexes],
+            "constraints": [{"name": c.name, "definition": c.definition} for c in spec.constraints],
+        }
+    return {"tables": tables, "views": dict(_VIEW_DEFINITIONS)}
+
+
+def render_schema_markdown(catalog: Mapping[str, Any]) -> str:
+    tables = catalog.get("tables") if isinstance(catalog.get("tables"), Mapping) else {}
+    views = catalog.get("views") if isinstance(catalog.get("views"), Mapping) else {}
+    lines: list[str] = []
+    lines.append("# Database Schema")
+    lines.append("")
+    lines.append("## Tables")
+    for table_name in sorted(tables.keys()):
+        table = tables.get(table_name) or {}
+        lines.append(f"### `{table_name}`")
+        lines.append("")
+        lines.append("**Columns**")
+        for col in table.get("columns") or []:
+            lines.append(f"- `{col.get('name')}`: {col.get('definition')}")
+        lines.append("")
+        indexes = table.get("indexes") or []
+        if indexes:
+            lines.append("**Indexes**")
+            for idx in indexes:
+                lines.append(f"- `{idx.get('name')}`: {idx.get('definition')}")
+            lines.append("")
+        constraints = table.get("constraints") or []
+        if constraints:
+            lines.append("**Constraints**")
+            for con in constraints:
+                lines.append(f"- `{con.get('name')}`: {con.get('definition')}")
+            lines.append("")
+    lines.append("## Views")
+    for view_name in sorted(views.keys()):
+        sql = str(views.get(view_name) or "").strip()
+        lines.append(f"### `{view_name}`")
+        lines.append("")
+        lines.append("```sql")
+        lines.append(sql)
+        lines.append("```")
+        lines.append("")
+    return "\n".join(lines)
 
 
 def ensure_config_tables(client) -> None:
@@ -690,9 +761,10 @@ def ensure_report_tables(client) -> None:
         This function does not return a value.
     """
     ensure_config_tables(client)
-    ensure_table(client, "test_case", _TABLE_SPECS["test_case"])
+    ensure_table(client, "test_report", _TABLE_SPECS["test_report"])
     ensure_table(client, "dut", _TABLE_SPECS["dut"])
-    ensure_table(client, "test_run", _TABLE_SPECS["test_run"])
+    ensure_table(client, "lab", _TABLE_SPECS["lab"])
+    ensure_table(client, "execution", _TABLE_SPECS["execution"])
     ensure_table(client, "router", _TABLE_SPECS["router"])
     ensure_table(client, "performance", _TABLE_SPECS["performance"])
     ensure_table(client, "artifact", _TABLE_SPECS["artifact"])
@@ -703,12 +775,14 @@ def ensure_report_tables(client) -> None:
     _migrate_artifact_table(client)
     _ensure_table_indexes(client, "project", _TABLE_SPECS["project"].indexes)
     _ensure_table_constraints(client, "project", _TABLE_SPECS["project"].constraints)
-    _ensure_table_indexes(client, "test_case", _TABLE_SPECS["test_case"].indexes)
-    _ensure_table_constraints(client, "test_case", _TABLE_SPECS["test_case"].constraints)
+    _ensure_table_indexes(client, "test_report", _TABLE_SPECS["test_report"].indexes)
+    _ensure_table_constraints(client, "test_report", _TABLE_SPECS["test_report"].constraints)
     _ensure_table_indexes(client, "dut", _TABLE_SPECS["dut"].indexes)
     _ensure_table_constraints(client, "dut", _TABLE_SPECS["dut"].constraints)
-    _ensure_table_indexes(client, "test_run", _TABLE_SPECS["test_run"].indexes)
-    _ensure_table_constraints(client, "test_run", _TABLE_SPECS["test_run"].constraints)
+    _ensure_table_indexes(client, "lab", _TABLE_SPECS["lab"].indexes)
+    _ensure_table_constraints(client, "lab", _TABLE_SPECS["lab"].constraints)
+    _ensure_table_indexes(client, "execution", _TABLE_SPECS["execution"].indexes)
+    _ensure_table_constraints(client, "execution", _TABLE_SPECS["execution"].constraints)
     _ensure_table_indexes(client, "router", _TABLE_SPECS["router"].indexes)
     _ensure_table_constraints(client, "router", _TABLE_SPECS["router"].constraints)
     _ensure_table_indexes(client, "performance", _TABLE_SPECS["performance"].indexes)
@@ -755,22 +829,22 @@ def _migrate_project_table(client) -> None:
 def _migrate_execution_table(client) -> None:
     """Apply best-effort execution table migrations without data loss."""
     try:
-        rows = client.query_all("SHOW COLUMNS FROM `test_run`")
+        rows = client.query_all("SHOW COLUMNS FROM `execution`")
     except Exception:
-        logging.debug("test_run: failed to inspect columns", exc_info=True)
+        logging.debug("execution: failed to inspect columns", exc_info=True)
         return
     existing = {str(row.get("Field") or "") for row in rows if isinstance(row, dict)}
 
     if "hardware_version" in existing:
         try:
-            client.execute("ALTER TABLE `test_run` DROP COLUMN `hardware_version`")
+            client.execute("ALTER TABLE `execution` DROP COLUMN `hardware_version`")
         except Exception:
-            logging.debug("test_run: failed to drop legacy hardware_version column", exc_info=True)
+            logging.debug("execution: failed to drop legacy hardware_version column", exc_info=True)
 
     migrations: tuple[tuple[str, str], ...] = (
-        ("bt_mode", "ALTER TABLE `test_run` ADD COLUMN `bt_mode` VARCHAR(64) NULL DEFAULT NULL"),
-        ("bt_ble_alias", "ALTER TABLE `test_run` ADD COLUMN `bt_ble_alias` VARCHAR(128) NULL DEFAULT NULL"),
-        ("bt_classic_alias", "ALTER TABLE `test_run` ADD COLUMN `bt_classic_alias` VARCHAR(128) NULL DEFAULT NULL"),
+        ("bt_mode", "ALTER TABLE `execution` ADD COLUMN `bt_mode` VARCHAR(64) NULL DEFAULT NULL"),
+        ("bt_ble_alias", "ALTER TABLE `execution` ADD COLUMN `bt_ble_alias` VARCHAR(128) NULL DEFAULT NULL"),
+        ("bt_classic_alias", "ALTER TABLE `execution` ADD COLUMN `bt_classic_alias` VARCHAR(128) NULL DEFAULT NULL"),
     )
     for column, sql in migrations:
         if column in existing:
@@ -778,7 +852,7 @@ def _migrate_execution_table(client) -> None:
         try:
             client.execute(sql)
         except Exception:
-            logging.debug("test_run: failed to add column %s", column, exc_info=True)
+            logging.debug("execution: failed to add column %s", column, exc_info=True)
 
 
 def _migrate_artifact_table(client) -> None:

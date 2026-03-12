@@ -1032,11 +1032,9 @@ def refresh_fpga_product_lines(view: Any, customer: str) -> None:
     combo = view.fpga_product_combo
     product_lines: dict[str, Any] = {}
     if customer:
-        for product_name, projects in WIFI_PRODUCT_PROJECT_MAP.items():
-            for info in projects.values():
-                if info["ODM"] == customer:
-                    product_lines[product_name] = projects
-                    break
+        for product_name, odm_map in WIFI_PRODUCT_PROJECT_MAP.items():
+            if customer in odm_map:
+                product_lines[product_name] = odm_map
     combo.clear()
     for product_name in product_lines.keys():
         combo.addItem(product_name)
@@ -1049,16 +1047,19 @@ def refresh_fpga_projects(view: Any, customer: str, product_line: str) -> None:
     combo = view.fpga_project_combo
     projects: dict[str, Any] = {}
     if product_line:
-        for product_name, project_map in WIFI_PRODUCT_PROJECT_MAP.items():
+        for product_name, odm_map in WIFI_PRODUCT_PROJECT_MAP.items():
             if product_name != product_line:
                 continue
             if not customer:
-                projects = project_map
+                merged: dict[str, Any] = {}
+                for project_map in odm_map.values():
+                    merged.update(project_map)
+                projects = merged
                 break
             filtered: dict[str, Any] = {}
+            project_map = odm_map.get(customer) or {}
             for project_name, info in project_map.items():
-                if info["ODM"] == customer:
-                    filtered[project_name] = info
+                filtered[project_name] = info
             projects = filtered
             break
     combo.clear()
