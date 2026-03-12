@@ -198,6 +198,7 @@ class MainWindow(FluentWindow):
         self.run_page = RunPage("", parent=self)
         # Ensure run page starts empty
         self.run_page.reset()
+        self._silent_init_mysql()
         # Report page (disabled until report_dir created)
         self.report_view = ReportView(self)
         self.report_ctl = ReportController(self.report_view)
@@ -465,17 +466,19 @@ class MainWindow(FluentWindow):
 
     def _silent_init_mysql(self) -> None:
         """Best-effort MySQL schema initialization without UI prompts."""
-        try:
-            from src.tools.mysql_tool import MySqlClient
-            from src.tools.mysql_tool.schema import ensure_report_tables
-            from src.tools.mysql_tool.operations import sync_project_catalog
+        from src.tools.mysql_tool import MySqlClient
+        from src.tools.mysql_tool.schema import ensure_report_tables
+        from src.tools.mysql_tool.operations import sync_catalogs
 
+        logging.info("MySQL init: start")
+        try:
             with MySqlClient() as client:
                 ensure_report_tables(client)
-                sync_project_catalog(client)
+                sync_catalogs(client)
         except Exception:
-            logging.debug("Silent MySQL init failed", exc_info=True)
+            logging.exception("MySQL init: failed")
             return
+        logging.info("MySQL init: done")
     # ------------------------------------------------------------------
     # Navigation button helpers
     # ------------------------------------------------------------------

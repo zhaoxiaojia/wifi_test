@@ -18,14 +18,14 @@ connect_type:
     wait_seconds: 45
   type: Android
 project:
-  customer: Hisense
-  product_line: TV
-  project: 65D50S
-  odm: Hisense
-  main_chip: T963D4
-  wifi_module: EA6621
-  interface: USB
-  mass_production_status: P0
+  customer: ZTE
+  product_line: OTT
+  project: Rosemary904
+  odm: ZTE
+  main_chip: S905Y5
+  wifi_module: W265S2M
+  interface: SDIO
+  mass_production_status: ''
 serial_port:
   baud: '921600'
   port: COM14 (蓝牙链接上的标准串行 (COM14))

@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import QFileDialog, QDialog
 from qfluentwidgets import MessageBox
 
 from src.tools.mysql_tool import MySqlClient
-from src.tools.mysql_tool.operations import ensure_project, ensure_test_report, sync_project_catalog
+from src.tools.mysql_tool.operations import ensure_project, ensure_test_report, sync_catalogs
 from src.tools.mysql_tool.operations import PerformanceTableManager
 from src.tools.mysql_tool.schema import ensure_report_tables
 from src.tools.mysql_tool.sql_writer import SqlWriter
@@ -23,7 +23,7 @@ from src.util.constants import IDENTIFIER_SANITIZE_PATTERN
 def _store_excel_artifact(
     client: MySqlClient,
     *,
-    test_case_id: int,
+    test_report_id: int,
     excel_path: str,
 ) -> int:
     content = Path(excel_path).read_bytes()
@@ -34,14 +34,14 @@ def _store_excel_artifact(
 
     insert_sql = (
         "INSERT INTO `artifact` "
-        "(`test_case_id`, `file_name`, `content_type`, `sha256`, `size_bytes`, `content`) "
+        "(`test_report_id`, `file_name`, `content_type`, `sha256`, `size_bytes`, `content`) "
         "VALUES (%s, %s, %s, %s, %s, %s) "
         "ON DUPLICATE KEY UPDATE `id`=LAST_INSERT_ID(`id`)"
     )
     artifact_id = client.insert(
         insert_sql,
         (
-            int(test_case_id),
+            int(test_report_id),
             file_name,
             content_type,
             digest,
@@ -966,7 +966,7 @@ class ImportController:
 
         with MySqlClient() as client:
             ensure_report_tables(client)
-            sync_project_catalog(client)
+            sync_catalogs(client)
             project_id = ensure_project(client, project_payload)
             manager = PerformanceTableManager(client)
             inserted_total = 0
@@ -984,7 +984,7 @@ class ImportController:
                     continue
                 if existing:
                     client.execute(
-                        "DELETE FROM `test_case` WHERE `id`=%s",
+                        "DELETE FROM `test_report` WHERE `id`=%s",
                         (int(existing["test_report_id"]),),
                     )
 
@@ -1002,12 +1002,12 @@ class ImportController:
                 )
                 _store_excel_artifact(
                     client,
-                    test_case_id=int(report_id),
+                    test_report_id=int(report_id),
                     excel_path=excel_path,
                 )
                 execution_id = self._insert_execution(
                     client,
-                    test_case_id=int(report_id),
+                    test_report_id=int(report_id),
                     execution_type=data_type,
                     csv_name=f"{Path(excel_path).name}:{data_type}",
                     csv_path=excel_path,
@@ -1040,8 +1040,8 @@ class ImportController:
             "SELECT "
             "tr.id AS test_report_id, tr.report_name, tr.created_at, tr.updated_at, "
             "a.file_name, a.created_at AS artifact_created_at "
-            "FROM test_case AS tr "
-            "LEFT JOIN artifact AS a ON a.test_case_id = tr.id "
+            "FROM test_report AS tr "
+            "LEFT JOIN artifact AS a ON a.test_report_id = tr.id "
             "WHERE tr.project_id = %s AND tr.is_golden = 1 "
             "AND tr.report_type = %s AND tr.golden_group = %s "
             "ORDER BY tr.updated_at DESC, tr.id DESC "
@@ -1056,9 +1056,9 @@ class ImportController:
             "tr.id AS test_report_id, tr.report_name, tr.created_at, tr.updated_at, "
             "a.file_name, a.created_at AS artifact_created_at, "
             "GROUP_CONCAT(DISTINCT ex.run_type ORDER BY ex.run_type) AS execution_types "
-            "FROM test_case AS tr "
-            "JOIN test_run AS ex ON ex.test_case_id = tr.id "
-            "LEFT JOIN artifact AS a ON a.test_case_id = tr.id "
+            "FROM test_report AS tr "
+            "JOIN execution AS ex ON ex.test_report_id = tr.id "
+            "LEFT JOIN artifact AS a ON a.test_report_id = tr.id "
             "WHERE tr.project_id = %s AND tr.is_golden = 1 "
             "AND (tr.report_type IS NULL OR tr.report_type = '') "
             "AND ex.run_type = %s "
@@ -1103,7 +1103,7 @@ class ImportController:
         self,
         client: MySqlClient,
         *,
-        test_case_id: int,
+        test_report_id: int,
         execution_type: str,
         csv_name: str,
         csv_path: str,
@@ -1144,8 +1144,8 @@ class ImportController:
             ),
         )
         insert_sql = (
-            "INSERT INTO `test_run` "
-            "(`test_case_id`, `run_type`, `dut_id`, "
+            "INSERT INTO `execution` "
+            "(`test_report_id`, `run_type`, `dut_id`, "
             "`router_name`, `router_address`, `rf_model`, `corner_model`, `lab_name`, "
             "`csv_name`, `csv_path`, `run_source`, `duration_seconds`, `payload_json`) "
             "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
@@ -1154,7 +1154,7 @@ class ImportController:
         return client.insert(
             insert_sql,
             (
-                test_case_id,
+                test_report_id,
                 execution_type,
                 int(dut_id),
                 None,
