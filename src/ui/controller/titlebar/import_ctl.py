@@ -12,9 +12,8 @@ from PyQt5.QtWidgets import QFileDialog, QDialog
 from qfluentwidgets import MessageBox
 
 from src.tools.mysql_tool import MySqlClient
-from src.tools.mysql_tool.operations import ensure_project, ensure_test_report, sync_catalogs
+from src.tools.mysql_tool.operations import ensure_project, ensure_test_report, prepare_database
 from src.tools.mysql_tool.operations import PerformanceTableManager
-from src.tools.mysql_tool.schema import ensure_report_tables
 from src.tools.mysql_tool.sql_writer import SqlWriter
 from src.ui.view.titlebar.import_dialog import ImportDialog
 from src.util.constants import IDENTIFIER_SANITIZE_PATTERN
@@ -965,8 +964,7 @@ class ImportController:
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
         with MySqlClient() as client:
-            ensure_report_tables(client)
-            sync_catalogs(client)
+            prepare_database(client)
             project_id = ensure_project(client, project_payload)
             manager = PerformanceTableManager(client)
             inserted_total = 0

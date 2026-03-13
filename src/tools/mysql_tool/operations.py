@@ -1190,6 +1190,16 @@ def sync_catalogs(client: MySqlClient) -> None:
     sync_lab_catalog(client)
 
 
+def prepare_database(client: MySqlClient, *, reset_schema: bool = False) -> None:
+    from .schema import ensure_report_tables, reset_report_schema
+
+    if reset_schema:
+        reset_report_schema(client)
+    else:
+        ensure_report_tables(client)
+    sync_catalogs(client)
+
+
 def sync_project_catalog(client: MySqlClient) -> None:
     global _PROJECT_CATALOG_SYNCED
     if _PROJECT_CATALOG_SYNCED:
@@ -1268,18 +1278,25 @@ def ensure_test_report(
     report_type: Optional[str] = None,
     golden_group: Optional[str] = None,
     notes: Optional[str] = None,
+    tester: Optional[str] = None,
 ) -> int:
+    if tester is None:
+        from src.util.auth_state import load_cached_username
+
+        tester = load_cached_username()
+
     insert_sql = (
         "INSERT INTO `test_report` "
-        "(`project_id`, `report_name`, `case_path`, `is_golden`, `report_type`, `golden_group`, `notes`) "
-        "VALUES (%s, %s, %s, %s, %s, %s, %s) "
+        "(`project_id`, `report_name`, `case_path`, `is_golden`, `report_type`, `golden_group`, `notes`, `tester`) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) "
         "ON DUPLICATE KEY UPDATE "
         "`id`=LAST_INSERT_ID(`id`), "
         "`case_path`=VALUES(`case_path`), "
         "`is_golden`=VALUES(`is_golden`), "
         "`report_type`=VALUES(`report_type`), "
         "`golden_group`=VALUES(`golden_group`), "
-        "`notes`=VALUES(`notes`)"
+        "`notes`=VALUES(`notes`), "
+        "`tester`=VALUES(`tester`)"
     )
     return client.insert(
         insert_sql,
@@ -1291,6 +1308,7 @@ def ensure_test_report(
             report_type,
             golden_group,
             notes,
+            tester,
         ),
     )
 
@@ -1521,8 +1539,7 @@ def sync_configuration(config: dict | None) -> Optional[Any]:
         return None
     project_payload = _build_project_payload(config)
     with MySqlClient() as client:
-        ensure_report_tables(client)
-        sync_catalogs(client)
+        prepare_database(client)
         project_id = ensure_project(client, project_payload)
     return ConfigSyncResult(project_id=project_id)
 
@@ -1631,9 +1648,9 @@ def sync_test_result_to_db(
 
     try:
         with MySqlClient() as client:
+            prepare_database(client)
             manager = PerformanceTableManager(client)
             manager.ensure_schema_initialized()
-            sync_catalogs(client)
             affected = manager.replace_with_csv(
                 csv_name=file_path.name,
                 csv_path=str(file_path),
@@ -1677,8 +1694,7 @@ def sync_compatibility_artifacts_to_db(
     normalized_source = (run_source or "local").strip().upper()[:32]
 
     with MySqlClient() as client:
-        ensure_report_tables(client)
-        sync_catalogs(client)
+        prepare_database(client)
 
         with open(router_json, "r", encoding="utf-8") as handle:
             router_entries = json.load(handle) or []
