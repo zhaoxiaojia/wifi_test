@@ -194,6 +194,7 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
             ColumnDefinition("report_type", "VARCHAR(64)"),
             ColumnDefinition("golden_group", "VARCHAR(32)"),
             ColumnDefinition("notes", "TEXT"),
+            ColumnDefinition("tester", "VARCHAR(128)"),
         ),
         indexes=(
             TableIndex(
@@ -794,6 +795,16 @@ def ensure_report_tables(client) -> None:
     _ensure_table_indexes(client, "compatibility", _TABLE_SPECS["compatibility"].indexes)
     _ensure_table_constraints(client, "compatibility", _TABLE_SPECS["compatibility"].constraints)
     _ensure_views(client)
+
+
+def reset_report_schema(client) -> None:
+    client.execute("SET FOREIGN_KEY_CHECKS=0")
+    for view_name in sorted(_VIEW_DEFINITIONS.keys()):
+        client.execute(f"DROP VIEW IF EXISTS `{view_name}`")
+    for table_name in sorted(_TABLE_SPECS.keys()):
+        client.execute(f"DROP TABLE IF EXISTS `{table_name}`")
+    client.execute("SET FOREIGN_KEY_CHECKS=1")
+    ensure_report_tables(client)
 
 
 def _migrate_project_table(client) -> None:

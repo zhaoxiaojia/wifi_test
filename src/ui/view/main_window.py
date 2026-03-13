@@ -467,14 +467,12 @@ class MainWindow(FluentWindow):
     def _silent_init_mysql(self) -> None:
         """Best-effort MySQL schema initialization without UI prompts."""
         from src.tools.mysql_tool import MySqlClient
-        from src.tools.mysql_tool.schema import ensure_report_tables
-        from src.tools.mysql_tool.operations import sync_catalogs
+        from src.tools.mysql_tool.operations import prepare_database
 
         logging.info("MySQL init: start")
         try:
             with MySqlClient() as client:
-                ensure_report_tables(client)
-                sync_catalogs(client)
+                prepare_database(client)
         except Exception:
             logging.exception("MySQL init: failed")
             return
