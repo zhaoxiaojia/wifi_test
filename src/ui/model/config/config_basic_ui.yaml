@@ -75,7 +75,7 @@ panels:
           - key: project.interface
             widget: line_edit
             label: "Interface"
-          - key: project.mass_production_status
+          - key: dut.mass_production_status
             widget: combo_box
             label: "Mass Production Status"
 

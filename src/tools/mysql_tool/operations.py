@@ -919,7 +919,6 @@ def _resolve_wifi_product_details(fpga_section: Any) -> Dict[str, Any]:
         "wifi_module": None,
         "interface": None,
         "ecosystem": None,
-        "mass_production_status": [],
     }
 
     if isinstance(fpga_section, Mapping):
@@ -931,7 +930,6 @@ def _resolve_wifi_product_details(fpga_section: Any) -> Dict[str, Any]:
             fpga_section.get("wifi_module") or fpga_section.get("series")
         )
         details["interface"] = _normalize_upper_token(fpga_section.get("interface"))
-        details["mass_production_status"] = list(fpga_section.get("mass_production_status") or [])
     else:
         wifi_module, interface = _split_fpga(fpga_section)
         details["wifi_module"] = wifi_module
@@ -993,8 +991,6 @@ def _resolve_wifi_product_details(fpga_section: Any) -> Dict[str, Any]:
             details["interface"] = info["interface"]
         if not details["ecosystem"]:
             details["ecosystem"] = info["ecosystem"]
-        if not details["mass_production_status"]:
-            details["mass_production_status"] = list(info["mass_production_status"])
 
     return details
 
@@ -1012,7 +1008,6 @@ def _build_project_payload(config: Mapping[str, Any]) -> Dict[str, Any]:
         "wifi_module": wifi_details.get("wifi_module"),
         "interface": wifi_details.get("interface"),
         "ecosystem": wifi_details.get("ecosystem"),
-        "mass_production_status": wifi_details.get("mass_production_status") or [],
         "payload_json": payload_json,
     }
 
@@ -1020,8 +1015,8 @@ def _build_project_payload(config: Mapping[str, Any]) -> Dict[str, Any]:
 def ensure_project(client: MySqlClient, project_payload: Mapping[str, Any]) -> int:
     insert_sql = (
         "INSERT INTO `project` "
-        "(`brand`, `product_line`, `project_name`, `project_display_name`, `main_chip`, `wifi_module`, `interface`, `ecosystem`, `mass_production_status`, `payload_json`) "
-        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
+        "(`brand`, `product_line`, `project_name`, `project_display_name`, `main_chip`, `wifi_module`, `interface`, `ecosystem`, `payload_json`) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) "
         "ON DUPLICATE KEY UPDATE "
         "`id`=LAST_INSERT_ID(`id`), "
         "`brand`=VALUES(`brand`), "
@@ -1031,7 +1026,6 @@ def ensure_project(client: MySqlClient, project_payload: Mapping[str, Any]) -> i
         "`wifi_module`=VALUES(`wifi_module`), "
         "`interface`=VALUES(`interface`), "
         "`ecosystem`=VALUES(`ecosystem`), "
-        "`mass_production_status`=VALUES(`mass_production_status`), "
         "`payload_json`=VALUES(`payload_json`)"
     )
     return client.insert(
@@ -1045,7 +1039,6 @@ def ensure_project(client: MySqlClient, project_payload: Mapping[str, Any]) -> i
             project_payload.get("wifi_module"),
             project_payload.get("interface"),
             project_payload.get("ecosystem"),
-            json.dumps(project_payload.get("mass_production_status") or [], ensure_ascii=False),
             project_payload.get("payload_json"),
         ),
     )
@@ -1206,8 +1199,8 @@ def sync_project_catalog(client: MySqlClient) -> None:
         return
     insert_sql = (
         "INSERT INTO `project` "
-        "(`brand`, `product_line`, `project_name`, `project_display_name`, `main_chip`, `wifi_module`, `interface`, `ecosystem`, `mass_production_status`, `payload_json`) "
-        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
+        "(`brand`, `product_line`, `project_name`, `project_display_name`, `main_chip`, `wifi_module`, `interface`, `ecosystem`, `payload_json`) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) "
         "ON DUPLICATE KEY UPDATE "
         "`brand`=VALUES(`brand`), "
         "`product_line`=VALUES(`product_line`), "
@@ -1216,7 +1209,6 @@ def sync_project_catalog(client: MySqlClient) -> None:
         "`wifi_module`=VALUES(`wifi_module`), "
         "`interface`=VALUES(`interface`), "
         "`ecosystem`=VALUES(`ecosystem`), "
-        "`mass_production_status`=VALUES(`mass_production_status`), "
         "`payload_json`=VALUES(`payload_json`)"
     )
     rows = []
@@ -1233,7 +1225,6 @@ def sync_project_catalog(client: MySqlClient) -> None:
                     "wifi_module": info["wifi_module"],
                     "interface": info["interface"],
                     "ecosystem": info["ecosystem"],
-                    "mass_production_status": list(info["mass_production_status"]),
                 }
                 rows.append(
                     (
@@ -1245,9 +1236,6 @@ def sync_project_catalog(client: MySqlClient) -> None:
                         payload.get("wifi_module"),
                         payload.get("interface"),
                         payload.get("ecosystem"),
-                        json.dumps(
-                            payload.get("mass_production_status") or [], ensure_ascii=False
-                        ),
                         json.dumps(payload, ensure_ascii=True, separators=(",", ":")),
                     )
                 )
@@ -1346,12 +1334,13 @@ def register_execution(
         "driver_version": execution_payload.get("driver_version"),
         "android_version": execution_payload.get("android_version"),
         "kernel_version": execution_payload.get("kernel_version"),
+        "mass_production_status": execution_payload.get("mass_production_status"),
     }
     dut_id = client.insert(
         "INSERT INTO `dut` "
         "(`serial_number`, `connect_type`, `mac_address`, `adb_device`, `telnet_ip`, "
-        "`software_version`, `driver_version`, `android_version`, `kernel_version`, `payload_json`) "
-        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+        "`software_version`, `driver_version`, `android_version`, `kernel_version`, `mass_production_status`, `payload_json`) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
         (
             dut_payload.get("serial_number"),
             dut_payload.get("connect_type"),
@@ -1362,6 +1351,7 @@ def register_execution(
             dut_payload.get("driver_version"),
             dut_payload.get("android_version"),
             dut_payload.get("kernel_version"),
+            dut_payload.get("mass_production_status"),
             json.dumps(dut_payload, ensure_ascii=True, separators=(",", ":")),
         ),
     )
@@ -1422,6 +1412,8 @@ def _build_execution_device_payload(config: Mapping[str, Any]) -> Dict[str, Any]
     connect = connect_section if isinstance(connect_section, Mapping) else {}
     project_section = _extract_first(config, "project", "fpga")
     project = project_section if isinstance(project_section, Mapping) else {}
+    dut_section = _extract_first(config, "dut")
+    dut = dut_section if isinstance(dut_section, Mapping) else {}
 
     connect_type_value = _normalize_str_token(connect.get("type"))
     normalized_connect_type = _normalize_lower_token(connect_type_value)
@@ -1438,6 +1430,14 @@ def _build_execution_device_payload(config: Mapping[str, Any]) -> Dict[str, Any]
     elif normalized_connect_type == "linux":
         telnet_ip = _normalize_str_token(_extract_first(connect, "Linux", "ip"))
 
+    mass_status_value = _extract_first(dut, "mass_production_status") or _extract_first(
+        connect, "mass_production_status"
+    )
+    if isinstance(mass_status_value, list):
+        mass_status = ",".join(str(item) for item in mass_status_value if str(item))
+    else:
+        mass_status = mass_status_value
+
     return {
         "serial_number": _extract_serial_number(config),
         "software_version": _extract_first(software, "software_version"),
@@ -1449,6 +1449,7 @@ def _build_execution_device_payload(config: Mapping[str, Any]) -> Dict[str, Any]
         "adb_device": adb_device,
         "telnet_ip": telnet_ip,
         "odm": _normalize_str_token(project.get("odm")),
+        "mass_production_status": _normalize_str_token(mass_status),
     }
 
 
