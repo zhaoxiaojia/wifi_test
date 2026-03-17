@@ -943,6 +943,9 @@ class ImportController:
             "driver_version": field_widgets["software_info.driver_version"].text(),
             "android_version": field_widgets["system.version"].currentText(),
             "kernel_version": field_widgets["system.kernel_version"].currentText(),
+            "mass_production_status": ",".join(
+                list((view.config.get("dut") or {}).get("mass_production_status") or [])
+            ),
         }
 
     def _sync_golden_to_db(
@@ -1120,13 +1123,14 @@ class ImportController:
             "driver_version": ui_payload.get("driver_version"),
             "android_version": ui_payload.get("android_version"),
             "kernel_version": ui_payload.get("kernel_version"),
+            "mass_production_status": ui_payload.get("mass_production_status"),
             "odm": ui_payload.get("odm"),
         }
         dut_id = client.insert(
             "INSERT INTO `dut` "
             "(`serial_number`, `connect_type`, `mac_address`, `adb_device`, `telnet_ip`, "
-            "`software_version`, `driver_version`, `android_version`, `kernel_version`, `odm`, `payload_json`) "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            "`software_version`, `driver_version`, `android_version`, `kernel_version`, `mass_production_status`, `odm`, `payload_json`) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
             (
                 dut_payload.get("serial_number"),
                 dut_payload.get("connect_type"),
@@ -1137,6 +1141,7 @@ class ImportController:
                 dut_payload.get("driver_version"),
                 dut_payload.get("android_version"),
                 dut_payload.get("kernel_version"),
+                dut_payload.get("mass_production_status"),
                 dut_payload.get("odm"),
                 json.dumps(dut_payload, ensure_ascii=True, separators=(",", ":")),
             ),

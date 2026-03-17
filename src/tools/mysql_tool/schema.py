@@ -169,7 +169,6 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
             ColumnDefinition("wifi_module", "VARCHAR(64)"),
             ColumnDefinition("interface", "VARCHAR(64)"),
             ColumnDefinition("ecosystem", "VARCHAR(64)"),
-            ColumnDefinition("mass_production_status", "JSON"),
             ColumnDefinition("payload_json", "JSON"),
         ),
         indexes=(
@@ -236,6 +235,7 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
             ColumnDefinition("driver_version", "VARCHAR(128)"),
             ColumnDefinition("android_version", "VARCHAR(64)"),
             ColumnDefinition("kernel_version", "VARCHAR(64)"),
+            ColumnDefinition("mass_production_status", "VARCHAR(64)"),
             ColumnDefinition("payload_json", "JSON"),
         ),
         indexes=(
@@ -477,7 +477,7 @@ _VIEW_DEFINITIONS: Dict[str, str] = {
             p.wifi_module,
             p.interface,
             p.ecosystem,
-            p.mass_production_status,
+            d.mass_production_status,
             tc.id AS test_report_id,
             tc.report_name AS case_name,
             tc.case_path AS case_path,

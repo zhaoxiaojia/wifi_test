@@ -916,6 +916,11 @@ CUSTOM_TESTCASE_UI_RULES.append(
                 condition=lambda values: True,
             ),
             SimpleFieldEffect(
+                target_field="dut.mass_production_status",
+                action="enable",
+                condition=lambda values: True,
+            ),
+            SimpleFieldEffect(
                 target_field="project.customer",
                 action="enable",
                 condition=lambda values: True,

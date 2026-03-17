@@ -7,25 +7,19 @@ system:
   version: Android 15
   kernel_version: Kernel 6.1
 connect_type:
-  Android:
-    device: No devices
-  Linux:
-    ip: 192.168.1.10
-    wildcard: ''
-  mac_address: ''
-  third_party:
-    enabled: false
-    wait_seconds: 45
-  type: Android
+  mass_production_status:
+  - EVT
+  - DVT
+  - PVT
+  - MP
 project:
-  customer: ZTE
-  product_line: OTT
-  project: Rosemary904
-  odm: ZTE
-  main_chip: S905Y5
-  wifi_module: W265S2M
-  interface: SDIO
-  mass_production_status: ''
+  customer: Hisense
+  product_line: TV
+  project: 65D50S
+  odm: Hisense
+  main_chip: T963D4
+  wifi_module: EA6621
+  interface: USB
 serial_port:
   baud: '921600'
   port: COM14 (蓝牙链接上的标准串行 (COM14))
