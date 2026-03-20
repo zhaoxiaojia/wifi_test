@@ -174,7 +174,7 @@ _FIELD_CHOICE_SOURCES: dict[str, Callable[[], Sequence[str]]] = {
     # Project / Wi-Fi chipset customer selection (product line / project
     # remain driven by WIFI_PRODUCT_PROJECT_MAP).
     "project.customer": _fpga_customer_choices,
-    "dut.mass_production_status": _mass_production_status_choices,
+    "project.mass_production_status": _mass_production_status_choices,
     # Android / Linux connect targets
     "connect_type.Android.device": _adb_device_choices,
     "connect_type.Linux.ip": _linux_ip_choices,

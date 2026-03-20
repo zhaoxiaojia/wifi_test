@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 import copy
+import json
+import logging
 import os
+import re
+import subprocess
+import threading
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Mapping, Optional
 
-from PyQt5.QtCore import QSortFilterProxyModel
+from PyQt5.QtCore import QSortFilterProxyModel, QObject, pyqtSignal
 from PyQt5.QtWidgets import QCheckBox, QSpinBox, QDoubleSpinBox
 from qfluentwidgets import ComboBox, LineEdit
 
@@ -60,6 +65,124 @@ from src.ui.view.ui_adapter import UiEvent
 
 if TYPE_CHECKING:  # pragma: no cover - circular import guard
     from src.ui.view.config.page import CaseConfigPage
+
+
+_WLAN0_MAC_PATTERN = re.compile(r"(?:HWaddr|ether)\s+([0-9a-fA-F:]{17})")
+
+
+def _load_mac_cache() -> dict[str, str]:
+    cache_path = Path(get_src_base()).parent / "config" / "dut_mac_cache.json"
+    if not cache_path.is_file():
+        return {}
+    try:
+        raw = cache_path.read_text(encoding="utf-8")
+        text = raw.lstrip("\ufeff").strip()
+        if not text:
+            return {}
+        data = json.loads(text) or {}
+        return data
+    except Exception as exc:
+        return {}
+
+
+def _save_mac_cache(cache: dict[str, str]) -> None:
+    cache_path = Path(get_src_base()).parent / "config" / "dut_mac_cache.json"
+    try:
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        cache_path.write_text(json.dumps(cache, ensure_ascii=True, separators=(",", ":")), encoding="utf-8")
+    except Exception as exc:
+        return None
+
+
+def _dut_cache_key(*, connect_type: str, adb_device: str, telnet_ip: str) -> Optional[str]:
+    if connect_type == "Android" and adb_device:
+        return f"ANDROID:{adb_device}"
+    if connect_type == "Linux" and telnet_ip:
+        return f"LINUX:{telnet_ip}"
+    return None
+def _detect_wlan0_mac(*, connect_type: str, adb_device: str, telnet_ip: str) -> Optional[str]:
+    if connect_type == "Android" and adb_device:
+        proc = subprocess.run(
+            ["adb", "-s", adb_device, "shell", "ifconfig", "wlan0"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        match = _WLAN0_MAC_PATTERN.search(proc.stdout or "")
+        return match.group(1).lower() if match else None
+
+    if connect_type == "Linux" and telnet_ip:
+        from src.tools.connect_tool.transports.telnet_tool import telnet_tool
+
+        output = str(telnet_tool(telnet_ip).checkoutput("ifconfig wlan0") or "")
+        match = _WLAN0_MAC_PATTERN.search(output)
+        return match.group(1).lower() if match else None
+
+    return None
+
+
+def _schedule_mac_autofill(page: Any) -> None:
+    if getattr(page, "_mac_auto_inflight", False):
+        return
+    page._mac_auto_inflight = True
+
+    def _worker() -> None:
+        cfg = page.config if isinstance(page.config, dict) else {}
+        connect_cfg = cfg.get("connect_type")
+        connect = connect_cfg if isinstance(connect_cfg, dict) else {}
+        android_cfg = connect.get("Android") if isinstance(connect.get("Android"), dict) else {}
+        linux_cfg = connect.get("Linux") if isinstance(connect.get("Linux"), dict) else {}
+        connect_type = str(connect.get("type") or "").strip()
+        adb_device = str(android_cfg.get("device") or "").strip()
+        telnet_ip = str(linux_cfg.get("ip") or "").strip()
+        cache_key = _dut_cache_key(connect_type=connect_type, adb_device=adb_device, telnet_ip=telnet_ip)
+        if cache_key:
+            cached = _load_mac_cache().get(cache_key)
+            if cached:
+                _mac_auto_emitter.mac_ready.emit(page, cached)
+                return
+        mac = _detect_wlan0_mac(
+            connect_type=connect_type,
+            adb_device=adb_device,
+            telnet_ip=telnet_ip,
+        )
+        if mac and cache_key:
+            cache = _load_mac_cache()
+            cache[cache_key] = mac
+            _save_mac_cache(cache)
+        _mac_auto_emitter.mac_ready.emit(page, mac)
+
+    threading.Thread(target=_worker, daemon=True).start()
+
+
+def _apply_mac_autofill(page: Any, mac: Optional[str]) -> None:
+    page._mac_auto_inflight = False
+    if not mac:
+        return
+    cfg = page.config if isinstance(page.config, dict) else {}
+    connect_cfg = cfg.get("connect_type")
+    connect = connect_cfg if isinstance(connect_cfg, dict) else {}
+    connect["mac_address"] = mac
+    cfg["connect_type"] = connect
+    page.config = cfg
+    mac_widget = (getattr(page, "field_widgets", {}) or {}).get("connect_type.mac_address")
+    if mac_widget is not None:
+        mac_widget.blockSignals(True)
+        mac_widget.setText(mac)
+        mac_widget.blockSignals(False)
+    try:
+        page.config_ctl.sync_widgets_to_config()
+        page.config_ctl.save_config()
+    except Exception as exc:
+        return
+
+
+class _MacAutoEmitter(QObject):
+    mac_ready = pyqtSignal(object, object)
+
+
+_mac_auto_emitter = _MacAutoEmitter()
+_mac_auto_emitter.mac_ready.connect(lambda page, mac: _apply_mac_autofill(page, mac))
 
 
 class _ConnectTypeControllerMixin:
@@ -477,9 +600,29 @@ class ConfigController(
 
         page = self.page
         field = str(event.payload["field"]).strip()
+        _mac_auto_trace(f"MAC_AUTO controller field.change field={field}")
 
         if field.startswith("compatibility."):
             QTimer.singleShot(0, lambda: _refresh_case_page_compatibility(page))
+
+        if field.startswith("project.") and not page._refreshing:
+            cfg = page.config if isinstance(page.config, dict) else {}
+            connect_cfg = cfg.get("connect_type")
+            if isinstance(connect_cfg, dict):
+                connect_cfg.pop("mac_address", None)
+                cfg["connect_type"] = connect_cfg
+                page.config = cfg
+                mac_widget = (getattr(page, "field_widgets", {}) or {}).get("connect_type.mac_address")
+                if mac_widget is not None:
+                    mac_widget.blockSignals(True)
+                    mac_widget.setText("")
+                    mac_widget.blockSignals(False)
+            self.sync_widgets_to_config()
+            _schedule_mac_autofill(page)
+
+        if field in {"connect_type.type", "connect_type.Android.device", "connect_type.Linux.ip"} and not page._refreshing:
+            self.sync_widgets_to_config()
+            _schedule_mac_autofill(page)
 
         if field != "csv_path" and should_autosave("field_changed") and not page._refreshing:
             self.sync_widgets_to_config()
@@ -997,13 +1140,8 @@ class ConfigController(
                 compat_cfg = page.config.setdefault("compatibility", {})
                 compat_cfg.pop("selected_routers", None)
             elif isinstance(widget, ComboBox):
-                if key == "dut.mass_production_status":
-                    checked_values = []
-                    for idx in range(widget.count()):
-                        state = int(widget.itemData(idx) or 0)
-                        if state == 2:
-                            checked_values.append(widget.itemText(idx))
-                    ref[leaf] = checked_values
+                if key == "project.mass_production_status":
+                    ref[leaf] = widget.currentText().strip()
                     continue
                 data_val = widget.currentData()
                 if data_val not in (None, "", widget.currentText()):
@@ -1024,7 +1162,9 @@ class ConfigController(
                 ref[leaf] = float(widget.value())
             elif isinstance(widget, QCheckBox):
                 ref[leaf] = widget.isChecked()
-        page.config["project"] = dict(page._fpga_details)
+        project_cfg = page.config.get("project") if isinstance(page.config.get("project"), dict) else {}
+        project_cfg.update(dict(page._fpga_details))
+        page.config["project"] = project_cfg
         base = Path(self.get_application_base())
         case_display = page.field_widgets.get("text_case")
         display_text = case_display.text().strip() if isinstance(case_display, LineEdit) else ""

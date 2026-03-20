@@ -498,6 +498,14 @@ class CaseConfigPage(ConfigView):
         except Exception:
             pass
 
+        # Auto-fill MAC if DUT connection info already exists.
+        try:
+            from src.ui.controller.config_ctl import _schedule_mac_autofill
+
+            _schedule_mac_autofill(self)
+        except Exception:
+            pass
+
         # CSV/router updates.
         _t = time.perf_counter()
         self.config_ctl.update_csv_options()

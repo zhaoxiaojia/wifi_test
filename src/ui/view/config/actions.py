@@ -1115,9 +1115,7 @@ def update_fpga_hidden_fields(page: Any) -> None:
         project_cfg = config.get("project") or {}
         if isinstance(project_cfg, dict):
             current_odm = str(project_cfg.get("odm") or "")
-        dut_cfg = config.get("dut") or {}
-        if isinstance(dut_cfg, dict):
-            status_value = dut_cfg.get("mass_production_status")
+            status_value = project_cfg.get("mass_production_status")
             if isinstance(status_value, list):
                 current_status = [str(item) for item in status_value if str(item)]
             elif status_value:
@@ -1151,11 +1149,12 @@ def update_fpga_hidden_fields(page: Any) -> None:
     setattr(page, "_fpga_details", normalized)
     config = getattr(page, "config", None)
     if isinstance(config, dict):
-        config["project"] = dict(normalized)
-        dut_cfg = config.setdefault("dut", {})
-        if isinstance(dut_cfg, dict):
-            selected = [item for item in current_status if item in mass_status]
-            dut_cfg["mass_production_status"] = selected if selected else list(mass_status)
+        project_payload = dict(normalized)
+        selected = [item for item in current_status if item in mass_status]
+        project_payload["mass_production_status"] = (
+            selected if selected else list(mass_status)
+        )
+        config["project"] = project_payload
 
     has_project = bool(project)
     ecosystem = ""
@@ -1196,7 +1195,7 @@ def update_fpga_hidden_fields(page: Any) -> None:
         if widget is not None and hasattr(widget, "setText"):
             widget.setText(normalized.get(key, "") or "")
 
-    status_widget = field_widgets.get("dut.mass_production_status")
+    status_widget = field_widgets.get("project.mass_production_status")
     if status_widget is not None and hasattr(status_widget, "clear"):
         status_widget.clear()
         for item in mass_status:

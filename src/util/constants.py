@@ -115,6 +115,7 @@ EXECUTION_CONFIG_FILENAME: Final[str] = "config_performance.yaml"
 BASIC_SECTION_KEYS: Final[frozenset[str]] = frozenset(
     {
         "connect_type",
+        "dut",
         # Project / Wi‑Fi chipset configuration (formerly "fpga").
         "project",
         "serial_port",
@@ -131,7 +132,6 @@ BASIC_SECTION_KEYS: Final[frozenset[str]] = frozenset(
 )
 DUT_SECTION_KEYS = BASIC_SECTION_KEYS
 CONFIG_KEY_ALIASES: Final[dict[str, str]] = {
-    "dut": "connect_type",
     # Backwards‑compatibility: legacy top-level "fpga" section is now
     # normalised as "project" in the merged config.
     "fpga": "project",
@@ -431,6 +431,11 @@ def _normalize_config_keys_for_save(data: Mapping[str, Any] | None) -> dict[str,
     so that the YAML files keep only the user-facing field names.
     """
     normalised = _normalize_config_keys(data)
+    connect_cfg = normalised.pop("connect_type", None)
+    if isinstance(connect_cfg, Mapping):
+        dut_cfg = dict(connect_cfg)
+        dut_cfg.pop("mass_production_status", None)
+        normalised["dut"] = dut_cfg
     turntable = normalised.get(TURN_TABLE_SECTION_KEY)
     if isinstance(turntable, Mapping):
         # Drop the internal lower-case duplicates so that only the
@@ -538,6 +543,11 @@ def merge_config_sections(
     merged: dict[str, Any] = {}
     merged.update(_normalize_config_keys(execution_section))
     merged.update(_normalize_config_keys(basic_section))
+    dut_cfg = merged.pop("dut", None)
+    if isinstance(dut_cfg, Mapping):
+        connect_cfg = dict(dut_cfg)
+        connect_cfg.pop("mass_production_status", None)
+        merged["connect_type"] = connect_cfg
     # Compatibility settings live in their own config file but use the same
     # top-level key as execution/dut sections, so we merge them after the
     # other sections so they take precedence.
