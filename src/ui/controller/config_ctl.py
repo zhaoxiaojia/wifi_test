@@ -600,7 +600,6 @@ class ConfigController(
 
         page = self.page
         field = str(event.payload["field"]).strip()
-        _mac_auto_trace(f"MAC_AUTO controller field.change field={field}")
 
         if field.startswith("compatibility."):
             QTimer.singleShot(0, lambda: _refresh_case_page_compatibility(page))
