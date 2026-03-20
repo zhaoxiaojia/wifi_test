@@ -227,6 +227,9 @@ def _create_widget(page: Any, spec: FieldSpec, value: Any) -> QWidget:
         edit = LineEdit(page)
         if spec.placeholder:
             edit.setPlaceholderText(spec.placeholder)
+        if spec.key == "connect_type.mac_address":
+            edit.setReadOnly(True)
+            edit.setEnabled(False)
         if value not in (None, ""):
             edit.setText(str(value))
         return edit
@@ -238,13 +241,13 @@ def _create_widget(page: Any, spec: FieldSpec, value: Any) -> QWidget:
         choices = spec.choices or get_field_choices(spec.key)
         for choice in choices or []:
             combo.addItem(str(choice), str(choice))
-        if spec.key == "dut.mass_production_status":
+        if spec.key == "project.mass_production_status":
             selected_values = set(value) if isinstance(value, list) else set()
             for idx in range(combo.count()):
                 combo.setItemData(idx, 0)
                 if combo.itemText(idx) in selected_values:
                     combo.setItemData(idx, 2)
-        if value not in (None, "") and not (spec.key == "dut.mass_production_status" and isinstance(value, list)):
+        if value not in (None, "") and not (spec.key == "project.mass_production_status" and isinstance(value, list)):
             text = str(value)
             # Prefer userData matches when available; fall back to a
             # text-based lookup so that persisted values such as

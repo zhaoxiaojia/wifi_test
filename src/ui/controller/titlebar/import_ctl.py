@@ -944,7 +944,10 @@ class ImportController:
             "android_version": field_widgets["system.version"].currentText(),
             "kernel_version": field_widgets["system.kernel_version"].currentText(),
             "mass_production_status": ",".join(
-                list((view.config.get("dut") or {}).get("mass_production_status") or [])
+                list(
+                    (view.config.get("project") or {}).get("mass_production_status")
+                    or []
+                )
             ),
         }
 

@@ -692,6 +692,7 @@ class PerformanceTableManager:
             headers: Sequence[str],
             rows: Sequence[Dict[str, Any]],
             data_type: Optional[str],
+            execution_type: Optional[str],
             run_source: str,
             case_path: Optional[str],
             project_payload: Mapping[str, Any],
@@ -729,12 +730,18 @@ class PerformanceTableManager:
             execution_payload=execution_payload,
             csv_name=csv_name,
             csv_path=csv_path,
-            data_type=data_type,
+            data_type=execution_type,
             case_path=case_path,
             run_source=run_source,
             duration_seconds=duration_seconds,
         )
-        logging.debug("Created execution entry id=%s", execution_id)
+        logging.info("[DBTRACE_EXEC] replace_with_csv execution_id=%s", execution_id)
+        test_report_id = int(
+            self._client.query_one(
+                "SELECT `test_report_id` FROM `execution` WHERE `id`=%s LIMIT 1",
+                (execution_id,),
+            )["test_report_id"]
+        )
 
         insert_columns = [name for name, _ in self._BASE_COLUMNS]
         insert_columns.extend(column.name for column in self._STATIC_COLUMNS)
@@ -745,6 +752,7 @@ class PerformanceTableManager:
         values: List[List[Any]] = []
         for row in rows:
             row_values: List[Any] = [
+                test_report_id,
                 execution_id,
                 csv_name,
                 data_type,
@@ -1314,6 +1322,12 @@ def register_execution(
     run_source: str,
     duration_seconds: Optional[float] = None,
 ) -> int:
+    logging.info(
+        "[DBTRACE_EXEC] register_execution start csv=%s source=%s type=%s",
+        csv_name,
+        run_source,
+        execution_type,
+    )
     project_id = ensure_project(client, project_payload)
     test_report_id = ensure_test_report(
         client,
@@ -1322,6 +1336,12 @@ def register_execution(
         case_path=case_path,
         is_golden=False,
         notes=None,
+    )
+    logging.info(
+        "[DBTRACE_EXEC] project_id=%s test_report_id=%s case_path=%s",
+        project_id,
+        test_report_id,
+        case_path,
     )
 
     dut_payload = {
@@ -1340,7 +1360,19 @@ def register_execution(
         "INSERT INTO `dut` "
         "(`serial_number`, `connect_type`, `mac_address`, `adb_device`, `telnet_ip`, "
         "`software_version`, `driver_version`, `android_version`, `kernel_version`, `mass_production_status`, `payload_json`) "
-        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
+        "ON DUPLICATE KEY UPDATE "
+        "`id`=LAST_INSERT_ID(`id`), "
+        "`connect_type`=VALUES(`connect_type`), "
+        "`mac_address`=VALUES(`mac_address`), "
+        "`adb_device`=VALUES(`adb_device`), "
+        "`telnet_ip`=VALUES(`telnet_ip`), "
+        "`software_version`=VALUES(`software_version`), "
+        "`driver_version`=VALUES(`driver_version`), "
+        "`android_version`=VALUES(`android_version`), "
+        "`kernel_version`=VALUES(`kernel_version`), "
+        "`mass_production_status`=VALUES(`mass_production_status`), "
+        "`payload_json`=VALUES(`payload_json`)",
         (
             dut_payload.get("serial_number"),
             dut_payload.get("connect_type"),
@@ -1355,13 +1387,14 @@ def register_execution(
             json.dumps(dut_payload, ensure_ascii=True, separators=(",", ":")),
         ),
     )
+    logging.info("[DBTRACE_EXEC] dut_id=%s mass_status=%s", dut_id, dut_payload.get("mass_production_status"))
     insert_sql = (
         "INSERT INTO `execution` "
         "(`test_report_id`, `run_type`, `dut_id`, "
         "`router_name`, `router_address`, `lab_id`, "
         "`bt_mode`, `bt_ble_alias`, `bt_classic_alias`, "
         "`csv_name`, `csv_path`, `run_source`, `duration_seconds`, `payload_json`) "
-        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
     )
     payload_json = json.dumps(dict(execution_payload), ensure_ascii=True, separators=(",", ":"))
     lab_id: Optional[int] = None
@@ -1370,7 +1403,7 @@ def register_execution(
         rows = client.query_all("SELECT id FROM `lab` WHERE `lab_name`=%s LIMIT 1", (lab_name.strip(),))
         if rows:
             lab_id = int(rows[0]["id"])
-    return client.insert(
+    execution_id = client.insert(
         insert_sql,
         (
             test_report_id,
@@ -1389,6 +1422,15 @@ def register_execution(
             payload_json,
         ),
     )
+    logging.info(
+        "[DBTRACE_EXEC] execution_id=%s router=%s lab_id=%s csv_path=%s duration=%s",
+        execution_id,
+        execution_payload.get("router_name"),
+        lab_id,
+        csv_path,
+        duration_seconds,
+    )
+    return execution_id
 
 
 def _extract_serial_number(config: Mapping[str, Any]) -> Optional[str]:
@@ -1402,18 +1444,25 @@ def _extract_serial_number(config: Mapping[str, Any]) -> Optional[str]:
 
 
 def _build_execution_device_payload(config: Mapping[str, Any]) -> Dict[str, Any]:
-    software_section = _extract_first(config, "software_info", "software")
+    software_section = config.get("software_info")
     software = software_section if isinstance(software_section, Mapping) else {}
-    hardware_section = _extract_first(config, "hardware_info", "hardware")
-    hardware = hardware_section if isinstance(hardware_section, Mapping) else {}
-    android_section = _extract_first(config, "android_system", "system", "android")
-    android = android_section if isinstance(android_section, Mapping) else {}
-    connect_section = _extract_first(config, "connect_type", "connect")
+
+    system_section = config.get("android_system")
+    if not isinstance(system_section, Mapping):
+        system_section = config.get("system")
+    if not isinstance(system_section, Mapping):
+        system_section = config.get("android")
+    system_info = system_section if isinstance(system_section, Mapping) else {}
+
+    connect_section = config.get("dut")
+    if not isinstance(connect_section, Mapping):
+        connect_section = config.get("connect_type")
     connect = connect_section if isinstance(connect_section, Mapping) else {}
-    project_section = _extract_first(config, "project", "fpga")
+
+    project_section = config.get("project")
     project = project_section if isinstance(project_section, Mapping) else {}
-    dut_section = _extract_first(config, "dut")
-    dut = dut_section if isinstance(dut_section, Mapping) else {}
+    fpga_section = project.get("fpga") if isinstance(project.get("fpga"), Mapping) else None
+    project_info = fpga_section if isinstance(fpga_section, Mapping) else project
 
     connect_type_value = _normalize_str_token(connect.get("type"))
     normalized_connect_type = _normalize_lower_token(connect_type_value)
@@ -1430,9 +1479,7 @@ def _build_execution_device_payload(config: Mapping[str, Any]) -> Dict[str, Any]
     elif normalized_connect_type == "linux":
         telnet_ip = _normalize_str_token(_extract_first(connect, "Linux", "ip"))
 
-    mass_status_value = _extract_first(dut, "mass_production_status") or _extract_first(
-        connect, "mass_production_status"
-    )
+    mass_status_value = project_info.get("mass_production_status")
     if isinstance(mass_status_value, list):
         mass_status = ",".join(str(item) for item in mass_status_value if str(item))
     else:
@@ -1440,15 +1487,15 @@ def _build_execution_device_payload(config: Mapping[str, Any]) -> Dict[str, Any]
 
     return {
         "serial_number": _extract_serial_number(config),
-        "software_version": _extract_first(software, "software_version"),
-        "driver_version": _extract_first(software, "driver_version"),
-        "android_version": _extract_first(android, "version"),
-        "kernel_version": _extract_first(android, "kernel_version"),
+        "software_version": software.get("software_version"),
+        "driver_version": software.get("driver_version"),
+        "android_version": system_info.get("version"),
+        "kernel_version": system_info.get("kernel_version"),
         "connect_type": connect_type_value,
-        "mac_address": _normalize_str_token(_extract_first(connect, "mac_address")),
+        "mac_address": _normalize_str_token(connect.get("mac_address")),
         "adb_device": adb_device,
         "telnet_ip": telnet_ip,
-        "odm": _normalize_str_token(project.get("odm")),
+        "odm": _normalize_str_token(project_info.get("odm")),
         "mass_production_status": _normalize_str_token(mass_status),
     }
 
@@ -1611,6 +1658,12 @@ def sync_test_result_to_db(
         logging.warning("CSV file %s does not contain a header row.", log_file)
 
     normalized_data_type = data_type.strip().upper() if isinstance(data_type, str) else None
+    if normalized_data_type == "RV0":
+        normalized_data_type = "RVO"
+    normalized_execution_type = normalized_data_type
+    normalized_performance_type = normalized_data_type
+    if normalized_data_type == "PEAK":
+        normalized_performance_type = "Peak Throughput"
     normalized_source = (run_source or "local").strip() or "local"
     normalized_source = normalized_source.upper()[:32]
 
@@ -1657,7 +1710,8 @@ def sync_test_result_to_db(
                 csv_path=str(file_path),
                 headers=headers,
                 rows=rows,
-                data_type=normalized_data_type,
+                data_type=normalized_performance_type,
+                execution_type=normalized_execution_type,
                 run_source=normalized_source,
                 case_path=resolved_case_path,
                 project_payload=project_payload,

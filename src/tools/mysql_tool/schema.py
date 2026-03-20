@@ -241,7 +241,12 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
         indexes=(
             TableIndex("idx_dut_created_at", "INDEX idx_dut_created_at (`created_at`)"),
         ),
-        constraints=(),
+        constraints=(
+            TableConstraint(
+                "uq_dut_mac_address",
+                "CONSTRAINT uq_dut_mac_address UNIQUE (`mac_address`)",
+            ),
+        ),
     ),
     "execution": TableSpec(
         columns=(
