@@ -17,11 +17,13 @@ from .schema import (
 )
 from .sql_writer import SqlWriter
 from src.util.constants import (
+    BASIC_CONFIG_FILENAME,
     LAB_CATALOG,
     TURN_TABLE_FIELD_MODEL,
     TURN_TABLE_SECTION_KEY,
     WIFI_PRODUCT_PROJECT_MAP,
     Paths,
+    get_config_base,
     load_config,
     get_debug_flags,
 )
@@ -1013,7 +1015,6 @@ def _resolve_wifi_product_details(fpga_section: Any) -> Dict[str, Any]:
 
 
 def _build_project_payload(config: Mapping[str, Any]) -> Dict[str, Any]:
-    global _PROJECT_CATALOG_SYNCED
     project_section = config.get("project")
     if not isinstance(project_section, Mapping):
         project_section = config.get("fpga")
