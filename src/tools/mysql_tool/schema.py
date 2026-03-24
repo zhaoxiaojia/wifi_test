@@ -163,8 +163,9 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
         columns=(
             ColumnDefinition("brand", "VARCHAR(64) NOT NULL"),
             ColumnDefinition("product_line", "VARCHAR(64) NOT NULL"),
-            ColumnDefinition("project_name", "VARCHAR(128) NOT NULL"),
-            ColumnDefinition("project_display_name", "VARCHAR(256)"),
+            ColumnDefinition("nickname", "VARCHAR(128) NOT NULL"),
+            ColumnDefinition("project_name", "VARCHAR(256)"),
+            ColumnDefinition("project_id", "VARCHAR(256)"),
             ColumnDefinition("main_chip", "VARCHAR(64)"),
             ColumnDefinition("wifi_module", "VARCHAR(64)"),
             ColumnDefinition("interface", "VARCHAR(64)"),
@@ -173,14 +174,18 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
         ),
         indexes=(
             TableIndex(
-                "idx_project_name",
-                "INDEX idx_project_name (`project_name`)",
+                "idx_project_nickname",
+                "INDEX idx_project_nickname (`nickname`)",
             ),
         ),
         constraints=(
             TableConstraint(
-                "uq_project_name",
-                "CONSTRAINT uq_project_name UNIQUE (`project_name`)",
+                "uq_project_project_id",
+                "CONSTRAINT uq_project_project_id UNIQUE (`project_id`)",
+            ),
+            TableConstraint(
+                "uq_project_catalog_key",
+                "CONSTRAINT uq_project_catalog_key UNIQUE (`brand`, `product_line`, `nickname`)",
             ),
         ),
     ),

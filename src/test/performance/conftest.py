@@ -100,6 +100,7 @@ class _PerformanceSyncSession:
         if not info.log_file or not info.data_type:
             return
         try:
+            print("[PERF_SYNC] start type=", info.data_type, "file=", info.log_file, flush=True)
             rows = sync_file_to_db(
                 info.log_file,
                 info.data_type,
@@ -109,6 +110,7 @@ class _PerformanceSyncSession:
                     or max(0.0, time.time() - float(getattr(pytest, "_session_start_ts", time.time())))
                 ),
             )
+            print("[PERF_SYNC] done type=", info.data_type, "rows=", rows, flush=True)
         except Exception as exc:
             logging.info("跳过 %s 数据同步：MySQL 操作失败（%s）", info.data_type, exc)
             self._mysql_available = False

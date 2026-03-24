@@ -651,7 +651,7 @@ class PerformanceTableManager:
             A value of type ``int``.
         """
         execution_type = (data_type or "PERFORMANCE").strip().upper()
-        report_name = execution_type
+        report_name = str(csv_name or execution_type)
         return register_execution(
             self._client,
             project_payload=project_payload,
@@ -922,7 +922,9 @@ def _resolve_wifi_product_details(fpga_section: Any) -> Dict[str, Any]:
     details: Dict[str, Any] = {
         "customer": None,
         "product_line": None,
-        "project": None,
+        "nickname": None,
+        "project_name": None,
+        "project_id": None,
         "main_chip": None,
         "wifi_module": None,
         "interface": None,
@@ -930,9 +932,9 @@ def _resolve_wifi_product_details(fpga_section: Any) -> Dict[str, Any]:
     }
 
     if isinstance(fpga_section, Mapping):
-        details["customer"] = _normalize_upper_token(fpga_section.get("customer"))
-        details["product_line"] = _normalize_upper_token(fpga_section.get("product_line"))
-        details["project"] = _normalize_upper_token(fpga_section.get("project"))
+        details["customer"] = str(fpga_section.get("customer") or "").strip() or None
+        details["product_line"] = str(fpga_section.get("product_line") or "").strip() or None
+        details["nickname"] = str(fpga_section.get("project") or "").strip() or None
         details["main_chip"] = _normalize_upper_token(fpga_section.get("main_chip"))
         details["wifi_module"] = _normalize_upper_token(
             fpga_section.get("wifi_module") or fpga_section.get("series")
@@ -944,30 +946,35 @@ def _resolve_wifi_product_details(fpga_section: Any) -> Dict[str, Any]:
         details["interface"] = interface
 
     info: Optional[dict[str, Any]] = None
-    if details["product_line"] and details["project"]:
-        if details["customer"]:
-            candidate = WIFI_PRODUCT_PROJECT_MAP[details["product_line"]][details["customer"]][
-                details["project"]
-            ]
-            info = candidate
-        else:
-            odm_map = WIFI_PRODUCT_PROJECT_MAP[details["product_line"]]
-            for odm_name, projects in odm_map.items():
-                if details["project"] not in projects:
-                    continue
-                details["customer"] = odm_name
-                info = projects[details["project"]]
-                break
-    elif details["project"]:
+
+    if details["product_line"] and details["customer"] and details["nickname"]:
+        projects = WIFI_PRODUCT_PROJECT_MAP.get(details["product_line"], {}).get(details["customer"], {})
+        if details["nickname"] in projects:
+            info = projects[details["nickname"]]
+
+    if info is None and details["nickname"] and details["product_line"]:
+        odm_map = WIFI_PRODUCT_PROJECT_MAP.get(details["product_line"], {})
+        for odm_name, projects in odm_map.items():
+            if details["customer"] is not None and odm_name != details["customer"]:
+                continue
+            if details["nickname"] not in projects:
+                continue
+            details["customer"] = odm_name
+            info = projects[details["nickname"]]
+            break
+
+    if info is None and details["nickname"]:
         for product_line, odm_map in WIFI_PRODUCT_PROJECT_MAP.items():
+            if details["product_line"] and product_line != details["product_line"]:
+                continue
             for odm_name, projects in odm_map.items():
-                if details["project"] not in projects:
+                if details["customer"] is not None and odm_name != details["customer"]:
                     continue
-                if details["customer"] and odm_name != details["customer"]:
+                if details["nickname"] not in projects:
                     continue
                 details["product_line"] = product_line
                 details["customer"] = odm_name
-                info = projects[details["project"]]
+                info = projects[details["nickname"]]
                 break
             if info is not None:
                 break
@@ -987,10 +994,12 @@ def _resolve_wifi_product_details(fpga_section: Any) -> Dict[str, Any]:
         if guessed_product:
             details["product_line"] = guessed_product
         if guessed_project:
-            details["project"] = guessed_project
+            details["nickname"] = guessed_project
         info = guessed_info
 
     if info:
+        details["project_id"] = str(info.get("ProjectID") or "").strip() or None
+        details["project_name"] = str(info.get("ProjectName") or "").strip() or None
         if not details["main_chip"]:
             details["main_chip"] = info["main_chip"]
         if not details["wifi_module"]:
@@ -1004,32 +1013,87 @@ def _resolve_wifi_product_details(fpga_section: Any) -> Dict[str, Any]:
 
 
 def _build_project_payload(config: Mapping[str, Any]) -> Dict[str, Any]:
-    fpga_section = _extract_first(config, "project", "fpga")
-    wifi_details = _resolve_wifi_product_details(fpga_section)
+    global _PROJECT_CATALOG_SYNCED
+    project_section = config.get("project")
+    if not isinstance(project_section, Mapping):
+        project_section = config.get("fpga")
+    global _DBTRACE_PROJECT_ONCE
+    try:
+        _DBTRACE_PROJECT_ONCE
+    except NameError:
+        _DBTRACE_PROJECT_ONCE = False  # type: ignore[assignment]
+
+    if not _DBTRACE_PROJECT_ONCE:
+        _DBTRACE_PROJECT_ONCE = True  # type: ignore[assignment]
+        print("[DBTRACE_PROJECT] Paths.CONFIG_DIR=", Paths.CONFIG_DIR, flush=True)
+        print("[DBTRACE_PROJECT] config.project=", project_section, flush=True)
+        logging.info("[DBTRACE_PROJECT] Paths.CONFIG_DIR=%s", Paths.CONFIG_DIR)
+        logging.info("[DBTRACE_PROJECT] config.project=%s", project_section)
+    wifi_details = _resolve_wifi_product_details(project_section)
     payload_json = json.dumps(wifi_details, ensure_ascii=True, separators=(",", ":"))
-    return {
+    out = {
         "brand": wifi_details.get("customer"),
         "product_line": wifi_details.get("product_line"),
-        "project_name": wifi_details.get("project"),
-        "project_display_name": None,
+        "nickname": wifi_details.get("nickname"),
+        "project_name": wifi_details.get("project_name"),
+        "project_id": wifi_details.get("project_id"),
         "main_chip": wifi_details.get("main_chip"),
         "wifi_module": wifi_details.get("wifi_module"),
         "interface": wifi_details.get("interface"),
         "ecosystem": wifi_details.get("ecosystem"),
         "payload_json": payload_json,
     }
+    if _DBTRACE_PROJECT_ONCE:
+        print("[DBTRACE_PROJECT] resolved_wifi_details=", wifi_details, flush=True)
+        print("[DBTRACE_PROJECT] project_payload=", out, flush=True)
+        logging.info("[DBTRACE_PROJECT] resolved_wifi_details=%s", wifi_details)
+        logging.info("[DBTRACE_PROJECT] project_payload=%s", out)
+    return out
 
 
 def ensure_project(client: MySqlClient, project_payload: Mapping[str, Any]) -> int:
+    project_id = str(project_payload.get("project_id") or "").strip()
+    if project_id:
+        print("[DBTRACE_PROJECT] ensure_project lookup project_id=", project_id, flush=True)
+        logging.info("[DBTRACE_PROJECT] ensure_project lookup project_id=%s", project_id)
+        existing = client.query_one(
+            "SELECT `id` FROM `project` WHERE `project_id`=%s ORDER BY `id` DESC LIMIT 1",
+            (project_id,),
+        )
+        if existing and existing.get("id"):
+            existing_id = int(existing["id"])
+            print("[DBTRACE_PROJECT] ensure_project hit id=", existing_id, flush=True)
+            logging.info("[DBTRACE_PROJECT] ensure_project hit id=%s", existing_id)
+            client.execute(
+                "UPDATE `project` SET `brand`=%s, `product_line`=%s, `nickname`=%s, `project_name`=%s, `main_chip`=%s, "
+                "`wifi_module`=%s, `interface`=%s, `ecosystem`=%s, `payload_json`=%s "
+                "WHERE `id`=%s",
+                (
+                    project_payload.get("brand"),
+                    project_payload.get("product_line"),
+                    project_payload.get("nickname"),
+                    project_payload.get("project_name"),
+                    project_payload.get("main_chip"),
+                    project_payload.get("wifi_module"),
+                    project_payload.get("interface"),
+                    project_payload.get("ecosystem"),
+                    project_payload.get("payload_json"),
+                    existing_id,
+                ),
+            )
+            return existing_id
+
     insert_sql = (
         "INSERT INTO `project` "
-        "(`brand`, `product_line`, `project_name`, `project_display_name`, `main_chip`, `wifi_module`, `interface`, `ecosystem`, `payload_json`) "
-        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) "
+        "(`brand`, `product_line`, `nickname`, `project_name`, `project_id`, `main_chip`, `wifi_module`, `interface`, `ecosystem`, `payload_json`) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
         "ON DUPLICATE KEY UPDATE "
         "`id`=LAST_INSERT_ID(`id`), "
         "`brand`=VALUES(`brand`), "
         "`product_line`=VALUES(`product_line`), "
-        "`project_display_name`=VALUES(`project_display_name`), "
+        "`nickname`=VALUES(`nickname`), "
+        "`project_name`=VALUES(`project_name`), "
+        "`project_id`=VALUES(`project_id`), "
         "`main_chip`=VALUES(`main_chip`), "
         "`wifi_module`=VALUES(`wifi_module`), "
         "`interface`=VALUES(`interface`), "
@@ -1041,8 +1105,9 @@ def ensure_project(client: MySqlClient, project_payload: Mapping[str, Any]) -> i
         (
             project_payload.get("brand"),
             project_payload.get("product_line"),
+            project_payload.get("nickname"),
             project_payload.get("project_name"),
-            project_payload.get("project_display_name"),
+            project_payload.get("project_id"),
             project_payload.get("main_chip"),
             project_payload.get("wifi_module"),
             project_payload.get("interface"),
@@ -1102,24 +1167,6 @@ def sync_router_catalog(client: MySqlClient) -> None:
         logging.info("Router catalog sync: upserting %d rows", len(rows))
         client.executemany(insert_sql, rows)
 
-    existing = client.query_all("SELECT id, ip, port FROM `router`")
-    stale_ids: list[int] = []
-    for row in existing:
-        ip = str(row.get("ip") or "").strip()
-        try:
-            port = int(row.get("port") or 0)
-        except Exception:
-            port = 0
-        if (ip, port) not in expected_keys:
-            stale_ids.append(int(row["id"]))
-    logging.info("Router catalog sync: deleting %d stale rows", len(stale_ids))
-    for i in range(0, len(stale_ids), 500):
-        chunk = stale_ids[i : i + 500]
-        if not chunk:
-            continue
-        placeholders = ",".join(["%s"] * len(chunk))
-        client.execute(f"DELETE FROM `router` WHERE `id` IN ({placeholders})", chunk)
-
     _ROUTER_CATALOG_SYNCED = True
 
 
@@ -1168,20 +1215,6 @@ def sync_lab_catalog(client: MySqlClient) -> None:
         logging.info("Lab catalog sync: upserting %d rows", len(rows))
         client.executemany(insert_sql, rows)
 
-    existing = client.query_all("SELECT id, lab_name FROM `lab`")
-    stale_ids: list[int] = []
-    for row in existing:
-        name = str(row.get("lab_name") or "")
-        if name not in expected_names:
-            stale_ids.append(int(row["id"]))
-    logging.info("Lab catalog sync: deleting %d stale rows", len(stale_ids))
-    for i in range(0, len(stale_ids), 500):
-        chunk = stale_ids[i : i + 500]
-        if not chunk:
-            continue
-        placeholders = ",".join(["%s"] * len(chunk))
-        client.execute(f"DELETE FROM `lab` WHERE `id` IN ({placeholders})", chunk)
-
     _LAB_CATALOG_SYNCED = True
 
 
@@ -1204,15 +1237,24 @@ def prepare_database(client: MySqlClient, *, reset_schema: bool = False) -> None
 def sync_project_catalog(client: MySqlClient) -> None:
     global _PROJECT_CATALOG_SYNCED
     if _PROJECT_CATALOG_SYNCED:
-        return
+        try:
+            row = client.query_one("SELECT COUNT(1) AS c FROM `project`")
+            count = int((row or {}).get("c") or 0)
+        except Exception:
+            count = 1
+        if count > 0:
+            return
+    print("[PROJECT_SYNC] start")
     insert_sql = (
         "INSERT INTO `project` "
-        "(`brand`, `product_line`, `project_name`, `project_display_name`, `main_chip`, `wifi_module`, `interface`, `ecosystem`, `payload_json`) "
-        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) "
+        "(`brand`, `product_line`, `nickname`, `project_name`, `project_id`, `main_chip`, `wifi_module`, `interface`, `ecosystem`, `payload_json`) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
         "ON DUPLICATE KEY UPDATE "
         "`brand`=VALUES(`brand`), "
         "`product_line`=VALUES(`product_line`), "
-        "`project_display_name`=VALUES(`project_display_name`), "
+        "`nickname`=VALUES(`nickname`), "
+        "`project_name`=VALUES(`project_name`), "
+        "`project_id`=VALUES(`project_id`), "
         "`main_chip`=VALUES(`main_chip`), "
         "`wifi_module`=VALUES(`wifi_module`), "
         "`interface`=VALUES(`interface`), "
@@ -1223,12 +1265,28 @@ def sync_project_catalog(client: MySqlClient) -> None:
     expected_keys: set[tuple[str, str, str]] = set()
     for product_line, odm_map in WIFI_PRODUCT_PROJECT_MAP.items():
         for odm_name, projects in odm_map.items():
-            for project_name, info in projects.items():
-                expected_keys.add((odm_name, product_line, project_name))
+            for nickname, info in projects.items():
+                expected_keys.add((odm_name, product_line, nickname))
+                project_id = str(info.get("ProjectID") or "").strip()
+                project_name = str(info.get("ProjectName") or "").strip() or None
+                if nickname in {"Latte829", "Vodka424", "Espresso115"} or not project_id:
+                    print(
+                        "[PROJECT_SYNC] map_row",
+                        "product_line=",
+                        product_line,
+                        "brand=",
+                        odm_name,
+                        "nickname=",
+                        nickname,
+                        "ProjectID=",
+                        project_id or "(empty)",
+                        "ProjectName=",
+                        project_name or "(empty)",
+                    )
                 payload = {
                     "customer": odm_name,
                     "product_line": product_line,
-                    "project": project_name,
+                    "nickname": nickname,
                     "main_chip": info["main_chip"],
                     "wifi_module": info["wifi_module"],
                     "interface": info["interface"],
@@ -1238,8 +1296,9 @@ def sync_project_catalog(client: MySqlClient) -> None:
                     (
                         payload.get("customer"),
                         payload.get("product_line"),
-                        payload.get("project"),
-                        info["ProjectName"],
+                        nickname,
+                        project_name,
+                        project_id or None,
                         payload.get("main_chip"),
                         payload.get("wifi_module"),
                         payload.get("interface"),
@@ -1248,19 +1307,20 @@ def sync_project_catalog(client: MySqlClient) -> None:
                     )
                 )
     if rows:
+        missing_id = sum(1 for r in rows if not r[4])
+        print("[PROJECT_SYNC] rows=", len(rows), "missing_project_id=", missing_id)
         logging.info("Project catalog sync: upserting %d rows", len(rows))
         client.executemany(insert_sql, rows)
-        existing = client.query_all("SELECT id, brand, product_line, project_name FROM `project`")
-        stale_ids: list[int] = []
-        for row in existing:
-            key = (row.get("brand"), row.get("product_line"), row.get("project_name"))
-            if key not in expected_keys:
-                stale_ids.append(int(row["id"]))
-        logging.info("Project catalog sync: deleting %d stale rows", len(stale_ids))
-        for i in range(0, len(stale_ids), 500):
-            chunk = stale_ids[i : i + 500]
-            placeholders = ",".join(["%s"] * len(chunk))
-            client.execute(f"DELETE FROM `project` WHERE `id` IN ({placeholders})", chunk)
+        try:
+            sample = client.query_all(
+                "SELECT `id`, `brand`, `product_line`, `nickname`, `project_name`, `project_id` "
+                "FROM `project` WHERE `nickname` IN (%s, %s, %s) ORDER BY `id`",
+                ("Vodka424", "Latte829", "Espresso115"),
+            )
+        except Exception as exc:
+            sample = [{"error": str(exc)}]
+        print("[PROJECT_SYNC] db_sample=", sample)
+    print("[PROJECT_SYNC] done")
     _PROJECT_CATALOG_SYNCED = True
 
 
@@ -1322,6 +1382,16 @@ def register_execution(
     run_source: str,
     duration_seconds: Optional[float] = None,
 ) -> int:
+    print("[DBTRACE_PROJECT] register_execution payload=", dict(project_payload), flush=True)
+    print(
+        "[DBTRACE_PROJECT] register_execution report_name=",
+        report_name,
+        "execution_type=",
+        execution_type,
+        flush=True,
+    )
+    logging.info("[DBTRACE_PROJECT] register_execution payload=%s", dict(project_payload))
+    logging.info("[DBTRACE_PROJECT] register_execution report_name=%s execution_type=%s", report_name, execution_type)
     logging.info(
         "[DBTRACE_EXEC] register_execution start csv=%s source=%s type=%s",
         csv_name,
@@ -1329,6 +1399,13 @@ def register_execution(
         execution_type,
     )
     project_id = ensure_project(client, project_payload)
+    row = client.query_one(
+        "SELECT `id`, `brand`, `product_line`, `nickname`, `project_name`, `project_id` "
+        "FROM `project` WHERE `id`=%s",
+        (int(project_id),),
+    )
+    print("[DBTRACE_PROJECT] ensured_project=", row, flush=True)
+    logging.info("[DBTRACE_PROJECT] ensured_project=%s", row)
     test_report_id = ensure_test_report(
         client,
         project_id=project_id,
@@ -1624,6 +1701,17 @@ def sync_test_result_to_db(
         active_config = config
     else:
         try:
+            base_dir = get_config_base()
+            basic_path = base_dir / BASIC_CONFIG_FILENAME
+            print("[DBTRACE_SYNC] config_base=", str(base_dir), "basic_yaml=", str(basic_path), flush=True)
+            try:
+                import yaml as _yaml
+
+                raw_basic = _yaml.safe_load(basic_path.read_text(encoding="utf-8")) or {}
+                raw_project = raw_basic.get("project") if isinstance(raw_basic, dict) else None
+            except Exception as exc:
+                raw_project = {"error": str(exc)}
+            print("[DBTRACE_SYNC] raw_basic.project=", raw_project, flush=True)
             active_config = load_config(refresh=True)
         except Exception:
             logging.debug(
@@ -1633,6 +1721,7 @@ def sync_test_result_to_db(
             active_config = None
 
     if active_config:
+        print("[DBTRACE_SYNC] active_config.project=", active_config.get("project"), flush=True)
         project_payload = _build_project_payload(active_config)
         execution_payload = _build_execution_payload(active_config)
         resolved_case_path = case_path or _resolve_case_path(active_config)
@@ -1641,6 +1730,9 @@ def sync_test_result_to_db(
         project_payload = {}
         execution_payload = {}
         resolved_case_path = case_path
+
+    print("[DBTRACE_SYNC] project_payload=", dict(project_payload), flush=True)
+    print("[DBTRACE_SYNC] case_path=", resolved_case_path, "log_file=", log_file, "data_type=", data_type, flush=True)
 
     file_path = Path(log_file)
     if not file_path.is_file():
@@ -1913,8 +2005,28 @@ def sync_file_to_db(
         A value of type ``int``.
     """
 
+    active_config = config if isinstance(config, dict) else None
+    if active_config is None:
+        active_config = load_config(refresh=True) or {}
+
+    print(
+        "[DBTRACE_SYNC] sync_file_to_db type=",
+        data_type,
+        "log=",
+        file_path,
+        "config_project=",
+        active_config.get("project") if isinstance(active_config, dict) else None,
+        flush=True,
+    )
+    logging.info(
+        "[DBTRACE_SYNC] sync_file_to_db type=%s log=%s config_project=%s",
+        data_type,
+        file_path,
+        (active_config.get("project") if isinstance(active_config, dict) else None),
+    )
+
     return sync_test_result_to_db(
-        config or {},
+        active_config,
         log_file=file_path,
         data_type=data_type,
         case_path=case_path,
