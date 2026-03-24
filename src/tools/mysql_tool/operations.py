@@ -1311,6 +1311,13 @@ def sync_project_catalog(client: MySqlClient) -> None:
         print("[PROJECT_SYNC] rows=", len(rows), "missing_project_id=", missing_id)
         logging.info("Project catalog sync: upserting %d rows", len(rows))
         client.executemany(insert_sql, rows)
+        updates = [row for row in rows if row[4]]
+        if updates:
+            client.executemany(
+                "UPDATE `project` SET `project_id`=%s, `project_name`=%s "
+                "WHERE `brand`=%s AND `product_line`=%s AND `nickname`=%s",
+                [(r[4], r[3], r[0], r[1], r[2]) for r in updates],
+            )
         try:
             sample = client.query_all(
                 "SELECT `id`, `brand`, `product_line`, `nickname`, `project_name`, `project_id` "
@@ -1382,6 +1389,20 @@ def register_execution(
     run_source: str,
     duration_seconds: Optional[float] = None,
 ) -> int:
+    def _normalize_run_source(value: str) -> str:
+        token = str(value or "").strip()
+        upper = token.upper()
+        if not upper:
+            return "auto"
+        if upper in {"FRAMEWORK", "LOCAL", "AUTO", "AUTO_TEST"}:
+            return "auto"
+        if upper in {"IMPORT"}:
+            return "import"
+        if upper in {"MANUAL", "MANUAL_TEST"}:
+            return "manual"
+        return token.lower()
+
+    normalized_source = _normalize_run_source(run_source)
     print("[DBTRACE_PROJECT] register_execution payload=", dict(project_payload), flush=True)
     print(
         "[DBTRACE_PROJECT] register_execution report_name=",
@@ -1395,7 +1416,7 @@ def register_execution(
     logging.info(
         "[DBTRACE_EXEC] register_execution start csv=%s source=%s type=%s",
         csv_name,
-        run_source,
+        normalized_source,
         execution_type,
     )
     project_id = ensure_project(client, project_payload)
@@ -1412,6 +1433,7 @@ def register_execution(
         report_name=report_name,
         case_path=case_path,
         is_golden=False,
+        report_type="compatibility" if str(execution_type or "").strip().upper() == "COMPATIBILITY" else "performance",
         notes=None,
     )
     logging.info(
@@ -1494,7 +1516,7 @@ def register_execution(
             execution_payload.get("bt_classic_alias"),
             csv_name,
             csv_path,
-            run_source,
+            normalized_source,
             int(duration_seconds) if duration_seconds is not None else None,
             payload_json,
         ),
