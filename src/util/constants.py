@@ -1071,16 +1071,6 @@ class RouterConst:
 WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]] = {
     "TV": {
         "XIAOMI": {
-            # "Blueplanet": {
-            #     "ProjectID": "None",
-            #     "ODM": "XIAOMI",
-            #     "main_chip": "T963D4",
-            #     "wifi_module": "W265U1",
-            #     "wifi_sn": " ",
-            #     "interface": "USB",
-            #     "ecosystem": "Android",
-            #     "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
-            # },
             "Vodka424": {
                 "ProjectID": "BU30A1-T966D5",
                 "ProjectName":"MI+T966D5-S9+AOSP U",
@@ -1105,16 +1095,6 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
                 "ecosystem": "Linux",
                 "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
             },
-            # "Roxton": {
-            #     "ProjectID": "None",
-            #     "ODM": "None",
-            #     "main_chip": "T950R4",
-            #     "wifi_module": "W155S2",
-            #     "wifi_sn": " ",
-            #     "interface": "USB",
-            #     "ecosystem": "Linux",
-            #     "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
-            # },
         },
         "Hisense": {
             "65D50S": {
@@ -1156,46 +1136,6 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
     },
     "OTT": {
         "XIAOMI": {
-            # "OB1": {
-            #     "ProjectID": "None",
-            #     "ODM": "XIAOMI",
-            #     "main_chip": "905X5M",
-            #     "wifi_module": "W265U1",
-            #     "wifi_sn": " ",
-            #     "interface": "USB",
-            #     "ecosystem": "Android",
-            #     "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
-            # },
-            # "OB2": {
-            #     "ProjectID": "None",
-            #     "ODM": "XIAOMI",
-            #     "main_chip": "905X5M",
-            #     "wifi_module": "W265U1",
-            #     "wifi_sn": " ",
-            #     "interface": "USB",
-            #     "ecosystem": "Android",
-            #     "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
-            # },
-            # "OB6": {
-            #     "ProjectID": "None",
-            #     "ODM": "XIAOMI",
-            #     "main_chip": "905X5M",
-            #     "wifi_module": "W265U1",
-            #     "wifi_sn": " ",
-            #     "interface": "USB",
-            #     "ecosystem": "Android",
-            #     "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
-            # },
-            # "OB7": {
-            #     "ProjectID": "None",
-            #     "ODM": "XIAOMI",
-            #     "main_chip": "S805X3",
-            #     "wifi_module": "W155S2",
-            #     "wifi_sn": " ",
-            #     "interface": "SDIO",
-            #     "ecosystem": "Android",
-            #     "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
-            # },
             "Cedar228": {
                 "ProjectID": "BP20A8-S805X3",
                 "ProjectName": "MI+S805X3-H+W155S2W+Android U",
@@ -1245,49 +1185,6 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
                 "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
             },
         },
-        # "SDMC": {
-        #     "Jarvis2": {
-        #         "ProjectID": "BM20CS-S905X5M",
-        #         "ODM": "SDMC",
-        #         "main_chip": "S905X5M",
-        #         "wifi_module": "W265S2M",
-        #         "wifi_sn": "00:05",
-        #         "interface": "SDIO",
-        #         "ecosystem": "Android",
-        #         "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
-        #     },
-        #     "JIO": {
-        #         "ProjectID": "BL20B9-S905X5",
-        #         "ODM": "JIO",
-        #         "main_chip": "S905X5",
-        #         "wifi_module": "W265S1",
-        #         "wifi_sn": "0b:32",
-        #         "interface": "SDIO",
-        #         "ecosystem": "Android",
-        #         "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
-        #     },
-        #     "Airtel": {
-        #         "ProjectID": "BH20AF-S905Y5",
-        #         "ODM": "Airtel",
-        #         "main_chip": "S905Y5",
-        #         "wifi_module": "W265S1",
-        #         "wifi_sn": "0b:32",
-        #         "interface": "SDIO",
-        #         "ecosystem": "Android",
-        #         "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
-        #     },
-        #     "Coffey": {
-        #         "ProjectID": "None",
-        #         "ODM": "Google",
-        #         "ODM": "",
-        #         "main_chip": "S905X5M",
-        #         "wifi_module": "W265S2M",
-        #         "wifi_sn": ["00:03", "00:05"],
-        #         "interface": "SDIO",
-        #         "ecosystem": "Android",
-        #         "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
-        #     },
-        # },
         "ZTE": {
             "Rosemary904": {
                 "ProjectID": "BH20BJ-S905Y5",
@@ -1300,28 +1197,6 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
                 "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
             },
         },
-        # "Public": {
-        #     "Public": {
-        #         "ProjectID": "None",
-        #         "ODM": "None",
-        #         "main_chip": "S905X5M",
-        #         "wifi_module": "W265U1",
-        #         "interface": "USB",
-        #         "ecosystem": "Android",
-        #         "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
-        #     },
-        # },
-        # "Other": {
-        #     "KitKat513": {
-        #         "ProjectID": "None",
-        #         "ODM": "None",
-        #         "main_chip": "C302X",
-        #         "wifi_module": "W155S2",
-        #         "interface": "SDIO",
-        #         "ecosystem": "Android",
-        #         "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
-        #     },
-        # },
         "A": {
             "Plam811": {
                 "ProjectID": "BM20CQ-S905X5M",
@@ -1359,45 +1234,6 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
             },
         },
     },
-    # "IPTV": {
-    #     "前宏": {
-    #         "四川魔盒": {
-    #             "ProjectID": "BH20BJ-S905Y5",
-    #             "ODM": "四川电信",
-    #             "main_chip": "S905L3A",
-    #             "wifi_module": "W265S1",
-    #             "interface": "SDIO",
-    #             "ecosystem": "IPTV",
-    #             "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
-    #         },
-    #     },
-    #     "东舜": {},
-    #     "西加": {},
-    #     "Skyworth": {
-    #         "河南移动": {
-    #             "ProjectID": "BH20BJ-S905Y5",
-    #             "ODM": "河南移动",
-    #             "main_chip": "S928X",
-    #             "wifi_module": "W265P1",
-    #             "interface": "PCIE",
-    #             "ecosystem": "IPTV",
-    #             "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
-    #         },
-    #     },
-    # },
-    # "Dongle": {
-    #     "SEI": {
-    #         "Airtel": {
-    #             "ProjectID": "BM20CQ-S905X5M",
-    #             "ODM": "SEI",
-    #             "main_chip": "S905X5M",
-    #             "wifi_module": "W265S1",
-    #             "interface": "SDIO",
-    #             "ecosystem": "Android",
-    #             "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
-    #         },
-    #     },
-    # },
 }
 
 

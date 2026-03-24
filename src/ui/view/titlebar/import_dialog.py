@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import List
+from typing import Final
 
 from PyQt5.QtWidgets import QWidget
 from qfluentwidgets import BodyLabel, CheckBox, MessageBoxBase, SubtitleLabel
@@ -14,30 +14,13 @@ class ImportDialog(MessageBoxBase):
         self.cancelButton.setText("Cancel")
 
         title = SubtitleLabel("Import", self)
-        subtitle = BodyLabel("Select data types to import", self)
+        subtitle = BodyLabel("Select import options", self)
         self.viewLayout.addWidget(title)
         self.viewLayout.addWidget(subtitle)
 
-        self._peak_cb = CheckBox("Peak Throughput", self)
-        self._rvr_cb = CheckBox("RVR", self)
-        self._rvo_cb = CheckBox("RVO", self)
-        self.viewLayout.addWidget(self._peak_cb)
-        self.viewLayout.addWidget(self._rvr_cb)
-        self.viewLayout.addWidget(self._rvo_cb)
+        self._golden_cb: Final[CheckBox] = CheckBox("Import as golden data", self)
+        self._golden_cb.setChecked(False)
+        self.viewLayout.addWidget(self._golden_cb)
 
-        for cb in (self._peak_cb, self._rvr_cb, self._rvo_cb):
-            cb.stateChanged.connect(self._sync_ok_enabled)
-        self._sync_ok_enabled()
-
-    def selected_types(self) -> List[str]:
-        out: List[str] = []
-        if self._peak_cb.isChecked():
-            out.append("PEAK_THROUGHPUT")
-        if self._rvr_cb.isChecked():
-            out.append("RVR")
-        if self._rvo_cb.isChecked():
-            out.append("RVO")
-        return out
-
-    def _sync_ok_enabled(self) -> None:
-        self.yesButton.setEnabled(bool(self.selected_types()))
+    def import_as_golden(self) -> bool:
+        return bool(self._golden_cb.isChecked())
