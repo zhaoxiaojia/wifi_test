@@ -365,9 +365,7 @@ def get_corner_step_list():
         return [start]
     if start > stop:
         start, stop = stop, start
-    if sep:
-        return list(range(start, stop + 1, step))
-    return [i for i in range(start, stop)][::45]
+    return list(range(start, stop + 1, step))
 
 
 def get_rvo_static_db_list():

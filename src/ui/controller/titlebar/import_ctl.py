@@ -13,8 +13,9 @@ from PyQt5.QtWidgets import QFileDialog, QDialog
 from qfluentwidgets import MessageBox
 
 from src.tools.mysql_tool import MySqlClient
-from src.tools.mysql_tool.operations import ensure_project, ensure_test_report, prepare_database
+from src.tools.mysql_tool.operations import ensure_test_report
 from src.tools.mysql_tool.operations import PerformanceTableManager
+from src.tools.mysql_tool.schema import ensure_report_tables
 from src.tools.mysql_tool.sql_writer import SqlWriter
 from src.ui.view.titlebar.import_dialog import ImportDialog
 from src.ui.view.titlebar.import_sheets_dialog import ImportSheetsDialog
@@ -81,7 +82,6 @@ def _insert_performance_rows(
             test_report_id,
             execution_id,
             csv_name,
-            data_type,
         ]
         for column in manager._STATIC_COLUMNS:
             if column.original == "Throughput":
@@ -615,12 +615,16 @@ class PerformanceExcelImporter:
                             break
 
             data_row = header_row + 2
+            current_angle: Optional[float] = None
             while data_row <= ws.max_row:
                 att = ws.cell(data_row, 2).value
                 if att is None:
                     break
                 att_value = int(float(att))
-                angle_value = 180.0
+                parsed_angle = _parse_angle(ws.cell(data_row, 3).value)
+                if parsed_angle is not None:
+                    current_angle = float(parsed_angle)
+                angle_value = float(current_angle) if current_angle is not None else 180.0
                 for ch, rx_col in rx_cols.items():
                     tx_col = tx_cols.get(ch)
                     if tx_col is None:
@@ -677,83 +681,135 @@ class PerformanceExcelImporter:
         for spec in self._scenarios:
             required_by_band_bw.setdefault((spec.band_token, spec.bandwidth_mhz), []).append(spec.channel)
 
-        start_rows: List[Tuple[str, int, int, str]] = []
-        for r in range(1, ws.max_row + 1):
-            v = ws.cell(r, 1).value
-            if not isinstance(v, str):
+        def normalize_text(value: Any) -> str:
+            return "" if value is None else str(value).strip().upper().replace(" ", "")
+
+        def parse_title(value: Any) -> Optional[Tuple[str, int, str]]:
+            if not isinstance(value, str):
+                return None
+            upper = value.strip().upper()
+            if not upper:
+                return None
+
+            band = "2.4" if "2.4G" in upper else "5" if "5G" in upper else "6" if "6G" in upper else ""
+            if not band:
+                return None
+
+            bw_mhz = 20 if "HT20" in upper else 40 if "HT40" in upper else 160 if "HE160" in upper else 80 if ("HE80" in upper or "VHT80" in upper) else 0
+            if not bw_mhz:
+                return None
+
+            standard = "11ax" if ("11AX" in upper or "HE" in upper) else "11ac" if ("11AC" in upper or "VHT" in upper) else "11n" if ("11N" in upper or "HT" in upper) else ""
+            return band, bw_mhz, standard
+
+        def find_title_above(row: int) -> Optional[Tuple[str, int, str]]:
+            for r in range(row - 1, max(0, row - 40), -1):
+                parsed = parse_title(ws.cell(r, 1).value)
+                if parsed is not None:
+                    return parsed
+            return None
+
+        def parse_att_db(value: Any) -> Optional[float]:
+            if value is None:
+                return None
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                return float(value)
+            text = str(value).strip().upper()
+            if not text:
+                return None
+            digits: list[str] = []
+            dot_seen = False
+            sign_seen = False
+            for ch in text:
+                if ch in "+-" and not digits and not sign_seen:
+                    digits.append(ch)
+                    sign_seen = True
+                    continue
+                if ch.isdigit():
+                    digits.append(ch)
+                    continue
+                if ch == "." and not dot_seen:
+                    digits.append(ch)
+                    dot_seen = True
+                    continue
+                if digits:
+                    break
+            number = "".join(digits).strip(".")
+            return float(number) if number else None
+
+        metric_tokens = (
+            ("RX(UNIT:MBPS)", "downlink"),
+            ("RXUNIT:MBPS", "downlink"),
+            ("TX(UNIT:MBPS)", "uplink"),
+            ("TXUNIT:MBPS", "uplink"),
+            ("TX(UNIT:MB)", "uplink"),
+            ("TXUNIT:MB", "uplink"),
+        )
+
+        for header_row in range(1, ws.max_row):
+            title = find_title_above(header_row)
+            if title is None:
                 continue
-            text = v.strip().upper()
-            if "2.4G" in text and "HT40" in text:
-                start_rows.append(("2.4", 40, r, "11n"))
-            if "5G" in text and "HE80" in text:
-                start_rows.append(("5", 80, r, "11ax"))
-
-        for band, bw_mhz, block_start, standard in start_rows:
+            band, bw_mhz, standard = title
             required_channels = required_by_band_bw.get((band, bw_mhz), [])
-            block_end = ws.max_row
-            for _other_band, _other_bw, other_start, _ in start_rows:
-                if other_start > block_start:
-                    block_end = min(block_end, other_start - 1)
+            if not required_channels:
+                continue
 
-            for item_row in range(block_start, block_end + 1):
-                ch_header = ws.cell(item_row, 2).value
-                metric_header = ws.cell(item_row, 4).value
-                if ch_header != "CH" or not isinstance(metric_header, str):
-                    continue
-                metric = metric_header.strip().upper()
-                if "RX" in metric:
-                    direction = "downlink"
-                elif "TX" in metric:
-                    direction = "uplink"
-                else:
+            for metric_col in range(1, ws.max_column + 1):
+                metric_cell = normalize_text(ws.cell(header_row, metric_col).value)
+                direction = ""
+                for token, resolved_direction in metric_tokens:
+                    direction = resolved_direction if token in metric_cell else direction
+                if not direction:
                     continue
 
-                angle_row = item_row + 1
+                ch_col = 0
+                att_col = 0
+                for c in range(max(1, metric_col - 10), metric_col):
+                    if normalize_text(ws.cell(header_row, c).value) == "CH":
+                        ch_col = c
+                    if normalize_text(ws.cell(header_row, c).value).endswith("ATT"):
+                        att_col = c
+                if not ch_col:
+                    continue
+                if not att_col:
+                    att_col = ch_col + 1
+
+                angle_row = header_row + 1
                 angles: List[Tuple[int, float]] = []
-                for c in range(4, 12):
+                for c in range(metric_col, ws.max_column + 1):
                     angle_value = _parse_angle(ws.cell(angle_row, c).value)
-                    if angle_value is not None:
-                        angles.append((c, float(angle_value)))
+                    if angle_value is None:
+                        if angles:
+                            break
+                        continue
+                    angles.append((c, float(angle_value)))
                 if not angles:
                     continue
 
-                r = angle_row + 1
-                while r <= block_end:
-                    ch_value = ws.cell(r, 2).value
-                    att_value = ws.cell(r, 3).value
-                    if ch_value == "CH" and isinstance(ws.cell(r, 4).value, str):
+                current_channel: Optional[int] = None
+                for data_row in range(angle_row + 1, ws.max_row + 1):
+                    if normalize_text(ws.cell(data_row, ch_col).value) == "CH" and ws.cell(data_row, metric_col).value is not None:
                         break
-                    if not isinstance(ch_value, str) or not isinstance(att_value, str):
-                        r += 1
-                        continue
-                    if att_value.strip().upper() != "0DB":
-                        r += 1
+
+                    ch_value = ws.cell(data_row, ch_col).value
+                    if isinstance(ch_value, str):
+                        ch_text = ch_value.strip().upper()
+                        digits = "".join(ch for ch in ch_text if ch.isdigit()) if ch_text.startswith("CH") else ""
+                        current_channel = int(digits) if digits else None
+                    channel = current_channel
+                    if channel is None or channel not in required_channels:
                         continue
 
-                    ch_text = ch_value.strip().upper()
-                    if not ch_text.startswith("CH"):
-                        r += 1
-                        continue
-                    ch_digits = "".join(ch for ch in ch_text if ch.isdigit())
-                    if not ch_digits:
-                        r += 1
-                        continue
-                    channel = int(ch_digits)
-                    if channel not in required_channels:
-                        r += 1
+                    att_db = parse_att_db(ws.cell(data_row, att_col).value)
+                    if att_db is None:
                         continue
 
                     spec = self._scenario_by_channel[(band, channel)]
-                    scenario_key = build_peak_scenario_group_key(
-                        spec,
-                        standard=standard,
-                        bandwidth_mhz=bw_mhz,
-                    )
+                    scenario_key = build_peak_scenario_group_key(spec, standard=standard, bandwidth_mhz=bw_mhz)
                     for col_idx, angle in angles:
-                        val = ws.cell(r, col_idx).value
-                        throughput = (
-                            float(val) if isinstance(val, (int, float)) and not isinstance(val, bool) else None
-                        )
+                        val = ws.cell(data_row, col_idx).value
+                        throughput = float(val) if isinstance(val, (int, float)) and not isinstance(val, bool) else None
                         if throughput is None:
                             continue
                         rows.append(
@@ -766,7 +822,7 @@ class PerformanceExcelImporter:
                                 protocol="TCP",
                                 mode=None,
                                 direction=direction,
-                                path_loss_db=0.0,
+                                path_loss_db=float(att_db),
                                 rssi=None,
                                 angle_deg=float(angle),
                                 throughput_mbps=throughput,
@@ -774,7 +830,6 @@ class PerformanceExcelImporter:
                                 scenario_group_key=scenario_key,
                             )
                         )
-                    r += 1
 
         return rows, []
 
@@ -901,36 +956,12 @@ class ImportController:
 
         importer = PerformanceExcelImporter()
         workbook = importer._load_workbook(file_path)
-        tester = ""
-        summary_project_id = ""
-        summary_name = None
-        for name in workbook.sheetnames:
-            if "SUMMARY" in str(name).strip().upper():
-                summary_name = name
-                break
+        summary_name = self._find_summary_sheet_name(workbook.sheetnames)
+        summary_payload: dict[str, str] = {}
         if summary_name is not None:
-            ws = workbook[summary_name]
-            for row in ws.iter_rows(values_only=True):
-                if not row:
-                    continue
-                for idx, cell in enumerate(row):
-                    label = str(cell or "").strip().upper()
-                    if label == "TESTED BY":
-                        for j in range(idx + 1, len(row)):
-                            candidate = str(row[j] or "").strip()
-                            if candidate:
-                                tester = self._format_tester_name(candidate)
-                                break
-                    elif label == "PROJECT ID":
-                        for j in range(idx + 1, len(row)):
-                            candidate = str(row[j] or "").strip()
-                            if candidate:
-                                summary_project_id = candidate
-                                break
-                    if tester and summary_project_id:
-                        break
-                if tester and summary_project_id:
-                    break
+            summary_payload = self._parse_summary_payload(workbook[summary_name])
+        tester = str(summary_payload.get("tester") or "").strip()
+        summary_project_id = str(summary_payload.get("project_id") or "").strip()
         if tester:
             print("[IMPORT_DEBUG] tester=", tester)
         if summary_project_id:
@@ -1001,6 +1032,9 @@ class ImportController:
                 return
 
             payload = self._collect_default_config()
+            if summary_payload:
+                payload = dict(payload)
+                payload.update({k: v for k, v in summary_payload.items() if v})
             if summary_project_id:
                 payload = dict(payload)
                 payload["project_id"] = summary_project_id
@@ -1021,10 +1055,43 @@ class ImportController:
                 payload = dict(payload)
                 payload["tester"] = tester
 
+            resolved_project_id = None
+            project_key = str(payload.get("project_id") or "").strip()
+            if not project_key:
+                MessageBox("Import blocked", "Missing Project ID in SUMMARY sheet.", self._main).exec()
+                sheets_box.set_loading(False)
+                sheets_box.reject()
+                return
+            with MySqlClient() as client:
+                ensure_report_tables(client)
+                row = client.query_one(
+                    "SELECT `id` FROM `project` WHERE `project_id`=%s ORDER BY `id` DESC LIMIT 1",
+                    (project_key,),
+                )
+                if not row or not row.get("id"):
+                    MessageBox(
+                        "Import blocked",
+                        f"Project not found in DB for project_id={project_key!r}.",
+                        self._main,
+                    ).exec()
+                    sheets_box.set_loading(False)
+                    sheets_box.reject()
+                    return
+                resolved_project_id = int(row["id"])
+            print("[IMPORT_DEBUG] resolved_project_id=", int(resolved_project_id), flush=True)
+            payload = dict(payload)
+            payload["resolved_project_id"] = str(int(resolved_project_id))
+
             def do_import() -> tuple[int, list[str]]:
                 if import_as_golden:
-                    return self._sync_golden_to_db(payload, file_path, extracted), []
-                return self._sync_report_to_db(payload, file_path, extracted, sheets_by_type=sheets_by_type)
+                    return self._sync_golden_to_db(payload, file_path, extracted, project_id=int(resolved_project_id)), []
+                return self._sync_report_to_db(
+                    payload,
+                    file_path,
+                    extracted,
+                    project_id=int(resolved_project_id),
+                    sheets_by_type=sheets_by_type,
+                )
 
             class _ImportWorker(QObject):
                 finished = pyqtSignal(object)
@@ -1102,33 +1169,79 @@ class ImportController:
         MessageBox("Import completed", "\n".join(summary_lines), self._main).exec()
         return
 
+    @staticmethod
+    def _find_summary_sheet_name(sheetnames: Sequence[object]) -> Optional[str]:
+        for name in sheetnames:
+            if "SUMMARY" in str(name).strip().upper():
+                return str(name)
+        return None
+
+    def _parse_summary_payload(self, ws) -> dict[str, str]:
+        label_aliases: dict[str, str] = {
+            "TESTED BY": "tester",
+            "TESTER": "tester",
+            "PROJECT ID": "project_id",
+            "PROJECTID": "project_id",
+            "SOFTWARE VERSION": "software_version",
+            "SW VERSION": "software_version",
+            "SW_VER": "software_version",
+            "DRIVER VERSION": "driver_version",
+            "WIFI DRIVER": "driver_version",
+            "ANDROID VERSION": "android_version",
+            "OS VERSION": "android_version",
+            "KERNEL VERSION": "kernel_version",
+            "KERNEL": "kernel_version",
+            "MASS PRODUCTION STATUS": "mass_production_status",
+            "MASS STATUS": "mass_production_status",
+            "MAC ADDRESS": "mac_address",
+            "MAC": "mac_address",
+            "CONNECT TYPE": "connect_type",
+            "DUT TYPE": "connect_type",
+            "ADB DEVICE": "adb_device",
+            "DUT IP": "telnet_ip",
+            "TELNET IP": "telnet_ip",
+            "SERIAL NUMBER": "serial_number",
+            "SERIAL": "serial_number",
+            "SN": "serial_number",
+        }
+
+        out: dict[str, str] = {}
+        for row in ws.iter_rows(values_only=True):
+            if not row:
+                continue
+            for idx, cell in enumerate(row):
+                label = str(cell or "").strip().upper()
+                key = label_aliases.get(label)
+                if not key:
+                    continue
+                value = ""
+                for j in range(idx + 1, len(row)):
+                    candidate = str(row[j] or "").strip()
+                    if candidate:
+                        value = candidate
+                        break
+                if not value:
+                    continue
+                if key == "tester":
+                    out[key] = self._format_tester_name(value)
+                else:
+                    out[key] = value
+        return out
+
     def _sync_report_to_db(
         self,
         payload: Mapping[str, Any],
         excel_path: str,
         extracted: Mapping[str, List[Mapping[str, Any]]],
         *,
+        project_id: int,
         sheets_by_type: Mapping[str, list[str]] | None = None,
     ) -> tuple[int, list[str]]:
-        project_payload = {
-            "brand": payload.get("brand") or "",
-            "product_line": payload.get("product_line") or "",
-            "nickname": payload.get("nickname") or "",
-            "project_name": payload.get("project_name") or "",
-            "project_id": payload.get("project_id") or "",
-            "main_chip": payload.get("main_chip") or "",
-            "wifi_module": payload.get("wifi_module") or "",
-            "interface": payload.get("interface") or "",
-            "ecosystem": payload.get("ecosystem") or "",
-            "payload_json": None,
-        }
-
         report_name = Path(excel_path).name
         notes = "\n".join([excel_path, "source=excel"])
 
         with MySqlClient() as client:
-            prepare_database(client)
-            project_id = ensure_project(client, project_payload)
+            ensure_report_tables(client)
             manager = PerformanceTableManager(client)
             existing = client.query_one(
                 "SELECT `id` FROM `test_report` WHERE `project_id`=%s AND `report_name`=%s ORDER BY `id` DESC LIMIT 1",
@@ -1139,7 +1252,10 @@ class ImportController:
             imported_types: set[str] = set()
             if report_id is not None:
                 rows = client.query_all(
-                    "SELECT DISTINCT `run_type` FROM `execution` WHERE `test_report_id`=%s",
+                    "SELECT DISTINCT ex.`run_type` "
+                    "FROM `execution` AS ex "
+                    "JOIN `performance` AS p ON p.`execution_id` = ex.`id` "
+                    "WHERE ex.`test_report_id`=%s",
                     (int(report_id),),
                 )
                 imported_types = {str(r.get("run_type") or "").strip().upper() for r in rows if r.get("run_type")}
@@ -1186,6 +1302,7 @@ class ImportController:
                 execution_id = self._insert_execution(
                     client,
                     test_report_id=int(report_id),
+                    project_id=int(project_id),
                     execution_type=data_type,
                     csv_name=f"{Path(excel_path).name}:{data_type}",
                     csv_path=excel_path,
@@ -1194,6 +1311,7 @@ class ImportController:
                         "source": "excel",
                         "excel_path": excel_path,
                         "data_type": data_type,
+                        "ui_payload": dict(payload),
                     },
                 )
                 inserted_total += _insert_performance_rows(
@@ -1240,25 +1358,14 @@ class ImportController:
         payload: Mapping[str, Any],
         excel_path: str,
         extracted: Mapping[str, List[Mapping[str, Any]]],
+        *,
+        project_id: int,
     ) -> int:
-        project_payload = {
-            "brand": payload.get("brand") or "",
-            "product_line": payload.get("product_line") or "",
-            "nickname": payload.get("nickname") or "",
-            "project_name": payload.get("project_name") or "",
-            "project_id": payload.get("project_id") or "",
-            "main_chip": payload.get("main_chip") or "",
-            "wifi_module": payload.get("wifi_module") or "",
-            "interface": payload.get("interface") or "",
-            "ecosystem": payload.get("ecosystem") or "",
-            "payload_json": None,
-        }
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         excel_digest = hashlib.sha256(Path(excel_path).read_bytes()).hexdigest()
 
         with MySqlClient() as client:
-            prepare_database(client)
-            project_id = ensure_project(client, project_payload)
+            ensure_report_tables(client)
             manager = PerformanceTableManager(client)
             inserted_total = 0
 
@@ -1313,6 +1420,7 @@ class ImportController:
                 execution_id = self._insert_execution(
                     client,
                     test_report_id=int(report_id),
+                    project_id=int(project_id),
                     execution_type=data_type,
                     csv_name=f"{Path(excel_path).name}:{data_type}",
                     csv_path=excel_path,
@@ -1409,6 +1517,7 @@ class ImportController:
         client: MySqlClient,
         *,
         test_report_id: int,
+        project_id: int,
         execution_type: str,
         csv_name: str,
         csv_path: str,
@@ -1417,12 +1526,18 @@ class ImportController:
         duration_seconds: Optional[float] = None,
     ) -> int:
         ui_payload = payload.get("ui_payload", {}) or {}
+        ecosystem = str(ui_payload.get("ecosystem") or "").strip()
+        connect_type = ui_payload.get("connect_type")
+        if not connect_type and ecosystem in {"Android", "Linux"}:
+            connect_type = ecosystem
+
         dut_payload = {
-            "serial_number": None,
-            "connect_type": None,
-            "mac_address": None,
-            "adb_device": None,
-            "telnet_ip": None,
+            "project_id": int(project_id),
+            "serial_number": ui_payload.get("serial_number"),
+            "connect_type": connect_type,
+            "mac_address": ui_payload.get("mac_address"),
+            "adb_device": ui_payload.get("adb_device"),
+            "telnet_ip": ui_payload.get("telnet_ip"),
             "software_version": ui_payload.get("software_version"),
             "driver_version": ui_payload.get("driver_version"),
             "android_version": ui_payload.get("android_version"),
@@ -1431,10 +1546,25 @@ class ImportController:
         }
         dut_id = client.insert(
             "INSERT INTO `dut` "
-            "(`serial_number`, `connect_type`, `mac_address`, `adb_device`, `telnet_ip`, "
+            "(`project_id`, `serial_number`, `connect_type`, `mac_address`, `adb_device`, `telnet_ip`, "
             "`software_version`, `driver_version`, `android_version`, `kernel_version`, `mass_production_status`, `payload_json`) "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
+            "ON DUPLICATE KEY UPDATE "
+            "`id`=LAST_INSERT_ID(`id`), "
+            "`project_id`=VALUES(`project_id`), "
+            "`serial_number`=VALUES(`serial_number`), "
+            "`connect_type`=VALUES(`connect_type`), "
+            "`mac_address`=VALUES(`mac_address`), "
+            "`adb_device`=VALUES(`adb_device`), "
+            "`telnet_ip`=VALUES(`telnet_ip`), "
+            "`software_version`=VALUES(`software_version`), "
+            "`driver_version`=VALUES(`driver_version`), "
+            "`android_version`=VALUES(`android_version`), "
+            "`kernel_version`=VALUES(`kernel_version`), "
+            "`mass_production_status`=VALUES(`mass_production_status`), "
+            "`payload_json`=VALUES(`payload_json`)",
             (
+                dut_payload.get("project_id"),
                 dut_payload.get("serial_number"),
                 dut_payload.get("connect_type"),
                 dut_payload.get("mac_address"),

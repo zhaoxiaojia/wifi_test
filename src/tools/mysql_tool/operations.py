@@ -280,7 +280,6 @@ class PerformanceTableManager:
         ("test_report_id", "INT NOT NULL"),
         ("execution_id", "INT NOT NULL"),
         ("csv_name", "VARCHAR(255) NOT NULL"),
-        ("data_type", "VARCHAR(64) NULL DEFAULT NULL"),
     )
 
     _STATIC_COLUMNS: Sequence[_StaticColumn] = tuple(
@@ -757,7 +756,6 @@ class PerformanceTableManager:
                 test_report_id,
                 execution_id,
                 csv_name,
-                data_type,
             ]
             for column in self._STATIC_COLUMNS:
                 if column.original == "Throughput":
@@ -1445,6 +1443,7 @@ def register_execution(
     )
 
     dut_payload = {
+        "project_id": int(project_id),
         "serial_number": execution_payload.get("serial_number"),
         "connect_type": execution_payload.get("connect_type"),
         "mac_address": execution_payload.get("mac_address"),
@@ -1458,11 +1457,12 @@ def register_execution(
     }
     dut_id = client.insert(
         "INSERT INTO `dut` "
-        "(`serial_number`, `connect_type`, `mac_address`, `adb_device`, `telnet_ip`, "
+        "(`project_id`, `serial_number`, `connect_type`, `mac_address`, `adb_device`, `telnet_ip`, "
         "`software_version`, `driver_version`, `android_version`, `kernel_version`, `mass_production_status`, `payload_json`) "
-        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
         "ON DUPLICATE KEY UPDATE "
         "`id`=LAST_INSERT_ID(`id`), "
+        "`project_id`=VALUES(`project_id`), "
         "`connect_type`=VALUES(`connect_type`), "
         "`mac_address`=VALUES(`mac_address`), "
         "`adb_device`=VALUES(`adb_device`), "
@@ -1474,6 +1474,7 @@ def register_execution(
         "`mass_production_status`=VALUES(`mass_production_status`), "
         "`payload_json`=VALUES(`payload_json`)",
         (
+            dut_payload.get("project_id"),
             dut_payload.get("serial_number"),
             dut_payload.get("connect_type"),
             dut_payload.get("mac_address"),
