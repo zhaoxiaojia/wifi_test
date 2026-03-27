@@ -129,7 +129,6 @@ _PERFORMANCE_BASE_COLUMNS: Tuple[ColumnDefinition, ...] = (
     ColumnDefinition("test_report_id", "INT NOT NULL"),
     ColumnDefinition("execution_id", "INT NOT NULL"),
     ColumnDefinition("csv_name", "VARCHAR(255) NOT NULL"),
-    ColumnDefinition("data_type", "VARCHAR(64)"),
 )
 
 
@@ -231,6 +230,7 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
     ),
     "dut": TableSpec(
         columns=(
+            ColumnDefinition("project_id", "INT NOT NULL"),
             ColumnDefinition("serial_number", "VARCHAR(255)"),
             ColumnDefinition("connect_type", "VARCHAR(64)"),
             ColumnDefinition("mac_address", "VARCHAR(64)"),
@@ -244,12 +244,17 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
             ColumnDefinition("payload_json", "JSON"),
         ),
         indexes=(
+            TableIndex("idx_dut_project", "INDEX idx_dut_project (`project_id`)"),
             TableIndex("idx_dut_created_at", "INDEX idx_dut_created_at (`created_at`)"),
         ),
         constraints=(
             TableConstraint(
-                "uq_dut_mac_address",
-                "CONSTRAINT uq_dut_mac_address UNIQUE (`mac_address`)",
+                "uq_dut_project_mac_address",
+                "CONSTRAINT uq_dut_project_mac_address UNIQUE (`project_id`, `mac_address`)",
+            ),
+            TableConstraint(
+                "fk_dut_project",
+                "CONSTRAINT fk_dut_project FOREIGN KEY (`project_id`) REFERENCES `project`(`id`) ON DELETE CASCADE",
             ),
         ),
     ),
@@ -295,7 +300,7 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
             ),
             TableConstraint(
                 "fk_test_run_dut",
-                "CONSTRAINT fk_test_run_dut FOREIGN KEY (`dut_id`) REFERENCES `dut`(`id`)",
+                "CONSTRAINT fk_test_run_dut FOREIGN KEY (`dut_id`) REFERENCES `dut`(`id`) ON DELETE CASCADE",
             ),
             TableConstraint(
                 "fk_test_run_lab",
@@ -538,7 +543,6 @@ _VIEW_DEFINITIONS: Dict[str, str] = {
             ranked.id,
             ranked.execution_id,
             ranked.csv_name,
-            ranked.data_type,
             ranked.serial_number,
             ranked.test_category,
             ranked.standard,

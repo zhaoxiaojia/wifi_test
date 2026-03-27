@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+import re
+import traceback
 from typing import Any, Dict, Iterable, List, Optional, Sequence
 
 import pymysql
@@ -111,6 +113,7 @@ class MySqlClient:
             A value of type ``int``.
         """
         logging.debug("Execute SQL: %s | args: %s", sql, args)
+        self._trace_project_write(sql, args)
         try:
             with self._connection.cursor() as cursor:
                 affected = cursor.execute(sql, args)
@@ -146,6 +149,7 @@ class MySqlClient:
             A value of type ``int``.
         """
         logging.debug("Execute many SQL: %s", sql)
+        self._trace_project_write(sql, None)
         try:
             with self._connection.cursor() as cursor:
                 affected = cursor.executemany(sql, args_list)
@@ -180,6 +184,7 @@ class MySqlClient:
             A value of type ``int``.
         """
         logging.debug("Insert SQL: %s | args: %s", sql, args)
+        self._trace_project_write(sql, args)
         try:
             with self._connection.cursor() as cursor:
                 cursor.execute(sql, args)
@@ -217,6 +222,26 @@ class MySqlClient:
         with self._connection.cursor() as cursor:
             cursor.execute(sql, args)
             return cursor.fetchone()
+
+    @staticmethod
+    def _trace_project_write(sql: str, args: Optional[Sequence[Any]]) -> None:
+        normalized = " ".join(str(sql).split()).strip().lower()
+        if not normalized:
+            return
+
+        is_write = normalized.startswith(("insert ", "update ", "delete ", "replace "))
+        if not is_write:
+            return
+
+        hits_project = re.search(r"(^|\\W)`?project`?(\\W|$)", normalized) is not None
+        if not hits_project:
+            return
+
+        stack = "".join(traceback.format_stack(limit=12))
+        print("[DBTRACE_PROJECT_WRITE] sql=", sql, flush=True)
+        if args is not None:
+            print("[DBTRACE_PROJECT_WRITE] args=", args, flush=True)
+        print("[DBTRACE_PROJECT_WRITE] stack=\n", stack, flush=True)
 
     def query_all(self, sql: str, args: Optional[Sequence[Any]] = None) -> List[Dict[str, Any]]:
         """

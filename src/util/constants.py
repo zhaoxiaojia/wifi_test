@@ -1163,7 +1163,7 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
         },
         "JIO": {
             "Oak528": {
-                "ProjectID": "BL208N-S905X5",
+                "ProjectID": "BL20BN-S905X5",
                 "ProjectName": "SEI+S905X5+AOSP U",
                 "ODM": "SEI",
                 "main_chip": "S905X5",
@@ -1174,7 +1174,7 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
                 "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
             },
             "Oak401": {
-                "ProjectID": "BL2089-S905X5",
+                "ProjectID": "BL20B9-S905X5",
                 "ProjectName": "SEI+S905X5-JU+AOSP U",
                 "ODM": "SEI",
                 "main_chip": "S905X5",
