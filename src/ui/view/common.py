@@ -709,11 +709,12 @@ class RfStepSegmentsWidget(QWidget):
         self.step_edit.setValidator(QIntValidator(1, 9999, self))
         self.step_edit.setText(str(self.DEFAULT_SEGMENT[2]))
 
-        form.addWidget(QLabel("Start"), 0, 0)
+        # 在Perormance UI生成
+        form.addWidget(QLabel("Start Atten"), 0, 0)
         form.addWidget(self.start_edit, 0, 1)
-        form.addWidget(QLabel("Stop"), 1, 0)
+        form.addWidget(QLabel("Stop Atten"), 1, 0)
         form.addWidget(self.stop_edit, 1, 1)
-        form.addWidget(QLabel("Step"), 2, 0)
+        form.addWidget(QLabel("Step Atten"), 2, 0)
         form.addWidget(self.step_edit, 2, 1)
 
         layout.addLayout(form)
@@ -749,9 +750,9 @@ class RfStepSegmentsWidget(QWidget):
         self.segment_list = QListWidget(self)
         self.segment_list.setSelectionMode(QListWidget.SingleSelection)
         self.segment_list.currentRowChanged.connect(self._on_segment_selected)
-        # Keep the list compact and scrollable instead of stretching.
+        # Keep the list compact and scrollable instead of stretching(调整衰减添加框大小).
         self.segment_list.setMinimumHeight(80)
-        self.segment_list.setMaximumHeight(140)
+        self.segment_list.setMaximumHeight(100) #old value:140
 
         self.segment_stack.addWidget(self.segment_hint)
         self.segment_stack.addWidget(self.segment_list)

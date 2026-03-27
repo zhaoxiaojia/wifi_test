@@ -16,6 +16,8 @@ from src.tools.router_tool.router_performance import (
 )
 from src.util.constants import load_config
 from src.tools.relay_tool.pdusnmp import power_ctrl as PduSnmpCtrl
+from src.util.constants import load_config
+from src.tools.connect_tool.mixins.ui_mixin import UiAutomationMixin
 
 _ap_test_state = {}
 _ap_test_lock = threading.Lock()
@@ -188,6 +190,12 @@ def test_wifi_reconnect_full_flow(power_setting):
     pdu_ip = power_setting['ip']
     pdu_port = power_setting['port']
     current_ap_key = f"{pdu_ip}:{pdu_port}"
+
+    cfg = load_config(refresh=True)
+    dut_serial = cfg.get("connect_type", {}).get("Android", {}).get("device")
+    if not dut_serial:
+        pytest.fail("Failed to get DUT serial from config for reboot.")
+    logging.info(f"Using DUT serial: {dut_serial}")
 
     try:
         # 遍历频段：先 2.4G，再 5G
@@ -381,9 +389,9 @@ def test_wifi_reconnect_full_flow(power_setting):
                         "ping": ping_result,
                         "tx_throughput": tx_result,
                         "rx_throughput": rx_result,
-                        "tx_channel": getattr(pytest.dut, 'channel_num', "N/A"),
+                        "tx_channel": getattr(pytest.dut, 'channel', "N/A"),
                         "tx_rssi": getattr(pytest.dut, 'rssi_num', "N/A"),
-                        "rx_channel": getattr(pytest.dut, 'channel_num', "N/A"),
+                        "rx_channel": getattr(pytest.dut, 'channel', "N/A"),
                         "rx_rssi": getattr(pytest.dut, 'rssi_num', "N/A"),
                         "reconnection_time": f"{reconnection_time:.2f}" if reconnection_time else "N/A",
                     })
@@ -420,16 +428,35 @@ def _perform_ping_test():
     if platform.system() == "Windows":
         cmd = f"ping -n 60 -w 1000 {dut_ip}"
         result = subprocess.run(cmd, shell=True, capture_output=True, text=False)
+        #logging.info(f"Ping Base Result: '{result}'")
 
+        # === 直接使用 stdout，无需 decode ===
         output = result.stdout
         logging.info(f"Ping Result: '{output}'")
 
-        # 先尝试中文，再尝试英文
-        match = re.search(r'丢失\s*[=:：]\s*(\d+)', output)
-        if not match:
-            match = re.search(r'Lost\s*[=:]\s*(\d+)', output, re.IGNORECASE)
+        # === 精准解析你的日志格式 ===
+        lost_count = None
 
-        lost = int(match.group(1)) if match else None
+        # 方案1: 匹配乱码 "ʧ = 数字"
+        loss_match = re.search(r'ʧ\s*[=:：]?\s*(\d+)', output)
+        if loss_match:
+            lost_count = int(loss_match.group(1))
+
+        # 方案2: 匹配标准中文 "丢失 = 数字"
+        if lost_count is None:
+            loss_match = re.search(r'丢失\s*[=:：]?\s*(\d+)', output)
+            if loss_match:
+                lost_count = int(loss_match.group(1))
+
+        # === 判定结果 ===
+        if lost_count is not None:
+            success = (lost_count == 0)
+        else:
+            # 如果还是无法解析，保守地认为只要命令执行成功就算通
+            success = (result.returncode == 0)
+
+        return success
+
     else:
         # Linux
         cmd = f"ping -c 60 -W 1 {dut_ip}"

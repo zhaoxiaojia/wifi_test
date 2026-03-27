@@ -230,7 +230,7 @@ class MainWindow(FluentWindow):
         self.rvr_nav_button = self._create_sidebar_button(
             "case",
             self.rvr_wifi_config_page,
-            FluentIcon.WIFI,
+            FluentIcon.LIBRARY #WiFi
         )
 
         # Run / execution page
@@ -238,7 +238,7 @@ class MainWindow(FluentWindow):
             "run",
             self.run_page,
             FluentIcon.PLAY,
-            position=NavigationItemPosition.BOTTOM,
+            #position=NavigationItemPosition.BOTTOM,
         )
         self.run_nav_button.setVisible(True)
 
@@ -247,7 +247,7 @@ class MainWindow(FluentWindow):
             "report",
             self.report_view,
             FluentIcon.DOCUMENT,
-            position=NavigationItemPosition.BOTTOM,
+            #position=NavigationItemPosition.BOTTOM,
         )
         self.report_nav_button.setVisible(True)
 
@@ -260,7 +260,7 @@ class MainWindow(FluentWindow):
             "about",
             self.about_page,
             FluentIcon.INFO,
-            position=NavigationItemPosition.BOTTOM,
+            #position=NavigationItemPosition.BOTTOM,
         )
         self.about_nav_button.setVisible(True)
 
@@ -491,14 +491,16 @@ class MainWindow(FluentWindow):
     ):
         """Create a navigation button based on a logical sidebar key."""
         text, subtext = SIDEBAR_PAGE_LABELS.get(key, (key.title(), None))
-        kwargs = {}
-        if position is not None:
-            kwargs["position"] = position
-        if subtext:
-            button = self._add_interface(page, icon, text, subtext, **kwargs)
-        else:
-            button = self._add_interface(page, icon, text, **kwargs)
+        button = self._add_interface(page, icon, text)
         return button
+        # kwargs = {}
+        # if position is not None:
+        #     kwargs["position"] = position
+        # if subtext:
+        #     button = self._add_interface(page, icon, text, subtext, **kwargs)
+        # else:
+        #     button = self._add_interface(page, icon, text, **kwargs)
+        # return button
 
     def _apply_nav_enabled(self, states: dict) -> None:
         """Enable or disable multiple navigation buttons in one call."""

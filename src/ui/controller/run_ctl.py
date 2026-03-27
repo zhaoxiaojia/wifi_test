@@ -22,8 +22,12 @@ from src.test.stability import (
     run_stability_plan,
 )
 from src.util.pytest_redact import install_redactor_for_current_process
-import pytest, os, sys
+import pytest, os, sys, allure
 import pandas as pd
+try:
+    import allure_pytest
+except ImportError:
+    pass
 
 try:
     from src.test.conftest import _generate_allure_report_cli
@@ -214,6 +218,14 @@ class CaseRunner(QThread):
         self.old_handlers = root_logger.handlers[:]
         self.old_level = root_logger.level
 
+        if shared_allure_results_dir:
+            # 强制转换为绝对路径（兼容字符串/Path输入）
+            self._shared_allure_results_dir = Path(shared_allure_results_dir).resolve()
+            print(f"[INIT] 📁 Saved absolute allure dir: {self._shared_allure_results_dir}")
+        else:
+            self._shared_allure_results_dir = None
+            print(f"[INIT] ⚠️ No shared allure dir provided")
+
     def run(self) -> None:  # type: ignore[override]
         """Spawn the worker process and relay events to the UI."""
         from datetime import datetime
@@ -287,6 +299,22 @@ class CaseRunner(QThread):
         worker,
     ) -> multiprocessing.Process:
         """Create and start the subprocess that executes pytest."""
+        is_exe = getattr(sys, 'frozen', False)
+        allure_dir_to_pass = None  # 默认值
+
+        # ✅ 修复：无论EXE/DEV，只要有共享目录就传递
+        if self._shared_allure_results_dir:
+            abs_dir = Path(self._shared_allure_results_dir).resolve()
+            if abs_dir.is_absolute() and str(abs_dir).strip():
+                allure_dir_to_pass = str(abs_dir)
+                mode_str = "EXE" if is_exe else "DEV"
+                print(f"[LAUNCH] {mode_str} MODE: Using SHARED allure dir: {allure_dir_to_pass}")
+            else:
+                print(f"[LAUNCH] WARNING: Shared allure dir invalid: {abs_dir}")
+        else:
+            mode_str = "EXE" if is_exe else "DEV"
+            print(f"[LAUNCH] {mode_str} MODE: No shared allure dir (independent mode)")
+
         proc = self._ctx.Process(
             target=worker,
             args=(
@@ -294,7 +322,8 @@ class CaseRunner(QThread):
                 self._queue,
                 python_log_path,
                 # 传递共享路径
-                str(self._shared_allure_results_dir) if self._shared_allure_results_dir else None,
+                allure_dir_to_pass,
+                #str(self._shared_allure_results_dir) if self._shared_allure_results_dir else None,
                 str(self._shared_pytest_log_file) if self._shared_pytest_log_file else None,
             ),
         )
@@ -420,7 +449,7 @@ def _is_project_test_script(case_path: str) -> bool:
     for i in range(len(parts) - 2):
         if (str(parts[i]).lower() == "src" and
             str(parts[i+1]).lower() == "test" and
-            str(parts[i+2]).lower() == "project"):
+            str(parts[i+2]).lower() == "function"):
             return True
     return False
 
@@ -429,17 +458,17 @@ def _extract_project_relative_path(case_path: str) -> Path:
     p = Path(case_path).resolve()
     parts = p.parts
 
-    # 查找连续�?src/test/project
+    # 查找连续�?src/test/function
     for i in range(len(parts) - 2):
         if (str(parts[i]).lower() == "src" and
                 str(parts[i + 1]).lower() == "test" and
-                str(parts[i + 2]).lower() == "project"):
-            # 返回 project/ 之后的所有部�?
-            relative_parts = parts[i + 3:]  # 注意�?i+3，跳�?src/test/project
+                str(parts[i + 2]).lower() == "function"):
+            # 返回 function/ 之后的所有部�?
+            relative_parts = parts[i + 3:]  # 注意�?i+3，跳�?src/test/function
             return Path(*relative_parts)
 
     # 理论上不会执行到这里（因为调用前已判断）
-    raise ValueError(f"Path does not contain 'src/test/project': {case_path}")
+    raise ValueError(f"Path does not contain 'src/test/function': {case_path}")
 
 
 def _find_pytest_root(start_path: Path) -> Path | None:
@@ -466,6 +495,10 @@ def _init_worker_env(
     import os, sys,  random, subprocess, tempfile
     from datetime import datetime
     from pathlib import Path
+
+    # # 👇 阶段1：强制初始化 Allure 目录
+    if 'ALLURE_REPORT_DIR' in os.environ:
+        Path(os.environ['ALLURE_REPORT_DIR']).mkdir(parents=True, exist_ok=True)
 
     # --- 【关键】判断是否为共享模式 (ExcelPlanRunner) ---
     in_shared_mode = bool(shared_allure_results_dir)
@@ -504,16 +537,29 @@ def _init_worker_env(
 
     # --- CORRECT PATH HANDLING (兼容开发/打包) ---
     input_path = Path(case_path)
+    print(f"[DEBUG _init_worker_env] input_path={input_path}, is_absolute={input_path.is_absolute()}")
     if input_path.is_absolute():
         absolute_test_path = input_path.resolve()
     else:
         if getattr(sys, 'frozen', False):  # 打包模式
             base_dir = Path(sys._MEIPASS)
+            print(f"[DEBUG _init_worker_env] EXE mode: base_dir={base_dir}, sys._MEIPASS={sys._MEIPASS}")
         else:  # 开发模式
             base_dir = Path(__file__).resolve().parents[3]
-        absolute_test_path = base_dir / "src/test/project" / case_path
+            print(f"[DEBUG _init_worker_env] DEV mode: base_dir={base_dir}")
+        absolute_test_path = base_dir / "src/test/function" / case_path
+        print(f"[DEBUG _init_worker_env] absolute_test_path={absolute_test_path}")
+
         if not absolute_test_path.exists():
-            raise FileNotFoundError(f"Test file not found: {absolute_test_path}")
+            # 尝试其他可能的路径格式
+            case_path_str = str(case_path).replace("\\", "/")
+            if case_path_str.startswith("src/test/function/"):
+                # 如果case_path已经包含前缀，直接拼接
+                absolute_test_path = base_dir / case_path
+                print(f"[DEBUG _init_worker_env] Retry with full path: {absolute_test_path}")
+
+            if not absolute_test_path.exists():
+                raise FileNotFoundError(f"Test file not found: {absolute_test_path}. Base dir: {base_dir}")
 
     # Ensure `src/conftest.py` is within the discovery scope so custom options
     # like `--resultpath/--dut-type/...` are registered.
@@ -521,48 +567,105 @@ def _init_worker_env(
         pytest_rootdir = Path(sys._MEIPASS)
     else:
         pytest_rootdir = Path(__file__).resolve().parents[3]
-    try:
-        relative_path = absolute_test_path.relative_to(pytest_rootdir)
-        pytest_case_path = str(relative_path).replace("\\", "/")
-    except ValueError:
+
+    # 确定pytest_case_path
+    if getattr(sys, 'frozen', False):
+        # EXE模式下使用绝对路径
         pytest_case_path = str(absolute_test_path)
+        print(f"[DEBUG _init_worker_env] EXE mode: Using absolute path: {pytest_case_path}")
+    else:
+        # 开发模式下使用相对路径
+        try:
+            relative_path = absolute_test_path.relative_to(pytest_rootdir)
+            pytest_case_path = str(relative_path).replace("\\", "/")
+            print(f"[DEBUG _init_worker_env] DEV mode: Using relative path: {pytest_case_path}")
+        except ValueError:
+            pytest_case_path = str(absolute_test_path)
+            print(f"[DEBUG _init_worker_env] DEV mode: Using absolute path (fallback): {pytest_case_path}")
+
     os.environ["PYTEST_REPORT_DIR"] = str(report_dir)
+    allure_results_dir = report_dir / "allure_report"
+    allure_results_dir.mkdir(parents=True, exist_ok=True)
+    #os.environ['ALLURE_REPORT_DIR'] = str(allure_results_dir)
     # --- END PATH HANDLING ---
+    is_exe = getattr(sys, 'frozen', False)
 
     # --- 构建 pytest 参数 ---
     pytest_args = [
         f"--rootdir={pytest_rootdir}",
         "--import-mode=importlib",
-        f"--resultpath={report_dir}",
-        #f"--alluredir={allure_results_dir}",
+        "--resultpath", str(report_dir),
         "--alluredir", str(allure_results_dir),
         pytest_case_path,
     ]
-    # ---
+    print(f"[MODE]  Added --alluredir={allure_results_dir} | Plugin status: REGISTERED")
+    # if not is_exe:  # 非 EXE 模式（即 DEV 模式）
+    #     pytest_args.insert(-1, "--alluredir")  # 插入在 case_path 前
+    #     pytest_args.insert(-1, str(allure_results_dir))
+    #     print(f"[MODE]  DEV MODE: Added --alluredir={allure_results_dir}")
+    # else:
+    #     print(f"[MODE]  EXE MODE: Skipping --alluredir (using ALLURE_REPORT_DIR env)")
+    #     print(f"[MODE] ENV CHECK: ALLURE_REPORT_DIR={os.environ.get('ALLURE_REPORT_DIR', 'UNSET')}")
 
-    # --- 添加 DUT 配置 ---
-    from src.util.constants import load_config
-    cfg = load_config(refresh=True)
-    connect_cfg = cfg.get("connect_type") or {}
-    dut_type = connect_cfg.get("type")
-    match dut_type:
-        case "Android":
-            pytest_args.append("--dut-type=Android")
+    import pytest as pytest_module
+    pytest_module._result_path = str(report_dir)
+
+    # --- 关键修复：在EXE环境和开发环境中使用不同策略 ---
+    if getattr(sys, 'frozen', False):
+        # ========== EXE环境：使用环境变量，不添加自定义参数到命令行 ==========
+        os.environ["PYTEST_RESULTPATH"] = str(report_dir)
+
+        # 从配置加载DUT设置到环境变量
+        from src.util.constants import load_config
+        cfg = load_config(refresh=True)
+        connect_cfg = cfg.get("connect_type") or {}
+        dut_type = connect_cfg.get("type") or "Android"
+
+        os.environ["PYTEST_DUT_TYPE"] = dut_type
+        if dut_type == "Android":
+            android_cfg = connect_cfg.get("Android") or {}
+            device = android_cfg.get("device") or "QASEIB300000371"
+            os.environ["PYTEST_ANDROID_DEVICE"] = device
+        elif dut_type == "Linux":
+            telnet_cfg = connect_cfg.get("Linux") or {}
+            ip = telnet_cfg.get("ip") or "192.168.1.1"
+            os.environ["PYTEST_LINUX_IP"] = ip
+
+        project_cfg = cfg.get("project") or {}
+        customer = project_cfg.get("customer") or "ZTE"
+        os.environ["PYTEST_PROJECT_CUSTOMER"] = customer
+
+    else:
+        # ========== 开发环境：使用命令行参数 ==========
+        #pytest_args.append(f"--resultpath={report_dir}")
+
+        from src.util.constants import load_config
+        cfg = load_config(refresh=True)
+        connect_cfg = cfg.get("connect_type") or {}
+        dut_type = connect_cfg.get("type")
+
+        # 添加自定义参数到命令行
+        if dut_type == "Android":
+            #pytest_args.append("--dut-type=Android")
+            pytest_args.extend(["--dut-type", "Android"])
             android_cfg = connect_cfg.get("Android") or {}
             device = android_cfg.get("device")
             if device:
-                pytest_args.append(f"--android-device={device}")
-        case "Linux":
-            pytest_args.append("--dut-type=Linux")
+                #pytest_args.append(f"--android-device={device}")
+                pytest_args.extend(["--android-device", device])
+        elif dut_type == "Linux":
+            #pytest_args.append("--dut-type=Linux")
+            pytest_args.extend(["--dut-type", "Linux"])
             telnet_cfg = connect_cfg.get("Linux") or {}
             ip = telnet_cfg.get("ip")
             if ip:
-                pytest_args.append(f"--linux-ip={ip}")
-    project_cfg = cfg.get("project") or {}
-    customer = project_cfg.get("customer")
-    if customer:
-        pytest_args.append(f"--project-customer={customer}")
-    # ---
+                #pytest_args.append(f"--linux-ip={ip}")
+                pytest_args.extend(["--linux-ip", ip])
+
+        project_cfg = cfg.get("project") or {}
+        customer = project_cfg.get("customer")
+        if customer:
+            pytest_args.append(f"--project-customer={customer}")
 
     # --- 处理稳定性测试 ---
     is_stability_case = is_stability_case_path(case_path)
@@ -678,7 +781,6 @@ def _stream_pytest_events(ctx: "_WorkerContext") -> None:
     def emit_stability_progress(percent: int) -> None:
         q.put(("progress", percent))
 
-
     if ctx.is_stability_case and ctx.plan is not None:
         result = run_stability_plan(
             ctx.plan,
@@ -689,18 +791,90 @@ def _stream_pytest_events(ctx: "_WorkerContext") -> None:
         )
         last_exit_code = result["exit_code"]
     else:
-        #exit_code = pytest.main(ctx.pytest_args, plugins=[ctx.plugin])
-        plugins_to_load = [ctx.plugin, 'allure_pytest']
+        # --- 关键修复：在EXE环境中过滤自定义参数 ---
+        import sys
         if getattr(sys, 'frozen', False):
-            plugins_to_load = [ctx.plugin, 'allure_pytest.plugin']
-        exit_code = pytest.main(ctx.pytest_args, plugins=plugins_to_load)
-        print(f"[PYTEST ARGS] {ctx.pytest_args}")
+            print(f"[DEBUG _stream_pytest_events] EXE mode detected, filtering custom args")
+
+            # # 构建安全的参数列表（只包含pytest认识的标准参数）
+            safe_args = []
+            custom_args_count = 0
+            i = 0
+            while i < len(ctx.pytest_args):
+                arg = ctx.pytest_args[i]
+
+                # # 保留标准参数
+                if arg == '--alluredir' and i + 1 < len(ctx.pytest_args):
+                    # 在EXE模式下也需要保留--alluredir参数
+                    safe_args.append(arg)
+                    safe_args.append(ctx.pytest_args[i + 1])
+                    print(f"[DEBUG] Keeping --alluredir for EXE: {ctx.pytest_args[i + 1]}")
+                    i += 2  # 正确跳过参数值
+                    continue
+
+                if arg.startswith('--rootdir='):
+                    safe_args.append(arg)
+                elif arg == '--import-mode=importlib':
+                    safe_args.append(arg)
+                elif arg in ('--resultpath', '--dut-type', '--android-device', '--linux-ip', '--project-customer'): #arg == '--alluredir' or arg == '--resultpath':
+                    # 跳过这两个参数及其值
+                    if i + 1 < len(ctx.pytest_args):
+                        #custom_args_count += 2
+                        print(f"[DEBUG _stream_pytest_events] Skipping internal arg: {arg} and its value")
+                        i += 1  # 跳过值
+                    else:
+                        #custom_args_count += 1
+                        print(f"[DEBUG _stream_pytest_events] Filtering out incomplete arg: {arg}")
+                elif not arg.startswith('--'):
+                    # 测试文件路径
+                    safe_args.append(arg)
+                elif arg in ['-v', '--verbose', '-q', '--quiet', '-x', '--exitfirst', '-s', '--capture=no']:
+                     # 标准pytest选项
+                     safe_args.append(arg)
+                else:
+                     # 过滤自定义参数（--resultpath, --dut-type等）
+                     custom_args_count += 1
+                     print(f"[DEBUG _stream_pytest_events] Filtering out custom arg in EXE: {arg}")
+
+                i += 1
+
+            actual_args =   safe_args
+            plugins_to_load = [ctx.plugin]
+
+            # 👇 关键：显式导入并添加 allure_pytest 模块对象
+            try:
+                from allure_pytest import plugin as allure_plugin  # ✅ 导入插件对象
+                plugins_to_load.append(allure_plugin)
+                print("[PLUGIN] ✅ EXE: Allure plugin CLASS registered successfully")
+            except Exception as e:
+                print(f"[PLUGIN] ❌ EXE: Failed to load Allure plugin class: {e}")
+                import traceback
+                traceback.print_exc()
+            #print(f"[DEBUG _stream_pytest_events] Filtered out {custom_args_count} custom arguments")
+            print(f"[DEBUG _stream_pytest_events] Safe args for EXE (len={len(actual_args)}): {actual_args}")
+        else:
+             # 开发环境：使用所有参数
+            actual_args = ctx.pytest_args
+            plugins_to_load = [ctx.plugin]
+            print(f"[DEBUG _stream_pytest_events] Using all args for DEV (len={len(actual_args)}): {actual_args}")
+
+        # 执行pytest
+        # # plugins_to_load = [ctx.plugin, 'allure_pytest']
+        # if getattr(sys, 'frozen', False):
+        #     plugins_to_load = [ctx.plugin, allure]
+        # else:
+        #     plugins_to_load = [ctx.plugin]
+        #plugins_to_load = [ctx.plugin]
+        exit_code = pytest.main(actual_args, plugins=plugins_to_load)
+
+        print(f"[PYTEST ARGS] {actual_args}")  # 打印实际使用的参数
         last_exit_code = exit_code
         if exit_code != 0:
             failure_msg = (
                 f"<b style='{STYLE_BASE} color:red;'>Pytest failed with exit code {exit_code}.</b>"
             )
             q.put(("log", failure_msg))
+
     if last_exit_code == 0:
         q.put(("log", f"<b style='{STYLE_BASE} color:#a6e3ff;'>Test completed</b>"))
     elif not ctx.is_stability_case:
@@ -725,12 +899,15 @@ def _pytest_worker(
     shared_pytest_log_file: str | None = None,
 ) -> None:
     """Spawned multiprocessing entrypoint that runs pytest and streams logs."""
-    # ctx = _init_worker_env(
-    #     case_path, q, log_file_path_str,
-    #     shared_allure_results_dir,
-    #     shared_pytest_log_file,
-    # )
     ctx = None
+
+    if shared_allure_results_dir:  # 仅当非 None 且非空字符串
+        os.environ['ALLURE_REPORT_DIR'] = str(shared_allure_results_dir)
+        try:
+            Path(shared_allure_results_dir).mkdir(parents=True, exist_ok=True)
+            print(f"[WORKER] 🌍 EXE MODE: Set ALLURE_REPORT_DIR={shared_allure_results_dir} (explicit)")
+        except Exception as e:
+            print(f"[WORKER] ⚠️ Failed to create allure dir: {e}")
 
     try:
         #ctx = _init_worker_env(case_path, q, log_file_path_str)
@@ -817,7 +994,10 @@ class ExcelPlanRunner(QThread):
             self.log_signal.emit(f"<b>测试计划已复制到: {self._local_excel_path}</b>")
 
             # --- 2. 创建共享资源 ---
-            self._shared_allure_dir = self._plan_report_dir / "allure_report"
+            #self._shared_allure_dir = self._plan_report_dir / "allure_report"
+            self._shared_allure_dir = (Path.cwd() / self._plan_report_dir / "allure_report").resolve()
+            self._shared_allure_dir.mkdir(parents=True, exist_ok=True)
+            print(f"[PLAN] ✅ Allure dir (absolute): {self._shared_allure_dir}")
             self._shared_allure_dir.mkdir(parents=True, exist_ok=True)
             self._shared_pytest_log = self._plan_report_dir / "pytest.log"
             # ---
@@ -825,6 +1005,9 @@ class ExcelPlanRunner(QThread):
 
 
             from src.util.report.excel.plan import read_script_paths
+
+            #读取包含UI Excel Test Type的数据
+            self.test_type, script_paths = read_script_paths(self.excel_path, include_test_type=True)
 
             script_paths = read_script_paths(self.excel_path)
             total_cases = len(script_paths)
@@ -834,7 +1017,15 @@ class ExcelPlanRunner(QThread):
 
             self.log_signal.emit(f"<b>Starting plan with {total_cases} case(s)...</b>")
 
+            # --- 4. 设置Test Type环境变量 ---
+            os.environ["TEST_TYPE"] = self.test_type
+            self.log_signal.emit(f"<b>测试类型: {self.test_type}</b>")
+            self.log_signal.emit(f"<b>开始执行{total_cases}个测试用例...</b>")
+
+            print(f"[DEBUG ExcelPlanRunner.run] total_cases={total_cases}")
+            print(f"[DEBUG ExcelPlanRunner.run] test_type={self.test_type}")
             for idx, script_path in enumerate(script_paths):
+                print(f"[DEBUG ExcelPlanRunner.run] Processing case {idx + 1}/{total_cases}: {script_path}")
                 if self.isInterruptionRequested():
                     self.log_signal.emit("<b style='color:red;'>Execution stopped by user.</b>")
                     break

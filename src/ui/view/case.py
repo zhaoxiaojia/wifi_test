@@ -179,7 +179,7 @@ class RvrWifiConfigPage(CardWidget):
         mode = str(mode or "").lower()
         show_rvr = mode == "performance"
         show_compat = mode == "compatibility"
-        show_func = mode in ("functionality", "func", "project", "stb")
+        show_func = mode in ("functionality", "func", "project", "stb", "function")
         logging.debug("compat mode=%s show_rvr=%s show_compat=%s show_func=%s", mode, show_rvr, show_compat, show_func)
         self._content.setVisible(show_rvr)
         self.compat_page.setVisible(show_compat)

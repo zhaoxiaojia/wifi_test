@@ -2,7 +2,7 @@ host_os:
   user: amlogic
   password: Linux2024
 mysql:
-  host: 127.0.0.1
+  host: 10.28.11.79
   user: root
   passwd: FAE-QA@123
   database: wifi_test

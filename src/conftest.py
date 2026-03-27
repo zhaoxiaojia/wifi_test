@@ -11,7 +11,7 @@ a Wi‑Fi performance report at session end for specific customers.
 from __future__ import annotations
 
 import os, json
-import sys
+import sys, glob
 import re
 import shutil
 from src.tools.connect_tool import command_batch as subprocess
@@ -46,7 +46,6 @@ from collections import defaultdict
 # ----------------------------------------------------------------------------
 # Logging
 # ----------------------------------------------------------------------------
-
 if not logging.getLogger().handlers:
     logging.basicConfig(
         level=logging.INFO,
@@ -386,7 +385,6 @@ def _generate_allure_report_offline(input_dir: Path, output_dir: Path) -> None:
     except Exception as e:
         logger.exception("💥 Unexpected error during system Allure report generation: %s", e)
 
-
 # ----------------------------------------------------------------------------#
 # Public API for external report generation (e.g., ExcelPlanRunner)
 # ----------------------------------------------------------------------------#
@@ -544,8 +542,10 @@ def pytest_sessionstart(session):
     # Serial (kernel log) setup
     rvr_cfg = pytest.config.get('rvr') or {}
     serial_cfg = pytest.config.get('serial_port') or {}
+    logging.info(f"[DEBUG] Full serial_port config from YAML/UI: {serial_cfg}")
     serial_cfg["port"] = serial_cfg.get("port", "").split(" (", 1)[0]
     status = serial_cfg.get('status')
+    logging.info(f"[DEBUG] Serial 'status' value: {repr(status)} (type: {type(status)})")
     serial_enabled = status
     serial_inst = None
     if serial_enabled:
@@ -561,7 +561,7 @@ def pytest_sessionstart(session):
 
     # DUT connection
     match pytest.connect_type:
-        case "Android":
+        case "Android" | "adb":
             adb_cfg = connect_cfg.get("Android") or {}
             device = session.config.getoption("--android-device") or adb_cfg.get("device") or ""
             project_cfg = pytest.config.get("project") or {}
@@ -572,7 +572,7 @@ def pytest_sessionstart(session):
                     pytest.dut = onn_dut(serialnumber=device)
                 case _:
                     pytest.dut = android(serialnumber=device)
-        case "Linux":
+        case "Linux"| "telnet":
             telnet_cfg = connect_cfg.get("Linux") or {}
             telnet_ip = session.config.getoption("--linux-ip") or telnet_cfg.get("ip")
             project_cfg = pytest.config.get("project") or {}
@@ -582,14 +582,15 @@ def pytest_sessionstart(session):
             match customer:
                 case "ROKU":
                     pytest.dut = roku(telnet_ip, serial=serial_inst)
+                    logging.info("Roku Test Start.")
                 case _:
                     pytest.dut = linux(serial=serial_inst, telnet=telnet_tool(telnet_ip))
 
     if serial_inst is not None:
         pytest.dut.serial = serial_inst
-
     # Artifact paths and state
-    pytest._result_path = session.config.getoption("--resultpath") or os.getcwd()
+    #pytest._result_path = session.config.getoption("--resultpath") or os.getcwd()
+    result_path = os.getenv("PYTEST_REPORT_DIR") or os.getcwd()
     pytest._testresult_repeat_times = repeat_times
 
     # Cleanup temp file used by some legacy scripts
@@ -880,11 +881,13 @@ def pytest_sessionfinish(session, exitstatus):
 
     if destination_dir is not None:
         # 检查是否存在共享的 allure_results 目录 (ExcelPlanRunner 模式)
-        shared_allure_results = destination_dir / "allure_report"
-        if shared_allure_results.exists() and any(shared_allure_results.iterdir()):
+        #shared_allure_results = destination_dir / "allure_report"
+        is_excel_plan = (destination_dir.parent / "test_result.xlsx").exists()
+        logging.info(f"is_excel_plan.{is_excel_plan}")
+        if is_excel_plan:
             # ========== ExcelPlanRunner 共享模式 ==========
             # 输入：共享的 allure_results 目录
-            input_dir_for_allure = shared_allure_results
+            input_dir_for_allure = destination_dir / "allure_report"
             # 输出：在同一个主报告目录下生成 allure-report
             output_dir_for_allure = destination_dir / "allure_results"
             logging.info("Detected ExcelPlanRunner mode. Generating report from shared 'allure_results'.")
@@ -894,6 +897,7 @@ def pytest_sessionfinish(session, exitstatus):
             input_dir_for_allure = destination_dir / "allure_report"
             # 输出：在同一个 Case 报告目录下生成 allure-report
             output_dir_for_allure = destination_dir / "allure_results"
+            logging.info("✅ [Single Case] Mode detected. Input: %s", input_dir_for_allure)
 
     # 调用通用的报告生成函数
     if input_dir_for_allure is not None and output_dir_for_allure is not None:
@@ -929,6 +933,8 @@ def pytest_sessionfinish(session, exitstatus):
 
             # 调用现有 Excel 写入函数（需确保它支持通用 TCID）
             _update_excel_with_tcid_result(tcid, final_status, step_details)
+
+
 
 def record_test_step(tcid: str, step_desc: str, status: str, details: str = ""):
     """
@@ -995,3 +1001,12 @@ def _update_excel_with_tcid_result(tcid: str, final_status: str, step_details: s
 
     except Exception as e:
         logging.error(f"❌ Failed to update Excel for TCID={tcid}: {e}")
+
+    # ✅【新增】删除 report_dir 下所有 ui_dump_*.xml 临时文件
+    try:
+        ui_dump_pattern = os.path.join(report_dir, "ui_dump_*.xml")
+        for xml_file in glob.glob(ui_dump_pattern):
+            os.remove(xml_file)
+            logging.debug(f"Deleted temporary UI dump file: {xml_file}")
+    except Exception as e:
+        logging.warning(f"Failed to clean up ui_dump_*.xml files in {report_dir}: {e}")
