@@ -29,7 +29,7 @@ power_ctrl = power_delay.ctrl
 router = ''
 ssid = {
     '2.4G': 'Aml_AP_Comp_2.4G',
-    '5G': 'Aml_AP_Comp_5G'
+    #'5G': 'Aml_AP_Comp_5G'
 }
 ssid_6g = 'Aml_AP_Comp_6G'
 passwd = '@Aml#*st271'

@@ -408,6 +408,15 @@ CUSTOM_SIMPLE_UI_RULES.append(
                 value=lambda values: _lab_equipment(values).get("rf_model", ""),
                 condition=lambda values: bool(_lab_equipment(values).get("rf_model")),
             ),
+            # === 【260327】自动填充 Attenuator Model ===
+            SimpleFieldEffect(
+                target_field="atte.model",  # 目标字段
+                action="set_value",
+                # 逻辑：优先使用 Lab 设备中的 rf_model，如果为空则设为空字符串
+                value=lambda values: _lab_equipment(values).get("rf_model", ""),
+                # 条件：只有当 Lab 选择了有效值，且 Lab 配置里有 rf_model 时才填充
+                condition=lambda values: bool(_lab_equipment(values).get("rf_model")),
+            ),
         ],
     )
 )

@@ -1,5 +1,5 @@
 Turntable:
-  Turntable: RS232Board5
+  Turntable: other
   IP address: 192.168.5.156
   Step: 0,360:45
   Static dB: ''
@@ -14,18 +14,29 @@ rf_solution:
   LDA-908V-8:
     ip_address: 192.168.10.43
     channels: 1,2,3,8
-  model: RS232Board5
+  model: RADIORACK-4-220
   step: 0,75:3
-text_case: test/performance/test_wifi_peak_throughput.py
+text_case: test/function/region/test_wifi_ae_region_24g_connectivity.py
 debug:
   database_mode: true
   skip_router: false
   skip_corner_rf: false
   skip_connect: false
-csv_path: performance_test_csv/ai_wifi_scenarios.csv
+csv_path: ''
 mode: Wi-Fi BLE CLASSIC
 bt:
   ble_alias: Remote
   classic_alias: JBL
 lab:
-  name: SH Full-wave anechoic chamber#2
+  name: SZ Venus
+function:
+  customer: ''
+  product_line: ''
+  project: ''
+  odm: ''
+  main_chip: T966D5
+  wifi_module: W265U1
+  interface: USB
+  mass_production_status: EVT
+atte:
+  model: RADIORACK-4-220

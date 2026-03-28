@@ -775,7 +775,7 @@ def configure_ap_security_universal(router, band: str, security_mode: str, passw
 #         raise
 #
 #     return result
-def configure_and_verify_ap_country_code(router, country_code="US"):
+def configure_and_verify_ap_country_code(router, country_code="US", dut_country_code=None):
     """
     Unified interface for country code configuration and verification.
 
@@ -784,7 +784,13 @@ def configure_and_verify_ap_country_code(router, country_code="US"):
         configure_and_verify_country_code(country_code: str) -> dict
     """
     # 直接调用 router 对象的方法（多态）
-    return router.configure_and_verify_country_code(country_code)
+    lookup_country = dut_country_code if dut_country_code is not None else country_code
+    result = router.configure_and_verify_country_code(
+        country_code=country_code,
+        dut_country_code=dut_country_code  # ← 必须传！
+    )
+    time.sleep(60)
+    return result
 
 def _extract_ssid_from_wl_output(output: str) -> str:
     """Extract SSID from 'wl -i <iface> ssid' command output."""

@@ -7,46 +7,46 @@ system:
   version: Android 15
   kernel_version: Kernel 6.1
 project:
-  customer: Roku
+  customer: Hisense
   product_line: TV
-  project: Latte829
-  odm: Roku
-  main_chip: TR964
-  wifi_module: W265S2M
+  project: 65D50S
+  odm: Hisense
+  main_chip: T963D4
+  wifi_module: EA6621
   interface: USB
   mass_production_status: EVT
+  dut_sn: ''
 serial_port:
-  baud: '921600'
-  port: COM14 (蓝牙链接上的标准串行 (COM14))
+  baud: '115200'
+  port: ''
   status: false
-rvr:
-  iperf:
-    path: ''
-    server_cmd: iperf -s -i 1
-    client_cmd: iperf -c {ip} -i 1 -t 5 -P 1
-  ixchariot:
-    path: D:/Program Files (x86)/Ixia/IxChariot
-  repeat: '0'
-  throughput_threshold: '0'
-  tool: iperf
-duration_control:
-  loop: '2'
-  duration_hours: '1.0'
-  exitfirst: false
-  retry_limit: '0'
 router:
   name: asusax88u
   address: 192.168.50.1
   24g_ssid: 2.4G
   5g_ssid: 5G
+rvr:
+  tool: iperf
+  iperf:
+    path: ''
+    server_cmd: ''
+    client_cmd: ''
+  ixchariot:
+    path: ''
+  repeat: ''
+  throughput_threshold: ''
 dut:
-  type: Linux
+  type: Android
   Android:
     device: No devices
   Linux:
-    ip: 192.168.1.166
+    ip: 10.28.38.10
     wildcard: ''
   third_party:
     enabled: false
     wait_seconds: 0
   mac_address: 70:c9:12:c5:9c:50
+  name: glmt3000
+  address: 192.168.8.1
+  24g_ssid: Openwrt-AT-24G
+  5g_ssid: Openwrt-AT-5G

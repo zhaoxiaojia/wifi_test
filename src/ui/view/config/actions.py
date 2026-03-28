@@ -126,10 +126,10 @@ def _notify_rvr_wifi_page_for_function_cases(page: Any, case_path: str) -> None:
             return
 
         app_base = Path(config_ctl.get_application_base())
-        project_root = app_base / "test" / "project"
+        project_root = app_base / "test" / "function"
         case_path_obj = Path(case_path).resolve()
 
-        # Check if the selected path is under 'test/project/'
+        # Check if the selected path is under 'test/function/'
         if project_root in case_path_obj.parents:
             # Extract the target directory name (e.g., 'android', 'region')
             rel_path = case_path_obj.relative_to(project_root)
@@ -147,12 +147,12 @@ def _notify_rvr_wifi_page_for_function_cases(page: Any, case_path: str) -> None:
                 rvr_page.load_function_cases_from_dirs([target_dir])
                 logging.debug(f"Notified RvrWifiConfigPage to load from: {target_dir}")
         else:
-            # If the selection is outside 'test/project/', reset the RvrWifiConfigPage
+            # If the selection is outside 'test/function/', reset the RvrWifiConfigPage
             main_window = page.window()
             rvr_page = getattr(main_window, "rvr_wifi_config_page", None)
             if rvr_page is not None and hasattr(rvr_page, "reset_function_cases"):
                 rvr_page.reset_function_cases()
-                logging.debug("Reset RvrWifiConfigPage as selection is outside project/")
+                logging.debug("Reset RvrWifiConfigPage as selection is outside function/")
 
     except Exception as e:
         logging.debug(f"Failed to notify RvrWifiConfigPage: {e}", exc_info=True)
@@ -277,8 +277,8 @@ def apply_ui(page: Any, case_path: str) -> None:
                     category = _case_cat(case_path=case_path, display_path=None)
                     if category == "compatibility":
                         rvr_page.set_case_mode("compatibility")
-                    elif category == "project":
-                        rvr_page.set_case_mode("project")
+                    elif category == "function":
+                        rvr_page.set_case_mode("function")
                     elif info.enable_rvr_wifi:
                         rvr_page.set_case_mode("performance")
                     else:
@@ -502,7 +502,8 @@ def refresh_config_page_controls(
         config.setdefault("system", {})["kernel_version"] = linux_cfg.pop("kernel_version")
 
     if config_ctl is not None:
-        config["project"] = config_ctl.normalize_project_section(config.get("project"))
+        #config["project"] = config_ctl.normalize_project_section(config.get("project"))
+        config["function"] = config_ctl.normalize_project_section(config.get("function"))
 
     if config_ctl is not None:
         config["stability"] = config_ctl.normalize_stability_settings(

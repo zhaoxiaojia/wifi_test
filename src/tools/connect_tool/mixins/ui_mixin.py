@@ -374,6 +374,120 @@ class UiAutomationMixin:
             logging.error(f"Exception in get_connected_ssid_via_cli_adb: {e}")
             return ""
 
+    def get_connected_channel_via_cli_adb(self, serial: str) -> int:
+        """
+        获取当前连接的 Wi-Fi 信道号。
+        通过 'iw wlan0 link' 命令获取连接频率，然后转换为信道号。
+        支持 2.4GHz 和 5GHz 频段。
+
+        Args:
+            serial (str): ADB 设备序列号
+
+        Returns:
+            int: 连接的信道号，未连接或无法获取时返回 0
+        """
+        try:
+            # 执行与 get_connected_ssid_via_cli_adb 相同的命令
+            result = subprocess.run(
+                ["adb", "-s", serial, "shell", "su 0 iw dev wlan0 link"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                stdin=subprocess.DEVNULL,
+                text=True,
+                timeout=8,
+                encoding='utf-8',
+                errors='ignore'
+            )
+
+            if result.returncode != 0:
+                logging.warning(f"Failed to run 'iw dev wlan0 link': {result.stderr}")
+                return 0
+
+            output = result.stdout
+            logging.debug(f"iw wlan0 link output:\n{output}")
+
+            # 检查是否已连接
+            if "Not connected" in output or "no current connection" in output.lower():
+                logging.info("Device is not connected to any Wi-Fi network")
+                return 0
+
+            # 提取频率 (freq)
+            freq_match = re.search(r'freq:\s*(\d+)', output)
+            if not freq_match:
+                logging.warning("Could not find frequency in iw link output")
+                return 0
+
+            freq = int(freq_match.group(1))
+            logging.debug(f"Connected frequency: {freq} MHz")
+
+            # 频率到信道的映射
+            FREQ_TO_CHANNEL = {
+                # 2.4GHz 频段
+                2412: 1, 2417: 2, 2422: 3, 2427: 4, 2432: 5, 2437: 6,
+                2442: 7, 2447: 8, 2452: 9, 2457: 10, 2462: 11, 2467: 12,
+                2472: 13, 2484: 14,
+
+                # 5GHz 频段 (UNII-1 & UNII-2)
+                5180: 36, 5200: 40, 5220: 44, 5240: 48,
+                5260: 52, 5280: 56, 5300: 60, 5320: 64,
+
+                # 5GHz 频段 (UNII-2e)
+                5500: 100, 5520: 104, 5540: 108, 5560: 112,
+                5580: 116, 5600: 120, 5620: 124, 5640: 128,
+                5660: 132, 5680: 136, 5700: 140, 5720: 144,
+
+                # 5GHz 频段 (UNII-3)
+                5745: 149, 5765: 153, 5785: 157, 5805: 161, 5825: 165
+            }
+
+            # 尝试直接映射
+            if freq in FREQ_TO_CHANNEL:
+                channel = FREQ_TO_CHANNEL[freq]
+                logging.info(f"✅ Connected to channel {channel} (frequency: {freq} MHz)")
+                return channel
+
+            # 尝试计算 2.4GHz 频段 (2412 + 5*(n-1))
+            if 2400 <= freq <= 2500:
+                # 公式：channel = (freq - 2407) / 5
+                channel = (freq - 2407) // 5
+                if 1 <= channel <= 14:
+                    logging.info(f"✅ Calculated 2.4GHz channel {channel} (frequency: {freq} MHz)")
+                    return channel
+
+            # 尝试计算 5GHz 频段 UNII-1 & UNII-2 (5180 + 20*(n-1))
+            if 5100 <= freq <= 5350:
+                # 从 36 开始
+                channel = 36 + ((freq - 5180) // 20) * 4
+                if channel in [36, 40, 44, 48, 52, 56, 60, 64]:
+                    logging.info(f"✅ Calculated 5GHz channel {channel} (frequency: {freq} MHz)")
+                    return channel
+
+            # 尝试计算 5GHz 频段 UNII-2e (5500 + 20*(n-1))
+            if 5400 <= freq <= 5750:
+                # 从 100 开始
+                channel = 100 + ((freq - 5500) // 20) * 4
+                if channel in [100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144]:
+                    logging.info(f"✅ Calculated 5GHz channel {channel} (frequency: {freq} MHz)")
+                    return channel
+
+            # 尝试计算 5GHz 频段 UNII-3 (5745 + 20*(n-1))
+            if 5700 <= freq <= 5900:
+                # 从 149 开始
+                channel = 149 + ((freq - 5745) // 20) * 4
+                if channel in [149, 153, 157, 161, 165]:
+                    logging.info(f"✅ Calculated 5GHz channel {channel} (frequency: {freq} MHz)")
+                    return channel
+
+            logging.warning(f"⚠️ Unknown frequency {freq} MHz, cannot determine channel")
+            return 0
+
+        except subprocess.TimeoutExpired:
+            logging.error(f"Timeout while getting connected channel on {serial}")
+            return 0
+        except Exception as e:
+            logging.error(f"Exception in get_connected_channel_via_cli_adb: {e}")
+            return 0
+
     def get_connected_ssid_adb(self, serial: Optional[str] = None) -> str:
         device_serial = serial or getattr(self, 'serial', None)
         if not device_serial:
@@ -880,91 +994,99 @@ class UiAutomationMixin:
         """
         Connect SSID via UI
         """
-        try:
-            # Step 1: Open Wi-Fi Setting
+        for retry_count in range(2):
             try:
-                temp_mixin = UiAutomationMixin()
-                temp_mixin.reset_settings_ui(serial)  # ← 现在可以调用了
-            except Exception as e:
-                logging.warning(f"[UI Connect] Failed to reset settings UI: {e}")
-            success = UiAutomationMixin._go_to_home(serial)
-            UiAutomationMixin._open_wifi_settings_page(serial)
-            time.sleep(2)
-
-            # Step 2: Click "See all"
-            see_all_texts = ["See all", "See all networks", "全部网络", "查看全部", "Show all"]
-            logging.info(f"[DEBUG] Looking for 'See all' keywords: {see_all_texts}")
-            for retry in range(5):
-                logging.info(f"\n[DEBUG] --- Attempt {retry + 1}/2 to find 'See all' ---")
-                root = UiAutomationMixin._dump_ui(serial, logdir)
-                pos = UiAutomationMixin._find_clickable_parent_of_text(root, see_all_texts)
-                if pos:
-                    logging.info(f"[INFO] Clicking 'See all' at ({pos[0]}, {pos[1]})")
-                    UiAutomationMixin._run_adb(f"adb -s {serial} shell input tap {pos[0]} {pos[1]}")
-                    time.sleep(4)
-                    break
+                logging.info(f"[UI Connect] Attempt {retry_count + 1}/2 to connect to '{ssid}'")
+                # Step 1: Open Wi-Fi Setting
+                try:
+                    temp_mixin = UiAutomationMixin()
+                    temp_mixin.reset_settings_ui(serial)  # ← 现在可以调用了
+                except Exception as e:
+                    logging.warning(f"[UI Connect] Failed to reset settings UI: {e}")
+                success = UiAutomationMixin._go_to_home(serial)
+                UiAutomationMixin._open_wifi_settings_page(serial)
                 time.sleep(2)
 
-            # Step 3: Scroll to bottom
-            logging.info("[INFO] Scrolling to bottom of network list...")
-            for _ in range(15):
-                UiAutomationMixin._run_adb(f"adb -s {serial} shell input keyevent KEYCODE_DPAD_DOWN")
-                time.sleep(0.3)
+                # Step 2: Click "See all"
+                see_all_texts = ["See all", "See all networks", "全部网络", "查看全部", "Show all"]
+                logging.info(f"[DEBUG] Looking for 'See all' keywords: {see_all_texts}")
+                for retry in range(5):
+                    logging.info(f"\nAttempt {retry + 1}/5 to find 'See all' ---")
+                    root = UiAutomationMixin._dump_ui(serial, logdir)
+                    pos = UiAutomationMixin._find_clickable_parent_of_text(root, see_all_texts)
+                    if pos:
+                        logging.info(f"[INFO] Clicking 'See all' at ({pos[0]}, {pos[1]})")
+                        UiAutomationMixin._run_adb(f"adb -s {serial} shell input tap {pos[0]} {pos[1]}")
+                        time.sleep(4)
+                        break
+                    time.sleep(2)
 
-            # Step 4: Find and click target SSID
-            for attempt in range(30):
-                root = UiAutomationMixin._dump_ui(serial, logdir)
-                pos = UiAutomationMixin._find_ssid_in_list(root, ssid)
-                logging.info(f"[INFO] Found pos: {pos}")
-                if pos:
-                    x, y = pos
-                    logging.info(f"[INFO] Found SSID '{ssid}' at screen position ({x}, {y}). Tapping directly.")
-                    UiAutomationMixin._run_adb(f"adb -s {serial} shell input tap {x} {y}")
-                    time.sleep(1.0)
+                # Step 3: Scroll to bottom
+                logging.info("[INFO] Scrolling to bottom of network list...")
+                for _ in range(15):
+                    UiAutomationMixin._run_adb(f"adb -s {serial} shell input keyevent KEYCODE_DPAD_DOWN")
+                    time.sleep(0.3)
 
-                    # Input password
-                    if password:
-                        logging.info(f"[INFO] Password required. Entering password.")
-                        UiAutomationMixin._run_adb(f"adb -s {serial} shell input text '{password}'")
-                        time.sleep(0.5)
+                # Step 4: Find and click target SSID
+                for attempt in range(30):
+                    root = UiAutomationMixin._dump_ui(serial, logdir)
+                    pos = UiAutomationMixin._find_ssid_in_list(root, ssid)
+                    logging.info(f"[INFO] Found pos: {pos}")
+                    if pos:
+                        x, y = pos
+                        logging.info(f"[INFO] Found SSID '{ssid}' at screen position ({x}, {y}). Tapping directly.")
+                        UiAutomationMixin._run_adb(f"adb -s {serial} shell input tap {x} {y}")
+                        time.sleep(1.0)
 
-                        # Try to Connect
-                        try:
-                            root_post = UiAutomationMixin._dump_ui(serial, logdir)
-                            for node in root_post.iter("node"):
-                                text = node.attrib.get("text", "").strip().lower()
-                                if text in ["connect", "连接", "ok"]:
-                                    bounds = node.attrib.get("bounds", "")
-                                    coords = list(map(int, re.findall(r"\d+", bounds)))
-                                    if len(coords) == 4:
-                                        btn_x = (coords[0] + coords[2]) // 2
-                                        btn_y = (coords[1] + coords[3]) // 2
-                                        UiAutomationMixin._run_adb(f"adb -s {serial} shell input tap {btn_x} {btn_y}")
-                                        logging.info("[INFO] Clicked 'Connect' button.")
-                                        break
-                            else:
-                                logging.info("[INFO] 'Connect' not found. Sending ENTER.")
+                        # Input password
+                        if password:
+                            logging.info(f"[INFO] Password required. Entering password.")
+                            UiAutomationMixin._run_adb(f"adb -s {serial} shell input text '{password}'")
+                            time.sleep(0.5)
+
+                            # Try to Connect
+                            try:
+                                root_post = UiAutomationMixin._dump_ui(serial, logdir)
+                                for node in root_post.iter("node"):
+                                    text = node.attrib.get("text", "").strip().lower()
+                                    if text in ["connect", "连接", "ok"]:
+                                        bounds = node.attrib.get("bounds", "")
+                                        coords = list(map(int, re.findall(r"\d+", bounds)))
+                                        if len(coords) == 4:
+                                            btn_x = (coords[0] + coords[2]) // 2
+                                            btn_y = (coords[1] + coords[3]) // 2
+                                            UiAutomationMixin._run_adb(f"adb -s {serial} shell input tap {btn_x} {btn_y}")
+                                            logging.info("[INFO] Clicked 'Connect' button.")
+                                            break
+                                else:
+                                    logging.info("[INFO] 'Connect' not found. Sending ENTER.")
+                                    UiAutomationMixin._run_adb(f"adb -s {serial} shell input keyevent KEYCODE_ENTER")
+                            except Exception as e:
+                                logging.warning(f"[WARN] Failed to click Connect: {e}. Using ENTER fallback.")
                                 UiAutomationMixin._run_adb(f"adb -s {serial} shell input keyevent KEYCODE_ENTER")
-                        except Exception as e:
-                            logging.warning(f"[WARN] Failed to click Connect: {e}. Using ENTER fallback.")
-                            UiAutomationMixin._run_adb(f"adb -s {serial} shell input keyevent KEYCODE_ENTER")
 
-                        time.sleep(2.0)
-                    else:
-                        time.sleep(2.0)
+                            time.sleep(2.0)
+                        else:
+                            time.sleep(2.0)
 
+                        time.sleep(30)
+                        return True
+
+                    for _ in range(5):
+                        UiAutomationMixin._run_adb(f"adb -s {serial} shell input keyevent KEYCODE_DPAD_UP")
+                        time.sleep(0.1)
+
+            except Exception as e:
+                if retry_count == 0:
+                    logging.info("[UI Connect] Retrying in 60 seconds...")
                     time.sleep(60)
-                    return True
-
-                for _ in range(5):
-                    UiAutomationMixin._run_adb(f"adb -s {serial} shell input keyevent KEYCODE_DPAD_UP")
-                    time.sleep(0.1)
-
-            return False
-
-        except Exception as e:
-            logging.error(f"[UI Connect Error] {e}", exc_info=True)
-            return False
+                    # 继续外层循环的下一次迭代
+                    continue
+                else:
+                    # 如果是第二次尝试也失败了，返回 False
+                    logging.error("[UI Connect] Failed to connect after 2 attempts.")
+                    return False
+        return False
 
     def launch_youtube_tv_and_search(self, serial: str, logdir: Path, query: str = "NASA"):
         """Launch YouTube TV and search for a channel on Android TV."""
@@ -1564,7 +1686,7 @@ class UiAutomationMixin:
                 output = UiAutomationMixin._run_adb_capture_output(
                     f"adb -s {serial} shell ping -c 10 8.8.8.8",
                     timeout=10
-                )
+                ) #8.8.8.8 111.45.11.5
                 # 检查是否收到回复（典型成功输出包含 "bytes from 8.8.8.8"）
                 if "bytes from 8.8.8.8" in output or "64 bytes from" in output:
                     logging.info(f"Ping succeeded, {output}")
@@ -1670,19 +1792,13 @@ class UiAutomationMixin:
     import re
 
     @staticmethod
+    @staticmethod
     def get_wifi_country_code(serial: str, timeout: int = 8) -> str:
         """
         Get the effective Wi-Fi regulatory country code via 'iw reg get' on the device.
 
-        This reads the 'global' country from the Linux wireless regulatory database,
-        which reflects the actual country code used by the Wi-Fi driver.
-
-        Args:
-            serial (str): ADB serial number of the target device.
-            timeout (int): Command execution timeout in seconds.
-
         Returns:
-            str: Country code (e.g., "US", "KR", "SG") if found, otherwise empty string.
+            str: Country code in uppercase (e.g., "US", "CN", "DE"). Returns empty string if failed.
         """
         try:
             cmd = f"adb -s {serial} shell iw reg get"
@@ -1698,7 +1814,6 @@ class UiAutomationMixin:
                 encoding='utf-8',
                 errors='ignore'
             )
-
             if result.returncode != 0:
                 logging.error(f"Failed to run 'iw reg get' on {serial}: {result.stderr.strip()}")
                 return ""
@@ -1710,7 +1825,6 @@ class UiAutomationMixin:
                 return ""
 
             # Parse the output to find the global country line
-            # Example line: "global\ncountry US: DFS-FCC"
             lines = output.splitlines()
             in_global_section = False
             for line in lines:
@@ -1719,25 +1833,267 @@ class UiAutomationMixin:
                     in_global_section = True
                     continue
                 if in_global_section and line.startswith("country "):
-                    # Extract country code before ':' or space
+                    # Extract country code (ensure it's uppercase)
+                    # Match exactly 2 capital letters after "country"
                     match = re.search(r'country\s+([A-Z]{2})', line)
                     if match:
-                        country_code = match.group(1)
-                        logging.info(f"✅ Detected Wi-Fi country code via iw reg: {country_code} on {serial}")
-                        return country_code
+                        country_code = match.group(1).upper()  # Double ensure uppercase
+                        logging.info(f"✅ Successfully retrieved country code: {country_code}")
+                        return country_code  # <-- 直接返回字符串 "US"
                     else:
-                        logging.warning(f"Unexpected country line format: {line}")
-                        return ""
-                # Stop after first non-global section (optional)
-                if line and not line.startswith("country ") and in_global_section:
+                        logging.warning(f"Regex did not match country code in line: {line}")
+                        break  # Exit loop if format is wrong
+                # Exit if we are past the global section (optional optimization)
+                elif in_global_section and line.startswith("country") is False and line != "":
                     break
 
-            logging.warning(f"Could not find 'global country' line in 'iw reg get' output on {serial}")
+            logging.warning(f"Could not find valid country code in 'iw reg get' output.")
             return ""
 
         except subprocess.TimeoutExpired:
             logging.error(f"⏰ Timeout while running 'iw reg get' on {serial}")
             return ""
         except Exception as e:
-            logging.exception(f"💥 Exception in get_wifi_country_code_via_iw_reg on {serial}: {e}")
+            logging.exception(f"💥 Exception in get_wifi_country_code: {e}")
             return ""
+
+    def set_wifi_country_code(self, serial: str, country_code: str, timeout: int = 8) -> dict:
+        """
+        Set the Wi-Fi regulatory country code.
+
+        Returns:
+            dict: Always returns a dictionary with 'status', 'message', '2g_channels' (list), '5g_channels' (list).
+        """
+        # --- 频率范围到信道列表的映射表 (修正版) ---
+        # 这里定义标准的频率范围对应的信道
+        FREQUENCY_TO_CHANNEL_MAP = {
+            # --- 2.4G 频段 ---
+            # 我们使用范围来定义，代码逻辑会判断具体属于哪个范围
+            # (min_freq, max_freq): [channels]
+            # 情况1: 频率上限在 2472 左右 (包含 Ch 1-11)
+            # 情况2: 频率上限在 2483 左右 (包含 Ch 1-13)
+            # 情况3: 频率上限在 2494 左右 (包含 Ch 1-14，通常仅日本)
+
+            # --- 5G 频段 ---
+            # 定义常见的 5G 频段范围
+            (5150, 5250): [36, 40, 44, 48],  # UNII-1
+            (5250, 5350): [52, 56, 60, 64],  # UNII-2A (DFS)
+            (5470, 5730): [100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144],  # UNII-2C (DFS)
+            (5735, 5835): [149, 153, 157, 161, 165],  # UNII-3
+            #(5850, 5895): [169, 173, 177],  # UNII-4 (部分设备)
+        }
+
+        def map_frequency_to_channels(freq_start: int, freq_end: int) -> List[int]:
+            """
+            根据频率范围查找对应的信道列表。
+            逻辑：
+            1. 如果是 2.4G 频段，根据结束频率判断是 Ch 1-11 还是 1-13。
+            2. 如果是 5G 频段，查找映射表。
+            """
+            channels = []
+
+            # --- 2.4G 逻辑 (核心修复) ---
+            if 2400 <= freq_start < 2500:
+                # 根据结束频率判断
+                if freq_end <= 2472:
+                    # 只支持到 2472 (Ch 11)
+                    channels = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+                    logging.debug(f"2.4G Logic: {freq_start}-{freq_end} -> Ch 1-11")
+                elif freq_end <= 2483:
+                    # 支持到 2483 (Ch 13)
+                    channels = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+                    logging.debug(f"2.4G Logic: {freq_start}-{freq_end} -> Ch 1-13")
+                else:
+                    # 支持到 2494 (Ch 14)
+                    channels = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+                    logging.debug(f"2.4G Logic: {freq_start}-{freq_end} -> Ch 1-14")
+
+            # --- 5G 逻辑 ---
+            elif freq_start >= 5000:
+                # 遍历映射表，检查是否有重叠
+                for (f_min, f_max), ch_list in FREQUENCY_TO_CHANNEL_MAP.items():
+                    if freq_start <= f_max and freq_end >= f_min:
+                        channels.extend(ch_list)
+
+            return sorted(list(set(channels)))
+
+        try:
+            # 1. Set the country code (Assuming this part is handled elsewhere or not needed here)
+            # If you need to set it, uncomment the following:
+            # cmd_set = f"adb -s {serial} shell iw reg set {country_code}"
+            # ... (subprocess.run for set) ...
+            cmd_set = f"adb -s {serial} shell iw reg set {country_code}"
+            result_get = subprocess.run(
+                cmd_set,
+                shell=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                stdin=subprocess.DEVNULL,
+                text=True,
+                timeout=timeout,
+                encoding='utf-8',
+                errors='ignore'
+            )
+            logging.info(f"iw reg set info: {result_get}")
+
+            cmd_reload = f"adb -s {serial} shell iw reg reload"
+            result_get = subprocess.run(
+                cmd_reload,
+                shell=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                stdin=subprocess.DEVNULL,
+                text=True,
+                timeout=timeout,
+                encoding='utf-8',
+                errors='ignore'
+            )
+            logging.info(f"iw reg reload info: {result_get}")
+
+            # 2. Get status
+            cmd_get = f"adb -s {serial} shell iw reg get"
+            result_get = subprocess.run(
+                cmd_get,
+                shell=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                stdin=subprocess.DEVNULL,
+                text=True,
+                timeout=timeout,
+                encoding='utf-8',
+                errors='ignore'
+            )
+            #logging.info(f"iw reg get info: {result_get}")
+            if result_get.returncode != 0:
+                error_msg = f"Failed to run 'iw reg get': {result_get.stderr.strip()}"
+                logging.error(error_msg)
+                return {
+                    'status': False,
+                    'message': error_msg,
+                    '2g_channels': [],
+                    '5g_channels': []
+                }
+
+            output = result_get.stdout.strip()
+            if not output:
+                error_msg = "Empty output from 'iw reg get'"
+                logging.error(error_msg)
+                return {
+                    'status': False,
+                    'message': error_msg,
+                    '2g_channels': [],
+                    '5g_channels': []
+                }
+
+            # --- 解析逻辑 ---
+            lines = output.splitlines()
+            in_global_section = False
+            all_2g_channels = set()
+            all_5g_channels = set()
+
+            for line in lines:
+                line = line.strip()
+                if line == "global":
+                    in_global_section = True
+                    continue
+                if in_global_section:
+                    # 遇到下一个 section 或空行结束
+                    if line and not line.startswith("(") and not line.startswith("country"):
+                        break
+                    if line.startswith("("):
+                        match = re.search(r'\((\d+)\s*-\s*(\d+)', line)
+                        if match:
+                            freq_start = int(match.group(1))
+                            freq_end = int(match.group(2))
+                            logging.debug(f"Detected Frequency Range: {freq_start} - {freq_end}")
+
+                            # --- 核心转换逻辑 ---
+                            channels = map_frequency_to_channels(freq_start, freq_end)
+
+                            # 根据频率判断频段
+                            if 2400 <= freq_start < 2500:
+                                all_2g_channels.update(channels)
+                                logging.info(f"✅ Matched 2.4G channels: {channels} for range {freq_start}-{freq_end}")
+                            elif 5000 <= freq_start < 5925:
+                                all_5g_channels.update(channels)
+                                logging.info(f"✅ Matched 5G channels: {channels} for range {freq_start}-{freq_end}")
+                            elif freq_start >= 5925:
+                                logging.debug(f"Ignoring 6G band frequency: {freq_start}-{freq_end}")
+
+            # 转换为排序列表
+            ch_2g_list = sorted(list(all_2g_channels))
+            ch_5g_list = sorted(list(all_5g_channels))
+
+            result_dict = {
+                'status': True,
+                'message': f"Country {country_code} channels parsed",
+                '2g_channels': ch_2g_list,
+                '5g_channels': ch_5g_list
+            }
+
+            logging.info(f"✅ Final Result: {result_dict}")
+            return result_dict
+
+        except Exception as e:
+            error_msg = f"Exception: {e}"
+            logging.exception(error_msg)
+            return {
+                'status': False,
+                'message': error_msg,
+                '2g_channels': [],
+                '5g_channels': []
+            }
+
+    def set_wifi_country_code_default(self, serial: str, country_code: str, timeout: int = 8) -> dict:
+        """
+        Set the Wi-Fi regulatory country code to default.
+
+        Returns:
+            dict: Always returns a dictionary with 'status' (bool) and 'message' (str).
+        """
+        try:
+            # 1. Set the country code
+            cmd_set = f"adb -s {serial} shell iw reg set {country_code}"
+            logging.debug(f"Executing: {cmd_set}")
+            result_set = subprocess.run(
+                cmd_set,
+                shell=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                stdin=subprocess.DEVNULL,
+                text=True,
+                timeout=timeout,
+                encoding='utf-8',
+                errors='ignore'
+            )
+            if result_set.returncode != 0:
+                error_msg = f"❌ Failed to run 'iw reg set {country_code}': {result_set.stderr.strip()}"
+                logging.error(error_msg)
+                # --- 修改点：返回错误字典 ---
+                return {
+                    'status': False,
+                    'message': error_msg,
+                    '2g_channels': [],
+                    '5g_channels': []
+                }
+
+            logging.info(f"✅ Successfully sent 'iw reg set {country_code}' command.")
+
+            # --- 修改点：成功时返回字典 ---
+            return {
+                'status': True,
+                'message': f"Default country {country_code} set",
+                '2g_channels': ['2412-2472'],  # 示例数据，实际可能需要解析
+                '5g_channels': ['5180-5320', '5745-5825']
+            }
+
+        except Exception as e:
+            error_msg = f"💥 Exception in set_wifi_country_code_default: {e}"
+            logging.exception(error_msg)
+            # --- 修改点：返回错误字典 ---
+            return {
+                'status': False,
+                'message': error_msg,
+                '2g_channels': [],
+                '5g_channels': []
+            }

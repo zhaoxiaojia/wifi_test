@@ -10,7 +10,7 @@ parameters in English.
 """
 
 import logging
-import re
+import re, queue
 import signal
 import time
 from time import sleep
@@ -20,8 +20,9 @@ import pytest
 import serial
 from queue import Queue, Empty
 from typing import Annotated
+import uuid
 
-
+_serial_tool_instances = {}
 class serial_tool:
     """
     Serial tool.
@@ -36,6 +37,7 @@ class serial_tool:
     None
         This class does not return a value.
     """
+
 
     def __init__(self, serial_port='', baud='', log_file="kernel_log.txt", enable_log=True):
         """
@@ -62,9 +64,12 @@ class serial_tool:
         None
             This method does not return a value.
         """
+
+        logging.info("!!! SerialTool.__init__ IS BEING CALLED !!!")
         self.serial_port = serial_port or pytest.config.get('serial_port')['port']
         self.baud = baud or pytest.config.get('serial_port')['baud']
         logging.info(f'port {self.serial_port} baud {self.baud}')
+        logging.debug(f'__init__: Attempting to open serial with port={self.serial_port}, baud={self.baud}')
         self.ethernet_ip = ''
         self.uboot_time = 0
         self.ser = None
@@ -106,10 +111,14 @@ class serial_tool:
                                      dsrdtr=False,
                                      timeout=1)
             logging.info('Serial port %s-%s opened', self.serial_port, self.baud)
+            logging.info(f'_open_serial: Successfully created serial object: {self.ser}')
         except serial.serialutil.SerialException as e:
             logging.error('Failed to open serial port %s-%s: %s',
                           self.serial_port, self.baud, e)
+            logging.debug(f'_open_serial: Failed to create serial object, set to None. Exception: {e}')
+            error_msg = f'Failed to open serial port {self.serial_port}-{self.baud}: {e}'
             self.ser = None
+            raise RuntimeError(error_msg) from e
 
     def _is_serial_open(self):
         """
@@ -138,6 +147,43 @@ class serial_tool:
             except Exception:
                 return False
         return False
+
+    def exec_command(self, cmd: str, timeout: float = 10.0) -> str:
+        if self.ser is None:
+            raise RuntimeError("Serial port is not open.")
+
+        # 1. 生成唯一标记
+        marker_start = f"CMD_START_{uuid.uuid4().hex[:8]}"
+        marker_end = f"CMD_END_{marker_start.split('_')[-1]}"
+
+        # 2. 发送复合命令
+        full_cmd = f'echo "{marker_start}"; {cmd}; echo "{marker_end}"'
+        self.write(full_cmd)
+
+        output = ""
+        start_time = time.time()
+
+        # 3. 读取所有数据直到超时
+        while time.time() - start_time < timeout:
+            try:
+                data = self._rx_queue.get(timeout=0.5)
+                output += data.decode('utf-8', errors='ignore')
+                if marker_end in output:
+                    break
+            except queue.Empty:
+                continue
+
+        # 4. 提取目标命令的输出
+        try:
+            start_idx = output.index(marker_start) + len(marker_start)
+            end_idx = output.index(marker_end)
+            result = output[start_idx:end_idx].strip()
+            # 移除可能的命令回显 (optional)
+            if result.startswith(cmd):
+                result = result[len(cmd):].lstrip('\r\n')
+            return result
+        except ValueError:
+            raise RuntimeError(f"Command '{cmd}' did not complete within {timeout}s. Output: {output[-500:]}")
 
     def _ensure_connection(self, retries=3, interval=2):
         """
@@ -173,6 +219,7 @@ class serial_tool:
                 except serial.serialutil.SerialException as e:
                     logging.debug('Error closing serial during reconnect: %s', e)
                 finally:
+                    logging.debug(f'_ensure_connection: Set self.ser to None before reopening.')
                     self.ser = None
             self._open_serial()
             if self._is_serial_open():
@@ -276,57 +323,78 @@ class serial_tool:
             if keyword in self.keyword_flags:
                 del self.keyword_flags[keyword]
 
-    def get_ip_address(self, inet='wlan0', count=20):
-        """
-        Retrieve ip address.
+    def get_ip_address(self, inet='wlan0', count=10):
+        """Retrieve ip address."""
+        if self.ser is None:
+            logging.error("get_ip_address called, but self.ser is None!")
+            return None
 
-        -------------------------
-        It logs information for debugging or monitoring purposes.
-        It introduces delays to allow the device to process commands.
-
-        -------------------------
-        Parameters
-        -------------------------
-        inet : Any
-            The ``inet`` parameter.
-        count : Any
-            The ``count`` parameter.
-
-        -------------------------
-        Returns
-        -------------------------
-        Any
-            The result produced by the function.
-        """
-
-        for attempt in range(count, 0, -1):
+        for attempt in range(count):
             try:
-                self.ser.reset_input_buffer()
-                self.write('\x1A')
-                self.write('bg')
-                time.sleep(10)
-                self.write(f'ifconfig {inet}')
-                ipInfo = ''
+                # --- 清空队列中的旧数据 ---
+                while not self._rx_queue.empty():
+                    try:
+                        self._rx_queue.get_nowait()
+                    except Empty:
+                        break
+
+                # --- 发送命令 ---
+                logging.info("[GET_IP] Sending 'echo HELLO' to test.")
+                self.write('echo HELLO')
+                time.sleep(1)
+
+                # --- 从 _rx_queue 读取 echo 响应 ---
+                echo_response = ''
                 start_time = time.time()
-                while time.time() - start_time < 10:  # 5 second timeout
-                    if self.ser.in_waiting:
-                        self.write(f'ifconfig {inet}')
-                        time.sleep(1)
-                        ipInfo += self.ser.read(self.ser.in_waiting).decode('utf-8', errors='ignore')
-                        if 'TX bytes:' in ipInfo:
-                            break  # Stop reading if we see the marker
-                    time.sleep(0.1)
-                ipInfo = ipInfo.split('TX bytes:')[0]
-                ipaddress = re.findall(r'inet addr:(\d+\.\d+\.\d+\.\d+)', ipInfo)
-                if ipaddress:
-                    logging.info(f'IP address: {ipaddress[0]}')
-                    return ipaddress[0]
+                while time.time() - start_time < 3:
+                    try:
+                        data = self._rx_queue.get(timeout=0.5)
+                        chunk = data.decode('utf-8', errors='ignore')
+                        echo_response += chunk
+                        if 'HELLO' in chunk:
+                            break
+                    except Empty:
+                        continue
+
+                logging.info(f"[GET_IP] Echo response: {repr(echo_response)}")
+                if 'HELLO' not in echo_response:
+                    logging.warning("[GET_IP] Echo test failed!")
+
+                # --- 发送 ifconfig 命令 ---
+                command = f'ifconfig {inet}'
+                logging.info(f'[GET_IP] Sending: {command}')
+                self.write(command)
+                time.sleep(2)
+
+                # --- 从 _rx_queue 读取 ifconfig 响应 ---
+                ip_info = ''
+                start_time = time.time()
+                while time.time() - start_time < 10:
+                    try:
+                        data = self._rx_queue.get(timeout=1)
+                        chunk = data.decode('utf-8', errors='ignore')
+                        ip_info += chunk
+                        # 如果看到 TX bytes 或者新提示符，可以提前结束
+                        if 'TX bytes:' in chunk or 'console:/ $' in chunk:
+                            break
+                    except Empty:
+                        break  # Timeout, no more data
+
+                logging.info(f"[GET_IP] Full response:\n{ip_info}")
+
+                # --- 解析 IP ---
+                ip_match = re.search(r'inet (?:addr:)?(\d+\.\d+\.\d+\.\d+)', ip_info)
+                if ip_match:
+                    ipaddress = ip_match.group(1)
+                    logging.info(f'[GET_IP] Found IP: {ipaddress}')
+                    return ipaddress
+
             except Exception as e:
-                logging.warning(f'Error getting IP address: {str(e)}')
-            if attempt > 1:
-                logging.debug(f'Retrying... attempts left: {attempt - 1}')
-                time.sleep(2 if attempt % 2 == 0 else 1)  # Vary sleep time
-        logging.error('Failed to get IP address after maximum attempts')
+                logging.exception(f'[GET_IP] Error on attempt {attempt + 1}: {e}')
+
+            time.sleep(2)
+
+        logging.error('[GET_IP] Failed after all attempts')
         return None
 
     def write_pipe(self, command):
@@ -445,8 +513,14 @@ class serial_tool:
         None
             This method does not return a value.
         """
+        if self.ser is None:
+            return
+
         try:
-            self.ser.write(bytes(command + '\r\n', encoding='utf-8'))
+            #self.ser.write(bytes(command + '\r\n', encoding='utf-8'))
+            full_cmd = command + '\r\n'  # <-- 这是关键！
+            self.ser.write(full_cmd.encode())
+            logging.info(f"=> {command}")
         except (serial.serialutil.SerialException, AttributeError, OSError) as err:
             logging.error('Serial write failed for command %s: %s', command, err)
             self._ensure_connection()

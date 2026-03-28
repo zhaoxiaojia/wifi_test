@@ -836,18 +836,25 @@ class ConfigController(
             "main_chip": "",
             "wifi_module": "",
             "interface": "",
+            "mass_production_status": "",
         }
         if isinstance(raw_value, Mapping):
             customer = self.normalize_fpga_token(raw_value.get("customer"))
             product_line = self.normalize_fpga_token(raw_value.get("product_line"))
             project = self.normalize_fpga_token(raw_value.get("project"))
             odm = str(raw_value.get("odm") or "")
+            mass_value = raw_value.get("mass_production_status")
+            if isinstance(mass_value, (list, tuple)):
+                mass_status = str(mass_value[0]) if mass_value else ""
+            else:
+                mass_status = str(mass_value or "")
             normalized.update(
                 {
                     "customer": customer,
                     "product_line": product_line,
                     "project": project,
                     "odm": odm,
+                    "mass_production_status": mass_status,
                 }
             )
             # Derive details from the project triple when possible; do not
@@ -864,6 +871,9 @@ class ConfigController(
                 normalized["main_chip"] = info["main_chip"]
                 normalized["wifi_module"] = info["wifi_module"]
                 normalized["interface"] = info["interface"]
+                if not normalized["mass_production_status"]:
+                    choices = list(info.get("mass_production_status") or [])
+                    normalized["mass_production_status"] = str(choices[0]) if choices else ""
         elif isinstance(raw_value, str):
             # Legacy string format: attempt to resolve project triple from
             # encoded wifi_module/interface and derive details accordingly.
@@ -882,6 +892,8 @@ class ConfigController(
                 normalized["main_chip"] = info["main_chip"]
                 normalized["wifi_module"] = info["wifi_module"]
                 normalized["interface"] = info["interface"]
+                choices = list(info.get("mass_production_status") or [])
+                normalized["mass_production_status"] = str(choices[0]) if choices else ""
         return normalized
 
     # ------------------------------------------------------------------
@@ -1189,6 +1201,9 @@ class ConfigController(
             if isinstance(model, QSortFilterProxyModel)
             else proxy_idx
         )
+        if not hasattr(page, 'fs_model') or page.fs_model is None:
+            # 只是纯文本显示，不需要处理文件路径
+            return
         selected_path = page.fs_model.filePath(src_idx)
         if os.path.isfile(selected_path) and selected_path.endswith(".py"):
             abs_path = Path(selected_path).resolve()

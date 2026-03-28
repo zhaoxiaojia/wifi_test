@@ -1,0 +1,1 @@
+from .region_result import ResultCollector

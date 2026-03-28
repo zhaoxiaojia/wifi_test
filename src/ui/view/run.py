@@ -210,14 +210,14 @@ class RunView(CardWidget):
 
     def _is_project_test_script(self, case_path: str) -> bool:
         """判断是否为 project/ 下的功能测试脚本"""
-        # 构建完整路径：base_dir/src/test/project/...
-        full_path = Path(Paths.BASE_DIR) / "src" / "test" / "project" / case_path
+        # 构建完整路径：base_dir/src/test/function/...
+        full_path = Path(Paths.BASE_DIR) / "src" / "test" / "function" / case_path
         p = full_path.resolve()
         parts = p.parts
         for i in range(len(parts) - 2):
             if (str(parts[i]).lower() == "src" and
                     str(parts[i + 1]).lower() == "test" and
-                    str(parts[i + 2]).lower() == "project"):
+                    str(parts[i + 2]).lower() == "function"):
                 return True
         return False
 
@@ -608,7 +608,7 @@ class RunPage(CardWidget):
             account_name = str(self.main_window._active_account.get("username", "")).strip()
 
         # --- 新增：智能判断是否应运行 Excel 计划 ---
-        # 条件1: 当前 case_path 指向 'project/' 目录下的文件
+        # 条件1: 当前 case_path 指向 'function/' 目录下的文件
         is_project_case = self.view._is_project_test_script(self.case_path)
 
         # 条件2: excel_plan_path 尚未被设置 (即为 None)
@@ -662,7 +662,7 @@ class RunPage(CardWidget):
             is_project_case = self.view._is_project_test_script(self.case_path)
             # 判断是否成功加载了 Excel 计划
             has_excel_plan = self.excel_plan_path is not None and self.excel_plan_path != "None"
-            print(f"[DEBUG] is_project_case check: 'project' in {Path(self.case_path).parts} -> {is_project_case}")
+            print(f"[DEBUG] is_project_case check: 'function' in {Path(self.case_path).parts} -> {is_project_case}")
 
             if is_project_case and not has_excel_plan:
                 from qfluentwidgets import MessageBox

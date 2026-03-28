@@ -1,35 +1,42 @@
 panels:
   basic:
+    layout: "grid"  # 新增：面板布局类型(grid/horizontal/vertical)
+    columns: 2      # 新增：网格列数
     sections:
-      - id: software_info
-        label: "Software Info"
+      - id: system
+        label: "System Info"
+        position: 0
+        #layout: horizontal
         fields:
+          - key: system.version
+            widget: combo_box
+            label: "OS Version"
+            #position: 1  # 新增：在网格中的位置
+            #layout: "horizontal"
+          - key: system.kernel_version
+            widget: combo_box
+            label: "Kernel Version"
+            #group: "right"
           - key: software_info.software_version
             widget: line_edit
             label: "Software Version"
             placeholder: "e.g. V1.2.3"
+            #group: "left"
           - key: software_info.driver_version
             widget: line_edit
             label: "Driver Version"
             placeholder: "Driver build"
-
-      - id: system
-        label: "System"
-        fields:
-          - key: system.version
-            widget: combo_box
-            label: "Android Version"
-          - key: system.kernel_version
-            widget: combo_box
-            label: "Kernel Version"
+            #group: "right"
 
       - id: connect_type
-        label: "Control Type"
+        label: "Control Setting"
+        position: 1
+        #layout: horizontal , "Android" "Linux"
         fields:
           - key: connect_type.type
             widget: combo_box
             label: "Control Type"
-            choices: ["Android", "Linux"]
+            choices: ["Android"]
           - key: connect_type.mac_address
             widget: line_edit
             label: "MAC Address"
@@ -50,9 +57,21 @@ panels:
             label: "Wait seconds"
             minimum: 1
             maximum: 999999
+          - key: serial_port.status
+            widget: checkbox
+            label: "Enable Serial Port"
+          - key: serial_port.port
+            widget: combo_box
+            label: "Port"
+          - key: serial_port.baud
+            widget: combo_box
+            label: "Baud Rate"
+            choices: [ "9600", "19200", "38400", "57600", "115200", "921600" ]
 
       - id: project
-        label: "Project"
+        label: "Project Info"
+        position: 2
+        #layout: horizontal
         fields:
           - key: project.customer
             widget: combo_box
@@ -78,54 +97,19 @@ panels:
           - key: project.mass_production_status
             widget: combo_box
             label: "Mass Production Status"
+          - key: project.dut_sn
+            widget: line_edit
+            label: "DUT SN"
 
-      - id: serial_port
-        label: "Serial Port"
-        fields:
-          - key: serial_port.status
-            widget: checkbox
-            label: "Enable Serial Port"
-          - key: serial_port.port
-            widget: combo_box
-            label: "Port"
-          - key: serial_port.baud
-            widget: combo_box
-            label: "Baud Rate"
-            choices: ["9600", "19200", "38400", "57600", "115200", "921600"]
-      - id: throughput
-        label: "Throughput Generator"
-        fields:
-          - key: rvr.tool
-            widget: combo_box
-            label: "Throughput Tool"
-            choices: ["iperf", "ixchariot"]
-          - key: rvr.iperf.path
-            widget: line_edit
-            label: "iperf path (DUT)"
-          - key: rvr.iperf.server_cmd
-            widget: line_edit
-            label: "iperf server cmd"
-          - key: rvr.iperf.client_cmd
-            widget: line_edit
-            label: "iperf client cmd"
-          - key: rvr.ixchariot.path
-            widget: line_edit
-            label: "IxChariot path"
-          - key: rvr.repeat
-            widget: line_edit
-            label: "Repeat"
-            placeholder: "0"
-          - key: rvr.throughput_threshold
-            widget: line_edit
-            label: "Zero Point Threshold"
-            placeholder: "0"
       - id: router
-        label: "Router"
+        label: "Router Setting"
+        position: 3
+        #layout: horizontal
         fields:
           - key: router.name
             widget: combo_box
             label: "Router"
-            choices: ["asusax88u", "asusax88upro", "asusax86u","xiaomibe7000", "xiaomiax3600"]
+            choices: [ "asusax88u", "asusax88upro", "asusax86u","xiaomibe7000", "xiaomiax3600", "glmt3000" ]
           - key: router.address
             widget: line_edit
             label: "Router IP"
@@ -138,18 +122,21 @@ panels:
             widget: line_edit
             label: "5G SSID"
             placeholder: "5G"
-      - id: duration_control
-        label: "Test Duration"
-        fields:
-          - key: duration_control.loop
-            widget: line_edit
-            label: "Loop count"
-          - key: duration_control.duration_hours
-            widget: line_edit
-            label: "Duration (hours)"
-          - key: duration_control.exitfirst
-            widget: checkbox
-            label: "Stop immediately on failure (exitfirst)"
-          - key: duration_control.retry_limit
-            widget: line_edit
-            label: "Retry count"
+
+#      - id: duration_control
+#        label: "Test Duration"
+#        position: 4
+#        layout: "two_column"
+#        fields:
+#          - key: duration_control.loop
+#            widget: line_edit
+#            label: "Loop count"
+#          - key: duration_control.duration_hours
+#            widget: line_edit
+#            label: "Duration (hours)"
+#          - key: duration_control.exitfirst
+#            widget: checkbox
+#            label: "Stop immediately on failure (exitfirst)"
+#          - key: duration_control.retry_limit
+#            widget: line_edit
+#            label: "Retry count"

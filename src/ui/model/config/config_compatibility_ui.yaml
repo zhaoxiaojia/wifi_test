@@ -7,3 +7,4 @@ panels:
           - key: compatibility.nic
             widget: combo_box
             label: "Network interface"
+            choices: ["LAN", "WLAN"]
