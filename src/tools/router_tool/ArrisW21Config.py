@@ -6,6 +6,7 @@ from __future__ import annotations
 import logging
 import re, time
 from typing import Optional
+from typing import Union
 
 from src.tools.router_tool.RouterControl import ConfigError
 from src.tools.router_tool.AsusRouter.AsusTelnetNvramControl import AsusBaseControl
