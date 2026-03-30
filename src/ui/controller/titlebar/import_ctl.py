@@ -745,7 +745,6 @@ class PerformanceExcelImporter:
             ("TX(UNIT:MB)", "uplink"),
             ("TXUNIT:MB", "uplink"),
         )
-
         for header_row in range(1, ws.max_row):
             title = find_title_above(header_row)
             if title is None:
@@ -1182,6 +1181,13 @@ class ImportController:
             "TESTER": "tester",
             "PROJECT ID": "project_id",
             "PROJECTID": "project_id",
+            "USB CABLE": "usb_cable",
+            "HDMI CABLE": "hdmi_cable",
+            "BT DEVICE": "bt_device",
+            "BLUETOOTH DEVICE": "bt_device",
+            "BT TYPE": "bt_type",
+            "BLUETOOTH TYPE": "bt_type",
+            "TV DEVICE": "tv_device",
             "SOFTWARE VERSION": "software_version",
             "SW VERSION": "software_version",
             "SW_VER": "software_version",
@@ -1351,6 +1357,7 @@ class ImportController:
                     or []
                 )
             ),
+            "lab_name": field_widgets["lab.name"].currentText(),
         }
 
     def _sync_golden_to_db(
@@ -1530,8 +1537,62 @@ class ImportController:
         connect_type = ui_payload.get("connect_type")
         if not connect_type and ecosystem in {"Android", "Linux"}:
             connect_type = ecosystem
+        lab_id: int | None = None
+        lab_name = str(ui_payload.get("lab_name") or "").strip()
+        if lab_name:
+            lab_payload = {"lab_name": lab_name}
+            lab_id = client.insert(
+                "INSERT INTO `lab` (`lab_name`, `payload_json`) "
+                "VALUES (%s, %s) "
+                "ON DUPLICATE KEY UPDATE "
+                "`id`=LAST_INSERT_ID(`id`), "
+                "`lab_name`=VALUES(`lab_name`), "
+                "`payload_json`=VALUES(`payload_json`)",
+                (
+                    lab_name,
+                    json.dumps(lab_payload, ensure_ascii=True, separators=(",", ":")),
+                ),
+            )
+
+            env_payload = {
+                "lab_id": int(lab_id),
+                "router_name": ui_payload.get("router_name"),
+                "router_address": ui_payload.get("router_address"),
+                "usb_cable": ui_payload.get("usb_cable"),
+                "hdmi_cable": ui_payload.get("hdmi_cable"),
+                "bt_device": ui_payload.get("bt_device"),
+                "bt_type": ui_payload.get("bt_type"),
+                "tv_device": ui_payload.get("tv_device"),
+            }
+            client.insert(
+                "INSERT INTO `lab_environment` "
+                "(`lab_id`, `router_name`, `router_address`, `usb_cable`, `hdmi_cable`, `bt_device`, `bt_type`, `tv_device`, `payload_json`) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) "
+                "ON DUPLICATE KEY UPDATE "
+                "`lab_id`=VALUES(`lab_id`), "
+                "`router_name`=VALUES(`router_name`), "
+                "`router_address`=VALUES(`router_address`), "
+                "`usb_cable`=VALUES(`usb_cable`), "
+                "`hdmi_cable`=VALUES(`hdmi_cable`), "
+                "`bt_device`=VALUES(`bt_device`), "
+                "`bt_type`=VALUES(`bt_type`), "
+                "`tv_device`=VALUES(`tv_device`), "
+                "`payload_json`=VALUES(`payload_json`)",
+                (
+                    int(lab_id),
+                    env_payload.get("router_name"),
+                    env_payload.get("router_address"),
+                    env_payload.get("usb_cable"),
+                    env_payload.get("hdmi_cable"),
+                    env_payload.get("bt_device"),
+                    env_payload.get("bt_type"),
+                    env_payload.get("tv_device"),
+                    json.dumps(env_payload, ensure_ascii=True, separators=(",", ":")),
+                ),
+            )
 
         dut_payload = {
+            "test_report_id": int(test_report_id),
             "project_id": int(project_id),
             "serial_number": ui_payload.get("serial_number"),
             "connect_type": connect_type,
@@ -1544,13 +1605,14 @@ class ImportController:
             "kernel_version": ui_payload.get("kernel_version"),
             "mass_production_status": ui_payload.get("mass_production_status"),
         }
-        dut_id = client.insert(
+        client.insert(
             "INSERT INTO `dut` "
-            "(`project_id`, `serial_number`, `connect_type`, `mac_address`, `adb_device`, `telnet_ip`, "
+            "(`test_report_id`, `project_id`, `serial_number`, `connect_type`, `mac_address`, `adb_device`, `telnet_ip`, "
             "`software_version`, `driver_version`, `android_version`, `kernel_version`, `mass_production_status`, `payload_json`) "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
             "ON DUPLICATE KEY UPDATE "
             "`id`=LAST_INSERT_ID(`id`), "
+            "`test_report_id`=VALUES(`test_report_id`), "
             "`project_id`=VALUES(`project_id`), "
             "`serial_number`=VALUES(`serial_number`), "
             "`connect_type`=VALUES(`connect_type`), "
@@ -1580,10 +1642,8 @@ class ImportController:
         )
         insert_sql = (
             "INSERT INTO `execution` "
-            "(`test_report_id`, `run_type`, `dut_id`, "
-            "`router_name`, `router_address`, `lab_id`, "
-            "`csv_name`, `csv_path`, `run_source`, `duration_seconds`, `payload_json`) "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+            "(`test_report_id`, `run_type`, `lab_id`, `run_source`, `duration_seconds`, `payload_json`) "
+            "VALUES (%s, %s, %s, %s, %s, %s)"
         )
         payload_json = json.dumps(dict(payload), ensure_ascii=True, separators=(",", ":"))
         return client.insert(
@@ -1591,12 +1651,7 @@ class ImportController:
             (
                 test_report_id,
                 execution_type,
-                int(dut_id),
-                None,
-                None,
-                None,
-                csv_name,
-                csv_path,
+                int(lab_id) if lab_id is not None else None,
                 (run_source or "import")[:32],
                 int(duration_seconds) if duration_seconds is not None else None,
                 payload_json,
