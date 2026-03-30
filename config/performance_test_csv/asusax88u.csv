@@ -1,1 +1,11 @@
 band,ssid,wireless_mode,channel,bandwidth,security_mode,password,tx,rx
+2.4G,RVR,11n,6,20,WPA2-Personal,88888888,1,1
+2.4G,RVR,11n,11,20,WPA2-Personal,88888888,1,1
+2.4G,RVR,11n,11,40,WPA2-Personal,88888888,1,1
+2.4G,RVR,11n,6,40,WPA2-Personal,88888888,1,1
+2.4G,RVR,11n,11,40,WPA2-Personal,88888888,1,1
+5G,RVR,11ac,36,80 MHz,WPA2-Personal,88888888,1,1
+5G,RVR,11ac,100,80 MHz,WPA2-Personal,88888888,1,1
+5G,RVR,11ax,100,80 MHz,WPA2-Personal,88888888,1,1
+5G,RVR,11ax,36,80 MHz,WPA2-Personal,88888888,1,1
+5G,RVR,11ax,100,80 MHz,WPA2-Personal,88888888,1,1

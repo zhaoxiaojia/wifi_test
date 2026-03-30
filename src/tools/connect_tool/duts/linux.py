@@ -17,10 +17,13 @@ class linux(dut):
     def __init__(self, *, serial=None, telnet=None) -> None:
         super().__init__()
         self.serial = serial
-        self.shell = SerialShellExecutor(serial) if serial is not None else None
+        self.serial_tool = serial
+        #self.shell = SerialShellExecutor(serial) if serial is not None else None
+        self.shell = None
         self.telnet = telnet
         self.wpa = WpaSupplicantManager(self.shell if self.shell is not None else self.telnet)
         self.dut_ip = ""
+        logging.info(f"[LINUX DUT] __init__ called. Received serial={serial}, telnet={telnet}")
         if telnet is not None:
             self.dut_ip = telnet.dut_ip
 

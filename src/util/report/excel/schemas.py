@@ -24,6 +24,7 @@ class PlanColumns:
     SCRIPT_PATH: str = "Script Path"
     STATUS: str = "Status"
     STEP_DETAILS: str = "Step_Details"
+    TEST_TYPE = "Test Type"
 
 
 PLAN_COLS: Final[PlanColumns] = PlanColumns()

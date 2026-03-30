@@ -745,7 +745,6 @@ class PerformanceExcelImporter:
             ("TX(UNIT:MB)", "uplink"),
             ("TXUNIT:MB", "uplink"),
         )
-
         for header_row in range(1, ws.max_row):
             title = find_title_above(header_row)
             if title is None:
@@ -1538,7 +1537,6 @@ class ImportController:
         connect_type = ui_payload.get("connect_type")
         if not connect_type and ecosystem in {"Android", "Linux"}:
             connect_type = ecosystem
-
         lab_id: int | None = None
         lab_name = str(ui_payload.get("lab_name") or "").strip()
         if lab_name:
@@ -1628,7 +1626,6 @@ class ImportController:
             "`mass_production_status`=VALUES(`mass_production_status`), "
             "`payload_json`=VALUES(`payload_json`)",
             (
-                dut_payload.get("test_report_id"),
                 dut_payload.get("project_id"),
                 dut_payload.get("serial_number"),
                 dut_payload.get("connect_type"),
