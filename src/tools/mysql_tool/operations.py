@@ -1341,6 +1341,8 @@ def ensure_test_report(
     golden_group: Optional[str] = None,
     notes: Optional[str] = None,
     tester: Optional[str] = None,
+    csv_name: Optional[str] = None,
+    csv_path: Optional[str] = None,
 ) -> int:
     if tester is None:
         from src.util.auth_state import load_cached_username
@@ -1349,8 +1351,9 @@ def ensure_test_report(
 
     insert_sql = (
         "INSERT INTO `test_report` "
-        "(`project_id`, `report_name`, `case_path`, `is_golden`, `report_type`, `golden_group`, `notes`, `tester`) "
-        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) "
+        "(`project_id`, `report_name`, `case_path`, `is_golden`, `report_type`, `golden_group`, `notes`, `tester`, "
+        "`csv_name`, `csv_path`) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
         "ON DUPLICATE KEY UPDATE "
         "`id`=LAST_INSERT_ID(`id`), "
         "`case_path`=VALUES(`case_path`), "
@@ -1358,7 +1361,9 @@ def ensure_test_report(
         "`report_type`=VALUES(`report_type`), "
         "`golden_group`=VALUES(`golden_group`), "
         "`notes`=VALUES(`notes`), "
-        "`tester`=VALUES(`tester`)"
+        "`tester`=VALUES(`tester`), "
+        "`csv_name`=VALUES(`csv_name`), "
+        "`csv_path`=VALUES(`csv_path`)"
     )
     return client.insert(
         insert_sql,
@@ -1371,6 +1376,8 @@ def ensure_test_report(
             golden_group,
             notes,
             tester,
+            csv_name,
+            csv_path,
         ),
     )
 
@@ -1434,6 +1441,8 @@ def register_execution(
         is_golden=False,
         report_type="compatibility" if str(execution_type or "").strip().upper() == "COMPATIBILITY" else "performance",
         notes=None,
+        csv_name=csv_name,
+        csv_path=csv_path,
     )
     logging.info(
         "[DBTRACE_EXEC] project_id=%s test_report_id=%s case_path=%s",
@@ -1443,6 +1452,7 @@ def register_execution(
     )
 
     dut_payload = {
+        "test_report_id": int(test_report_id),
         "project_id": int(project_id),
         "serial_number": execution_payload.get("serial_number"),
         "connect_type": execution_payload.get("connect_type"),
@@ -1455,13 +1465,14 @@ def register_execution(
         "kernel_version": execution_payload.get("kernel_version"),
         "mass_production_status": execution_payload.get("mass_production_status"),
     }
-    dut_id = client.insert(
+    client.insert(
         "INSERT INTO `dut` "
-        "(`project_id`, `serial_number`, `connect_type`, `mac_address`, `adb_device`, `telnet_ip`, "
+        "(`test_report_id`, `project_id`, `serial_number`, `connect_type`, `mac_address`, `adb_device`, `telnet_ip`, "
         "`software_version`, `driver_version`, `android_version`, `kernel_version`, `mass_production_status`, `payload_json`) "
-        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
         "ON DUPLICATE KEY UPDATE "
         "`id`=LAST_INSERT_ID(`id`), "
+        "`test_report_id`=VALUES(`test_report_id`), "
         "`project_id`=VALUES(`project_id`), "
         "`connect_type`=VALUES(`connect_type`), "
         "`mac_address`=VALUES(`mac_address`), "
@@ -1474,6 +1485,7 @@ def register_execution(
         "`mass_production_status`=VALUES(`mass_production_status`), "
         "`payload_json`=VALUES(`payload_json`)",
         (
+            dut_payload.get("test_report_id"),
             dut_payload.get("project_id"),
             dut_payload.get("serial_number"),
             dut_payload.get("connect_type"),
@@ -1488,15 +1500,7 @@ def register_execution(
             json.dumps(dut_payload, ensure_ascii=True, separators=(",", ":")),
         ),
     )
-    logging.info("[DBTRACE_EXEC] dut_id=%s mass_status=%s", dut_id, dut_payload.get("mass_production_status"))
-    insert_sql = (
-        "INSERT INTO `execution` "
-        "(`test_report_id`, `run_type`, `dut_id`, "
-        "`router_name`, `router_address`, `lab_id`, "
-        "`bt_mode`, `bt_ble_alias`, `bt_classic_alias`, "
-        "`csv_name`, `csv_path`, `run_source`, `duration_seconds`, `payload_json`) "
-        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
-    )
+    logging.info("[DBTRACE_EXEC] dut_upserted mass_status=%s", dut_payload.get("mass_production_status"))
     payload_json = json.dumps(dict(execution_payload), ensure_ascii=True, separators=(",", ":"))
     lab_id: Optional[int] = None
     lab_name = execution_payload.get("lab_name")
@@ -1504,31 +1508,56 @@ def register_execution(
         rows = client.query_all("SELECT id FROM `lab` WHERE `lab_name`=%s LIMIT 1", (lab_name.strip(),))
         if rows:
             lab_id = int(rows[0]["id"])
+
+    if lab_id is not None:
+        lab_environment_payload = {
+            "lab_id": int(lab_id),
+            "router_name": execution_payload.get("router_name"),
+            "router_address": execution_payload.get("router_address"),
+            "bt_device": execution_payload.get("bt_device"),
+            "bt_type": execution_payload.get("bt_type"),
+        }
+        client.insert(
+            "INSERT INTO `lab_environment` "
+            "(`lab_id`, `router_name`, `router_address`, `bt_device`, `bt_type`, `payload_json`) "
+            "VALUES (%s, %s, %s, %s, %s, %s) "
+            "ON DUPLICATE KEY UPDATE "
+            "`id`=LAST_INSERT_ID(`id`), "
+            "`router_name`=VALUES(`router_name`), "
+            "`router_address`=VALUES(`router_address`), "
+            "`bt_device`=VALUES(`bt_device`), "
+            "`bt_type`=VALUES(`bt_type`), "
+            "`payload_json`=VALUES(`payload_json`)",
+            (
+                lab_environment_payload.get("lab_id"),
+                lab_environment_payload.get("router_name"),
+                lab_environment_payload.get("router_address"),
+                lab_environment_payload.get("bt_device"),
+                lab_environment_payload.get("bt_type"),
+                json.dumps(lab_environment_payload, ensure_ascii=True, separators=(",", ":")),
+            ),
+        )
+
+    insert_sql = (
+        "INSERT INTO `execution` "
+        "(`test_report_id`, `run_type`, `lab_id`, `run_source`, `duration_seconds`, `payload_json`) "
+        "VALUES (%s, %s, %s, %s, %s, %s)"
+    )
     execution_id = client.insert(
         insert_sql,
         (
             test_report_id,
             execution_type,
-            int(dut_id),
-            execution_payload.get("router_name"),
-            execution_payload.get("router_address"),
             lab_id,
-            execution_payload.get("bt_mode"),
-            execution_payload.get("bt_ble_alias"),
-            execution_payload.get("bt_classic_alias"),
-            csv_name,
-            csv_path,
             normalized_source,
             int(duration_seconds) if duration_seconds is not None else None,
             payload_json,
         ),
     )
     logging.info(
-        "[DBTRACE_EXEC] execution_id=%s router=%s lab_id=%s csv_path=%s duration=%s",
+        "[DBTRACE_EXEC] execution_id=%s lab_id=%s duration=%s",
         execution_id,
-        execution_payload.get("router_name"),
         lab_id,
-        csv_path,
         duration_seconds,
     )
     return execution_id
@@ -1652,11 +1681,17 @@ def _build_execution_payload(config: Mapping[str, Any]) -> Dict[str, Any]:
     payload: Dict[str, Any] = {}
     payload.update(_build_execution_device_payload(config))
     payload.update(_build_execution_lab_payload(config))
-    payload["bt_mode"] = _normalize_str_token(config.get("mode"))
     bt_section = config.get("bt") if isinstance(config, Mapping) else {}
     bt_data = bt_section if isinstance(bt_section, Mapping) else {}
-    payload["bt_ble_alias"] = _normalize_str_token(bt_data.get("ble_alias"))
-    payload["bt_classic_alias"] = _normalize_str_token(bt_data.get("classic_alias"))
+    payload["bt_device"] = _normalize_str_token(bt_data.get("device") or bt_data.get("model"))
+
+    mode_token = _normalize_lower_token(_normalize_str_token(config.get("mode")))
+    if "classic" in mode_token:
+        payload["bt_type"] = "classic"
+    elif "ble" in mode_token:
+        payload["bt_type"] = "ble"
+    else:
+        payload["bt_type"] = None
     return payload
 
 
