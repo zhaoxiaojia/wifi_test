@@ -685,15 +685,15 @@ def build_groups_from_schema(
             group_box = QGroupBox(group_label, parent_widget)
             group_box.setFlat(False)
             group_box.setAlignment(Qt.AlignTop)
+            parent_bg_color = parent_widget.palette().color(parent_widget.backgroundRole()).name()
             group_box.setStyleSheet("""
             QGroupBox {
                 border: none;
                 margin-top: 12px;
-                margin-top: 12px;
                 font-weight: bold;
                 color: rgba(255, 255, 255, 0.85);
                 font-weight: bold; /* 加粗 */
-                text-decoration: underline; /* 下划线 */
+                text-decoration: underline; /* 下划线  #202020*/
                 background-color: transparent;
                 padding-top: 0;
                 margin-bottom: 8px;
@@ -713,7 +713,7 @@ def build_groups_from_schema(
             if section_id == "rf_solution" or section_id == "mode" or section_id == "Turntable":
                 inner_layout = QFormLayout(group_box)
                 # inner_layout.setLabelAlignment(Qt.AlignRight)
-                # inner_layout.setFormAlignment(Qt.AlignLeft | Qt.AlignTop)
+                inner_layout.setFormAlignment(Qt.AlignLeft | Qt.AlignTop)
                 #调整UI下左右对齐，但有个问题是groupbox内部的间隔不太一致
                 #inner_layout.setFormAlignment(Qt.AlignJustify | Qt.AlignTop)
                 inner_layout.setFormAlignment(Qt.AlignTop)
@@ -721,7 +721,16 @@ def build_groups_from_schema(
                 #inner_layout.setFieldGrowthPolicy(QFormLayout.FieldsStayAtSizeHint)
                 inner_layout.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
                 inner_layout.setVerticalSpacing(8)
-                inner_layout.setContentsMargins(16, 16, 16, 16)
+                if section_id == "rf_solution":
+                    # rf_solution 是第一个，保留所有边距
+                    inner_layout.setContentsMargins(16, 6, 16, 6)
+                elif section_id == "Turntable":
+                    # Turntable 紧跟在 rf_solution 后面，移除顶部边距以减小间距
+                    inner_layout.setContentsMargins(16, 6, 16, 6)  # 上边距设为 0
+                    #inner_layout.setHorizontalSpacing(120)
+                else:
+                    # 其他情况保持默认
+                    inner_layout.setContentsMargins(16, 6, 16, 6)
 
                 for i, field in enumerate(fields):
                     key = str(field.get("key") or "").strip()
@@ -739,7 +748,7 @@ def build_groups_from_schema(
 
                     # 特殊处理：RF Solution model
                     if not choices and key == "rf_solution.model":
-                        inner_layout.setHorizontalSpacing(75)
+                        inner_layout.setHorizontalSpacing(105)
                         rf_cfg = config.get("rf_solution")
                         derived = [
                             str(model_key) for model_key in rf_cfg.keys()
@@ -750,9 +759,9 @@ def build_groups_from_schema(
                         if derived:
                             choices = sorted(derived)
                     elif section_id == "Turntable":
-                        inner_layout.setHorizontalSpacing(145)
+                        inner_layout.setHorizontalSpacing(114)
                     else:
-                        inner_layout.setHorizontalSpacing(100)
+                        inner_layout.setHorizontalSpacing(93)
 
                     spec = FieldSpec(
                         key=key,
@@ -803,7 +812,6 @@ def build_groups_from_schema(
                         label = QLabel(label_text)
                         if label_text in ["Coex Mode", "Lab"]:
                             # 使用样式表强制加下划线
-                            print(f"[DEBUG] Coex Mode] {label_text}")
                             current_font = label.font()
                             underline_font = QFont(current_font)
                             underline_font.setUnderline(True)
@@ -838,7 +846,9 @@ def build_groups_from_schema(
                                           is_right_panel)
 
             inner_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+            #group_box.setStyleSheet("")
             return group_box
+
 
         # 创建左侧 GroupBox
         first_left = True
@@ -864,10 +874,11 @@ def build_groups_from_schema(
                 if is_basic_panel:
                     right_layout.addSpacing(200)
                 else:
-                    right_layout.addSpacing(1)
-        #right_layout.addStretch()  # ← 确保右侧内容顶部对齐
+                    right_layout.addSpacing(0)
+                    print(f"[DEBUG] {section}{section_id} sizeHint: {widget.sizeHint()}")
+                    print(f"[DEBUG] {section}{section_id} minSize: {widget.minimumSize()}")
 
-        # 记录组信息
+            #right_layout.addStretch()  # ← 确保右侧内容顶部对齐
         for section in sections:
             section_id = str(section.get("id") or "")
             target[section_id] = None
@@ -949,9 +960,9 @@ def build_groups_from_schema(
 
             # Add to layout.
             if isinstance(widget, QCheckBox) and spec.widget == "checkbox":
-                layout.addRow(widget)
+                group_layout.addRow(widget)
             else:
-                layout.addRow(label_text, widget)
+                group_layout.addRow(label_text, widget)
 
             # Register widget in page.field_widgets.
             logical_key = key
@@ -967,29 +978,17 @@ def build_groups_from_schema(
             field_name = key.split(".")[-1]
             _register_config_control(page, panel_key, group_name, field_name, widget)
 
-            # Add to group layout
-            if widget_type == "checkbox":
-                group_layout.addRow(widget)
-            else:
-                group_layout.addRow(label_text, widget)
+            # # Add to group layout
+            # if widget_type == "checkbox":
+            #     group_layout.addRow(widget)
+            # else:
+            #     group_layout.addRow(label_text, widget)
 
-        # 关键：委托给 parent 管理布局
-        # if hasattr(parent, 'add_group'):
-        #     parent.add_group(group_box, defer=False)  # defer=False 立即显示
+
+        # if widget_type == "checkbox":
+        #     group_layout.addRow(widget)
         # else:
-        #     # 回退方案：如果 parent 没有 add_group 方法，尝试添加到现有 layout
-        #     existing_layout = parent.layout()
-        #     if existing_layout is not None:
-        #         existing_layout.addWidget(group_box)
-        #     else:
-        #         # 最后回退：创建新 layout
-        #         form_layout = QFormLayout(parent)
-        #         form_layout.addRow(group_box)
-        # Add to group layout
-        if widget_type == "checkbox":
-            group_layout.addRow(widget)
-        else:
-            group_layout.addRow(label_text, widget)
+        #     group_layout.addRow(label_text, widget)
         if parent is not None:
             parent.add_group(group_box, defer=False)  # defer=False 立即显示
         else:

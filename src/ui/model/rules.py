@@ -500,7 +500,7 @@ CUSTOM_SIMPLE_UI_RULES.append(
             ),
             SimpleFieldEffect(
                 target_field="system.version",
-                action="hide",
+                action="disable",
                 condition=lambda values: normalize_connect_type_label(
                     str(values.get("connect_type.type") or "")
                 )

@@ -430,12 +430,37 @@ def _normalize_config_keys_for_save(data: Mapping[str, Any] | None) -> dict[str,
     Turntable helper keys (``model``, ``ip_address``, ``step``, etc.)
     so that the YAML files keep only the user-facing field names.
     """
+
     normalised = _normalize_config_keys(data)
-    connect_cfg = normalised.pop("connect_type", None)
-    if isinstance(connect_cfg, Mapping):
-        dut_cfg = dict(connect_cfg)
-        dut_cfg.pop("mass_production_status", None)
-        normalised["dut"] = dut_cfg
+
+    # connect_cfg = normalised.pop("connect_type", None)
+    # if isinstance(connect_cfg, Mapping):
+    #     dut_cfg = dict(connect_cfg)
+    #     dut_cfg.pop("mass_production_status", None)
+    #     normalised["dut"] = dut_cfg
+    #
+    # project_cfg = data.get("project", {}) if data else {}
+    # customer = str(project_cfg.get("customer", "")).strip()
+    # inferred_type = "Linux" if customer == "Roku" else "Android"
+    # if "connect_type" not in normalised:
+    #     normalised["connect_type"] = {}
+    # normalised["connect_type"]["type"] = inferred_type
+    # normalised["dut"]["type"] = inferred_type
+    if data and "project" in data:
+        connect_cfg = normalised.pop("connect_type", None)
+        if isinstance(connect_cfg, Mapping):
+            dut_cfg = dict(connect_cfg)
+            dut_cfg.pop("mass_production_status", None)
+            normalised["dut"] = dut_cfg
+
+        project_cfg = data["project"]
+        customer = str(project_cfg.get("customer", "")).strip()
+        inferred_type = "Linux" if customer == "Roku" else "Android"
+
+        normalised["connect_type"] = {"type": inferred_type}
+        if "dut" in normalised:
+            normalised["dut"]["type"] = inferred_type
+
     turntable = normalised.get(TURN_TABLE_SECTION_KEY)
     if isinstance(turntable, Mapping):
         # Drop the internal lower-case duplicates so that only the
@@ -444,6 +469,7 @@ def _normalize_config_keys_for_save(data: Mapping[str, Any] | None) -> dict[str,
         for extra_key in ("model", "ip_address", "step", "static_db", "target_rssi"):
             cleaned.pop(extra_key, None)
         normalised[TURN_TABLE_SECTION_KEY] = cleaned
+
     return normalised
 
 

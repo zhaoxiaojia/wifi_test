@@ -396,8 +396,9 @@ class roku_ctrl(Roku):
         """
         logging.info(f'navigation {target}')
         self.get_ir_focus(secret=secret)
-        if target in self.ir_current_location:
-            target = self.ir_current_location
+        array = self.get_launcher_element(item)
+        target_idx, _ = self.get_ir_index(target, item, fuz_match)
+
         current_index, _ = self.get_ir_index(self.ir_current_location, item, fuz_match=fuz_match)
         target_index, list_len = self.get_ir_index(target, item, fuz_match=fuz_match)
         array = self.get_launcher_element(item)
@@ -412,61 +413,6 @@ class roku_ctrl(Roku):
             self._move_horizontal(current_index[1], target_index[1], list_len)
 
         return self.ir_navigation(target, item, secret=secret, fuz_match=fuz_match)
-
-    # def ir_navigation(self, target, item, secret=False, fuz_match=False):
-    #     """
-    #     修复版：线性逻辑，拒绝递归，拒绝篡改 target
-    #     """
-    #     logging.info(f"Navigation start: Target='{target}', Current='{self.ir_current_location}'")
-    #
-    #     # 1. 获取当前焦点（确保是最新的）
-    #     self.get_ir_focus(secret=secret)
-    #
-    #     # 2. 获取目标索引
-    #     # 注意：这里不要用 fuz_match=True，除非你确定不会匹配错
-    #     target_index, list_len = self.get_ir_index(target, item, fuz_match=fuz_match)
-    #
-    #     # 3. 获取当前索引
-    #     current_index, _ = self.get_ir_index(self.ir_current_location, item, fuz_match=fuz_match)
-    #
-    #     # 4. 容错处理
-    #     if not target_index:
-    #         logging.error(f"CRITICAL: Could not find target index for '{target}'. Aborting navigation.")
-    #         return False  # 找不到目标，直接失败，不要瞎按
-    #
-    #     if not current_index:
-    #         logging.warning("Current index not found, assuming (0,0)")
-    #         current_index = (0, 0)
-    #
-    #     # 5. 计算步数
-    #     x_step = target_index[0] - current_index[0]  # 行差
-    #     y_step = target_index[1] - current_index[1]  # 列差
-    #
-    #     # 如果已经在目标上
-    #     if x_step == 0 and y_step == 0:
-    #         logging.info(f"Already on target '{target}'")
-    #         return True
-    #
-    #     # 6. 执行移动
-    #     logging.info(f"Moving: dx={x_step}, dy={y_step}")
-    #
-    #     # 垂直移动 (Up/Down)
-    #     array = self.get_launcher_element(item)
-    #     row_len = len(array) if array else 1
-    #
-    #     if x_step > 0:
-    #         for _ in range(x_step): self.down(time=0.5)
-    #     elif x_step < 0:
-    #         for _ in range(abs(x_step)): self.up(time=0.5)
-    #
-    #     # 水平移动 (Left/Right) - 列表通常是垂直的，但这部分保留以防万一
-    #     if y_step > 0:
-    #         for _ in range(y_step): self.right(time=0.5)
-    #     elif y_step < 0:
-    #         for _ in range(abs(y_step)): self.left(time=0.5)
-    #
-    #     logging.info(f"Navigation to '{target}' finished.")
-    #     return True
 
     def ir_enter(self, target, item, secret=False, fuz_match=False):
         """
@@ -1023,6 +969,9 @@ class roku_ctrl(Roku):
                     break
 
         self.setup_conn()
+        if self.get_ir_focus() == "Set up connection":
+            self.select(time=2)
+        time.sleep(2)
         for i in range(5):
             for info in self.get_launcher_element('ArrayGridItem'):
                 logging.info(info[0])
@@ -1064,77 +1013,39 @@ class roku_ctrl(Roku):
         This method encapsulates the logic necessary to perform its function.
         Refer to the implementation for details on parameters and return values.
         """
-
-        full_ssid = f"{ssid}_{'5G' if band == 5 else '2.4G'}"
-
-        found = self.wifi_scan(full_ssid)
+        found = self.wifi_scan(ssid)
         if not found:
-            logging.error(f"Target SSID {full_ssid} not found in scan results!")
+            logging.error(f"Target SSID {ssid} not found in scan results!")
             #return ""
-        self.ir_enter(full_ssid, 'ArrayGridItem', fuz_match=False)
-        # if 'Recommended network found' in self._get_screen_xml():
-        #     if band == 2:
-        #         self.down()
-        #     self.select()
-        # if 'Enter the network password for' in self._get_screen_xml():
-        #     if 'Connect' == self.get_ir_focus():
-        #         self.down()
-        #         self.select()
-        #         self.up()
-        #         self.up()
-        #     self.literal(pwd)
-        #     time.sleep(1)
-        #     for _ in range(4):
-        #         self.down()
-
-        # --- 【修正】统一处理逻辑 ---
-        screen_xml = self._get_screen_xml()
-        # 情况 A: 需要输入密码（新网络或忘记密码后）
-        if 'Enter the network password for' in screen_xml:
-            logging.info("Password prompt detected. Entering password...")
-
-            # 确保焦点在密码框或连接按钮上
-            # 这里的逻辑根据你的 UI 具体表现调整，通常是直接输密码
-            if 'Connect' == self.get_ir_focus():
-                # 如果焦点在 Connect 上，可能需要先上移找到密码框
-                self.up()
-                self.up()
-
-            self.literal(pwd)  # 输入密码
-            time.sleep(1)
-
-            # 移动到 Connect 按钮并确认
-            for _ in range(4):  # 根据实际 UI 结构调整次数
-                self.down()
-            self.select()
-
-        # 情况 B: 推荐网络/已保存网络（直接连接）
-        # 注意：这里要非常小心，因为这正是导致误连的原因
-        # 但为了逻辑完整性，我们保留它，前提是前面的 ir_enter 必须精准选中了目标
-        elif 'Recommended network found' in screen_xml:
-            logging.info("Recommended network detected. Confirming connection...")
-            # 如果是 2.4G 且目标是 5G，这里可能会出问题，所以 ir_enter 必须准
+        self.ir_enter(ssid, 'ArrayGridItem', fuz_match=True) #找到的SSID配置
+        time.sleep(5)
+        if 'Recommended network found' in self._get_screen_xml():
             if band == 2:
                 self.down()
             self.select()
+        if 'Enter the network password for' in self._get_screen_xml():
+            if 'Connect' == self.get_ir_focus():
+                self.down()
+                self.select()
+                self.up()
+                self.up()
+            self.literal(pwd)
+            time.sleep(10)
+            for _ in range(4):
+                self.down()
 
-        # 情况 C: 既不是密码框也不是推荐网络（可能是列表页）
-        # 这说明 ir_enter 可能没生效，或者 UI 还没刷出来
-        else:
-            logging.warning("Unexpected screen state. Retrying selection...")
-            # 兜底：再次尝试选中
-            self.select()
 
         self.select()
         for _ in range(20):
-            time.sleep(1)
+            time.sleep(3)
             ip = self.ser.get_ip_address('wlan0')
             if ip:
                 self.ip = ip
                 Roku.__init__(self, ip)
                 logging.info(f'roku ip {self.ip}')
                 break
-        if not ip:
+        else:
+            logging.error("Failed to obtain IP address after 60 seconds!")
             return ""
         self.home(time=3)
         self.home(time=3)
@@ -1196,6 +1107,12 @@ class roku(linux):
             return False
         self._refresh_ip(ip)
         return True
+
+    def wifi_connect(self, ssid, password="", security=""):
+        """Implement the standard DUT interface for Roku."""
+        band = 5 if "5G" in ssid else 2
+        ip = self.roku.wifi_conn(ssid=ssid, pwd=password, band=band)
+        return bool(ip and ip != "")
 
     def _wifi_connect_impl(self, params: WifiConnectParams) -> bool:
         # Todo 逻辑待优化

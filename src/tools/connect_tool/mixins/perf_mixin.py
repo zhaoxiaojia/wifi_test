@@ -569,7 +569,7 @@ class PerfMixin:
                 rx_result = 0
                 mcs_rx = 0
                 try:
-                    if self.rvr_tool == "iperf":
+                    if self.rvr_tool in ("iperf", "iperf3"):
                         self.kill_iperf()
                         terminal = self.run_iperf(self.tool_path + self.iperf_server_cmd, self.serialnumber)
                         time.sleep(1)
@@ -704,7 +704,7 @@ class PerfMixin:
                 tx_result = 0
                 mcs_tx = 0
                 try:
-                    if self.rvr_tool == "iperf":
+                    if self.rvr_tool in ("iperf", "iperf3"):
                         self.kill_iperf()
                         time.sleep(1)
                         terminal = self.run_iperf(self.iperf_server_cmd, "")

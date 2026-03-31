@@ -21,18 +21,20 @@ _ap_test_state = {}
 _ap_test_lock = threading.Lock()
 _test_metadata_cache = {}
 _metadata_lock = threading.Lock()
-# _last_known_pc_ip = None
 
 power_delay = power_ctrl()
-# power_delay.shutdown()
 power_ctrl = power_delay.ctrl
 router = ''
 ssid = {
     '2.4G': 'Aml_AP_Comp_2.4G',
-    #'5G': 'Aml_AP_Comp_5G'
+    '5G': 'Aml_AP_Comp_5G'
+    #'2.4G': 'AX86U-2.4G',
+
 }
 ssid_6g = 'Aml_AP_Comp_6G'
 passwd = '@Aml#*st271'
+#passwd = '88888888'
+_rvr_tool_initialized = False
 
 # Project and chip info
 project_cfg = pytest.config.get("project") or {}
@@ -176,6 +178,7 @@ def router_setting(power_setting, request):
 @pytest.mark.dependency(name="scan")
 def test_scan(router_setting, request):
     result = 'FAIL'
+
     try:
         if pytest.connect_type == 'Linux':
             result = 'PASS' if pytest.dut.flush_ip() else 'FAIL'
@@ -200,13 +203,53 @@ def test_connect(router_setting, request):
     print(">>> ENTERING test_connect!")
     try:
         pytest.dut.wifi_forget()
-        pytest.dut.wifi_connect(
+        ip = pytest.dut.wifi_connect(
             router_setting.ssid,
             password=router_setting.password,
             security=router_setting.security_mode,
         )
         result = 'PASS' if pytest.dut.wifi_wait_ip()[0] else 'FAIL'
+        if not ip:
+            pytest.fail("WiFi connection succeeded but no IP assigned!")
         pytest.dut.get_rssi()
+
+        #set Iperf commands
+        global _rvr_tool_initialized
+        if not _rvr_tool_initialized and hasattr(pytest, 'dut') and hasattr(pytest, 'connect_type'):
+            # Step1: set rvr_tool via connect_type
+            if pytest.connect_type == 'Linux':
+                pytest.dut.rvr_tool = 'iperf'
+            else:
+                pytest.dut.rvr_tool = 'iperf3'
+
+            # Step 2: set iperf command
+            if pytest.dut.rvr_tool == 'iperf':
+                # Linux DUT should it iperf 2.x
+                server_cmd = 'iperf -s -w 2m -i 1'
+                client_cmd = 'iperf -c {ip} -w 2m -i 1 -t 30 -P 5'
+            else:  # iperf3
+                # no Linux iperf3
+                server_cmd = 'iperf3 -s -i 1'
+                client_cmd = 'iperf3 -c {ip} -i 1 -t 30 -P 5'
+                # pytest.dut.repest_times = 1
+                # pytest.selected_test_types = {"PERFORMANCE"}
+
+            # Step 3: write dut command
+            pytest.dut.iperf_server_cmd = server_cmd
+            pytest.dut.iperf_client_cmd = client_cmd
+
+            # Step 4: 推导 test_tool（用于 PC 端执行）
+            # 注意：PC 端执行的命令名 = client_cmd 的第一个词
+            pytest.dut.test_tool = client_cmd.split()[0]  # 'iperf' 或 'iperf3'
+
+            logging.info(f"[AUTO CONFIG] connect_type={pytest.connect_type} → "
+                         f"rvr_tool='{pytest.dut.rvr_tool}', "
+                         f"test_tool='{pytest.dut.test_tool}', "
+                         f"client_cmd='{client_cmd}'")
+            time.sleep(30)
+
+            _rvr_tool_initialized = True
+
         if router_setting.band == '5G':
             assert pytest.dut.freq_num > 5000
         if router_setting.band == '2.4G':
@@ -239,6 +282,7 @@ def test_ping(router_setting, request):
 
     pc_ip = pytest.dut.pc_ip
     dut_ip = pytest.dut.dut_ip
+    pytest.dut.ip = pytest.dut.dut_ip
     current_os = platform.system()
     logging.info(f"Verifying connectivity: PC({pc_ip}) -> DUT({dut_ip})")
 
@@ -264,7 +308,8 @@ def test_ping(router_setting, request):
         lost = int(int(match.group(1)) * 60 / 100) if match else None
 
     success = (lost == 0) if lost is not None else (result.returncode == 0)
-
+    logging.info(
+        f"[test_ping] pytest.dut object ID: {id(pytest.dut)}, dut_ip={getattr(pytest.dut, 'dut_ip', 'MISSING')}")
     pytest.ping_result = "PASS" if success else "FAIL"
     if success:
         request.node._store["compat_compare"] = "PASS"
@@ -276,6 +321,7 @@ def test_ping(router_setting, request):
 @pytest.mark.dependency(depends=["connect"])
 @pytest.mark.wifi_connect
 def test_multi_throughtput_tx(router_setting, request):
+    logging.info(f"[throughput] pytest.dut object ID: {id(pytest.dut)}, dut_ip={getattr(pytest.dut, 'dut_ip', 'MISSING')}")
     if customer == "ONN" or project_name == "KitKat513" or project_id == "KitKat513":
         logging.info("⏩ Skipping TX throughput test for this project (ONN/KitKat513)")
         ping_status = getattr(pytest, 'ping_result', 'N/A')
@@ -287,7 +333,7 @@ def test_multi_throughtput_tx(router_setting, request):
         #pytest.skip("Skipped for ONN/KitKat513")
 
     else:
-        tx_result = pytest.dut.get_tx_rate(router_setting, pytest.dut.rssi_num)
+        tx_result = pytest.dut.get_tx_rate(router_setting) #pytest.dut.rssi_num
         logging.info(f'tx_result {tx_result}')
         expect_data = float(router_setting.expected_rate.split(' ')[0])
         logging.info(f'expect_data {expect_data}')
@@ -319,7 +365,7 @@ def test_multi_throughtput_rx(router_setting, request):
         #pytest.skip("Skipped for ONN/KitKat513")
 
     else:
-        rx_result = pytest.dut.get_rx_rate(router_setting, pytest.dut.rssi_num)
+        rx_result = pytest.dut.get_rx_rate(router_setting) #pytest.dut.rssi_num
         logging.info(f'rx_result {rx_result}')
         expect_data = float(router_setting.expected_rate.split(' ')[1])
         logging.info(f'expect_data {expect_data}')

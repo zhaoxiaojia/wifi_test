@@ -753,9 +753,22 @@ class RfStepSegmentsWidget(QWidget):
         # Keep the list compact and scrollable instead of stretching(调整衰减添加框大小).
         self.segment_list.setMinimumHeight(80)
         self.segment_list.setMaximumHeight(100) #old value:140
+        self.segment_list.setStyleSheet("""
+        QListWidget {
+            border: 1px solid #444444;
+            border-radius: 4px;
+            background-color: #2D2D30; 
+            padding: 2px;
+        }
+        """)
 
         self.segment_stack.addWidget(self.segment_hint)
         self.segment_stack.addWidget(self.segment_list)
+        self.segment_stack.setStyleSheet("""
+        QStackedWidget {
+            background-color: transparent;
+        }
+        """)
         layout.addWidget(self.segment_stack)
 
         # Prefer a compact, non-expanding height so that the
@@ -763,7 +776,7 @@ class RfStepSegmentsWidget(QWidget):
         # fields immediately below this widget instead of stretching
         # the Step row to fill all available vertical space.
         self.setSizePolicy(self.sizePolicy().horizontalPolicy(), QSizePolicy.Fixed)
-
+        self.segment_stack.setMaximumHeight(120)
         self._refresh_segment_list()
 
     def segments(self) -> list[tuple[int, int, int]]:

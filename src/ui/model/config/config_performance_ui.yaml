@@ -62,8 +62,16 @@ panels:
             placeholder: "192.168.x.x"
           - key: Turntable.step
             widget: line_edit
-            label: "Step"
-            placeholder: "0,360 or 0,75:3"
+            label: "Angle Step"
+            placeholder: "0,360:30"
+          - key: Turntable.atte_24g_step
+            widget: line_edit
+            label: "2.4G Atten Step"
+            placeholder: "0,75:3"
+          - key: Turntable.atte_5g_step
+            widget: line_edit
+            label: "5G Atten Step"
+            placeholder: "0,75:3"
           - key: Turntable.static_db
             widget: line_edit
             label: "Static dB"
@@ -117,9 +125,11 @@ panels:
           - key: rvr.iperf.server_cmd
             widget: line_edit
             label: "iperf Server Cmd"
+            placeholder: "iperf3 -s -i 1"
           - key: rvr.iperf.client_cmd
             widget: line_edit
             label: "iperf Client Cmd"
+            placeholder: "iperf3 -c {ip} -i 1 -t 30 -P 5"
           - key: rvr.ixchariot.path
             widget: line_edit
             label: "IxChariot Path"
