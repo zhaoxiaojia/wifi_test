@@ -552,13 +552,6 @@ def _add_fields_to_layout(page, config, fields, layout, section_id, panel_key, p
 
 # ===========================================================================
 
-def get_underlined_text(text):
-    """如果文本是特定关键词，返回带下划线的HTML文本，否则返回原文本"""
-    underlined_keywords = ["Coex Mode", "Lab"]  # 把需要加下划线的词都放这里
-    if text in underlined_keywords:
-        return f"<u>{text}</u>"
-    return text
-
 def build_groups_from_schema(
         page: Any,
         config: Mapping[str, Any],
@@ -605,8 +598,10 @@ def build_groups_from_schema(
         # 创建带边框的主容器
         main_container = QWidget(parent)
         main_layout = QHBoxLayout(main_container)
-        main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.setSpacing(30)
+        # Keep a small outer margin and a narrow gap between the two bordered panels.
+        # (Previously spacing=30 left a large "blank" area; spacing=0 made borders touch.)
+        main_layout.setContentsMargins(12, 12, 12, 12)
+        main_layout.setSpacing(12)
 
         left_panel = QWidget()
         right_panel = QWidget()
@@ -693,7 +688,6 @@ def build_groups_from_schema(
                 font-weight: bold;
                 color: rgba(255, 255, 255, 0.85);
                 font-weight: bold; /* 加粗 */
-                text-decoration: underline; /* 下划线 */
                 background-color: transparent;
                 padding-top: 0;
                 margin-bottom: 8px;
@@ -709,8 +703,8 @@ def build_groups_from_schema(
 
             fields = section.get("fields") or []
 
-            # --- 关键修改：为 rf_solution 使用 QFormLayout ---
-            if section_id == "rf_solution" or section_id == "mode" or section_id == "Turntable":
+            # --- 关键修改：统一右侧表单类 section 的对齐方式（QFormLayout）---
+            if section_id == "lab" or section_id == "rf_solution" or section_id == "mode" or section_id == "Turntable":
                 inner_layout = QFormLayout(group_box)
                 # inner_layout.setLabelAlignment(Qt.AlignRight)
                 # inner_layout.setFormAlignment(Qt.AlignLeft | Qt.AlignTop)
@@ -722,6 +716,8 @@ def build_groups_from_schema(
                 inner_layout.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
                 inner_layout.setVerticalSpacing(8)
                 inner_layout.setContentsMargins(16, 16, 16, 16)
+                inner_layout.setHorizontalSpacing(30)
+                label_min_width = 140
 
                 for i, field in enumerate(fields):
                     key = str(field.get("key") or "").strip()
@@ -739,7 +735,6 @@ def build_groups_from_schema(
 
                     # 特殊处理：RF Solution model
                     if not choices and key == "rf_solution.model":
-                        inner_layout.setHorizontalSpacing(75)
                         rf_cfg = config.get("rf_solution")
                         derived = [
                             str(model_key) for model_key in rf_cfg.keys()
@@ -749,10 +744,6 @@ def build_groups_from_schema(
                             derived.append(RF_MODEL_RS232)
                         if derived:
                             choices = sorted(derived)
-                    elif section_id == "Turntable":
-                        inner_layout.setHorizontalSpacing(145)
-                    else:
-                        inner_layout.setHorizontalSpacing(100)
 
                     spec = FieldSpec(
                         key=key,
@@ -800,23 +791,14 @@ def build_groups_from_schema(
                             #sp.setVerticalPolicy(QSizePolicy.Preferred)
                             widget.setSizePolicy(sp)
 
-                        label = QLabel(label_text)
-                        if label_text in ["Coex Mode", "Lab"]:
-                            # 使用样式表强制加下划线
-                            print(f"[DEBUG] Coex Mode] {label_text}")
-                            current_font = label.font()
-                            underline_font = QFont(current_font)
-                            underline_font.setUnderline(True)
-
                         if  key == "rf_solution.step":
-                            # 只添加 Widget，不添加 Label
-                            #inner_layout.addRow(widget)
-                            placeholder_label = QLabel("")
-                            placeholder_label.setFixedWidth(100)  # 可选：固定宽度以保持对齐，或者不设置让它自动匹配其他Label的宽度
-                            inner_layout.addRow(placeholder_label, widget)
+                            # Spanning row: keep the internal Start/Stop/Step inputs aligned
+                            # under the outer field column (Attenuator IP, etc.).
+                            inner_layout.addRow(widget)
                         else:
-                            widget.setMinimumWidth(200)
-                            inner_layout.addRow(label_text, widget)
+                            label = QLabel(label_text)
+                            label.setMinimumWidth(label_min_width)
+                            inner_layout.addRow(label, widget)
 
                 # --- Final State Check ---
                 if hasattr(page, 'field_widgets'):

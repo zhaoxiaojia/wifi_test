@@ -13,7 +13,7 @@ import _io
 import pytest
 
 from src.tools.connect_tool.mixins.dut_mixins import WifiConnectParams
-from src.tools.connect_tool.duts.linux import linux
+from src.tools.connect_tool.duts.dut import dut
 from src.tools.connect_tool.transports.uiautomator_tool import UiautomatorTool
 
 
@@ -58,7 +58,7 @@ def connect_again(func):
     return inner
 
 
-class android(linux):
+class android(dut):
     """
     ADB.
 

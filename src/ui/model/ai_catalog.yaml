@@ -25,7 +25,6 @@ allowed_update_keys:
 
   - connect_type.type
   - connect_type.Android.device
-  - connect_type.Linux.ip
 
   # RVR tool selection
   - rvr.tool
@@ -56,16 +55,6 @@ cases:
     title: "Performance: RVO"
     text_case: test/performance/test_wifi_rvo.py
     synonyms: ["rvo", "roaming", "漫游", "切换", "切ap"]
-
-  - id: compatibility
-    title: "Compatibility"
-    text_case: test/compatibility/test_compatibility.py
-    synonyms: ["兼容", "兼容性", "compatibility", "互通"]
-
-  - id: stability_switch_wifi
-    title: "Stability: Switch Wi-Fi STR"
-    text_case: test/stability/test_switch_wifi_str.py
-    synonyms: ["压测", "稳定性", "stability", "str", "切wifi", "切换wifi", "循环"]
 
 fields:
   - key: text_case
@@ -119,7 +108,7 @@ fields:
 
   - key: connect_type.type
     type: string
-    description: "Control type: Android or Linux."
+    description: "Control type: Android."
     choices: ["Android", "Linux"]
     synonyms: ["adb", "telnet", "控制方式"]
 
@@ -128,9 +117,6 @@ fields:
     description: "adb device identifier."
     synonyms: ["device", "设备", "adb设备"]
 
-  - key: connect_type.Linux.ip
-    type: string
-    description: "Linux DUT IP address."
 
   - key: rvr.tool
     type: string

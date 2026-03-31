@@ -28,12 +28,6 @@ def setup_router(request):
     router_info = request.param
     common_setup(router, router_info)
     connect_status = wait_connect(router_info)
-    debug_flags = get_debug_flags()
-    if debug_flags.database_mode:
-        logging.info(
-            "Database debug mode enabled, use simulated throughput results for router %s",
-            getattr(router_info, "ssid", "<unknown>"),
-        )
     pytest.dut.get_rssi()
     yield connect_status, router_info
     pytest.dut.kill_iperf()
@@ -48,22 +42,16 @@ def test_rvr(setup_router, performance_sync_manager):
             return
 
         logging.info(f'start test iperf tx {router_info.tx} rx {router_info.rx}')
-        debug_flags = get_debug_flags()
         rssi_num = pytest.dut.rssi_num
-        if debug_flags.database_mode:
-            logging.info(
-                "Database debug mode enabled, skipping real iperf execution for router %s",
-                getattr(router_info, "ssid", "<unknown>"),
-            )
         if int(router_info.tx):
             logging.info(f'rssi : {rssi_num}')
-            pytest.dut.get_tx_rate(router_info, 'TCP', debug=debug_flags.database_mode)
+            pytest.dut.get_tx_rate(router_info, 'TCP')
         if int(router_info.rx):
             logging.info(f'rssi : {rssi_num}')
-            pytest.dut.get_rx_rate(router_info, 'TCP', debug=debug_flags.database_mode)
+            pytest.dut.get_rx_rate(router_info, 'TCP')
 
     performance_sync_manager(
         "Peak",
         test_result.log_file,
-        message="Peak throught data rows stored in database",
+        message="Peak throughput data stored",
     )

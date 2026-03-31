@@ -141,22 +141,6 @@ def _iter_ipv4_prefixes() -> list[str]:
     return sorted(prefixes)
 
 
-def _linux_ip_choices() -> Sequence[str]:
-    """Return fast local /24 candidates (no ping scan)."""
-
-    prefixes = _iter_ipv4_prefixes()
-    if not prefixes:
-        return ["No devices"]
-
-    candidates: list[str] = []
-    for prefix in prefixes:
-        for suffix in (2, 10, 11, 12, 100, 101, 166, 200):
-            candidates.append(f"{prefix}.{suffix}")
-
-    choices = _sorted_unique(candidates)
-    return choices if choices else ["No devices"]
-
-
 _FIELD_CHOICE_SOURCES: dict[str, Callable[[], Sequence[str]]] = {
     # Android / kernel system fields (support both legacy and new keys)
     "android_system.version": _android_version_choices,
@@ -175,9 +159,8 @@ _FIELD_CHOICE_SOURCES: dict[str, Callable[[], Sequence[str]]] = {
     # remain driven by WIFI_PRODUCT_PROJECT_MAP).
     "project.customer": _fpga_customer_choices,
     "project.mass_production_status": _mass_production_status_choices,
-    # Android / Linux connect targets
+    # Android connect targets
     "connect_type.Android.device": _adb_device_choices,
-    "connect_type.Linux.ip": _linux_ip_choices,
 }
 
 

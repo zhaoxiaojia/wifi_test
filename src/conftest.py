@@ -29,18 +29,13 @@ import pytest
 import csv  # noqa: F401  (kept for potential future CSV export)
 
 from src.tools.connect_tool.duts.android import android
-from src.tools.connect_tool.duts.linux import linux
-from src.tools.connect_tool.duts.onn_dut import onn_dut
-from src.tools.connect_tool.duts.roku_dut import roku
 from src.tools.connect_tool.transports.serial_tool import serial_tool
-from src.tools.connect_tool.transports.telnet_tool import telnet_tool
 from src.tools.connect_tool.local_os import LocalOS
 from src.tools.performance_result import PerformanceResult
 from src.util.constants import load_config
 from src.tools.router_tool.Router import Router
 from src.tools.reporting import generate_project_report
 from src.test.pyqt_log import emit_pyqt_message
-from src.test.compatibility.results import write_compatibility_results
 from collections import defaultdict
 
 # ----------------------------------------------------------------------------
@@ -536,7 +531,7 @@ def pytest_sessionstart(session):
 
     # Connection type setup
     connect_cfg = pytest.config.get("connect_type") or {}
-    pytest.connect_type = session.config.getoption("--dut-type") or connect_cfg.get("type")
+    pytest.connect_type = "Android"
     pytest.third_party_cfg = connect_cfg.get("third_party", {})
 
     # Serial (kernel log) setup
@@ -560,31 +555,9 @@ def pytest_sessionstart(session):
     repeat_times = int(rvr_cfg.get('repeat', 0) or 0)
 
     # DUT connection
-    match pytest.connect_type:
-        case "Android" | "adb":
-            adb_cfg = connect_cfg.get("Android") or {}
-            device = session.config.getoption("--android-device") or adb_cfg.get("device") or ""
-            project_cfg = pytest.config.get("project") or {}
-            customer = session.config.getoption("--project-customer") or project_cfg.get("customer") or ""
-            customer = str(customer).strip().upper()
-            match customer:
-                case "ONN":
-                    pytest.dut = onn_dut(serialnumber=device)
-                case _:
-                    pytest.dut = android(serialnumber=device)
-        case "Linux"| "telnet":
-            telnet_cfg = connect_cfg.get("Linux") or {}
-            telnet_ip = session.config.getoption("--linux-ip") or telnet_cfg.get("ip")
-            project_cfg = pytest.config.get("project") or {}
-            customer = session.config.getoption("--project-customer") or project_cfg.get("customer") or ""
-            customer = str(customer).strip().upper()
-
-            match customer:
-                case "ROKU":
-                    pytest.dut = roku(telnet_ip, serial=serial_inst)
-                    logging.info("Roku Test Start.")
-                case _:
-                    pytest.dut = linux(serial=serial_inst, telnet=telnet_tool(telnet_ip))
+    adb_cfg = connect_cfg.get("Android") or {}
+    device = session.config.getoption("--android-device") or adb_cfg.get("device") or ""
+    pytest.dut = android(serialnumber=device)
 
     if serial_inst is not None:
         pytest.dut.serial = serial_inst
@@ -609,10 +582,7 @@ def pytest_addoption(parser):
         --resultpath: Destination directory for log artifacts (debug.log, kernel.log, etc.).
     """
     parser.addoption("--resultpath", action="store", default=None, help="Test result path")
-    parser.addoption("--dut-type", action="store", default=None, help="DUT type: Android or Linux")
     parser.addoption("--android-device", action="store", default=None, help="ADB serial number")
-    parser.addoption("--linux-ip", action="store", default=None, help="Linux DUT IP address")
-    parser.addoption("--project-customer", action="store", default=None, help="Project customer code (e.g. ROKU)")
 
 
 def pytest_collection_finish(session):
@@ -643,8 +613,6 @@ def pytest_collection_finish(session):
             selected_types.add("RVR")
         elif "test_wifi_rvo" in path_text:
             selected_types.add("RVO")
-        elif "test/stability/" in path_text:
-            selected_types.add("STABILITY")
 
     if selected_types:
         pytest.selected_test_types = selected_types
@@ -794,66 +762,12 @@ def pytest_sessionfinish(session, exitstatus):
         pytest._session_duration_seconds = None
 
     destination_dir: Path | None = None
-    csv_file = "test_results.csv"
     logging.info(test_results)
-
-    # --- [原有逻辑] 处理兼容性结果 ---
-    logging.info(f"🔍 Total test_results count: {len(test_results)}")
-    logging.info(f"🔍 Raw test_results: {test_results}")
-
-    compatibility_results = []
-    for record in test_results:
-        if not isinstance(record, dict) or not record:
-            continue
-        test_name = next(iter(record))
-        data = record[test_name]
-        fixtures = data.get("fixtures", {})
-        if "event_loop_policy" in fixtures:
-            del fixtures["event_loop_policy"]
-
-        if "router_setting" in fixtures or "power_setting" in fixtures:
-            compatibility_results.append(record)
-
-    logging.info(f"✅ Final compatibility_results count: {len(compatibility_results)}")
-
-    if compatibility_results:
-        write_compatibility_results(compatibility_results, csv_file)
-        logging.info(f"✅ Wrote test_results.csv with {len(compatibility_results)} records")
-    else:
-        logging.warning("⚠️ No compatibility results found! Skipping test_results.csv")
 
     if result_path:
         destination_dir = Path(result_path)
         with suppress(Exception):
             destination_dir.mkdir(parents=True, exist_ok=True)
-
-        # For compatibility cases, archive the CSV into the report directory and
-        # sync both CSV + router catalogue into MySQL (best effort).
-        csv_path_for_db = Path(csv_file).resolve()
-        if compatibility_results and destination_dir:
-            target_csv = destination_dir / csv_file
-            shutil.copy(Path(csv_file), target_csv)
-            csv_path_for_db = target_csv.resolve()
-
-        if compatibility_results:
-            from src.tools.mysql_tool.operations import sync_compatibility_artifacts_to_db
-            from src.util.constants import load_config
-            config = load_config(refresh=True) or {}
-            router_json = str((Path.cwd() / "config" / "compatibility_router.json").resolve())
-            case_path_hint = None
-            try:
-                args = getattr(session.config, "args", None) or []
-                if args:
-                    case_path_hint = str(args[-1])
-            except Exception:
-                case_path_hint = None
-            sync_compatibility_artifacts_to_db(
-                config,
-                csv_file=str(csv_path_for_db),
-                router_json=router_json,
-                case_path=case_path_hint,
-                duration_seconds=getattr(pytest, "_session_duration_seconds", None),
-            )
 
         # --- [原有逻辑] 复制日志文件 ---
         src_log = Path("pytest.log")

@@ -185,15 +185,15 @@ def get_cfg() -> Any:
     return load_config(refresh=True)
 
 
-def describe_debug_reason(option_key: str, *, database_mode: bool) -> str:
-    return "database debug mode" if database_mode else f"debug option '{option_key}'"
+def describe_debug_reason(option_key: str) -> str:
+    return f"debug option '{option_key}'"
 
 
 def init_rf():
     """根据配置初始化射频衰减器"""
     flags = get_debug_flags()
     if flags.skip_corner_rf:
-        reason = describe_debug_reason("skip_corner_rf", database_mode=flags.database_mode)
+        reason = describe_debug_reason("skip_corner_rf")
         logging.info("Debug flag (%s) enabled, skip RF attenuator initialization", reason)
         return _DebugRFController()
     cfg = get_cfg()
@@ -217,7 +217,7 @@ def init_corner():
     """根据配置初始化转台"""
     flags = get_debug_flags()
     if flags.skip_corner_rf:
-        reason = describe_debug_reason("skip_corner_rf", database_mode=flags.database_mode)
+        reason = describe_debug_reason("skip_corner_rf")
         logging.info("Debug flag (%s) enabled, skip corner initialization", reason)
         controller = _DebugCornerController()
         controller.set_turntable_zero()
@@ -247,7 +247,7 @@ def init_router() -> Any:
     """根据配置返回路由实例"""
     flags = get_debug_flags()
     if flags.skip_router:
-        reason = describe_debug_reason("skip_router", database_mode=flags.database_mode)
+        reason = describe_debug_reason("skip_router")
         return _DebugRouterController(reason)
     cfg = get_cfg()
     router = get_router(cfg['router']['name'])
@@ -263,7 +263,7 @@ def common_setup(router: Router, router_info: Router) -> bool:
 
     flags = get_debug_flags()
     if flags.skip_router:
-        reason = describe_debug_reason("skip_router", database_mode=flags.database_mode)
+        reason = describe_debug_reason("skip_router")
         logging.info("Debug flag (%s) enabled, skip router setup steps", reason)
         return True
 
@@ -292,7 +292,7 @@ def wait_connect(router_info: Router):
     third_party_cfg = get_cfg().get("connect_type", {}).get("third_party", {})
     flags = get_debug_flags()
     if flags.skip_connect:
-        reason = describe_debug_reason("skip_connect", database_mode=flags.database_mode)
+        reason = describe_debug_reason("skip_connect")
         logging.info(
             "Debug flag (%s) enabled, skip Wi-Fi reconnection workflow (router=%s)",
             reason,

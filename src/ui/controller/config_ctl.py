@@ -97,8 +97,6 @@ def _save_mac_cache(cache: dict[str, str]) -> None:
 def _dut_cache_key(*, connect_type: str, adb_device: str, telnet_ip: str) -> Optional[str]:
     if connect_type == "Android" and adb_device:
         return f"ANDROID:{adb_device}"
-    if connect_type == "Linux" and telnet_ip:
-        return f"LINUX:{telnet_ip}"
     return None
 def _detect_wlan0_mac(*, connect_type: str, adb_device: str, telnet_ip: str) -> Optional[str]:
     if connect_type == "Android" and adb_device:
@@ -109,13 +107,6 @@ def _detect_wlan0_mac(*, connect_type: str, adb_device: str, telnet_ip: str) -> 
             timeout=5,
         )
         match = _WLAN0_MAC_PATTERN.search(proc.stdout or "")
-        return match.group(1).lower() if match else None
-
-    if connect_type == "Linux" and telnet_ip:
-        from src.tools.connect_tool.transports.telnet_tool import telnet_tool
-
-        output = str(telnet_tool(telnet_ip).checkoutput("ifconfig wlan0") or "")
-        match = _WLAN0_MAC_PATTERN.search(output)
         return match.group(1).lower() if match else None
 
     return None
@@ -131,11 +122,9 @@ def _schedule_mac_autofill(page: Any) -> None:
         connect_cfg = cfg.get("connect_type")
         connect = connect_cfg if isinstance(connect_cfg, dict) else {}
         android_cfg = connect.get("Android") if isinstance(connect.get("Android"), dict) else {}
-        linux_cfg = connect.get("Linux") if isinstance(connect.get("Linux"), dict) else {}
         connect_type = str(connect.get("type") or "").strip()
         adb_device = str(android_cfg.get("device") or "").strip()
-        telnet_ip = str(linux_cfg.get("ip") or "").strip()
-        cache_key = _dut_cache_key(connect_type=connect_type, adb_device=adb_device, telnet_ip=telnet_ip)
+        cache_key = _dut_cache_key(connect_type=connect_type, adb_device=adb_device, telnet_ip="")
         if cache_key:
             cached = _load_mac_cache().get(cache_key)
             if cached:
@@ -144,7 +133,7 @@ def _schedule_mac_autofill(page: Any) -> None:
         mac = _detect_wlan0_mac(
             connect_type=connect_type,
             adb_device=adb_device,
-            telnet_ip=telnet_ip,
+            telnet_ip="",
         )
         if mac and cache_key:
             cache = _load_mac_cache()
@@ -189,7 +178,7 @@ class _ConnectTypeControllerMixin:
     """Connect-type specific configuration helpers."""
 
     def normalize_connect_type_section(self, raw_value: Any) -> dict[str, Any]:
-        """Normalise connect_type section including Android/Linux/third_party."""
+        """Normalise connect_type section including Android/third_party."""
         source = raw_value if isinstance(raw_value, Mapping) else {}
         normalized: dict[str, Any] = {}
 
@@ -198,8 +187,6 @@ class _ConnectTypeControllerMixin:
         lowered_type = type_value.lower()
         if lowered_type in {"android", "adb"}:
             type_value = "Android"
-        elif lowered_type in {"linux", "telnet"}:
-            type_value = "Linux"
         normalized["type"] = type_value
 
         android_cfg = source.get("Android")
@@ -208,15 +195,6 @@ class _ConnectTypeControllerMixin:
         android_dict["device"] = str(device).strip() if device is not None else ""
         normalized["Android"] = android_dict
         normalized.pop("adb", None)
-
-        linux_cfg = source.get("Linux")
-        linux_dict = dict(linux_cfg)
-        telnet_ip = linux_dict.get("ip", "")
-        linux_dict["ip"] = str(telnet_ip).strip() if telnet_ip is not None else ""
-        wildcard = linux_dict.get("wildcard", "")
-        linux_dict["wildcard"] = str(wildcard).strip() if wildcard is not None else ""
-        normalized["Linux"] = linux_dict
-        normalized.pop("telnet", None)
 
         third_cfg = source.get("third_party")
         third_dict = dict(third_cfg)
@@ -619,7 +597,7 @@ class ConfigController(
             self.sync_widgets_to_config()
             _schedule_mac_autofill(page)
 
-        if field in {"connect_type.type", "connect_type.Android.device", "connect_type.Linux.ip"} and not page._refreshing:
+        if field in {"connect_type.type", "connect_type.Android.device"} and not page._refreshing:
             self.sync_widgets_to_config()
             _schedule_mac_autofill(page)
 
@@ -901,7 +879,7 @@ class ConfigController(
     # ------------------------------------------------------------------
 
     def normalize_connect_type_section(self, raw_value: Any) -> dict[str, Any]:
-        """Normalise connect-type data, supporting legacy adb/telnet fields."""
+        """Normalise connect-type data, supporting legacy adb fields."""
         normalized: dict[str, Any] = {}
         if isinstance(raw_value, Mapping):
             normalized.update(raw_value)
@@ -914,8 +892,6 @@ class ConfigController(
         lowered_type = type_value.lower()
         if lowered_type in {"android", "adb"}:
             type_value = "Android"
-        elif lowered_type in {"linux", "telnet"}:
-            type_value = "Linux"
         normalized["type"] = type_value
 
         android_cfg = normalized.get("Android")
@@ -935,26 +911,6 @@ class ConfigController(
         android_dict["device"] = str(device).strip() if device is not None else ""
         normalized["Android"] = android_dict
         normalized.pop("adb", None)
-
-        linux_cfg = normalized.get("Linux")
-        if not isinstance(linux_cfg, Mapping):
-            legacy_telnet = normalized.get("telnet")
-            if isinstance(legacy_telnet, Mapping):
-                linux_cfg = legacy_telnet
-            else:
-                linux_cfg = legacy_telnet
-        if isinstance(linux_cfg, Mapping):
-            linux_dict = dict(linux_cfg)
-        else:
-            linux_dict = {}
-            if isinstance(linux_cfg, str) and linux_cfg.strip():
-                linux_dict["ip"] = linux_cfg.strip()
-        telnet_ip = linux_dict.get("ip", "")
-        linux_dict["ip"] = str(telnet_ip).strip() if telnet_ip is not None else ""
-        wildcard = linux_dict.get("wildcard", "")
-        linux_dict["wildcard"] = str(wildcard).strip() if wildcard is not None else ""
-        normalized["Linux"] = linux_dict
-        normalized.pop("telnet", None)
 
         third_cfg = normalized.get("third_party")
         if isinstance(third_cfg, Mapping):
@@ -1080,14 +1036,17 @@ class ConfigController(
                     ref[part] = child
                 ref = child
             leaf = parts[-1]
+            if key == "rf_solution.step" and hasattr(widget, "serialize"):
+                try:
+                    ref[leaf] = str(widget.serialize()).strip()
+                except Exception:
+                    ref[leaf] = ""
+                continue
             if isinstance(widget, LineEdit):
                 val = widget.text()
                 if key == "connect_type.third_party.wait_seconds":
                     val = val.strip()
                     ref[leaf] = int(val) if val else 0
-                    continue
-                if key == "rf_solution.step":
-                    ref[leaf] = val.strip()
                     continue
                 if key == f"{TURN_TABLE_SECTION_KEY}.{TURN_TABLE_FIELD_STEP}":
                     ref[leaf] = val.strip()
@@ -1315,20 +1274,6 @@ class ConfigController(
             if not android_text or android_text == "No devices":
                 errors.append("ADB device is required.")
                 focus_widget = focus_widget or android_device_edit
-        elif connect_type == "Linux":
-            telnet_ip_edit = widgets["connect_type.Linux.ip"]
-            telnet_text = (
-                telnet_ip_edit.currentText().strip()
-                if hasattr(telnet_ip_edit, "currentText")
-                else telnet_ip_edit.text().strip()
-            )
-            if not telnet_text or telnet_text == "No devices":
-                errors.append("Linux IP is required.")
-                focus_widget = focus_widget or telnet_ip_edit
-            kernel_text = page.kernel_version_combo.currentText().strip()
-            if not kernel_text:
-                errors.append("Kernel version is required for Linux access.")
-                focus_widget = focus_widget or page.kernel_version_combo
         if page.third_party_checkbox.isChecked():
             wait_text = page.third_party_wait_edit.text().strip()
             if not wait_text or not wait_text.isdigit() or int(wait_text) <= 0:

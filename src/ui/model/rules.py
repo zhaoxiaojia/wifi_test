@@ -442,14 +442,6 @@ CUSTOM_SIMPLE_UI_RULES.append(
                 == "Android",
             ),
             SimpleFieldEffect(
-                target_field="connect_type.Linux.ip",
-                action="disable",
-                condition=lambda values: normalize_connect_type_label(
-                    str(values.get("connect_type.type") or "")
-                )
-                == "Android",
-            ),
-            SimpleFieldEffect(
                 target_field="system.version",
                 action="show",
                 condition=lambda values: normalize_connect_type_label(
@@ -480,47 +472,6 @@ CUSTOM_SIMPLE_UI_RULES.append(
                     str(values.get("connect_type.type") or "")
                 )
                 == "Android",
-            ),
-            # Linux branch
-            SimpleFieldEffect(
-                target_field="connect_type.Linux.ip",
-                action="enable",
-                condition=lambda values: normalize_connect_type_label(
-                    str(values.get("connect_type.type") or "")
-                )
-                == "Linux",
-            ),
-            SimpleFieldEffect(
-                target_field="connect_type.Android.device",
-                action="disable",
-                condition=lambda values: normalize_connect_type_label(
-                    str(values.get("connect_type.type") or "")
-                )
-                == "Linux",
-            ),
-            SimpleFieldEffect(
-                target_field="system.version",
-                action="hide",
-                condition=lambda values: normalize_connect_type_label(
-                    str(values.get("connect_type.type") or "")
-                )
-                == "Linux",
-            ),
-            SimpleFieldEffect(
-                target_field="system.kernel_version",
-                action="show",
-                condition=lambda values: normalize_connect_type_label(
-                    str(values.get("connect_type.type") or "")
-                )
-                == "Linux",
-            ),
-            SimpleFieldEffect(
-                target_field="system.kernel_version",
-                action="enable",
-                condition=lambda values: normalize_connect_type_label(
-                    str(values.get("connect_type.type") or "")
-                )
-                == "Linux",
             ),
         ],
     )
@@ -899,22 +850,6 @@ CUSTOM_TESTCASE_UI_RULES.append(
                 == "Android",
             ),
             SimpleFieldEffect(
-                target_field="connect_type.Linux.ip",
-                action="enable",
-                condition=lambda values: normalize_connect_type_label(
-                    str(values.get("connect_type.type") or "")
-                )
-                == "Linux",
-            ),
-            SimpleFieldEffect(
-                target_field="connect_type.Linux.wildcard",
-                action="enable",
-                condition=lambda values: normalize_connect_type_label(
-                    str(values.get("connect_type.type") or "")
-                )
-                == "Linux",
-            ),
-            SimpleFieldEffect(
                 target_field="connect_type.third_party.enabled",
                 action="enable",
                 condition=lambda values: True,
@@ -980,11 +915,6 @@ CUSTOM_TESTCASE_UI_RULES.append(
                 condition=lambda values: True,
             ),
             # Debug Options: these checkboxes should always be user-editable.
-            SimpleFieldEffect(
-                target_field="debug.database_mode",
-                action="enable",
-                condition=lambda values: True,
-            ),
             SimpleFieldEffect(
                 target_field="debug.skip_router",
                 action="enable",

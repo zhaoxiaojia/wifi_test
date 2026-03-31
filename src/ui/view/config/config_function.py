@@ -290,7 +290,10 @@ class FunctionConfigForm(QWidget):
         test_project_root = current_file.parent.parent.parent.parent / "test" / "function"
 
         # --- 确定要加载的目录 ---
-        if target_dirs is None:
+        if not test_project_root.exists():
+            # Function test cases were removed during repo slim-down; keep UI alive.
+            dirs_to_load = []
+        elif target_dirs is None:
             # 回退逻辑：加载 function 下所有直接子目录
             dirs_to_load = [d for d in test_project_root.iterdir() if d.is_dir()]
         else:

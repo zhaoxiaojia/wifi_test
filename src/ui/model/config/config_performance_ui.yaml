@@ -135,9 +135,6 @@ panels:
       - id: debug
         label: "Debug Options"
         fields:
-          - key: debug.database_mode
-            widget: checkbox
-            label: "Enable database debug mode"
           - key: debug.skip_router
             widget: checkbox
             label: "Skip router workflow"

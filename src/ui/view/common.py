@@ -683,14 +683,22 @@ class RfStepSegmentsWidget(QWidget):
         super().__init__(parent)
         self._segments: list[tuple[int, int, int]] = []
 
+        # Keep alignment consistent with the outer QFormLayout used by the
+        # Performance page (see builder.py): label column ~140px, spacing ~30px.
+        label_width = 140
+        column_spacing = 30
+        indent_left = label_width + column_spacing
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(6)
 
         form = QGridLayout()
         form.setContentsMargins(0, 0, 0, 0)
-        form.setHorizontalSpacing(8)
+        form.setHorizontalSpacing(column_spacing)
         form.setVerticalSpacing(4)
+        form.setColumnMinimumWidth(0, label_width)
+        form.setColumnStretch(1, 1)
 
         from PyQt5.QtGui import QIntValidator
 
@@ -710,17 +718,25 @@ class RfStepSegmentsWidget(QWidget):
         self.step_edit.setText(str(self.DEFAULT_SEGMENT[2]))
 
         # 在Perormance UI生成
-        form.addWidget(QLabel("Start Atten"), 0, 0)
+        start_label = QLabel("Start Atten")
+        start_label.setMinimumWidth(label_width)
+        form.addWidget(start_label, 0, 0)
         form.addWidget(self.start_edit, 0, 1)
-        form.addWidget(QLabel("Stop Atten"), 1, 0)
+        stop_label = QLabel("Stop Atten")
+        stop_label.setMinimumWidth(label_width)
+        form.addWidget(stop_label, 1, 0)
         form.addWidget(self.stop_edit, 1, 1)
-        form.addWidget(QLabel("Step Atten"), 2, 0)
+        step_label = QLabel("Step Atten")
+        step_label.setMinimumWidth(label_width)
+        form.addWidget(step_label, 2, 0)
         form.addWidget(self.step_edit, 2, 1)
 
         layout.addLayout(form)
 
-        btn_row = QHBoxLayout()
-        btn_row.setContentsMargins(0, 0, 0, 0)
+        btn_container = QWidget(self)
+        btn_row = QHBoxLayout(btn_container)
+        # Indent buttons to align with the input column (under Attenuator IP).
+        btn_row.setContentsMargins(indent_left, 0, 0, 0)
         btn_row.setSpacing(8)
 
         self.add_btn = PushButton("Add", self)
@@ -732,7 +748,7 @@ class RfStepSegmentsWidget(QWidget):
         btn_row.addWidget(self.del_btn)
 
         btn_row.addStretch(1)
-        layout.addLayout(btn_row)
+        layout.addWidget(btn_container)
 
         hint_text = (
             "If no range is added, the default 0-75 (step 3) range is used.\n"
@@ -756,7 +772,13 @@ class RfStepSegmentsWidget(QWidget):
 
         self.segment_stack.addWidget(self.segment_hint)
         self.segment_stack.addWidget(self.segment_list)
-        layout.addWidget(self.segment_stack)
+        segment_container = QWidget(self)
+        segment_layout = QVBoxLayout(segment_container)
+        # Indent the list/hint so it aligns with the input column too.
+        segment_layout.setContentsMargins(indent_left, 0, 0, 0)
+        segment_layout.setSpacing(0)
+        segment_layout.addWidget(self.segment_stack)
+        layout.addWidget(segment_container)
 
         # Prefer a compact, non-expanding height so that the
         # surrounding form layout can place the next RF Solution

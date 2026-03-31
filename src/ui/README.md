@@ -325,7 +325,7 @@ When you add a new test that follows the same pattern (Config → optional
 CSV → pytest), use this checklist:
 
 1. **Create the pytest module**
-   - Place it under `src/test/performance/` or `src/test/stability/`.
+   - Place it under `src/test/performance/`.
    - Reuse helpers from `src/test/performance/__init__.py` where possible
      (`init_router`, `init_rf`, `scenario_group`, `wait_connect`, etc.).
    - If the test is CSV‑driven, either:

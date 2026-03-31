@@ -6,9 +6,9 @@
 
 from typing import Any, Iterable
 
-from .constants import Paths, RouterConst, RokuConst
+from .constants import Paths, RouterConst
 
-__all__ = ["Paths", "RouterConst", "RokuConst", "parse_host_list"]
+__all__ = ["Paths", "RouterConst", "parse_host_list"]
 
 
 def parse_host_list(raw: Any) -> tuple[str, ...]:

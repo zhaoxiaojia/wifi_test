@@ -142,8 +142,7 @@ def determine_case_category(case_path: str | None = None, display_path: str | No
     The category is defined as the first directory immediately under
     ``test`` within the relative path, for example:
 
-    - ``src/test/stability/test_str.py`` -> ``stability``
-    - ``test/compatibility/test_compatibility.py`` -> ``compatibility``
+    - ``src/test/performance/test_wifi_rvr.py`` -> ``performance``
     """
     candidate_paths: list[str] = []
     if display_path:

@@ -15,12 +15,6 @@ from PyQt5.QtCore import QThread, pyqtSignal, Qt
 
 from src.util.constants import Paths
 from src.ui.view.theme import STYLE_BASE, TEXT_COLOR
-from src.test.stability import (
-    is_stability_case_path,
-    load_stability_plan,
-    prepare_stability_environment,
-    run_stability_plan,
-)
 from src.util.pytest_redact import install_redactor_for_current_process
 import pytest, os, sys, allure
 import pandas as pd
@@ -444,33 +438,6 @@ class CaseRunner(QThread):
         )
         return messages
 
-def _is_project_test_script(case_path: str) -> bool:
-    parts = Path(case_path).resolve().parts
-    for i in range(len(parts) - 2):
-        if (str(parts[i]).lower() == "src" and
-            str(parts[i+1]).lower() == "test" and
-            str(parts[i+2]).lower() == "function"):
-            return True
-    return False
-
-
-def _extract_project_relative_path(case_path: str) -> Path:
-    p = Path(case_path).resolve()
-    parts = p.parts
-
-    # 查找连续�?src/test/function
-    for i in range(len(parts) - 2):
-        if (str(parts[i]).lower() == "src" and
-                str(parts[i + 1]).lower() == "test" and
-                str(parts[i + 2]).lower() == "function"):
-            # 返回 function/ 之后的所有部�?
-            relative_parts = parts[i + 3:]  # 注意�?i+3，跳�?src/test/function
-            return Path(*relative_parts)
-
-    # 理论上不会执行到这里（因为调用前已判断）
-    raise ValueError(f"Path does not contain 'src/test/function': {case_path}")
-
-
 def _find_pytest_root(start_path: Path) -> Path | None:
     current = start_path.resolve()
     if current.is_file():
@@ -547,13 +514,13 @@ def _init_worker_env(
         else:  # 开发模式
             base_dir = Path(__file__).resolve().parents[3]
             print(f"[DEBUG _init_worker_env] DEV mode: base_dir={base_dir}")
-        absolute_test_path = base_dir / "src/test/function" / case_path
+        absolute_test_path = base_dir / "src" / case_path
         print(f"[DEBUG _init_worker_env] absolute_test_path={absolute_test_path}")
 
         if not absolute_test_path.exists():
             # 尝试其他可能的路径格式
             case_path_str = str(case_path).replace("\\", "/")
-            if case_path_str.startswith("src/test/function/"):
+            if case_path_str.startswith("src/"):
                 # 如果case_path已经包含前缀，直接拼接
                 absolute_test_path = base_dir / case_path
                 print(f"[DEBUG _init_worker_env] Retry with full path: {absolute_test_path}")
@@ -668,9 +635,6 @@ def _init_worker_env(
             pytest_args.append(f"--project-customer={customer}")
 
     # --- 处理稳定性测试 ---
-    is_stability_case = is_stability_case_path(case_path)
-    plan = load_stability_plan() if is_stability_case else None
-    pytest_args = _apply_exitfirst_flags(pytest_args, plan)
     # ---
 
     return _WorkerContext(
@@ -679,30 +643,10 @@ def _init_worker_env(
         pytest_args=pytest_args,
         report_dir=report_dir,
         plugin=plugin,
-        is_stability_case=is_stability_case,
-        plan=plan if is_stability_case else None,
         log_session=session,
         # --- 传递日志路径给 _RunLogSession ---
         #effective_log_path=str(effective_log_path),
     )
-
-def _apply_exitfirst_flags(pytest_args: list[str], plan) -> list[str]:
-    """Return pytest args extended with exit-first and retry flags when requested."""
-
-    if plan is None or not getattr(plan, "exit_first", False) or not pytest_args:
-        return pytest_args
-
-    args = list(pytest_args)
-    case_arg = args.pop() if args else None
-    args.append("-x")
-    retry_limit = max(0, int(getattr(plan, "retry_limit", 0) or 0))
-    if retry_limit > 0:
-        args.append(f"--count={retry_limit + 1}")
-        args.append(f"--maxfail={retry_limit}")
-    if case_arg is not None:
-        args.append(case_arg)
-    return args
-
 
 def _stream_pytest_events(ctx: "_WorkerContext") -> None:
     """Execute pytest (or the stability harness) and forward updates via queue."""
@@ -781,7 +725,7 @@ def _stream_pytest_events(ctx: "_WorkerContext") -> None:
     def emit_stability_progress(percent: int) -> None:
         q.put(("progress", percent))
 
-    if ctx.is_stability_case and ctx.plan is not None:
+    if False:
         result = run_stability_plan(
             ctx.plan,
             run_pytest=lambda: pytest.main(ctx.pytest_args, plugins=[ctx.plugin]),
@@ -877,7 +821,7 @@ def _stream_pytest_events(ctx: "_WorkerContext") -> None:
 
     if last_exit_code == 0:
         q.put(("log", f"<b style='{STYLE_BASE} color:#a6e3ff;'>Test completed</b>"))
-    elif not ctx.is_stability_case:
+    else:
         q.put(
             (
                 "log",
@@ -939,8 +883,6 @@ class _WorkerContext:
         pytest_args: list[str],
         report_dir: Path,
         plugin: Any,
-        is_stability_case: bool,
-        plan: Any | None,
         log_session: _RunLogSession,
     ) -> None:
         self.case_path = case_path
@@ -948,8 +890,6 @@ class _WorkerContext:
         self.pytest_args = pytest_args
         self.report_dir = report_dir
         self.plugin = plugin
-        self.is_stability_case = is_stability_case
-        self.plan = plan
         self.log_session = log_session
 
 

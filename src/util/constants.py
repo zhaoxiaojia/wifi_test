@@ -271,32 +271,11 @@ LAB_FIELD_NAME: Final[str] = "name"
 # fixed equipment models used in that lab. Editable parameters (IP address,
 # attenuation steps, vendor/product IDs, etc.) remain user-controlled via YAML.
 LAB_CATALOG: Final[dict[str, dict[str, Any]]] = {
-    "SH Full-wave anechoic chamber#2": {
+    "xiaomi lab": {
         "capabilities": {"rvr", "rvo", "peak_throughput"},
-        "equipment": {
-            "turntable_model": TURN_TABLE_MODEL_RS232,
-            "rf_model": RF_MODEL_RS232,
-        },
-    },
-    "SH Shielded box": {
-        "capabilities": {"rvr", "peak_throughput"},
-        "equipment": {
-            "turntable_model": None,
-            "rf_model": RF_MODEL_RADIORACK_4_220,
-        },
-    },
-    "SZ Venus": {
-        "capabilities": {"rvo", "rvr", "peak_throughput"},
         "equipment": {
             "turntable_model": TURN_TABLE_MODEL_OTHER,
             "rf_model": RF_MODEL_RADIORACK_4_220,
-        },
-    },
-    "SZ Shielded box": {
-        "capabilities": {"rvr", "peak_throughput"},
-        "equipment": {
-            "turntable_model": None,
-            "rf_model": RF_MODEL_LDA_908V_8,
         },
     },
 }
@@ -675,7 +654,6 @@ def _coerce_truthy(value: Any) -> bool:
 class DebugFlags:
     """Aggregated debug switches parsed from configuration."""
 
-    database_mode: bool = False
     skip_router: bool = False
     skip_connect: bool = False
     skip_corner_rf: bool = False
@@ -698,26 +676,13 @@ def get_debug_flags(
     if isinstance(debug_section, Mapping):
         debug_cfg = dict(debug_section)
     else:
-        debug_cfg = {"database_mode": debug_section}
+        debug_cfg = {}
 
-    database_mode = _coerce_truthy(debug_cfg.get("database_mode"))
-    skip_router = database_mode or _coerce_truthy(debug_cfg.get("skip_router"))
-    skip_connect = database_mode or _coerce_truthy(debug_cfg.get("skip_connect"))
-    skip_corner_rf = database_mode or _coerce_truthy(debug_cfg.get("skip_corner_rf"))
     return DebugFlags(
-        database_mode=database_mode,
-        skip_router=skip_router,
-        skip_connect=skip_connect,
-        skip_corner_rf=skip_corner_rf,
+        skip_router=_coerce_truthy(debug_cfg.get("skip_router")),
+        skip_connect=_coerce_truthy(debug_cfg.get("skip_connect")),
+        skip_corner_rf=_coerce_truthy(debug_cfg.get("skip_corner_rf")),
     )
-
-
-def is_database_debug_enabled(
-    *, config: Mapping[str, Any] | None = None, refresh: bool = False
-) -> bool:
-    """Return whether database debug mode is enabled in the configuration."""
-
-    return get_debug_flags(config=config, refresh=refresh).database_mode
 
 
 def save_config_sections(
@@ -1083,56 +1048,6 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
                 "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
             },
         },
-        "Roku": {
-            "Latte829": {
-                "ProjectID": "AT308F-TR964",
-                "ProjectName":"",
-                "ODM": "Roku",
-                "main_chip": "TR964",
-                "wifi_module": "W265S2M",
-                "wifi_sn": " ",
-                "interface": "USB",
-                "ecosystem": "Linux",
-                "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
-            },
-        },
-        "Hisense": {
-            "65D50S": {
-                "ProjectID": "None",
-                "ProjectName":"-",
-                "ODM": "Hisense",
-                "main_chip": "T963D4",
-                "wifi_module": "EA6621",
-                "wifi_sn": " ",
-                "interface": "USB",
-                "ecosystem": "Android",
-                "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
-            },
-            "55A6Q": {
-                "ProjectID": "None",
-                "ProjectName":"-",
-                "ODM": "Hisense",
-                "main_chip": "T963D4",
-                "wifi_module": "EA6652",
-                "wifi_sn": " ",
-                "interface": "USB",
-                "ecosystem": "Android",
-                "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
-            },
-        },
-        "TCL": {
-            "Espresso115": {
-                "ProjectID": "AY30AD-TC8000",
-                "ProjectName":"",
-                "ODM": "TCL",
-                "main_chip": "T963D4",
-                "wifi_module": "W265UI",
-                "wifi_sn": " ",
-                "interface": "USB",
-                "ecosystem": "Android",
-                "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
-            },
-        },
     },
     "OTT": {
         "XIAOMI": {
@@ -1148,141 +1063,8 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
                 "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
             },
         },
-        "Vantiva": {
-            "Rosemary607": {
-                "ProjectID": "BH20AD-S905YT",
-                "ProjectName":"-",
-                "ODM": "SDMC",
-                "main_chip": "S905Y5",
-                "wifi_module": "W265S1",
-                "wifi_sn": "05:33",
-                "interface": "SDIO",
-                "ecosystem": "Android",
-                "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
-            },
-        },
-        "JIO": {
-            "Oak528": {
-                "ProjectID": "BL20BN-S905X5",
-                "ProjectName": "SEI+S905X5+AOSP U",
-                "ODM": "SEI",
-                "main_chip": "S905X5",
-                "wifi_module": "W265S1",
-                "wifi_sn": "05:33",
-                "interface": "SDIO",
-                "ecosystem": "Android",
-                "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
-            },
-            "Oak401": {
-                "ProjectID": "BL20B9-S905X5",
-                "ProjectName": "SEI+S905X5-JU+AOSP U",
-                "ODM": "SEI",
-                "main_chip": "S905X5",
-                "wifi_module": "W265S1",
-                "wifi_sn": "05:33",
-                "interface": "SDIO",
-                "ecosystem": "Android",
-                "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
-            },
-        },
-        "ZTE": {
-            "Rosemary904": {
-                "ProjectID": "BH20BJ-S905Y5",
-                "ProjectName": "ZTE+Viettel+S905Y5+W265S2-M+ATV U",
-                "ODM": "ZTE",
-                "main_chip": "S905Y5",
-                "wifi_module": "W265S2M",
-                "interface": "SDIO",
-                "ecosystem": "Android",
-                "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
-            },
-        },
-        "A": {
-            "Plam811": {
-                "ProjectID": "BM20CQ-S905X5M",
-                "ProjectName": "SEI+S905X5+W265S1+",
-                "ODM": "SEI",
-                "main_chip": "S905X5M",
-                "wifi_module": "W265S1",
-                "interface": "SDIO",
-                "ecosystem": "Android",
-                "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
-            },
-        },
-        "Roku": {
-            "Seabrook": {
-                "ProjectID": "BM208H-S905X5M",
-                "ProjectName": "Seabrook",
-                "ODM": "Foxconn",
-                "main_chip": "S905X5M",
-                "wifi_module": "W265S2-M",
-                "interface": "SDIO",
-                "ecosystem": "Linux",
-                "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
-            },
-        },
-        "W": {
-            "Palm825": {
-                "ProjectID": "BM20CS-S905X5M",
-                "ProjectName": "SDMC+S905X5M-J+ATV U",
-                "ODM": "SDMC",
-                "main_chip": "S905X5M",
-                "wifi_module": "W265S2-M",
-                "interface": "SDIO",
-                "ecosystem": "Android",
-                "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
-            },
-        },
     },
 }
 
 
 
-class RokuConst:
-    """Roku 控制常量"""
-
-    COMMANDS: Final[dict[str, str]] = {
-        # Standard Keys
-        "home": "Home",
-        "reverse": "Rev",
-        "forward": "Fwd",
-        "play": "Play",
-        "select": "Select",
-        "left": "Left",
-        "right": "Right",
-        "down": "Down",
-        "up": "Up",
-        "back": "Back",
-        "replay": "InstantReplay",
-        "info": "Info",
-        "backspace": "Backspace",
-        "search": "Search",
-        "enter": "Enter",
-        "literal": "Lit",
-        # For devices that support "Find Remote"
-        "find_remote": "FindRemote",
-        # For Roku TV
-        "volume_down": "VolumeDown",
-        "volume_up": "VolumeUp",
-        "volume_mute": "VolumeMute",
-        # For Roku TV while on TV tuner channel
-        "channel_up": "ChannelUp",
-        "channel_down": "ChannelDown",
-        # For Roku TV current input
-        "input_tuner": "InputTuner",
-        "input_hdmi1": "InputHDMI1",
-        "input_hdmi2": "InputHDMI2",
-        "input_hdmi3": "InputHDMI3",
-        "input_hdmi4": "InputHDMI4",
-        "input_av1": "InputAV1",
-        # For devices that support being turned on/off
-        "power": "Power",
-        "poweroff": "PowerOff",
-        "poweron": "PowerOn",
-    }
-    SENSORS: Final[tuple[str, ...]] = (
-        "acceleration",
-        "magnetic",
-        "orientation",
-        "rotation",
-    )

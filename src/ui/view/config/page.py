@@ -47,6 +47,8 @@ from src.util.constants import (
 )
 from src.ui.controller.case_ctl import _register_switch_wifi_csv_combo as _reg_sw_csv
 
+_CONFIG_PANEL_OUTER_MARGIN_PX = 12
+
 
 class _RowHeightWrapper(QObject):
     """
@@ -227,10 +229,25 @@ class ConfigView(CardWidget):
                 PAGE_CONTENT_MARGIN,
                 PAGE_CONTENT_MARGIN,
             )
-            page_layout.setSpacing(PAGE_CONTENT_MARGIN)
-            page_layout.addWidget(panel, 1)
+            # Keep the Create Case button visually attached to the config panels.
+            page_layout.setSpacing(4)
+            # Keep the config panel height driven by its content so the
+            # Create Case button sits directly below (avoid large blank area
+            # above the button on short pages like Basic).
+            page_layout.addWidget(panel, 0)
             run_btn = self._create_run_button(page)
-            page_layout.addWidget(run_btn, 0)
+            run_row = QWidget(page)
+            run_row_layout = QHBoxLayout(run_row)
+            run_row_layout.setContentsMargins(
+                _CONFIG_PANEL_OUTER_MARGIN_PX,
+                0,
+                _CONFIG_PANEL_OUTER_MARGIN_PX,
+                0,
+            )
+            run_row_layout.setSpacing(0)
+            run_row_layout.addWidget(run_btn, 1)
+            page_layout.addWidget(run_row, 0)
+            page_layout.addStretch(1)
             self._page_widgets[key] = page
 
         # Initialise stack and step view with the default page selection.

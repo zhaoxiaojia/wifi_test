@@ -7,12 +7,12 @@ system:
   version: Android 15
   kernel_version: Kernel 6.1
 project:
-  customer: Hisense
+  customer: XIAOMI
   product_line: TV
-  project: 65D50S
-  odm: Hisense
-  main_chip: T963D4
-  wifi_module: EA6621
+  project: Vodka424
+  odm: '-'
+  main_chip: T966D5
+  wifi_module: W265U1
   interface: USB
   mass_production_status: EVT
   dut_sn: ''
@@ -21,8 +21,8 @@ serial_port:
   port: ''
   status: false
 router:
-  name: asusax88u
-  address: 192.168.50.1
+  name: xiaomibe7000
+  address: 192.168.31.1
   24g_ssid: 2.4G
   5g_ssid: 5G
 rvr:
@@ -45,8 +45,8 @@ dut:
   third_party:
     enabled: false
     wait_seconds: 0
-  mac_address: 70:c9:12:c5:9c:50
-  name: glmt3000
+  name: asusax88u
   address: 192.168.8.1
   24g_ssid: Openwrt-AT-24G
   5g_ssid: Openwrt-AT-5G
+  mac_address: ''

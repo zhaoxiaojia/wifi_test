@@ -137,7 +137,7 @@ def _adjust_rssi_to_target(target_rssi: int, base_db: Optional[int]) -> Tuple[in
     flags = get_debug_flags()
     if flags.skip_corner_rf:
         simulated_rssi = pytest.dut.get_rssi()
-        reason = describe_debug_reason("skip_corner_rf", database_mode=flags.database_mode)
+        reason = describe_debug_reason("skip_corner_rf")
         logging.info(
             "Debug flag (%s) enabled, skip RSSI adjustment and return simulated RSSI %s dBm",
             reason,
@@ -253,7 +253,7 @@ def _apply_static_attenuation(static_db: Optional[int]) -> Tuple[int, Optional[i
     logging.info('Set static attenuation to %s dB before RVO test.', static_db)
     flags = get_debug_flags()
     if flags.skip_corner_rf:
-        reason = describe_debug_reason("skip_corner_rf", database_mode=flags.database_mode)
+        reason = describe_debug_reason("skip_corner_rf")
         logging.info(
             'Debug flag (%s) enabled, skip applying static attenuation %s dB.',
             reason,
@@ -360,5 +360,5 @@ def test_rvo(setup_rvo_case, performance_sync_manager):
     performance_sync_manager(
         "RVO",
         test_result.log_file,
-        message="RVO data rows stored in database",
+        message="RVO data stored",
     )

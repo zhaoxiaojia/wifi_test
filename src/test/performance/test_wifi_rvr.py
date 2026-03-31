@@ -86,5 +86,5 @@ def test_rvr(setup_attenuation, performance_sync_manager):
     performance_sync_manager(
         "RVR",
         test_result.log_file,
-        message="RVR data rows stored in database",
+        message="RVR data stored",
     )

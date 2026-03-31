@@ -44,7 +44,6 @@ __all__ = [
 # ---------------------------------------------------------------------------
 
 SIDEBAR_PAGE_KEYS: Tuple[str, ...] = (
-    "account",
     "config",
     "case",
     "run",
@@ -53,7 +52,6 @@ SIDEBAR_PAGE_KEYS: Tuple[str, ...] = (
 )
 
 SIDEBAR_PAGE_LABELS: Dict[str, Tuple[str, Optional[str]]] = {
-    "account": ("Login", None),
     "config": ("Config ", "Case Config"), #Setup
     "case": ("Case", "RVR Wi-Fi Config"), #Advanced Test Setup Select
     "run": ("Test", None),

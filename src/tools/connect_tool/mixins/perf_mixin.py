@@ -23,7 +23,7 @@ from src.tools.connect_tool.command_batch import (
 from src.tools.ixchariot import ix
 from src.tools.performance_result import PerformanceResult
 from src.tools.router_tool.router_performance import handle_expectdata
-from src.util.constants import is_database_debug_enabled
+from src.util.constants import get_debug_flags
 
 
 @dataclass
@@ -43,7 +43,7 @@ class PerfMixin:
     IPERF_WIN_KILL = "taskkill /im {}.exe -f"
 
     def _is_performance_debug_enabled(self) -> bool:
-        if not is_database_debug_enabled():
+        if not get_debug_flags(refresh=True).skip_connect:
             return False
         selected = getattr(pytest, "selected_test_types", set())
         return any(kind in {"RVR", "RVO", "PERFORMANCE"} for kind in selected)

@@ -11,7 +11,6 @@ from src.tools.router_tool.AsusRouter.Asusax5400Control import Asusax5400Control
 from src.tools.router_tool.AsusRouter.Asusax6700Control import Asusax6700Control
 from src.tools.router_tool.Xiaomi.Xiaomiax3600Control import Xiaomiax3600Control
 from src.tools.router_tool.Xiaomi.XiaomiBe7000Control import XiaomiBe7000Control
-from src.tools.router_tool.OpenWrtWlControl import OpenWrtWlControl
 from src.util.constants import load_config
 
 router_list = {
@@ -20,7 +19,6 @@ router_list = {
     'asusax88upro': Asusax88uProControl,
     'xiaomibe7000': XiaomiBe7000Control,
     'xiaomiax3600': Xiaomiax3600Control,
-    'glmt3000': OpenWrtWlControl,
 }
 
 

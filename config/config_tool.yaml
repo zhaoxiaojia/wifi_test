@@ -1,10 +1,5 @@
 host_os:
   user: amlogic
   password: Linux2024
-mysql:
-  host: 10.28.11.79
-  user: root
-  passwd: FAE-QA@123
-  database: wifi_test
 ai_chat:
   model_id: groq-llama3-8b

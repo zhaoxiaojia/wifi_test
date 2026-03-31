@@ -1,3 +1,7 @@
-stability:
-- test\base\test_03_open_wifi.py
-- test\base\test_08_hide_passwd.py
+performance:
+- src/test/performance/test_wifi_peak_throughput.py
+- src/test/performance/test_wifi_rvo.py
+- src/test/performance/test_wifi_rvr.py
+- src/test/performance/xiaomi/test_xiaomi_peak_throughput.py
+- src/test/performance/xiaomi/test_xiaomi_rvo.py
+- src/test/performance/xiaomi/test_xiaomi_rvr.py

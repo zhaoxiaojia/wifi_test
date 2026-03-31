@@ -12,12 +12,10 @@ pytest-rerunfailures
 psutil
 pyserial
 PyQt5
-PyMySQL
 PyQt-Fluent-Widgets
 cryptography
 PyUserInput
 pysnmp
-roku
 pytest-dependency
 scapy
 ldap3

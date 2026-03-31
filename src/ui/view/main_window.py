@@ -45,16 +45,8 @@ from src.ui.view.config.page import CaseConfigPage
 from src.ui.view.run import RunPage
 from src.ui.view.report import ReportView
 from src.ui.view.about import AboutView
-from src.ui.view.account import CompanyLoginPage
 from src.ui.controller.about_ctl import AboutController
 from src.ui.controller.report_ctl import ReportController
-from src.ui.controller.account_ctl import (
-    get_configured_ldap_server,
-    ldap_authenticate,
-    load_auth_state,
-    save_auth_state,
-    clear_auth_state,
-)
 from src.ui.controller import set_run_locked
 from src.ui.model.tools_registry import load_tools_registry
 from src.ui.view.theme import BACKGROUND_COLOR, TEXT_COLOR
@@ -108,8 +100,6 @@ class MainWindow(FluentWindow):
         self.stackedWidget.addWidget(self._loading_page)
         self.stackedWidget.setCurrentWidget(self._loading_page)
         print(f"[STARTUP_TIME] MainWindow.loading_page: {time.perf_counter() - self._startup_t0:.3f}s")
-
-        self._active_account: dict | None = None
 
         final_rect = self.geometry()
         start_rect = final_rect.adjusted(
@@ -177,12 +167,6 @@ class MainWindow(FluentWindow):
 
         # Pages
         t_step = time.perf_counter()
-        self.login_page = CompanyLoginPage(self)
-        self.login_page.loginResult.connect(self._on_login_result)
-        self.login_page.logoutRequested.connect(self._on_logout_requested)
-        print(f"[STARTUP_TIME] CompanyLoginPage: {time.perf_counter() - t_step:.3f}s")
-
-        t_step = time.perf_counter()
         self.caseConfigPage = CaseConfigPage(self.on_run)
         self.rvr_wifi_config_page = RvrWifiConfigPage()
         print(f"[STARTUP_TIME] CaseConfigPage+RvrWifiConfigPage: {time.perf_counter() - t_step:.3f}s")
@@ -198,7 +182,6 @@ class MainWindow(FluentWindow):
         self.run_page = RunPage("", parent=self)
         # Ensure run page starts empty
         self.run_page.reset()
-        self._silent_init_mysql()
         # Report page (disabled until report_dir created)
         self.report_view = ReportView(self)
         self.report_ctl = ReportController(self.report_view)
@@ -208,15 +191,6 @@ class MainWindow(FluentWindow):
         # Logical sidebar keys (top -> bottom): account, config, case, run, report, about
         self.sidebar_page_keys = SIDEBAR_PAGE_KEYS
         self.sidebar_labels = SIDEBAR_PAGE_LABELS
-
-        # Account / login entry
-        self.login_nav_button = self._create_sidebar_button(
-            "account",
-            self.login_page,
-            FluentIcon.PEOPLE,
-        )
-        self.login_nav_button.setVisible(True)
-        self.login_nav_button.setEnabled(True)
 
         # Case configuration / main config page
         self.case_nav_button = self._create_sidebar_button(
@@ -266,7 +240,6 @@ class MainWindow(FluentWindow):
 
         # Canonical mapping from logical sidebar keys to pages/buttons
         self.sidebar_pages = {
-            "account": self.login_page,
             "config": self.caseConfigPage,
             "case": self.rvr_wifi_config_page,
             "run": self.run_page,
@@ -274,7 +247,6 @@ class MainWindow(FluentWindow):
             "about": self.about_page,
         }
         self.sidebar_nav_buttons = {
-            "account": self.login_nav_button,
             "config": self.case_nav_button,
             "case": self.rvr_nav_button,
             "run": self.run_nav_button,
@@ -282,22 +254,12 @@ class MainWindow(FluentWindow):
             "about": self.about_nav_button,
         }
 
-        self._nav_logged_out_states = {
-            self.sidebar_nav_buttons["config"]: False,
-            self.sidebar_nav_buttons["case"]: False,
-            self.sidebar_nav_buttons["run"]: False,
-            self.sidebar_nav_buttons["report"]: False,
-            self.sidebar_nav_buttons["about"]: False,
-        }
-        # In the logged-in state, all feature pages are enabled.
-        self._nav_logged_in_states = {
-            self.sidebar_nav_buttons["config"]: True,
-            self.sidebar_nav_buttons["case"]: True,
-            self.sidebar_nav_buttons["run"]: True,
-            self.sidebar_nav_buttons["report"]: True,
-            self.sidebar_nav_buttons["about"]: True,
-        }
-        self._initialize_login_state()
+        # Login has been removed; always enable feature pages.
+        for btn in self.sidebar_nav_buttons.values():
+            if btn and not sip.isdeleted(btn):
+                btn.setEnabled(True)
+        self.setCurrentIndex(self.caseConfigPage)
+        self.refresh_about_metadata()
         self._update_global_tools_geometry()
         self.import_ctl = None
 
@@ -305,8 +267,6 @@ class MainWindow(FluentWindow):
         self._theme_key = "dark"
         self._language_key = "zh"
         self._init_menu_bar()
-
-        QTimer.singleShot(500, self._silent_init_mysql)
 
         # Backward compatibility fields
         self._run_nav_button = self.run_nav_button
@@ -464,19 +424,6 @@ class MainWindow(FluentWindow):
             self._language_key = "en"
             return
 
-    def _silent_init_mysql(self) -> None:
-        """Best-effort MySQL schema initialization without UI prompts."""
-        from src.tools.mysql_tool import MySqlClient
-        from src.tools.mysql_tool.operations import prepare_database
-
-        logging.info("MySQL init: start")
-        try:
-            with MySqlClient() as client:
-                prepare_database(client)
-        except Exception:
-            logging.exception("MySQL init: failed")
-            return
-        logging.info("MySQL init: done")
     # ------------------------------------------------------------------
     # Navigation button helpers
     # ------------------------------------------------------------------
@@ -501,69 +448,6 @@ class MainWindow(FluentWindow):
         # else:
         #     button = self._add_interface(page, icon, text, **kwargs)
         # return button
-
-    def _apply_nav_enabled(self, states: dict) -> None:
-        """Enable or disable multiple navigation buttons in one call."""
-        for btn, enabled in states.items():
-            if btn and not sip.isdeleted(btn):
-                btn.setEnabled(bool(enabled))
-
-    # ------------------------------------------------------------------
-    # Login / logout
-    # ------------------------------------------------------------------
-
-    def _initialize_login_state(self) -> None:
-        """Restore navigation and initial page based on persisted auth state."""
-        auth_state = load_auth_state()
-        if (
-            isinstance(auth_state, dict)
-            and auth_state.get("authenticated")
-            and auth_state.get("username")
-        ):
-            # Treat as already authenticated: enable all features and go to Config page.
-            username = str(auth_state.get("username", "") or "").strip()
-            self._active_account = {"username": username, "source": "cached"}
-            self._apply_nav_enabled(self._nav_logged_in_states)
-            # Keep Account page UI in sync with the cached login state.
-            self.login_page.apply_cached_login(username)
-            self.setCurrentIndex(self.caseConfigPage)
-        else:
-            # No previous login or explicitly cleared: force Account page and lock features.
-            self._active_account = None
-            self._apply_nav_enabled(self._nav_logged_out_states)
-            self.setCurrentIndex(self.login_page)
-        # Ensure About page metadata (including test duration) is in sync with
-        # the latest on-disk state when the application starts.
-        self.refresh_about_metadata()
-
-    def _on_login_result(self, success: bool, message: str, payload: dict) -> None:
-        """Handle completion of a login attempt."""
-        logging.info(
-            "MainWindow: sign-in finished success=%s message=%s payload=%s",
-            success,
-            message,
-            payload,
-        )
-        if success:
-            self._active_account = dict(payload)
-            username = str(self._active_account.get("username", "") or "").strip()
-            save_auth_state(username=username, authenticated=True)
-            self._apply_nav_enabled(self._nav_logged_in_states)
-            self.setCurrentIndex(self.caseConfigPage)
-        else:
-            self._active_account = None
-            clear_auth_state()
-            self._apply_nav_enabled(self._nav_logged_out_states)
-            self.setCurrentIndex(self.login_page)
-
-    def _on_logout_requested(self) -> None:
-        """Respond to a user-initiated sign-out."""
-        logging.info("MainWindow: user requested sign-out (active_account=%s)", self._active_account)
-        self._apply_nav_enabled(self._nav_logged_out_states)
-        self.setCurrentIndex(self.login_page)
-        self._active_account = None
-        clear_auth_state()
-        self.login_page.set_status_message("Signed out. Please sign in again.", state="info")
 
     def refresh_about_metadata(self) -> None:
         """Refresh the About page metadata, including total test duration."""
