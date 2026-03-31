@@ -115,12 +115,13 @@ class dut(WifiMixin, PerfMixin, SystemMixin, InputMixin, AppMixin, UiAutomationM
         self.iperf_client_cmd = iperf_cfg.get('client_cmd', 'iperf -c {ip} -w 2m -i 1 -t 30 -P 5')
         self.iperf_test_time, self.pair = self._parse_iperf_params(self.iperf_client_cmd)
         self.iperf_wait_time = self._calculate_iperf_wait_time(self.iperf_test_time)
-        self.repest_times = int(rvr_cfg.get('repeat', 0))
+        self.repest_times = int(rvr_cfg.get('repeat') or 0)
         self._dut_ip = ''
         self._pc_ip = ''
         self.ip_target = ''
         self.rvr_result = None
-        self.throughput_threshold = float(rvr_cfg.get('throughput_threshold', 0))
+        thr_val = rvr_cfg.get('throughput_threshold', 0)
+        self.throughput_threshold = float(thr_val if thr_val != '' else 0)
         self.skip_tx = False
         self.skip_rx = False
         self.iperf_server_log_list: list[str] = []
@@ -408,6 +409,11 @@ class dut(WifiMixin, PerfMixin, SystemMixin, InputMixin, AppMixin, UiAutomationM
             daemon=True
         )
         rssi_thread.start()
+        logging.info(f"[DEBUG] About to call super().get_tx_rate with:")
+        logging.info(f"  - router_info: {router_info}")
+        logging.info(f"  - type: {type}")
+        logging.info(f"  - self.iperf_client_cmd: {getattr(self, 'iperf_client_cmd', 'N/A')}")
+        logging.info(f"  - self.dut_ip: {getattr(self, 'dut_ip', 'N/A')}")
 
         return super().get_rx_rate(
             router_info,
@@ -430,7 +436,6 @@ class dut(WifiMixin, PerfMixin, SystemMixin, InputMixin, AppMixin, UiAutomationM
             daemon=True  # 主线程结束，子线程自动销毁
         )
         rssi_thread.start()
-
         return super().get_tx_rate(
             router_info,
             type=type,

@@ -33,7 +33,7 @@ TEST_REGION_CODE2 = "CL(智利)"
 @allure.title("Wi-Fi {TEST_REGION_CODE2} Region and 5G Channel Connectivity Test")
 @allure.description("""
 1. Set AP region to {TEST_REGION_CODE2} and verify.
-2.For 5G: Test channels [36, 64, 100, 165]. Connect, verify internet, then change channel and check reconnection.
+2.For 5G: Test channels [36, 64, 149, 165]. Connect, verify internet, then change channel and check reconnection.
 """)
 def test_wifi_cl_5g_region_connectivity(wifi_adb_device):
     dut, serial, logdir, cfg = wifi_adb_device
