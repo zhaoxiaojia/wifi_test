@@ -233,6 +233,38 @@ class PerfMixin:
         encoding = "gbk" if pytest.win_flag else "utf-8"
         use_adb = bool(adb)
         self._current_udp_mode = self._is_udp_command(command)
+        start_ts = time.time()
+
+        def _summarize_text(text: str | None, *, limit: int = 1200) -> str:
+            if not text:
+                return ""
+            s = str(text)
+            if len(s) <= limit:
+                return s
+            head = s[: limit // 2]
+            tail = s[-limit // 2 :]
+            return f"{head}\n... <truncated {len(s) - len(head) - len(tail)} chars> ...\n{tail}"
+
+        def _cmd_to_str(cmd_list: Sequence[str]) -> str:
+            return " ".join(str(x) for x in cmd_list if x is not None)
+
+        logging.info(
+            "[IPERF_DEBUG] run_iperf enter: use_adb=%s adb_serial=%r encoding=%s udp_mode=%s wait_time=%ss raw_command=%r tool_path=%r",
+            use_adb,
+            adb,
+            encoding,
+            bool(self._current_udp_mode),
+            getattr(self, "iperf_wait_time", None),
+            command,
+            getattr(self, "tool_path", None),
+        )
+
+        # Best-effort ensure iperf exists on DUT before attempting adb shell.
+        if use_adb and ("iperf" in str(command)):
+            try:
+                self.push_iperf()
+            except Exception:
+                logging.info("[IPERF_DEBUG] push_iperf failed (continuing)", exc_info=True)
 
         def _extend_logs(target_list: list[str], lines, label: str | None = None):
             if not lines:
@@ -259,6 +291,7 @@ class PerfMixin:
                         _extend_logs(target_list, [line], label)
 
         def _start_background(cmd_list, desc):
+            logging.info("[IPERF_DEBUG] start_background %s cmd=%s", desc, _cmd_to_str(cmd_list))
             process = self.command_runner.popen(
                 cmd_list,
                 stdout=subprocess.PIPE,
@@ -277,9 +310,15 @@ class PerfMixin:
                 args=(process, process.stderr, [], f"{desc} stderr"),
                 daemon=True,
             ).start()
+            logging.info(
+                "[IPERF_DEBUG] background started %s pid=%s",
+                desc,
+                getattr(process, "pid", None),
+            )
             return process
 
         def _run_blocking(cmd_list, desc: str):
+            logging.info("[IPERF_DEBUG] run_blocking %s cmd=%s", desc, _cmd_to_str(cmd_list))
             process = self.command_runner.popen(
                 cmd_list,
                 stdout=subprocess.PIPE,
@@ -288,12 +327,33 @@ class PerfMixin:
                 encoding=encoding,
                 errors="ignore",
             )
-            stdout, stderr = process.communicate(timeout=self.iperf_wait_time)
+            try:
+                stdout, stderr = process.communicate(timeout=self.iperf_wait_time)
+            except subprocess.TimeoutExpired as exc:
+                logging.error(
+                    "[IPERF_DEBUG] %s timeout after %ss (pid=%s)",
+                    desc,
+                    getattr(self, "iperf_wait_time", None),
+                    getattr(process, "pid", None),
+                )
+                with suppress(Exception):
+                    process.terminate()
+                with suppress(Exception):
+                    stdout, stderr = process.communicate(timeout=3)
+                stdout = (stdout or "") + "\n[TIMEOUT]"
+                stderr = (stderr or "") + "\n[TIMEOUT]"
             if stderr:
-                logging.warning(stderr.strip())
+                logging.warning("[IPERF_DEBUG] %s stderr:\n%s", desc, _summarize_text(stderr.strip()))
             if stdout:
-                logging.debug(stdout.strip())
-            logging.info("%s process return code: %s", desc, process.returncode)
+                logging.info("[IPERF_DEBUG] %s stdout:\n%s", desc, _summarize_text(stdout.strip()))
+            logging.info(
+                "[IPERF_DEBUG] %s return code=%s elapsed=%.2fs",
+                desc,
+                process.returncode,
+                time.time() - start_ts,
+            )
+            if process.returncode not in (0, None):
+                logging.error("[IPERF_DEBUG] %s non-zero exit; see stdout/stderr above", desc)
 
         def _build_cmd_list():
             cmd_parts = command.split()

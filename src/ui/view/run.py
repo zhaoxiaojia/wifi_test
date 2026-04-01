@@ -95,46 +95,7 @@ class RunView(CardWidget):
         apply_theme(self.log_area)
         layout.addWidget(self.log_area, stretch=5)
 
-        # Floating button (bottom-right of log area) to open the
-        # Allure HTML report for the latest run. Enabled only after a
-        # test run has finished and the report directory is known.
-        self.open_allure_btn = PushButton(self.log_area)
-        self.open_allure_btn.setObjectName("openAllureBtn")
-        self.open_allure_btn.setText("")
-        self.open_allure_btn.setToolTip("Open Allure report")
-        self.open_allure_btn.setFixedSize(32, 32)
-        self.open_allure_btn.setEnabled(False)
-        self.open_allure_btn.setStyleSheet(
-            """
-            #openAllureBtn {
-                border-radius: 16px;
-                background-color: #555555;
-                border: none;
-                color: white;
-                font-size: 16px;
-            }
-            #openAllureBtn:hover {
-                background-color: #666666;
-            }
-            #openAllureBtn:pressed {
-                background-color: #444444;
-            }
-            #openAllureBtn:disabled {
-                background-color: rgba(255,255,255,0.15);
-            }
-            """
-        )
-        # Use a Google Chrome icon from the shared res directory when available.
-        icon_path = Path(Paths.RES_DIR) / "logo" / "google-chrome.webp"
-        if icon_path.exists():
-            self.open_allure_btn.setIcon(QIcon(str(icon_path)))
-            self.open_allure_btn.setIconSize(QSize(20, 20))
-        else:
-            self.open_allure_btn.setText("🌐")
-        self._allure_report_dir: str | None = None
-        self._allure_server_proc: subprocess.Popen | None = None
-        self._allure_server_url: str | None = None
-        self.open_allure_btn.clicked.connect(self._on_open_allure_clicked)
+        # NOTE: Allure report UI has been removed in this branch.
 
         # Current case info
         self.case_info_label = QLabel("Current case : ", self)
@@ -204,10 +165,6 @@ class RunView(CardWidget):
             "run_main_action_btn": self.action_btn,
         }
 
-    def resizeEvent(self, event) -> None:  # type: ignore[override]
-        super().resizeEvent(event)
-        self._position_allure_button()
-
     def _is_project_test_script(self, case_path: str) -> bool:
         """判断是否为 project/ 下的功能测试脚本"""
         # 构建完整路径：base_dir/src/test/function/...
@@ -222,8 +179,7 @@ class RunView(CardWidget):
         return False
 
     def _position_allure_button(self) -> None:
-        if not self.open_allure_btn:
-            return
+        return
         margin_right = 20
         margin_bottom = 12
         rect = self.log_area.rect()
@@ -232,12 +188,10 @@ class RunView(CardWidget):
         self.open_allure_btn.move(x, y)
 
     def set_allure_report_dir(self, report_dir: str | None) -> None:
-        self._allure_report_dir = report_dir
-        self.open_allure_btn.setEnabled(bool(report_dir))
+        return
 
     def _on_open_allure_clicked(self) -> None:
-        if not self._allure_report_dir:
-            return
+        return
 
         base = Path(self._allure_report_dir)
         report_root = (base / "allure_results").resolve()
@@ -594,7 +548,6 @@ class RunPage(CardWidget):
 
         # reset report status
         self._last_report_dir = None
-        self.view.set_allure_report_dir(None)
 
     def run_case(self) -> None:
         print(f"[DEBUG] run_case() called.")
@@ -603,9 +556,9 @@ class RunPage(CardWidget):
         self._set_action_button("stop")
         self.excel_plan_path = None
 
+        # Login/account page has been removed in this branch; keep test history
+        # compatible by recording an empty account name.
         account_name = ""
-        if self.main_window and self.main_window._active_account:
-            account_name = str(self.main_window._active_account.get("username", "")).strip()
 
         # --- 新增：智能判断是否应运行 Excel 计划 ---
         # 条件1: 当前 case_path 指向 'function/' 目录下的文件
@@ -738,12 +691,10 @@ class RunPage(CardWidget):
         """
         # 只要收到一次，就设置报告目录并启用按钮
         # （后续的信号可以忽略，因为按钮已经启用了）
-        if not self.view.open_allure_btn.isEnabled():
-            #self._last_report_dir = report_dir
-            #self.view.set_allure_report_dir(report_dir)
-            self.view.open_allure_btn.setEnabled(True)
-            if self.runner and hasattr(self.runner, '_plan_report_dir'):
-                self._last_report_dir = str(self.runner._plan_report_dir)
+        if not self._last_report_dir:
+            self._last_report_dir = report_dir
+            if self.main_window:
+                self.main_window.enable_report_page(report_dir)
 
     # 260104 For function test;
     def set_excel_plan_path(self, path: str) -> None:
@@ -785,24 +736,19 @@ class RunPage(CardWidget):
         runner.deleteLater()
         self.runner = None
 
-        if self._last_report_dir:
-            self.view.set_allure_report_dir(self._last_report_dir)
-        else:
-            final_report_dir = None
+        final_report_dir = self._last_report_dir
+        if not final_report_dir:
+            candidate = None
             if isinstance(runner, ExcelPlanRunner):
-                final_report_dir = getattr(runner, '_plan_report_dir', None)
-                if final_report_dir is not None:
-                    final_report_dir = str(final_report_dir)
+                candidate = getattr(runner, "_plan_report_dir", None)
             elif isinstance(runner, CaseRunner):
-                # 直接从 CaseRunner 实例获取其 report_dir 属性
-                final_report_dir = getattr(runner, 'report_dir', None)
+                candidate = getattr(runner, "report_dir", None)
+            final_report_dir = str(candidate) if candidate else None
 
-                # 只要拿到了有效的目录，就更新 UI
-            if final_report_dir:
-                self._last_report_dir = final_report_dir
-                self.view.set_allure_report_dir(final_report_dir)
-                # 如果需要，也可以通知主窗口
-                # self.main_window.enable_report_page(final_report_dir)
+        if final_report_dir:
+            self._last_report_dir = final_report_dir
+            if self.main_window:
+                self.main_window.enable_report_page(final_report_dir)
 
         self.on_runner_finished()
 
@@ -810,7 +756,6 @@ class RunPage(CardWidget):
         if not self._last_report_dir:
             self._last_report_dir = path
             self.main_window.enable_report_page(path)
-            self.view.set_allure_report_dir(path)
 
     def cleanup(self, disconnect_page: bool = True) -> None:
         stack = self.main_window.stackedWidget
@@ -876,9 +821,6 @@ class RunPage(CardWidget):
         self._case_name_base = "Current case : "
         self._fixture_chain = []
         self.case_info_label.setText(self._case_name_base)
-        if self._last_report_dir:
-            self.view.set_allure_report_dir(self._last_report_dir)
-
         from src.ui.controller.run_ctl import reset_wizard_after_run
         reset_wizard_after_run(self)
 

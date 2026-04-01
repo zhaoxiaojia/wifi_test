@@ -1259,12 +1259,6 @@ CUSTOM_TESTCASE_UI_RULES.append(
                 ),
             ),
             SimpleFieldEffect(
-                target_field="rf_solution.step",
-                action="disable",
-                condition=lambda values: values.get("testcase.basename")
-                in {"test_xiaomi_rvr.py", "test_xiaomi_rvr_wifi6.py"},
-            ),
-            SimpleFieldEffect(
                 target_field="Turntable.step",
                 action="disable",
                 condition=lambda values: values.get("testcase.basename")

@@ -163,11 +163,13 @@ class android(dut):
     def _run_iperf_server_on_device(self, command: str, *, start_background, extend_logs, encoding: str):
         cmd_parts = command.split()
         cmd_list = ["adb", "-s", self.serialnumber, "shell", *cmd_parts]
+        logging.info("[IPERF_DEBUG] adb server cmd_list=%s", " ".join(cmd_list))
         return start_background(cmd_list, "server adb command:")
 
     def _run_iperf_client_on_device(self, command: str, *, run_blocking, encoding: str):
         cmd_parts = command.split()
         cmd_list = ["adb", "-s", self.serialnumber, "shell", *cmd_parts]
+        logging.info("[IPERF_DEBUG] adb client cmd_list=%s", " ".join(cmd_list))
         run_blocking(cmd_list, "client adb command:")
         return None
 

@@ -191,6 +191,24 @@ class _DebugRouterController:
             reason,
         )
 
+    def set_wireless_mode(self, mode) -> None:
+        logging.info("[Debug] Skip router set_wireless_mode(%s)", mode)
+
+    def set_bandwidth(self, bandwidth) -> None:
+        logging.info("[Debug] Skip router set_bandwidth(%s)", bandwidth)
+
+    def set_channel(self, channel) -> None:
+        logging.info("[Debug] Skip router set_channel(%s)", channel)
+
+    def set_security(self, security_mode) -> None:
+        logging.info("[Debug] Skip router set_security(%s)", security_mode)
+
+    def set_ssid_password(self, ssid, password) -> None:
+        logging.info("[Debug] Skip router set_ssid_password(ssid=%s)", ssid)
+
+    def enable_tx_rx(self, tx, rx) -> None:
+        logging.info("[Debug] Skip router enable_tx_rx(tx=%s, rx=%s)", tx, rx)
+
     def __getattr__(self, item: str):
         raise AttributeError(f"_DebugRouterController has no attribute {item!r}")
 
@@ -269,7 +287,12 @@ def init_router() -> Any:
 def common_setup(router: Router, router_info: Router) -> bool:
     logging.info("router setup start")
     logging.info("router factory start")
-    router.channel = int(router_info.channel)
+    channel_text = str(getattr(router_info, "channel", "") or "").strip()
+    if not channel_text or channel_text.lower() in {"none", "null"}:
+        channel_text = "auto"
+    # Router controllers typically expect the visible text value (e.g. "auto",
+    # "36") rather than an integer.
+    router.channel = channel_text
     router.bandwidth = router_info.bandwidth
     router.wireless_mode = router_info.wireless_mode
     router.security_mode = router_info.security_mode
@@ -470,8 +493,7 @@ def get_rf_step_segments() -> str:
 
 
 def get_rf_step_list() -> list[int]:
-    segments = collect_rf_step_segments()
-    return expand_rf_step_segments(segments)
+    return expand_rf_step_segments()
 
 
 __all__ = [

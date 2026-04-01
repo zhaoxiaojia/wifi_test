@@ -188,7 +188,7 @@ class MainWindow(FluentWindow):
         print(f"[STARTUP_TIME] Pages (run+report): {time.perf_counter() - self._startup_t0:.3f}s")
 
         # Navigation buttons
-        # Logical sidebar keys (top -> bottom): account, config, case, run, report, about
+        # Logical sidebar keys (top -> bottom): config, case, run, report, about
         self.sidebar_page_keys = SIDEBAR_PAGE_KEYS
         self.sidebar_labels = SIDEBAR_PAGE_LABELS
 
@@ -451,7 +451,8 @@ class MainWindow(FluentWindow):
 
     def refresh_about_metadata(self) -> None:
         """Refresh the About page metadata, including total test duration."""
-        self.about_ctl.populate_metadata()
+        # About metadata/business logic removed in this branch.
+        return
 
     # ------------------------------------------------------------------
     # RVR Wi-Fi page animation

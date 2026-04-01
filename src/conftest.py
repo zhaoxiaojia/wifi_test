@@ -444,13 +444,7 @@ def pytest_sessionstart(session):
     Args:
         session (pytest.Session): The current pytest session object.
     """
-    # Ensure the Allure results directory exists; historical trends are
-    # maintained via the dedicated history cache in _generate_allure_report.
-    try:
-        results_dir = Path("allure_results")
-        results_dir.mkdir(parents=True, exist_ok=True)
-    except Exception:
-        logging.debug("Failed to ensure Allure results directory", exc_info=True)
+    # NOTE: Allure integration has been removed in this branch.
 
     # get host os
     if ('win32' or 'win64') in sys.platform:
@@ -722,7 +716,7 @@ def pytest_sessionfinish(session, exitstatus):
     input_dir_for_allure = None
     output_dir_for_allure = None
 
-    if destination_dir is not None:
+    if False and destination_dir is not None:
         # 检查是否存在共享的 allure_results 目录 (ExcelPlanRunner 模式)
         #shared_allure_results = destination_dir / "allure_report"
         is_excel_plan = (destination_dir.parent / "test_result.xlsx").exists()
@@ -743,7 +737,7 @@ def pytest_sessionfinish(session, exitstatus):
             logging.info("✅ [Single Case] Mode detected. Input: %s", input_dir_for_allure)
 
     # 调用通用的报告生成函数
-    if input_dir_for_allure is not None and output_dir_for_allure is not None:
+    if False and input_dir_for_allure is not None and output_dir_for_allure is not None:
         # 智能选择生成方式：本地用 CLI，打包用离线
         import sys
         if getattr(sys, 'frozen', False):
@@ -751,7 +745,7 @@ def pytest_sessionfinish(session, exitstatus):
         else:
             _generate_allure_report_cli(input_dir_for_allure, output_dir_for_allure)
     else:
-        logging.warning("Could not determine Allure input/output directories.")
+        pass
     # --- 【关键修改结束】---
 
     # --- 【新增】通用测试步骤报告写入 ---

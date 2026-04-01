@@ -99,7 +99,7 @@ class LabDeviceController:
             value = str(value)
         if int(value) < RF_ATTENUATION_MIN_DB or int(value) > RF_ATTENUATION_MAX_DB:
             assert 0, f'value must be in range {RF_ATTENUATION_MIN_DB}-{RF_ATTENUATION_MAX_DB}'
-        logging.info(f'Set rf value to {value}')
+        logging.info("Set rf value to %s", value)
         print(f"[DEBUG_RF] execute_rf_cmd model={self.model} value={value}")
         action = self._schedule_action(value)
         action()
@@ -141,6 +141,8 @@ class LabDeviceController:
                 return next(iter(results.values()))
             return results
         if self.model == RF_MODEL_RC4DAT_8G_95:
+            if self.tn is None or (hasattr(self.tn, "is_connected") and not self.tn.is_connected()):
+                self._ensure_telnet()
             self.tn.write("ATT?;".encode('ascii') + b'\r')
             res = self.tn.read_some().decode('ascii')
             print(f"[DEBUG_RF] RC4DAT ATT? raw={res!r}")
@@ -149,7 +151,9 @@ class LabDeviceController:
             return parsed
         else:
             if not self.tn:
-                raise RuntimeError('Telnet connection not initialized')
+                self._ensure_telnet()
+            if not self.tn:
+                raise RuntimeError("Telnet connection not initialized")
             self.tn.write("ATT".encode('ascii') + b'\r\n')
             res = self.tn.read_some().decode('utf-8')
             print(f"[DEBUG_RF] ATT raw={res!r}")
@@ -270,14 +274,43 @@ class LabDeviceController:
                 self.lda_channels,
             )
             return
-        try:
-            logging.info('Try to connect %s', self.ip)
-            self.tn = TelnetSession(self.ip, port=23)
-            self.tn.open()
-            logging.info('Telnet connection established to %s:23', self.ip)
-        except Exception as exc:
-            logging.error("Failed to connect to lab controller %s: %s", self.ip, exc)
-            self.tn = None
+        self._ensure_telnet()
+
+    def _ensure_telnet(self) -> None:
+        """Best-effort establish a telnet session for RF/turntable controllers."""
+        if self.tn is not None:
+            try:
+                if hasattr(self.tn, "is_connected") and self.tn.is_connected():
+                    return
+            except Exception:
+                # Fall back to reconnect below.
+                pass
+
+        last_exc: Exception | None = None
+        for attempt in range(1, 4):
+            try:
+                logging.info("Try to connect %s (attempt %s/3)", self.ip, attempt)
+                session = TelnetSession(self.ip, port=23, timeout=15.0)
+                session.open()
+                self.tn = session
+                logging.info("Telnet connection established to %s:23", self.ip)
+                return
+            except Exception as exc:
+                last_exc = exc if isinstance(exc, Exception) else Exception(str(exc))
+                logging.error(
+                    "Failed to connect to lab controller %s on attempt %s/3: %r",
+                    self.ip,
+                    attempt,
+                    exc,
+                )
+                try:
+                    time.sleep(0.6)
+                except Exception:
+                    pass
+
+        self.tn = None
+        if last_exc is not None:
+            raise last_exc
 
     def _schedule_action(self, value: str):
         """Return a callable that applies attenuation for the current model."""
@@ -298,8 +331,10 @@ class LabDeviceController:
 
     def _write_telnet(self, command: str, *, read_response: bool = False) -> None:
         """Write a command over telnet, ensuring the connection exists."""
+        if self.tn is None or (hasattr(self.tn, "is_connected") and not self.tn.is_connected()):
+            self._ensure_telnet()
         if not self.tn:
-            raise RuntimeError('Telnet connection not initialized')
+            raise RuntimeError("Telnet connection not initialized")
         logging.info(command)
         self.tn.write(command.encode('ascii') + (b'\r\n' if read_response else b'\r'))
         if read_response:

@@ -16,17 +16,8 @@ from PyQt5.QtCore import QThread, pyqtSignal, Qt
 from src.util.constants import Paths
 from src.ui.view.theme import STYLE_BASE, TEXT_COLOR
 from src.util.pytest_redact import install_redactor_for_current_process
-import pytest, os, sys, allure
+import pytest, os, sys
 import pandas as pd
-try:
-    import allure_pytest
-except ImportError:
-    pass
-
-try:
-    from src.test.conftest import _generate_allure_report_cli
-except ImportError:
-    _generate_allure_report_cli = None
 
 def reset_wizard_after_run(page: Any) -> None:
     """Reset Config wizard state after a successful run.
@@ -464,8 +455,7 @@ def _init_worker_env(
     from pathlib import Path
 
     # # 👇 阶段1：强制初始化 Allure 目录
-    if 'ALLURE_REPORT_DIR' in os.environ:
-        Path(os.environ['ALLURE_REPORT_DIR']).mkdir(parents=True, exist_ok=True)
+    # This branch no longer uses Allure. Ignore ALLURE_REPORT_DIR when present.
 
     # --- 【关键】判断是否为共享模式 (ExcelPlanRunner) ---
     in_shared_mode = bool(shared_allure_results_dir)
@@ -473,8 +463,8 @@ def _init_worker_env(
 
     if in_shared_mode:
         # ========== ExcelPlanRunner 共享模式 ==========
-        allure_results_dir = Path(shared_allure_results_dir).resolve()
-        report_dir = allure_results_dir.parent  # 主报告目录
+        report_dir = Path(shared_allure_results_dir).resolve()
+        report_dir.mkdir(parents=True, exist_ok=True)
         # 日志路径：优先使用传入的共享日志文件，否则在主报告目录下创建
         effective_log_path = (
             shared_pytest_log_file
@@ -487,7 +477,6 @@ def _init_worker_env(
         timestamp = f"{timestamp}_{random.randint(1000, 9999)}"
         report_dir = (Path.cwd() / "report" / timestamp).resolve()
         report_dir.mkdir(parents=True, exist_ok=True)
-        allure_results_dir = report_dir / "allure_report"
         effective_log_path = log_file_path_str or str(report_dir / "python.log")
     # ============================================
 
@@ -551,9 +540,6 @@ def _init_worker_env(
             print(f"[DEBUG _init_worker_env] DEV mode: Using absolute path (fallback): {pytest_case_path}")
 
     os.environ["PYTEST_REPORT_DIR"] = str(report_dir)
-    allure_results_dir = report_dir / "allure_report"
-    allure_results_dir.mkdir(parents=True, exist_ok=True)
-    #os.environ['ALLURE_REPORT_DIR'] = str(allure_results_dir)
     # --- END PATH HANDLING ---
     is_exe = getattr(sys, 'frozen', False)
 
@@ -562,10 +548,8 @@ def _init_worker_env(
         f"--rootdir={pytest_rootdir}",
         "--import-mode=importlib",
         "--resultpath", str(report_dir),
-        "--alluredir", str(allure_results_dir),
         pytest_case_path,
     ]
-    print(f"[MODE]  Added --alluredir={allure_results_dir} | Plugin status: REGISTERED")
     # if not is_exe:  # 非 EXE 模式（即 DEV 模式）
     #     pytest_args.insert(-1, "--alluredir")  # 插入在 case_path 前
     #     pytest_args.insert(-1, str(allure_results_dir))
@@ -609,30 +593,10 @@ def _init_worker_env(
         from src.util.constants import load_config
         cfg = load_config(refresh=True)
         connect_cfg = cfg.get("connect_type") or {}
-        dut_type = connect_cfg.get("type")
-
-        # 添加自定义参数到命令行
-        if dut_type == "Android":
-            #pytest_args.append("--dut-type=Android")
-            pytest_args.extend(["--dut-type", "Android"])
-            android_cfg = connect_cfg.get("Android") or {}
-            device = android_cfg.get("device")
-            if device:
-                #pytest_args.append(f"--android-device={device}")
-                pytest_args.extend(["--android-device", device])
-        elif dut_type == "Linux":
-            #pytest_args.append("--dut-type=Linux")
-            pytest_args.extend(["--dut-type", "Linux"])
-            telnet_cfg = connect_cfg.get("Linux") or {}
-            ip = telnet_cfg.get("ip")
-            if ip:
-                #pytest_args.append(f"--linux-ip={ip}")
-                pytest_args.extend(["--linux-ip", ip])
-
-        project_cfg = cfg.get("project") or {}
-        customer = project_cfg.get("customer")
-        if customer:
-            pytest_args.append(f"--project-customer={customer}")
+        android_cfg = connect_cfg.get("Android") or {}
+        device = android_cfg.get("device")
+        if device:
+            pytest_args.extend(["--android-device", device])
 
     # --- 处理稳定性测试 ---
     # ---
@@ -737,7 +701,7 @@ def _stream_pytest_events(ctx: "_WorkerContext") -> None:
     else:
         # --- 关键修复：在EXE环境中过滤自定义参数 ---
         import sys
-        if getattr(sys, 'frozen', False):
+        if False and getattr(sys, 'frozen', False):
             print(f"[DEBUG _stream_pytest_events] EXE mode detected, filtering custom args")
 
             # # 构建安全的参数列表（只包含pytest认识的标准参数）
@@ -845,7 +809,7 @@ def _pytest_worker(
     """Spawned multiprocessing entrypoint that runs pytest and streams logs."""
     ctx = None
 
-    if shared_allure_results_dir:  # 仅当非 None 且非空字符串
+    if False and shared_allure_results_dir:  # 仅当非 None 且非空字符串
         os.environ['ALLURE_REPORT_DIR'] = str(shared_allure_results_dir)
         try:
             Path(shared_allure_results_dir).mkdir(parents=True, exist_ok=True)
@@ -935,10 +899,7 @@ class ExcelPlanRunner(QThread):
 
             # --- 2. 创建共享资源 ---
             #self._shared_allure_dir = self._plan_report_dir / "allure_report"
-            self._shared_allure_dir = (Path.cwd() / self._plan_report_dir / "allure_report").resolve()
-            self._shared_allure_dir.mkdir(parents=True, exist_ok=True)
-            print(f"[PLAN] ✅ Allure dir (absolute): {self._shared_allure_dir}")
-            self._shared_allure_dir.mkdir(parents=True, exist_ok=True)
+            self._shared_allure_dir = (Path.cwd() / self._plan_report_dir).resolve()
             self._shared_pytest_log = self._plan_report_dir / "pytest.log"
             # ---
             self.report_dir_signal.emit(str(self._plan_report_dir))
@@ -1067,6 +1028,8 @@ class ExcelPlanRunner(QThread):
         Only used in ExcelPlanRunner for real-time preview.
         Does NOT affect CaseRunner's own report generation.
         """
+        return False
+
         if _generate_allure_report_cli is None:
             print("[WARN] conftest._generate_allure_report_cli not available")
             return False
