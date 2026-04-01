@@ -18,9 +18,9 @@ rf_solution:
   step: 0,4:3
 text_case: test/test_wifi_rvr.py
 debug:
-  skip_router: false
+  skip_router: true
   skip_corner_rf: false
-  skip_connect: false
+  skip_connect: true
 csv_path: performance_test_csv/ai_wifi_scenarios.csv
 mode: Wi-Fi BLE CLASSIC
 bt:

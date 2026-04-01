@@ -2,7 +2,6 @@ import logging
 import os
 import re
 import time
-import random
 import pytest
 import threading
 from src.util.constants import load_config
@@ -457,15 +456,6 @@ class dut(WifiMixin, PerfMixin, SystemMixin, InputMixin, AppMixin, UiAutomationM
         Any
             The result produced by the function.
         """
-        if self._is_performance_debug_enabled():
-            simulated_rssi = -random.randint(40, 80)
-            self.rssi_num = simulated_rssi
-            self.freq_num = 0
-            logging.info(
-                "Database debug mode enabled, skip real RSSI query and return simulated %s dBm",
-                simulated_rssi,
-            )
-            return self.rssi_num
         for i in range(3):
             time.sleep(3)
             rssi_info = self.checkoutput(self.IW_LINNK_COMMAND)
@@ -553,16 +543,6 @@ class dut(WifiMixin, PerfMixin, SystemMixin, InputMixin, AppMixin, UiAutomationM
         self.bcn_rssi = -1
         self.wf0_rssi = -1
         self.wf1_rssi = -1
-
-        if self._is_performance_debug_enabled():
-            # 模拟调试模式
-            import random
-            self.bcn_rssi = -random.randint(30, 80)
-            self.wf0_rssi = self.bcn_rssi + random.randint(0, 3)
-            self.wf1_rssi = self.bcn_rssi + random.randint(0, 3)
-            logging.info("Debug mode: simulated extended RSSI = bcn:%d, wf0:%d, wf1:%d",
-                         self.bcn_rssi, self.wf0_rssi, self.wf1_rssi)
-            return (self.bcn_rssi, self.wf0_rssi, self.wf1_rssi)
 
         try:
             # Step 1: 清除上一次接收记录

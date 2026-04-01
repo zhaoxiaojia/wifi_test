@@ -771,6 +771,26 @@ def pytest_sessionfinish(session, exitstatus):
             # 调用现有 Excel 写入函数（需确保它支持通用 TCID）
             _update_excel_with_tcid_result(tcid, final_status, step_details)
 
+    # --- 【新增】自动生成项目报告 Excel（单 Case 模式也生成） ---
+    if destination_dir is not None:
+        try:
+            from src.util.report.facade import generate_project_report
+
+            candidates = []
+            for path in destination_dir.glob("*.csv"):
+                upper = path.name.upper()
+                if upper.startswith(("RVR", "RVO", "PEAK")):
+                    candidates.append(path)
+
+            if len(candidates) == 1:
+                generate_project_report(candidates[0], destination_dir / "project_report.xlsx")
+            elif candidates:
+                for csv_path in candidates:
+                    out_name = f"{csv_path.stem}_project_report.xlsx"
+                    generate_project_report(csv_path, destination_dir / out_name)
+        except Exception as exc:
+            logging.warning("Failed to generate project report Excel: %s", exc)
+
 
 
 def record_test_step(tcid: str, step_desc: str, status: str, details: str = ""):
