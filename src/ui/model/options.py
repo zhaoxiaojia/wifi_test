@@ -14,12 +14,9 @@ import subprocess
 
 from src.tools.router_tool.router_factory import router_list
 from src.util.constants import (
-    DEFAULT_ANDROID_VERSION_CHOICES,
-    DEFAULT_KERNEL_VERSION_CHOICES,
     LAB_CATALOG,
     RF_MODEL_CHOICES,
     TURN_TABLE_MODEL_CHOICES,
-    WIFI_PRODUCT_PROJECT_MAP,
 )
 
 
@@ -42,18 +39,6 @@ def _router_name_choices() -> Sequence[str]:
     return _sorted_unique(router_list.keys())
 
 
-def _android_version_choices() -> Sequence[str]:
-    """Return default Android version choices."""
-
-    return list(DEFAULT_ANDROID_VERSION_CHOICES)
-
-
-def _kernel_version_choices() -> Sequence[str]:
-    """Return default kernel version choices."""
-
-    return list(DEFAULT_KERNEL_VERSION_CHOICES)
-
-
 def _turntable_model_choices() -> Sequence[str]:
     """Return available turntable model identifiers."""
 
@@ -65,30 +50,10 @@ def _rf_model_choices() -> Sequence[str]:
     return list(RF_MODEL_CHOICES)
 
 
-def _fpga_customer_choices() -> Sequence[str]:
-    """Return known ODM names from the Wi-Fi project map."""
-
-    values: list[str] = []
-    for odm_map in WIFI_PRODUCT_PROJECT_MAP.values():
-        for odm_name in odm_map.keys():
-            values.append(odm_name)
-    return _sorted_unique(values)
-
 def _lab_name_choices() -> Sequence[str]:
     """Return known lab names from the lab catalog."""
 
     return _sorted_unique(LAB_CATALOG.keys())
-
-
-def _mass_production_status_choices() -> Sequence[str]:
-    values: list[str] = []
-    for odm_map in WIFI_PRODUCT_PROJECT_MAP.values():
-        for projects in odm_map.values():
-            for info in projects.values():
-                entries = info["mass_production_status"]
-                for entry in entries:
-                    values.append(str(entry))
-    return _sorted_unique(values)
 
 
 def _adb_device_choices() -> Sequence[str]:
@@ -142,11 +107,6 @@ def _iter_ipv4_prefixes() -> list[str]:
 
 
 _FIELD_CHOICE_SOURCES: dict[str, Callable[[], Sequence[str]]] = {
-    # Android / kernel system fields (support both legacy and new keys)
-    "android_system.version": _android_version_choices,
-    "android_system.kernel_version": _kernel_version_choices,
-    "system.version": _android_version_choices,
-    "system.kernel_version": _kernel_version_choices,
     # Turntable models
     "Turntable.model": _turntable_model_choices,
     # Lab selection
@@ -155,10 +115,6 @@ _FIELD_CHOICE_SOURCES: dict[str, Callable[[], Sequence[str]]] = {
     "rf_solution.model": _rf_model_choices,
     # Router selection
     "router.name": _router_name_choices,
-    # Project / Wi-Fi chipset customer selection (product line / project
-    # remain driven by WIFI_PRODUCT_PROJECT_MAP).
-    "project.customer": _fpga_customer_choices,
-    "project.mass_production_status": _mass_production_status_choices,
     # Android connect targets
     "connect_type.Android.device": _adb_device_choices,
 }

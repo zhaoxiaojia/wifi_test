@@ -1,37 +1,11 @@
 panels:
   basic:
-    layout: "grid"  # 新增：面板布局类型(grid/horizontal/vertical)
-    columns: 2      # 新增：网格列数
+    layout: "grid"
+    columns: 2
     sections:
-      - id: system
-        label: "System Info"
-        position: 0
-        #layout: horizontal
-        fields:
-          - key: system.version
-            widget: combo_box
-            label: "OS Version"
-            #position: 1  # 新增：在网格中的位置
-            #layout: "horizontal"
-          - key: system.kernel_version
-            widget: combo_box
-            label: "Kernel Version"
-            #group: "right"
-          - key: software_info.software_version
-            widget: line_edit
-            label: "Software Version"
-            placeholder: "e.g. V1.2.3"
-            #group: "left"
-          - key: software_info.driver_version
-            widget: line_edit
-            label: "Driver Version"
-            placeholder: "Driver build"
-            #group: "right"
-
       - id: connect_type
         label: "Control Setting"
-        position: 1
-        #layout: horizontal , "Android" "Linux"
+        position: 0
         fields:
           - key: connect_type.type
             widget: combo_box
@@ -62,50 +36,16 @@ panels:
           - key: serial_port.baud
             widget: combo_box
             label: "Baud Rate"
-            choices: [ "9600", "19200", "38400", "57600", "115200", "921600" ]
-
-      - id: project
-        label: "Project Info"
-        position: 2
-        #layout: horizontal
-        fields:
-          - key: project.customer
-            widget: combo_box
-            label: "Customer"
-          - key: project.product_line
-            widget: combo_box
-            label: "Product Line"
-          - key: project.project
-            widget: combo_box
-            label: "Project"
-          - key: project.odm
-            widget: combo_box
-            label: "ODM"
-          - key: project.main_chip
-            widget: line_edit
-            label: "Main Chip"
-          - key: project.wifi_module
-            widget: line_edit
-            label: "Wi-Fi Module"
-          - key: project.interface
-            widget: line_edit
-            label: "Interface"
-          - key: project.mass_production_status
-            widget: combo_box
-            label: "Mass Production Status"
-          - key: project.dut_sn
-            widget: line_edit
-            label: "DUT SN"
+            choices: ["9600", "19200", "38400", "57600", "115200", "921600"]
 
       - id: router
         label: "Router Setting"
-        position: 3
-        #layout: horizontal
+        position: 1
         fields:
           - key: router.name
             widget: combo_box
             label: "Router"
-            choices: [ "asusax88u", "asusax88upro", "asusax86u", "xiaomibe7000", "xiaomiax3600" ]
+            choices: ["asusax88u", "asusax88upro", "asusax86u", "xiaomibe7000", "xiaomiax3600"]
           - key: router.address
             widget: line_edit
             label: "Router IP"
@@ -118,21 +58,3 @@ panels:
             widget: line_edit
             label: "5G SSID"
             placeholder: "5G"
-
-#      - id: duration_control
-#        label: "Test Duration"
-#        position: 4
-#        layout: "two_column"
-#        fields:
-#          - key: duration_control.loop
-#            widget: line_edit
-#            label: "Loop count"
-#          - key: duration_control.duration_hours
-#            widget: line_edit
-#            label: "Duration (hours)"
-#          - key: duration_control.exitfirst
-#            widget: checkbox
-#            label: "Stop immediately on failure (exitfirst)"
-#          - key: duration_control.retry_limit
-#            widget: line_edit
-#            label: "Retry count"

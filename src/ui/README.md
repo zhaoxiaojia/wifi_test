@@ -22,9 +22,9 @@ Goals:
 - Location: `src/ui/model/`
 - Purpose: describe *what* can be configured and how fields are grouped.
 - Typical files:
-  - `config_basic.yaml`, `config_performance.yaml`, `config_stability.yaml`
+  - `config_basic.yaml`, `config_performance.yaml`
     (persisted config values)
-  - `config_basic_ui.yaml`, `config_performance_ui.yaml`, `config_stability_ui.yaml`
+  - `config_basic_ui.yaml`, `config_performance_ui.yaml`
     (UI schema: panels/sections/fields)
   - `options.py` (dynamic choice lists for comboboxes)
   - `rules.py` (declarative UI rules and helpers)
@@ -86,7 +86,6 @@ Persisted configuration is stored under `src/ui/model/config/`:
 
 - `config_basic.yaml`
 - `config_performance.yaml`
-- `config_stability.yaml`
 - `config_tool.yaml`
 
 Loading and saving is handled by helpers in `src/ui/__init__.py` and
@@ -105,7 +104,6 @@ The *structure* of the Config page is described in:
 
 - `config_basic_ui.yaml`
 - `config_performance_ui.yaml`
-- `config_stability_ui.yaml`
 
 Each schema file defines panels and sections:
 
@@ -325,8 +323,8 @@ When you add a new test that follows the same pattern (Config → optional
 CSV → pytest), use this checklist:
 
 1. **Create the pytest module**
-   - Place it under `src/test/performance/`.
-   - Reuse helpers from `src/test/performance/__init__.py` where possible
+   - Place it under `src/test/`.
+   - Reuse helpers from `src/test/__init__.py` where possible
      (`init_router`, `init_rf`, `scenario_group`, `wait_connect`, etc.).
    - If the test is CSV‑driven, either:
      - reuse the `Router` namedtuple + `get_testdata()` (same CSV schema as
@@ -334,7 +332,7 @@ CSV → pytest), use this checklist:
      - implement a dedicated CSV loader in the test package.
 2. **Expose the test from Performance config**
    - In `config_performance.yaml`, set a default for `text_case` (e.g.
-     `test/performance/test_wifi_<name>.py` relative to `src/test`).
+     `test/test_wifi_<name>.py` relative to `src/test`).
    - The “Selected Test Case” group in `config_performance_ui.yaml` already
      maps to `text_case`, so the file‑dialog selection and auto‑save logic
      will just work.

@@ -142,7 +142,7 @@ def determine_case_category(case_path: str | None = None, display_path: str | No
     The category is defined as the first directory immediately under
     ``test`` within the relative path, for example:
 
-    - ``src/test/performance/test_wifi_rvr.py`` -> ``performance``
+    - ``src/test/test_wifi_rvr.py`` -> ``performance``
     """
     candidate_paths: list[str] = []
     if display_path:
@@ -154,8 +154,13 @@ def determine_case_category(case_path: str | None = None, display_path: str | No
         normalized = raw.replace("\\", "/")
         parts = PurePosixPath(normalized).parts
         category = _extract_category_from_parts(parts)
-        if category:
-            return category
+        if not category:
+            continue
+        if category.endswith(".py"):
+            name = Path(category).name.lower()
+            if name.startswith(("test_wifi_", "test_xiaomi_")):
+                return "performance"
+        return category
     return None
 
 

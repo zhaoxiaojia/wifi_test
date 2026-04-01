@@ -11,12 +11,7 @@ from PyQt5.QtCore import QSignalBlocker, QTimer
 from PyQt5.QtWidgets import QWidget, QCheckBox, QSpinBox
 from qfluentwidgets import LineEdit, ComboBox
 
-from src.util.constants import (
-    WIFI_PRODUCT_PROJECT_MAP,
-    ANDROID_KERNEL_MAP,
-    SWITCH_WIFI_CASE_KEY,
-    SWITCH_WIFI_CASE_KEYS,
-)
+from src.util.constants import SWITCH_WIFI_CASE_KEY, SWITCH_WIFI_CASE_KEYS
 from src.ui.model.rules import normalize_connect_type_label, current_connect_type, evaluate_all_rules
 from src.ui.model.autosave import autosave_config
 from src.ui.view.builder import build_groups_from_schema, load_ui_schema
@@ -39,62 +34,6 @@ def set_connect_type_combo_selection(page: Any, type_value: str) -> None:
                 page.connect_type_combo.setCurrentIndex(0)
     except Exception:
         logging.debug("set_connect_type_combo_selection failed", exc_info=True)
-
-
-def _ensure_kernel_option(page: Any, kernel: str) -> None:
-    if not kernel or not hasattr(page, "kernel_version_combo"):
-        return
-    try:
-        combo = page.kernel_version_combo
-        existing = {combo.itemText(i) for i in range(combo.count())}
-        if kernel not in existing:
-            combo.addItem(kernel)
-        if not hasattr(page, "_kernel_versions"):
-            try:
-                page._kernel_versions = []
-            except Exception:
-                page._kernel_versions = []
-        if kernel not in page._kernel_versions:
-            page._kernel_versions.append(kernel)
-    except Exception:
-        logging.debug("_ensure_kernel_option failed", exc_info=True)
-
-
-def apply_android_kernel_mapping(page: Any) -> None:
-    if not hasattr(page, "android_version_combo") or not hasattr(page, "kernel_version_combo"):
-        return
-    try:
-        version = page.android_version_combo.currentText().strip()
-        kernel = ANDROID_KERNEL_MAP.get(version, "")
-        if kernel:
-            _ensure_kernel_option(page, kernel)
-            page.kernel_version_combo.setCurrentText(kernel)
-        else:
-            page.kernel_version_combo.setCurrentIndex(-1)
-    except Exception:
-        logging.debug("apply_android_kernel_mapping failed", exc_info=True)
-
-
-def update_android_system_for_connect_type(page: Any, connect_type: str) -> None:
-    if not hasattr(page, "android_version_combo") or not hasattr(page, "kernel_version_combo"):
-        return
-    try:
-        is_adb = connect_type == "Android"
-        if is_adb:
-            apply_android_kernel_mapping(page)
-        else:
-            if not page.kernel_version_combo.currentText().strip():
-                page.kernel_version_combo.setCurrentIndex(-1)
-    except Exception:
-        logging.debug("update_android_system_for_connect_type failed", exc_info=True)
-
-
-def on_android_version_changed(page: Any, version: str) -> None:
-    try:
-        if current_connect_type(page) == "Android":
-            apply_android_kernel_mapping(page)
-    except Exception:
-        logging.debug("on_android_version_changed failed", exc_info=True)
 
 
 def set_refresh_ui_locked(page: Any, locked: bool) -> None:
@@ -157,38 +96,6 @@ def _notify_rvr_wifi_page_for_function_cases(page: Any, case_path: str) -> None:
     except Exception as e:
         logging.debug(f"Failed to notify RvrWifiConfigPage: {e}", exc_info=True)
 
-def _refresh_case_page_compatibility(page: Any) -> None:
-    """Refresh the Case-page compatibility selection to mirror config state."""
-    try:
-        main_window = page.window()
-    except Exception:
-        main_window = None
-    if main_window is None:
-        return
-    rvr_page = getattr(main_window, "rvr_wifi_config_page", None)
-    if rvr_page is None or not hasattr(rvr_page, "set_case_mode"):
-        return
-    try:
-        from src.ui.view import determine_case_category  # local import to avoid cycles
-    except Exception:
-        determine_case_category = None  # type: ignore[assignment]
-    try:
-        case_path = getattr(page, "_current_case_path", "") or ""
-    except Exception:
-        case_path = ""
-    if determine_case_category is not None:
-        try:
-            category = determine_case_category(case_path=case_path, display_path=None)
-        except Exception:
-            category = None
-        if category != "compatibility":
-            return
-    try:
-        rvr_page.set_case_mode("compatibility")
-    except Exception:
-        logging.debug("Failed to refresh Case page compatibility selection", exc_info=True)
-
-
 def apply_ui(page: Any, case_path: str) -> None:
     """Recompute case-scoped UI state and apply testcase + simple rules.
 
@@ -207,12 +114,6 @@ def apply_ui(page: Any, case_path: str) -> None:
     set_refresh_ui_locked(page, True)
 
     try:
-        # Script-specific stability UI (test_str / switch_wifi, etc.).
-        try:
-            update_script_config_ui(page, case_path)
-        except Exception:
-            logging.debug("apply_ui: update_script_config_ui failed", exc_info=True)
-
         # Controller-side model flags (CSV / RvR Wi-Fi) are still derived
         # from testcase type, but field-level enabled/visible state is
         # driven solely by the rule engine.
@@ -264,9 +165,9 @@ def apply_ui(page: Any, case_path: str) -> None:
         except Exception:
             logging.exception("apply_ui: failed to evaluate rules for testcase", exc_info=True)
 
-        # Update the Case page content: performance cases with RvR Wi‑Fi
-        # enabled show the RvR Wi‑Fi editor; compatibility cases show the
-        # compatibility router list; other cases keep the Case page empty.
+        # Update the Case page content: performance cases with RvR Wi-Fi enabled
+        # show the RvR Wi-Fi editor; function cases show the function list;
+        # other cases keep the Case page empty.
         try:
             main_window = page.window()
             if main_window is not None:
@@ -275,9 +176,7 @@ def apply_ui(page: Any, case_path: str) -> None:
                     from src.ui.view import determine_case_category as _case_cat
 
                     category = _case_cat(case_path=case_path, display_path=None)
-                    if category == "compatibility":
-                        rvr_page.set_case_mode("compatibility")
-                    elif category == "function":
+                    if category == "function":
                         rvr_page.set_case_mode("function")
                     elif info.enable_rvr_wifi:
                         rvr_page.set_case_mode("performance")
@@ -310,7 +209,7 @@ def _rebalance_panel(panel: Any) -> None:
 
 @autosave_config
 def handle_config_event(page: Any, event: str, **payload: Any) -> None:
-    """Thin compatibility layer: map legacy events to UiEvent + forward."""
+    """Adapter layer: map legacy events to UiEvent + forward."""
     event = str(event or "").strip() if event is not None else ""
     ctl = getattr(page, "config_ctl", None)
     if not ctl or not hasattr(ctl, "handle_ui_event"):
@@ -434,7 +333,7 @@ def refresh_config_page_controls(
     panel_keys: Sequence[str] | None = None,
     clear_existing: bool = True,
 ) -> None:
-    """Build and refresh all controls on the Config page (including FPGA mapping)."""
+    """Build and refresh all controls on the Config page."""
     selected = {str(k) for k in panel_keys} if panel_keys is not None else None
 
     def _want(key: str) -> bool:
@@ -454,41 +353,7 @@ def refresh_config_page_controls(
         config = {}
         page.config = config
 
-    # Ensure a few top-level sections always exist and are dicts.
-    defaults_for_basic = {
-        "software_info": {},
-        "hardware_info": {},
-        "system": {},
-    }
-    for key, default in defaults_for_basic.items():
-        existing = config.get(key)
-        if not isinstance(existing, dict):
-            config[key] = default.copy()
-        else:
-            config[key] = dict(existing)
-
-    # Ensure compatibility section exists with basic structure so that the
-    # Compatibility Settings panel can bind fields without special cases.
-    if "compatibility" not in config or not isinstance(config["compatibility"], dict):
-        config["compatibility"] = {}
-
-    def _coerce_debug_flag(value: Any) -> bool:
-        if isinstance(value, str):
-            return value.strip().lower() in {"1", "true", "yes", "on"}
-        return bool(value)
-
-    def _normalize_debug_section(raw_value: Any) -> dict[str, bool]:
-        if isinstance(raw_value, dict):
-            normalized = dict(raw_value)
-        else:
-            normalized = {}
-        for option in ("skip_router", "skip_connect", "skip_corner_rf"):
-            normalized[option] = _coerce_debug_flag(normalized.get(option))
-        return normalized
-
-    config["debug"] = _normalize_debug_section(config.get("debug"))
-
-    # Normalise connect_type / fpga / stability sections via helpers on the page.
+    # Normalise connect_type / fpga sections via helpers on the page.
     config_ctl = getattr(page, "config_ctl", None)
 
     if config_ctl is not None:
@@ -496,19 +361,9 @@ def refresh_config_page_controls(
             config.get("connect_type")
         )
 
-    linux_cfg = config.get("connect_type", {}).get("Linux")
-    if isinstance(linux_cfg, dict) and "kernel_version" in linux_cfg:
-        # For legacy configs, move Linux.kernel_version into system.kernel_version.
-        config.setdefault("system", {})["kernel_version"] = linux_cfg.pop("kernel_version")
-
     if config_ctl is not None:
         #config["project"] = config_ctl.normalize_project_section(config.get("project"))
         config["function"] = config_ctl.normalize_project_section(config.get("function"))
-
-    if config_ctl is not None:
-        config["stability"] = config_ctl.normalize_stability_settings(
-            config.get("stability")
-        )
 
     # Build panels from YAML schemas.  Parent all groups directly
     # to the corresponding ConfigGroupPanel so that layout is fully
@@ -517,83 +372,6 @@ def refresh_config_page_controls(
         basic_schema = load_ui_schema("basic")
         basic_panel = getattr(page, "_basic_panel", None) or getattr(page, "_dut_panel", None)
         build_groups_from_schema(page, config, basic_schema, panel_key="basic", parent=basic_panel)
-
-    # Compatibility Settings live on their own panel so that they can
-    # behave as a dedicated Settings tab for compatibility testcases.
-    compat_schema = load_ui_schema("compatibility") if _want("compatibility") else None
-    if compat_schema:
-        compat_panel = getattr(page, "_compatibility_panel", None)
-        build_groups_from_schema(page, config, compat_schema, panel_key="compatibility", parent=compat_panel)
-        # Enrich the Compatibility Settings group with a composite relay editor
-        # and populate NIC choices dynamically.
-        try:
-            from src.ui.view.config.config_compatibility import CompatibilityRelayEditor
-
-            other_groups = getattr(page, "_other_groups", {}) or {}
-            compat_group = other_groups.get("compatibility_settings")
-            if isinstance(compat_group, QWidget):
-                from PyQt5.QtWidgets import QFormLayout
-
-                layout = compat_group.layout()
-                if not isinstance(layout, QFormLayout):
-                    layout = QFormLayout(compat_group)
-                    compat_group.setLayout(layout)
-
-                # NIC combo comes from the UI schema (compatibility.nic).
-                field_widgets = getattr(page, "field_widgets", {}) or {}
-                nic_combo = field_widgets.get("compatibility.nic")
-
-                # Collect local NIC labels.
-                nic_labels: list[str] = []
-                try:
-                    import psutil  # type: ignore
-
-                    addrs_by_name = psutil.net_if_addrs()
-                    stats_by_name = psutil.net_if_stats()
-
-                    for name, addrs in addrs_by_name.items():
-                        # Only include interfaces that are up; do not filter by IP
-                        # presence so that active NICs without an address are still
-                        # visible in the dropdown.
-                        stats = stats_by_name.get(name)
-                        if stats is None or not getattr(stats, "isup", False):
-                            continue
-                        if not addrs:
-                            nic_labels.append(str(name))
-                            continue
-                        nic_labels.append(str(name))
-                except Exception:
-                    nic_labels = []
-
-                if isinstance(nic_combo, ComboBox):
-                    current_value = getattr(page.config.get("compatibility", {}), "get", lambda _k, _d=None: None)(
-                        "nic", ""
-                    )
-                    nic_combo.clear()
-                    for label in nic_labels:
-                        nic_combo.addItem(label)
-                    if current_value:
-                        nic_combo.setCurrentText(str(current_value))
-
-                # Insert relay editor under the NIC row.
-                relay_editor = CompatibilityRelayEditor(compat_group)
-                layout.addRow("Power relays", relay_editor)
-
-                # Initialise from config if available.
-                compat_cfg = config.get("compatibility", {}) or {}
-                power_cfg = compat_cfg.get("power_ctrl", {}) or {}
-                relays = power_cfg.get("relays") or []
-                relay_editor.set_relays(relays)
-
-                # Expose for sync_widgets_to_config and autosave.
-                field_widgets["compatibility.power_ctrl.relays"] = relay_editor
-
-                def _on_relays_changed() -> None:
-                    handle_config_event(page, "field_changed", field="compatibility.power_ctrl.relays")
-
-                relay_editor.entriesChanged.connect(_on_relays_changed)
-        except Exception:
-            logging.debug("Failed to initialise Compatibility relay editor", exc_info=True)
 
     if _want("execution"):
         exec_schema = load_ui_schema("execution")
@@ -611,30 +389,11 @@ def refresh_config_page_controls(
         except Exception:
             ix_enabled = None
 
-    if _want("stability"):
-        stability_cfg = config.get("stability") or {}
-        stab_schema = load_ui_schema("stability")
-        stab_panel = getattr(page, "_stability_panel", None)
-        build_groups_from_schema(page, stability_cfg, stab_schema, panel_key="stability", parent=stab_panel)
-        # Bind common stability groups (Duration Control / Check Point).
-        try:
-            from src.ui.view.config import init_stability_common_groups
-
-            init_stability_common_groups(page)
-        except Exception:
-            logging.debug("Failed to initialise stability common groups", exc_info=True)
-
     # Wire FPGA dropdowns + Control Type / Third‑party / Stability wiring.
     if not getattr(page, "_config_common_actions_initialized", False):
-        init_fpga_dropdowns(page)
         init_connect_type_actions(page)
         init_system_version_actions(page)
         setattr(page, "_config_common_actions_initialized", True)
-
-    if _want("stability") and not getattr(page, "_config_stability_actions_initialized", False):
-        init_stability_actions(page)
-        init_switch_wifi_actions(page)
-        setattr(page, "_config_stability_actions_initialized", True)
 
     # Bind declarative view events for the Config page.
     if not getattr(page, "_config_view_events_bound", False):
@@ -651,7 +410,7 @@ def set_available_pages(page: Any, page_keys: list[str]) -> None:
 
 
 def apply_config_ui_rules(page: Any) -> None:
-    """Compatibility wrapper around the unified rule engine.
+    """Legacy wrapper around the unified rule engine.
 
     New code should call ``evaluate_all_rules(page, None)`` directly.  This
     helper exists to keep older call sites working while all behaviour is
@@ -919,46 +678,12 @@ def init_stability_actions(page: Any) -> None:
 
 
 def init_system_version_actions(page: Any) -> None:
-    """Wire Android/System version combo to existing mapping logic."""
-    field_widgets = getattr(page, "field_widgets", {}) or {}
-
-    version_widget = field_widgets.get("system.version")
-    kernel_widget = field_widgets.get("system.kernel_version")
-    if version_widget is None or kernel_widget is None:
-        return
-
-    setattr(page, "android_version_combo", version_widget)
-    setattr(page, "kernel_version_combo", kernel_widget)
-
-    # Reconnect Android Version combo to the original handler, but keep
-    # the kernel combo's enabled state controlled purely by connect_type
-    # and the rule engine.
-    handler = getattr(page, "_on_android_version_changed", None)
-    if not callable(handler):
-        # Fall back to centralized helper if the page does not provide one.
-        handler = lambda text: on_android_version_changed(page, text)
-
-    def _on_version_changed(text: str) -> None:
-        kernel = getattr(page, "kernel_version_combo", None)
-        prev_enabled = kernel.isEnabled() if kernel is not None else None
-        try:
-            handler(text)
-        except Exception:
-            logging.debug("handler for android version changed failed", exc_info=True)
-        if kernel is not None:
-            after_handler = kernel.isEnabled()
-            if prev_enabled is not None and after_handler != prev_enabled:
-                kernel.setEnabled(prev_enabled)
-
-    try:
-        version_widget.currentTextChanged.connect(_on_version_changed)
-    except Exception:
-        logging.debug("Failed to bind _on_android_version_changed wrapper", exc_info=True)
+    _ = page
 
 
 def init_fpga_dropdowns(view: Any) -> None:
-    """Wire FPGA customer/product/project combos and keep them in sync."""
-    field_widgets = getattr(view, "field_widgets", {}) or {}
+    _ = view
+    return
 
     customer_combo = None
     product_combo = None

@@ -116,14 +116,7 @@ BASIC_SECTION_KEYS: Final[frozenset[str]] = frozenset(
     {
         "connect_type",
         "dut",
-        # Project / Wi‑Fi chipset configuration (formerly "fpga").
-        "project",
         "serial_port",
-        "software_info",
-        "hardware_info",
-        # Support both legacy and new naming for the system section.
-        "android_system",
-        "system",
         "duration_control",
         "router",
         # Shared throughput generator configuration.
@@ -131,29 +124,11 @@ BASIC_SECTION_KEYS: Final[frozenset[str]] = frozenset(
     }
 )
 DUT_SECTION_KEYS = BASIC_SECTION_KEYS
-CONFIG_KEY_ALIASES: Final[dict[str, str]] = {
-    # Backwards‑compatibility: legacy top-level "fpga" section is now
-    # normalised as "project" in the merged config.
-    "fpga": "project",
-}
+CONFIG_KEY_ALIASES: Final[dict[str, str]] = {}
 TOOL_SECTION_KEY: Final[str] = "tool"
 TOOL_CONFIG_FILENAME: Final[str] = "config_tool.yaml"
 TOOLBAR_SECTION_KEY: Final[str] = "toolbar"
 TOOLBAR_CONFIG_FILENAME: Final[str] = "config_toolbar.yaml"
-STABILITY_CONFIG_FILENAME: Final[str] = "config_stability.yaml"
-COMPATIBILITY_CONFIG_FILENAME: Final[str] = "config_compatibility.yaml"
-STABILITY_SECTION_KEYS: Final[frozenset[str]] = frozenset(
-    {
-        "stability",
-        "check_point",
-        "cases",
-    }
-)
-COMPATIBILITY_SECTION_KEYS: Final[frozenset[str]] = frozenset(
-    {
-        "compatibility",
-    }
-)
 PERFORMANCE_SECTION_KEYS: Final[frozenset[str]] = frozenset(
     {
         "Turntable",
@@ -216,7 +191,7 @@ AUTH_OPTIONS: Final[tuple[str, ...]] = (
 OPEN_AUTH: Final[frozenset[str]] = frozenset({"Open System"})
 
 # ``test_switch_wifi`` / ``test_switch_wifi_str`` case field names reused by UI and configuration helpers.
-# Canonical key uses the merged stability script name; legacy aliases keep older
+# Canonical key uses the merged script name; legacy aliases keep older
 # configs and test paths working transparently.
 SWITCH_WIFI_CASE_KEY: Final[str] = "test_switch_wifi_str"
 SWITCH_WIFI_CASE_ALIASES: Final[tuple[str, ...]] = (
@@ -433,17 +408,13 @@ def split_config_data(
     dict[str, Any],
     dict[str, Any],
     dict[str, Any],
-    dict[str, Any],
-    dict[str, Any],
 ]:
-    """Split the full configuration into basic, execution, stability, compatibility, tool and toolbar sections."""
+    """Split the full configuration into basic, execution, tool and toolbar sections."""
     normalised = _normalize_config_keys(config)
 
     # Section payloads written back to individual YAML files.
     basic_section: dict[str, Any] = {}
     execution_section: dict[str, Any] = {}
-    stability_section: dict[str, Any] = {}
-    compatibility_section: dict[str, Any] = {}
     tool_section: dict[str, Any] = {}
     toolbar_section: dict[str, Any] = {}
 
@@ -460,38 +431,6 @@ def split_config_data(
                 toolbar_section = copy.deepcopy(value)
             continue
 
-        # Stability Settings (stability/duration_control/check_point/cases).
-        if key in STABILITY_SECTION_KEYS:
-            # Primary stability section lives under the ``stability`` key.
-            if key == "stability" and isinstance(value, Mapping):
-                # If stability_section already has content, merge it so that
-                # any per-key updates (duration_control/cases/etc.) from the
-                # flat config are preserved. Keys already present in
-                # stability_section take precedence.
-                base = copy.deepcopy(value)
-                if isinstance(stability_section, Mapping):
-                    base.update(stability_section)
-                stability_section = base
-            elif key == "cases":
-                # Legacy top-level ``cases`` keys are no longer persisted.
-                # Canonical stability case data lives under ``stability.cases``.
-                continue
-            else:
-                # duration_control / check_point written into stability section.
-                if not isinstance(stability_section, dict):
-                    stability_section = {}
-                stability_section[key] = copy.deepcopy(value)
-            continue
-
-        # Compatibility Settings live under a top-level ``compatibility`` key
-        # in their own YAML file.
-        if key in COMPATIBILITY_SECTION_KEYS:
-            if isinstance(value, Mapping):
-                compatibility_section = {"compatibility": copy.deepcopy(value)}
-            else:
-                compatibility_section = {}
-            continue
-
         # Basic Settings use a fixed set of top-level keys (connect_type/project/etc.).
         if key in BASIC_SECTION_KEYS:
             basic_section[key] = copy.deepcopy(value)
@@ -503,8 +442,6 @@ def split_config_data(
     return (
         basic_section,
         execution_section,
-        stability_section,
-        compatibility_section,
         tool_section,
         toolbar_section,
     )
@@ -513,12 +450,10 @@ def split_config_data(
 def merge_config_sections(
     basic_section: Mapping[str, Any] | None,
     execution_section: Mapping[str, Any] | None,
-    stability_section: Mapping[str, Any] | None = None,
-    compatibility_section: Mapping[str, Any] | None = None,
     tool_section: Mapping[str, Any] | None = None,
     toolbar_section: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Return a merged configuration mapping from basic, execution, stability, compatibility, tool and toolbar sections."""
+    """Return a merged configuration mapping from basic, execution, tool and toolbar sections."""
     merged: dict[str, Any] = {}
     merged.update(_normalize_config_keys(execution_section))
     merged.update(_normalize_config_keys(basic_section))
@@ -527,15 +462,6 @@ def merge_config_sections(
         connect_cfg = dict(dut_cfg)
         connect_cfg.pop("mass_production_status", None)
         merged["connect_type"] = connect_cfg
-    # Compatibility settings live in their own config file but use the same
-    # top-level key as execution/dut sections, so we merge them after the
-    # other sections so they take precedence.
-    if isinstance(compatibility_section, Mapping):
-        merged.update(_normalize_config_keys(compatibility_section))
-    if isinstance(stability_section, Mapping):
-        merged["stability"] = copy.deepcopy(stability_section)
-    else:
-        merged.setdefault("stability", {})
     if isinstance(tool_section, Mapping):
         merged[TOOL_SECTION_KEY] = copy.deepcopy(tool_section)
     else:
@@ -591,16 +517,12 @@ def _load_config_cached(base_dir: str) -> dict[str, Any]:
     config_dir = Path(base_dir)
     basic_path = config_dir / BASIC_CONFIG_FILENAME
     execution_path = config_dir / EXECUTION_CONFIG_FILENAME
-    stability_path = config_dir / STABILITY_CONFIG_FILENAME
     tool_path = config_dir / TOOL_CONFIG_FILENAME
-    compatibility_path = config_dir / COMPATIBILITY_CONFIG_FILENAME
     toolbar_path = config_dir / TOOLBAR_CONFIG_FILENAME
     required_paths = [
         basic_path,
         execution_path,
-        stability_path,
         tool_path,
-        compatibility_path,
         toolbar_path,
     ]
     missing = [str(path) for path in required_paths if not path.exists()]
@@ -612,16 +534,11 @@ def _load_config_cached(base_dir: str) -> dict[str, Any]:
         )
     basic_section = _read_yaml_dict(basic_path)
     execution_section = _read_yaml_dict(execution_path)
-    stability_section = _read_yaml_dict(stability_path)
     tool_section = _read_yaml_dict(tool_path)
-    compatibility_section = _read_yaml_dict(compatibility_path)
     toolbar_section = _read_yaml_dict(toolbar_path)
-    logging.debug("compatibility section loaded: %s", compatibility_section)
     return merge_config_sections(
         basic_section,
         execution_section,
-        stability_section,
-        compatibility_section,
         tool_section,
         toolbar_section,
     )
@@ -632,7 +549,7 @@ def load_config(
     *,
     base_dir: str | os.PathLike[str] | None = None,
 ) -> dict[str, Any]:
-    """Return a deep-copied configuration dictionary including stability data.
+    """Return a deep-copied configuration dictionary.
 
     Set ``refresh=True`` to discard the cached content and re-read from disk.
     """
@@ -688,32 +605,19 @@ def get_debug_flags(
 def save_config_sections(
     basic_section: Mapping[str, Any] | None,
     execution_section: Mapping[str, Any] | None,
-    stability_section: Mapping[str, Any] | None,
-    compatibility_section: Mapping[str, Any] | None,
     tool_section: Mapping[str, Any] | None,
     toolbar_section: Mapping[str, Any] | None,
     *,
     base_dir: str | os.PathLike[str] | None = None,
 ) -> None:
-    """Persist basic, execution, stability, compatibility, tool and toolbar configuration sections."""
+    """Persist basic, execution, tool and toolbar configuration sections."""
     config_base = Path(base_dir) if base_dir is not None else get_config_base()
     basic_path = config_base / BASIC_CONFIG_FILENAME
     execution_path = config_base / EXECUTION_CONFIG_FILENAME
-    stability_path = config_base / STABILITY_CONFIG_FILENAME
-    compatibility_path = config_base / COMPATIBILITY_CONFIG_FILENAME
     tool_path = config_base / TOOL_CONFIG_FILENAME
     toolbar_path = config_base / TOOLBAR_CONFIG_FILENAME
     _write_yaml_dict(basic_path, _normalize_config_keys_for_save(basic_section))
     _write_yaml_dict(execution_path, _normalize_config_keys_for_save(execution_section))
-    stability_payload = (
-        stability_section if isinstance(stability_section, Mapping) else {}
-    )
-    _write_yaml_dict(stability_path, stability_payload)
-    compatibility_payload = (
-        compatibility_section if isinstance(compatibility_section, Mapping) else {}
-    )
-    logging.debug("compatibility payload persisted: %s", compatibility_payload)
-    _write_yaml_dict(compatibility_path, compatibility_payload)
     tool_payload = tool_section if isinstance(tool_section, Mapping) else {}
     _write_yaml_dict(tool_path, tool_payload)
     toolbar_payload = toolbar_section if isinstance(toolbar_section, Mapping) else {}
@@ -729,16 +633,12 @@ def save_config(
     (
         basic_section,
         execution_section,
-        stability_section,
-        compatibility_section,
         tool_section,
         toolbar_section,
     ) = split_config_data(config)
     save_config_sections(
         basic_section,
         execution_section,
-        stability_section,
-        compatibility_section,
         tool_section,
         toolbar_section,
         base_dir=base_dir,

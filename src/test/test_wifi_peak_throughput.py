@@ -16,7 +16,7 @@ import pytest
 from src.tools.router_tool.Router import router_str
 from src.util.constants import get_debug_flags
 
-from src.test.performance import common_setup, ensure_performance_result, init_router, scenario_group, wait_connect
+from src.test import common_setup, ensure_performance_result, init_router, scenario_group, wait_connect
 
 _test_data = get_testdata(init_router())
 router = init_router()

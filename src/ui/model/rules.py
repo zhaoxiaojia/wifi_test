@@ -75,8 +75,6 @@ def needs_throughput(values: Mapping[str, Any]) -> bool:
         or values.get("testcase.is_performance")
         or values.get("testcase.is_rvr")
         or values.get("testcase.is_rvo")
-        or values.get("testcase.is_stability")
-        or values.get("testcase.is_compatibility")
     )
 
 
@@ -436,38 +434,6 @@ CUSTOM_SIMPLE_UI_RULES.append(
             SimpleFieldEffect(
                 target_field="connect_type.Android.device",
                 action="enable",
-                condition=lambda values: normalize_connect_type_label(
-                    str(values.get("connect_type.type") or "")
-                )
-                == "Android",
-            ),
-            SimpleFieldEffect(
-                target_field="system.version",
-                action="show",
-                condition=lambda values: normalize_connect_type_label(
-                    str(values.get("connect_type.type") or "")
-                )
-                == "Android",
-            ),
-            SimpleFieldEffect(
-                target_field="system.version",
-                action="enable",
-                condition=lambda values: normalize_connect_type_label(
-                    str(values.get("connect_type.type") or "")
-                )
-                == "Android",
-            ),
-            SimpleFieldEffect(
-                target_field="system.kernel_version",
-                action="show",
-                condition=lambda values: normalize_connect_type_label(
-                    str(values.get("connect_type.type") or "")
-                )
-                == "Android",
-            ),
-            SimpleFieldEffect(
-                target_field="system.kernel_version",
-                action="disable",
                 condition=lambda values: normalize_connect_type_label(
                     str(values.get("connect_type.type") or "")
                 )
@@ -839,7 +805,7 @@ CUSTOM_TESTCASE_UI_RULES.append(
             SimpleFieldEffect(
                 target_field="connect_type.type",
                 action="enable",
-                condition=lambda values: not str(values.get("project.project") or "").strip(),
+                condition=lambda values: True,
             ),
             SimpleFieldEffect(
                 target_field="connect_type.Android.device",
@@ -856,36 +822,6 @@ CUSTOM_TESTCASE_UI_RULES.append(
             ),
             SimpleFieldEffect(
                 target_field="connect_type.third_party.wait_seconds",
-                action="enable",
-                condition=lambda values: True,
-            ),
-            SimpleFieldEffect(
-                target_field="project.mass_production_status",
-                action="enable",
-                condition=lambda values: True,
-            ),
-            SimpleFieldEffect(
-                target_field="project.customer",
-                action="enable",
-                condition=lambda values: True,
-            ),
-            SimpleFieldEffect(
-                target_field="project.product_line",
-                action="enable",
-                condition=lambda values: True,
-            ),
-            SimpleFieldEffect(
-                target_field="project.project",
-                action="enable",
-                condition=lambda values: True,
-            ),
-            SimpleFieldEffect(
-                target_field="system.version",
-                action="enable",
-                condition=lambda values: True,
-            ),
-            SimpleFieldEffect(
-                target_field="system.kernel_version",
                 action="enable",
                 condition=lambda values: True,
             ),
@@ -914,23 +850,6 @@ CUSTOM_TESTCASE_UI_RULES.append(
                 action="enable",
                 condition=lambda values: True,
             ),
-            # Debug Options: these checkboxes should always be user-editable.
-            SimpleFieldEffect(
-                target_field="debug.skip_router",
-                action="enable",
-                condition=lambda values: True,
-            ),
-            SimpleFieldEffect(
-                target_field="debug.skip_connect",
-                action="enable",
-                condition=lambda values: True,
-            ),
-              SimpleFieldEffect(
-                  target_field="debug.skip_corner_rf",
-                  action="enable",
-                  condition=lambda values: True,
-              ),
-
               # `test_switch_wifi` controls should always be user-editable
               # when the script group is visible.
               SimpleFieldEffect(
@@ -959,31 +878,6 @@ CUSTOM_TESTCASE_UI_RULES.append(
             # Always-disabled DUT detail fields (not part of the editable
             # surface in the original EditableInfo logic).
             # ------------------------------------------------------------------
-            SimpleFieldEffect(
-                target_field="software_info.software_version",
-                action="disable",
-                condition=lambda values: True,
-            ),
-            SimpleFieldEffect(
-                target_field="software_info.driver_version",
-                action="disable",
-                condition=lambda values: True,
-            ),
-            SimpleFieldEffect(
-                target_field="project.main_chip",
-                action="disable",
-                condition=lambda values: True,
-            ),
-            SimpleFieldEffect(
-                target_field="project.wifi_module",
-                action="disable",
-                condition=lambda values: True,
-            ),
-            SimpleFieldEffect(
-                target_field="project.interface",
-                action="disable",
-                condition=lambda values: True,
-            ),
             # ------------------------------------------------------------------
             # Throughput generator fields shared across test types.
             # ------------------------------------------------------------------
@@ -1025,30 +919,8 @@ CUSTOM_TESTCASE_UI_RULES.append(
                 condition=lambda values: bool(values.get("testcase.is_performance")),
             ),
             # ------------------------------------------------------------------
-            # Compatibility Settings fields.
+            # Field defaults and enable/disable behaviors.
             # ------------------------------------------------------------------
-            # NIC selection and power‑relay configuration are only editable
-            # for compatibility testcases; keep them disabled otherwise.
-            SimpleFieldEffect(
-                target_field="compatibility.nic",
-                action="enable",
-                condition=lambda values: bool(values.get("testcase.is_compatibility")),
-            ),
-            SimpleFieldEffect(
-                target_field="compatibility.nic",
-                action="disable",
-                condition=lambda values: not bool(values.get("testcase.is_compatibility")),
-            ),
-            SimpleFieldEffect(
-                target_field="compatibility.power_ctrl.relays",
-                action="enable",
-                condition=lambda values: bool(values.get("testcase.is_compatibility")),
-            ),
-            SimpleFieldEffect(
-                target_field="compatibility.power_ctrl.relays",
-                action="disable",
-                condition=lambda values: not bool(values.get("testcase.is_compatibility")),
-            ),
             # Disable RvR fields when throughput inputs are not required.
             SimpleFieldEffect(
                 target_field="rvr.tool",
@@ -1681,10 +1553,8 @@ def evaluate_all_rules(
     values["testcase.is_rvr"] = bool(basename and "rvr" in basename)
     values["testcase.is_peak_throughput"] = basename == "test_wifi_peak_throughput.py"
 
-    # Derive performance/stability/compatibility flags via the controller when available.
+    # Derive performance flags via the controller when available.
     is_performance = False
-    is_stability = False
-    is_compatibility = False
     config_ctl = getattr(page, "config_ctl", None)
     if config_ctl is not None:
         try:
@@ -1692,24 +1562,8 @@ def evaluate_all_rules(
                 is_performance = bool(config_ctl.is_performance_case(case_path))
         except Exception:
             logging.debug("evaluate_all_rules: is_performance_case failed", exc_info=True)
-        try:
-            if hasattr(config_ctl, "is_stability_case"):
-                is_stability = bool(config_ctl.is_stability_case(case_path))
-        except Exception:
-            logging.debug("evaluate_all_rules: is_stability_case failed", exc_info=True)
-
-    # Treat any testcase whose path contains a "compatibility" segment as a
-    # compatibility case.  This mirrors the folder-based Settings layout
-    # logic in the view/controller layer.
-    try:
-        norm_path = case_path.replace("\\", "/")
-        is_compatibility = bool("/compatibility/" in norm_path)
-    except Exception:
-        is_compatibility = False
 
     values["testcase.is_performance"] = is_performance
-    values["testcase.is_stability"] = is_stability
-    values["testcase.is_compatibility"] = is_compatibility
     # Build combined ordered rule list(s): testcase-specific lists first,
     # followed by any extra lists and then the global rule list.  This
     # ordering lets testcase rules define the editable surface while

@@ -1,24 +1,6 @@
-software_info:
-  software_version: ''
-  driver_version: ''
-hardware_info:
-  hardware_version: ''
-system:
-  version: Android 15
-  kernel_version: Kernel 6.1
-project:
-  customer: XIAOMI
-  product_line: TV
-  project: Vodka424
-  odm: '-'
-  main_chip: T966D5
-  wifi_module: W265U1
-  interface: USB
-  mass_production_status: EVT
-  dut_sn: ''
 serial_port:
   baud: '115200'
-  port: ''
+  port: COM14 (蓝牙链接上的标准串行 (COM14))
   status: false
 router:
   name: xiaomibe7000
@@ -33,7 +15,7 @@ rvr:
     client_cmd: ''
   ixchariot:
     path: ''
-  repeat: ''
+  repeat: '3'
   throughput_threshold: ''
 dut:
   type: Android

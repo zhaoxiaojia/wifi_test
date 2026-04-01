@@ -1,4 +1,4 @@
-"""View + page implementation for the Config sidebar (Basic/Performance/Stability)."""
+"""View + page implementation for the Config sidebar (Basic/Performance)."""
 
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ from PyQt5.QtWidgets import (
 from qfluentwidgets import CardWidget, ComboBox, PushButton, ScrollArea, FluentIcon, TreeView
 
 from src.ui.controller.config_ctl import ConfigController
-from src.ui.view.common import ConfigGroupPanel, EditableInfo, ScriptConfigEntry, PAGE_CONTENT_MARGIN
+from src.ui.view.common import ConfigGroupPanel, EditableInfo, PAGE_CONTENT_MARGIN
 from src.ui.view.theme import (
     CASE_TREE_FONT_SIZE_PX,
     apply_font_and_selection,
@@ -37,14 +37,6 @@ from src.ui.view.theme import (
 )
 from src.ui.view.config.actions import refresh_config_page_controls, apply_ui
 from src.ui.view.ui_adapter import UiAdapter, UiEvent
-from src.ui.view.config import (
-    create_test_switch_wifi_str_config_entry_from_schema,
-    initialize_script_config_groups,
-)
-from src.util.constants import (
-    DEFAULT_ANDROID_VERSION_CHOICES,
-    DEFAULT_KERNEL_VERSION_CHOICES,
-)
 from src.ui.controller.case_ctl import _register_switch_wifi_csv_combo as _reg_sw_csv
 
 _CONFIG_PANEL_OUTER_MARGIN_PX = 12
@@ -132,7 +124,7 @@ class AnimatedTreeView(TreeView):
 
 
 class _ConfigTabLabel(QLabel):
-    """Clickable label used for Basic/Performance/Stability tabs."""
+    """Clickable label used for Basic/Performance tabs."""
 
     clicked = pyqtSignal()
 
@@ -173,18 +165,16 @@ class ConfigView(CardWidget):
         # Track which logical pages are currently available
         self._current_page_keys: list[str] = []
 
-        # Simple tab row for Basic / Performance / Stability / Compatibility
+        # Simple tab row for Basic / Performance
         self._page_label_map: dict[str, str] = {
             "basic": "Basic",
             "execution": "Performance",
-            "stability": "Stability",
-            "compatibility": "Compatibility",
         }
         self._page_buttons: dict[str, _ConfigTabLabel] = {}
         tabs_row = QHBoxLayout()
         tabs_row.setContentsMargins(PAGE_CONTENT_MARGIN, PAGE_CONTENT_MARGIN, PAGE_CONTENT_MARGIN, 0)
         tabs_row.setSpacing(8)
-        for key in ("basic", "execution", "stability", "compatibility"):
+        for key in ("basic", "execution"):
             lbl = _ConfigTabLabel(self._page_label_map[key], self)
             apply_settings_tab_label_style(lbl, active=(key == "basic"))
             self._page_buttons[key] = lbl
@@ -198,9 +188,6 @@ class ConfigView(CardWidget):
         self._page_panels: dict[str, ConfigGroupPanel] = {
             "basic": ConfigGroupPanel(self),
             "execution": ConfigGroupPanel(self),
-            # 稳定性页使用两列布局：左侧给脚本用例（如 test_switch_wifi）更多空间，
-            # 右侧堆叠 Duration / Check Point / Selected Test Case。
-            "stability": ConfigGroupPanel(self, columns=2),
         }
         # Backward-compatible attributes expected by existing actions/helpers.
         # These aliases allow refresh_config_page_controls (and related helpers)
@@ -209,16 +196,10 @@ class ConfigView(CardWidget):
         self._basic_panel = self._page_panels["basic"]
         self._dut_panel = self._basic_panel
         self._execution_panel = self._page_panels["execution"]
-        self._stability_panel = self._page_panels["stability"]
-        # Additional panel used for folder-based Compatibility Settings.
-        # Use a two-column layout so that the Compatibility Settings group
-        # can occupy the wider left column, similar to Stability scripts.
-        self._page_panels["compatibility"] = ConfigGroupPanel(self, columns=2)
-        self._compatibility_panel = self._page_panels["compatibility"]
         self._page_widgets: dict[str, QWidget] = {}
         self._run_buttons: list[PushButton] = []
 
-        for key in ("basic", "execution", "stability", "compatibility"):
+        for key in ("basic", "execution"):
             panel = self._page_panels[key]
             page = QWidget()
             page.setObjectName(f"config_{key}_page")
@@ -431,27 +412,14 @@ class CaseConfigPage(ConfigView):
         self._current_case_path: str = getattr(self, "_current_case_path", "")
         self._last_editable_info: EditableInfo | None = None
 
-        # Switch‑Wi‑Fi CSV combo management.
+        # Switch-Wi-Fi CSV combo management.
         self._switch_wifi_csv_combos: list[ComboBox] = []
         self.register_switch_wifi_csv_combo = lambda combo: _reg_sw_csv(self, combo)
-
-        # Track Android/kernel version options.
-        self._android_versions = list(DEFAULT_ANDROID_VERSION_CHOICES)
-        self._kernel_versions = list(DEFAULT_KERNEL_VERSION_CHOICES)
 
         # Logical page tracking from the controller perspective.
         self._current_page_keys = ["basic"]
 
-        self._script_config_factories: dict[
-            str, Callable[[Any, str, str, Mapping[str, Any]], ScriptConfigEntry]
-        ] = {
-            # Merged stability script combining STR relay and Wi‑Fi switching.
-            "test/stability/test_switch_wifi_str.py": create_test_switch_wifi_str_config_entry_from_schema,
-        }
-        self._script_groups: dict[str, ScriptConfigEntry] = {}
-        self._active_script_case: str | None = None
-
-        self._config_panels = tuple(self._page_panels[key] for key in ("basic", "execution", "stability"))
+        self._config_panels = tuple(self._page_panels[key] for key in ("basic", "execution"))
 
         # Containers for groups discovered from the YAML schema.
         self._basic_groups: dict[str, QWidget] = {}
@@ -546,9 +514,6 @@ class CaseConfigPage(ConfigView):
         if not key or key in getattr(self, "_lazy_panels_built", set()):
             return
         refresh_config_page_controls(self, panel_keys=(key,), clear_existing=False)
-        if key == "stability" and not getattr(self, "_script_groups_initialized", False):
-            initialize_script_config_groups(self)
-            self._script_groups_initialized = True
         if self._ui_adapter is not None:
             try:
                 self._ui_adapter.bind_all()

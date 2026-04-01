@@ -1,8 +1,0 @@
-compatibility:
-  power_ctrl:
-    relays:
-    - ip: 192.168.200.3
-      ports:
-      - 1
-      - 2
-  nic: LAN

@@ -2,7 +2,7 @@
 
 This module reads UI schema YAML files from ``src/ui/model/config``
 and constructs Qt widgets (group boxes + field controls) for a given
-Config panel. It is used to render Basic / Performance / Stability
+Config panel. It is used to render Basic / Performance
 panels from YAML.
 """
 
@@ -66,8 +66,6 @@ def load_ui_schema(section: str) -> Dict[str, Any]:
         "basic": "config_basic_ui.yaml",
         "dut": "config_basic_ui.yaml",
         "execution": "config_performance_ui.yaml",
-        "stability": "config_stability_ui.yaml",
-        "compatibility": "config_compatibility_ui.yaml",
     }
     if section == "toolbar":
         return _load_yaml_schema("config_toolbar_ui.yaml", base=get_model_toolbar_base())
@@ -242,13 +240,7 @@ def _create_widget(page: Any, spec: FieldSpec, value: Any) -> QWidget:
         choices = spec.choices or get_field_choices(spec.key)
         for choice in choices or []:
             combo.addItem(str(choice), str(choice))
-        if spec.key == "project.mass_production_status":
-            selected_values = set(value) if isinstance(value, list) else set()
-            for idx in range(combo.count()):
-                combo.setItemData(idx, 0)
-                if combo.itemText(idx) in selected_values:
-                    combo.setItemData(idx, 2)
-        if value not in (None, "") and not (spec.key == "project.mass_production_status" and isinstance(value, list)):
+        if value not in (None, ""):
             text = str(value)
             # Prefer userData matches when available; fall back to a
             # text-based lookup so that persisted values such as
@@ -334,14 +326,8 @@ def _add_single_field_to_layout(page, config, field, layout, section_id, panel_k
     widget = _create_widget(page, spec, value)
     # === 【关键修复】注册控件！===
     logical_key = key
-    # For Stability panel: special handling for "Selected Test Case"
-    if not (panel_key == "stability" and logical_key == "text_case"):
-        if hasattr(page, 'field_widgets'):
-            page.field_widgets[logical_key] = widget
-    if panel_key == "stability":
-        stability_key = f"stability.{logical_key}"
-        if hasattr(page, 'field_widgets'):
-            page.field_widgets[stability_key] = widget
+    if hasattr(page, 'field_widgets'):
+        page.field_widgets[logical_key] = widget
 
     # Maintain config_controls mapping
     group_name = section_id or key.split(".")[0]
@@ -384,14 +370,8 @@ def _add_single_field_to_layout(page, config, field, layout, section_id, panel_k
     # ========== 以下注册逻辑与原build_groups_from_schema完全一致 ==========
     # Register widget in page.field_widgets
     logical_key = key
-    # For Stability panel: special handling for "Selected Test Case"
-    if not (panel_key == "stability" and logical_key == "text_case"):
-        if hasattr(page, 'field_widgets'):
-            page.field_widgets[logical_key] = widget
-    if panel_key == "stability":
-        stability_key = f"stability.{logical_key}"
-        if hasattr(page, 'field_widgets'):
-            page.field_widgets[stability_key] = widget
+    if hasattr(page, 'field_widgets'):
+        page.field_widgets[logical_key] = widget
 
     # Maintain config_controls mapping
     group_name = section_id or key.split(".")[0]
@@ -453,14 +433,8 @@ def _add_fields_to_two_column_layout(page, config, fields, layout, section_id, p
 
         # === 【关键修复】注册控件！===
         logical_key = key
-        # For Stability panel: special handling for "Selected Test Case"
-        if not (panel_key == "stability" and logical_key == "text_case"):
-            if hasattr(page, 'field_widgets'):
-                page.field_widgets[logical_key] = widget
-        if panel_key == "stability":
-            stability_key = f"stability.{logical_key}"
-            if hasattr(page, 'field_widgets'):
-                page.field_widgets[stability_key] = widget
+        if hasattr(page, 'field_widgets'):
+            page.field_widgets[logical_key] = widget
 
         # Maintain config_controls mapping
         group_name = section_id or key.split(".")[0]
@@ -765,15 +739,8 @@ def build_groups_from_schema(
                     # === 【关键修复】注册控件到 page.field_widgets！===
                     logical_key = key
 
-                    # For Stability panel: special handling for "Selected Test Case"
-                    should_register_normal = not (panel_key == "stability" and logical_key == "text_case")
-                    if should_register_normal:
-                        if hasattr(page, 'field_widgets'):
-                            page.field_widgets[logical_key] = widget
-                    if panel_key == "stability":
-                        stability_key = f"stability.{logical_key}"
-                        if hasattr(page, 'field_widgets'):
-                            page.field_widgets[stability_key] = widget
+                    if hasattr(page, 'field_widgets'):
+                        page.field_widgets[logical_key] = widget
 
                     # Maintain config_controls mapping
                     group_name = section_id or key.split(".")[0]
@@ -937,13 +904,8 @@ def build_groups_from_schema(
 
             # Register widget in page.field_widgets.
             logical_key = key
-            if not (panel_key == "stability" and logical_key == "text_case"):
-                if hasattr(page, 'field_widgets'):
-                    page.field_widgets[logical_key] = widget
-            if panel_key == "stability":
-                stability_key = f"stability.{logical_key}"
-                if hasattr(page, 'field_widgets'):
-                    page.field_widgets[stability_key] = widget
+            if hasattr(page, 'field_widgets'):
+                page.field_widgets[logical_key] = widget
 
             group_name = section.get("id") or key.split(".")[0]
             field_name = key.split(".")[-1]

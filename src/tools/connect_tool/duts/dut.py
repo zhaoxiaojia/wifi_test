@@ -115,12 +115,14 @@ class dut(WifiMixin, PerfMixin, SystemMixin, InputMixin, AppMixin, UiAutomationM
         self.iperf_client_cmd = iperf_cfg.get('client_cmd', 'iperf -c {ip} -w 2m -i 1 -t 30 -P 5')
         self.iperf_test_time, self.pair = self._parse_iperf_params(self.iperf_client_cmd)
         self.iperf_wait_time = self._calculate_iperf_wait_time(self.iperf_test_time)
-        self.repest_times = int(rvr_cfg.get('repeat', 0))
+        repeat_value = rvr_cfg.get("repeat", 0)
+        self.repest_times = 0 if repeat_value == "" else int(repeat_value)
         self._dut_ip = ''
         self._pc_ip = ''
         self.ip_target = ''
         self.rvr_result = None
-        self.throughput_threshold = float(rvr_cfg.get('throughput_threshold', 0))
+        threshold_value = rvr_cfg.get("throughput_threshold", 0)
+        self.throughput_threshold = 0.0 if threshold_value == "" else float(threshold_value)
         self.skip_tx = False
         self.skip_rx = False
         self.iperf_server_log_list: list[str] = []

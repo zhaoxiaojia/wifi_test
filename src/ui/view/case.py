@@ -2,12 +2,12 @@
 
 This module now defines three widgets:
 
-* :class:`FormListPage` – generic, read‑only CSV/list table with an optional
+* :class:`FormListPage` - generic, read-only CSV/list table with an optional
   checkbox column that can be reused by other features (such as the
-  switch‑Wi‑Fi stability editor).
-* :class:`RouterConfigForm` – left‑hand form used to edit a single Wi‑Fi
+  switch-Wi-Fi stability editor).
+* :class:`RouterConfigForm` - left-hand form used to edit a single Wi-Fi
   row (band, channel, security, SSID, password, tx/rx flags).
-* :class:`RvrWifiConfigPage` – the actual Case page shown in the
+* :class:`RvrWifiConfigPage` - the actual Case page shown in the
   application, implemented as a composition of ``RouterConfigForm`` and
   ``FormListPage`` plus router/CSV persistence logic.
 """
@@ -42,11 +42,6 @@ from src.util.constants import AUTH_OPTIONS, OPEN_AUTH, Paths, RouterConst
 from src.tools.router_tool.router_factory import get_router
 from src.ui.view.theme import apply_theme, apply_font_and_selection
 from src.ui.view import FormListPage, RouterConfigForm, FormListBinder
-from src.ui.view.config.config_compatibility import (
-    CompatibilityConfigPage,
-    derive_selected_router_keys,
-)
-
 from src.ui.view.config.config_function import FunctionConfigForm
 from src.ui.view.run import apply_run_action_button_style
 
@@ -76,11 +71,7 @@ class RvrWifiConfigPage(CardWidget):
         self.headers, self.rows = self._load_csv()
         print(f"[STARTUP_TIME] RvrWifiConfigPage.load_csv: {time.perf_counter() - _t:.3f}s")
 
-        # Outer layout holds both the RvR Wi‑Fi editor and, for
-        # compatibility testcases, a CompatibilityConfigPage that shows
-        # router entries from compatibility_router.json.  Only one of
-        # these child widgets is visible at a time; the Config page
-        # controller decides which mode to use for the active testcase.
+        # Outer layout holds both the RvR Wi-Fi editor and optional case-specific widgets.
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
@@ -142,14 +133,6 @@ class RvrWifiConfigPage(CardWidget):
             self.list.set_current_row(0)
             self.form.load_row(self.rows[0])
 
-        # Compatibility router list: hidden by default and only shown
-        # for compatibility testcases.
-        self.compat_page = CompatibilityConfigPage(self)
-        outer.addWidget(self.compat_page, 1)
-        self.compat_page.setVisible(False)
-        self._compat_loading = False
-        self.compat_page.selectionChanged.connect(self._on_compat_selection_changed)
-
         # Hidden by default until the Config page decides which mode
         # should be active for the selected testcase.
         self._content.setVisible(False)
@@ -171,92 +154,18 @@ class RvrWifiConfigPage(CardWidget):
 
         Modes
         -----
-        - ``\"performance\"`` – show RvR Wi‑Fi CSV editor.
-        - ``\"compatibility\"`` – show compatibility router list driven
-          by ``config_compatibility.yaml``.
-        - anything else – hide both, leaving the Case page empty.
+        - ``\"performance\"`` - show RvR Wi-Fi CSV editor.
+        - anything else - hide, leaving the Case page empty.
         """
         mode = str(mode or "").lower()
         show_rvr = mode == "performance"
-        show_compat = mode == "compatibility"
         show_func = mode in ("functionality", "func", "project", "stb", "function")
-        logging.debug("compat mode=%s show_rvr=%s show_compat=%s show_func=%s", mode, show_rvr, show_compat, show_func)
+        logging.debug("case mode=%s show_rvr=%s show_func=%s", mode, show_rvr, show_func)
         self._content.setVisible(show_rvr)
-        self.compat_page.setVisible(show_compat)
         #self.func_content.setVisible(show_func)
         self.func_form.setVisible(show_func)
 
-        if show_compat:
-            # Refresh router selection from the merged configuration so
-            # that Case page checkboxes mirror the Config-page
-            # Compatibility Settings (selected_routers).
-            try:
-                from src.util.constants import load_config  # local import to avoid cycles
-
-                cfg = load_config(refresh=True) or {}
-                compat_cfg = cfg.get("compatibility", {}) or {}
-                relays = (compat_cfg.get("power_ctrl") or {}).get("relays")
-                selected = derive_selected_router_keys(relays)
-                if not selected:
-                    # Legacy fallback: honour selected_routers only if relays
-                    # do not describe any catalogue-backed entries.
-                    selected = compat_cfg.get("selected_routers") or []
-                logging.debug("compat selected_routers for case page: %s", selected)
-                self._compat_loading = True
-                try:
-                    self.compat_page.set_selected_keys(selected)
-                finally:
-                    self._compat_loading = False
-            except Exception:
-                logging.debug("Failed to refresh Compatibility router selection", exc_info=True)
-
-    def _on_compat_selection_changed(self) -> None:
-        """Persist Case-page compatibility selection back to config YAML."""
-        if self._compat_loading:
-            return
-        try:
-            selected = sorted(self.compat_page.selected_keys())
-            logging.debug("compat CasePage selection changed -> %s", selected)
-            from src.util.constants import load_config, save_config
-            from src.ui.view.config.config_compatibility import apply_selected_keys_to_relays
-
-            cfg = load_config(refresh=True) or {}
-            compat_cfg = cfg.setdefault("compatibility", {})
-            power_cfg = compat_cfg.setdefault("power_ctrl", {})
-            relays = power_cfg.get("relays") or []
-            power_cfg["relays"] = apply_selected_keys_to_relays(selected, relays)
-            compat_cfg.pop("selected_routers", None)
-            save_config(cfg)
-            # Keep the Config page Compatibility panel in sync so the user
-            # immediately sees Case-page edits reflected in Config.
-            self._sync_config_page_relays(power_cfg["relays"])
-        except Exception:
-            logging.debug("Failed to persist Case-page compatibility selection", exc_info=True)
-
-    def _sync_config_page_relays(self, relays: list[dict[str, Any]]) -> None:
-        """Apply updated relays into the Config page widget and model."""
-        main_window = self.window()
-        cfg_page = main_window.caseConfigPage
-        field_widgets = cfg_page.field_widgets
-        editor = field_widgets.get("compatibility.power_ctrl.relays")
-        if editor is None:
-            return
-        try:
-            # Avoid autosave during programmatic refresh.
-            setattr(cfg_page, "_refreshing", True)
-            if hasattr(editor, "set_relays"):
-                editor.set_relays(relays)
-            compat_cfg = cfg_page.config.setdefault("compatibility", {})
-            power_cfg = compat_cfg.setdefault("power_ctrl", {})
-            power_cfg["relays"] = relays
-            compat_cfg.pop("selected_routers", None)
-        except Exception:
-            logging.debug("Failed to sync Config page relays from Case selection", exc_info=True)
-        finally:
-            try:
-                setattr(cfg_page, "_refreshing", False)
-            except Exception:
-                pass
+        return
 
     def _on_run_clicked(self) -> None:
         main_window = self.window()

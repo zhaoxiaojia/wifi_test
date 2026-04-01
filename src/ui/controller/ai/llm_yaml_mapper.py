@@ -407,7 +407,7 @@ def derive_performance_csv_updates(
 
 def _is_performance_case(text_case: str) -> bool:
     normalized = (text_case or "").replace("\\", "/").strip()
-    return normalized.startswith("test/performance/")
+    return normalized.startswith("test/")
 
 
 def _resolve_csv_path(raw_path: str, config_base: Path) -> Path | None:

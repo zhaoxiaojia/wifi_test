@@ -23,7 +23,7 @@ from openpyxl.styles import Alignment, Border, Font, Side
 from openpyxl.utils import get_column_letter, column_index_from_string
 from openpyxl.worksheet.worksheet import Worksheet
 
-from src.test.performance import get_rvo_static_db_list, get_rvo_target_rssi_list
+from src.test import get_rvo_static_db_list, get_rvo_target_rssi_list
 from src.tools.performance.rvr_chart_generator import PerformanceRvrChartGenerator
 from src.util.report import style
 from src.util.report.style import *  # noqa: F401,F403

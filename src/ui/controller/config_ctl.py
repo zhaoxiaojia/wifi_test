@@ -56,9 +56,6 @@ from src.ui.view.config.config_switch_wifi import (
     normalize_switch_wifi_manual_entries,
     SwitchWifiConfigPage,
 )
-from src.ui.view.config.config_compatibility import (
-    CompatibilityRelayEditor,
-)
 from src.ui.view.config.config_str import script_field_key
 from src.ui.controller import show_info_bar
 from src.ui.view.ui_adapter import UiEvent
@@ -291,8 +288,19 @@ class _StabilityControllerMixin:
         if not abs_case_path:
             return False
         path_obj = abs_case_path if isinstance(abs_case_path, Path) else Path(abs_case_path)
-        parts = path_obj.as_posix().split("/")
-        return "performance" in (p.lower() for p in parts)
+        parts = [p.lower() for p in path_obj.as_posix().split("/") if p]
+        if "performance" in parts:
+            return True
+        if "test" in parts:
+            try:
+                test_idx = len(parts) - 1 - list(reversed(parts)).index("test")
+            except ValueError:
+                test_idx = -1
+            if 0 <= test_idx < len(parts) - 1:
+                leaf = parts[test_idx + 1]
+                if leaf.endswith(".py") and leaf.startswith(("test_wifi_", "test_xiaomi_")):
+                    return True
+        return False
 
 
 class _CsvRvrControllerMixin:
@@ -573,29 +581,10 @@ class ConfigController(
     def _on_field_change(self, event: UiEvent) -> None:
         """Handle generic field-change events from the UI."""
         from PyQt5.QtCore import QTimer  # local import
-        from src.ui.view.config.actions import _refresh_case_page_compatibility  # type: ignore[attr-defined]
         from src.ui.model.autosave import should_autosave
 
         page = self.page
         field = str(event.payload["field"]).strip()
-
-        if field.startswith("compatibility."):
-            QTimer.singleShot(0, lambda: _refresh_case_page_compatibility(page))
-
-        if field.startswith("project.") and not page._refreshing:
-            cfg = page.config if isinstance(page.config, dict) else {}
-            connect_cfg = cfg.get("connect_type")
-            if isinstance(connect_cfg, dict):
-                connect_cfg.pop("mac_address", None)
-                cfg["connect_type"] = connect_cfg
-                page.config = cfg
-                mac_widget = (getattr(page, "field_widgets", {}) or {}).get("connect_type.mac_address")
-                if mac_widget is not None:
-                    mac_widget.blockSignals(True)
-                    mac_widget.setText("")
-                    mac_widget.blockSignals(False)
-            self.sync_widgets_to_config()
-            _schedule_mac_autofill(page)
 
         if field in {"connect_type.type", "connect_type.Android.device"} and not page._refreshing:
             self.sync_widgets_to_config()
@@ -1101,18 +1090,7 @@ class ConfigController(
                 if is_router_mode:
                     continue
                 ref[leaf] = widget.serialize()
-            elif isinstance(widget, CompatibilityRelayEditor):
-                # Persist compatibility.power_ctrl.relays from the composite
-                # editor used on the Compatibility Settings panel.
-                relays = widget.relays()
-                ref[leaf] = relays
-                # Keep compatibility section free of redundant selected_routers.
-                compat_cfg = page.config.setdefault("compatibility", {})
-                compat_cfg.pop("selected_routers", None)
             elif isinstance(widget, ComboBox):
-                if key == "project.mass_production_status":
-                    ref[leaf] = widget.currentText().strip()
-                    continue
                 data_val = widget.currentData()
                 if data_val not in (None, "", widget.currentText()):
                     value = data_val
@@ -1132,9 +1110,6 @@ class ConfigController(
                 ref[leaf] = float(widget.value())
             elif isinstance(widget, QCheckBox):
                 ref[leaf] = widget.isChecked()
-        project_cfg = page.config.get("project") if isinstance(page.config.get("project"), dict) else {}
-        project_cfg.update(dict(page._fpga_details))
-        page.config["project"] = project_cfg
         base = Path(self.get_application_base())
         case_display = page.field_widgets.get("text_case")
         display_text = case_display.text().strip() if isinstance(case_display, LineEdit) else ""
@@ -1280,25 +1255,6 @@ class ConfigController(
                 errors.append("Third-party wait time must be a positive integer.")
                 focus_widget = focus_widget or page.third_party_wait_edit
 
-        if connect_type == "Android" and not page.android_version_combo.currentText().strip():
-            errors.append("Android version is required.")
-            focus_widget = focus_widget or page.android_version_combo
-
-        customer_text = page.fpga_customer_combo.currentText().strip()
-        product_text = page.fpga_product_combo.currentText().strip()
-        project_text = page.fpga_project_combo.currentText().strip()
-        if not customer_text or not product_text or not project_text:
-            errors.append(
-                "Wi-Fi chipset customer, product line and project are required."
-            )
-            focus_widget = focus_widget or (
-                page.fpga_customer_combo
-                if not customer_text
-                else page.fpga_product_combo
-                if not product_text
-                else page.fpga_project_combo
-            )
-
         if errors:
             show_info_bar(
                 page,
@@ -1324,6 +1280,16 @@ class ConfigController(
         for node in (p, *p.parents):
             if node.name == "performance" and node.parent.name == "test":
                 return True
+        parts = [seg.lower() for seg in p.as_posix().split("/") if seg]
+        if "test" in parts:
+            try:
+                test_idx = len(parts) - 1 - list(reversed(parts)).index("test")
+            except ValueError:
+                test_idx = -1
+            if 0 <= test_idx < len(parts) - 1:
+                leaf = parts[test_idx + 1]
+                if leaf.endswith(".py") and leaf.startswith(("test_wifi_", "test_xiaomi_")):
+                    return True
         return False
 
     def is_stability_case(self, case_path: str | Path | None) -> bool:
@@ -1354,7 +1320,7 @@ class ConfigController(
         return stem
 
     def determine_pages_for_case(self, case_path: str, info: "EditableInfo") -> list[str]:
-        """Return which logical pages (basic/execution/stability/compatibility) are visible for the case."""
+        """Return which logical pages (basic/execution) are visible for the case."""
         if not case_path:
             return ["basic"]
 
@@ -1366,19 +1332,9 @@ class ConfigController(
 
         category = determine_case_category(case_path=case_path, display_path=None)
 
-        if category == "compatibility":
-            if "compatibility" not in keys:
-                keys.append("compatibility")
-            return keys
-
         if self.is_performance_case(case_path) or info.enable_csv:
             if "execution" not in keys:
                 keys.append("execution")
-        else:
-            case_key = self.script_case_key(case_path)
-            script_groups = self.page._script_groups
-            if case_key in script_groups:
-                keys.append("stability")
         return keys
 
     # ------------------------------------------------------------------

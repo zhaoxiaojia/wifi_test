@@ -34,7 +34,7 @@ from src.tools.connect_tool.local_os import LocalOS
 from src.tools.performance_result import PerformanceResult
 from src.util.constants import load_config
 from src.tools.router_tool.Router import Router
-from src.tools.reporting import generate_project_report
+
 from src.test.pyqt_log import emit_pyqt_message
 from collections import defaultdict
 
@@ -60,7 +60,7 @@ if not hasattr(pytest, "test_step_results"):
 def _maybe_apply_xiaomi_presets(pytest_config: pytest.Config) -> None:
     args = getattr(pytest_config, "args", None) or []
     normalized_args = [str(item).replace("\\", "/") for item in args]
-    selected = next((item for item in normalized_args if "test/performance/xiaomi/" in item), "")
+    selected = next((item for item in normalized_args if "test/test_xiaomi_" in item), "")
     if not selected:
         return
 
@@ -153,7 +153,7 @@ def _derive_test_category_from_session(session: pytest.Session) -> Path:
 
     The category is the path segment under ``src/test`` for the active
     testcase, for example:
-        src/test/performance/test_wifi_rvo.py -> performance/test_wifi_rvo
+        src/test/test_wifi_rvo.py -> test_wifi_rvo
     When the path cannot be resolved, a generic ``root`` category is used.
     """
     args = getattr(session.config, "args", None) or []
@@ -423,74 +423,7 @@ def _sanitize_filename_component(value) -> str:
     return sanitized.strip("_")
 
 
-def _maybe_generate_project_report() -> None:
-    """
-    Conditionally generate a Wi‑Fi performance Excel report at session end.
 
-    Behavior:
-        - Runs for performance sessions when a result CSV is available.
-        - If a single Wi‑Fi test type was selected (RVR/RVO/PERFORMANCE), force the
-          report to that type for clearer labeling.
-
-
-    Side effects:
-        Logs success/failure and exceptions; never raises to the caller.
-    """
-    config = getattr(pytest, "config", {}) or {}
-    fpga_cfg = config.get("project") or {}
-    test_result = getattr(pytest, "testResult", None)
-    if test_result is None:
-        logging.warning("Skip project report: missing testResult handle")
-        return
-
-    selected_types = getattr(pytest, "selected_test_types", set())
-    forced_type = None
-    if isinstance(selected_types, set) and selected_types:
-        preferred = None
-        if "PEAK_THROUGHPUT" in selected_types:
-            preferred = "PEAK_THROUGHPUT"
-        elif "RVO" in selected_types:
-            preferred = "RVO"
-        elif "RVR" in selected_types:
-            preferred = "RVR"
-        if len(selected_types) == 1:
-            forced_type = next(iter(selected_types))
-        elif preferred is not None and selected_types.issubset({"PERFORMANCE", preferred}):
-            forced_type = preferred
-        if forced_type:
-            logging.info("Using selected Wi-Fi test type for project report: %s (detected=%s)", forced_type, ", ".join(sorted(selected_types)))
-        else:
-            logging.warning(
-                "Multiple Wi-Fi test types detected (%s); fallback to auto detection.",
-                ", ".join(sorted(selected_types)),
-            )
-
-    logdir = Path(getattr(test_result, "logdir", "") or ".").resolve()
-    result_file = Path(getattr(test_result, "log_file", "") or "")
-    if not result_file.exists():
-        logging.warning("Skip project report: result CSV missing (%s)", result_file)
-        return
-    software_info = config.get("software_info") or {}
-    hardware_info = config.get("hardware_info") or {}
-
-    project_raw = (
-        hardware_info.get("project_name")
-        or software_info.get("project_name")
-        or fpga_cfg.get("project_name")
-        or fpga_cfg.get("customer")
-        or "Project"
-    )
-    project_label = _sanitize_filename_component(project_raw) or "Project"
-    project_label = "_".join(part.capitalize() for part in project_label.split("_") if part) or "Project"
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"{project_label}_WiFi_{timestamp}.xlsx"
-    output_path = logdir / filename
-
-    try:
-        generate_project_report(result_file, output_path, forced_test_type=forced_type)
-        logging.info("Generated project Wi‑Fi performance report: %s", output_path)
-    except Exception:
-        logging.exception("Failed to generate project Wi‑Fi performance report")
 
 
 # ----------------------------------------------------------------------------
@@ -605,7 +538,7 @@ def pytest_collection_finish(session):
         path_text = str(getattr(item, "fspath", "")).replace("\\", "/").lower()
         if not path_text:
             continue
-        if "test/performance/" in path_text:
+        if "/src/test/" in path_text:
             selected_types.add("PERFORMANCE")
         if "test_wifi_peak_throughput" in path_text:
             selected_types.add("PEAK_THROUGHPUT")
@@ -782,11 +715,7 @@ def pytest_sessionfinish(session, exitstatus):
                 logging.warning("Failed to copy kernel_log.txt to %s: %s", destination_dir, exc)
     # --- [原有逻辑结束] ---
 
-    # --- 【新增】处理项目性能报告 (XIAOMI) ---
-    test_result = getattr(pytest, "testResult", None)
-    if isinstance(test_result, PerformanceResult):
-        _maybe_generate_project_report()
-    # --- 【新增结束】---
+
 
     # --- 【关键修改】智能生成 Allure 报告 ---
     # 默认行为：destination_dir 是单 Case 的报告目录，input_dir 是其下的 allure_report

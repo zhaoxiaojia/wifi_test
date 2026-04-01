@@ -16,7 +16,7 @@ rf_solution:
     channels: 1,2,3,8
   model: RADIORACK-4-220
   step: 0,75:3
-text_case: test/performance/test_wifi_rvr.py
+text_case: test/test_wifi_rvo.py
 debug:
   skip_router: false
   skip_corner_rf: false
@@ -39,3 +39,13 @@ function:
   mass_production_status: EVT
 atte:
   model: RADIORACK-4-220
+stability:
+  duration_control:
+    loop: null
+    duration_hours: null
+    exitfirst: false
+    retry_limit: 0
+  check_point:
+    ping: false
+    ping_targets: ''
+  cases: {}

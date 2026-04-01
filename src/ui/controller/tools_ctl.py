@@ -13,9 +13,7 @@ from PyQt5.QtCore import QObject
 
 from src.ui.model.tools_registry import ToolSpec
 from src.ui.view.tools_global import GlobalToolsBar, GlobalToolsPanel
-from src.ui.view.toolbar.tools_bt_fw_log import BtFwLogToolView
 from src.ui.view.toolbar.tools_ai_chat import AiChatToolView
-from src.ui.controller.tools_bt_fw_log_ctl import BtFwLogToolController
 from src.ui.controller.tools_ai_chat_ctl import AiChatToolController
 
 
@@ -51,10 +49,7 @@ class GlobalToolsController(QObject):
     def _create_tool_instances(self) -> None:
         """Instantiate tool views and controllers based on registry ids."""
         for tool_id in self._specs:
-            if tool_id == "bt_fw_log":
-                view = BtFwLogToolView(parent=self.main_window)
-                controller = BtFwLogToolController(view, parent=self.main_window)
-            elif tool_id == "ai_chat":
+            if tool_id == "ai_chat":
                 view = AiChatToolView(parent=self.main_window)
                 controller = AiChatToolController(view, parent=self.main_window)
             else:

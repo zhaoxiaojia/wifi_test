@@ -3,36 +3,36 @@
         "id": 1,
         "desc": "performance",
         "priority": "P0",
-        "path": "src/test/performance/test_wifi_peak_throughput.py"
+        "path": "src/test/test_wifi_peak_throughput.py"
     },
     "test_wifi_rvo.py": {
         "id": 1,
         "desc": "performance",
         "priority": "P0",
-        "path": "src/test/performance/test_wifi_rvo.py"
+        "path": "src/test/test_wifi_rvo.py"
     },
     "test_wifi_rvr.py": {
         "id": 1,
         "desc": "performance",
         "priority": "P0",
-        "path": "src/test/performance/test_wifi_rvr.py"
+        "path": "src/test/test_wifi_rvr.py"
     },
     "test_xiaomi_peak_throughput.py": {
         "id": 1,
         "desc": "performance",
         "priority": "P0",
-        "path": "src/test/performance/xiaomi/test_xiaomi_peak_throughput.py"
+        "path": "src/test/test_xiaomi_peak_throughput.py"
     },
     "test_xiaomi_rvo.py": {
         "id": 1,
         "desc": "performance",
         "priority": "P0",
-        "path": "src/test/performance/xiaomi/test_xiaomi_rvo.py"
+        "path": "src/test/test_xiaomi_rvo.py"
     },
     "test_xiaomi_rvr.py": {
         "id": 1,
         "desc": "performance",
         "priority": "P0",
-        "path": "src/test/performance/xiaomi/test_xiaomi_rvr.py"
+        "path": "src/test/test_xiaomi_rvr.py"
     }
 }
