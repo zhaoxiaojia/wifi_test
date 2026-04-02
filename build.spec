@@ -20,8 +20,6 @@ a = Analysis(
         ('config/performance_test_csv', 'config/performance_test_csv'),
         ('config/config_basic.yaml', 'config'),
         ('config/config_performance.yaml', 'config'),
-        ('config/config_stability.yaml', 'config'),
-        ('config/config_compatibility.yaml', 'config'),
         ('config/config_tool.yaml', 'config'),
         ('config/config_toolbar.yaml', 'config'),
     ] + u2_datas,
@@ -71,7 +69,7 @@ a = Analysis(
         'selenium.webdriver.chrome',
         *requirements,
         'src.ui.run',
-        'xlrd'
+        'xlrd',
         '_multiprocessing',
         'multiprocessing',
         'multiprocessing.context',
