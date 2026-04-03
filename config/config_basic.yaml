@@ -7,18 +7,18 @@ system:
   version: Android 15
   kernel_version: Kernel 6.1
 project:
-  customer: Hisense
-  product_line: TV
-  project: 65D50S
-  odm: Hisense
-  main_chip: T963D4
-  wifi_module: EA6621
-  interface: USB
+  customer: A
+  project_type: OTT
+  project: Plam811
+  odm: SEI
+  soc: S905X5M
+  wifi_module: W265S1
+  interface: SDIO
   mass_production_status: EVT
   dut_sn: ''
 serial_port:
   baud: '115200'
-  port: ''
+  port: COM14 (蓝牙链接上的标准串行 (COM14))
   status: false
 router:
   name: asusax88u
@@ -40,13 +40,15 @@ dut:
   Android:
     device: No devices
   Linux:
-    ip: 10.28.38.10
+    ip: 192.168.1.10
     wildcard: ''
   third_party:
     enabled: false
     wait_seconds: 0
-  mac_address: 70:c9:12:c5:9c:50
   name: glmt3000
   address: 192.168.8.1
   24g_ssid: Openwrt-AT-24G
   5g_ssid: Openwrt-AT-5G
+  mac_address: ''
+connect_type:
+  type: Android

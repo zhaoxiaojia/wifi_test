@@ -925,7 +925,7 @@ CUSTOM_TESTCASE_UI_RULES.append(
                 condition=lambda values: True,
             ),
             SimpleFieldEffect(
-                target_field="project.mass_production_status",
+                target_field="dut.hw_phase",
                 action="enable",
                 condition=lambda values: True,
             ),
@@ -935,7 +935,7 @@ CUSTOM_TESTCASE_UI_RULES.append(
                 condition=lambda values: True,
             ),
             SimpleFieldEffect(
-                target_field="project.product_line",
+                target_field="project.project_type",
                 action="enable",
                 condition=lambda values: True,
             ),
@@ -1040,7 +1040,7 @@ CUSTOM_TESTCASE_UI_RULES.append(
                 condition=lambda values: True,
             ),
             SimpleFieldEffect(
-                target_field="project.main_chip",
+                target_field="project.soc",
                 action="disable",
                 condition=lambda values: True,
             ),

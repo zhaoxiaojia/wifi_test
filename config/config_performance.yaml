@@ -31,12 +31,12 @@ lab:
   name: SZ Venus
 function:
   customer: ''
-  product_line: ''
+  project_type: ''
   project: ''
   odm: ''
-  main_chip: T966D5
-  wifi_module: W265U1
-  interface: USB
+  soc: ''
+  wifi_module: ''
+  interface: ''
   mass_production_status: EVT
 atte:
   model: RADIORACK-4-220

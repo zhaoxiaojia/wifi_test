@@ -972,7 +972,7 @@ def init_fpga_dropdowns(view: Any) -> None:
             continue
         if logical == "project.customer":
             customer_combo = widget
-        elif logical == "project.product_line":
+        elif logical == "project.project_type":
             product_combo = widget
         elif logical == "project.project":
             project_combo = widget
@@ -1016,7 +1016,7 @@ def init_fpga_dropdowns(view: Any) -> None:
     _set_combo_text(customer_combo, target_customer)
     refresh_fpga_product_lines(view, target_customer)
 
-    target_product = project_cfg.get("product_line") or product_combo.currentText() or ""
+    target_product = project_cfg.get("project_type") or product_combo.currentText() or ""
     _set_combo_text(product_combo, target_product)
     refresh_fpga_projects(view, target_customer, target_product)
 
@@ -1029,7 +1029,7 @@ def init_fpga_dropdowns(view: Any) -> None:
 
 
 def refresh_fpga_product_lines(view: Any, customer: str) -> None:
-    """Populate the FPGA product-line combo for a given customer."""
+    """Populate the FPGA project-type combo for a given customer."""
     combo = view.fpga_product_combo
     product_lines: dict[str, Any] = {}
     if customer:
@@ -1043,13 +1043,13 @@ def refresh_fpga_product_lines(view: Any, customer: str) -> None:
         combo.setCurrentIndex(-1)
 
 
-def refresh_fpga_projects(view: Any, customer: str, product_line: str) -> None:
-    """Populate the FPGA project combo for a given customer/product-line."""
+def refresh_fpga_projects(view: Any, customer: str, project_type: str) -> None:
+    """Populate the FPGA project combo for a given customer/project-type."""
     combo = view.fpga_project_combo
     projects: dict[str, Any] = {}
-    if product_line:
+    if project_type:
         for product_name, odm_map in WIFI_PRODUCT_PROJECT_MAP.items():
-            if product_name != product_line:
+            if product_name != project_type:
                 continue
             if not customer:
                 merged: dict[str, Any] = {}
@@ -1079,56 +1079,37 @@ def update_fpga_hidden_fields(page: Any) -> None:
         return
 
     customer = customer_combo.currentText() or ""
-    product = product_combo.currentText() or ""
+    project_type = product_combo.currentText() or ""
     project = project_combo.currentText() or ""
 
     info: dict[str, Any] | None = None
-    config_ctl = getattr(page, "config_ctl", None)
-    if product and project and config_ctl is not None:
-        guessed_customer, guessed_product, guessed_project, guessed_info = config_ctl._find_project_in_map(  # type: ignore[attr-defined]
-            "",
-            "",
-            "",
-            customer=customer,
-            product_line=product,
-            project=project,
+    if project_type and customer and project:
+        info = (
+            WIFI_PRODUCT_PROJECT_MAP.get(project_type, {})
+            .get(customer, {})
+            .get(project)
         )
-        if guessed_info:
-            customer = guessed_customer or customer
-            product = guessed_product or product
-            project = guessed_project or project
-            info = guessed_info
-
-    config_ctl = getattr(page, "config_ctl", None)
 
     def _norm(value: Any) -> str:
         return str(value or "")
 
-    mass_status: list[str] = []
     odm_choices: list[str] = []
     if info:
-        mass_status = list(info["mass_production_status"])
         odm_choices = [info["ODM"]]
-    current_status: list[str] = []
     current_odm = ""
     config = getattr(page, "config", None)
     if isinstance(config, dict):
         project_cfg = config.get("project") or {}
         if isinstance(project_cfg, dict):
             current_odm = str(project_cfg.get("odm") or "")
-            status_value = project_cfg.get("mass_production_status")
-            if isinstance(status_value, list):
-                current_status = [str(item) for item in status_value if str(item)]
-            elif status_value:
-                current_status = [str(status_value)]
 
-    if product and project and info:
+    if project_type and project and info:
         normalized = {
             "customer": customer,
-            "product_line": product,
+            "project_type": project_type,
             "project": project,
             "odm": "",
-            "main_chip": _norm(info.get("main_chip")),
+            "soc": _norm(info.get("main_chip")),
             "wifi_module": _norm(info.get("wifi_module")),
             "interface": _norm(info.get("interface")),
         }
@@ -1139,10 +1120,10 @@ def update_fpga_hidden_fields(page: Any) -> None:
     else:
         normalized = {
             "customer": customer,
-            "product_line": product,
+            "project_type": project_type,
             "project": project,
             "odm": current_odm,
-            "main_chip": "",
+            "soc": "",
             "wifi_module": "",
             "interface": "",
         }
@@ -1150,12 +1131,7 @@ def update_fpga_hidden_fields(page: Any) -> None:
     setattr(page, "_fpga_details", normalized)
     config = getattr(page, "config", None)
     if isinstance(config, dict):
-        project_payload = dict(normalized)
-        selected = [item for item in current_status if item in mass_status]
-        project_payload["mass_production_status"] = (
-            selected if selected else list(mass_status)
-        )
-        config["project"] = project_payload
+        config["project"] = dict(normalized)
 
     has_project = bool(project)
     ecosystem = ""
@@ -1188,7 +1164,7 @@ def update_fpga_hidden_fields(page: Any) -> None:
 
     field_widgets = getattr(page, "field_widgets", {}) or {}
     for key, field_key in (
-        ("main_chip", "project.main_chip"),
+        ("soc", "project.soc"),
         ("wifi_module", "project.wifi_module"),
         ("interface", "project.interface"),
     ):
@@ -1196,7 +1172,7 @@ def update_fpga_hidden_fields(page: Any) -> None:
         if widget is not None and hasattr(widget, "setText"):
             widget.setText(normalized.get(key, "") or "")
 
-    status_widget = field_widgets.get("project.mass_production_status")
+    status_widget = field_widgets.get("dut.hw_phase")
     if status_widget is not None and hasattr(status_widget, "clear"):
         status_widget.clear()
         for item in mass_status:

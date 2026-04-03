@@ -1037,15 +1037,15 @@ class ImportController:
             if summary_project_id:
                 payload = dict(payload)
                 payload["project_id"] = summary_project_id
-                for product_line, brands in WIFI_PRODUCT_PROJECT_MAP.items():
+                for project_type, brands in WIFI_PRODUCT_PROJECT_MAP.items():
                     for brand, projects in brands.items():
                         for _, info in projects.items():
                             if str(info.get("ProjectID") or "").strip() != summary_project_id:
                                 continue
-                            payload["brand"] = str(brand)
-                            payload["product_line"] = str(product_line)
+                            payload["customer"] = str(brand)
+                            payload["project_type"] = str(project_type)
                             payload["project_name"] = str(info.get("ProjectName") or payload.get("project_name") or "")
-                            payload["main_chip"] = str(info.get("main_chip") or payload.get("main_chip") or "")
+                            payload["soc"] = str(info.get("main_chip") or payload.get("soc") or "")
                             payload["wifi_module"] = str(info.get("wifi_module") or payload.get("wifi_module") or "")
                             payload["interface"] = str(info.get("interface") or payload.get("interface") or "")
                             payload["ecosystem"] = str(info.get("ecosystem") or payload.get("ecosystem") or "")
@@ -1197,8 +1197,7 @@ class ImportController:
             "OS VERSION": "android_version",
             "KERNEL VERSION": "kernel_version",
             "KERNEL": "kernel_version",
-            "MASS PRODUCTION STATUS": "mass_production_status",
-            "MASS STATUS": "mass_production_status",
+            "HW PHASE": "hw_phase",
             "MAC ADDRESS": "mac_address",
             "MAC": "mac_address",
             "CONNECT TYPE": "connect_type",
@@ -1339,24 +1338,19 @@ class ImportController:
         field_widgets: Mapping[str, Any] = view.field_widgets
 
         return {
-            "brand": field_widgets["project.customer"].currentText(),
-            "product_line": field_widgets["project.product_line"].currentText(),
+            "customer": field_widgets["project.customer"].currentText(),
+            "project_type": field_widgets["project.project_type"].currentText(),
             "nickname": field_widgets["project.project"].currentText(),
             "project_name": "",
             "odm": field_widgets["project.odm"].currentText(),
-            "main_chip": field_widgets["project.main_chip"].text(),
+            "soc": field_widgets["project.soc"].text(),
             "wifi_module": field_widgets["project.wifi_module"].text(),
             "interface": field_widgets["project.interface"].text(),
             "software_version": field_widgets["software_info.software_version"].text(),
             "driver_version": field_widgets["software_info.driver_version"].text(),
             "android_version": field_widgets["system.version"].currentText(),
             "kernel_version": field_widgets["system.kernel_version"].currentText(),
-            "mass_production_status": ",".join(
-                list(
-                    (view.config.get("project") or {}).get("mass_production_status")
-                    or []
-                )
-            ),
+            "hw_phase": field_widgets["dut.hw_phase"].currentText(),
             "lab_name": field_widgets["lab.name"].currentText(),
         }
 
@@ -1556,8 +1550,10 @@ class ImportController:
 
             env_payload = {
                 "lab_id": int(lab_id),
-                "router_name": ui_payload.get("router_name"),
-                "router_address": ui_payload.get("router_address"),
+                "ap_name": ui_payload.get("ap_name") or ui_payload.get("router_name"),
+                "ap_address": ui_payload.get("ap_address") or ui_payload.get("router_address"),
+                "distance": ui_payload.get("distance"),
+                "ap_region": ui_payload.get("ap_region"),
                 "usb_cable": ui_payload.get("usb_cable"),
                 "hdmi_cable": ui_payload.get("hdmi_cable"),
                 "bt_device": ui_payload.get("bt_device"),
@@ -1566,12 +1562,14 @@ class ImportController:
             }
             client.insert(
                 "INSERT INTO `lab_environment` "
-                "(`lab_id`, `router_name`, `router_address`, `usb_cable`, `hdmi_cable`, `bt_device`, `bt_type`, `tv_device`, `payload_json`) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) "
+                "(`lab_id`, `ap_name`, `ap_address`, `distance`, `ap_region`, `usb_cable`, `hdmi_cable`, `bt_device`, `bt_type`, `tv_device`, `payload_json`) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
                 "ON DUPLICATE KEY UPDATE "
                 "`lab_id`=VALUES(`lab_id`), "
-                "`router_name`=VALUES(`router_name`), "
-                "`router_address`=VALUES(`router_address`), "
+                "`ap_name`=VALUES(`ap_name`), "
+                "`ap_address`=VALUES(`ap_address`), "
+                "`distance`=VALUES(`distance`), "
+                "`ap_region`=VALUES(`ap_region`), "
                 "`usb_cable`=VALUES(`usb_cable`), "
                 "`hdmi_cable`=VALUES(`hdmi_cable`), "
                 "`bt_device`=VALUES(`bt_device`), "
@@ -1580,8 +1578,10 @@ class ImportController:
                 "`payload_json`=VALUES(`payload_json`)",
                 (
                     int(lab_id),
-                    env_payload.get("router_name"),
-                    env_payload.get("router_address"),
+                    env_payload.get("ap_name"),
+                    env_payload.get("ap_address"),
+                    env_payload.get("distance"),
+                    env_payload.get("ap_region"),
                     env_payload.get("usb_cable"),
                     env_payload.get("hdmi_cable"),
                     env_payload.get("bt_device"),
@@ -1594,49 +1594,56 @@ class ImportController:
         dut_payload = {
             "test_report_id": int(test_report_id),
             "project_id": int(project_id),
-            "serial_number": ui_payload.get("serial_number"),
+            "sn": ui_payload.get("sn") or ui_payload.get("serial_number"),
             "connect_type": connect_type,
             "mac_address": ui_payload.get("mac_address"),
             "adb_device": ui_payload.get("adb_device"),
-            "telnet_ip": ui_payload.get("telnet_ip"),
+            "ip": ui_payload.get("ip") or ui_payload.get("telnet_ip"),
             "software_version": ui_payload.get("software_version"),
             "driver_version": ui_payload.get("driver_version"),
             "android_version": ui_payload.get("android_version"),
             "kernel_version": ui_payload.get("kernel_version"),
-            "mass_production_status": ui_payload.get("mass_production_status"),
+            "hw_phase": ui_payload.get("hw_phase"),
+            "wifi_module_sn": ui_payload.get("wifi_module_sn"),
+            "antenna": ui_payload.get("antenna"),
         }
         client.insert(
             "INSERT INTO `dut` "
-            "(`test_report_id`, `project_id`, `serial_number`, `connect_type`, `mac_address`, `adb_device`, `telnet_ip`, "
-            "`software_version`, `driver_version`, `android_version`, `kernel_version`, `mass_production_status`, `payload_json`) "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
+            "(`test_report_id`, `project_id`, `sn`, `connect_type`, `mac_address`, `adb_device`, `ip`, "
+            "`software_version`, `driver_version`, `android_version`, `kernel_version`, `hw_phase`, `wifi_module_sn`, `antenna`, `payload_json`) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
             "ON DUPLICATE KEY UPDATE "
             "`id`=LAST_INSERT_ID(`id`), "
             "`test_report_id`=VALUES(`test_report_id`), "
             "`project_id`=VALUES(`project_id`), "
-            "`serial_number`=VALUES(`serial_number`), "
+            "`sn`=VALUES(`sn`), "
             "`connect_type`=VALUES(`connect_type`), "
             "`mac_address`=VALUES(`mac_address`), "
             "`adb_device`=VALUES(`adb_device`), "
-            "`telnet_ip`=VALUES(`telnet_ip`), "
+            "`ip`=VALUES(`ip`), "
             "`software_version`=VALUES(`software_version`), "
             "`driver_version`=VALUES(`driver_version`), "
             "`android_version`=VALUES(`android_version`), "
             "`kernel_version`=VALUES(`kernel_version`), "
-            "`mass_production_status`=VALUES(`mass_production_status`), "
+            "`hw_phase`=VALUES(`hw_phase`), "
+            "`wifi_module_sn`=VALUES(`wifi_module_sn`), "
+            "`antenna`=VALUES(`antenna`), "
             "`payload_json`=VALUES(`payload_json`)",
             (
+                dut_payload.get("test_report_id"),
                 dut_payload.get("project_id"),
-                dut_payload.get("serial_number"),
+                dut_payload.get("sn"),
                 dut_payload.get("connect_type"),
                 dut_payload.get("mac_address"),
                 dut_payload.get("adb_device"),
-                dut_payload.get("telnet_ip"),
+                dut_payload.get("ip"),
                 dut_payload.get("software_version"),
                 dut_payload.get("driver_version"),
                 dut_payload.get("android_version"),
                 dut_payload.get("kernel_version"),
-                dut_payload.get("mass_production_status"),
+                dut_payload.get("hw_phase"),
+                dut_payload.get("wifi_module_sn"),
+                dut_payload.get("antenna"),
                 json.dumps(dut_payload, ensure_ascii=True, separators=(",", ":")),
             ),
         )

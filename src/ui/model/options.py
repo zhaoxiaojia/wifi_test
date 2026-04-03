@@ -17,6 +17,8 @@ from src.util.constants import (
     DEFAULT_ANDROID_VERSION_CHOICES,
     DEFAULT_KERNEL_VERSION_CHOICES,
     LAB_CATALOG,
+    HW_PHASE_CHOICES,
+    PROJECT_TYPES,
     RF_MODEL_CHOICES,
     TURN_TABLE_MODEL_CHOICES,
     WIFI_PRODUCT_PROJECT_MAP,
@@ -74,21 +76,17 @@ def _fpga_customer_choices() -> Sequence[str]:
             values.append(odm_name)
     return _sorted_unique(values)
 
+def _project_type_choices() -> Sequence[str]:
+    return list(PROJECT_TYPES)
+
 def _lab_name_choices() -> Sequence[str]:
     """Return known lab names from the lab catalog."""
 
     return _sorted_unique(LAB_CATALOG.keys())
 
 
-def _mass_production_status_choices() -> Sequence[str]:
-    values: list[str] = []
-    for odm_map in WIFI_PRODUCT_PROJECT_MAP.values():
-        for projects in odm_map.values():
-            for info in projects.values():
-                entries = info["mass_production_status"]
-                for entry in entries:
-                    values.append(str(entry))
-    return _sorted_unique(values)
+def _hw_phase_choices() -> Sequence[str]:
+    return list(HW_PHASE_CHOICES)
 
 
 def _adb_device_choices() -> Sequence[str]:
@@ -174,7 +172,8 @@ _FIELD_CHOICE_SOURCES: dict[str, Callable[[], Sequence[str]]] = {
     # Project / Wi-Fi chipset customer selection (product line / project
     # remain driven by WIFI_PRODUCT_PROJECT_MAP).
     "project.customer": _fpga_customer_choices,
-    "project.mass_production_status": _mass_production_status_choices,
+    "project.project_type": _project_type_choices,
+    "dut.hw_phase": _hw_phase_choices,
     # Android / Linux connect targets
     "connect_type.Android.device": _adb_device_choices,
     "connect_type.Linux.ip": _linux_ip_choices,

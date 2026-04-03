@@ -116,7 +116,7 @@ BASIC_SECTION_KEYS: Final[frozenset[str]] = frozenset(
     {
         "connect_type",
         "dut",
-        # Project / Wi‑Fi chipset configuration (formerly "fpga").
+        # Project / Wi?Fi chipset configuration (formerly "fpga").
         "project",
         "serial_port",
         "software_info",
@@ -132,7 +132,7 @@ BASIC_SECTION_KEYS: Final[frozenset[str]] = frozenset(
 )
 DUT_SECTION_KEYS = BASIC_SECTION_KEYS
 CONFIG_KEY_ALIASES: Final[dict[str, str]] = {
-    # Backwards‑compatibility: legacy top-level "fpga" section is now
+    # Backwards?compatibility: legacy top-level "fpga" section is now
     # normalised as "project" in the merged config.
     "fpga": "project",
 }
@@ -436,7 +436,7 @@ def _normalize_config_keys_for_save(data: Mapping[str, Any] | None) -> dict[str,
     # connect_cfg = normalised.pop("connect_type", None)
     # if isinstance(connect_cfg, Mapping):
     #     dut_cfg = dict(connect_cfg)
-    #     dut_cfg.pop("mass_production_status", None)
+    #     dut_cfg.pop("hw_phase", None)
     #     normalised["dut"] = dut_cfg
     #
     # project_cfg = data.get("project", {}) if data else {}
@@ -450,7 +450,7 @@ def _normalize_config_keys_for_save(data: Mapping[str, Any] | None) -> dict[str,
         connect_cfg = normalised.pop("connect_type", None)
         if isinstance(connect_cfg, Mapping):
             dut_cfg = dict(connect_cfg)
-            dut_cfg.pop("mass_production_status", None)
+            dut_cfg.pop("hw_phase", None)
             normalised["dut"] = dut_cfg
 
         project_cfg = data["project"]
@@ -572,7 +572,7 @@ def merge_config_sections(
     dut_cfg = merged.pop("dut", None)
     if isinstance(dut_cfg, Mapping):
         connect_cfg = dict(dut_cfg)
-        connect_cfg.pop("mass_production_status", None)
+        connect_cfg.pop("hw_phase", None)
         merged["connect_type"] = connect_cfg
     # Compatibility settings live in their own config file but use the same
     # top-level key as execution/dut sections, so we merge them after the
@@ -1094,6 +1094,48 @@ class RouterConst:
 
 
 # TODO: Extend product/project mapping as needed.
+PROJECT_TYPES: Final[tuple[str, ...]] = ("OTT", "TV", "IPTV", "SH")
+WIFI_MODULE_CHOICES: Final[tuple[str, ...]] = (
+    "W265S1",
+    "W265S2-M",
+    "W155S1",
+    "W265P1",
+    "W265U1",
+    "W155S2",
+    "NA",
+    "W155U1",
+    "W265U2-M",
+    "W165S1-M",
+    "W165X1-M",
+    "XW EA6621",
+    "RTL8852",
+    "RTL8822",
+    "WQ9201S",
+    "AIC8800D",
+    "ATBM6032X",
+    "RTL8811",
+    "XW EA6652",
+    "RTL8862AE",
+    "MTK7920",
+    "MT7921AU/BE",
+)
+HW_PHASE_CHOICES: Final[tuple[str, ...]] = (
+    "POC",
+    "EVT",
+    "DVT",
+    "DVT-REWORK",
+    "DVT-1",
+    "DVT-2",
+    "PVT",
+    "PVT-1",
+    "PVT-2",
+    "MP",
+    "P0",
+    "P1",
+    "P1.1",
+    "P1.2",
+)
+
 WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]] = {
     "TV": {
         "XIAOMI": {
@@ -1105,9 +1147,7 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
                 "wifi_module": "W265U1",
                 "wifi_sn": " ",
                 "interface": "USB",
-                "ecosystem": "Android",
-                "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
-            },
+                "ecosystem": "Android",},
         },
         "Roku": {
             "Latte829": {
@@ -1115,11 +1155,10 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
                 "ProjectName":"",
                 "ODM": "Roku",
                 "main_chip": "TR964",
-                "wifi_module": "W265S2M",
+                "wifi_module": "W265S2-M",
                 "wifi_sn": " ",
                 "interface": "USB",
                 "ecosystem": "Linux",
-                "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
             },
         },
         "Hisense": {
@@ -1128,23 +1167,19 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
                 "ProjectName":"-",
                 "ODM": "Hisense",
                 "main_chip": "T963D4",
-                "wifi_module": "EA6621",
+                "wifi_module": "XW EA6621",
                 "wifi_sn": " ",
                 "interface": "USB",
-                "ecosystem": "Android",
-                "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
-            },
+                "ecosystem": "Android",},
             "55A6Q": {
                 "ProjectID": "None",
                 "ProjectName":"-",
                 "ODM": "Hisense",
                 "main_chip": "T963D4",
-                "wifi_module": "EA6652",
+                "wifi_module": "XW EA6652",
                 "wifi_sn": " ",
                 "interface": "USB",
-                "ecosystem": "Android",
-                "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
-            },
+                "ecosystem": "Android",},
         },
         "TCL": {
             "Espresso115": {
@@ -1152,12 +1187,10 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
                 "ProjectName":"",
                 "ODM": "TCL",
                 "main_chip": "T963D4",
-                "wifi_module": "W265UI",
+                "wifi_module": "W265U1",
                 "wifi_sn": " ",
                 "interface": "USB",
-                "ecosystem": "Android",
-                "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
-            },
+                "ecosystem": "Android",},
         },
     },
     "OTT": {
@@ -1170,9 +1203,7 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
                 "wifi_module": "W155S2",
                 "wifi_sn": " ",
                 "interface": "SDIO",
-                "ecosystem": "Android",
-                "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
-            },
+                "ecosystem": "Android",},
         },
         "Vantiva": {
             "Rosemary607": {
@@ -1183,9 +1214,7 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
                 "wifi_module": "W265S1",
                 "wifi_sn": "05:33",
                 "interface": "SDIO",
-                "ecosystem": "Android",
-                "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
-            },
+                "ecosystem": "Android",},
         },
         "JIO": {
             "Oak528": {
@@ -1196,9 +1225,7 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
                 "wifi_module": "W265S1",
                 "wifi_sn": "05:33",
                 "interface": "SDIO",
-                "ecosystem": "Android",
-                "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
-            },
+                "ecosystem": "Android",},
             "Oak401": {
                 "ProjectID": "BL20B9-S905X5",
                 "ProjectName": "SEI+S905X5-JU+AOSP U",
@@ -1207,9 +1234,7 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
                 "wifi_module": "W265S1",
                 "wifi_sn": "05:33",
                 "interface": "SDIO",
-                "ecosystem": "Android",
-                "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
-            },
+                "ecosystem": "Android",},
         },
         "ZTE": {
             "Rosemary904": {
@@ -1217,11 +1242,9 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
                 "ProjectName": "ZTE+Viettel+S905Y5+W265S2-M+ATV U",
                 "ODM": "ZTE",
                 "main_chip": "S905Y5",
-                "wifi_module": "W265S2M",
+                "wifi_module": "W265S2-M",
                 "interface": "SDIO",
-                "ecosystem": "Android",
-                "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
-            },
+                "ecosystem": "Android",},
         },
         "A": {
             "Plam811": {
@@ -1231,9 +1254,7 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
                 "main_chip": "S905X5M",
                 "wifi_module": "W265S1",
                 "interface": "SDIO",
-                "ecosystem": "Android",
-                "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
-            },
+                "ecosystem": "Android",},
         },
         "Roku": {
             "Seabrook": {
@@ -1243,9 +1264,7 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
                 "main_chip": "S905X5M",
                 "wifi_module": "W265S2-M",
                 "interface": "SDIO",
-                "ecosystem": "Linux",
-                "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
-            },
+                "ecosystem": "Linux",},
         },
         "W": {
             "Palm825": {
@@ -1255,12 +1274,30 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
                 "main_chip": "S905X5M",
                 "wifi_module": "W265S2-M",
                 "interface": "SDIO",
-                "ecosystem": "Android",
-                "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
-            },
+                "ecosystem": "Android",},
         },
     },
 }
+
+_unknown_project_types = sorted(set(WIFI_PRODUCT_PROJECT_MAP.keys()) - set(PROJECT_TYPES))
+if _unknown_project_types:
+    raise ValueError(
+        "WIFI_PRODUCT_PROJECT_MAP contains unsupported project types: "
+        + ", ".join(_unknown_project_types)
+    )
+
+_unknown_wifi_modules: set[str] = set()
+for _project_type, _odm_map in WIFI_PRODUCT_PROJECT_MAP.items():
+    for _customer, _projects in _odm_map.items():
+        for _project, _info in _projects.items():
+            _wifi_module = str(_info.get("wifi_module") or "").strip()
+            if _wifi_module and _wifi_module not in WIFI_MODULE_CHOICES:
+                _unknown_wifi_modules.add(_wifi_module)
+if _unknown_wifi_modules:
+    raise ValueError(
+        "WIFI_PRODUCT_PROJECT_MAP contains unsupported wifi_module values: "
+        + ", ".join(sorted(_unknown_wifi_modules))
+    )
 
 
 

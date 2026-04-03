@@ -76,27 +76,27 @@ panels:
           - key: project.customer
             widget: combo_box
             label: "Customer"
-          - key: project.product_line
+          - key: project.project_type
             widget: combo_box
-            label: "Product Line"
+            label: "Project Type"
           - key: project.project
             widget: combo_box
             label: "Project"
           - key: project.odm
             widget: combo_box
             label: "ODM"
-          - key: project.main_chip
+          - key: project.soc
             widget: line_edit
-            label: "Main Chip"
+            label: "SoC"
           - key: project.wifi_module
             widget: line_edit
             label: "Wi-Fi Module"
           - key: project.interface
             widget: line_edit
             label: "Interface"
-          - key: project.mass_production_status
+          - key: dut.hw_phase
             widget: combo_box
-            label: "Mass Production Status"
+            label: "HW Phase"
           - key: project.dut_sn
             widget: line_edit
             label: "DUT SN"

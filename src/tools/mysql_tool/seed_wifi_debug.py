@@ -42,10 +42,10 @@ class SeedPlan:
 @dataclass(frozen=True)
 class SeededProject:
     id: int
-    brand: str
-    product_line: str
+    customer: str
+    project_type: str
     project_name: str
-    main_chip: str
+    soc: str
     wifi_module: str
     interface: str
 
@@ -80,7 +80,7 @@ def _random_utc_datetime(*, days_back: int = 365) -> datetime:
 
 def _load_projects(cursor) -> List[SeededProject]:
     cursor.execute(
-        "SELECT id, brand, product_line, nickname AS project_name, main_chip, wifi_module, interface "
+        "SELECT id, customer, project_type, nickname AS project_name, soc, wifi_module, interface "
         "FROM `project` ORDER BY id ASC"
     )
     projects: List[SeededProject] = []
@@ -88,10 +88,10 @@ def _load_projects(cursor) -> List[SeededProject]:
         projects.append(
             SeededProject(
                 id=int(row["id"]),
-                brand=str(row.get("brand") or ""),
-                product_line=str(row.get("product_line") or ""),
+                customer=str(row.get("customer") or ""),
+                project_type=str(row.get("project_type") or ""),
                 project_name=str(row.get("project_name") or ""),
-                main_chip=str(row.get("main_chip") or ""),
+                soc=str(row.get("soc") or ""),
                 wifi_module=str(row.get("wifi_module") or ""),
                 interface=str(row.get("interface") or ""),
             )
@@ -163,16 +163,18 @@ def _ensure_dut_columns(cursor) -> None:
         "dut",
         {
             "project_id": "INT NOT NULL",
-            "serial_number": "VARCHAR(255)",
+            "sn": "VARCHAR(255)",
             "connect_type": "VARCHAR(64)",
             "mac_address": "VARCHAR(64)",
             "device_number": "VARCHAR(128)",
-            "telnet_ip": "VARCHAR(128)",
+            "ip": "VARCHAR(128)",
             "software_version": "VARCHAR(128)",
             "driver_version": "VARCHAR(128)",
             "android_version": "VARCHAR(64)",
             "kernel_version": "VARCHAR(64)",
-            "mass_production_status": "VARCHAR(64)",
+            "hw_phase": "VARCHAR(64)",
+            "wifi_module_sn": "VARCHAR(128)",
+            "antenna": "VARCHAR(128)",
             "payload_json": "JSON",
         },
     )
@@ -265,9 +267,9 @@ def _build_value_pools(
 ) -> dict[str, List[object]]:
     pools: dict[str, List[object]] = {}
 
-    pools["project.brand"] = _distinct_values(source_cursor, table="project", column="brand", limit=200)
-    pools["project.product_line"] = _distinct_values(source_cursor, table="project", column="product_line", limit=200)
-    pools["project.main_chip"] = _distinct_values(source_cursor, table="project", column="main_chip", limit=200)
+    pools["project.customer"] = _distinct_values(source_cursor, table="project", column="customer", limit=200)
+    pools["project.project_type"] = _distinct_values(source_cursor, table="project", column="project_type", limit=200)
+    pools["project.soc"] = _distinct_values(source_cursor, table="project", column="soc", limit=200)
     pools["project.wifi_module"] = _distinct_values(source_cursor, table="project", column="wifi_module", limit=200)
     pools["project.interface"] = _distinct_values(source_cursor, table="project", column="interface", limit=200)
     pools["project.ecosystem"] = _distinct_values(source_cursor, table="project", column="ecosystem", limit=200)
@@ -285,7 +287,7 @@ def _build_value_pools(
 
     pools["test_run.run_type"] = _distinct_values(source_cursor, table="execution", column="run_type", limit=50)
     pools["test_run.run_source"] = _distinct_values(source_cursor, table="execution", column="run_source", limit=50)
-    pools["test_run.router_name"] = _distinct_values(source_cursor, table="lab_environment", column="router_name", limit=200)
+    pools["test_run.ap_name"] = _distinct_values(source_cursor, table="lab_environment", column="ap_name", limit=200)
     pools["test_run.bt_mode"] = _distinct_values(source_cursor, table="execution", column="bt_mode", limit=50)
 
     pools["compat.ap_brand"] = _distinct_values(source_cursor, table="compatibility", column="ap_brand", limit=200)
@@ -343,9 +345,9 @@ def _remove_seeded_data(
         if purge_legacy:
             cursor.execute("DELETE FROM `execution` WHERE `run_source` = 'dbg'")
             cursor.execute("DELETE FROM `performance` WHERE `report_name` LIKE 'dbg\\_%%'")
-            cursor.execute("DELETE FROM `dut` WHERE `serial_number` LIKE 'SN-%'")
+            cursor.execute("DELETE FROM `dut` WHERE `sn` LIKE 'SN-%'")
         else:
-            cursor.execute("DELETE FROM `dut` WHERE `serial_number` LIKE %s", (f"SN-{seed_namespace}-%",))
+            cursor.execute("DELETE FROM `dut` WHERE `sn` LIKE %s", (f"SN-{seed_namespace}-%",))
         return
 
     cursor.execute(
@@ -372,7 +374,7 @@ def _remove_seeded_data(
         f"DELETE FROM `test_report` WHERE `id` IN ({', '.join(['%s'] * len(report_ids))})",
         tuple(report_ids),
     )
-    cursor.execute("DELETE FROM `dut` WHERE `serial_number` LIKE %s", (f"SN-{seed_namespace}-%",))
+    cursor.execute("DELETE FROM `dut` WHERE `sn` LIKE %s", (f"SN-{seed_namespace}-%",))
 
 
 def _randomize_audit_timestamps(
@@ -693,16 +695,18 @@ def _seed_duts(
     duts_by_project_id: dict[int, List[int]] = {}
     columns = (
         "project_id",
-        "serial_number",
+        "sn",
         "connect_type",
         "mac_address",
         "device_number",
-        "telnet_ip",
+        "ip",
         "software_version",
         "driver_version",
         "android_version",
         "kernel_version",
-        "mass_production_status",
+        "hw_phase",
+        "wifi_module_sn",
+        "antenna",
         "payload_json",
     )
     rows: List[Sequence[object]] = []
@@ -714,7 +718,7 @@ def _seed_duts(
             connect_type = str(_pick(pools.get("dut.connect_type", ()), ["adb", "telnet", "ssh"]))
             mac_address = "02:%02x:%02x:%02x:%02x:%02x" % tuple(random.randint(0, 255) for _ in range(5))
             device_number = f"adb-{project.id:06d}-{i:02d}"
-            telnet_ip = f"192.168.{random.randint(0, 254)}.{random.randint(1, 254)}"
+            dut_ip = f"192.168.{random.randint(0, 254)}.{random.randint(1, 254)}"
             software_version = str(
                 _pick(
                     pools.get("dut.software_version", ()),
@@ -734,12 +738,9 @@ def _seed_duts(
                     [f"{random.randint(4, 6)}.{random.randint(0, 19)}.{random.randint(0, 99)}"],
                 )
             )
-            mass_production_status = str(
-                _pick(
-                    pools.get("project.mass_production_status", ()),
-                    ["EVT", "DVT", "PVT", "MP"],
-                )
-            )
+            hw_phase = str(_pick((), ["EVT", "DVT", "PVT", "MP"]))
+            wifi_module_sn = f"WF-{seed_namespace}-{run_token}-{project.id:06d}-{i:02d}"
+            antenna = str(_pick((), ["default", "ext", "int"]))
             rows.append(
                 (
                     int(project.id),
@@ -747,23 +748,25 @@ def _seed_duts(
                     connect_type,
                     mac_address,
                     device_number,
-                    telnet_ip,
+                    dut_ip,
                     software_version,
                     driver_version,
                     android_version,
                     kernel_version,
-                    mass_production_status,
+                    hw_phase,
+                    wifi_module_sn,
+                    antenna,
                     None,
                 )
             )
 
     _insert_many(cursor, "dut", columns, rows)
     cursor.execute(
-        "SELECT id, serial_number FROM `dut` WHERE `serial_number` LIKE %s ORDER BY id ASC",
+        "SELECT id, sn FROM `dut` WHERE `sn` LIKE %s ORDER BY id ASC",
         (f"SN-{seed_namespace}-{run_token}-%",),
     )
     for row in cursor.fetchall():
-        serial = str(row.get("serial_number") or "")
+        serial = str(row.get("sn") or "")
         parts = serial.split("-")
         project_id = int(parts[3]) if len(parts) >= 5 else 0
         if project_id in duts_by_project_id:
@@ -802,8 +805,8 @@ def _seed_test_runs(
             dut_index = dut_cursor_by_project.get(_project_id, 0) % len(project_duts)
             dut_id = project_duts[dut_index]
             dut_cursor_by_project[_project_id] = dut_index + 1
-            router_name = str(_pick(pools.get("test_run.router_name", ()), [f"router-{random.randint(1, 64):02d}"]))
-            router_address = f"172.16.{random.randint(0, 254)}.{random.randint(1, 254)}"
+            ap_name = str(_pick(pools.get("test_run.ap_name", ()), [f"ap-{random.randint(1, 64):02d}"]))
+            ap_address = f"172.16.{random.randint(0, 254)}.{random.randint(1, 254)}"
             lab_id = random.choice(list(lab_ids))
             bt_mode = str(_pick(pools.get("test_run.bt_mode", ()), ["off", "ble", "classic", "dual"]))
             bt_ble_alias = f"ble-{random.randint(1, 9999):04d}"
@@ -822,7 +825,7 @@ def _seed_test_runs(
                     run_source,
                     duration_seconds,
                     json.dumps(
-                        {"router_name": router_name, "router_address": router_address},
+                        {"ap_name": ap_name, "ap_address": ap_address},
                         ensure_ascii=True,
                         separators=(",", ":"),
                     ),
