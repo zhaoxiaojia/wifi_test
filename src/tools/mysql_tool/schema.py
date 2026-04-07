@@ -298,6 +298,7 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
     "execution": TableSpec(
         columns=(
             ColumnDefinition("test_report_id", "INT NOT NULL"),
+            ColumnDefinition("sheet_name", "VARCHAR(255)"),
             ColumnDefinition("run_type", _enum_sql(RUN_TYPE_CHOICES, not_null=True)),
             ColumnDefinition("run_source", "VARCHAR(32)"),
             ColumnDefinition("duration_seconds", "INT NULL DEFAULT NULL"),
@@ -312,11 +313,19 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
                 "INDEX idx_test_run_type (`run_type`)",
             ),
             TableIndex(
+                "idx_test_run_sheet_name",
+                "INDEX idx_test_run_sheet_name (`sheet_name`)",
+            ),
+            TableIndex(
                 "idx_test_run_created_at",
                 "INDEX idx_test_run_created_at (`created_at`)",
             ),
         ),
         constraints=(
+            TableConstraint(
+                "uq_test_run_report_sheet",
+                "CONSTRAINT uq_test_run_report_sheet UNIQUE (`test_report_id`, `sheet_name`)",
+            ),
             TableConstraint(
                 "fk_test_run_case",
                 "CONSTRAINT fk_test_run_case FOREIGN KEY (`test_report_id`) REFERENCES `test_report`(`id`) ON DELETE CASCADE",

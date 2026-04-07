@@ -317,8 +317,6 @@ class PerformanceTableManager:
 
     _BASE_COLUMNS: Sequence[tuple[str, str]] = (
         ("test_report_id", "INT NOT NULL"),
-        ("execution_id", "INT NOT NULL"),
-        ("csv_name", "VARCHAR(255) NOT NULL"),
     )
 
     _STATIC_COLUMNS: Sequence[_StaticColumn] = tuple(
@@ -667,6 +665,7 @@ class PerformanceTableManager:
             *,
             project_payload: Mapping[str, Any],
             execution_payload: Mapping[str, Any],
+            sheet_name: Optional[str],
             csv_name: str,
             csv_path: str,
             data_type: Optional[str],
@@ -699,6 +698,7 @@ class PerformanceTableManager:
             case_path=case_path,
             execution_type=execution_type,
             execution_payload=execution_payload,
+            sheet_name=sheet_name,
             csv_name=csv_name,
             csv_path=csv_path,
             run_source=run_source,
@@ -768,6 +768,7 @@ class PerformanceTableManager:
         execution_id = self._register_execution(
             project_payload=project_payload,
             execution_payload=execution_payload,
+            sheet_name=None,
             csv_name=csv_name,
             csv_path=csv_path,
             data_type=execution_type,
@@ -793,8 +794,6 @@ class PerformanceTableManager:
         for row in rows:
             row_values: List[Any] = [
                 test_report_id,
-                execution_id,
-                csv_name,
             ]
             for column in self._STATIC_COLUMNS:
                 if column.original == "Throughput":
@@ -1043,7 +1042,7 @@ def ensure_project(client: MySqlClient, project_payload: Mapping[str, Any]) -> i
     brand_value = customer_value if "brand" in columns else None
     main_chip_value = soc_value if "main_chip" in columns else None
 
-    if project_id:
+    if project_id and project_id.upper() != "NA":
         print("[DBTRACE_PROJECT] ensure_project lookup project_id=", project_id, flush=True)
         logging.info("[DBTRACE_PROJECT] ensure_project lookup project_id=%s", project_id)
         existing = client.query_one(
@@ -1101,6 +1100,107 @@ def ensure_project(client: MySqlClient, project_payload: Mapping[str, Any]) -> i
             )
             return existing_id
 
+    def _update_existing_project(existing_id: int) -> int:
+        set_fields: list[str] = []
+        values: list[Any] = []
+        if "customer" in columns:
+            set_fields.append("`customer`=%s")
+            values.append(customer_value)
+        if "brand" in columns:
+            set_fields.append("`brand`=%s")
+            values.append(brand_value)
+        set_fields.extend(
+            [
+                "`project_type`=%s",
+                "`nickname`=%s",
+                "`project_name`=%s",
+                "`project_id`=%s",
+            ]
+        )
+        values.extend(
+            [
+                project_payload.get("project_type"),
+                project_payload.get("nickname") or "",
+                project_payload.get("project_name"),
+                project_payload.get("project_id"),
+            ]
+        )
+        if "soc" in columns:
+            set_fields.append("`soc`=%s")
+            values.append(soc_value)
+        if "main_chip" in columns:
+            set_fields.append("`main_chip`=%s")
+            values.append(main_chip_value)
+        set_fields.append("`wifi_module`=%s")
+        values.append(project_payload.get("wifi_module"))
+        if "odm" in columns:
+            set_fields.append("`odm`=%s")
+            values.append(project_payload.get("odm"))
+        set_fields.extend(["`interface`=%s", "`ecosystem`=%s"])
+        values.extend(
+            [
+                project_payload.get("interface"),
+                project_payload.get("ecosystem"),
+            ]
+        )
+        values.append(existing_id)
+        client.execute(
+            f"UPDATE `project` SET {', '.join(set_fields)} WHERE `id`=%s",
+            tuple(values),
+        )
+        return existing_id
+
+    identity_filters: list[tuple[str, Any]] = []
+    for column_name in (
+        "customer",
+        "project_type",
+        "project_name",
+        "project_id",
+        "soc",
+        "wifi_module",
+        "odm",
+        "interface",
+        "ecosystem",
+    ):
+        if column_name not in columns:
+            continue
+        value = project_payload.get(column_name)
+        text = str(value).strip() if value is not None else ""
+        if text:
+            identity_filters.append((column_name, value))
+
+    logging.info(
+        "[DBTRACE_PROJECT] ensure_project normalized project_id=%s payload=%s identity_filters=%s",
+        project_id,
+        {
+            "customer": project_payload.get("customer"),
+            "project_type": project_payload.get("project_type"),
+            "nickname": project_payload.get("nickname"),
+            "project_name": project_payload.get("project_name"),
+            "project_id": project_payload.get("project_id"),
+            "soc": project_payload.get("soc"),
+            "wifi_module": project_payload.get("wifi_module"),
+            "odm": project_payload.get("odm"),
+            "interface": project_payload.get("interface"),
+            "ecosystem": project_payload.get("ecosystem"),
+        },
+        identity_filters,
+    )
+
+    if identity_filters:
+        where_sql = " AND ".join(f"`{column}`=%s" for column, _ in identity_filters)
+        matched_rows = client.query_all(
+            f"SELECT `id` FROM `project` WHERE {where_sql} ORDER BY `id` DESC LIMIT 2",
+            tuple(value for _, value in identity_filters),
+        )
+        if len(matched_rows) == 1 and matched_rows[0].get("id"):
+            return _update_existing_project(int(matched_rows[0]["id"]))
+        if len(matched_rows) > 1:
+            raise ValueError(
+                "Multiple project records match SUMMARY project fields; "
+                f"filters={{{', '.join(f'{k}={v!r}' for k, v in identity_filters)}}}"
+            )
+
     insert_columns: list[str] = []
     insert_values: list[Any] = []
     if "customer" in columns:
@@ -1113,7 +1213,7 @@ def ensure_project(client: MySqlClient, project_payload: Mapping[str, Any]) -> i
     insert_values.extend(
         [
             project_payload.get("project_type"),
-            project_payload.get("nickname"),
+            project_payload.get("nickname") or "",
             project_payload.get("project_name"),
             project_payload.get("project_id"),
         ]
@@ -1144,6 +1244,11 @@ def ensure_project(client: MySqlClient, project_payload: Mapping[str, Any]) -> i
         "ON DUPLICATE KEY UPDATE "
         "`id`=LAST_INSERT_ID(`id`), "
         + ", ".join(f"{col}=VALUES({col})" for col in insert_columns)
+    )
+    logging.info(
+        "[DBTRACE_PROJECT] ensure_project insert columns=%s values=%s",
+        insert_columns,
+        insert_values,
     )
     return client.insert(
         insert_sql,
@@ -1436,6 +1541,7 @@ def register_execution(
     case_path: Optional[str],
     execution_type: str,
     execution_payload: Mapping[str, Any],
+    sheet_name: Optional[str] = None,
     csv_name: str,
     csv_path: str,
     run_source: str,
@@ -1602,13 +1708,14 @@ def register_execution(
 
     insert_sql = (
         "INSERT INTO `execution` "
-        "(`test_report_id`, `run_type`, `run_source`, `duration_seconds`) "
-        "VALUES (%s, %s, %s, %s)"
+        "(`test_report_id`, `sheet_name`, `run_type`, `run_source`, `duration_seconds`) "
+        "VALUES (%s, %s, %s, %s, %s)"
     )
     execution_id = client.insert(
         insert_sql,
         (
             test_report_id,
+            None if not sheet_name else str(sheet_name).strip(),
             run_type,
             normalized_source,
             int(duration_seconds) if duration_seconds is not None else None,
@@ -1989,7 +2096,7 @@ def sync_compatibility_artifacts_to_db(
     Sync compatibility CSV + router catalogue into database.
 
     Inserts/updates router entries into `router`, registers an execution,
-    then bulk inserts rows into `compatibility` linked by `execution_id`
+    then bulk inserts rows into `compatibility` linked by `test_report_id`
     and `router_id`.
     """
     if not isinstance(config, Mapping) or not config:
@@ -2043,6 +2150,13 @@ def sync_compatibility_artifacts_to_db(
             run_source=normalized_source,
             duration_seconds=duration_seconds,
         )
+        test_report_row = client.query_one(
+            "SELECT `test_report_id` FROM `execution` WHERE `id`=%s LIMIT 1",
+            (int(execution_id),),
+        )
+        if not test_report_row or test_report_row.get("test_report_id") is None:
+            raise ValueError(f"Execution {execution_id} is missing test_report_id")
+        test_report_id = int(test_report_row["test_report_id"])
 
         with open(csv_file, "r", encoding="utf-8") as handle:
             reader = csv.reader(handle)
@@ -2053,7 +2167,7 @@ def sync_compatibility_artifacts_to_db(
 
         data_rows = rows[1:]
         insert_cols = [
-            "execution_id",
+            "test_report_id",
             "router_id",
             "pdu_ip",
             "pdu_port",
@@ -2107,7 +2221,7 @@ def sync_compatibility_artifacts_to_db(
             router_id = router_id_by_key.get((pdu_ip, pdu_port))
             compat_rows.append(
                 (
-                    execution_id,
+                    test_report_id,
                     router_id,
                     pdu_ip,
                     pdu_port,

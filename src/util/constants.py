@@ -1234,6 +1234,7 @@ WIFI_MODULE_CHOICES: Final[tuple[str, ...]] = (
     "MTK7920",
     "MT7921AU/BE",
 )
+PROJECT_ID_NA: Final[str] = "NA"
 HW_PHASE_CHOICES: Final[tuple[str, ...]] = (
     "POC",
     "EVT",
@@ -1412,17 +1413,22 @@ if _unknown_project_types:
     )
 
 _unknown_wifi_modules: set[str] = set()
+_project_id_choices: set[str] = {PROJECT_ID_NA}
 for _project_type, _odm_map in WIFI_PRODUCT_PROJECT_MAP.items():
     for _customer, _projects in _odm_map.items():
         for _project, _info in _projects.items():
             _wifi_module = str(_info.get("wifi_module") or "").strip()
             if _wifi_module and _wifi_module not in WIFI_MODULE_CHOICES:
                 _unknown_wifi_modules.add(_wifi_module)
+            _project_id = str(_info.get("ProjectID") or "").strip()
+            if _project_id:
+                _project_id_choices.add(_project_id)
 if _unknown_wifi_modules:
     raise ValueError(
         "WIFI_PRODUCT_PROJECT_MAP contains unsupported wifi_module values: "
         + ", ".join(sorted(_unknown_wifi_modules))
     )
+PROJECT_ID_CHOICES: Final[tuple[str, ...]] = tuple(sorted(_project_id_choices))
 
 
 
