@@ -164,7 +164,6 @@ def _ensure_dut_columns(cursor) -> None:
         {
             "project_id": "INT NOT NULL",
             "sn": "VARCHAR(255)",
-            "connect_type": "VARCHAR(64)",
             "mac_address": "VARCHAR(64)",
             "device_number": "VARCHAR(128)",
             "ip": "VARCHAR(128)",
@@ -175,7 +174,6 @@ def _ensure_dut_columns(cursor) -> None:
             "hw_phase": "VARCHAR(64)",
             "wifi_module_sn": "VARCHAR(128)",
             "antenna": "VARCHAR(128)",
-            "payload_json": "JSON",
         },
     )
 
@@ -277,7 +275,6 @@ def _build_value_pools(
     pools["router.brand"] = _distinct_values(source_cursor, table="router", column="brand", limit=200)
     pools["router.model"] = _distinct_values(source_cursor, table="router", column="model", limit=500)
 
-    pools["dut.connect_type"] = _distinct_values(source_cursor, table="dut", column="connect_type", limit=50)
     pools["dut.software_version"] = _distinct_values(source_cursor, table="dut", column="software_version", limit=500)
     pools["dut.driver_version"] = _distinct_values(source_cursor, table="dut", column="driver_version", limit=500)
     pools["dut.android_version"] = _distinct_values(source_cursor, table="dut", column="android_version", limit=50)
@@ -479,6 +476,7 @@ def seed_wifi_debug(
                 seed_namespace=seed_namespace,
                 run_token=run_token,
                 projects=projects,
+                lab_ids=lab_ids,
                 pools=pools,
             )
             duts_by_project_id = _seed_duts(cursor, plan, seed_namespace, run_token, projects, pools)
@@ -538,10 +536,12 @@ def _seed_test_cases(
     seed_namespace: str,
     run_token: str,
     projects: Sequence[SeededProject],
+    lab_ids: Sequence[int],
     pools: Mapping[str, Sequence[object]],
 ) -> tuple[List[Tuple[int, int]], dict[int, str], List[int]]:
     columns = (
         "project_id",
+        "lab_id",
         "report_name",
         "case_path",
         "is_golden",
@@ -583,7 +583,7 @@ def _seed_test_cases(
             case_path = f"cases/{report_name}.yaml"
             golden_group = "GOLDEN" if is_golden else perf_key.upper()
             tester = random.choice(tester_pool)
-            rows.append((project.id, report_name, case_path, is_golden, "performance", golden_group, seed_namespace, tester))
+            rows.append((project.id, random.choice(list(lab_ids)), report_name, case_path, is_golden, "performance", golden_group, seed_namespace, tester))
             idx += 1
 
         for compat_index in range(compat_total):
@@ -592,7 +592,7 @@ def _seed_test_cases(
             is_golden = 1 if compat_index == 0 else 0
             golden_group = "GOLDEN" if is_golden else f"DBG_{idx:05d}"
             tester = random.choice(tester_pool)
-            rows.append((project.id, report_name, case_path, is_golden, "compatibility", golden_group, seed_namespace, tester))
+            rows.append((project.id, random.choice(list(lab_ids)), report_name, case_path, is_golden, "compatibility", golden_group, seed_namespace, tester))
             idx += 1
 
         for i in range(other_total):
@@ -601,15 +601,16 @@ def _seed_test_cases(
             is_golden = 1 if i == 0 else 0
             golden_group = "GOLDEN" if is_golden else f"DBG_{idx:05d}"
             tester = random.choice(tester_pool)
-            rows.append((project.id, report_name, case_path, is_golden, "other", golden_group, seed_namespace, tester))
+            rows.append((project.id, random.choice(list(lab_ids)), report_name, case_path, is_golden, "other", golden_group, seed_namespace, tester))
             idx += 1
 
     sql = (
         "INSERT INTO `test_report` "
-        "(`project_id`, `report_name`, `case_path`, `is_golden`, `report_type`, `golden_group`, `notes`, `tester`) "
-        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) "
+        "(`project_id`, `lab_id`, `report_name`, `case_path`, `is_golden`, `report_type`, `golden_group`, `notes`, `tester`) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) "
         "ON DUPLICATE KEY UPDATE "
         "`id`=LAST_INSERT_ID(`id`), "
+        "`lab_id`=VALUES(`lab_id`), "
         "`report_name`=VALUES(`report_name`), "
         "`case_path`=VALUES(`case_path`), "
         "`is_golden`=VALUES(`is_golden`), "
@@ -696,7 +697,6 @@ def _seed_duts(
     columns = (
         "project_id",
         "sn",
-        "connect_type",
         "mac_address",
         "device_number",
         "ip",
@@ -707,7 +707,6 @@ def _seed_duts(
         "hw_phase",
         "wifi_module_sn",
         "antenna",
-        "payload_json",
     )
     rows: List[Sequence[object]] = []
     for project in projects:
@@ -715,7 +714,6 @@ def _seed_duts(
         duts_by_project_id[project.id] = []
         for i in range(dut_count):
             serial_number = f"SN-{seed_namespace}-{run_token}-{project.id:06d}-{i:02d}"
-            connect_type = str(_pick(pools.get("dut.connect_type", ()), ["adb", "telnet", "ssh"]))
             mac_address = "02:%02x:%02x:%02x:%02x:%02x" % tuple(random.randint(0, 255) for _ in range(5))
             device_number = f"adb-{project.id:06d}-{i:02d}"
             dut_ip = f"192.168.{random.randint(0, 254)}.{random.randint(1, 254)}"
@@ -745,7 +743,6 @@ def _seed_duts(
                 (
                     int(project.id),
                     serial_number,
-                    connect_type,
                     mac_address,
                     device_number,
                     dut_ip,
@@ -756,7 +753,6 @@ def _seed_duts(
                     hw_phase,
                     wifi_module_sn,
                     antenna,
-                    None,
                 )
             )
 
@@ -787,48 +783,26 @@ def _seed_test_runs(
     columns = (
         "test_report_id",
         "run_type",
-        "dut_id",
-        "lab_id",
-        "bt_mode",
-        "bt_ble_alias",
-        "bt_classic_alias",
         "run_source",
         "duration_seconds",
-        "payload_json",
     )
     rows: List[Sequence[object]] = []
     dut_cursor_by_project: dict[int, int] = {}
     for test_case_id, _project_id in case_pairs:
         for run_index in range(plan.runs_per_case):
-            run_type = str(_pick(pools.get("test_run.run_type", ()), ["manual", "ci", "nightly"]))
+            run_type = str(_pick(pools.get("test_run.run_type", ()), ["WIFI-SmartTest", "DI"]))
             project_duts = list(duts_by_project_id[_project_id])
             dut_index = dut_cursor_by_project.get(_project_id, 0) % len(project_duts)
-            dut_id = project_duts[dut_index]
+            _dut_id = project_duts[dut_index]
             dut_cursor_by_project[_project_id] = dut_index + 1
-            ap_name = str(_pick(pools.get("test_run.ap_name", ()), [f"ap-{random.randint(1, 64):02d}"]))
-            ap_address = f"172.16.{random.randint(0, 254)}.{random.randint(1, 254)}"
-            lab_id = random.choice(list(lab_ids))
-            bt_mode = str(_pick(pools.get("test_run.bt_mode", ()), ["off", "ble", "classic", "dual"]))
-            bt_ble_alias = f"ble-{random.randint(1, 9999):04d}"
-            bt_classic_alias = f"bt-{random.randint(1, 9999):04d}"
             run_source = "dbg"
             duration_seconds = random.randint(5, 3600)
             rows.append(
                 (
                     test_case_id,
                     run_type,
-                    dut_id,
-                    lab_id,
-                    bt_mode,
-                    bt_ble_alias,
-                    bt_classic_alias,
                     run_source,
                     duration_seconds,
-                    json.dumps(
-                        {"ap_name": ap_name, "ap_address": ap_address},
-                        ensure_ascii=True,
-                        separators=(",", ":"),
-                    ),
                 )
             )
 

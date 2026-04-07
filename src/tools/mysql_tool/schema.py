@@ -16,6 +16,21 @@ from .models import (
     TableSpec,
 )
 from .naming import IdentifierBuilder, sanitize_identifier
+from src.util.constants import (
+    AP_MODEL_CHOICES,
+    AP_REGION_CHOICES,
+    LAB_CAPABILITY_CHOICES,
+    RUN_TYPE_CHOICES,
+    TEST_REPORT_CHOICES,
+    BT_DEVICE_CHOICES,
+    BT_REMOTE_CHOICES,
+    BT_TYPE_CHOICES,
+    DUT_OS_CHOICES,
+    HW_PHASE_CHOICES,
+    LAB_ENV_COEX_MODE_CHOICES,
+    LAB_ENV_CONNECT_TYPE_CHOICES,
+    PROJECT_TYPES,
+)
 
 if TYPE_CHECKING:  # pragma: no cover
     from .client import MySqlClient
@@ -34,6 +49,14 @@ __all__ = [
     "render_schema_markdown",
     "PERFORMANCE_STATIC_COLUMNS",
 ]
+
+
+def _enum_sql(values: Sequence[str], *, not_null: bool = False) -> str:
+    escaped_values = [str(value).replace("'", "''") for value in values]
+    definition = "ENUM(" + ",".join(f"'{value}'" for value in escaped_values) + ")"
+    if not_null:
+        definition += " NOT NULL"
+    return definition
 
 PERFORMANCE_STATIC_COLUMNS: Tuple[Tuple[str, str, str], ...] = (
     ("serial_number", "VARCHAR(255)", "SerianNumber"),
@@ -163,7 +186,7 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
     "project": TableSpec(
         columns=(
             ColumnDefinition("customer", "VARCHAR(64) NOT NULL"),
-            ColumnDefinition("project_type", "ENUM('OTT','TV','IPTV','SH') NOT NULL"),
+            ColumnDefinition("project_type", _enum_sql(PROJECT_TYPES, not_null=True)),
             ColumnDefinition("nickname", "VARCHAR(128) NOT NULL"),
             ColumnDefinition("project_name", "VARCHAR(256)"),
             ColumnDefinition("project_id", "VARCHAR(256)"),
@@ -172,7 +195,6 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
             ColumnDefinition("odm", "VARCHAR(64)"),
             ColumnDefinition("interface", "VARCHAR(64)"),
             ColumnDefinition("ecosystem", "VARCHAR(64)"),
-            ColumnDefinition("payload_json", "JSON"),
         ),
         indexes=(
             TableIndex(
@@ -194,10 +216,11 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
     "test_report": TableSpec(
         columns=(
             ColumnDefinition("project_id", "INT NOT NULL"),
+            ColumnDefinition("lab_id", "INT NULL DEFAULT NULL"),
             ColumnDefinition("report_name", "VARCHAR(255) NOT NULL"),
             ColumnDefinition("case_path", "VARCHAR(512)"),
             ColumnDefinition("is_golden", "TINYINT(1) NOT NULL DEFAULT 0"),
-            ColumnDefinition("report_type", "VARCHAR(64)"),
+            ColumnDefinition("report_type", _enum_sql(TEST_REPORT_CHOICES)),
             ColumnDefinition("golden_group", "VARCHAR(32)"),
             ColumnDefinition("notes", "TEXT"),
             ColumnDefinition("tester", "VARCHAR(128)"),
@@ -208,6 +231,10 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
             TableIndex(
                 "idx_test_case_project",
                 "INDEX idx_test_case_project (`project_id`)",
+            ),
+            TableIndex(
+                "idx_test_case_lab",
+                "INDEX idx_test_case_lab (`lab_id`)",
             ),
             TableIndex(
                 "idx_test_case_golden_group",
@@ -231,14 +258,16 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
                 "fk_test_report_project",
                 "CONSTRAINT fk_test_report_project FOREIGN KEY (`project_id`) REFERENCES `project`(`id`) ON DELETE CASCADE",
             ),
+            TableConstraint(
+                "fk_test_report_lab",
+                "CONSTRAINT fk_test_report_lab FOREIGN KEY (`lab_id`) REFERENCES `lab`(`id`) ON DELETE SET NULL",
+            ),
         ),
     ),
     "dut": TableSpec(
         columns=(
             ColumnDefinition("test_report_id", "INT NOT NULL"),
-            ColumnDefinition("project_id", "INT"),
             ColumnDefinition("sn", "VARCHAR(255)"),
-            ColumnDefinition("connect_type", "VARCHAR(64)"),
             ColumnDefinition("mac_address", "VARCHAR(64)"),
             ColumnDefinition("adb_device", "VARCHAR(128)"),
             ColumnDefinition("ip", "VARCHAR(128)"),
@@ -246,13 +275,10 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
             ColumnDefinition("driver_version", "VARCHAR(128)"),
             ColumnDefinition("android_version", "VARCHAR(64)"),
             ColumnDefinition("kernel_version", "VARCHAR(64)"),
-            ColumnDefinition(
-                "hw_phase",
-                "ENUM('POC','EVT','DVT','DVT-REWORK','DVT-1','DVT-2','PVT','PVT-1','PVT-2','MP','P0','P1','P1.1','P1.2')",
-            ),
+            ColumnDefinition("os", _enum_sql(DUT_OS_CHOICES)),
+            ColumnDefinition("hw_phase", _enum_sql(HW_PHASE_CHOICES)),
             ColumnDefinition("wifi_module_sn", "VARCHAR(128)"),
             ColumnDefinition("antenna", "VARCHAR(128)"),
-            ColumnDefinition("payload_json", "JSON"),
         ),
         indexes=(
             TableIndex("idx_dut_test_report", "INDEX idx_dut_test_report (`test_report_id`)"),
@@ -260,8 +286,8 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
         ),
         constraints=(
             TableConstraint(
-                "uq_dut_report_mac_address",
-                "CONSTRAINT uq_dut_report_mac_address UNIQUE (`test_report_id`, `mac_address`)",
+                "uq_dut_test_report",
+                "CONSTRAINT uq_dut_test_report UNIQUE (`test_report_id`)",
             ),
             TableConstraint(
                 "fk_dut_test_report",
@@ -272,20 +298,14 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
     "execution": TableSpec(
         columns=(
             ColumnDefinition("test_report_id", "INT NOT NULL"),
-            ColumnDefinition("run_type", "VARCHAR(64) NOT NULL"),
-            ColumnDefinition("lab_id", "INT NULL DEFAULT NULL"),
+            ColumnDefinition("run_type", _enum_sql(RUN_TYPE_CHOICES, not_null=True)),
             ColumnDefinition("run_source", "VARCHAR(32)"),
             ColumnDefinition("duration_seconds", "INT NULL DEFAULT NULL"),
-            ColumnDefinition("payload_json", "JSON"),
         ),
         indexes=(
             TableIndex(
                 "idx_test_run_case",
                 "INDEX idx_test_run_case (`test_report_id`)",
-            ),
-            TableIndex(
-                "idx_test_run_lab",
-                "INDEX idx_test_run_lab (`lab_id`)",
             ),
             TableIndex(
                 "idx_test_run_type",
@@ -301,10 +321,6 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
                 "fk_test_run_case",
                 "CONSTRAINT fk_test_run_case FOREIGN KEY (`test_report_id`) REFERENCES `test_report`(`id`) ON DELETE CASCADE",
             ),
-            TableConstraint(
-                "fk_test_run_lab",
-                "CONSTRAINT fk_test_run_lab FOREIGN KEY (`lab_id`) REFERENCES `lab`(`id`) ON DELETE SET NULL",
-            ),
         ),
     ),
     "router": TableSpec(
@@ -313,7 +329,6 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
             ColumnDefinition("port", "INT NOT NULL"),
             ColumnDefinition("brand", "VARCHAR(128)"),
             ColumnDefinition("model", "VARCHAR(128)"),
-            ColumnDefinition("payload_json", "JSON"),
         ),
         indexes=(
             TableIndex(
@@ -331,10 +346,8 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
     "lab": TableSpec(
         columns=(
             ColumnDefinition("lab_name", "VARCHAR(255) NOT NULL"),
-            ColumnDefinition("capabilities", "JSON"),
             ColumnDefinition("turntable", "VARCHAR(64)"),
             ColumnDefinition("attenuator", "VARCHAR(64)"),
-            ColumnDefinition("payload_json", "JSON"),
         ),
         indexes=(
             TableIndex(
@@ -349,19 +362,47 @@ _TABLE_SPECS: Dict[str, TableSpec] = {
             ),
         ),
     ),
+    "lab_capability": TableSpec(
+        columns=(
+            ColumnDefinition("lab_id", "INT NOT NULL"),
+            ColumnDefinition("capability", _enum_sql(LAB_CAPABILITY_CHOICES, not_null=True)),
+        ),
+        indexes=(
+            TableIndex(
+                "idx_lab_capability_lab_id",
+                "INDEX idx_lab_capability_lab_id (`lab_id`)",
+            ),
+            TableIndex(
+                "idx_lab_capability_capability",
+                "INDEX idx_lab_capability_capability (`capability`)",
+            ),
+        ),
+        constraints=(
+            TableConstraint(
+                "uq_lab_capability_pair",
+                "CONSTRAINT uq_lab_capability_pair UNIQUE (`lab_id`, `capability`)",
+            ),
+            TableConstraint(
+                "fk_lab_capability_lab",
+                "CONSTRAINT fk_lab_capability_lab FOREIGN KEY (`lab_id`) REFERENCES `lab`(`id`) ON DELETE CASCADE",
+            ),
+        ),
+    ),
     "lab_environment": TableSpec(
         columns=(
             ColumnDefinition("lab_id", "INT NOT NULL"),
-            ColumnDefinition("ap_name", "VARCHAR(255)"),
+            ColumnDefinition("ap_name", _enum_sql(AP_MODEL_CHOICES)),
             ColumnDefinition("ap_address", "VARCHAR(255)"),
             ColumnDefinition("distance", "VARCHAR(64)"),
-            ColumnDefinition("ap_region", "VARCHAR(64)"),
+            ColumnDefinition("ap_region", _enum_sql(AP_REGION_CHOICES)),
+            ColumnDefinition("connect_type", _enum_sql(LAB_ENV_CONNECT_TYPE_CHOICES)),
+            ColumnDefinition("coex_mode", _enum_sql(LAB_ENV_COEX_MODE_CHOICES)),
             ColumnDefinition("usb_cable", "VARCHAR(255)"),
             ColumnDefinition("hdmi_cable", "VARCHAR(255)"),
-            ColumnDefinition("bt_device", "VARCHAR(255)"),
-            ColumnDefinition("bt_type", "VARCHAR(16)"),
+            ColumnDefinition("bt_remote", _enum_sql(BT_REMOTE_CHOICES)),
+            ColumnDefinition("bt_device", _enum_sql(BT_DEVICE_CHOICES)),
+            ColumnDefinition("bt_type", _enum_sql(BT_TYPE_CHOICES)),
             ColumnDefinition("tv_device", "VARCHAR(255)"),
-            ColumnDefinition("payload_json", "JSON"),
         ),
         indexes=(
             TableIndex(
@@ -528,7 +569,6 @@ _VIEW_DEFINITIONS: Dict[str, str] = {
             ex.duration_seconds,
             ex.created_at AS execution_created_at,
             d.sn,
-            d.connect_type,
             d.adb_device,
             d.ip,
             d.software_version,
@@ -545,7 +585,7 @@ _VIEW_DEFINITIONS: Dict[str, str] = {
         FROM project AS p
         JOIN test_report AS tc ON tc.project_id = p.id
         LEFT JOIN execution AS ex ON ex.test_report_id = tc.id
-        LEFT JOIN lab AS l ON l.id = ex.lab_id
+        LEFT JOIN lab AS l ON l.id = tc.lab_id
         LEFT JOIN dut AS d ON d.test_report_id = tc.id
         LEFT JOIN (
             SELECT
@@ -583,15 +623,15 @@ _VIEW_DEFINITIONS: Dict[str, str] = {
             ranked.updated_at,
             ranked.project_id,
             ranked.report_case_path AS case_path,
-            ranked.execution_type
+            ranked.report_type
         FROM (
             SELECT
                 p.*,
                 tr.project_id,
                 tr.case_path AS report_case_path,
-                ex.run_type AS execution_type,
+                tr.report_type AS report_type,
                 ROW_NUMBER() OVER (
-                    PARTITION BY tr.project_id, tr.case_path, p.band, p.bandwidth_mhz, ex.run_type
+                    PARTITION BY tr.project_id, tr.case_path, p.band, p.bandwidth_mhz, tr.report_type
                     ORDER BY p.created_at DESC, p.id DESC
                 ) AS rn
             FROM performance AS p
@@ -795,12 +835,13 @@ def ensure_report_tables(client, *, apply_migrations: bool = False) -> None:
         This function does not return a value.
     """
     ensure_config_tables(client)
+    ensure_table(client, "lab", _TABLE_SPECS["lab"])
+    ensure_table(client, "router", _TABLE_SPECS["router"])
     ensure_table(client, "test_report", _TABLE_SPECS["test_report"])
     ensure_table(client, "dut", _TABLE_SPECS["dut"])
-    ensure_table(client, "lab", _TABLE_SPECS["lab"])
+    ensure_table(client, "lab_capability", _TABLE_SPECS["lab_capability"])
     ensure_table(client, "lab_environment", _TABLE_SPECS["lab_environment"])
     ensure_table(client, "execution", _TABLE_SPECS["execution"])
-    ensure_table(client, "router", _TABLE_SPECS["router"])
     ensure_table(client, "performance", _TABLE_SPECS["performance"])
     ensure_table(client, "artifact", _TABLE_SPECS["artifact"])
     ensure_table(client, "perf_metric_kv", _TABLE_SPECS["perf_metric_kv"])
@@ -817,6 +858,8 @@ def ensure_report_tables(client, *, apply_migrations: bool = False) -> None:
     _ensure_table_constraints(client, "dut", _TABLE_SPECS["dut"].constraints)
     _ensure_table_indexes(client, "lab", _TABLE_SPECS["lab"].indexes)
     _ensure_table_constraints(client, "lab", _TABLE_SPECS["lab"].constraints)
+    _ensure_table_indexes(client, "lab_capability", _TABLE_SPECS["lab_capability"].indexes)
+    _ensure_table_constraints(client, "lab_capability", _TABLE_SPECS["lab_capability"].constraints)
     _ensure_table_indexes(client, "lab_environment", _TABLE_SPECS["lab_environment"].indexes)
     _ensure_table_constraints(client, "lab_environment", _TABLE_SPECS["lab_environment"].constraints)
     _ensure_table_indexes(client, "execution", _TABLE_SPECS["execution"].indexes)

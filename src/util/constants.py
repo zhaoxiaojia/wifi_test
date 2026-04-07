@@ -188,7 +188,34 @@ CHART_DPI: Final[int] = 150
 STANDARD_ORDER: Final[tuple[str, ...]] = ("11ax", "11ac", "11n")
 BANDWIDTH_ORDER: Final[tuple[str, ...]] = ("20MHz", "40MHz", "80MHz", "160MHz")
 FREQ_BAND_ORDER: Final[tuple[str, ...]] = ("2.4G", "5G", "6G")
-TEST_TYPE_ORDER: Final[tuple[str, ...]] = ("RVR", "PEAK_THROUGHPUT", "RVO")
+TEST_REPORT_RVR: Final[str] = "RVR"
+TEST_REPORT_RVO: Final[str] = "RVO"
+TEST_REPORT_PEAK_THROUGHPUT: Final[str] = "Peak Throughput"
+TEST_REPORT_OTA: Final[str] = "OTA"
+TEST_REPORT_NOISE: Final[str] = "NOISE"
+TEST_REPORT_RF: Final[str] = "RF"
+TEST_REPORT_COMPATIBILITY: Final[str] = "Compatibility"
+TEST_REPORT_CHOICES: Final[tuple[str, ...]] = (
+    TEST_REPORT_RVR,
+    TEST_REPORT_RVO,
+    TEST_REPORT_PEAK_THROUGHPUT,
+    TEST_REPORT_OTA,
+    TEST_REPORT_NOISE,
+    TEST_REPORT_RF,
+    TEST_REPORT_COMPATIBILITY,
+)
+LAB_CAPABILITY_CHOICES: Final[tuple[str, ...]] = TEST_REPORT_CHOICES
+RUN_TYPE_WIFI_SMARTTEST: Final[str] = "WIFI-SmartTest"
+RUN_TYPE_DI: Final[str] = "DI"
+RUN_TYPE_CHOICES: Final[tuple[str, ...]] = (
+    RUN_TYPE_WIFI_SMARTTEST,
+    RUN_TYPE_DI,
+)
+TEST_TYPE_ORDER: Final[tuple[str, ...]] = (
+    TEST_REPORT_RVR,
+    TEST_REPORT_PEAK_THROUGHPUT,
+    TEST_REPORT_RVO,
+)
 DIRECTION_ORDER: Final[tuple[str, ...]] = ("TX", "RX")
 STANDARD_ORDER_MAP: Final[dict[str, int]] = {
     value.lower(): index for index, value in enumerate(STANDARD_ORDER)
@@ -250,15 +277,15 @@ TURN_TABLE_MODEL_CHOICES: Final[tuple[str, ...]] = (
 
 # RF solution models and defaults.
 RF_SOLUTION_SECTION_KEY: Final[str] = "rf_solution"
-RF_MODEL_RS232: Final[str] = TURN_TABLE_MODEL_RS232
-RF_MODEL_RADIORACK_4_220: Final[str] = "RADIORACK-4-220"
-RF_MODEL_RC4DAT_8G_95: Final[str] = "RC4DAT-8G-95"
-RF_MODEL_LDA_908V_8: Final[str] = "LDA-908V-8"
-RF_MODEL_CHOICES: Final[tuple[str, ...]] = (
-    RF_MODEL_RADIORACK_4_220,
-    RF_MODEL_RC4DAT_8G_95,
-    RF_MODEL_RS232,
-    RF_MODEL_LDA_908V_8,
+ATTENUATOR_HJ_RADIORACK_4_220: Final[str] = "HJ-RADIORACK-4-220"
+ATTENUATOR_SWD_RC4DAT_8G_95: Final[str] = "SWD-RC4DAT-8G-95"
+ATTENUATOR_VAUNIX_LDA_908V_8: Final[str] = "Vaunix-LDA-908V-8"
+ATTENUATOR_SY_RS232BOARD5: Final[str] = "SY-RS232Board5"
+ATTENUATOR_CHOICES: Final[tuple[str, ...]] = (
+    ATTENUATOR_HJ_RADIORACK_4_220,
+    ATTENUATOR_SWD_RC4DAT_8G_95,
+    ATTENUATOR_SY_RS232BOARD5,
+    ATTENUATOR_VAUNIX_LDA_908V_8,
 )
 RF_ATTENUATION_MIN_DB: Final[int] = 0
 RF_ATTENUATION_MAX_DB: Final[int] = 110
@@ -266,40 +293,128 @@ RF_ATTENUATION_MAX_DB: Final[int] = 110
 # Lab selection keys shared between the UI and YAML files.
 LAB_SECTION_KEY: Final[str] = "lab"
 LAB_FIELD_NAME: Final[str] = "name"
+LAB_NAME_CHOICES: Final[tuple[str, ...]] = (
+    "SZ-RVR-VENUS",
+    "SZ-RVR-MERCURY",
+    "SZ-RVR-MARS",
+    "SZ-ShieldBox",
+    "SH-ShieldBox",
+    "SH-RVR-2",
+    "SH-RVR-3",
+)
+LAB_ENV_CONNECT_TYPE_CHOICES: Final[tuple[str, ...]] = (
+    "Direct Plug-in",
+    "HDMI Extension",
+    "NO HDMI",
+)
+LAB_ENV_COEX_MODE_CHOICES: Final[tuple[str, ...]] = (
+    "WiFi+BLE",
+    "WiFi Only",
+    "WiFi+BLE+CLASSIC",
+    "WiFi+BLE+Thread",
+    "WiFi+Thread",
+    "WiFi+Zigbee",
+    "WiFi+CLASSIC",
+    "WiFi+BLE+Zigbee",
+)
+AP_REGION_CHOICES: Final[tuple[str, ...]] = ("CN", "US", "EU", "JP")
+AP_MODEL_CHOICES: Final[tuple[str, ...]] = (
+    "ASUS-AX86U",
+    "ASUS-AX88U",
+    "ASUS-AX88U Pro",
+    "Xiaomi AX3600",
+    "Xiaomi AX7000",
+    "Glmt3000",
+)
 
 # Lab catalog. Each entry defines supported performance capabilities and the
 # fixed equipment models used in that lab. Editable parameters (IP address,
 # attenuation steps, vendor/product IDs, etc.) remain user-controlled via YAML.
 LAB_CATALOG: Final[dict[str, dict[str, Any]]] = {
-    "SH Full-wave anechoic chamber#2": {
-        "capabilities": {"rvr", "rvo", "peak_throughput"},
+    "SH-RVR-2": {
+        "capabilities": {
+            TEST_REPORT_RVR,
+            TEST_REPORT_RVO,
+            TEST_REPORT_PEAK_THROUGHPUT,
+        },
         "equipment": {
             "turntable_model": TURN_TABLE_MODEL_RS232,
-            "rf_model": RF_MODEL_RS232,
+            "rf_model": ATTENUATOR_HJ_RADIORACK_4_220,
         },
     },
-    "SH Shielded box": {
-        "capabilities": {"rvr", "peak_throughput"},
+    # "SH-RVR-3": {
+    #     "capabilities": {"rvr", "rvo", "peak_throughput"},
+    #     "equipment": {
+    #         "turntable_model": TURN_TABLE_MODEL_RS232,
+    #         "rf_model": ATTENUATOR_SY_RS232BOARD5,
+    #     },
+    # },
+    "SH-ShieldBox": {
+        "capabilities": {
+            TEST_REPORT_RVR,
+            TEST_REPORT_PEAK_THROUGHPUT,
+        },
         "equipment": {
             "turntable_model": None,
-            "rf_model": RF_MODEL_RADIORACK_4_220,
+            "rf_model": ATTENUATOR_SWD_RC4DAT_8G_95,
         },
     },
-    "SZ Venus": {
-        "capabilities": {"rvo", "rvr", "peak_throughput"},
+    # "SZ-RVR-VENUS": {
+    #     "capabilities": {"rvo", "rvr", "peak_throughput"},
+    #     "equipment": {
+    #         "turntable_model": TURN_TABLE_MODEL_OTHER,
+    #         "rf_model": ATTENUATOR_HJ_RADIORACK_4_220,
+    #     },
+    # },
+    # "SZ-RVR-MERCURY": {
+    #     "capabilities": {"rvo", "rvr", "peak_throughput"},
+    #     "equipment": {
+    #         "turntable_model": TURN_TABLE_MODEL_OTHER,
+    #         "rf_model": ATTENUATOR_HJ_RADIORACK_4_220,
+    #     },
+    # },
+    "SZ-RVR-MARS": {
+        "capabilities": {
+            TEST_REPORT_RVO,
+            TEST_REPORT_RVR,
+            TEST_REPORT_PEAK_THROUGHPUT,
+        },
         "equipment": {
             "turntable_model": TURN_TABLE_MODEL_OTHER,
-            "rf_model": RF_MODEL_RADIORACK_4_220,
+            "rf_model": ATTENUATOR_HJ_RADIORACK_4_220,
         },
     },
-    "SZ Shielded box": {
-        "capabilities": {"rvr", "peak_throughput"},
+    "SZ-ShieldBox": {
+        "capabilities": {
+            TEST_REPORT_RVR,
+            TEST_REPORT_PEAK_THROUGHPUT,
+        },
         "equipment": {
             "turntable_model": None,
-            "rf_model": RF_MODEL_LDA_908V_8,
+            "rf_model": ATTENUATOR_VAUNIX_LDA_908V_8,
         },
     },
 }
+
+_unknown_lab_names = sorted(set(LAB_CATALOG.keys()) - set(LAB_NAME_CHOICES))
+if _unknown_lab_names:
+    raise ValueError(
+        "LAB_CATALOG contains unsupported lab names: " + ", ".join(_unknown_lab_names)
+    )
+
+_unknown_lab_capabilities = sorted(
+    {
+        str(capability)
+        for spec in LAB_CATALOG.values()
+        for capability in (spec.get("capabilities") or set())
+        if str(capability) not in LAB_CAPABILITY_CHOICES
+    }
+)
+if _unknown_lab_capabilities:
+    raise ValueError(
+        "LAB_CATALOG contains unsupported capabilities: "
+        + ", ".join(_unknown_lab_capabilities)
+    )
 
 # Android version defaults
 DEFAULT_ANDROID_VERSION_CHOICES: Final[tuple[str, ...]] = (
@@ -1135,6 +1250,16 @@ HW_PHASE_CHOICES: Final[tuple[str, ...]] = (
     "P1.1",
     "P1.2",
 )
+DUT_OS_CHOICES: Final[tuple[str, ...]] = ("RDK", "Roku", "Fireos")
+BT_REMOTE_CHOICES: Final[tuple[str, ...]] = ("B12", "B25", "Project BTRC", "NA")
+BT_DEVICE_CHOICES: Final[tuple[str, ...]] = (
+    "MP30",
+    "JBL Pulse4",
+    "JBL Flip7",
+    "HUAWEI EGRT-00",
+    "xiaomi XMYX02JY",
+)
+BT_TYPE_CHOICES: Final[tuple[str, ...]] = ("BLE", "CLASSIC")
 
 WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]] = {
     "TV": {

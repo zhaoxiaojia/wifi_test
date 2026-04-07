@@ -19,7 +19,18 @@ from src.tools.mysql_tool.schema import ensure_report_tables
 from src.tools.mysql_tool.sql_writer import SqlWriter
 from src.ui.view.titlebar.import_dialog import ImportDialog
 from src.ui.view.titlebar.import_sheets_dialog import ImportSheetsDialog
-from src.util.constants import IDENTIFIER_SANITIZE_PATTERN, WIFI_PRODUCT_PROJECT_MAP
+from src.util.constants import (
+    AP_MODEL_CHOICES,
+    AP_REGION_CHOICES,
+    IDENTIFIER_SANITIZE_PATTERN,
+    RUN_TYPE_WIFI_SMARTTEST,
+    TEST_REPORT_CHOICES,
+    TEST_REPORT_COMPATIBILITY,
+    TEST_REPORT_PEAK_THROUGHPUT,
+    TEST_REPORT_RVO,
+    TEST_REPORT_RVR,
+    WIFI_PRODUCT_PROJECT_MAP,
+)
 
 
 def _store_excel_artifact(
@@ -377,7 +388,7 @@ class PerformanceExcelImporter:
 
             rows.append(
                 _performance_row(
-                    test_category="PEAK_THROUGHPUT",
+                    test_category=TEST_REPORT_PEAK_THROUGHPUT,
                     standard=standard,
                     band=band,
                     bandwidth_mhz=int(bw_mhz),
@@ -433,7 +444,7 @@ class PerformanceExcelImporter:
             scenario_group_key: str,
         ) -> None:
             base = dict(
-                test_category="RVR",
+                    test_category=TEST_REPORT_RVR,
                 standard=standard,
                 band=band,
                 bandwidth_mhz=bandwidth_mhz,
@@ -813,7 +824,7 @@ class PerformanceExcelImporter:
                             continue
                         rows.append(
                             _performance_row(
-                                test_category="RVO",
+                                test_category=TEST_REPORT_RVO,
                                 standard=standard,
                                 band=band,
                                 bandwidth_mhz=bw_mhz,
@@ -844,17 +855,13 @@ class PerformanceExcelImporter:
         workbook = self._load_workbook(path)
         sheetnames = set(workbook.sheetnames)
 
-        alias_map = {
-            "PEAK": "PEAK_THROUGHPUT",
-            "THROUGHPUT": "PEAK_THROUGHPUT",
-        }
         selected: list[str] = []
         seen: set[str] = set()
         for raw in types:
-            text = str(raw).strip().upper()
+            text = str(raw).strip()
             if not text:
                 continue
-            key = alias_map.get(text, text)
+            key = text
             if key not in seen:
                 selected.append(key)
                 seen.add(key)
@@ -873,24 +880,24 @@ class PerformanceExcelImporter:
         out: Dict[str, List[Dict[str, Any]]] = {}
         issues: List[str] = []
         peak_sheet: Optional[str] = None
-        if "PEAK_THROUGHPUT" in selected:
+        if TEST_REPORT_PEAK_THROUGHPUT in selected:
             peak_sheet = _resolve_peak_sheet()
             if not peak_sheet:
-                issues.append("PEAK_THROUGHPUT: missing throughput sheet")
+                issues.append(f"{TEST_REPORT_PEAK_THROUGHPUT}: missing throughput sheet")
             elif peak_sheet not in sheetnames:
-                issues.append(f"PEAK_THROUGHPUT: worksheet {peak_sheet!r} not found")
+                issues.append(f"{TEST_REPORT_PEAK_THROUGHPUT}: worksheet {peak_sheet!r} not found")
                 peak_sheet = None
 
         for key in selected:
-            if key == "PEAK_THROUGHPUT":
+            if key == TEST_REPORT_PEAK_THROUGHPUT:
                 if not peak_sheet:
                     continue
                 try:
                     rows, row_issues = self.build_peak_throughput_rows(workbook, sheet_name=peak_sheet)
                 except Exception as exc:
-                    issues.append(f"PEAK_THROUGHPUT: parse failed ({exc})")
+                    issues.append(f"{TEST_REPORT_PEAK_THROUGHPUT}: parse failed ({exc})")
                     continue
-            elif key == "RVR":
+            elif key == TEST_REPORT_RVR:
                 if rvr_sheet_name not in sheetnames:
                     issues.append(f"RVR: worksheet {rvr_sheet_name!r} not found")
                     continue
@@ -899,7 +906,7 @@ class PerformanceExcelImporter:
                 except Exception as exc:
                     issues.append(f"RVR: parse failed ({exc})")
                     continue
-            elif key == "RVO":
+            elif key == TEST_REPORT_RVO:
                 if rvo_sheet_name not in sheetnames:
                     issues.append(f"RVO: worksheet {rvo_sheet_name!r} not found")
                     continue
@@ -989,22 +996,22 @@ class ImportController:
             for sheet_name in selected_sheets:
                 token = str(sheet_name).strip().upper()
                 if "RVR" in token:
-                    if "RVR" not in types:
-                        types.append("RVR")
+                    if TEST_REPORT_RVR not in types:
+                        types.append(TEST_REPORT_RVR)
                     rvr_sheet_name = str(sheet_name)
-                    sheets_by_type.setdefault("RVR", []).append(str(sheet_name))
+                    sheets_by_type.setdefault(TEST_REPORT_RVR, []).append(str(sheet_name))
                     continue
                 if "RVO" in token:
-                    if "RVO" not in types:
-                        types.append("RVO")
+                    if TEST_REPORT_RVO not in types:
+                        types.append(TEST_REPORT_RVO)
                     rvo_sheet_name = str(sheet_name)
-                    sheets_by_type.setdefault("RVO", []).append(str(sheet_name))
+                    sheets_by_type.setdefault(TEST_REPORT_RVO, []).append(str(sheet_name))
                     continue
-                if "PEAK_THROUGHPUT" not in types:
-                    types.append("PEAK_THROUGHPUT")
+                if TEST_REPORT_PEAK_THROUGHPUT not in types:
+                    types.append(TEST_REPORT_PEAK_THROUGHPUT)
                 if peak_sheet_name is None:
                     peak_sheet_name = str(sheet_name)
-                sheets_by_type.setdefault("PEAK_THROUGHPUT", []).append(str(sheet_name))
+                sheets_by_type.setdefault(TEST_REPORT_PEAK_THROUGHPUT, []).append(str(sheet_name))
 
             print(
                 "[IMPORT_DEBUG] resolved_types=",
@@ -1185,6 +1192,7 @@ class ImportController:
             "HDMI CABLE": "hdmi_cable",
             "BT DEVICE": "bt_device",
             "BLUETOOTH DEVICE": "bt_device",
+            "BT REMOTE": "bt_remote",
             "BT TYPE": "bt_type",
             "BLUETOOTH TYPE": "bt_type",
             "TV DEVICE": "tv_device",
@@ -1200,8 +1208,9 @@ class ImportController:
             "HW PHASE": "hw_phase",
             "MAC ADDRESS": "mac_address",
             "MAC": "mac_address",
-            "CONNECT TYPE": "connect_type",
-            "DUT TYPE": "connect_type",
+            "CONNECT TYPE": "lab_enviroment.connect_type",
+            "DUT TYPE": "lab_enviroment.connect_type",
+            "COEX MODE": "lab_enviroment.coex_mode",
             "ADB DEVICE": "adb_device",
             "DUT IP": "telnet_ip",
             "TELNET IP": "telnet_ip",
@@ -1257,13 +1266,12 @@ class ImportController:
             imported_types: set[str] = set()
             if report_id is not None:
                 rows = client.query_all(
-                    "SELECT DISTINCT ex.`run_type` "
-                    "FROM `execution` AS ex "
-                    "JOIN `performance` AS p ON p.`execution_id` = ex.`id` "
-                    "WHERE ex.`test_report_id`=%s",
+                    "SELECT DISTINCT p.`test_category` "
+                    "FROM `performance` AS p "
+                    "WHERE p.`test_report_id`=%s",
                     (int(report_id),),
                 )
-                imported_types = {str(r.get("run_type") or "").strip().upper() for r in rows if r.get("run_type")}
+                imported_types = {str(r.get("test_category") or "").strip() for r in rows if r.get("test_category")}
             print(
                 "[IMPORT_DEBUG] existing_report",
                 "report_name=",
@@ -1275,13 +1283,17 @@ class ImportController:
             )
 
             if report_id is None:
+                initial_report_type = next(
+                    (str(key).strip() for key in extracted.keys() if str(key).strip() in TEST_REPORT_CHOICES),
+                    TEST_REPORT_PEAK_THROUGHPUT,
+                )
                 report_id = ensure_test_report(
                     client,
                     project_id=int(project_id),
                     report_name=report_name,
                     case_path=None,
                     is_golden=False,
-                    report_type="performance",
+                    report_type=initial_report_type,
                     golden_group=None,
                     notes=notes,
                     tester=payload.get("tester"),
@@ -1297,8 +1309,8 @@ class ImportController:
             for data_type, rows in extracted.items():
                 if not rows:
                     continue
-                if str(data_type).strip().upper() in imported_types:
-                    normalized = str(data_type).strip().upper()
+                if str(data_type).strip() in imported_types:
+                    normalized = str(data_type).strip()
                     for sheet in (sheets_by_type or {}).get(normalized, []):
                         skipped.append(f"{sheet} ({normalized})")
                     if normalized not in (sheets_by_type or {}):
@@ -1527,25 +1539,20 @@ class ImportController:
         duration_seconds: Optional[float] = None,
     ) -> int:
         ui_payload = payload.get("ui_payload", {}) or {}
-        ecosystem = str(ui_payload.get("ecosystem") or "").strip()
-        connect_type = ui_payload.get("connect_type")
-        if not connect_type and ecosystem in {"Android", "Linux"}:
-            connect_type = ecosystem
         lab_id: int | None = None
         lab_name = str(ui_payload.get("lab_name") or "").strip()
         if lab_name:
-            lab_payload = {"lab_name": lab_name}
             lab_id = client.insert(
-                "INSERT INTO `lab` (`lab_name`, `payload_json`) "
-                "VALUES (%s, %s) "
+                "INSERT INTO `lab` (`lab_name`) "
+                "VALUES (%s) "
                 "ON DUPLICATE KEY UPDATE "
                 "`id`=LAST_INSERT_ID(`id`), "
-                "`lab_name`=VALUES(`lab_name`), "
-                "`payload_json`=VALUES(`payload_json`)",
-                (
-                    lab_name,
-                    json.dumps(lab_payload, ensure_ascii=True, separators=(",", ":")),
-                ),
+                "`lab_name`=VALUES(`lab_name`)",
+                (lab_name,),
+            )
+            client.execute(
+                "UPDATE `test_report` SET `lab_id`=%s WHERE `id`=%s",
+                (int(lab_id), int(test_report_id)),
             )
 
             env_payload = {
@@ -1554,48 +1561,65 @@ class ImportController:
                 "ap_address": ui_payload.get("ap_address") or ui_payload.get("router_address"),
                 "distance": ui_payload.get("distance"),
                 "ap_region": ui_payload.get("ap_region"),
+                "connect_type": ui_payload.get("lab_enviroment.connect_type"),
+                "coex_mode": ui_payload.get("lab_enviroment.coex_mode"),
+                "bt_remote": ui_payload.get("bt_remote"),
                 "usb_cable": ui_payload.get("usb_cable"),
                 "hdmi_cable": ui_payload.get("hdmi_cable"),
                 "bt_device": ui_payload.get("bt_device"),
                 "bt_type": ui_payload.get("bt_type"),
                 "tv_device": ui_payload.get("tv_device"),
             }
+            ap_name = str(env_payload.get("ap_name") or "").strip()
+            if ap_name and ap_name not in AP_MODEL_CHOICES:
+                raise ValueError(
+                    f"Unsupported lab_enviroment.ap_name={ap_name!r}; "
+                    f"allowed={list(AP_MODEL_CHOICES)!r}"
+                )
+            ap_region = str(env_payload.get("ap_region") or "").strip()
+            if ap_region and ap_region not in AP_REGION_CHOICES:
+                raise ValueError(
+                    f"Unsupported lab_enviroment.ap_region={ap_region!r}; "
+                    f"allowed={list(AP_REGION_CHOICES)!r}"
+                )
             client.insert(
                 "INSERT INTO `lab_environment` "
-                "(`lab_id`, `ap_name`, `ap_address`, `distance`, `ap_region`, `usb_cable`, `hdmi_cable`, `bt_device`, `bt_type`, `tv_device`, `payload_json`) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
+                "(`lab_id`, `ap_name`, `ap_address`, `distance`, `ap_region`, `connect_type`, `coex_mode`, `bt_remote`, `usb_cable`, `hdmi_cable`, `bt_device`, `bt_type`, `tv_device`) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
                 "ON DUPLICATE KEY UPDATE "
                 "`lab_id`=VALUES(`lab_id`), "
                 "`ap_name`=VALUES(`ap_name`), "
                 "`ap_address`=VALUES(`ap_address`), "
                 "`distance`=VALUES(`distance`), "
                 "`ap_region`=VALUES(`ap_region`), "
+                "`connect_type`=VALUES(`connect_type`), "
+                "`coex_mode`=VALUES(`coex_mode`), "
+                "`bt_remote`=VALUES(`bt_remote`), "
                 "`usb_cable`=VALUES(`usb_cable`), "
                 "`hdmi_cable`=VALUES(`hdmi_cable`), "
                 "`bt_device`=VALUES(`bt_device`), "
                 "`bt_type`=VALUES(`bt_type`), "
-                "`tv_device`=VALUES(`tv_device`), "
-                "`payload_json`=VALUES(`payload_json`)",
+                "`tv_device`=VALUES(`tv_device`)",
                 (
                     int(lab_id),
                     env_payload.get("ap_name"),
                     env_payload.get("ap_address"),
                     env_payload.get("distance"),
                     env_payload.get("ap_region"),
+                    env_payload.get("connect_type"),
+                    env_payload.get("coex_mode"),
+                    env_payload.get("bt_remote"),
                     env_payload.get("usb_cable"),
                     env_payload.get("hdmi_cable"),
                     env_payload.get("bt_device"),
                     env_payload.get("bt_type"),
                     env_payload.get("tv_device"),
-                    json.dumps(env_payload, ensure_ascii=True, separators=(",", ":")),
                 ),
             )
 
         dut_payload = {
             "test_report_id": int(test_report_id),
-            "project_id": int(project_id),
             "sn": ui_payload.get("sn") or ui_payload.get("serial_number"),
-            "connect_type": connect_type,
             "mac_address": ui_payload.get("mac_address"),
             "adb_device": ui_payload.get("adb_device"),
             "ip": ui_payload.get("ip") or ui_payload.get("telnet_ip"),
@@ -1609,15 +1633,13 @@ class ImportController:
         }
         client.insert(
             "INSERT INTO `dut` "
-            "(`test_report_id`, `project_id`, `sn`, `connect_type`, `mac_address`, `adb_device`, `ip`, "
-            "`software_version`, `driver_version`, `android_version`, `kernel_version`, `hw_phase`, `wifi_module_sn`, `antenna`, `payload_json`) "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
+            "(`test_report_id`, `sn`, `mac_address`, `adb_device`, `ip`, "
+            "`software_version`, `driver_version`, `android_version`, `kernel_version`, `hw_phase`, `wifi_module_sn`, `antenna`) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
             "ON DUPLICATE KEY UPDATE "
             "`id`=LAST_INSERT_ID(`id`), "
             "`test_report_id`=VALUES(`test_report_id`), "
-            "`project_id`=VALUES(`project_id`), "
             "`sn`=VALUES(`sn`), "
-            "`connect_type`=VALUES(`connect_type`), "
             "`mac_address`=VALUES(`mac_address`), "
             "`adb_device`=VALUES(`adb_device`), "
             "`ip`=VALUES(`ip`), "
@@ -1627,13 +1649,10 @@ class ImportController:
             "`kernel_version`=VALUES(`kernel_version`), "
             "`hw_phase`=VALUES(`hw_phase`), "
             "`wifi_module_sn`=VALUES(`wifi_module_sn`), "
-            "`antenna`=VALUES(`antenna`), "
-            "`payload_json`=VALUES(`payload_json`)",
+            "`antenna`=VALUES(`antenna`)",
             (
                 dut_payload.get("test_report_id"),
-                dut_payload.get("project_id"),
                 dut_payload.get("sn"),
-                dut_payload.get("connect_type"),
                 dut_payload.get("mac_address"),
                 dut_payload.get("adb_device"),
                 dut_payload.get("ip"),
@@ -1644,23 +1663,19 @@ class ImportController:
                 dut_payload.get("hw_phase"),
                 dut_payload.get("wifi_module_sn"),
                 dut_payload.get("antenna"),
-                json.dumps(dut_payload, ensure_ascii=True, separators=(",", ":")),
             ),
         )
         insert_sql = (
             "INSERT INTO `execution` "
-            "(`test_report_id`, `run_type`, `lab_id`, `run_source`, `duration_seconds`, `payload_json`) "
-            "VALUES (%s, %s, %s, %s, %s, %s)"
+            "(`test_report_id`, `run_type`, `run_source`, `duration_seconds`) "
+            "VALUES (%s, %s, %s, %s)"
         )
-        payload_json = json.dumps(dict(payload), ensure_ascii=True, separators=(",", ":"))
         return client.insert(
             insert_sql,
             (
                 test_report_id,
-                execution_type,
-                int(lab_id) if lab_id is not None else None,
+                RUN_TYPE_WIFI_SMARTTEST,
                 (run_source or "import")[:32],
                 int(duration_seconds) if duration_seconds is not None else None,
-                payload_json,
             ),
         )

@@ -24,7 +24,7 @@ from qfluentwidgets import ComboBox, LineEdit
 from PyQt5.QtCore import Qt
 
 from src.util.constants import (
-    RF_MODEL_RS232,
+    ATTENUATOR_SY_RS232BOARD5,
     get_model_config_base,
     get_model_toolbar_base,
 )
@@ -309,8 +309,8 @@ def _add_single_field_to_layout(page, config, field, layout, section_id, panel_k
             for model_key in rf_cfg.keys()
             if model_key not in {"model", "step"}
         ]
-        if RF_MODEL_RS232 not in derived:
-            derived.append(RF_MODEL_RS232)
+        if ATTENUATOR_SY_RS232BOARD5 not in derived:
+            derived.append(ATTENUATOR_SY_RS232BOARD5)
         if derived:
             choices = sorted(derived)
 
@@ -426,8 +426,8 @@ def _add_fields_to_two_column_layout(page, config, fields, layout, section_id, p
                 for model_key in rf_cfg.keys()
                 if model_key not in {"model", "step"}
             ]
-            if RF_MODEL_RS232 not in derived:
-                derived.append(RF_MODEL_RS232)
+            if ATTENUATOR_SY_RS232BOARD5 not in derived:
+                derived.append(ATTENUATOR_SY_RS232BOARD5)
             if derived:
                 choices = sorted(derived)
 
@@ -748,8 +748,8 @@ def build_groups_from_schema(
                             str(model_key) for model_key in rf_cfg.keys()
                             if model_key not in {"model", "step"}
                         ]
-                        if RF_MODEL_RS232 not in derived:
-                            derived.append(RF_MODEL_RS232)
+                        if ATTENUATOR_SY_RS232BOARD5 not in derived:
+                            derived.append(ATTENUATOR_SY_RS232BOARD5)
                         if derived:
                             choices = sorted(derived)
                     elif section_id == "Turntable":
@@ -934,8 +934,8 @@ def build_groups_from_schema(
                         for model_key in rf_cfg.keys()
                         if model_key not in {"model", "step"}
                     ]
-                    if RF_MODEL_RS232 not in derived:
-                        derived.append(RF_MODEL_RS232)
+                    if ATTENUATOR_SY_RS232BOARD5 not in derived:
+                        derived.append(ATTENUATOR_SY_RS232BOARD5)
                     if derived:
                         choices = sorted(derived)
 

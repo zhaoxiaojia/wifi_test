@@ -14,14 +14,13 @@ project:
   soc: S905X5M
   wifi_module: W265S1
   interface: SDIO
-  mass_production_status: EVT
   dut_sn: ''
 serial_port:
   baud: '115200'
-  port: COM14 (蓝牙链接上的标准串行 (COM14))
+  port: ''
   status: false
 router:
-  name: asusax88u
+  name: ASUS-AX88U
   address: 192.168.50.1
   24g_ssid: 2.4G
   5g_ssid: 5G
@@ -45,7 +44,7 @@ dut:
   third_party:
     enabled: false
     wait_seconds: 0
-  name: glmt3000
+  name: Glmt3000
   address: 192.168.8.1
   24g_ssid: Openwrt-AT-24G
   5g_ssid: Openwrt-AT-5G

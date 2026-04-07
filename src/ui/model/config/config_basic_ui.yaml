@@ -109,11 +109,13 @@ panels:
           - key: router.name
             widget: combo_box
             label: "Router"
-            choices: [ "asusax88u", "asusax88upro", "asusax86u","xiaomibe7000", "xiaomiax3600", "glmt3000" ]
           - key: router.address
             widget: line_edit
             label: "Router IP"
             placeholder: "192.168.x.x"
+          - key: lab_enviroment.ap_region
+            widget: combo_box
+            label: "AP Region"
           - key: router.24g_ssid
             widget: line_edit
             label: "2.4G SSID"

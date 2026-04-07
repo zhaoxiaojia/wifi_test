@@ -1174,13 +1174,12 @@ def update_fpga_hidden_fields(page: Any) -> None:
 
     status_widget = field_widgets.get("dut.hw_phase")
     if status_widget is not None and hasattr(status_widget, "clear"):
-        status_widget.clear()
-        for item in mass_status:
-            status_widget.addItem(item)
-        selected = set(current_status) if current_status else set(mass_status)
-        for idx in range(status_widget.count()):
-            state = 2 if status_widget.itemText(idx) in selected else 0
-            status_widget.setItemData(idx, state)
+        target = str((getattr(page, "config", {}) or {}).get("dut", {}).get("hw_phase") or "")
+        if target:
+            try:
+                status_widget.setCurrentText(target)
+            except Exception:
+                logging.debug("Failed to set dut.hw_phase text", exc_info=True)
 
     odm_widget = field_widgets.get("project.odm")
     if odm_widget is not None and hasattr(odm_widget, "clear"):

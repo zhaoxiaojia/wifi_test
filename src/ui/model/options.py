@@ -12,14 +12,21 @@ from typing import Callable, Iterable, Sequence
 import socket
 import subprocess
 
-from src.tools.router_tool.router_factory import router_list
 from src.util.constants import (
+    AP_MODEL_CHOICES,
+    AP_REGION_CHOICES,
+    ATTENUATOR_CHOICES,
+    BT_DEVICE_CHOICES,
+    BT_REMOTE_CHOICES,
+    BT_TYPE_CHOICES,
     DEFAULT_ANDROID_VERSION_CHOICES,
     DEFAULT_KERNEL_VERSION_CHOICES,
-    LAB_CATALOG,
+    DUT_OS_CHOICES,
+    LAB_ENV_COEX_MODE_CHOICES,
     HW_PHASE_CHOICES,
+    LAB_ENV_CONNECT_TYPE_CHOICES,
+    LAB_NAME_CHOICES,
     PROJECT_TYPES,
-    RF_MODEL_CHOICES,
     TURN_TABLE_MODEL_CHOICES,
     WIFI_PRODUCT_PROJECT_MAP,
 )
@@ -39,9 +46,9 @@ def _sorted_unique(values: Iterable[str]) -> list[str]:
 
 
 def _router_name_choices() -> Sequence[str]:
-    """Return available router names derived from the router factory."""
+    """Return supported AP models from the shared constants enum."""
 
-    return _sorted_unique(router_list.keys())
+    return list(AP_MODEL_CHOICES)
 
 
 def _android_version_choices() -> Sequence[str]:
@@ -64,7 +71,7 @@ def _turntable_model_choices() -> Sequence[str]:
 def _rf_model_choices() -> Sequence[str]:
     """Return available RF solution model identifiers."""
 
-    return list(RF_MODEL_CHOICES)
+    return list(ATTENUATOR_CHOICES)
 
 
 def _fpga_customer_choices() -> Sequence[str]:
@@ -82,11 +89,32 @@ def _project_type_choices() -> Sequence[str]:
 def _lab_name_choices() -> Sequence[str]:
     """Return known lab names from the lab catalog."""
 
-    return _sorted_unique(LAB_CATALOG.keys())
+    return list(LAB_NAME_CHOICES)
 
 
 def _hw_phase_choices() -> Sequence[str]:
     return list(HW_PHASE_CHOICES)
+
+def _dut_os_choices() -> Sequence[str]:
+    return list(DUT_OS_CHOICES)
+
+def _bt_remote_choices() -> Sequence[str]:
+    return list(BT_REMOTE_CHOICES)
+
+def _bt_device_choices() -> Sequence[str]:
+    return list(BT_DEVICE_CHOICES)
+
+def _bt_type_choices() -> Sequence[str]:
+    return list(BT_TYPE_CHOICES)
+
+def _lab_env_connect_type_choices() -> Sequence[str]:
+    return list(LAB_ENV_CONNECT_TYPE_CHOICES)
+
+def _lab_env_coex_mode_choices() -> Sequence[str]:
+    return list(LAB_ENV_COEX_MODE_CHOICES)
+
+def _ap_region_choices() -> Sequence[str]:
+    return list(AP_REGION_CHOICES)
 
 
 def _adb_device_choices() -> Sequence[str]:
@@ -174,9 +202,18 @@ _FIELD_CHOICE_SOURCES: dict[str, Callable[[], Sequence[str]]] = {
     "project.customer": _fpga_customer_choices,
     "project.project_type": _project_type_choices,
     "dut.hw_phase": _hw_phase_choices,
+    "dut.os": _dut_os_choices,
     # Android / Linux connect targets
     "connect_type.Android.device": _adb_device_choices,
     "connect_type.Linux.ip": _linux_ip_choices,
+    # Lab environment Bluetooth options
+    "lab_enviroment.ap_name": _router_name_choices,
+    "lab_enviroment.ap_region": _ap_region_choices,
+    "lab_enviroment.bt_remote": _bt_remote_choices,
+    "lab_enviroment.bt_device": _bt_device_choices,
+    "lab_enviroment.bt_type": _bt_type_choices,
+    "lab_enviroment.connect_type": _lab_env_connect_type_choices,
+    "lab_enviroment.coex_mode": _lab_env_coex_mode_choices,
 }
 
 
