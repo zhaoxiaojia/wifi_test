@@ -789,111 +789,61 @@ class ConfigController(
 
     def _find_project_in_map(
         self,
-        wifi_module: str,
-        interface: str,
-        main_chip: str = "",
         *,
-        customer: str = "",
-        product_line: str = "",
-        project: str = "",
-    ) -> tuple[str, str, str, Optional[dict[str, Any]]]:
-        """Resolve project metadata from WIFI_PRODUCT_PROJECT_MAP."""
-        for product_name, odm_map in WIFI_PRODUCT_PROJECT_MAP.items():
-            if product_line and product_name != product_line:
-                continue
-            for odm_name, projects in odm_map.items():
-                if customer and odm_name != customer:
-                    continue
-                for project_name, info in projects.items():
-                    if project and project_name != project:
-                        continue
-                    info_customer = odm_name
-                    info_wifi = info["wifi_module"]
-                    info_if = info["interface"]
-                    info_chip = info["main_chip"]
-                    if wifi_module and info_wifi != wifi_module:
-                        continue
-                    if interface and info_if != interface:
-                        continue
-                    if main_chip and info_chip != main_chip:
-                        continue
-                    return info_customer, product_name, project_name, info
-        return "", "", "", None
+        customer: str,
+        project_type: str,
+        project: str,
+    ) -> Optional[dict[str, Any]]:
+        """Strict lookup in WIFI_PRODUCT_PROJECT_MAP without fuzzy matching."""
+        if not customer or not project_type or not project:
+            return None
+        return (
+            WIFI_PRODUCT_PROJECT_MAP.get(project_type, {})
+            .get(customer, {})
+            .get(project)
+        )
 
     def normalize_project_section(self, raw_value: Any) -> dict[str, str]:
         """Normalise project configuration into structured token fields.
 
-        The persisted source of truth is the (customer, product_line,
+        The persisted source of truth is the (customer, project_type,
         project) triple chosen by the user.  ``wifi_module``,
-        ``interface`` and ``main_chip`` are derived from
+        ``interface`` and ``soc`` are derived from
         :data:`WIFI_PRODUCT_PROJECT_MAP` when a matching entry exists.
         """
         normalized = {
             "customer": "",
-            "product_line": "",
+            "project_type": "",
             "project": "",
             "odm": "",
-            "main_chip": "",
+            "soc": "",
             "wifi_module": "",
             "interface": "",
-            "mass_production_status": "",
         }
         if isinstance(raw_value, Mapping):
             customer = self.normalize_fpga_token(raw_value.get("customer"))
-            product_line = self.normalize_fpga_token(raw_value.get("product_line"))
+            project_type = self.normalize_fpga_token(raw_value.get("project_type"))
             project = self.normalize_fpga_token(raw_value.get("project"))
             odm = str(raw_value.get("odm") or "")
-            mass_value = raw_value.get("mass_production_status")
-            if isinstance(mass_value, (list, tuple)):
-                mass_status = str(mass_value[0]) if mass_value else ""
-            else:
-                mass_status = str(mass_value or "")
             normalized.update(
                 {
                     "customer": customer,
-                    "product_line": product_line,
+                    "project_type": project_type,
                     "project": project,
                     "odm": odm,
-                    "mass_production_status": mass_status,
                 }
             )
-            # Derive details from the project triple when possible; do not
-            # overwrite the triple itself so YAML remains the source of truth.
-            _, _, _, info = self._find_project_in_map(
-                "",
-                "",
-                "",
+            info = self._find_project_in_map(
                 customer=customer,
-                product_line=product_line,
+                project_type=project_type,
                 project=project,
             )
             if info:
-                normalized["main_chip"] = info["main_chip"]
+                normalized["soc"] = info["main_chip"]
                 normalized["wifi_module"] = info["wifi_module"]
                 normalized["interface"] = info["interface"]
-                if not normalized["mass_production_status"]:
-                    choices = list(info.get("mass_production_status") or [])
-                    normalized["mass_production_status"] = str(choices[0]) if choices else ""
         elif isinstance(raw_value, str):
-            # Legacy string format: attempt to resolve project triple from
-            # encoded wifi_module/interface and derive details accordingly.
-            wifi_module, interface = self._split_legacy_fpga_value(raw_value)
-            customer, product, project, info = self._find_project_in_map(
-                wifi_module,
-                interface,
-            )
-            if customer:
-                normalized["customer"] = customer
-            if product:
-                normalized["product_line"] = product
-            if project:
-                normalized["project"] = project
-            if info:
-                normalized["main_chip"] = info["main_chip"]
-                normalized["wifi_module"] = info["wifi_module"]
-                normalized["interface"] = info["interface"]
-                choices = list(info.get("mass_production_status") or [])
-                normalized["mass_production_status"] = str(choices[0]) if choices else ""
+            raise ValueError("Legacy project string format is not supported; use mapping with customer/project_type/project.")
         return normalized
 
     # ------------------------------------------------------------------
@@ -1151,9 +1101,6 @@ class ConfigController(
                 compat_cfg = page.config.setdefault("compatibility", {})
                 compat_cfg.pop("selected_routers", None)
             elif isinstance(widget, ComboBox):
-                if key == "project.mass_production_status":
-                    ref[leaf] = widget.currentText().strip()
-                    continue
                 data_val = widget.currentData()
                 if data_val not in (None, "", widget.currentText()):
                     value = data_val

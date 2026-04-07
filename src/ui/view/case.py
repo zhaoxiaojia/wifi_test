@@ -289,13 +289,13 @@ class RvrWifiConfigPage(CardWidget):
 
         try:
             cfg = load_config(refresh=True) or {}
-            router_name = name or cfg.get("router", {}).get("name", "asusax86u")
+            router_name = name or cfg.get("router", {}).get("name", "ASUS-AX86U")
             if address is None and cfg.get("router", {}).get("name") == router_name:
                 address = cfg.get("router", {}).get("address")
             router = get_router(router_name, address)
         except Exception as e:
             logging.error("load router error: %s", e)
-            router_name = name or "asusax86u"
+            router_name = name or "ASUS-AX86U"
             router = get_router(router_name, address)
         return (router, router_name)
 

@@ -116,7 +116,7 @@ BASIC_SECTION_KEYS: Final[frozenset[str]] = frozenset(
     {
         "connect_type",
         "dut",
-        # Project / Wi‑Fi chipset configuration (formerly "fpga").
+        # Project / Wi?Fi chipset configuration (formerly "fpga").
         "project",
         "serial_port",
         "software_info",
@@ -132,7 +132,7 @@ BASIC_SECTION_KEYS: Final[frozenset[str]] = frozenset(
 )
 DUT_SECTION_KEYS = BASIC_SECTION_KEYS
 CONFIG_KEY_ALIASES: Final[dict[str, str]] = {
-    # Backwards‑compatibility: legacy top-level "fpga" section is now
+    # Backwards?compatibility: legacy top-level "fpga" section is now
     # normalised as "project" in the merged config.
     "fpga": "project",
 }
@@ -188,7 +188,34 @@ CHART_DPI: Final[int] = 150
 STANDARD_ORDER: Final[tuple[str, ...]] = ("11ax", "11ac", "11n")
 BANDWIDTH_ORDER: Final[tuple[str, ...]] = ("20MHz", "40MHz", "80MHz", "160MHz")
 FREQ_BAND_ORDER: Final[tuple[str, ...]] = ("2.4G", "5G", "6G")
-TEST_TYPE_ORDER: Final[tuple[str, ...]] = ("RVR", "PEAK_THROUGHPUT", "RVO")
+TEST_REPORT_RVR: Final[str] = "RVR"
+TEST_REPORT_RVO: Final[str] = "RVO"
+TEST_REPORT_PEAK_THROUGHPUT: Final[str] = "Peak Throughput"
+TEST_REPORT_OTA: Final[str] = "OTA"
+TEST_REPORT_NOISE: Final[str] = "NOISE"
+TEST_REPORT_RF: Final[str] = "RF"
+TEST_REPORT_COMPATIBILITY: Final[str] = "Compatibility"
+TEST_REPORT_CHOICES: Final[tuple[str, ...]] = (
+    TEST_REPORT_RVR,
+    TEST_REPORT_RVO,
+    TEST_REPORT_PEAK_THROUGHPUT,
+    TEST_REPORT_OTA,
+    TEST_REPORT_NOISE,
+    TEST_REPORT_RF,
+    TEST_REPORT_COMPATIBILITY,
+)
+LAB_CAPABILITY_CHOICES: Final[tuple[str, ...]] = TEST_REPORT_CHOICES
+RUN_TYPE_WIFI_SMARTTEST: Final[str] = "WIFI-SmartTest"
+RUN_TYPE_DI: Final[str] = "DI"
+RUN_TYPE_CHOICES: Final[tuple[str, ...]] = (
+    RUN_TYPE_WIFI_SMARTTEST,
+    RUN_TYPE_DI,
+)
+TEST_TYPE_ORDER: Final[tuple[str, ...]] = (
+    TEST_REPORT_RVR,
+    TEST_REPORT_PEAK_THROUGHPUT,
+    TEST_REPORT_RVO,
+)
 DIRECTION_ORDER: Final[tuple[str, ...]] = ("TX", "RX")
 STANDARD_ORDER_MAP: Final[dict[str, int]] = {
     value.lower(): index for index, value in enumerate(STANDARD_ORDER)
@@ -250,15 +277,15 @@ TURN_TABLE_MODEL_CHOICES: Final[tuple[str, ...]] = (
 
 # RF solution models and defaults.
 RF_SOLUTION_SECTION_KEY: Final[str] = "rf_solution"
-RF_MODEL_RS232: Final[str] = TURN_TABLE_MODEL_RS232
-RF_MODEL_RADIORACK_4_220: Final[str] = "RADIORACK-4-220"
-RF_MODEL_RC4DAT_8G_95: Final[str] = "RC4DAT-8G-95"
-RF_MODEL_LDA_908V_8: Final[str] = "LDA-908V-8"
-RF_MODEL_CHOICES: Final[tuple[str, ...]] = (
-    RF_MODEL_RADIORACK_4_220,
-    RF_MODEL_RC4DAT_8G_95,
-    RF_MODEL_RS232,
-    RF_MODEL_LDA_908V_8,
+ATTENUATOR_HJ_RADIORACK_4_220: Final[str] = "HJ-RADIORACK-4-220"
+ATTENUATOR_SWD_RC4DAT_8G_95: Final[str] = "SWD-RC4DAT-8G-95"
+ATTENUATOR_VAUNIX_LDA_908V_8: Final[str] = "Vaunix-LDA-908V-8"
+ATTENUATOR_SY_RS232BOARD5: Final[str] = "SY-RS232Board5"
+ATTENUATOR_CHOICES: Final[tuple[str, ...]] = (
+    ATTENUATOR_HJ_RADIORACK_4_220,
+    ATTENUATOR_SWD_RC4DAT_8G_95,
+    ATTENUATOR_SY_RS232BOARD5,
+    ATTENUATOR_VAUNIX_LDA_908V_8,
 )
 RF_ATTENUATION_MIN_DB: Final[int] = 0
 RF_ATTENUATION_MAX_DB: Final[int] = 110
@@ -266,40 +293,128 @@ RF_ATTENUATION_MAX_DB: Final[int] = 110
 # Lab selection keys shared between the UI and YAML files.
 LAB_SECTION_KEY: Final[str] = "lab"
 LAB_FIELD_NAME: Final[str] = "name"
+LAB_NAME_CHOICES: Final[tuple[str, ...]] = (
+    "SZ-RVR-VENUS",
+    "SZ-RVR-MERCURY",
+    "SZ-RVR-MARS",
+    "SZ-ShieldBox",
+    "SH-ShieldBox",
+    "SH-RVR-2",
+    "SH-RVR-3",
+)
+LAB_ENV_CONNECT_TYPE_CHOICES: Final[tuple[str, ...]] = (
+    "Direct Plug-in",
+    "HDMI Extension",
+    "NO HDMI",
+)
+LAB_ENV_COEX_MODE_CHOICES: Final[tuple[str, ...]] = (
+    "WiFi+BLE",
+    "WiFi Only",
+    "WiFi+BLE+CLASSIC",
+    "WiFi+BLE+Thread",
+    "WiFi+Thread",
+    "WiFi+Zigbee",
+    "WiFi+CLASSIC",
+    "WiFi+BLE+Zigbee",
+)
+AP_REGION_CHOICES: Final[tuple[str, ...]] = ("CN", "US", "EU", "JP")
+AP_MODEL_CHOICES: Final[tuple[str, ...]] = (
+    "ASUS-AX86U",
+    "ASUS-AX88U",
+    "ASUS-AX88U Pro",
+    "Xiaomi AX3600",
+    "Xiaomi AX7000",
+    "Glmt3000",
+)
 
 # Lab catalog. Each entry defines supported performance capabilities and the
 # fixed equipment models used in that lab. Editable parameters (IP address,
 # attenuation steps, vendor/product IDs, etc.) remain user-controlled via YAML.
 LAB_CATALOG: Final[dict[str, dict[str, Any]]] = {
-    "SH Full-wave anechoic chamber#2": {
-        "capabilities": {"rvr", "rvo", "peak_throughput"},
+    "SH-RVR-2": {
+        "capabilities": {
+            TEST_REPORT_RVR,
+            TEST_REPORT_RVO,
+            TEST_REPORT_PEAK_THROUGHPUT,
+        },
         "equipment": {
             "turntable_model": TURN_TABLE_MODEL_RS232,
-            "rf_model": RF_MODEL_RS232,
+            "rf_model": ATTENUATOR_HJ_RADIORACK_4_220,
         },
     },
-    "SH Shielded box": {
-        "capabilities": {"rvr", "peak_throughput"},
+    # "SH-RVR-3": {
+    #     "capabilities": {"rvr", "rvo", "peak_throughput"},
+    #     "equipment": {
+    #         "turntable_model": TURN_TABLE_MODEL_RS232,
+    #         "rf_model": ATTENUATOR_SY_RS232BOARD5,
+    #     },
+    # },
+    "SH-ShieldBox": {
+        "capabilities": {
+            TEST_REPORT_RVR,
+            TEST_REPORT_PEAK_THROUGHPUT,
+        },
         "equipment": {
             "turntable_model": None,
-            "rf_model": RF_MODEL_RADIORACK_4_220,
+            "rf_model": ATTENUATOR_SWD_RC4DAT_8G_95,
         },
     },
-    "SZ Venus": {
-        "capabilities": {"rvo", "rvr", "peak_throughput"},
+    # "SZ-RVR-VENUS": {
+    #     "capabilities": {"rvo", "rvr", "peak_throughput"},
+    #     "equipment": {
+    #         "turntable_model": TURN_TABLE_MODEL_OTHER,
+    #         "rf_model": ATTENUATOR_HJ_RADIORACK_4_220,
+    #     },
+    # },
+    # "SZ-RVR-MERCURY": {
+    #     "capabilities": {"rvo", "rvr", "peak_throughput"},
+    #     "equipment": {
+    #         "turntable_model": TURN_TABLE_MODEL_OTHER,
+    #         "rf_model": ATTENUATOR_HJ_RADIORACK_4_220,
+    #     },
+    # },
+    "SZ-RVR-MARS": {
+        "capabilities": {
+            TEST_REPORT_RVO,
+            TEST_REPORT_RVR,
+            TEST_REPORT_PEAK_THROUGHPUT,
+        },
         "equipment": {
             "turntable_model": TURN_TABLE_MODEL_OTHER,
-            "rf_model": RF_MODEL_RADIORACK_4_220,
+            "rf_model": ATTENUATOR_HJ_RADIORACK_4_220,
         },
     },
-    "SZ Shielded box": {
-        "capabilities": {"rvr", "peak_throughput"},
+    "SZ-ShieldBox": {
+        "capabilities": {
+            TEST_REPORT_RVR,
+            TEST_REPORT_PEAK_THROUGHPUT,
+        },
         "equipment": {
             "turntable_model": None,
-            "rf_model": RF_MODEL_LDA_908V_8,
+            "rf_model": ATTENUATOR_VAUNIX_LDA_908V_8,
         },
     },
 }
+
+_unknown_lab_names = sorted(set(LAB_CATALOG.keys()) - set(LAB_NAME_CHOICES))
+if _unknown_lab_names:
+    raise ValueError(
+        "LAB_CATALOG contains unsupported lab names: " + ", ".join(_unknown_lab_names)
+    )
+
+_unknown_lab_capabilities = sorted(
+    {
+        str(capability)
+        for spec in LAB_CATALOG.values()
+        for capability in (spec.get("capabilities") or set())
+        if str(capability) not in LAB_CAPABILITY_CHOICES
+    }
+)
+if _unknown_lab_capabilities:
+    raise ValueError(
+        "LAB_CATALOG contains unsupported capabilities: "
+        + ", ".join(_unknown_lab_capabilities)
+    )
 
 # Android version defaults
 DEFAULT_ANDROID_VERSION_CHOICES: Final[tuple[str, ...]] = (
@@ -436,7 +551,7 @@ def _normalize_config_keys_for_save(data: Mapping[str, Any] | None) -> dict[str,
     # connect_cfg = normalised.pop("connect_type", None)
     # if isinstance(connect_cfg, Mapping):
     #     dut_cfg = dict(connect_cfg)
-    #     dut_cfg.pop("mass_production_status", None)
+    #     dut_cfg.pop("hw_phase", None)
     #     normalised["dut"] = dut_cfg
     #
     # project_cfg = data.get("project", {}) if data else {}
@@ -450,7 +565,7 @@ def _normalize_config_keys_for_save(data: Mapping[str, Any] | None) -> dict[str,
         connect_cfg = normalised.pop("connect_type", None)
         if isinstance(connect_cfg, Mapping):
             dut_cfg = dict(connect_cfg)
-            dut_cfg.pop("mass_production_status", None)
+            dut_cfg.pop("hw_phase", None)
             normalised["dut"] = dut_cfg
 
         project_cfg = data["project"]
@@ -572,7 +687,7 @@ def merge_config_sections(
     dut_cfg = merged.pop("dut", None)
     if isinstance(dut_cfg, Mapping):
         connect_cfg = dict(dut_cfg)
-        connect_cfg.pop("mass_production_status", None)
+        connect_cfg.pop("hw_phase", None)
         merged["connect_type"] = connect_cfg
     # Compatibility settings live in their own config file but use the same
     # top-level key as execution/dut sections, so we merge them after the
@@ -1094,6 +1209,58 @@ class RouterConst:
 
 
 # TODO: Extend product/project mapping as needed.
+PROJECT_TYPES: Final[tuple[str, ...]] = ("OTT", "TV", "IPTV", "SH")
+WIFI_MODULE_CHOICES: Final[tuple[str, ...]] = (
+    "W265S1",
+    "W265S2-M",
+    "W155S1",
+    "W265P1",
+    "W265U1",
+    "W155S2",
+    "NA",
+    "W155U1",
+    "W265U2-M",
+    "W165S1-M",
+    "W165X1-M",
+    "XW EA6621",
+    "RTL8852",
+    "RTL8822",
+    "WQ9201S",
+    "AIC8800D",
+    "ATBM6032X",
+    "RTL8811",
+    "XW EA6652",
+    "RTL8862AE",
+    "MTK7920",
+    "MT7921AU/BE",
+)
+HW_PHASE_CHOICES: Final[tuple[str, ...]] = (
+    "POC",
+    "EVT",
+    "DVT",
+    "DVT-REWORK",
+    "DVT-1",
+    "DVT-2",
+    "PVT",
+    "PVT-1",
+    "PVT-2",
+    "MP",
+    "P0",
+    "P1",
+    "P1.1",
+    "P1.2",
+)
+DUT_OS_CHOICES: Final[tuple[str, ...]] = ("RDK", "Roku", "Fireos")
+BT_REMOTE_CHOICES: Final[tuple[str, ...]] = ("B12", "B25", "Project BTRC", "NA")
+BT_DEVICE_CHOICES: Final[tuple[str, ...]] = (
+    "MP30",
+    "JBL Pulse4",
+    "JBL Flip7",
+    "HUAWEI EGRT-00",
+    "xiaomi XMYX02JY",
+)
+BT_TYPE_CHOICES: Final[tuple[str, ...]] = ("BLE", "CLASSIC")
+
 WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]] = {
     "TV": {
         "XIAOMI": {
@@ -1105,9 +1272,7 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
                 "wifi_module": "W265U1",
                 "wifi_sn": " ",
                 "interface": "USB",
-                "ecosystem": "Android",
-                "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
-            },
+                "ecosystem": "Android",},
         },
         "Roku": {
             "Latte829": {
@@ -1115,11 +1280,10 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
                 "ProjectName":"",
                 "ODM": "Roku",
                 "main_chip": "TR964",
-                "wifi_module": "W265S2M",
+                "wifi_module": "W265S2-M",
                 "wifi_sn": " ",
                 "interface": "USB",
                 "ecosystem": "Linux",
-                "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
             },
         },
         "Hisense": {
@@ -1128,23 +1292,19 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
                 "ProjectName":"-",
                 "ODM": "Hisense",
                 "main_chip": "T963D4",
-                "wifi_module": "EA6621",
+                "wifi_module": "XW EA6621",
                 "wifi_sn": " ",
                 "interface": "USB",
-                "ecosystem": "Android",
-                "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
-            },
+                "ecosystem": "Android",},
             "55A6Q": {
                 "ProjectID": "None",
                 "ProjectName":"-",
                 "ODM": "Hisense",
                 "main_chip": "T963D4",
-                "wifi_module": "EA6652",
+                "wifi_module": "XW EA6652",
                 "wifi_sn": " ",
                 "interface": "USB",
-                "ecosystem": "Android",
-                "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
-            },
+                "ecosystem": "Android",},
         },
         "TCL": {
             "Espresso115": {
@@ -1152,12 +1312,10 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
                 "ProjectName":"",
                 "ODM": "TCL",
                 "main_chip": "T963D4",
-                "wifi_module": "W265UI",
+                "wifi_module": "W265U1",
                 "wifi_sn": " ",
                 "interface": "USB",
-                "ecosystem": "Android",
-                "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
-            },
+                "ecosystem": "Android",},
         },
     },
     "OTT": {
@@ -1170,9 +1328,7 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
                 "wifi_module": "W155S2",
                 "wifi_sn": " ",
                 "interface": "SDIO",
-                "ecosystem": "Android",
-                "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
-            },
+                "ecosystem": "Android",},
         },
         "Vantiva": {
             "Rosemary607": {
@@ -1183,9 +1339,7 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
                 "wifi_module": "W265S1",
                 "wifi_sn": "05:33",
                 "interface": "SDIO",
-                "ecosystem": "Android",
-                "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
-            },
+                "ecosystem": "Android",},
         },
         "JIO": {
             "Oak528": {
@@ -1196,9 +1350,7 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
                 "wifi_module": "W265S1",
                 "wifi_sn": "05:33",
                 "interface": "SDIO",
-                "ecosystem": "Android",
-                "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
-            },
+                "ecosystem": "Android",},
             "Oak401": {
                 "ProjectID": "BL20B9-S905X5",
                 "ProjectName": "SEI+S905X5-JU+AOSP U",
@@ -1207,9 +1359,7 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
                 "wifi_module": "W265S1",
                 "wifi_sn": "05:33",
                 "interface": "SDIO",
-                "ecosystem": "Android",
-                "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
-            },
+                "ecosystem": "Android",},
         },
         "ZTE": {
             "Rosemary904": {
@@ -1217,11 +1367,9 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
                 "ProjectName": "ZTE+Viettel+S905Y5+W265S2-M+ATV U",
                 "ODM": "ZTE",
                 "main_chip": "S905Y5",
-                "wifi_module": "W265S2M",
+                "wifi_module": "W265S2-M",
                 "interface": "SDIO",
-                "ecosystem": "Android",
-                "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
-            },
+                "ecosystem": "Android",},
         },
         "A": {
             "Plam811": {
@@ -1231,9 +1379,7 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
                 "main_chip": "S905X5M",
                 "wifi_module": "W265S1",
                 "interface": "SDIO",
-                "ecosystem": "Android",
-                "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
-            },
+                "ecosystem": "Android",},
         },
         "Roku": {
             "Seabrook": {
@@ -1243,9 +1389,7 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
                 "main_chip": "S905X5M",
                 "wifi_module": "W265S2-M",
                 "interface": "SDIO",
-                "ecosystem": "Linux",
-                "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
-            },
+                "ecosystem": "Linux",},
         },
         "W": {
             "Palm825": {
@@ -1255,12 +1399,30 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
                 "main_chip": "S905X5M",
                 "wifi_module": "W265S2-M",
                 "interface": "SDIO",
-                "ecosystem": "Android",
-                "mass_production_status": ["EVT", "DVT", "PVT", "MP"],
-            },
+                "ecosystem": "Android",},
         },
     },
 }
+
+_unknown_project_types = sorted(set(WIFI_PRODUCT_PROJECT_MAP.keys()) - set(PROJECT_TYPES))
+if _unknown_project_types:
+    raise ValueError(
+        "WIFI_PRODUCT_PROJECT_MAP contains unsupported project types: "
+        + ", ".join(_unknown_project_types)
+    )
+
+_unknown_wifi_modules: set[str] = set()
+for _project_type, _odm_map in WIFI_PRODUCT_PROJECT_MAP.items():
+    for _customer, _projects in _odm_map.items():
+        for _project, _info in _projects.items():
+            _wifi_module = str(_info.get("wifi_module") or "").strip()
+            if _wifi_module and _wifi_module not in WIFI_MODULE_CHOICES:
+                _unknown_wifi_modules.add(_wifi_module)
+if _unknown_wifi_modules:
+    raise ValueError(
+        "WIFI_PRODUCT_PROJECT_MAP contains unsupported wifi_module values: "
+        + ", ".join(sorted(_unknown_wifi_modules))
+    )
 
 
 

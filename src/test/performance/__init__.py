@@ -20,12 +20,12 @@ from src.tools.router_tool.router_factory import get_router
 from src.tools.connect_tool.lab_device_controller import LabDeviceController
 from src.tools.rs_test import rs
 from src.util.constants import (
+    ATTENUATOR_CHOICES,
+    ATTENUATOR_SY_RS232BOARD5,
     DEFAULT_RF_STEP_SPEC,
     IDENTIFIER_SANITIZE_PATTERN,
     RF_ATTENUATION_MAX_DB,
     RF_ATTENUATION_MIN_DB,
-    RF_MODEL_CHOICES,
-    RF_MODEL_RS232,
     get_debug_flags,
     TURN_TABLE_FIELD_IP_ADDRESS,
     TURN_TABLE_FIELD_MODEL,
@@ -199,9 +199,9 @@ def init_rf():
     cfg = get_cfg()
     rf_solution = cfg['rf_solution']
     model = rf_solution['model']
-    if model not in RF_MODEL_CHOICES:
+    if model not in ATTENUATOR_CHOICES:
         raise EnvironmentError("Doesn't support this model")
-    if model == RF_MODEL_RS232:
+    if model == ATTENUATOR_SY_RS232BOARD5:
         rf_tool = rs()
     else:
         rf_ip = rf_solution[model]['ip_address']

@@ -12,16 +12,22 @@ from src.tools.router_tool.AsusRouter.Asusax6700Control import Asusax6700Control
 from src.tools.router_tool.Xiaomi.Xiaomiax3600Control import Xiaomiax3600Control
 from src.tools.router_tool.Xiaomi.XiaomiBe7000Control import XiaomiBe7000Control
 from src.tools.router_tool.OpenWrtWlControl import OpenWrtWlControl
-from src.util.constants import load_config
+from src.util.constants import AP_MODEL_CHOICES, load_config
 
 router_list = {
-    'asusax86u': Asusax86uControl,
-    'asusax88u': Asusax88uControl,
-    'asusax88upro': Asusax88uProControl,
-    'xiaomibe7000': XiaomiBe7000Control,
-    'xiaomiax3600': Xiaomiax3600Control,
-    'glmt3000': OpenWrtWlControl,
+    "ASUS-AX86U": Asusax86uControl,
+    "ASUS-AX88U": Asusax88uControl,
+    "ASUS-AX88U Pro": Asusax88uProControl,
+    "Xiaomi AX3600": Xiaomiax3600Control,
+    "Xiaomi AX7000": XiaomiBe7000Control,
+    "Glmt3000": OpenWrtWlControl,
 }
+
+_unsupported_router_models = sorted(set(router_list.keys()) - set(AP_MODEL_CHOICES))
+if _unsupported_router_models:
+    raise ValueError(
+        "router_list contains unsupported AP models: " + ", ".join(_unsupported_router_models)
+    )
 
 
 def get_router(router_name: str, address: str | None = None):
@@ -38,7 +44,7 @@ def get_router(router_name: str, address: str | None = None):
             object
                 Description of the returned value.
     """
-    if router_name not in router_list:
+    if router_name not in AP_MODEL_CHOICES or router_name not in router_list:
         raise ValueError("Doesn't support this router")
 
     if address is None:

@@ -27,10 +27,13 @@ import os
 from PyQt5.QtCore import QSignalBlocker
 
 from src.util.constants import (
+    ATTENUATOR_HJ_RADIORACK_4_220,
+    ATTENUATOR_SWD_RC4DAT_8G_95,
+    ATTENUATOR_VAUNIX_LDA_908V_8,
     LAB_CATALOG,
-    RF_MODEL_LDA_908V_8,
-    RF_MODEL_RADIORACK_4_220,
-    RF_MODEL_RC4DAT_8G_95,
+    TEST_REPORT_PEAK_THROUGHPUT,
+    TEST_REPORT_RVO,
+    TEST_REPORT_RVR,
     TURN_TABLE_MODEL_OTHER,
 )
 
@@ -94,11 +97,11 @@ def _ui_mode_has_classic(values: Mapping[str, Any]) -> bool:
 
 def _current_lab_choices(values: Dict[str, Any]) -> List[str]:
     if values.get("testcase.is_peak_throughput"):
-        capability = "peak_throughput"
+        capability = TEST_REPORT_PEAK_THROUGHPUT
     elif values.get("testcase.is_rvo"):
-        capability = "rvo"
+        capability = TEST_REPORT_RVO
     elif values.get("testcase.is_rvr"):
-        capability = "rvr"
+        capability = TEST_REPORT_RVR
     else:
         return []
 
@@ -245,68 +248,68 @@ CUSTOM_SIMPLE_UI_RULES.append(
     SimpleRuleSpec(
         trigger_field="rf_solution.model",
         effects=[
-            # RC4DAT-8G-95 fields
+            # SWD-RC4DAT-8G-95 fields
             SimpleFieldEffect(
-                target_field="rf_solution.RC4DAT-8G-95.idVendor",
+                target_field="rf_solution.SWD-RC4DAT-8G-95.idVendor",
                 action="show",
-                condition=lambda values: values.get("rf_solution.model") == RF_MODEL_RC4DAT_8G_95,
+                condition=lambda values: values.get("rf_solution.model") == ATTENUATOR_SWD_RC4DAT_8G_95,
             ),
             SimpleFieldEffect(
-                target_field="rf_solution.RC4DAT-8G-95.idVendor",
+                target_field="rf_solution.SWD-RC4DAT-8G-95.idVendor",
                 action="hide",
-                condition=lambda values: values.get("rf_solution.model") != RF_MODEL_RC4DAT_8G_95,
+                condition=lambda values: values.get("rf_solution.model") != ATTENUATOR_SWD_RC4DAT_8G_95,
             ),
             SimpleFieldEffect(
-                target_field="rf_solution.RC4DAT-8G-95.idProduct",
+                target_field="rf_solution.SWD-RC4DAT-8G-95.idProduct",
                 action="show",
-                condition=lambda values: values.get("rf_solution.model") == RF_MODEL_RC4DAT_8G_95,
+                condition=lambda values: values.get("rf_solution.model") == ATTENUATOR_SWD_RC4DAT_8G_95,
             ),
             SimpleFieldEffect(
-                target_field="rf_solution.RC4DAT-8G-95.idProduct",
+                target_field="rf_solution.SWD-RC4DAT-8G-95.idProduct",
                 action="hide",
-                condition=lambda values: values.get("rf_solution.model") != RF_MODEL_RC4DAT_8G_95,
+                condition=lambda values: values.get("rf_solution.model") != ATTENUATOR_SWD_RC4DAT_8G_95,
             ),
             SimpleFieldEffect(
-                target_field="rf_solution.RC4DAT-8G-95.ip_address",
+                target_field="rf_solution.SWD-RC4DAT-8G-95.ip_address",
                 action="show",
-                condition=lambda values: values.get("rf_solution.model") == RF_MODEL_RC4DAT_8G_95,
+                condition=lambda values: values.get("rf_solution.model") == ATTENUATOR_SWD_RC4DAT_8G_95,
             ),
             SimpleFieldEffect(
-                target_field="rf_solution.RC4DAT-8G-95.ip_address",
+                target_field="rf_solution.SWD-RC4DAT-8G-95.ip_address",
                 action="hide",
-                condition=lambda values: values.get("rf_solution.model") != RF_MODEL_RC4DAT_8G_95,
+                condition=lambda values: values.get("rf_solution.model") != ATTENUATOR_SWD_RC4DAT_8G_95,
             ),
-            # RADIORACK-4-220 field
+            # HJ-RADIORACK-4-220 field
             SimpleFieldEffect(
-                target_field="rf_solution.RADIORACK-4-220.ip_address",
+                target_field="rf_solution.HJ-RADIORACK-4-220.ip_address",
                 action="show",
-                condition=lambda values: values.get("rf_solution.model") == RF_MODEL_RADIORACK_4_220,
+                condition=lambda values: values.get("rf_solution.model") == ATTENUATOR_HJ_RADIORACK_4_220,
             ),
             SimpleFieldEffect(
-                target_field="rf_solution.RADIORACK-4-220.ip_address",
+                target_field="rf_solution.HJ-RADIORACK-4-220.ip_address",
                 action="hide",
-                condition=lambda values: values.get("rf_solution.model") != RF_MODEL_RADIORACK_4_220,
+                condition=lambda values: values.get("rf_solution.model") != ATTENUATOR_HJ_RADIORACK_4_220,
             ),
-            # LDA-908V-8 fields
+            # Vaunix-LDA-908V-8 fields
             SimpleFieldEffect(
-                target_field="rf_solution.LDA-908V-8.ip_address",
+                target_field="rf_solution.Vaunix-LDA-908V-8.ip_address",
                 action="show",
-                condition=lambda values: values.get("rf_solution.model") == RF_MODEL_LDA_908V_8,
+                condition=lambda values: values.get("rf_solution.model") == ATTENUATOR_VAUNIX_LDA_908V_8,
             ),
             SimpleFieldEffect(
-                target_field="rf_solution.LDA-908V-8.ip_address",
+                target_field="rf_solution.Vaunix-LDA-908V-8.ip_address",
                 action="hide",
-                condition=lambda values: values.get("rf_solution.model") != RF_MODEL_LDA_908V_8,
+                condition=lambda values: values.get("rf_solution.model") != ATTENUATOR_VAUNIX_LDA_908V_8,
             ),
             SimpleFieldEffect(
-                target_field="rf_solution.LDA-908V-8.channels",
+                target_field="rf_solution.Vaunix-LDA-908V-8.channels",
                 action="show",
-                condition=lambda values: values.get("rf_solution.model") == RF_MODEL_LDA_908V_8,
+                condition=lambda values: values.get("rf_solution.model") == ATTENUATOR_VAUNIX_LDA_908V_8,
             ),
             SimpleFieldEffect(
-                target_field="rf_solution.LDA-908V-8.channels",
+                target_field="rf_solution.Vaunix-LDA-908V-8.channels",
                 action="hide",
-                condition=lambda values: values.get("rf_solution.model") != RF_MODEL_LDA_908V_8,
+                condition=lambda values: values.get("rf_solution.model") != ATTENUATOR_VAUNIX_LDA_908V_8,
             ),
         ],
     )
@@ -925,7 +928,7 @@ CUSTOM_TESTCASE_UI_RULES.append(
                 condition=lambda values: True,
             ),
             SimpleFieldEffect(
-                target_field="project.mass_production_status",
+                target_field="dut.hw_phase",
                 action="enable",
                 condition=lambda values: True,
             ),
@@ -935,7 +938,7 @@ CUSTOM_TESTCASE_UI_RULES.append(
                 condition=lambda values: True,
             ),
             SimpleFieldEffect(
-                target_field="project.product_line",
+                target_field="project.project_type",
                 action="enable",
                 condition=lambda values: True,
             ),
@@ -1040,7 +1043,7 @@ CUSTOM_TESTCASE_UI_RULES.append(
                 condition=lambda values: True,
             ),
             SimpleFieldEffect(
-                target_field="project.main_chip",
+                target_field="project.soc",
                 action="disable",
                 condition=lambda values: True,
             ),
@@ -1272,42 +1275,42 @@ CUSTOM_TESTCASE_UI_RULES.append(
                 condition=lambda values: True,
             ),
             SimpleFieldEffect(
-                target_field="rf_solution.RC4DAT-8G-95.idVendor",
+                target_field="rf_solution.SWD-RC4DAT-8G-95.idVendor",
                 action="enable",
                 condition=lambda values: bool(
                     values.get("testcase.is_rvo") or values.get("testcase.is_rvr")
                 ),
             ),
             SimpleFieldEffect(
-                target_field="rf_solution.RC4DAT-8G-95.idProduct",
+                target_field="rf_solution.SWD-RC4DAT-8G-95.idProduct",
                 action="enable",
                 condition=lambda values: bool(
                     values.get("testcase.is_rvo") or values.get("testcase.is_rvr")
                 ),
             ),
             SimpleFieldEffect(
-                target_field="rf_solution.RC4DAT-8G-95.ip_address",
+                target_field="rf_solution.SWD-RC4DAT-8G-95.ip_address",
                 action="enable",
                 condition=lambda values: bool(
                     values.get("testcase.is_rvo") or values.get("testcase.is_rvr")
                 ),
             ),
             SimpleFieldEffect(
-                target_field="rf_solution.RADIORACK-4-220.ip_address",
+                target_field="rf_solution.HJ-RADIORACK-4-220.ip_address",
                 action="enable",
                 condition=lambda values: bool(
                     values.get("testcase.is_rvo") or values.get("testcase.is_rvr")
                 ),
             ),
             SimpleFieldEffect(
-                target_field="rf_solution.LDA-908V-8.ip_address",
+                target_field="rf_solution.Vaunix-LDA-908V-8.ip_address",
                 action="enable",
                 condition=lambda values: bool(
                     values.get("testcase.is_rvo") or values.get("testcase.is_rvr")
                 ),
             ),
             SimpleFieldEffect(
-                target_field="rf_solution.LDA-908V-8.channels",
+                target_field="rf_solution.Vaunix-LDA-908V-8.channels",
                 action="enable",
                 condition=lambda values: bool(
                     values.get("testcase.is_rvo") or values.get("testcase.is_rvr")
@@ -1326,42 +1329,42 @@ CUSTOM_TESTCASE_UI_RULES.append(
                 condition=lambda values: True,
             ),
             SimpleFieldEffect(
-                target_field="rf_solution.RC4DAT-8G-95.idVendor",
+                target_field="rf_solution.SWD-RC4DAT-8G-95.idVendor",
                 action="disable",
                 condition=lambda values: not bool(
                     values.get("testcase.is_rvo") or values.get("testcase.is_rvr")
                 ),
             ),
             SimpleFieldEffect(
-                target_field="rf_solution.RC4DAT-8G-95.idProduct",
+                target_field="rf_solution.SWD-RC4DAT-8G-95.idProduct",
                 action="disable",
                 condition=lambda values: not bool(
                     values.get("testcase.is_rvo") or values.get("testcase.is_rvr")
                 ),
             ),
             SimpleFieldEffect(
-                target_field="rf_solution.RC4DAT-8G-95.ip_address",
+                target_field="rf_solution.SWD-RC4DAT-8G-95.ip_address",
                 action="disable",
                 condition=lambda values: not bool(
                     values.get("testcase.is_rvo") or values.get("testcase.is_rvr")
                 ),
             ),
             SimpleFieldEffect(
-                target_field="rf_solution.RADIORACK-4-220.ip_address",
+                target_field="rf_solution.HJ-RADIORACK-4-220.ip_address",
                 action="disable",
                 condition=lambda values: not bool(
                     values.get("testcase.is_rvo") or values.get("testcase.is_rvr")
                 ),
             ),
             SimpleFieldEffect(
-                target_field="rf_solution.LDA-908V-8.ip_address",
+                target_field="rf_solution.Vaunix-LDA-908V-8.ip_address",
                 action="disable",
                 condition=lambda values: not bool(
                     values.get("testcase.is_rvo") or values.get("testcase.is_rvr")
                 ),
             ),
             SimpleFieldEffect(
-                target_field="rf_solution.LDA-908V-8.channels",
+                target_field="rf_solution.Vaunix-LDA-908V-8.channels",
                 action="disable",
                 condition=lambda values: not bool(
                     values.get("testcase.is_rvo") or values.get("testcase.is_rvr")
@@ -1469,37 +1472,37 @@ CUSTOM_TESTCASE_UI_RULES.append(
                 in {"test_xiaomi_rvo.py", "test_xiaomi_rvo_wifi6.py"},
             ),
             SimpleFieldEffect(
-                target_field="rf_solution.RC4DAT-8G-95.idVendor",
+                target_field="rf_solution.SWD-RC4DAT-8G-95.idVendor",
                 action="disable",
                 condition=lambda values: values.get("testcase.basename")
                 == "test_xiaomi_rvr_wifi6.py",
             ),
             SimpleFieldEffect(
-                target_field="rf_solution.RC4DAT-8G-95.idProduct",
+                target_field="rf_solution.SWD-RC4DAT-8G-95.idProduct",
                 action="disable",
                 condition=lambda values: values.get("testcase.basename")
                 == "test_xiaomi_rvr_wifi6.py",
             ),
             SimpleFieldEffect(
-                target_field="rf_solution.RC4DAT-8G-95.ip_address",
+                target_field="rf_solution.SWD-RC4DAT-8G-95.ip_address",
                 action="disable",
                 condition=lambda values: values.get("testcase.basename")
                 == "test_xiaomi_rvr_wifi6.py",
             ),
             SimpleFieldEffect(
-                target_field="rf_solution.RADIORACK-4-220.ip_address",
+                target_field="rf_solution.HJ-RADIORACK-4-220.ip_address",
                 action="disable",
                 condition=lambda values: values.get("testcase.basename")
                 == "test_xiaomi_rvr_wifi6.py",
             ),
             SimpleFieldEffect(
-                target_field="rf_solution.LDA-908V-8.ip_address",
+                target_field="rf_solution.Vaunix-LDA-908V-8.ip_address",
                 action="disable",
                 condition=lambda values: values.get("testcase.basename")
                 == "test_xiaomi_rvr_wifi6.py",
             ),
             SimpleFieldEffect(
-                target_field="rf_solution.LDA-908V-8.channels",
+                target_field="rf_solution.Vaunix-LDA-908V-8.channels",
                 action="disable",
                 condition=lambda values: values.get("testcase.basename")
                 == "test_xiaomi_rvr_wifi6.py",

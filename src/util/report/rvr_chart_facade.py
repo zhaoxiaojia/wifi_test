@@ -1,4 +1,4 @@
-"""Shared RVR chart data processing helpers.
+﻿"""Shared RVR chart data processing helpers.
 
 This module extracts the data preparation logic that was previously
 embedded in the report page UI so it can be reused by both the GUI and
@@ -22,6 +22,9 @@ from src.util.constants import (
     DIRECTION_ORDER_MAP,
     FREQ_BAND_ORDER_MAP,
     STANDARD_ORDER_MAP,
+    TEST_REPORT_PEAK_THROUGHPUT,
+    TEST_REPORT_RVO,
+    TEST_REPORT_RVR,
     TEST_TYPE_ORDER_MAP,
 )
 
@@ -35,10 +38,10 @@ class RvrDataFrame:
     def apply_test_type(self, inferred: Optional[str]) -> None:
         """Ensure the dataframe exposes ``__test_type_display__`` with a fallback."""
         if inferred:
-            normalized = (inferred or "").strip().upper()
-            self.frame["__test_type_display__"] = normalized or "RVR"
+            normalized = str(inferred or "").strip()
+            self.frame["__test_type_display__"] = normalized or TEST_REPORT_RVR
         elif "__test_type_display__" not in self.frame.columns:
-            self.frame["__test_type_display__"] = "RVR"
+            self.frame["__test_type_display__"] = TEST_REPORT_RVR
 
 
 class RvrChartLogic:
@@ -274,11 +277,11 @@ class RvrChartLogic:
             if not normalized:
                 continue
             if "peak" in normalized and "throughput" in normalized:
-                return "PEAK_THROUGHPUT"
-            if "rvo" in normalized:
-                return "RVO"
-            if "rvr" in normalized:
-                return "RVR"
+                return TEST_REPORT_PEAK_THROUGHPUT
+            if TEST_REPORT_RVO.lower() in normalized:
+                return TEST_REPORT_RVO
+            if TEST_REPORT_RVR.lower() in normalized:
+                return TEST_REPORT_RVR
 
         angle_value = self._extract_first_non_empty(
             row,
@@ -296,46 +299,46 @@ class RvrChartLogic:
         if angle_value is not None:
             normalized_angle = self._normalize_value(angle_value)
             if normalized_angle and normalized_angle not in {"", "null", "none"}:
-                return "RVO"
+                return TEST_REPORT_RVO
 
         for value in row.tolist():
             normalized = self._normalize_value(value)
             if not normalized:
                 continue
             if "peak" in normalized and "throughput" in normalized:
-                return "PEAK_THROUGHPUT"
-            if "rvo" in normalized:
-                return "RVO"
-            if "rvr" in normalized:
-                return "RVR"
-        return "RVR"
+                return TEST_REPORT_PEAK_THROUGHPUT
+            if TEST_REPORT_RVO.lower() in normalized:
+                return TEST_REPORT_RVO
+            if TEST_REPORT_RVR.lower() in normalized:
+                return TEST_REPORT_RVR
+        return TEST_REPORT_RVR
 
     def _resolve_dataframe_test_type(self, df: pd.DataFrame, path: Optional[Path]) -> Optional[str]:
         if df is None or df.empty:
             return None
         selection_override = self._infer_test_type_from_selection()
         if selection_override:
-            normalized_selection = selection_override.strip().upper()
+            normalized_selection = selection_override.strip()
             if normalized_selection:
                 return normalized_selection
 
         override = self._infer_test_type_from_path(path) if path is not None else None
         if override:
-            normalized_override = override.strip().upper()
+            normalized_override = override.strip()
             if normalized_override:
                 return normalized_override
 
         detected = self._determine_dataframe_test_type(df)
         if detected:
             return detected
-        return "RVR"
+        return TEST_REPORT_RVR
 
     def _determine_dataframe_test_type(self, df: pd.DataFrame) -> Optional[str]:
         if df is None or df.empty:
             return None
 
         if self._dataframe_contains_corner_angles(df):
-            return "RVO"
+            return TEST_REPORT_RVO
 
         sample = df.head(200)
         detected: set[str] = set()
@@ -343,24 +346,24 @@ class RvrChartLogic:
             candidate = self._detect_test_type_from_row(row)
             if candidate:
                 detected.add(candidate.upper())
-        if "RVO" in detected:
-            return "RVO"
-        if "PEAK_THROUGHPUT" in detected:
-            return "PEAK_THROUGHPUT"
-        if "RVR" in detected:
-            return "RVR"
+        if TEST_REPORT_RVO in detected:
+            return TEST_REPORT_RVO
+        if TEST_REPORT_PEAK_THROUGHPUT in detected:
+            return TEST_REPORT_PEAK_THROUGHPUT
+        if TEST_REPORT_RVR in detected:
+            return TEST_REPORT_RVR
 
         column_tokens = " ".join(str(name).lower() for name in df.columns)
-        if "rvo" in column_tokens:
-            return "RVO"
+        if TEST_REPORT_RVO.lower() in column_tokens:
+            return TEST_REPORT_RVO
         if "peak" in column_tokens and "throughput" in column_tokens:
-            return "PEAK_THROUGHPUT"
+            return TEST_REPORT_PEAK_THROUGHPUT
         return None
 
     def _infer_test_type_from_selection(self) -> Optional[str]:
         explicit = getattr(self, "_selected_test_type", None)
         if isinstance(explicit, str):
-            normalized = explicit.strip().upper()
+            normalized = explicit.strip()
             if normalized:
                 return normalized
 
@@ -384,11 +387,11 @@ class RvrChartLogic:
         if not name:
             return None
         if "peak" in name and "throughput" in name:
-            return "PEAK_THROUGHPUT"
-        if "rvo" in name:
-            return "RVO"
-        if any(token in name for token in ("rvr", "performance")):
-            return "RVR"
+            return TEST_REPORT_PEAK_THROUGHPUT
+        if TEST_REPORT_RVO.lower() in name:
+            return TEST_REPORT_RVO
+        if any(token in name for token in (TEST_REPORT_RVR.lower(), "performance")):
+            return TEST_REPORT_RVR
         return None
 
     def _dataframe_contains_corner_angles(self, df: pd.DataFrame) -> bool:
@@ -613,13 +616,13 @@ class RvrChartLogic:
             return None
         if not raw:
             return None
-        if "rvo" in raw:
-            return "RVO"
-        peak_keywords = {"peak_throughput", "peak-throughput", "peakthroughput"}
+        if TEST_REPORT_RVO in raw:
+            return TEST_REPORT_RVO
+        peak_keywords = {TEST_REPORT_PEAK_THROUGHPUT, "peak-throughput", "peakthroughput"}
         if any(keyword in raw for keyword in peak_keywords) or ("peak" in raw and "throughput" in raw):
-            return "PEAK_THROUGHPUT"
-        if "rvr" in raw:
-            return "RVR"
+            return TEST_REPORT_PEAK_THROUGHPUT
+        if TEST_REPORT_RVR in raw:
+            return TEST_REPORT_RVR
         return None
 
     def _collect_angle_positions(self, group: pd.DataFrame) -> list[tuple[float, str]]:
@@ -783,9 +786,9 @@ class RvrChartLogic:
 
     def _format_test_type_label(self, test_type: str) -> str:
         mapping = {
-            "RVR": "RVR Throughput",
-            "RVO": "RVO Throughput",
-            "PEAK_THROUGHPUT": "Peak Throughput",
+            TEST_REPORT_RVR: "RVR Throughput",
+            TEST_REPORT_RVO: "RVO Throughput",
+            TEST_REPORT_PEAK_THROUGHPUT: "Peak Throughput",
         }
         normalized = (test_type or "").strip().upper()
         if normalized in mapping:
@@ -1043,10 +1046,10 @@ class RvrChartLogic:
             return ""
         rounded = round(value)
         if abs(value - rounded) < 1e-6:
-            return f"{int(rounded)}°"
-        formatted = f"{value:.1f}°"
-        if formatted.endswith(".0°"):
-            formatted = formatted[:-3] + "°"
+            return f"{int(rounded)}掳"
+        formatted = f"{value:.1f}掳"
+        if formatted.endswith(".0掳"):
+            formatted = formatted[:-3] + "掳"
         return formatted
 
     def _format_angle_display(self, value) -> str:
@@ -1094,3 +1097,6 @@ class RvrChartLogic:
     def _safe_chart_name(self, title: str) -> str:
         safe = re.sub(r"[^0-9A-Za-z_-]+", "_", title).strip("_")
         return safe or "rvr_chart"
+
+
+

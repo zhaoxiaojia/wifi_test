@@ -17,8 +17,27 @@ from .schema import (
 )
 from .sql_writer import SqlWriter
 from src.util.constants import (
+    AP_MODEL_CHOICES,
+    AP_REGION_CHOICES,
     BASIC_CONFIG_FILENAME,
+    BT_DEVICE_CHOICES,
+    BT_REMOTE_CHOICES,
+    BT_TYPE_CHOICES,
+    DUT_OS_CHOICES,
+    LAB_CAPABILITY_CHOICES,
+    LAB_ENV_COEX_MODE_CHOICES,
+    LAB_NAME_CHOICES,
+    LAB_ENV_CONNECT_TYPE_CHOICES,
     LAB_CATALOG,
+    HW_PHASE_CHOICES,
+    PROJECT_TYPES,
+    RUN_TYPE_CHOICES,
+    RUN_TYPE_WIFI_SMARTTEST,
+    TEST_REPORT_CHOICES,
+    TEST_REPORT_COMPATIBILITY,
+    TEST_REPORT_PEAK_THROUGHPUT,
+    TEST_REPORT_RVO,
+    TEST_REPORT_RVR,
     TURN_TABLE_FIELD_MODEL,
     TURN_TABLE_SECTION_KEY,
     WIFI_PRODUCT_PROJECT_MAP,
@@ -27,6 +46,26 @@ from src.util.constants import (
     load_config,
     get_debug_flags,
 )
+
+
+def _require_test_report_type(value: str | None) -> str:
+    report_type = str(value or "").strip()
+    if report_type not in TEST_REPORT_CHOICES:
+        raise ValueError(
+            f"Unsupported test_report type={report_type!r}; "
+            f"allowed={list(TEST_REPORT_CHOICES)!r}"
+        )
+    return report_type
+
+
+def _require_run_type(value: str | None) -> str:
+    run_type = str(value or "").strip()
+    if run_type not in RUN_TYPE_CHOICES:
+        raise ValueError(
+            f"Unsupported execution.run_type={run_type!r}; "
+            f"allowed={list(RUN_TYPE_CHOICES)!r}"
+        )
+    return run_type
 
 __all__ = [
     "PerformanceTableManager",
@@ -253,8 +292,8 @@ def _normalize_angle_token(value: Any) -> Optional[float]:
 _COLUMN_NORMALIZERS: Dict[str, ColumnNormalizer] = {
     "band": _normalize_band_token,
     "direction": _normalize_direction_token,
-    "standard": _normalize_standard_token,
-    "angle_deg": _normalize_angle_token,
+    "wifi_mode": _normalize_standard_token,
+    "angle": _normalize_angle_token,
 }
 
 
@@ -867,44 +906,6 @@ def _split_fpga(value: Any) -> tuple[Optional[str], Optional[str]]:
     return None, None
 
 
-def _guess_product_by_mapping(
-        wifi_module: Optional[str],
-        interface: Optional[str],
-        main_chip: Optional[str],
-) -> tuple[Optional[str], Optional[str], Optional[str], Optional[dict[str, Any]]]:
-    """
-    Guess product by mapping.
-
-    Parameters
-    ----------
-    wifi_module : Any
-        The ``wifi_module`` parameter.
-    interface : Any
-        The ``interface`` parameter.
-    main_chip : Any
-        The ``main_chip`` parameter.
-
-    Returns
-    -------
-    tuple[Optional[str], Optional[str], Optional[str], Optional[dict[str, str]]]
-        A value of type ``tuple[Optional[str], Optional[str], Optional[str], Optional[dict[str, str]]]``.
-    """
-    for product_line, odm_map in WIFI_PRODUCT_PROJECT_MAP.items():
-        for odm_name, projects in odm_map.items():
-            for project_name, info in projects.items():
-                info_wifi = info["wifi_module"]
-                info_interface = info["interface"]
-                info_chip = info["main_chip"]
-                if wifi_module and info_wifi != wifi_module:
-                    continue
-                if interface and info_interface != interface:
-                    continue
-                if main_chip and info_chip != main_chip:
-                    continue
-                return odm_name, product_line, project_name, info
-    return None, None, None, None
-
-
 def _resolve_wifi_product_details(fpga_section: Any) -> Dict[str, Any]:
     """
     Resolve wifi product details.
@@ -921,7 +922,7 @@ def _resolve_wifi_product_details(fpga_section: Any) -> Dict[str, Any]:
     """
     details: Dict[str, Any] = {
         "customer": None,
-        "product_line": None,
+        "project_type": None,
         "nickname": None,
         "project_name": None,
         "project_id": None,
@@ -931,83 +932,53 @@ def _resolve_wifi_product_details(fpga_section: Any) -> Dict[str, Any]:
         "ecosystem": None,
     }
 
-    if isinstance(fpga_section, Mapping):
-        details["customer"] = str(fpga_section.get("customer") or "").strip() or None
-        details["product_line"] = str(fpga_section.get("product_line") or "").strip() or None
-        details["nickname"] = str(fpga_section.get("project") or "").strip() or None
-        details["main_chip"] = _normalize_upper_token(fpga_section.get("main_chip"))
-        details["wifi_module"] = _normalize_upper_token(
-            fpga_section.get("wifi_module") or fpga_section.get("series")
-        )
-        details["interface"] = _normalize_upper_token(fpga_section.get("interface"))
-    else:
-        wifi_module, interface = _split_fpga(fpga_section)
-        details["wifi_module"] = wifi_module
-        details["interface"] = interface
+    if not isinstance(fpga_section, Mapping):
+        raise ValueError("project section must be a mapping containing customer/project_type/project.")
 
-    info: Optional[dict[str, Any]] = None
+    customer = str(fpga_section.get("customer") or "").strip()
+    project_type = str(fpga_section.get("project_type") or "").strip()
+    nickname = str(fpga_section.get("project") or "").strip()
+    if not customer or not project_type or not nickname:
+        raise ValueError("project section must include non-empty customer/project_type/project.")
+    if project_type not in PROJECT_TYPES:
+        raise ValueError(f"Unsupported project_type={project_type!r}; allowed={list(PROJECT_TYPES)!r}")
 
-    if details["product_line"] and details["customer"] and details["nickname"]:
-        projects = WIFI_PRODUCT_PROJECT_MAP.get(details["product_line"], {}).get(details["customer"], {})
-        if details["nickname"] in projects:
-            info = projects[details["nickname"]]
+    details["customer"] = customer
+    details["project_type"] = project_type
+    details["nickname"] = nickname
+    details["main_chip"] = _normalize_upper_token(fpga_section.get("soc") or fpga_section.get("main_chip"))
+    details["wifi_module"] = _normalize_upper_token(fpga_section.get("wifi_module") or fpga_section.get("series"))
+    details["interface"] = _normalize_upper_token(fpga_section.get("interface"))
+    details["ecosystem"] = _normalize_str_token(fpga_section.get("ecosystem"))
 
-    if info is None and details["nickname"] and details["product_line"]:
-        odm_map = WIFI_PRODUCT_PROJECT_MAP.get(details["product_line"], {})
-        for odm_name, projects in odm_map.items():
-            if details["customer"] is not None and odm_name != details["customer"]:
-                continue
-            if details["nickname"] not in projects:
-                continue
-            details["customer"] = odm_name
-            info = projects[details["nickname"]]
-            break
-
-    if info is None and details["nickname"]:
-        for product_line, odm_map in WIFI_PRODUCT_PROJECT_MAP.items():
-            if details["product_line"] and product_line != details["product_line"]:
-                continue
-            for odm_name, projects in odm_map.items():
-                if details["customer"] is not None and odm_name != details["customer"]:
-                    continue
-                if details["nickname"] not in projects:
-                    continue
-                details["product_line"] = product_line
-                details["customer"] = odm_name
-                info = projects[details["nickname"]]
-                break
-            if info is not None:
-                break
-    if info is None:
-        (
-            guessed_customer,
-            guessed_product,
-            guessed_project,
-            guessed_info,
-        ) = _guess_product_by_mapping(
-            details["wifi_module"],
-            details["interface"],
-            details["main_chip"],
-        )
-        if guessed_customer:
-            details["customer"] = guessed_customer
-        if guessed_product:
-            details["product_line"] = guessed_product
-        if guessed_project:
-            details["nickname"] = guessed_project
-        info = guessed_info
+    try:
+        info = WIFI_PRODUCT_PROJECT_MAP[project_type][customer][nickname]
+    except KeyError as exc:
+        raise KeyError(
+            f"Unknown mapping for project_type={project_type!r}, customer={customer!r}, project={nickname!r}"
+        ) from exc
 
     if info:
         details["project_id"] = str(info.get("ProjectID") or "").strip() or None
         details["project_name"] = str(info.get("ProjectName") or "").strip() or None
-        if not details["main_chip"]:
-            details["main_chip"] = info["main_chip"]
-        if not details["wifi_module"]:
-            details["wifi_module"] = info["wifi_module"]
-        if not details["interface"]:
-            details["interface"] = info["interface"]
-        if not details["ecosystem"]:
-            details["ecosystem"] = info["ecosystem"]
+        expected_chip = _normalize_upper_token(info.get("main_chip"))
+        expected_wifi = _normalize_upper_token(info.get("wifi_module"))
+        expected_if = _normalize_upper_token(info.get("interface"))
+        expected_ecosystem = _normalize_str_token(info.get("ecosystem"))
+
+        if details["main_chip"] and expected_chip and details["main_chip"] != expected_chip:
+            raise ValueError(f"project.soc mismatch: {details['main_chip']!r} != {expected_chip!r}")
+        if details["wifi_module"] and expected_wifi and details["wifi_module"] != expected_wifi:
+            raise ValueError(f"project.wifi_module mismatch: {details['wifi_module']!r} != {expected_wifi!r}")
+        if details["interface"] and expected_if and details["interface"] != expected_if:
+            raise ValueError(f"project.interface mismatch: {details['interface']!r} != {expected_if!r}")
+        if details["ecosystem"] and expected_ecosystem and details["ecosystem"] != expected_ecosystem:
+            raise ValueError(f"project.ecosystem mismatch: {details['ecosystem']!r} != {expected_ecosystem!r}")
+
+        details["main_chip"] = expected_chip
+        details["wifi_module"] = expected_wifi
+        details["interface"] = expected_if
+        details["ecosystem"] = expected_ecosystem
 
     return details
 
@@ -1029,18 +1000,17 @@ def _build_project_payload(config: Mapping[str, Any]) -> Dict[str, Any]:
         logging.info("[DBTRACE_PROJECT] Paths.CONFIG_DIR=%s", Paths.CONFIG_DIR)
         logging.info("[DBTRACE_PROJECT] config.project=%s", project_section)
     wifi_details = _resolve_wifi_product_details(project_section)
-    payload_json = json.dumps(wifi_details, ensure_ascii=True, separators=(",", ":"))
     out = {
-        "brand": wifi_details.get("customer"),
-        "product_line": wifi_details.get("product_line"),
+        "customer": wifi_details.get("customer"),
+        "project_type": wifi_details.get("project_type"),
         "nickname": wifi_details.get("nickname"),
         "project_name": wifi_details.get("project_name"),
         "project_id": wifi_details.get("project_id"),
-        "main_chip": wifi_details.get("main_chip"),
+        "soc": wifi_details.get("main_chip"),
         "wifi_module": wifi_details.get("wifi_module"),
+        "odm": wifi_details.get("odm") or wifi_details.get("ODM") or None,
         "interface": wifi_details.get("interface"),
         "ecosystem": wifi_details.get("ecosystem"),
-        "payload_json": payload_json,
     }
     if _DBTRACE_PROJECT_ONCE:
         print("[DBTRACE_PROJECT] resolved_wifi_details=", wifi_details, flush=True)
@@ -1051,7 +1021,28 @@ def _build_project_payload(config: Mapping[str, Any]) -> Dict[str, Any]:
 
 
 def ensure_project(client: MySqlClient, project_payload: Mapping[str, Any]) -> int:
+    global _PROJECT_COLUMNS_CACHE  # type: ignore[global-variable-not-assigned]
+    try:
+        _PROJECT_COLUMNS_CACHE  # type: ignore[name-defined]
+    except NameError:
+        _PROJECT_COLUMNS_CACHE = None  # type: ignore[assignment]
+
+    if _PROJECT_COLUMNS_CACHE is None:
+        try:
+            rows = client.query_all("SHOW COLUMNS FROM `project`")
+            _PROJECT_COLUMNS_CACHE = {str(r.get("Field") or "") for r in rows if isinstance(r, dict)}
+        except Exception:
+            _PROJECT_COLUMNS_CACHE = set()
+
+    columns: set[str] = set(_PROJECT_COLUMNS_CACHE or set())
+
     project_id = str(project_payload.get("project_id") or "").strip()
+    customer_value = project_payload.get("customer")
+    soc_value = project_payload.get("soc")
+    # Best-effort compatibility for legacy schemas/constraints.
+    brand_value = customer_value if "brand" in columns else None
+    main_chip_value = soc_value if "main_chip" in columns else None
+
     if project_id:
         print("[DBTRACE_PROJECT] ensure_project lookup project_id=", project_id, flush=True)
         logging.info("[DBTRACE_PROJECT] ensure_project lookup project_id=%s", project_id)
@@ -1063,56 +1054,100 @@ def ensure_project(client: MySqlClient, project_payload: Mapping[str, Any]) -> i
             existing_id = int(existing["id"])
             print("[DBTRACE_PROJECT] ensure_project hit id=", existing_id, flush=True)
             logging.info("[DBTRACE_PROJECT] ensure_project hit id=%s", existing_id)
-            client.execute(
-                "UPDATE `project` SET `brand`=%s, `product_line`=%s, `nickname`=%s, `project_name`=%s, `main_chip`=%s, "
-                "`wifi_module`=%s, `interface`=%s, `ecosystem`=%s, `payload_json`=%s "
-                "WHERE `id`=%s",
-                (
-                    project_payload.get("brand"),
-                    project_payload.get("product_line"),
+            set_fields: list[str] = []
+            values: list[Any] = []
+            if "customer" in columns:
+                set_fields.append("`customer`=%s")
+                values.append(customer_value)
+            if "brand" in columns:
+                set_fields.append("`brand`=%s")
+                values.append(brand_value)
+            set_fields.extend(
+                [
+                    "`project_type`=%s",
+                    "`nickname`=%s",
+                    "`project_name`=%s",
+                ]
+            )
+            values.extend(
+                [
+                    project_payload.get("project_type"),
                     project_payload.get("nickname"),
                     project_payload.get("project_name"),
-                    project_payload.get("main_chip"),
-                    project_payload.get("wifi_module"),
+                ]
+            )
+            if "soc" in columns:
+                set_fields.append("`soc`=%s")
+                values.append(soc_value)
+            if "main_chip" in columns:
+                set_fields.append("`main_chip`=%s")
+                values.append(main_chip_value)
+            set_fields.append("`wifi_module`=%s")
+            values.append(project_payload.get("wifi_module"))
+            if "odm" in columns:
+                set_fields.append("`odm`=%s")
+                values.append(project_payload.get("odm"))
+            set_fields.extend(["`interface`=%s", "`ecosystem`=%s"])
+            values.extend(
+                [
                     project_payload.get("interface"),
                     project_payload.get("ecosystem"),
-                    project_payload.get("payload_json"),
-                    existing_id,
-                ),
+                ]
+            )
+            values.append(existing_id)
+            client.execute(
+                f"UPDATE `project` SET {', '.join(set_fields)} WHERE `id`=%s",
+                tuple(values),
             )
             return existing_id
 
-    insert_sql = (
-        "INSERT INTO `project` "
-        "(`brand`, `product_line`, `nickname`, `project_name`, `project_id`, `main_chip`, `wifi_module`, `interface`, `ecosystem`, `payload_json`) "
-        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
-        "ON DUPLICATE KEY UPDATE "
-        "`id`=LAST_INSERT_ID(`id`), "
-        "`brand`=VALUES(`brand`), "
-        "`product_line`=VALUES(`product_line`), "
-        "`nickname`=VALUES(`nickname`), "
-        "`project_name`=VALUES(`project_name`), "
-        "`project_id`=VALUES(`project_id`), "
-        "`main_chip`=VALUES(`main_chip`), "
-        "`wifi_module`=VALUES(`wifi_module`), "
-        "`interface`=VALUES(`interface`), "
-        "`ecosystem`=VALUES(`ecosystem`), "
-        "`payload_json`=VALUES(`payload_json`)"
-    )
-    return client.insert(
-        insert_sql,
-        (
-            project_payload.get("brand"),
-            project_payload.get("product_line"),
+    insert_columns: list[str] = []
+    insert_values: list[Any] = []
+    if "customer" in columns:
+        insert_columns.append("`customer`")
+        insert_values.append(customer_value)
+    if "brand" in columns:
+        insert_columns.append("`brand`")
+        insert_values.append(brand_value)
+    insert_columns.extend(["`project_type`", "`nickname`", "`project_name`", "`project_id`"])
+    insert_values.extend(
+        [
+            project_payload.get("project_type"),
             project_payload.get("nickname"),
             project_payload.get("project_name"),
             project_payload.get("project_id"),
-            project_payload.get("main_chip"),
-            project_payload.get("wifi_module"),
+        ]
+    )
+    if "soc" in columns:
+        insert_columns.append("`soc`")
+        insert_values.append(soc_value)
+    if "main_chip" in columns:
+        insert_columns.append("`main_chip`")
+        insert_values.append(main_chip_value)
+    insert_columns.append("`wifi_module`")
+    insert_values.append(project_payload.get("wifi_module"))
+    if "odm" in columns:
+        insert_columns.append("`odm`")
+        insert_values.append(project_payload.get("odm"))
+    insert_columns.extend(["`interface`", "`ecosystem`"])
+    insert_values.extend(
+        [
             project_payload.get("interface"),
             project_payload.get("ecosystem"),
-            project_payload.get("payload_json"),
-        ),
+        ]
+    )
+
+    placeholder = ", ".join(["%s"] * len(insert_columns))
+    insert_sql = (
+        f"INSERT INTO `project` ({', '.join(insert_columns)}) "
+        f"VALUES ({placeholder}) "
+        "ON DUPLICATE KEY UPDATE "
+        "`id`=LAST_INSERT_ID(`id`), "
+        + ", ".join(f"{col}=VALUES({col})" for col in insert_columns)
+    )
+    return client.insert(
+        insert_sql,
+        tuple(insert_values),
     )
 
 
@@ -1139,12 +1174,11 @@ def sync_router_catalog(client: MySqlClient) -> None:
 
     entries = _load_router_catalog()
     insert_sql = (
-        "INSERT INTO `router` (`ip`, `port`, `brand`, `model`, `payload_json`) "
-        "VALUES (%s, %s, %s, %s, %s) "
+        "INSERT INTO `router` (`ip`, `port`, `brand`, `model`) "
+        "VALUES (%s, %s, %s, %s) "
         "ON DUPLICATE KEY UPDATE "
         "`brand`=VALUES(`brand`), "
-        "`model`=VALUES(`model`), "
-        "`payload_json`=VALUES(`payload_json`)"
+        "`model`=VALUES(`model`)"
     )
     rows: list[tuple[Any, ...]] = []
     expected_keys: set[tuple[str, int]] = set()
@@ -1158,9 +1192,8 @@ def sync_router_catalog(client: MySqlClient) -> None:
             continue
         brand = str(entry.get("brand") or "").strip()
         model = str(entry.get("model") or "").strip()
-        payload_json = json.dumps(entry, ensure_ascii=True, separators=(",", ":"))
         expected_keys.add((ip, port))
-        rows.append((ip, port, brand, model, payload_json))
+        rows.append((ip, port, brand, model))
 
     if rows:
         logging.info("Router catalog sync: upserting %d rows", len(rows))
@@ -1175,44 +1208,63 @@ def sync_lab_catalog(client: MySqlClient) -> None:
         return
 
     insert_sql = (
-        "INSERT INTO `lab` (`lab_name`, `capabilities`, `turntable_model`, `rf_model`, `payload_json`) "
-        "VALUES (%s, %s, %s, %s, %s) "
+        "INSERT INTO `lab` (`lab_name`, `turntable`, `attenuator`) "
+        "VALUES (%s, %s, %s) "
         "ON DUPLICATE KEY UPDATE "
-        "`capabilities`=VALUES(`capabilities`), "
-        "`turntable_model`=VALUES(`turntable_model`), "
-        "`rf_model`=VALUES(`rf_model`), "
-        "`payload_json`=VALUES(`payload_json`)"
+        "`turntable`=VALUES(`turntable`), "
+        "`attenuator`=VALUES(`attenuator`)"
     )
 
     rows: list[tuple[Any, ...]] = []
-    expected_names: set[str] = set()
     for lab_name, info in LAB_CATALOG.items():
-        expected_names.add(str(lab_name))
         capabilities = sorted({str(x) for x in (info.get("capabilities") or [])})
+        invalid_capabilities = sorted(
+            capability for capability in capabilities if capability not in LAB_CAPABILITY_CHOICES
+        )
+        if invalid_capabilities:
+            raise ValueError(
+                f"Unsupported lab capabilities for {lab_name!r}: {invalid_capabilities!r}; "
+                f"allowed={list(LAB_CAPABILITY_CHOICES)!r}"
+            )
         equipment = info.get("equipment") if isinstance(info.get("equipment"), Mapping) else {}
         turntable_model = equipment.get("turntable_model") if equipment else None
         rf_model = equipment.get("rf_model") if equipment else None
-        payload = {
-            "capabilities": capabilities,
-            "equipment": {
-                "turntable_model": None if turntable_model is None else str(turntable_model),
-                "rf_model": None if rf_model is None else str(rf_model),
-            },
-        }
-        payload_json = json.dumps(payload, ensure_ascii=True, separators=(",", ":"))
         rows.append(
             (
                 str(lab_name),
-                json.dumps(capabilities, ensure_ascii=False),
                 None if turntable_model is None else str(turntable_model),
                 None if rf_model is None else str(rf_model),
-                payload_json,
             )
         )
 
     if rows:
         logging.info("Lab catalog sync: upserting %d rows", len(rows))
         client.executemany(insert_sql, rows)
+        lab_rows = client.query_all("SELECT `id`, `lab_name` FROM `lab`")
+        lab_ids = {
+            str(row.get("lab_name") or ""): int(row["id"])
+            for row in lab_rows
+            if isinstance(row, dict) and row.get("id") is not None
+        }
+        managed_lab_ids = [lab_ids[name] for name in LAB_CATALOG.keys() if name in lab_ids]
+        if managed_lab_ids:
+            placeholders = ", ".join(["%s"] * len(managed_lab_ids))
+            client.execute(
+                f"DELETE FROM `lab_capability` WHERE `lab_id` IN ({placeholders})",
+                tuple(managed_lab_ids),
+            )
+            capability_rows: list[tuple[int, str]] = []
+            for lab_name, info in LAB_CATALOG.items():
+                lab_id = lab_ids.get(str(lab_name))
+                if lab_id is None:
+                    continue
+                for capability in sorted({str(x) for x in (info.get('capabilities') or [])}):
+                    capability_rows.append((lab_id, capability))
+            if capability_rows:
+                client.executemany(
+                    "INSERT INTO `lab_capability` (`lab_id`, `capability`) VALUES (%s, %s)",
+                    capability_rows,
+                )
 
     _LAB_CATALOG_SYNCED = True
 
@@ -1246,33 +1298,33 @@ def sync_project_catalog(client: MySqlClient) -> None:
     print("[PROJECT_SYNC] start")
     insert_sql = (
         "INSERT INTO `project` "
-        "(`brand`, `product_line`, `nickname`, `project_name`, `project_id`, `main_chip`, `wifi_module`, `interface`, `ecosystem`, `payload_json`) "
+        "(`customer`, `project_type`, `nickname`, `project_name`, `project_id`, `soc`, `wifi_module`, `odm`, `interface`, `ecosystem`) "
         "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
         "ON DUPLICATE KEY UPDATE "
-        "`brand`=VALUES(`brand`), "
-        "`product_line`=VALUES(`product_line`), "
+        "`customer`=VALUES(`customer`), "
+        "`project_type`=VALUES(`project_type`), "
         "`nickname`=VALUES(`nickname`), "
         "`project_name`=VALUES(`project_name`), "
         "`project_id`=VALUES(`project_id`), "
-        "`main_chip`=VALUES(`main_chip`), "
+        "`soc`=VALUES(`soc`), "
         "`wifi_module`=VALUES(`wifi_module`), "
+        "`odm`=VALUES(`odm`), "
         "`interface`=VALUES(`interface`), "
-        "`ecosystem`=VALUES(`ecosystem`), "
-        "`payload_json`=VALUES(`payload_json`)"
+        "`ecosystem`=VALUES(`ecosystem`)"
     )
     rows = []
     expected_keys: set[tuple[str, str, str]] = set()
-    for product_line, odm_map in WIFI_PRODUCT_PROJECT_MAP.items():
+    for project_type, odm_map in WIFI_PRODUCT_PROJECT_MAP.items():
         for odm_name, projects in odm_map.items():
             for nickname, info in projects.items():
-                expected_keys.add((odm_name, product_line, nickname))
+                expected_keys.add((odm_name, project_type, nickname))
                 project_id = str(info.get("ProjectID") or "").strip()
                 project_name = str(info.get("ProjectName") or "").strip() or None
                 if nickname in {"Latte829", "Vodka424", "Espresso115"} or not project_id:
                     print(
                         "[PROJECT_SYNC] map_row",
-                        "product_line=",
-                        product_line,
+                        "project_type=",
+                        project_type,
                         "brand=",
                         odm_name,
                         "nickname=",
@@ -1282,27 +1334,18 @@ def sync_project_catalog(client: MySqlClient) -> None:
                         "ProjectName=",
                         project_name or "(empty)",
                     )
-                payload = {
-                    "customer": odm_name,
-                    "product_line": product_line,
-                    "nickname": nickname,
-                    "main_chip": info["main_chip"],
-                    "wifi_module": info["wifi_module"],
-                    "interface": info["interface"],
-                    "ecosystem": info["ecosystem"],
-                }
                 rows.append(
                     (
-                        payload.get("customer"),
-                        payload.get("product_line"),
+                        odm_name,
+                        project_type,
                         nickname,
                         project_name,
                         project_id or None,
-                        payload.get("main_chip"),
-                        payload.get("wifi_module"),
-                        payload.get("interface"),
-                        payload.get("ecosystem"),
-                        json.dumps(payload, ensure_ascii=True, separators=(",", ":")),
+                        info["main_chip"],
+                        info["wifi_module"],
+                        odm_name,
+                        info["interface"],
+                        info["ecosystem"],
                     )
                 )
     if rows:
@@ -1314,12 +1357,12 @@ def sync_project_catalog(client: MySqlClient) -> None:
         if updates:
             client.executemany(
                 "UPDATE `project` SET `project_id`=%s, `project_name`=%s "
-                "WHERE `brand`=%s AND `product_line`=%s AND `nickname`=%s",
+                "WHERE `customer`=%s AND `project_type`=%s AND `nickname`=%s",
                 [(r[4], r[3], r[0], r[1], r[2]) for r in updates],
             )
         try:
             sample = client.query_all(
-                "SELECT `id`, `brand`, `product_line`, `nickname`, `project_name`, `project_id` "
+                "SELECT `id`, `customer`, `project_type`, `nickname`, `project_name`, `project_id` "
                 "FROM `project` WHERE `nickname` IN (%s, %s, %s) ORDER BY `id`",
                 ("Vodka424", "Latte829", "Espresso115"),
             )
@@ -1334,6 +1377,7 @@ def ensure_test_report(
     client: MySqlClient,
     *,
     project_id: int,
+    lab_id: Optional[int] = None,
     report_name: str,
     case_path: Optional[str],
     is_golden: bool = False,
@@ -1351,11 +1395,12 @@ def ensure_test_report(
 
     insert_sql = (
         "INSERT INTO `test_report` "
-        "(`project_id`, `report_name`, `case_path`, `is_golden`, `report_type`, `golden_group`, `notes`, `tester`, "
+        "(`project_id`, `lab_id`, `report_name`, `case_path`, `is_golden`, `report_type`, `golden_group`, `notes`, `tester`, "
         "`csv_name`, `csv_path`) "
-        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
         "ON DUPLICATE KEY UPDATE "
         "`id`=LAST_INSERT_ID(`id`), "
+        "`lab_id`=VALUES(`lab_id`), "
         "`case_path`=VALUES(`case_path`), "
         "`is_golden`=VALUES(`is_golden`), "
         "`report_type`=VALUES(`report_type`), "
@@ -1369,6 +1414,7 @@ def ensure_test_report(
         insert_sql,
         (
             project_id,
+            lab_id,
             report_name,
             case_path,
             1 if is_golden else 0,
@@ -1425,9 +1471,17 @@ def register_execution(
         normalized_source,
         execution_type,
     )
+    report_type = _require_test_report_type(execution_type)
+    run_type = _require_run_type(RUN_TYPE_WIFI_SMARTTEST)
+    lab_id: Optional[int] = None
+    lab_name = execution_payload.get("lab_name")
+    if isinstance(lab_name, str) and lab_name.strip():
+        rows = client.query_all("SELECT id FROM `lab` WHERE `lab_name`=%s LIMIT 1", (lab_name.strip(),))
+        if rows:
+            lab_id = int(rows[0]["id"])
     project_id = ensure_project(client, project_payload)
     row = client.query_one(
-        "SELECT `id`, `brand`, `product_line`, `nickname`, `project_name`, `project_id` "
+        "SELECT `id`, `customer`, `project_type`, `nickname`, `project_name`, `project_id` "
         "FROM `project` WHERE `id`=%s",
         (int(project_id),),
     )
@@ -1436,10 +1490,11 @@ def register_execution(
     test_report_id = ensure_test_report(
         client,
         project_id=project_id,
+        lab_id=lab_id,
         report_name=report_name,
         case_path=case_path,
         is_golden=False,
-        report_type="compatibility" if str(execution_type or "").strip().upper() == "COMPATIBILITY" else "performance",
+        report_type=report_type,
         notes=None,
         csv_name=csv_name,
         csv_path=csv_path,
@@ -1453,105 +1508,110 @@ def register_execution(
 
     dut_payload = {
         "test_report_id": int(test_report_id),
-        "project_id": int(project_id),
-        "serial_number": execution_payload.get("serial_number"),
-        "connect_type": execution_payload.get("connect_type"),
+        "sn": execution_payload.get("sn") or execution_payload.get("serial_number"),
         "mac_address": execution_payload.get("mac_address"),
         "adb_device": execution_payload.get("adb_device"),
-        "telnet_ip": execution_payload.get("telnet_ip"),
+        "ip": execution_payload.get("ip") or execution_payload.get("telnet_ip"),
         "software_version": execution_payload.get("software_version"),
         "driver_version": execution_payload.get("driver_version"),
         "android_version": execution_payload.get("android_version"),
         "kernel_version": execution_payload.get("kernel_version"),
-        "mass_production_status": execution_payload.get("mass_production_status"),
+        "os": execution_payload.get("os"),
+        "hw_phase": execution_payload.get("hw_phase"),
+        "wifi_module_sn": execution_payload.get("wifi_module_sn"),
+        "antenna": execution_payload.get("antenna"),
     }
     client.insert(
         "INSERT INTO `dut` "
-        "(`test_report_id`, `project_id`, `serial_number`, `connect_type`, `mac_address`, `adb_device`, `telnet_ip`, "
-        "`software_version`, `driver_version`, `android_version`, `kernel_version`, `mass_production_status`, `payload_json`) "
+        "(`test_report_id`, `sn`, `mac_address`, `adb_device`, `ip`, "
+        "`software_version`, `driver_version`, `android_version`, `kernel_version`, `os`, `hw_phase`, `wifi_module_sn`, `antenna`) "
         "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
         "ON DUPLICATE KEY UPDATE "
         "`id`=LAST_INSERT_ID(`id`), "
         "`test_report_id`=VALUES(`test_report_id`), "
-        "`project_id`=VALUES(`project_id`), "
-        "`connect_type`=VALUES(`connect_type`), "
+        "`sn`=VALUES(`sn`), "
         "`mac_address`=VALUES(`mac_address`), "
         "`adb_device`=VALUES(`adb_device`), "
-        "`telnet_ip`=VALUES(`telnet_ip`), "
+        "`ip`=VALUES(`ip`), "
         "`software_version`=VALUES(`software_version`), "
         "`driver_version`=VALUES(`driver_version`), "
         "`android_version`=VALUES(`android_version`), "
         "`kernel_version`=VALUES(`kernel_version`), "
-        "`mass_production_status`=VALUES(`mass_production_status`), "
-        "`payload_json`=VALUES(`payload_json`)",
+        "`os`=VALUES(`os`), "
+        "`hw_phase`=VALUES(`hw_phase`), "
+        "`wifi_module_sn`=VALUES(`wifi_module_sn`), "
+        "`antenna`=VALUES(`antenna`)",
         (
             dut_payload.get("test_report_id"),
-            dut_payload.get("project_id"),
-            dut_payload.get("serial_number"),
-            dut_payload.get("connect_type"),
+            dut_payload.get("sn"),
             dut_payload.get("mac_address"),
             dut_payload.get("adb_device"),
-            dut_payload.get("telnet_ip"),
+            dut_payload.get("ip"),
             dut_payload.get("software_version"),
             dut_payload.get("driver_version"),
             dut_payload.get("android_version"),
             dut_payload.get("kernel_version"),
-            dut_payload.get("mass_production_status"),
-            json.dumps(dut_payload, ensure_ascii=True, separators=(",", ":")),
+            dut_payload.get("os"),
+            dut_payload.get("hw_phase"),
+            dut_payload.get("wifi_module_sn"),
+            dut_payload.get("antenna"),
         ),
     )
-    logging.info("[DBTRACE_EXEC] dut_upserted mass_status=%s", dut_payload.get("mass_production_status"))
-    payload_json = json.dumps(dict(execution_payload), ensure_ascii=True, separators=(",", ":"))
-    lab_id: Optional[int] = None
-    lab_name = execution_payload.get("lab_name")
-    if isinstance(lab_name, str) and lab_name.strip():
-        rows = client.query_all("SELECT id FROM `lab` WHERE `lab_name`=%s LIMIT 1", (lab_name.strip(),))
-        if rows:
-            lab_id = int(rows[0]["id"])
-
+    logging.info("[DBTRACE_EXEC] dut_upserted hw_phase=%s", dut_payload.get("hw_phase"))
     if lab_id is not None:
         lab_environment_payload = {
             "lab_id": int(lab_id),
-            "router_name": execution_payload.get("router_name"),
-            "router_address": execution_payload.get("router_address"),
+            "ap_name": execution_payload.get("ap_name") or execution_payload.get("router_name"),
+            "ap_address": execution_payload.get("ap_address") or execution_payload.get("router_address"),
+            "distance": execution_payload.get("distance"),
+            "ap_region": execution_payload.get("ap_region"),
+            "connect_type": execution_payload.get("connect_type"),
+            "coex_mode": execution_payload.get("coex_mode"),
+            "bt_remote": execution_payload.get("bt_remote"),
             "bt_device": execution_payload.get("bt_device"),
             "bt_type": execution_payload.get("bt_type"),
         }
         client.insert(
             "INSERT INTO `lab_environment` "
-            "(`lab_id`, `router_name`, `router_address`, `bt_device`, `bt_type`, `payload_json`) "
-            "VALUES (%s, %s, %s, %s, %s, %s) "
+            "(`lab_id`, `ap_name`, `ap_address`, `distance`, `ap_region`, `connect_type`, `coex_mode`, `bt_remote`, `bt_device`, `bt_type`) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
             "ON DUPLICATE KEY UPDATE "
             "`id`=LAST_INSERT_ID(`id`), "
-            "`router_name`=VALUES(`router_name`), "
-            "`router_address`=VALUES(`router_address`), "
+            "`ap_name`=VALUES(`ap_name`), "
+            "`ap_address`=VALUES(`ap_address`), "
+            "`distance`=VALUES(`distance`), "
+            "`ap_region`=VALUES(`ap_region`), "
+            "`connect_type`=VALUES(`connect_type`), "
+            "`coex_mode`=VALUES(`coex_mode`), "
+            "`bt_remote`=VALUES(`bt_remote`), "
             "`bt_device`=VALUES(`bt_device`), "
-            "`bt_type`=VALUES(`bt_type`), "
-            "`payload_json`=VALUES(`payload_json`)",
+            "`bt_type`=VALUES(`bt_type`)",
             (
                 lab_environment_payload.get("lab_id"),
-                lab_environment_payload.get("router_name"),
-                lab_environment_payload.get("router_address"),
+                lab_environment_payload.get("ap_name"),
+                lab_environment_payload.get("ap_address"),
+                lab_environment_payload.get("distance"),
+                lab_environment_payload.get("ap_region"),
+                lab_environment_payload.get("connect_type"),
+                lab_environment_payload.get("coex_mode"),
+                lab_environment_payload.get("bt_remote"),
                 lab_environment_payload.get("bt_device"),
                 lab_environment_payload.get("bt_type"),
-                json.dumps(lab_environment_payload, ensure_ascii=True, separators=(",", ":")),
             ),
         )
 
     insert_sql = (
         "INSERT INTO `execution` "
-        "(`test_report_id`, `run_type`, `lab_id`, `run_source`, `duration_seconds`, `payload_json`) "
-        "VALUES (%s, %s, %s, %s, %s, %s)"
+        "(`test_report_id`, `run_type`, `run_source`, `duration_seconds`) "
+        "VALUES (%s, %s, %s, %s)"
     )
     execution_id = client.insert(
         insert_sql,
         (
             test_report_id,
-            execution_type,
-            lab_id,
+            run_type,
             normalized_source,
             int(duration_seconds) if duration_seconds is not None else None,
-            payload_json,
         ),
     )
     logging.info(
@@ -1594,39 +1654,42 @@ def _build_execution_device_payload(config: Mapping[str, Any]) -> Dict[str, Any]
     fpga_section = project.get("fpga") if isinstance(project.get("fpga"), Mapping) else None
     project_info = fpga_section if isinstance(fpga_section, Mapping) else project
 
-    connect_type_value = _normalize_str_token(connect.get("type"))
-    normalized_connect_type = _normalize_lower_token(connect_type_value)
-    if normalized_connect_type == "android":
-        connect_type_value = "Android"
-    elif normalized_connect_type == "linux":
-        connect_type_value = "Linux"
-
     adb_device: Optional[str] = None
-    telnet_ip: Optional[str] = None
+    dut_ip: Optional[str] = None
 
-    if normalized_connect_type == "android":
+    control_type = _normalize_lower_token(_normalize_str_token(connect.get("type")))
+    if control_type == "android":
         adb_device = _normalize_str_token(_extract_first(connect, "Android", "device"))
-    elif normalized_connect_type == "linux":
-        telnet_ip = _normalize_str_token(_extract_first(connect, "Linux", "ip"))
+    elif control_type == "linux":
+        dut_ip = _normalize_str_token(_extract_first(connect, "Linux", "ip"))
 
-    mass_status_value = project_info.get("mass_production_status")
-    if isinstance(mass_status_value, list):
-        mass_status = ",".join(str(item) for item in mass_status_value if str(item))
-    else:
-        mass_status = mass_status_value
+    hw_phase = _normalize_str_token(connect.get("hw_phase"))
+    if hw_phase and hw_phase not in HW_PHASE_CHOICES:
+        raise ValueError(f"Unsupported dut.hw_phase={hw_phase!r}; allowed={list(HW_PHASE_CHOICES)!r}")
+    dut_os = _normalize_str_token(connect.get("os"))
+    if dut_os and dut_os not in DUT_OS_CHOICES:
+        raise ValueError(f"Unsupported dut.os={dut_os!r}; allowed={list(DUT_OS_CHOICES)!r}")
+
+    sn = _extract_serial_number(config)
+    wifi_module_sn = _normalize_str_token(_extract_first(connect, "wifi_module_sn", "wifi_sn", "module_sn"))
+    antenna = _normalize_str_token(_extract_first(connect, "antenna"))
 
     return {
-        "serial_number": _extract_serial_number(config),
+        "sn": sn,
+        "serial_number": sn,
         "software_version": software.get("software_version"),
         "driver_version": software.get("driver_version"),
         "android_version": system_info.get("version"),
         "kernel_version": system_info.get("kernel_version"),
-        "connect_type": connect_type_value,
+        "os": dut_os,
         "mac_address": _normalize_str_token(connect.get("mac_address")),
         "adb_device": adb_device,
-        "telnet_ip": telnet_ip,
+        "ip": dut_ip,
+        "telnet_ip": dut_ip,
         "odm": _normalize_str_token(project_info.get("odm")),
-        "mass_production_status": _normalize_str_token(mass_status),
+        "wifi_module_sn": wifi_module_sn,
+        "antenna": antenna,
+        "hw_phase": hw_phase,
     }
 
 
@@ -1649,11 +1712,50 @@ def _build_execution_lab_payload(config: Mapping[str, Any]) -> Dict[str, Any]:
     else:
         corner_model = None
     if skip_router:
-        router_name = None
-        router_address = None
+        ap_name = None
+        ap_address = None
     else:
-        router_name = _normalize_str_token(router.get("name"))
-        router_address = _normalize_str_token(router.get("address"))
+        ap_name = _normalize_str_token(router.get("name"))
+        ap_address = _normalize_str_token(router.get("address"))
+
+    lab_env_section = _extract_first(config, "lab_environment", "lab_enviroment")
+    lab_env = lab_env_section if isinstance(lab_env_section, Mapping) else {}
+    distance = _normalize_str_token(lab_env.get("distance"))
+    ap_region = _normalize_str_token(lab_env.get("ap_region"))
+    connect_type = _normalize_str_token(lab_env.get("connect_type"))
+    coex_mode = _normalize_str_token(lab_env.get("coex_mode"))
+    bt_remote = _normalize_str_token(lab_env.get("bt_remote"))
+    bt_device = _normalize_str_token(lab_env.get("bt_device"))
+    bt_type = _normalize_str_token(lab_env.get("bt_type"))
+    explicit_ap_name = _normalize_str_token(lab_env.get("ap_name"))
+    if explicit_ap_name:
+        ap_name = explicit_ap_name
+    if ap_name and ap_name not in AP_MODEL_CHOICES:
+        raise ValueError(
+            f"Unsupported lab_enviroment.ap_name={ap_name!r}; "
+            f"allowed={list(AP_MODEL_CHOICES)!r}"
+        )
+    if ap_region and ap_region not in AP_REGION_CHOICES:
+        raise ValueError(
+            f"Unsupported lab_enviroment.ap_region={ap_region!r}; "
+            f"allowed={list(AP_REGION_CHOICES)!r}"
+        )
+    if connect_type and connect_type not in LAB_ENV_CONNECT_TYPE_CHOICES:
+        raise ValueError(
+            f"Unsupported lab_enviroment.connect_type={connect_type!r}; "
+            f"allowed={list(LAB_ENV_CONNECT_TYPE_CHOICES)!r}"
+        )
+    if coex_mode and coex_mode not in LAB_ENV_COEX_MODE_CHOICES:
+        raise ValueError(
+            f"Unsupported lab_enviroment.coex_mode={coex_mode!r}; "
+            f"allowed={list(LAB_ENV_COEX_MODE_CHOICES)!r}"
+        )
+    if bt_remote and bt_remote not in BT_REMOTE_CHOICES:
+        raise ValueError(f"Unsupported lab_enviroment.bt_remote={bt_remote!r}; allowed={list(BT_REMOTE_CHOICES)!r}")
+    if bt_device and bt_device not in BT_DEVICE_CHOICES:
+        raise ValueError(f"Unsupported lab_enviroment.bt_device={bt_device!r}; allowed={list(BT_DEVICE_CHOICES)!r}")
+    if bt_type and bt_type not in BT_TYPE_CHOICES:
+        raise ValueError(f"Unsupported lab_enviroment.bt_type={bt_type!r}; allowed={list(BT_TYPE_CHOICES)!r}")
     lab_name = None
     if isinstance(config, Mapping):
         lab_name = config.get("lab_name")
@@ -1668,11 +1770,25 @@ def _build_execution_lab_payload(config: Mapping[str, Any]) -> Dict[str, Any]:
     else:
         lab_name = None
 
+    if lab_name and lab_name not in LAB_NAME_CHOICES:
+        raise ValueError(f"Unsupported lab.lab_name={lab_name!r}; allowed={list(LAB_NAME_CHOICES)!r}")
+
     return {
-        "router_name": router_name,
-        "router_address": router_address,
+        "ap_name": ap_name,
+        "ap_address": ap_address,
+        "router_name": ap_name,
+        "router_address": ap_address,
+        "attenuator": rf_model,
         "rf_model": rf_model,
+        "turntable": corner_model,
         "corner_model": corner_model,
+        "distance": distance,
+        "ap_region": ap_region,
+        "connect_type": connect_type,
+        "coex_mode": coex_mode,
+        "bt_remote": bt_remote,
+        "bt_device": bt_device,
+        "bt_type": bt_type,
         "lab_name": lab_name,
     }
 
@@ -1681,17 +1797,6 @@ def _build_execution_payload(config: Mapping[str, Any]) -> Dict[str, Any]:
     payload: Dict[str, Any] = {}
     payload.update(_build_execution_device_payload(config))
     payload.update(_build_execution_lab_payload(config))
-    bt_section = config.get("bt") if isinstance(config, Mapping) else {}
-    bt_data = bt_section if isinstance(bt_section, Mapping) else {}
-    payload["bt_device"] = _normalize_str_token(bt_data.get("device") or bt_data.get("model"))
-
-    mode_token = _normalize_lower_token(_normalize_str_token(config.get("mode")))
-    if "classic" in mode_token:
-        payload["bt_type"] = "classic"
-    elif "ble" in mode_token:
-        payload["bt_type"] = "ble"
-    else:
-        payload["bt_type"] = None
     return payload
 
 
@@ -1808,17 +1913,13 @@ def sync_test_result_to_db(
     if not headers:
         logging.warning("CSV file %s does not contain a header row.", log_file)
 
-    normalized_data_type = data_type.strip().upper() if isinstance(data_type, str) else None
-    if normalized_data_type == "RV0":
-        normalized_data_type = "RVO"
+    normalized_data_type = _require_test_report_type(data_type if isinstance(data_type, str) else None)
     normalized_execution_type = normalized_data_type
     normalized_performance_type = normalized_data_type
-    if normalized_data_type == "PEAK":
-        normalized_performance_type = "Peak Throughput"
     normalized_source = (run_source or "local").strip() or "local"
     normalized_source = normalized_source.upper()[:32]
 
-    if normalized_data_type in {"RVR", "RVO"}:
+    if normalized_data_type in {TEST_REPORT_RVR, TEST_REPORT_RVO}:
         try:
             from src.tools.performance import generate_rvr_charts
         except Exception:
@@ -1827,7 +1928,7 @@ def sync_test_result_to_db(
             )
         else:
             try:
-                charts_subdir = 'rvo_charts' if normalized_data_type == 'RVO' else 'rvr_charts'
+                charts_subdir = 'rvo_charts' if normalized_data_type == TEST_REPORT_RVO else 'rvr_charts'
                 generated = generate_rvr_charts(file_path, charts_subdir=charts_subdir)
             except Exception:
                 logging.exception(
@@ -1906,10 +2007,10 @@ def sync_compatibility_artifacts_to_db(
             router_entries = json.load(handle) or []
 
         upsert_sql = (
-            "INSERT INTO `router` (`ip`, `port`, `brand`, `model`, `payload_json`) "
-            "VALUES (%s, %s, %s, %s, %s) "
+            "INSERT INTO `router` (`ip`, `port`, `brand`, `model`) "
+            "VALUES (%s, %s, %s, %s) "
             "ON DUPLICATE KEY UPDATE "
-            "`brand`=VALUES(`brand`), `model`=VALUES(`model`), `payload_json`=VALUES(`payload_json`)"
+            "`brand`=VALUES(`brand`), `model`=VALUES(`model`)"
         )
         router_rows = []
         for entry in router_entries:
@@ -1919,8 +2020,7 @@ def sync_compatibility_artifacts_to_db(
                 continue
             brand = str(entry.get("brand") or "").strip()
             model = str(entry.get("model") or "").strip()
-            payload_json = json.dumps(entry, ensure_ascii=True, separators=(",", ":"))
-            router_rows.append((ip, port, brand, model, payload_json))
+            router_rows.append((ip, port, brand, model))
         if router_rows:
             client.executemany(upsert_sql, router_rows)
 
@@ -1936,7 +2036,7 @@ def sync_compatibility_artifacts_to_db(
             project_payload=project_payload,
             report_name="COMPATIBILITY",
             case_path=resolved_case_path,
-            execution_type="COMPATIBILITY",
+            execution_type=TEST_REPORT_COMPATIBILITY,
             execution_payload=execution_payload,
             csv_name=Path(csv_file).name,
             csv_path=str(Path(csv_file).resolve()),

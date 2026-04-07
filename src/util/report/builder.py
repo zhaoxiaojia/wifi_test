@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import csv
 import logging
@@ -25,6 +25,11 @@ from openpyxl.worksheet.worksheet import Worksheet
 
 from src.test.performance import get_rvo_static_db_list, get_rvo_target_rssi_list
 from src.tools.performance.rvr_chart_generator import PerformanceRvrChartGenerator
+from src.util.constants import (
+    TEST_REPORT_PEAK_THROUGHPUT,
+    TEST_REPORT_RVO,
+    TEST_REPORT_RVR,
+)
 from src.util.report import style
 from src.util.report.style import *  # noqa: F401,F403
 LOGGER = logging.getLogger(__name__)
@@ -90,7 +95,7 @@ class ScenarioGroup:
     step_summary: str = ""
     channels: List[ProjectScenario] = field(default_factory=list)
     raw_keys: set[str] = field(default_factory=set)
-    test_type: str = "RVR"
+    test_type: str = TEST_REPORT_RVR
     angle_order: List[str] = field(default_factory=list)
 
     @property
@@ -143,10 +148,9 @@ def _normalize_test_type(value: Optional[str]) -> str:
     text = str(value or "").strip()
     if not text:
         return ""
-    upper = text.upper()
-    if upper in {"PEAK", "PEAK_THROUGHPUT", "PEAK THROUGHPUT"}:
-        return "PEAK_THROUGHPUT"
-    return upper
+    if text in {TEST_REPORT_RVR, TEST_REPORT_RVO, TEST_REPORT_PEAK_THROUGHPUT}:
+        return text
+    return ""
 
 
 def _detect_row_test_type(row: dict[str, object]) -> str:
@@ -169,8 +173,8 @@ def _detect_row_test_type(row: dict[str, object]) -> str:
         for name in ("Profile_Mode", "Profile Mode", "RVO_Profile_Mode")
     )
     if has_profile:
-        return "RVO"
-    return "RVR"
+        return TEST_REPORT_RVO
+    return TEST_REPORT_RVR
 
 
 def _build_group_layout(channel_count: int) -> GroupLayout:
@@ -295,7 +299,7 @@ def _sorted_unique_angles(angles: Sequence[str]) -> List[str]:
     """Return unique angles sorted numerically when possible."""
 
     def _angle_key(text: str) -> Tuple[int, float, str]:
-        normalized = str(text or "").strip().lower().replace("°", "").replace("deg", "")
+        normalized = str(text or "").strip().lower().replace("掳", "").replace("deg", "")
         try:
             numeric = float(normalized)
             return (0, numeric, text)
@@ -431,7 +435,7 @@ def _determine_report_last_column(
     *,
     rvo_att_entries: Sequence[Tuple[Optional[float], str, str]] | None = None,
 ) -> int:
-    if test_type == "RVO":
+    if test_type == TEST_REPORT_RVO:
         entries = rvo_att_entries or []
         return _estimate_rvo_last_column(groups, entries)
     return _estimate_standard_last_column(groups)
@@ -506,7 +510,7 @@ def _write_peak_section(
 
     config = load_config(refresh=True) or {}
     lab_name = str((config.get("lab") or {}).get("name") or "").strip()
-    ui_mode = str(config.get("mode") or "").strip()
+    ui_mode = str((config.get("lab_enviroment") or {}).get("coex_mode") or "").strip()
 
     title_row = start_row
     _merge(ws, f"A{title_row}:{last_column}{title_row}")
@@ -575,7 +579,7 @@ def _write_peak_rows(
 
     config = load_config(refresh=True) or {}
     lab_name = str((config.get("lab") or {}).get("name") or "").strip()
-    ui_mode = str(config.get("mode") or "").strip()
+    ui_mode = str((config.get("lab_enviroment") or {}).get("coex_mode") or "").strip()
 
     current = start_row
     run_count = max(1, int(repeat_count))
@@ -637,7 +641,7 @@ def _rvo_standard_text(att: float) -> Optional[str]:
         return None
     if att <= -55:
         return "MIN Tput: 63dB>0"
-    return "AVG Tput: 13dB≥85.5\n33dB≥66.5\n53dB≥30"
+    return "AVG Tput: 13dB>=5.5\n33dB>=6.5\n53dB>=0"
 def _aml_threshold(att: float) -> Optional[Tuple[int, int]]:
     if att <= 12:
         return 400, 300
@@ -758,7 +762,7 @@ def _build_frequency_summary(
 
 def _build_throughput_title_summary(groups: Sequence[ScenarioGroup]) -> str:
     if not groups:
-        return "1、Throughput:None"
+        return "1銆乀hroughput:None"
 
     frequency_order: list[str] = []
     frequency_details: dict[str, dict[str, int]] = {}
@@ -777,7 +781,7 @@ def _build_throughput_title_summary(groups: Sequence[ScenarioGroup]) -> str:
 
     summary_lines: list[str] = []
     for index, freq_label in enumerate(frequency_order, start=1):
-        summary_lines.append(f"{index}、Throughput:{freq_label}")
+        summary_lines.append(f"{index}銆乀hroughput:{freq_label}")
         detail_map = frequency_details[freq_label]
         if detail_map:
             detail_segments: list[str] = []
@@ -800,8 +804,8 @@ def _build_rvr_title_summary(groups: Sequence[ScenarioGroup]) -> str:
 
 
 _TITLE_SUMMARY_BUILDERS: Dict[str, TitleSummaryBuilder] = {
-    "RVO": _build_rvo_title_summary,
-    "RVR": _build_rvr_title_summary,
+    TEST_REPORT_RVO: _build_rvo_title_summary,
+    TEST_REPORT_RVR: _build_rvr_title_summary,
 }
 
 
@@ -1013,7 +1017,7 @@ def _write_data(
             style.set_body_center(ws, row, rx_col, scenario.rssi_rx.get(attenuation), fill=COLOR_RSSI_RX)
             style.set_body_center(ws, row, tx_col, scenario.rssi_tx.get(attenuation), fill=COLOR_RSSI_TX)
 
-    # AML 标准与结果暂时留空，后续再补逻辑，因此不应用自动填充/格式化。
+    # AML 鏍囧噯涓庣粨鏋滄殏鏃剁暀绌猴紝鍚庣画鍐嶈ˉ閫昏緫锛屽洜姝や笉搴旂敤鑷姩濉厖/鏍煎紡鍖栥€?
     LOGGER.info(
         'Data rows populated | group=%s start_row=%d end_row=%d points=%d channels=%d',
         group.key,
@@ -1730,7 +1734,7 @@ def _add_rvo_polar_chart(
         if "Scenario_Group_Key" in df.columns:
             df = df[df["Scenario_Group_Key"].isin(group.raw_keys)]
         if "__test_type_display__" in df.columns:
-            df = df[df["__test_type_display__"].astype(str).str.upper() == "RVO"]
+            df = df[df["__test_type_display__"].astype(str).str.strip() == TEST_REPORT_RVO]
         if df.empty:
             raise ValueError("No RVO rows matched group keys")
 
@@ -1865,7 +1869,7 @@ def _load_scenario_groups(result_file: Path | str, *, test_type: str | None = No
                 if not row:
                     continue
                 total_rows += 1
-                row_type = normalized_filter if normalized_filter == "PEAK_THROUGHPUT" else _detect_row_test_type(row)
+                row_type = normalized_filter if normalized_filter == TEST_REPORT_PEAK_THROUGHPUT else _detect_row_test_type(row)
                 type_counts[row_type] += 1
                 if normalized_filter and row_type != normalized_filter:
                     filtered_rows += 1
@@ -1874,7 +1878,7 @@ def _load_scenario_groups(result_file: Path | str, *, test_type: str | None = No
                 raw_key = row.get('Scenario_Group_Key')
                 freq_for_peak = str(row.get('Freq_Band') or '').strip()
                 standard_for_peak = str(row.get('Standard') or '').strip()
-                if normalized_filter == "PEAK_THROUGHPUT":
+                if normalized_filter == TEST_REPORT_PEAK_THROUGHPUT:
                     base_key = f"PEAK|BAND={freq_for_peak or 'N/A'}|STANDARD={standard_for_peak or 'N/A'}"
                 else:
                     base_key = _group_base_key(raw_key)
@@ -1897,10 +1901,10 @@ def _load_scenario_groups(result_file: Path | str, *, test_type: str | None = No
                 bucket['raw_keys'].add(_normalize_scenario_key(raw_key))
                 bucket['test_type'][row_type] += 1
 
-                freq = freq_for_peak if normalized_filter == "PEAK_THROUGHPUT" else str(row.get('Freq_Band') or '').strip()
+                freq = freq_for_peak if normalized_filter == TEST_REPORT_PEAK_THROUGHPUT else str(row.get('Freq_Band') or '').strip()
                 if freq:
                     bucket['freq'][freq] += 1
-                standard = standard_for_peak if normalized_filter == "PEAK_THROUGHPUT" else str(row.get('Standard') or '').strip()
+                standard = standard_for_peak if normalized_filter == TEST_REPORT_PEAK_THROUGHPUT else str(row.get('Standard') or '').strip()
                 if standard:
                     bucket['standard'][standard] += 1
                 bandwidth_raw = row.get('BW') or row.get('Bandwidth')
@@ -1911,7 +1915,7 @@ def _load_scenario_groups(result_file: Path | str, *, test_type: str | None = No
                 if angle:
                     bucket['angle'][angle] += 1
 
-                if normalized_filter == "PEAK_THROUGHPUT":
+                if normalized_filter == TEST_REPORT_PEAK_THROUGHPUT:
                     channel_label = _format_channel(row.get('CH_Freq_MHz') or row.get('CH') or row.get('Channel'))
                     scenario_id = f"{bandwidth}|{channel_label}"
                     channels = bucket['channels']
@@ -1981,7 +1985,7 @@ def _load_scenario_groups(result_file: Path | str, *, test_type: str | None = No
                 direction = str(row.get('Direction') or '').upper()
                 throughput = _sanitize_number(row.get('Throughput'))
                 if throughput is not None:
-                    if row_type == 'RVO':
+                    if row_type == TEST_REPORT_RVO:
                         angle_label = angle or '0deg'
                         angle_order = bucket['angle_order']
                         if angle_label not in angle_order:
@@ -2005,13 +2009,13 @@ def _load_scenario_groups(result_file: Path | str, *, test_type: str | None = No
                 if rssi is not None:
                     if direction in {'DL', 'RX'}:
                         channel_bucket['rssi_rx'][attenuation] = rssi
-                        if row_type == 'RVO':
+                        if row_type == TEST_REPORT_RVO:
                             angle_label = angle or '0deg'
                             angle_map = channel_bucket['rvo_rssi_rx'].setdefault(float(attenuation), {})
                             angle_map[angle_label] = rssi
                     elif direction in {'UL', 'TX'}:
                         channel_bucket['rssi_tx'][attenuation] = rssi
-                        if row_type == 'RVO':
+                        if row_type == TEST_REPORT_RVO:
                             angle_label = angle or '0deg'
                             angle_map = channel_bucket['rvo_rssi_tx'].setdefault(float(attenuation), {})
                             angle_map[angle_label] = rssi
@@ -2024,7 +2028,7 @@ def _load_scenario_groups(result_file: Path | str, *, test_type: str | None = No
         attenuation_steps = sorted(bucket['attenuations'])
         group_attenuations = attenuation_steps if attenuation_steps else DEFAULT_ATTENUATIONS.copy()
         group_key = base_key
-        if normalized_filter == "PEAK_THROUGHPUT":
+        if normalized_filter == TEST_REPORT_PEAK_THROUGHPUT:
             group_key = f"{_most_common(bucket['freq'], default='N/A').upper()} {_most_common(bucket['standard'], default='N/A').upper()}"
         group = ScenarioGroup(
             key=group_key,
@@ -2038,7 +2042,7 @@ def _load_scenario_groups(result_file: Path | str, *, test_type: str | None = No
         group.raw_keys = set(bucket['raw_keys'])
         group.test_type = _most_common(
             bucket['test_type'],
-            default=_normalize_test_type(normalized_filter or 'RVR'),
+            default=_normalize_test_type(normalized_filter or TEST_REPORT_RVR),
         )
         group.angle_order = _sorted_unique_angles(bucket.get('angle_order', []))
 
@@ -2186,7 +2190,7 @@ class _ReportStrategy:
 
 
 class _RvoReportStrategy(_ReportStrategy):
-    name = "RVO"
+    name = TEST_REPORT_RVO
 
     def __init__(self) -> None:
         self._rvo_att_entries: List[Tuple[Optional[float], str, str]] = []
@@ -2342,7 +2346,7 @@ class _ThroughputReportStrategy(_ReportStrategy):
 
 
 class _PeakThroughputReportStrategy(_ReportStrategy):
-    name = "PEAK_THROUGHPUT"
+    name = TEST_REPORT_PEAK_THROUGHPUT
 
     def __init__(self) -> None:
         self._repeat_count: int = 1
@@ -2440,10 +2444,10 @@ class ProjectReportBuilder:
             result_file,
             test_type=self.normalized_type,
         )
-        self.actual_type: str = self.normalized_type or (self.groups[0].test_type if self.groups else "RVR")
-        if self.actual_type == "RVO":
+        self.actual_type: str = self.normalized_type or (self.groups[0].test_type if self.groups else TEST_REPORT_RVR)
+        if self.actual_type == TEST_REPORT_RVO:
             self._strategy = _RvoReportStrategy()
-        elif self.actual_type == "PEAK_THROUGHPUT":
+        elif self.actual_type == TEST_REPORT_PEAK_THROUGHPUT:
             self._strategy = _PeakThroughputReportStrategy()
         else:
             self._strategy = _ThroughputReportStrategy()
@@ -2480,14 +2484,13 @@ class ProjectReportBuilder:
         if explicit:
             resolved = explicit
         else:
-            normalized = (ctx.actual_type or "").strip().upper()
-            if normalized == "PEAK_THROUGHPUT":
-                resolved = "Peak Throughput"
-            elif normalized == "RVO":
-                resolved = "RVO"
+            normalized = _normalize_test_type(ctx.actual_type)
+            if normalized == TEST_REPORT_PEAK_THROUGHPUT:
+                resolved = TEST_REPORT_PEAK_THROUGHPUT
+            elif normalized == TEST_REPORT_RVO:
+                resolved = TEST_REPORT_RVO
             else:
-                # Default includes RVR and any future types.
-                resolved = normalized or "RVR"
+                resolved = normalized or TEST_REPORT_RVR
         self.sheet.title = resolved[:31]
         _configure_sheet(self.sheet)
 
@@ -2590,4 +2593,6 @@ def generate_project_report(
 
 
 __all__ = ["generate_project_report", "ProjectScenario"]
+
+
 

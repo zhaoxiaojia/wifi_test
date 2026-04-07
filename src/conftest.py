@@ -36,7 +36,12 @@ from src.tools.connect_tool.transports.serial_tool import serial_tool
 from src.tools.connect_tool.transports.telnet_tool import telnet_tool
 from src.tools.connect_tool.local_os import LocalOS
 from src.tools.performance_result import PerformanceResult
-from src.util.constants import load_config
+from src.util.constants import (
+    TEST_REPORT_PEAK_THROUGHPUT,
+    TEST_REPORT_RVO,
+    TEST_REPORT_RVR,
+    load_config,
+)
 from src.tools.router_tool.Router import Router
 from src.tools.reporting import generate_project_report
 from src.test.pyqt_log import emit_pyqt_message
@@ -452,15 +457,15 @@ def _maybe_generate_project_report() -> None:
     forced_type = None
     if isinstance(selected_types, set) and selected_types:
         preferred = None
-        if "PEAK_THROUGHPUT" in selected_types:
-            preferred = "PEAK_THROUGHPUT"
-        elif "RVO" in selected_types:
-            preferred = "RVO"
-        elif "RVR" in selected_types:
-            preferred = "RVR"
+        if TEST_REPORT_PEAK_THROUGHPUT in selected_types:
+            preferred = TEST_REPORT_PEAK_THROUGHPUT
+        elif TEST_REPORT_RVO in selected_types:
+            preferred = TEST_REPORT_RVO
+        elif TEST_REPORT_RVR in selected_types:
+            preferred = TEST_REPORT_RVR
         if len(selected_types) == 1:
             forced_type = next(iter(selected_types))
-        elif preferred is not None and selected_types.issubset({"PERFORMANCE", preferred}):
+        elif preferred is not None and selected_types.issubset({preferred}):
             forced_type = preferred
         if forced_type:
             logging.info("Using selected Wi-Fi test type for project report: %s (detected=%s)", forced_type, ", ".join(sorted(selected_types)))
@@ -635,14 +640,12 @@ def pytest_collection_finish(session):
         path_text = str(getattr(item, "fspath", "")).replace("\\", "/").lower()
         if not path_text:
             continue
-        if "test/performance/" in path_text:
-            selected_types.add("PERFORMANCE")
         if "test_wifi_peak_throughput" in path_text:
-            selected_types.add("PEAK_THROUGHPUT")
+            selected_types.add(TEST_REPORT_PEAK_THROUGHPUT)
         if "test_wifi_rvr" in path_text:
-            selected_types.add("RVR")
+            selected_types.add(TEST_REPORT_RVR)
         elif "test_wifi_rvo" in path_text:
-            selected_types.add("RVO")
+            selected_types.add(TEST_REPORT_RVO)
         elif "test/stability/" in path_text:
             selected_types.add("STABILITY")
 

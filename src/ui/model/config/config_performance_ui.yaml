@@ -18,27 +18,27 @@ panels:
           - key: atte.model
             widget: read_only_text
             label: "Attenuator Model"
-          - key: rf_solution.RC4DAT-8G-95.idVendor
+          - key: rf_solution.SWD-RC4DAT-8G-95.idVendor
             widget: line_edit
             #label: "RC4DAT-8G-95 idVendor"
             label: "Attenuator idVendor"
-          - key: rf_solution.RC4DAT-8G-95.idProduct
+          - key: rf_solution.SWD-RC4DAT-8G-95.idProduct
             widget: line_edit
             #label: "RC4DAT-8G-95 idProduct"
             label: "Attenuator idProduct"
-          - key: rf_solution.RC4DAT-8G-95.ip_address
+          - key: rf_solution.SWD-RC4DAT-8G-95.ip_address
             widget: line_edit
             #label: "RC4DAT-8G-95 IP"
             label: "Attenuator IP"
-          - key: rf_solution.RADIORACK-4-220.ip_address
+          - key: rf_solution.HJ-RADIORACK-4-220.ip_address
             widget: line_edit
             #label: "RADIORACK-4-220 IP"
             label: "Attenuator IP"
-          - key: rf_solution.LDA-908V-8.ip_address
+          - key: rf_solution.Vaunix-LDA-908V-8.ip_address
             widget: line_edit
             #label: "LDA-908V-8 IP"
             label: "Attenuator IP"
-          - key: rf_solution.LDA-908V-8.channels
+          - key: rf_solution.Vaunix-LDA-908V-8.channels
             widget: line_edit
             #label: "LDA-908V-8 Channels"
             label: "Attenuator Channels"
@@ -99,10 +99,9 @@ panels:
       - id: mode
         label: "Wi-Fi BT Coex"
         fields:
-          - key: mode
+          - key: lab_enviroment.coex_mode
             widget: combo_box
             label: "Coex Mode"
-            choices: ["Wi-Fi Only", "Wi-Fi BLE", "Wi-Fi BLE CLASSIC"]
           - key: bt.ble_alias
             widget: line_edit
             label: "BLE alias"
