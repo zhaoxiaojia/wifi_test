@@ -339,7 +339,7 @@ LAB_CATALOG: Final[dict[str, dict[str, Any]]] = {
         },
         "equipment": {
             "turntable_model": TURN_TABLE_MODEL_RS232,
-            "rf_model": ATTENUATOR_HJ_RADIORACK_4_220,
+            "rf_model": ATTENUATOR_SY_RS232BOARD5,
         },
     },
     # "SH-RVR-3": {

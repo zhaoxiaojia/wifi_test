@@ -317,8 +317,6 @@ class PerformanceTableManager:
 
     _BASE_COLUMNS: Sequence[tuple[str, str]] = (
         ("test_report_id", "INT NOT NULL"),
-        ("execution_id", "INT NOT NULL"),
-        ("csv_name", "VARCHAR(255) NOT NULL"),
     )
 
     _STATIC_COLUMNS: Sequence[_StaticColumn] = tuple(
@@ -690,7 +688,7 @@ class PerformanceTableManager:
         int
             A value of type ``int``.
         """
-        execution_type = (data_type or "PERFORMANCE").strip().upper()
+        execution_type = str(data_type or "").strip()
         report_name = str(csv_name or execution_type)
         return register_execution(
             self._client,
@@ -793,8 +791,6 @@ class PerformanceTableManager:
         for row in rows:
             row_values: List[Any] = [
                 test_report_id,
-                execution_id,
-                csv_name,
             ]
             for column in self._STATIC_COLUMNS:
                 if column.original == "Throughput":
@@ -1020,28 +1016,59 @@ def _build_project_payload(config: Mapping[str, Any]) -> Dict[str, Any]:
     return out
 
 
-def ensure_project(client: MySqlClient, project_payload: Mapping[str, Any]) -> int:
-    global _PROJECT_COLUMNS_CACHE  # type: ignore[global-variable-not-assigned]
-    try:
-        _PROJECT_COLUMNS_CACHE  # type: ignore[name-defined]
-    except NameError:
-        _PROJECT_COLUMNS_CACHE = None  # type: ignore[assignment]
+_PROJECT_COLUMNS_CACHE: Optional[set[str]] = None
 
+
+def _get_project_columns(client: MySqlClient) -> set[str]:
+    global _PROJECT_COLUMNS_CACHE
     if _PROJECT_COLUMNS_CACHE is None:
         try:
             rows = client.query_all("SHOW COLUMNS FROM `project`")
             _PROJECT_COLUMNS_CACHE = {str(r.get("Field") or "") for r in rows if isinstance(r, dict)}
         except Exception:
             _PROJECT_COLUMNS_CACHE = set()
+    return set(_PROJECT_COLUMNS_CACHE or set())
 
-    columns: set[str] = set(_PROJECT_COLUMNS_CACHE or set())
+
+def _project_column_names(columns: set[str], *, include_project_id: bool) -> list[str]:
+    names: list[str] = []
+    if "customer" in columns:
+        names.append("customer")
+    if "brand" in columns:
+        names.append("brand")
+    if "project_type" in columns:
+        names.append("project_type")
+    if "product_line" in columns:
+        names.append("product_line")
+    for name in ("nickname", "project_name"):
+        if name in columns:
+            names.append(name)
+    if include_project_id and "project_id" in columns:
+        names.append("project_id")
+    if "soc" in columns:
+        names.append("soc")
+    if "main_chip" in columns:
+        names.append("main_chip")
+    for name in ("wifi_module", "odm", "interface", "ecosystem"):
+        if name in columns:
+            names.append(name)
+    return names
+
+
+def _project_column_value(project_payload: Mapping[str, Any], column_name: str) -> Any:
+    if column_name in {"customer", "brand"}:
+        return project_payload.get("customer")
+    if column_name in {"project_type", "product_line"}:
+        return project_payload.get("project_type")
+    if column_name in {"soc", "main_chip"}:
+        return project_payload.get("soc")
+    return project_payload.get(column_name)
+
+
+def ensure_project(client: MySqlClient, project_payload: Mapping[str, Any]) -> int:
+    columns = _get_project_columns(client)
 
     project_id = str(project_payload.get("project_id") or "").strip()
-    customer_value = project_payload.get("customer")
-    soc_value = project_payload.get("soc")
-    # Best-effort compatibility for legacy schemas/constraints.
-    brand_value = customer_value if "brand" in columns else None
-    main_chip_value = soc_value if "main_chip" in columns else None
 
     if project_id:
         print("[DBTRACE_PROJECT] ensure_project lookup project_id=", project_id, flush=True)
@@ -1054,46 +1081,9 @@ def ensure_project(client: MySqlClient, project_payload: Mapping[str, Any]) -> i
             existing_id = int(existing["id"])
             print("[DBTRACE_PROJECT] ensure_project hit id=", existing_id, flush=True)
             logging.info("[DBTRACE_PROJECT] ensure_project hit id=%s", existing_id)
-            set_fields: list[str] = []
-            values: list[Any] = []
-            if "customer" in columns:
-                set_fields.append("`customer`=%s")
-                values.append(customer_value)
-            if "brand" in columns:
-                set_fields.append("`brand`=%s")
-                values.append(brand_value)
-            set_fields.extend(
-                [
-                    "`project_type`=%s",
-                    "`nickname`=%s",
-                    "`project_name`=%s",
-                ]
-            )
-            values.extend(
-                [
-                    project_payload.get("project_type"),
-                    project_payload.get("nickname"),
-                    project_payload.get("project_name"),
-                ]
-            )
-            if "soc" in columns:
-                set_fields.append("`soc`=%s")
-                values.append(soc_value)
-            if "main_chip" in columns:
-                set_fields.append("`main_chip`=%s")
-                values.append(main_chip_value)
-            set_fields.append("`wifi_module`=%s")
-            values.append(project_payload.get("wifi_module"))
-            if "odm" in columns:
-                set_fields.append("`odm`=%s")
-                values.append(project_payload.get("odm"))
-            set_fields.extend(["`interface`=%s", "`ecosystem`=%s"])
-            values.extend(
-                [
-                    project_payload.get("interface"),
-                    project_payload.get("ecosystem"),
-                ]
-            )
+            update_columns = _project_column_names(columns, include_project_id=False)
+            set_fields = [f"`{column}`=%s" for column in update_columns]
+            values = [_project_column_value(project_payload, column) for column in update_columns]
             values.append(existing_id)
             client.execute(
                 f"UPDATE `project` SET {', '.join(set_fields)} WHERE `id`=%s",
@@ -1101,49 +1091,16 @@ def ensure_project(client: MySqlClient, project_payload: Mapping[str, Any]) -> i
             )
             return existing_id
 
-    insert_columns: list[str] = []
-    insert_values: list[Any] = []
-    if "customer" in columns:
-        insert_columns.append("`customer`")
-        insert_values.append(customer_value)
-    if "brand" in columns:
-        insert_columns.append("`brand`")
-        insert_values.append(brand_value)
-    insert_columns.extend(["`project_type`", "`nickname`", "`project_name`", "`project_id`"])
-    insert_values.extend(
-        [
-            project_payload.get("project_type"),
-            project_payload.get("nickname"),
-            project_payload.get("project_name"),
-            project_payload.get("project_id"),
-        ]
-    )
-    if "soc" in columns:
-        insert_columns.append("`soc`")
-        insert_values.append(soc_value)
-    if "main_chip" in columns:
-        insert_columns.append("`main_chip`")
-        insert_values.append(main_chip_value)
-    insert_columns.append("`wifi_module`")
-    insert_values.append(project_payload.get("wifi_module"))
-    if "odm" in columns:
-        insert_columns.append("`odm`")
-        insert_values.append(project_payload.get("odm"))
-    insert_columns.extend(["`interface`", "`ecosystem`"])
-    insert_values.extend(
-        [
-            project_payload.get("interface"),
-            project_payload.get("ecosystem"),
-        ]
-    )
+    insert_columns = _project_column_names(columns, include_project_id=True)
+    insert_values = [_project_column_value(project_payload, column) for column in insert_columns]
 
     placeholder = ", ".join(["%s"] * len(insert_columns))
     insert_sql = (
-        f"INSERT INTO `project` ({', '.join(insert_columns)}) "
+        f"INSERT INTO `project` ({', '.join(f'`{column}`' for column in insert_columns)}) "
         f"VALUES ({placeholder}) "
         "ON DUPLICATE KEY UPDATE "
         "`id`=LAST_INSERT_ID(`id`), "
-        + ", ".join(f"{col}=VALUES({col})" for col in insert_columns)
+        + ", ".join(f"`{column}`=VALUES(`{column}`)" for column in insert_columns)
     )
     return client.insert(
         insert_sql,
@@ -1154,6 +1111,24 @@ def ensure_project(client: MySqlClient, project_payload: Mapping[str, Any]) -> i
 _PROJECT_CATALOG_SYNCED = False
 _ROUTER_CATALOG_SYNCED = False
 _LAB_CATALOG_SYNCED = False
+
+
+def _load_cached_tester() -> Optional[str]:
+    path = Path(Paths.CONFIG_DIR) / "auth_state.json"
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        logging.debug("Failed to read auth state from %s", path, exc_info=True)
+        return None
+    if not isinstance(data, Mapping):
+        return None
+    username = str(data.get("username") or "").strip()
+    authenticated = bool(data.get("authenticated", False))
+    if not username or not authenticated:
+        return None
+    return username
 
 
 def _load_router_catalog() -> list[dict[str, Any]]:
@@ -1296,37 +1271,42 @@ def sync_project_catalog(client: MySqlClient) -> None:
         if count > 0:
             return
     print("[PROJECT_SYNC] start")
+    columns = _get_project_columns(client)
+    insert_columns = _project_column_names(columns, include_project_id=True)
+    placeholders = ", ".join(["%s"] * len(insert_columns))
     insert_sql = (
         "INSERT INTO `project` "
-        "(`customer`, `project_type`, `nickname`, `project_name`, `project_id`, `soc`, `wifi_module`, `odm`, `interface`, `ecosystem`) "
-        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
+        f"({', '.join(f'`{column}`' for column in insert_columns)}) "
+        f"VALUES ({placeholders}) "
         "ON DUPLICATE KEY UPDATE "
-        "`customer`=VALUES(`customer`), "
-        "`project_type`=VALUES(`project_type`), "
-        "`nickname`=VALUES(`nickname`), "
-        "`project_name`=VALUES(`project_name`), "
-        "`project_id`=VALUES(`project_id`), "
-        "`soc`=VALUES(`soc`), "
-        "`wifi_module`=VALUES(`wifi_module`), "
-        "`odm`=VALUES(`odm`), "
-        "`interface`=VALUES(`interface`), "
-        "`ecosystem`=VALUES(`ecosystem`)"
+        + ", ".join(f"`{column}`=VALUES(`{column}`)" for column in insert_columns)
     )
     rows = []
-    expected_keys: set[tuple[str, str, str]] = set()
-    for project_type, odm_map in WIFI_PRODUCT_PROJECT_MAP.items():
-        for odm_name, projects in odm_map.items():
+    update_rows: list[tuple[Any, ...]] = []
+    for project_type, customer_map in WIFI_PRODUCT_PROJECT_MAP.items():
+        for customer_name, projects in customer_map.items():
             for nickname, info in projects.items():
-                expected_keys.add((odm_name, project_type, nickname))
                 project_id = str(info.get("ProjectID") or "").strip()
                 project_name = str(info.get("ProjectName") or "").strip() or None
+                project_payload = {
+                    "customer": customer_name,
+                    "project_type": project_type,
+                    "nickname": nickname,
+                    "project_name": project_name,
+                    "project_id": project_id or None,
+                    "soc": info.get("main_chip"),
+                    "wifi_module": info.get("wifi_module"),
+                    "odm": info.get("ODM") or None,
+                    "interface": info.get("interface"),
+                    "ecosystem": info.get("ecosystem"),
+                }
                 if nickname in {"Latte829", "Vodka424", "Espresso115"} or not project_id:
                     print(
                         "[PROJECT_SYNC] map_row",
                         "project_type=",
                         project_type,
-                        "brand=",
-                        odm_name,
+                        "customer=",
+                        customer_name,
                         "nickname=",
                         nickname,
                         "ProjectID=",
@@ -1335,30 +1315,30 @@ def sync_project_catalog(client: MySqlClient) -> None:
                         project_name or "(empty)",
                     )
                 rows.append(
-                    (
-                        odm_name,
-                        project_type,
-                        nickname,
-                        project_name,
-                        project_id or None,
-                        info["main_chip"],
-                        info["wifi_module"],
-                        odm_name,
-                        info["interface"],
-                        info["ecosystem"],
-                    )
+                    tuple(_project_column_value(project_payload, column) for column in insert_columns)
                 )
+                if project_payload.get("project_id"):
+                    update_rows.append(
+                        (
+                            project_payload.get("project_id"),
+                            project_payload.get("project_name"),
+                            project_payload.get("customer"),
+                            project_payload.get("project_type"),
+                            project_payload.get("nickname"),
+                        )
+                    )
     if rows:
-        missing_id = sum(1 for r in rows if not r[4])
+        missing_id = len(rows) - len(update_rows)
         print("[PROJECT_SYNC] rows=", len(rows), "missing_project_id=", missing_id)
         logging.info("Project catalog sync: upserting %d rows", len(rows))
         client.executemany(insert_sql, rows)
-        updates = [row for row in rows if row[4]]
-        if updates:
+        customer_lookup_column = "customer" if "customer" in columns else "brand"
+        project_type_lookup_column = "project_type" if "project_type" in columns else "product_line"
+        if update_rows and customer_lookup_column and project_type_lookup_column and "nickname" in columns:
             client.executemany(
-                "UPDATE `project` SET `project_id`=%s, `project_name`=%s "
-                "WHERE `customer`=%s AND `project_type`=%s AND `nickname`=%s",
-                [(r[4], r[3], r[0], r[1], r[2]) for r in updates],
+                f"UPDATE `project` SET `project_id`=%s, `project_name`=%s "
+                f"WHERE `{customer_lookup_column}`=%s AND `{project_type_lookup_column}`=%s AND `nickname`=%s",
+                update_rows,
             )
         try:
             sample = client.query_all(
@@ -1389,9 +1369,7 @@ def ensure_test_report(
     csv_path: Optional[str] = None,
 ) -> int:
     if tester is None:
-        from src.util.auth_state import load_cached_username
-
-        tester = load_cached_username()
+        tester = _load_cached_tester()
 
     insert_sql = (
         "INSERT INTO `test_report` "
@@ -1989,7 +1967,7 @@ def sync_compatibility_artifacts_to_db(
     Sync compatibility CSV + router catalogue into database.
 
     Inserts/updates router entries into `router`, registers an execution,
-    then bulk inserts rows into `compatibility` linked by `execution_id`
+    then bulk inserts rows into `compatibility` linked by `test_report_id`
     and `router_id`.
     """
     if not isinstance(config, Mapping) or not config:
@@ -2043,6 +2021,11 @@ def sync_compatibility_artifacts_to_db(
             run_source=normalized_source,
             duration_seconds=duration_seconds,
         )
+        test_report_row = client.query_one(
+            "SELECT `test_report_id` FROM `execution` WHERE `id`=%s LIMIT 1",
+            (execution_id,),
+        )
+        test_report_id = int((test_report_row or {}).get("test_report_id") or 0)
 
         with open(csv_file, "r", encoding="utf-8") as handle:
             reader = csv.reader(handle)
@@ -2053,7 +2036,7 @@ def sync_compatibility_artifacts_to_db(
 
         data_rows = rows[1:]
         insert_cols = [
-            "execution_id",
+            "test_report_id",
             "router_id",
             "pdu_ip",
             "pdu_port",
@@ -2107,7 +2090,7 @@ def sync_compatibility_artifacts_to_db(
             router_id = router_id_by_key.get((pdu_ip, pdu_port))
             compat_rows.append(
                 (
-                    execution_id,
+                    test_report_id,
                     router_id,
                     pdu_ip,
                     pdu_port,

@@ -32,7 +32,7 @@ rvr:
     client_cmd: ''
   ixchariot:
     path: ''
-  repeat: ''
+  repeat: '3'
   throughput_threshold: ''
 dut:
   type: Android

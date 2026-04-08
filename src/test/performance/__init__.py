@@ -383,6 +383,7 @@ def get_rvo_static_db_list():
         candidates.append(raw_value)
 
     parsed_values = []
+    has_invalid = False
     for item in candidates:
         parsed = _parse_optional_int(
             item,
@@ -390,9 +391,13 @@ def get_rvo_static_db_list():
             min_value=0,
             max_value=RF_ATTENUATION_MAX_DB,
         )
-        if parsed is not None:
-            parsed_values.append(parsed)
+        if parsed is None:
+            has_invalid = True
+            break
+        parsed_values.append(parsed)
 
+    if has_invalid:
+        return [None]
     return parsed_values if parsed_values else [None]
 
 
@@ -411,21 +416,26 @@ def get_rvo_target_rssi_list():
         candidates.append(raw_value)
 
     parsed_values = []
+    has_invalid = False
     for item in candidates:
         parsed = _parse_optional_int(
             item,
             field_name=f'{TURN_TABLE_SECTION_KEY}.{TURN_TABLE_FIELD_TARGET_RSSI}',
         )
-        if parsed is not None:
-            normalized = parsed if parsed <= 0 else -abs(parsed)
-            if normalized != parsed:
-                logging.debug(
-                    "%s.%s %s converted to %s dBm to match RSSI sign convention",
-                    TURN_TABLE_SECTION_KEY,
-                    TURN_TABLE_FIELD_TARGET_RSSI,
-                    parsed,
-                    normalized,
-                )
-            parsed_values.append(normalized)
+        if parsed is None:
+            has_invalid = True
+            break
+        normalized = parsed if parsed <= 0 else -abs(parsed)
+        if normalized != parsed:
+            logging.debug(
+                "%s.%s %s converted to %s dBm to match RSSI sign convention",
+                TURN_TABLE_SECTION_KEY,
+                TURN_TABLE_FIELD_TARGET_RSSI,
+                parsed,
+                normalized,
+            )
+        parsed_values.append(normalized)
 
+    if has_invalid:
+        return [None]
     return parsed_values if parsed_values else [None]
