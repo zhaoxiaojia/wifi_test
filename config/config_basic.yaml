@@ -1,6 +1,6 @@
 serial_port:
   baud: '115200'
-  port: COM5 (Silicon Labs CP210x USB to UART Bridge (COM5))
+  port: COM10 (Silicon Labs CP210x USB to UART Bridge (COM10))
   status: false
 router:
   name: asusax88upro
@@ -11,8 +11,8 @@ rvr:
   tool: iperf
   iperf:
     path: ''
-    server_cmd: iperf -s -i 1
-    client_cmd: iperf -c {ip} -i 1  -t 5 -P 5
+    server_cmd: iperf3 -s -i 1
+    client_cmd: iperf3 -c {ip} -i 1  -t 5 -P 5
   ixchariot:
     path: ''
   repeat: '0'
@@ -20,7 +20,7 @@ rvr:
 dut:
   type: Android
   Android:
-    device: No devices
+    device: ross809de10187501f0a
   Linux:
     ip: 10.28.38.10
     wildcard: ''
@@ -31,4 +31,4 @@ dut:
   address: 192.168.8.1
   24g_ssid: Openwrt-AT-24G
   5g_ssid: Openwrt-AT-5G
-  mac_address: 1c:a4:10:6e:48:c1
+  mac_address: 10:a5:62:6a:be:c8

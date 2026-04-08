@@ -1,11 +1,4 @@
 panels:
   toolbar:
-    sections:
-      - id: ai_chat
-        label: "AI Chat"
-        fields:
-          - key: toolbar.ai_chat.model_id
-            widget: combo_box
-            label: "Model"
-            placeholder: "Select LLM provider"
+    sections: []
 

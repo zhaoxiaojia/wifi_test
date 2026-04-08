@@ -209,6 +209,10 @@ class _DebugRouterController:
     def enable_tx_rx(self, tx, rx) -> None:
         logging.info("[Debug] Skip router enable_tx_rx(tx=%s, rx=%s)", tx, rx)
 
+    def change_setting(self, router_info: Router) -> bool:
+        logging.info("[Debug] Skip router change_setting(%s)", router_info)
+        return True
+
     def __getattr__(self, item: str):
         raise AttributeError(f"_DebugRouterController has no attribute {item!r}")
 
@@ -290,16 +294,42 @@ def common_setup(router: Router, router_info: Router) -> bool:
     channel_text = str(getattr(router_info, "channel", "") or "").strip()
     if not channel_text or channel_text.lower() in {"none", "null"}:
         channel_text = "auto"
-    # Router controllers typically expect the visible text value (e.g. "auto",
-    # "36") rather than an integer.
-    router.channel = channel_text
-    router.bandwidth = router_info.bandwidth
-    router.wireless_mode = router_info.wireless_mode
-    router.security_mode = router_info.security_mode
-    router.tx = router_info.tx
-    router.rx = router_info.rx
-    router.ssid = router_info.ssid
-    router.password = router_info.password
+    router_config = Router(
+        band=getattr(router_info, "band", None),
+        ssid=getattr(router_info, "ssid", None),
+        wireless_mode=getattr(router_info, "wireless_mode", None),
+        channel=channel_text,
+        bandwidth=getattr(router_info, "bandwidth", None),
+        security_mode=getattr(router_info, "security_mode", None),
+        password=getattr(router_info, "password", None),
+        tx=getattr(router_info, "tx", None),
+        rx=getattr(router_info, "rx", None),
+        expected_rate=getattr(router_info, "expected_rate", None),
+        wifi6=getattr(router_info, "wifi6", None),
+        wep_encrypt=getattr(router_info, "wep_encrypt", None),
+        hide_ssid=getattr(router_info, "hide_ssid", None),
+        hide_type=getattr(router_info, "hide_type", None),
+        wpa_encrypt=getattr(router_info, "wpa_encrypt", None),
+        passwd_index=getattr(router_info, "passwd_index", None),
+        protect_frame=getattr(router_info, "protect_frame", None),
+        smart_connect=getattr(router_info, "smart_connect", None),
+        country_code=getattr(router_info, "country_code", None),
+    )
+
+    if hasattr(router, "change_setting"):
+        result = router.change_setting(router_config)
+        logging.info("router setup end")
+        return True if result is None else bool(result)
+
+    # Compatibility fallback for legacy controllers that expose step-wise APIs.
+    router.channel = router_config.channel
+    router.bandwidth = router_config.bandwidth
+    router.wireless_mode = router_config.wireless_mode
+    router.security_mode = router_config.security_mode
+    router.tx = router_config.tx
+    router.rx = router_config.rx
+    router.ssid = router_config.ssid
+    router.password = router_config.password
 
     router.set_wireless_mode(router.wireless_mode)
     router.set_bandwidth(router.bandwidth)

@@ -1,8 +1,8 @@
 """Global tools bar and side-panel views.
 
-These widgets host the application-wide tools (BT FW log analysis,
-AI chat, etc.).  They are intentionally UI-only and do not perform any
-I/O; behaviour is provided by controllers in ``src.ui.controller``.
+These widgets host optional application-wide tools. They are intentionally
+UI-only and do not perform any I/O; behaviour is provided by controllers
+in ``src.ui.controller``.
 """
 
 from __future__ import annotations

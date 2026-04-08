@@ -29,7 +29,6 @@ import csv  # noqa: F401  (kept for potential future CSV export)
 
 from src.tools.connect_tool.duts.android import android
 from src.tools.connect_tool.transports.serial_tool import serial_tool
-from src.tools.connect_tool.local_os import LocalOS
 from src.tools.performance_result import PerformanceResult
 from src.util.constants import load_config
 from src.tools.router_tool.Router import Router
@@ -399,7 +398,6 @@ def pytest_sessionstart(session):
         pytest.win_flag = True
     else:
         pytest.win_flag = False
-    pytest.host_os = LocalOS()
     pytest._session_start_ts = time.time()
     # Load configuration (fresh)
     pytest.config = load_config(refresh=True) or {}

@@ -1,5 +1,3 @@
 host_os:
   user: amlogic
   password: Linux2024
-ai_chat:
-  model_id: groq-llama3-8b

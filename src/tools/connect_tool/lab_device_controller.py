@@ -14,6 +14,7 @@ from src.util.constants import (
     RF_ATTENUATION_MAX_DB,
     RF_ATTENUATION_MIN_DB,
     RF_MODEL_LDA_908V_8,
+    RF_MODEL_RADIORACK_4_220,
     RF_MODEL_RC4DAT_8G_95,
 )
 
@@ -318,7 +319,14 @@ class LabDeviceController:
             return lambda: self._apply_lda_attenuation(value)
         if self.model == RF_MODEL_RC4DAT_8G_95:
             return lambda: self._write_telnet(f":CHAN:1:2:3:4:SETATT:{value};", read_response=True)
+        if self.model == RF_MODEL_RADIORACK_4_220:
+            return lambda: self._write_telnet(self._build_radiorack_command(int(value)*2), read_response=True)
         return lambda: self._write_telnet(f"ATT 1 {value};2 {value};3 {value};4 {value};")
+
+    @staticmethod
+    def _build_radiorack_command(value: str) -> str:
+        """Return the command format expected by the RADIORACK attenuator."""
+        return f"ATT 1 {value};2 {value};3 {value};4 {value};"
 
     def _apply_lda_attenuation(self, value: str) -> None:
         """Send HTTP commands for each configured LDA channel."""
@@ -338,7 +346,11 @@ class LabDeviceController:
         logging.info(command)
         self.tn.write(command.encode('ascii') + (b'\r\n' if read_response else b'\r'))
         if read_response:
-            self.tn.read_some()
+            try:
+                response = self.tn.read_some(timeout=2.0).decode('ascii', errors='ignore')
+            except EOFError:
+                response = ""
+            print(f"[DEBUG_RF] TELNET_ECHO raw={response!r}")
 
     def _perform_cleanup(self) -> None:
         """Allow hardware state to settle after issuing commands."""

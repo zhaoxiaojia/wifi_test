@@ -156,14 +156,19 @@ class MainWindow(FluentWindow):
         self.global_tools_bar_frame = self._tools_chrome.bar_frame
         self.global_tools_bar = self._tools_chrome.bar
         self.global_tools_panel = self._tools_chrome.panel
-        self.global_tools_bar_frame.show()
-        self.global_tools_bar_frame.raise_()
+        if tool_specs:
+            self.global_tools_bar_frame.show()
+            self.global_tools_bar_frame.raise_()
+        else:
+            self.global_tools_bar_frame.hide()
         self._update_global_tools_geometry()
         t_step = time.perf_counter()
-        self.global_tools_controller = GlobalToolsController(
-            self, self.global_tools_bar, self.global_tools_panel, tool_specs
-        )
-        print(f"[STARTUP_TIME] GlobalToolsController: {time.perf_counter() - t_step:.3f}s")
+        self.global_tools_controller = None
+        if tool_specs:
+            self.global_tools_controller = GlobalToolsController(
+                self, self.global_tools_bar, self.global_tools_panel, tool_specs
+            )
+            print(f"[STARTUP_TIME] GlobalToolsController: {time.perf_counter() - t_step:.3f}s")
 
         # Pages
         t_step = time.perf_counter()
@@ -753,6 +758,50 @@ class MainWindow(FluentWindow):
             if page_widget is self.rvr_wifi_config_page and (ssid or passwd):
                 self.rvr_wifi_config_page.set_router_credentials(ssid or "", passwd or "")
             self._route_to_page(page_widget)
+            nav = getattr(self, "navigationInterface", None)
+            if nav is not None and page_widget is not None:
+                nav_button = None
+                if page_widget is getattr(self, "caseConfigPage", None):
+                    nav_button = getattr(self, "case_nav_button", None)
+                elif page_widget is getattr(self, "rvr_wifi_config_page", None):
+                    nav_button = getattr(self, "_rvr_nav_button", None) or getattr(self, "rvr_nav_button", None)
+                elif page_widget is getattr(self, "run_page", None):
+                    nav_button = getattr(self, "_run_nav_button", None) or getattr(self, "run_nav_button", None)
+                elif page_widget is getattr(self, "report_view", None):
+                    nav_button = getattr(self, "report_nav_button", None)
+                elif page_widget is getattr(self, "about_page", None):
+                    nav_button = getattr(self, "about_nav_button", None)
+
+                route_key = None
+                try:
+                    if nav_button is not None and not sip.isdeleted(nav_button):
+                        route_key = nav_button.property("routeKey")
+                except Exception:
+                    route_key = None
+                if not route_key:
+                    try:
+                        route_key = page_widget.objectName()
+                    except Exception:
+                        route_key = None
+
+                # Keep left navigation highlight in sync for programmatic page switches
+                # (e.g. Create Case / Run buttons). Prefer stable routeKey-based APIs.
+                try:
+                    if route_key and hasattr(nav, "setCurrentItem"):
+                        nav.setCurrentItem(route_key)
+                    elif route_key and hasattr(nav, "setCurrentRouteKey"):
+                        nav.setCurrentRouteKey(route_key)
+                    elif hasattr(nav, "setCurrentWidget"):
+                        nav.setCurrentWidget(page_widget)
+                except Exception:
+                    pass
+
+                # Fallback for older qfluentwidgets versions where route sync is a no-op.
+                try:
+                    if nav_button is not None and hasattr(nav_button, "setChecked"):
+                        nav_button.setChecked(True)
+                except Exception:
+                    pass
         except Exception as e:
             logging.error("Failed to set current widget: %s", e)
 
@@ -829,7 +878,7 @@ class MainWindow(FluentWindow):
         self.run_nav_button.setEnabled(True)
         if self.stackedWidget.indexOf(self.run_page) == -1:
             self.stackedWidget.addWidget(self.run_page)
-        self.switchTo(self.run_page)
+        self.setCurrentIndex(self.run_page)
         self.run_page.run_case()
         runner = self.run_page.runner
 

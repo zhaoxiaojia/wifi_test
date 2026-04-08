@@ -615,13 +615,6 @@ class ReportController(RvrChartLogic, QObject):
                 points.append({"position": (x_px, y_px), "tooltip": tooltip})
         widget.set_points(points)
 
-        try:
-            charts_dir.mkdir(parents=True, exist_ok=True)
-            out_path = charts_dir / f"{title}.png"
-            pixmap.save(str(out_path), "PNG")
-        except Exception:
-            pass
-
         return widget
 
     def _create_rvo_chart_widget(
@@ -731,13 +724,6 @@ class ReportController(RvrChartLogic, QObject):
                 points.append({"position": (x, y), "tooltip": tooltip})
         widget.set_points(points)
 
-        try:
-            charts_dir.mkdir(parents=True, exist_ok=True)
-            out_path = charts_dir / f"{title}.png"
-            pixmap.save(str(out_path), "PNG")
-        except Exception:
-            pass
-
         return widget
 
     def _collect_step_labels(self, df: pd.DataFrame) -> list[str]:
@@ -802,12 +788,6 @@ class ReportController(RvrChartLogic, QObject):
         plt.close(fig)
         widget = InteractiveChartLabel()
         widget.setPixmap(pixmap)
-        try:
-            charts_dir.mkdir(parents=True, exist_ok=True)
-            out_path = charts_dir / f"{title}.png"
-            pixmap.save(str(out_path), "PNG")
-        except Exception:
-            pass
         return widget
 
     def _make_tooltip_html(

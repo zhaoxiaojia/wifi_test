@@ -311,29 +311,29 @@ def _normalize_turntable_section(data: Mapping[str, Any] | None) -> dict[str, An
     else:
         source = {}
 
+    def _prefer_key(primary: str, *fallback_keys: str, default: Any = "") -> Any:
+        """Return value for the first key that exists (even if empty string)."""
+        if primary in source:
+            return source.get(primary)
+        for key in fallback_keys:
+            if key in source:
+                return source.get(key)
+        return default
+
     # Prefer the internal/UI (lowercase) keys when present so that edits
     # from the Config page take effect even when legacy/display keys are
     # still present in the mapping. Fall back to the display names used
     # in YAML for older configs.
-    model_value = (
-        source.get("model")
-        or source.get("turntable_type")
-        or source.get(TURN_TABLE_FIELD_MODEL)
-        or TURN_TABLE_MODEL_RS232
+    model_value = _prefer_key(
+        "model",
+        "turntable_type",
+        TURN_TABLE_FIELD_MODEL,
+        default=TURN_TABLE_MODEL_RS232,
     )
-    ip_value = (
-        source.get("ip_address")
-        or source.get("ip")
-        or source.get(TURN_TABLE_FIELD_IP_ADDRESS)
-        or ""
-    )
-    step_value = source.get("step") or source.get(TURN_TABLE_FIELD_STEP) or ""
-    static_value = (
-        source.get("static_db") or source.get(TURN_TABLE_FIELD_STATIC_DB) or ""
-    )
-    target_value = (
-        source.get("target_rssi") or source.get(TURN_TABLE_FIELD_TARGET_RSSI) or ""
-    )
+    ip_value = _prefer_key("ip_address", "ip", TURN_TABLE_FIELD_IP_ADDRESS, default="")
+    step_value = _prefer_key("step", TURN_TABLE_FIELD_STEP, default="")
+    static_value = _prefer_key("static_db", TURN_TABLE_FIELD_STATIC_DB, default="")
+    target_value = _prefer_key("target_rssi", TURN_TABLE_FIELD_TARGET_RSSI, default="")
 
     model_text = str(model_value).strip() if model_value is not None else ""
     if model_text not in TURN_TABLE_MODEL_CHOICES:

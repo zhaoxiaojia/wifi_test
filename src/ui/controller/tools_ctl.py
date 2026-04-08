@@ -13,8 +13,6 @@ from PyQt5.QtCore import QObject
 
 from src.ui.model.tools_registry import ToolSpec
 from src.ui.view.tools_global import GlobalToolsBar, GlobalToolsPanel
-from src.ui.view.toolbar.tools_ai_chat import AiChatToolView
-from src.ui.controller.tools_ai_chat_ctl import AiChatToolController
 
 
 class GlobalToolsController(QObject):
@@ -49,15 +47,11 @@ class GlobalToolsController(QObject):
     def _create_tool_instances(self) -> None:
         """Instantiate tool views and controllers based on registry ids."""
         for tool_id in self._specs:
-            if tool_id == "ai_chat":
-                view = AiChatToolView(parent=self.main_window)
-                controller = AiChatToolController(view, parent=self.main_window)
-            else:
-                continue
-
-            self.tools_panel.register_tool_widget(tool_id, view)
-            self._tool_views[tool_id] = view
-            self._tool_controllers[tool_id] = controller
+            # No built-in tools are currently shipped. Keep this hook for
+            # future tool integrations while allowing the toolbar registry
+            # to be empty without raising.
+            _ = tool_id
+            continue
 
     # ------------------------------------------------------------------
     # Visibility / toggling
