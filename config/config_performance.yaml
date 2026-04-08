@@ -14,9 +14,9 @@ rf_solution:
   Vaunix-LDA-908V-8:
     ip_address: 192.168.10.43
     channels: 1,2,3,8
-  model: HJ-RADIORACK-4-220
+  model: SY-RS232Board5
   step: 0,75:3
-text_case: test/performance/test_wifi_rvr.py
+text_case: test/performance/test_wifi_peak_throughput.py
 debug:
   database_mode: true
   skip_router: false
@@ -38,7 +38,7 @@ function:
   wifi_module: ''
   interface: ''
 atte:
-  model: HJ-RADIORACK-4-220
+  model: SY-RS232Board5
 lab_enviroment:
   coex_mode: WiFi+BLE
   ap_region: CN

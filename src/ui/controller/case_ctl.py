@@ -53,12 +53,23 @@ def _unregister_switch_wifi_csv_combo(page: "CaseConfigPage", combo: ComboBox) -
         return
 
 
-def _list_available_csv_files() -> list[tuple[str, str]]:
+def _resolve_csv_glob_pattern(page: "CaseConfigPage") -> str:
+    """Return the CSV filename pattern for the active testcase."""
+    config = page.config if isinstance(page.config, Mapping) else {}
+    case_path = str(config.get("text_case") or "").replace("\\", "/").strip().lower()
+    basename = Path(case_path).name
+    if "/test/performance/xiaomi/" in case_path and basename.startswith("test_xiaomi_"):
+        return "xiaomi*.csv"
+    return "*.csv"
+
+
+def _list_available_csv_files(page: "CaseConfigPage") -> list[tuple[str, str]]:
     """Discover available CSV files under the configured directory."""
     csv_dir = get_config_base() / "performance_test_csv"
     entries: list[tuple[str, str]] = []
+    pattern = _resolve_csv_glob_pattern(page)
     if csv_dir.exists():
-        for csv_file in sorted(csv_dir.glob("*.csv")):
+        for csv_file in sorted(csv_dir.glob(pattern)):
             try:
                 entries.append((csv_file.name, str(csv_file.resolve())))
             except Exception:
@@ -195,7 +206,7 @@ def _populate_csv_combo(
     include_placeholder: bool = False,
 ) -> None:
     """Populate a combo box with available CSV files."""
-    entries = _list_available_csv_files()
+    entries = _list_available_csv_files(page)
     normalized_selected = _normalize_csv_path(selected_path)
     with QSignalBlocker(combo):
         combo.clear()

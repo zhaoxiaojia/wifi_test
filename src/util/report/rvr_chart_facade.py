@@ -1046,10 +1046,10 @@ class RvrChartLogic:
             return ""
         rounded = round(value)
         if abs(value - rounded) < 1e-6:
-            return f"{int(rounded)}掳"
-        formatted = f"{value:.1f}掳"
-        if formatted.endswith(".0掳"):
-            formatted = formatted[:-3] + "掳"
+            return f"{int(rounded)}°"
+        formatted = f"{value:.1f}°"
+        if formatted.endswith(".0°"):
+            formatted = formatted[:-3] + "°"
         return formatted
 
     def _format_angle_display(self, value) -> str:

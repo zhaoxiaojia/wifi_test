@@ -7,8 +7,25 @@ from typing import Callable, Dict, Optional
 import pytest
 
 from src.tools.mysql_tool.MySqlControl import MySqlClient, sync_file_to_db
-
 from src.tools.performance.rvr_chart_generator import generate_rvr_charts
+from src.util.constants import (
+    TEST_REPORT_PEAK_THROUGHPUT,
+    TEST_REPORT_RVO,
+    TEST_REPORT_RVR,
+)
+
+
+_PERFORMANCE_DB_REPORT_TYPES = {
+    TEST_REPORT_RVR: TEST_REPORT_RVR,
+    TEST_REPORT_RVO: TEST_REPORT_RVO,
+    "PEAK": TEST_REPORT_PEAK_THROUGHPUT,
+    TEST_REPORT_PEAK_THROUGHPUT.upper(): TEST_REPORT_PEAK_THROUGHPUT,
+}
+
+
+def _resolve_db_report_type(data_type: str) -> str:
+    normalized_type = (data_type or "").strip().upper()
+    return _PERFORMANCE_DB_REPORT_TYPES.get(normalized_type, normalized_type)
 
 
 def _generate_charts(data_type: str, log_file: str) -> None:
@@ -51,12 +68,13 @@ class _PerformanceSyncSession:
             logging.warning("Skip registering database sync for %s: missing log file path", data_type)
             return
         normalized_type = (data_type or "").strip().upper() or "UNKNOWN"
+        db_report_type = _resolve_db_report_type(data_type)
         log_file = self._align_prefix_if_needed(normalized_type, log_file)
-        self.pending[normalized_type] = _PendingSync(
+        self.pending[db_report_type] = _PendingSync(
             log_file=log_file,
-            data_type=normalized_type,
+            data_type=db_report_type,
             run_source=(run_source or "FRAMEWORK").strip() or "FRAMEWORK",
-            message=message or f"Stored rows for {normalized_type}",
+            message=message or f"Stored rows for {db_report_type}",
         )
         if normalized_type in {"RVR", "RVO", "PEAK"}:
             _generate_charts(normalized_type, log_file)
