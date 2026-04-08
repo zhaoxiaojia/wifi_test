@@ -67,6 +67,7 @@ def _require_run_type(value: str | None) -> str:
         )
     return run_type
 
+
 __all__ = [
     "PerformanceTableManager",
     "sync_configuration",
@@ -665,6 +666,7 @@ class PerformanceTableManager:
             *,
             project_payload: Mapping[str, Any],
             execution_payload: Mapping[str, Any],
+            sheet_name: Optional[str],
             csv_name: str,
             csv_path: str,
             data_type: Optional[str],
@@ -688,6 +690,7 @@ class PerformanceTableManager:
         int
             A value of type ``int``.
         """
+
         execution_type = str(data_type or "").strip()
         report_name = str(csv_name or execution_type)
         return register_execution(
@@ -792,6 +795,7 @@ class PerformanceTableManager:
             row_values: List[Any] = [
                 test_report_id,
             ]
+
             for column in self._STATIC_COLUMNS:
                 if column.original == "Throughput":
                     samples: List[Any] = []
@@ -995,6 +999,7 @@ def _build_project_payload(config: Mapping[str, Any]) -> Dict[str, Any]:
         print("[DBTRACE_PROJECT] config.project=", project_section, flush=True)
         logging.info("[DBTRACE_PROJECT] Paths.CONFIG_DIR=%s", Paths.CONFIG_DIR)
         logging.info("[DBTRACE_PROJECT] config.project=%s", project_section)
+
     wifi_details = _resolve_wifi_product_details(project_section)
     out = {
         "customer": wifi_details.get("customer"),
@@ -1077,6 +1082,7 @@ def ensure_project(client: MySqlClient, project_payload: Mapping[str, Any]) -> i
             "SELECT `id` FROM `project` WHERE `project_id`=%s ORDER BY `id` DESC LIMIT 1",
             (project_id,),
         )
+
         if existing and existing.get("id"):
             existing_id = int(existing["id"])
             print("[DBTRACE_PROJECT] ensure_project hit id=", existing_id, flush=True)
@@ -1414,6 +1420,7 @@ def register_execution(
     case_path: Optional[str],
     execution_type: str,
     execution_payload: Mapping[str, Any],
+    sheet_name: Optional[str] = None,
     csv_name: str,
     csv_path: str,
     run_source: str,
@@ -1580,13 +1587,14 @@ def register_execution(
 
     insert_sql = (
         "INSERT INTO `execution` "
-        "(`test_report_id`, `run_type`, `run_source`, `duration_seconds`) "
-        "VALUES (%s, %s, %s, %s)"
+        "(`test_report_id`, `sheet_name`, `run_type`, `run_source`, `duration_seconds`) "
+        "VALUES (%s, %s, %s, %s, %s)"
     )
     execution_id = client.insert(
         insert_sql,
         (
             test_report_id,
+            None if not sheet_name else str(sheet_name).strip(),
             run_type,
             normalized_source,
             int(duration_seconds) if duration_seconds is not None else None,
@@ -2023,6 +2031,7 @@ def sync_compatibility_artifacts_to_db(
         )
         test_report_row = client.query_one(
             "SELECT `test_report_id` FROM `execution` WHERE `id`=%s LIMIT 1",
+
             (execution_id,),
         )
         test_report_id = int((test_report_row or {}).get("test_report_id") or 0)

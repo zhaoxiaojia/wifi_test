@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass
 from datetime import datetime
 import hashlib
@@ -13,7 +14,7 @@ from PyQt5.QtWidgets import QFileDialog, QDialog
 from qfluentwidgets import MessageBox
 
 from src.tools.mysql_tool import MySqlClient
-from src.tools.mysql_tool.operations import ensure_test_report
+from src.tools.mysql_tool.operations import ensure_project, ensure_test_report
 from src.tools.mysql_tool.operations import PerformanceTableManager
 from src.tools.mysql_tool.schema import ensure_report_tables
 from src.tools.mysql_tool.sql_writer import SqlWriter
@@ -22,13 +23,23 @@ from src.ui.view.titlebar.import_sheets_dialog import ImportSheetsDialog
 from src.util.constants import (
     AP_MODEL_CHOICES,
     AP_REGION_CHOICES,
+    BT_DEVICE_CHOICES,
+    BT_REMOTE_CHOICES,
+    BT_TYPE_CHOICES,
+    DUT_OS_CHOICES,
+    HW_PHASE_CHOICES,
     IDENTIFIER_SANITIZE_PATTERN,
+    LAB_ENV_COEX_MODE_CHOICES,
+    LAB_ENV_CONNECT_TYPE_CHOICES,
+    PROJECT_ID_CHOICES,
+    PROJECT_TYPES,
     RUN_TYPE_WIFI_SMARTTEST,
     TEST_REPORT_CHOICES,
     TEST_REPORT_COMPATIBILITY,
     TEST_REPORT_PEAK_THROUGHPUT,
     TEST_REPORT_RVO,
     TEST_REPORT_RVR,
+    WIFI_MODULE_CHOICES,
     WIFI_PRODUCT_PROJECT_MAP,
 )
 
@@ -91,8 +102,6 @@ def _insert_performance_rows(
     for row in rows:
         row_values: List[Any] = [
             test_report_id,
-            execution_id,
-            csv_name,
         ]
         for column in manager._STATIC_COLUMNS:
             if column.original == "Throughput":
@@ -142,6 +151,27 @@ class ScenarioSpec:
         text = self.bandwidth_label.strip().lower()
         digits = "".join(ch for ch in text if ch.isdigit())
         return int(digits or 0)
+
+
+@dataclass(frozen=True)
+class SheetImportBatch:
+    report_type: str
+    sheet_name: str
+    rows: List[Dict[str, Any]]
+
+
+_PROJECT_PAYLOAD_KEYS: tuple[str, ...] = (
+    "customer",
+    "project_type",
+    "nickname",
+    "project_name",
+    "project_id",
+    "soc",
+    "wifi_module",
+    "odm",
+    "interface",
+    "ecosystem",
+)
 
 
 DEFAULT_SCENARIOS: Tuple[ScenarioSpec, ...] = (
@@ -926,6 +956,50 @@ class PerformanceExcelImporter:
 
         return out, issues
 
+    def build_sheet_batches(
+        self,
+        path: str | Path,
+        *,
+        sheet_entries: Sequence[tuple[str, str]],
+    ) -> Tuple[List[SheetImportBatch], List[str]]:
+        workbook = self._load_workbook(path)
+        sheetnames = set(workbook.sheetnames)
+        batches: List[SheetImportBatch] = []
+        issues: List[str] = []
+
+        for report_type, raw_sheet_name in sheet_entries:
+            normalized_type = str(report_type).strip()
+            sheet_name = str(raw_sheet_name).strip()
+            if not normalized_type or not sheet_name:
+                continue
+            if sheet_name not in sheetnames:
+                issues.append(f"{normalized_type}: worksheet {sheet_name!r} not found")
+                continue
+            try:
+                if normalized_type == TEST_REPORT_PEAK_THROUGHPUT:
+                    rows, row_issues = self.build_peak_throughput_rows(workbook, sheet_name=sheet_name)
+                elif normalized_type == TEST_REPORT_RVR:
+                    rows, row_issues = self.build_rvr_rows(workbook, sheet_name=sheet_name)
+                elif normalized_type == TEST_REPORT_RVO:
+                    rows, row_issues = self.build_rvo_rows(workbook, sheet_name=sheet_name)
+                else:
+                    issues.append(f"Unknown import type: {normalized_type}")
+                    continue
+            except Exception as exc:
+                issues.append(f"{normalized_type}: parse failed ({exc})")
+                continue
+
+            batches.append(
+                SheetImportBatch(
+                    report_type=normalized_type,
+                    sheet_name=sheet_name,
+                    rows=rows,
+                )
+            )
+            issues.extend(f"{sheet_name}: {issue}" for issue in row_issues)
+
+        return batches, issues
+
 
 class ImportController:
     def __init__(self, main_window) -> None:
@@ -988,78 +1062,53 @@ class ImportController:
         def start_import(selected_sheets: list[str]) -> None:
             print("[IMPORT_DEBUG] selected_sheets=", selected_sheets)
 
-            types: list[str] = []
-            peak_sheet_name: Optional[str] = None
-            rvr_sheet_name = "RVR"
-            rvo_sheet_name = "RVO"
-            sheets_by_type: dict[str, list[str]] = {}
+            sheet_entries: list[tuple[str, str]] = []
             for sheet_name in selected_sheets:
                 token = str(sheet_name).strip().upper()
                 if "RVR" in token:
-                    if TEST_REPORT_RVR not in types:
-                        types.append(TEST_REPORT_RVR)
-                    rvr_sheet_name = str(sheet_name)
-                    sheets_by_type.setdefault(TEST_REPORT_RVR, []).append(str(sheet_name))
+                    sheet_entries.append((TEST_REPORT_RVR, str(sheet_name)))
                     continue
                 if "RVO" in token:
-                    if TEST_REPORT_RVO not in types:
-                        types.append(TEST_REPORT_RVO)
-                    rvo_sheet_name = str(sheet_name)
-                    sheets_by_type.setdefault(TEST_REPORT_RVO, []).append(str(sheet_name))
+                    sheet_entries.append((TEST_REPORT_RVO, str(sheet_name)))
                     continue
-                if TEST_REPORT_PEAK_THROUGHPUT not in types:
-                    types.append(TEST_REPORT_PEAK_THROUGHPUT)
-                if peak_sheet_name is None:
-                    peak_sheet_name = str(sheet_name)
-                sheets_by_type.setdefault(TEST_REPORT_PEAK_THROUGHPUT, []).append(str(sheet_name))
+                sheet_entries.append((TEST_REPORT_PEAK_THROUGHPUT, str(sheet_name)))
 
             print(
-                "[IMPORT_DEBUG] resolved_types=",
-                types,
-                "peak_sheet=",
-                peak_sheet_name,
-                "rvr_sheet=",
-                rvr_sheet_name,
-                "rvo_sheet=",
-                rvo_sheet_name,
+                "[IMPORT_DEBUG] resolved_sheet_entries=",
+                sheet_entries,
             )
 
             try:
-                extracted, issues = importer.build_rows(
+                sheet_batches, issues = importer.build_sheet_batches(
                     file_path,
-                    types=types,
-                    throughput_sheet_name=peak_sheet_name,
-                    rvr_sheet_name=rvr_sheet_name,
-                    rvo_sheet_name=rvo_sheet_name,
+                    sheet_entries=sheet_entries,
                 )
             except Exception as exc:
                 failed_holder["value"] = str(exc)
                 sheets_box.reject()
                 return
 
-            payload = self._collect_default_config()
-            if summary_payload:
-                payload = dict(payload)
-                payload.update({k: v for k, v in summary_payload.items() if v})
-            if summary_project_id:
-                payload = dict(payload)
-                payload["project_id"] = summary_project_id
-                for project_type, brands in WIFI_PRODUCT_PROJECT_MAP.items():
-                    for brand, projects in brands.items():
-                        for _, info in projects.items():
-                            if str(info.get("ProjectID") or "").strip() != summary_project_id:
-                                continue
-                            payload["customer"] = str(brand)
-                            payload["project_type"] = str(project_type)
-                            payload["project_name"] = str(info.get("ProjectName") or payload.get("project_name") or "")
-                            payload["soc"] = str(info.get("main_chip") or payload.get("soc") or "")
-                            payload["wifi_module"] = str(info.get("wifi_module") or payload.get("wifi_module") or "")
-                            payload["interface"] = str(info.get("interface") or payload.get("interface") or "")
-                            payload["ecosystem"] = str(info.get("ecosystem") or payload.get("ecosystem") or "")
-                            break
+            payload = self._build_import_payload(
+                {},
+                summary_payload or {},
+                summary_project_id=summary_project_id or "",
+            )
             if tester:
                 payload = dict(payload)
                 payload["tester"] = tester
+
+            summary_issues = self._validate_summary_payload(payload)
+            summary_issues.extend(self._validate_import_project_payload(payload))
+            if summary_issues:
+                MessageBox(
+                    "Import blocked",
+                    "SUMMARY sheet contains unsupported values:\n\n"
+                    + "\n".join(f"- {issue}" for issue in summary_issues),
+                    self._main,
+                ).exec()
+                sheets_box.set_loading(False)
+                sheets_box.reject()
+                return
 
             resolved_project_id = None
             project_key = str(payload.get("project_id") or "").strip()
@@ -1070,33 +1119,29 @@ class ImportController:
                 return
             with MySqlClient() as client:
                 ensure_report_tables(client)
-                row = client.query_one(
-                    "SELECT `id` FROM `project` WHERE `project_id`=%s ORDER BY `id` DESC LIMIT 1",
-                    (project_key,),
-                )
-                if not row or not row.get("id"):
-                    MessageBox(
-                        "Import blocked",
-                        f"Project not found in DB for project_id={project_key!r}.",
-                        self._main,
-                    ).exec()
-                    sheets_box.set_loading(False)
-                    sheets_box.reject()
-                    return
-                resolved_project_id = int(row["id"])
+                if str(project_key or "").strip().upper() == "NA":
+                    row = None
+                else:
+                    row = client.query_one(
+                        "SELECT `id` FROM `project` WHERE `project_id`=%s ORDER BY `id` DESC LIMIT 1",
+                        (project_key,),
+                    )
+                if row and row.get("id"):
+                    resolved_project_id = int(row["id"])
+                else:
+                    resolved_project_id = int(ensure_project(client, payload))
             print("[IMPORT_DEBUG] resolved_project_id=", int(resolved_project_id), flush=True)
             payload = dict(payload)
             payload["resolved_project_id"] = str(int(resolved_project_id))
 
             def do_import() -> tuple[int, list[str]]:
                 if import_as_golden:
-                    return self._sync_golden_to_db(payload, file_path, extracted, project_id=int(resolved_project_id)), []
+                    return self._sync_golden_to_db(payload, file_path, sheet_batches, project_id=int(resolved_project_id)), []
                 return self._sync_report_to_db(
                     payload,
                     file_path,
-                    extracted,
+                    sheet_batches,
                     project_id=int(resolved_project_id),
-                    sheets_by_type=sheets_by_type,
                 )
 
             class _ImportWorker(QObject):
@@ -1128,6 +1173,7 @@ class ImportController:
             def _on_failed(message: str) -> None:
                 failed_holder["value"] = message
                 _cleanup()
+                sheets_box.set_loading(False)
                 sheets_box.reject()
 
             def _on_finished(result: object) -> None:
@@ -1136,6 +1182,7 @@ class ImportController:
                 issues_holder["value"] = issues
                 skipped_holder["value"] = list(skipped)
                 _cleanup()
+                sheets_box.set_loading(False)
                 sheets_box.accept()
 
             thread.started.connect(worker.run)
@@ -1182,12 +1229,45 @@ class ImportController:
                 return str(name)
         return None
 
+    @staticmethod
+    def _validate_summary_payload(payload: Mapping[str, Any]) -> list[str]:
+        validations: tuple[tuple[str, str, Sequence[str]], ...] = (
+            ("Project ID", "project_id", PROJECT_ID_CHOICES),
+            ("Product Type", "project_type", PROJECT_TYPES),
+            ("WiFi Module", "wifi_module", WIFI_MODULE_CHOICES),
+            ("HW Phase", "hw_phase", HW_PHASE_CHOICES),
+            ("OS", "os", DUT_OS_CHOICES),
+            ("BT Remote", "bt_remote", BT_REMOTE_CHOICES),
+            ("BT Device", "bt_device", BT_DEVICE_CHOICES),
+            ("BT Type", "bt_type", BT_TYPE_CHOICES),
+            ("Connect Type", "lab_enviroment.connect_type", LAB_ENV_CONNECT_TYPE_CHOICES),
+            ("Coex Mode", "lab_enviroment.coex_mode", LAB_ENV_COEX_MODE_CHOICES),
+            ("AP Name", "ap_name", AP_MODEL_CHOICES),
+            ("AP Region", "ap_region", AP_REGION_CHOICES),
+        )
+        issues: list[str] = []
+        for label, key, allowed in validations:
+            value = str(payload.get(key) or "").strip()
+            if not value:
+                continue
+            if value not in allowed:
+                issues.append(f"{label}: {value!r} not in {list(allowed)!r}")
+        return issues
+
     def _parse_summary_payload(self, ws) -> dict[str, str]:
         label_aliases: dict[str, str] = {
             "TESTED BY": "tester",
             "TESTER": "tester",
             "PROJECT ID": "project_id",
             "PROJECTID": "project_id",
+            "PROJECT NAME": "project_name",
+            "PRODUCT TYPE": "project_type",
+            "PROJECT TYPE": "project_type",
+            "CUSTOMER": "customer",
+            "ODM": "odm",
+            "SOC": "soc",
+            "WIFI MODULE": "wifi_module",
+            "WIFI MODULE SN": "wifi_module_sn",
             "USB CABLE": "usb_cable",
             "HDMI CABLE": "hdmi_cable",
             "BT DEVICE": "bt_device",
@@ -1205,12 +1285,16 @@ class ImportController:
             "OS VERSION": "android_version",
             "KERNEL VERSION": "kernel_version",
             "KERNEL": "kernel_version",
+            "OS": "os",
             "HW PHASE": "hw_phase",
             "MAC ADDRESS": "mac_address",
             "MAC": "mac_address",
             "CONNECT TYPE": "lab_enviroment.connect_type",
             "DUT TYPE": "lab_enviroment.connect_type",
             "COEX MODE": "lab_enviroment.coex_mode",
+            "AP NAME": "ap_name",
+            "ROUTER": "ap_name",
+            "AP REGION": "ap_region",
             "ADB DEVICE": "adb_device",
             "DUT IP": "telnet_ip",
             "TELNET IP": "telnet_ip",
@@ -1242,14 +1326,82 @@ class ImportController:
                     out[key] = value
         return out
 
+    @staticmethod
+    def _build_import_payload(
+        default_payload: Mapping[str, Any],
+        summary_payload: Mapping[str, Any],
+        *,
+        summary_project_id: str,
+    ) -> dict[str, Any]:
+        payload = dict(default_payload)
+        summary_values = {k: v for k, v in summary_payload.items() if v not in (None, "")}
+        normalized_project_id = str(summary_project_id or "").strip()
+        logging.info(
+            "[IMPORT_DEBUG] build_payload start project_id=%s default_project=%s summary_project=%s",
+            normalized_project_id,
+            {k: default_payload.get(k) for k in _PROJECT_PAYLOAD_KEYS if k in default_payload},
+            {k: summary_values.get(k) for k in _PROJECT_PAYLOAD_KEYS if k in summary_values},
+        )
+
+        if normalized_project_id.upper() == "NA":
+            for key in _PROJECT_PAYLOAD_KEYS:
+                payload.pop(key, None)
+            payload.update({k: v for k, v in summary_values.items() if k in _PROJECT_PAYLOAD_KEYS})
+            payload["project_id"] = normalized_project_id
+            logging.info(
+                "[IMPORT_DEBUG] build_payload NA project=%s",
+                {k: payload.get(k) for k in _PROJECT_PAYLOAD_KEYS if k in payload},
+            )
+            return payload
+
+        payload.update(summary_values)
+        if normalized_project_id:
+            payload["project_id"] = normalized_project_id
+            for project_type, brands in WIFI_PRODUCT_PROJECT_MAP.items():
+                for brand, projects in brands.items():
+                    for _, info in projects.items():
+                        if str(info.get("ProjectID") or "").strip() != normalized_project_id:
+                            continue
+                        payload["customer"] = str(brand)
+                        payload["project_type"] = str(project_type)
+                        payload["project_name"] = str(info.get("ProjectName") or payload.get("project_name") or "")
+                        payload["soc"] = str(info.get("main_chip") or payload.get("soc") or "")
+                        payload["wifi_module"] = str(info.get("wifi_module") or payload.get("wifi_module") or "")
+                        payload["interface"] = str(info.get("interface") or payload.get("interface") or "")
+                        payload["ecosystem"] = str(info.get("ecosystem") or payload.get("ecosystem") or "")
+                        logging.info(
+                            "[IMPORT_DEBUG] build_payload mapped project=%s",
+                            {k: payload.get(k) for k in _PROJECT_PAYLOAD_KEYS if k in payload},
+                        )
+                        return payload
+        logging.info(
+            "[IMPORT_DEBUG] build_payload final project=%s",
+            {k: payload.get(k) for k in _PROJECT_PAYLOAD_KEYS if k in payload},
+        )
+        return payload
+
+    @staticmethod
+    def _validate_import_project_payload(payload: Mapping[str, Any]) -> list[str]:
+        issues: list[str] = []
+        project_id = str(payload.get("project_id") or "").strip()
+        if project_id.upper() != "NA":
+            return issues
+        for key, label in (
+            ("customer", "Customer"),
+            ("project_type", "Product Type"),
+        ):
+            value = str(payload.get(key) or "").strip()
+            if not value:
+                issues.append(f"{label}: required when Project ID is 'NA'")
+        return issues
+
     def _sync_report_to_db(
         self,
         payload: Mapping[str, Any],
         excel_path: str,
-        extracted: Mapping[str, List[Mapping[str, Any]]],
+        sheet_batches: Sequence[SheetImportBatch],
         *,
         project_id: int,
-        sheets_by_type: Mapping[str, list[str]] | None = None,
     ) -> tuple[int, list[str]]:
         report_name = Path(excel_path).name
         notes = "\n".join([excel_path, "source=excel"])
@@ -1263,28 +1415,32 @@ class ImportController:
             )
             report_id = int(existing["id"]) if existing and existing.get("id") else None
 
-            imported_types: set[str] = set()
+            imported_sheets: set[str] = set()
             if report_id is not None:
                 rows = client.query_all(
-                    "SELECT DISTINCT p.`test_category` "
-                    "FROM `performance` AS p "
-                    "WHERE p.`test_report_id`=%s",
+                    "SELECT DISTINCT `sheet_name` "
+                    "FROM `execution` "
+                    "WHERE `test_report_id`=%s AND `sheet_name` IS NOT NULL AND TRIM(`sheet_name`) <> ''",
                     (int(report_id),),
                 )
-                imported_types = {str(r.get("test_category") or "").strip() for r in rows if r.get("test_category")}
+                imported_sheets = {str(r.get("sheet_name") or "").strip() for r in rows if r.get("sheet_name")}
             print(
                 "[IMPORT_DEBUG] existing_report",
                 "report_name=",
                 report_name,
                 "report_id=",
                 report_id,
-                "imported_types=",
-                sorted(imported_types),
+                "imported_sheets=",
+                sorted(imported_sheets),
             )
 
             if report_id is None:
                 initial_report_type = next(
-                    (str(key).strip() for key in extracted.keys() if str(key).strip() in TEST_REPORT_CHOICES),
+                    (
+                        str(batch.report_type).strip()
+                        for batch in sheet_batches
+                        if str(batch.report_type).strip() in TEST_REPORT_CHOICES
+                    ),
                     TEST_REPORT_PEAK_THROUGHPUT,
                 )
                 report_id = ensure_test_report(
@@ -1306,21 +1462,21 @@ class ImportController:
 
             skipped: list[str] = []
             inserted_total = 0
-            for data_type, rows in extracted.items():
+            for batch in sheet_batches:
+                data_type = str(batch.report_type).strip()
+                sheet_name = str(batch.sheet_name).strip()
+                rows = list(batch.rows)
                 if not rows:
                     continue
-                if str(data_type).strip() in imported_types:
-                    normalized = str(data_type).strip()
-                    for sheet in (sheets_by_type or {}).get(normalized, []):
-                        skipped.append(f"{sheet} ({normalized})")
-                    if normalized not in (sheets_by_type or {}):
-                        skipped.append(normalized)
+                if sheet_name in imported_sheets:
+                    skipped.append(f"{sheet_name} ({data_type})")
                     continue
                 execution_id = self._insert_execution(
                     client,
                     test_report_id=int(report_id),
                     project_id=int(project_id),
                     execution_type=data_type,
+                    sheet_name=sheet_name,
                     csv_name=f"{Path(excel_path).name}:{data_type}",
                     csv_path=excel_path,
                     run_source="import",
@@ -1339,38 +1495,18 @@ class ImportController:
                     data_type=data_type,
                     rows=list(rows),
                 )
+                imported_sheets.add(sheet_name)
 
             if skipped:
                 print("[IMPORT_DEBUG] skipped=", skipped)
             print("[IMPORT_DEBUG] inserted_total=", inserted_total)
             return inserted_total, skipped
 
-    def _collect_default_config(self) -> dict[str, str]:
-        view = self._main.caseConfigPage
-        field_widgets: Mapping[str, Any] = view.field_widgets
-
-        return {
-            "customer": field_widgets["project.customer"].currentText(),
-            "project_type": field_widgets["project.project_type"].currentText(),
-            "nickname": field_widgets["project.project"].currentText(),
-            "project_name": "",
-            "odm": field_widgets["project.odm"].currentText(),
-            "soc": field_widgets["project.soc"].text(),
-            "wifi_module": field_widgets["project.wifi_module"].text(),
-            "interface": field_widgets["project.interface"].text(),
-            "software_version": field_widgets["software_info.software_version"].text(),
-            "driver_version": field_widgets["software_info.driver_version"].text(),
-            "android_version": field_widgets["system.version"].currentText(),
-            "kernel_version": field_widgets["system.kernel_version"].currentText(),
-            "hw_phase": field_widgets["dut.hw_phase"].currentText(),
-            "lab_name": field_widgets["lab.name"].currentText(),
-        }
-
     def _sync_golden_to_db(
         self,
         payload: Mapping[str, Any],
         excel_path: str,
-        extracted: Mapping[str, List[Mapping[str, Any]]],
+        sheet_batches: Sequence[SheetImportBatch],
         *,
         project_id: int,
     ) -> int:
@@ -1382,7 +1518,10 @@ class ImportController:
             manager = PerformanceTableManager(client)
             inserted_total = 0
 
-            for data_type, rows in extracted.items():
+            for batch in sheet_batches:
+                data_type = str(batch.report_type).strip()
+                sheet_name = str(batch.sheet_name).strip()
+                rows = list(batch.rows)
                 if not rows:
                     continue
 
@@ -1435,6 +1574,7 @@ class ImportController:
                     test_report_id=int(report_id),
                     project_id=int(project_id),
                     execution_type=data_type,
+                    sheet_name=sheet_name,
                     csv_name=f"{Path(excel_path).name}:{data_type}",
                     csv_path=excel_path,
                     run_source="import",
@@ -1532,6 +1672,7 @@ class ImportController:
         test_report_id: int,
         project_id: int,
         execution_type: str,
+        sheet_name: str,
         csv_name: str,
         csv_path: str,
         run_source: str,
@@ -1667,13 +1808,14 @@ class ImportController:
         )
         insert_sql = (
             "INSERT INTO `execution` "
-            "(`test_report_id`, `run_type`, `run_source`, `duration_seconds`) "
-            "VALUES (%s, %s, %s, %s)"
+            "(`test_report_id`, `sheet_name`, `run_type`, `run_source`, `duration_seconds`) "
+            "VALUES (%s, %s, %s, %s, %s)"
         )
         return client.insert(
             insert_sql,
             (
                 test_report_id,
+                sheet_name,
                 RUN_TYPE_WIFI_SMARTTEST,
                 (run_source or "import")[:32],
                 int(duration_seconds) if duration_seconds is not None else None,
