@@ -3,7 +3,6 @@
 """RVO performance test flow with streamlined fixture handling."""
 
 import logging
-import time
 from collections import namedtuple
 from typing import Optional, Tuple
 
@@ -19,11 +18,11 @@ from src.util.constants import (
 from src.test import get_testdata
 from src.test.pyqt_log import log_fixture_params, update_fixture_params
 from src.test import (
+    adjust_rssi_to_target,
     common_setup,
     describe_debug_reason,
     ensure_performance_result,
     get_corner_step_list,
-    get_rf_step_list,
     get_rvo_static_db_list,
     get_rvo_target_rssi_list,
     init_corner,
@@ -32,164 +31,6 @@ from src.test import (
     scenario_group,
     wait_connect,
 )
-
-
-def _safe_int(value) -> Optional[int]:
-    if isinstance(value, str):
-        value = value.strip()
-        if not value:
-            return None
-        try:
-            return int(float(value))
-        except ValueError:
-            return None
-    if isinstance(value, (list, tuple, set)):
-        for item in value:
-            parsed = _safe_int(item)
-            if parsed is not None:
-                return parsed
-        return None
-    if isinstance(value, (int, float)):
-        return int(value)
-    return None
-
-
-def _get_current_attenuation() -> int:
-    try:
-        value = rf_tool.get_rf_current_value()
-    except Exception as exc:
-        logging.warning('Failed to get rf current value: %s', exc)
-        return 0
-    parsed = _safe_int(value)
-    return parsed if parsed is not None else 0
-
-
-def _clamp_db(value: Optional[int]) -> int:
-    parsed = _safe_int(value)
-    if parsed is None:
-        return 0
-    return max(0, min(110, parsed))
-
-
-def _initial_step_size() -> int:
-    try:
-        candidates = sorted(set(get_rf_step_list()))
-    except Exception as exc:
-        logging.warning('Failed to load RF step list: %s; fallback to step=1', exc)
-        return 1
-
-    max_gap = 0
-    previous = None
-    for value in candidates:
-        if previous is not None and value > previous:
-            gap = value - previous
-            if gap > max_gap:
-                max_gap = gap
-        previous = value
-
-    return max_gap or 1
-
-
-def _resolve_target_rssi(base_db: Optional[int]) -> Tuple[int, int, int]:
-    applied_db = base_db if base_db is not None else _get_current_attenuation()
-    applied_db = _clamp_db(applied_db)
-    step = _initial_step_size()
-    current_rssi = pytest.dut.get_rssi()
-    return current_rssi, applied_db, step
-
-
-def _step_att_db(applied_db: int, step: int, diff: int, attempt: int, target_rssi: int) -> Tuple[int, bool]:
-    direction = 1 if diff > 0 else -1
-    next_db = max(0, min(110, applied_db + direction * step))
-    if next_db == applied_db:
-        return applied_db, False
-    logging.info(
-        'Adjust attenuation to %s dB (attempt %s) for RSSI diff=%s dB (target %s dBm)',
-        next_db,
-        attempt + 1,
-        diff,
-        target_rssi,
-    )
-    try:
-        rf_tool.execute_rf_cmd(next_db)
-    except Exception as exc:
-        logging.warning('Failed to execute rf command %s: %s', next_db, exc)
-        return applied_db, False
-    return next_db, True
-
-
-def _record_adjustment(next_db: int, target_rssi: int) -> Tuple[int, Optional[int]]:
-    time.sleep(3)
-    measured = pytest.dut.get_rssi()
-    if measured == -1:
-        return measured, None
-    new_diff = measured - target_rssi
-    logging.info(
-        'Measured RSSI %s dBm (diff %s dB) after attenuation %s dB',
-        measured,
-        new_diff,
-        next_db,
-    )
-    return measured, new_diff
-
-
-def _adjust_rssi_to_target(target_rssi: int, base_db: Optional[int]) -> Tuple[int, Optional[int]]:
-    flags = get_debug_flags()
-    if flags.skip_corner_rf:
-        simulated_rssi = pytest.dut.get_rssi()
-        reason = describe_debug_reason("skip_corner_rf")
-        logging.info(
-            "Debug flag (%s) enabled, skip RSSI adjustment and return simulated RSSI %s dBm",
-            reason,
-            simulated_rssi,
-        )
-        return simulated_rssi, _clamp_db(base_db if base_db is not None else _get_current_attenuation())
-
-    current_rssi, applied_db, step = _resolve_target_rssi(base_db)
-    logging.info(
-        'Start adjusting attenuation to %s dB for target RSSI %s dBm',
-        applied_db,
-        target_rssi,
-    )
-    if current_rssi == -1:
-        return current_rssi, applied_db
-
-    max_iterations = 30
-    for attempt in range(max_iterations):
-        diff = current_rssi - target_rssi
-        logging.info('current rssi %s target rssi %s', current_rssi, target_rssi)
-        if diff == 0:
-            break
-
-        next_db, changed = _step_att_db(applied_db, step, diff, attempt, target_rssi)
-        if not changed:
-            if step > 1:
-                step = 1
-                continue
-            logging.info(
-                'Attenuation locked at %s dB while RSSI diff=%s dB; boundary reached.',
-                applied_db,
-                diff,
-            )
-            break
-
-        measured, new_diff = _record_adjustment(next_db, target_rssi)
-        applied_db = next_db
-        current_rssi = measured
-
-        if measured == -1:
-            break
-        if new_diff == 0:
-            break
-
-        if new_diff is not None:
-            if abs(new_diff) >= abs(diff) and step > 1:
-                step = max(1, step // 2)
-            elif step > 1 and abs(new_diff) <= 1:
-                step = 1
-
-    logging.info('Final RSSI %s dBm with attenuation %s dB', current_rssi, applied_db)
-    return current_rssi, applied_db
 
 
 RVOProfile = namedtuple("RVOProfile", "mode value")
@@ -273,7 +114,7 @@ def _apply_profile(profile: RVOProfile) -> Tuple[int, Optional[int]]:
     if profile.mode == _MODE_STATIC:
         return _apply_static_attenuation(profile.value)
     if profile.mode == _MODE_TARGET:
-        return _adjust_rssi_to_target(profile.value, None)
+        return adjust_rssi_to_target(rf_tool, profile.value, None)
     measured = pytest.dut.get_rssi()
     return measured, None
 

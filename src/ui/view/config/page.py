@@ -654,7 +654,17 @@ class CaseConfigPage(ConfigView):
         if widget is None:
             return
         try:
+            if field_id == "rf_solution.step":
+                print(
+                    f"[TRACE_PAGE_ADAPTER] enable field={field_id} widget={type(widget).__name__} "
+                    f"before={widget.isEnabled() if hasattr(widget, 'isEnabled') else None!r}"
+                )
             widget.setEnabled(True)
+            if field_id == "rf_solution.step":
+                print(
+                    f"[TRACE_PAGE_ADAPTER] enable field={field_id} "
+                    f"after={widget.isEnabled() if hasattr(widget, 'isEnabled') else None!r}"
+                )
         except Exception:
             pass
 
@@ -663,7 +673,17 @@ class CaseConfigPage(ConfigView):
         if widget is None:
             return
         try:
+            if field_id == "rf_solution.step":
+                print(
+                    f"[TRACE_PAGE_ADAPTER] disable field={field_id} widget={type(widget).__name__} "
+                    f"before={widget.isEnabled() if hasattr(widget, 'isEnabled') else None!r}"
+                )
             widget.setEnabled(False)
+            if field_id == "rf_solution.step":
+                print(
+                    f"[TRACE_PAGE_ADAPTER] disable field={field_id} "
+                    f"after={widget.isEnabled() if hasattr(widget, 'isEnabled') else None!r}"
+                )
         except Exception:
             pass
 

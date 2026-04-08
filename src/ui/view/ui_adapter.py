@@ -85,6 +85,11 @@ class UiAdapter(QObject):
 
             def _handler(fid: str = field_id) -> None:
                 value = self._extract_widget_value(widget)
+                if fid in {"Turntable.target_rssi", "rf_solution.step"}:
+                    print(
+                        f"[TRACE_UI_ADAPTER] field.change source={fid} "
+                        f"value={value!r} widget={type(widget).__name__}"
+                    )
                 self._emit_event("field.change", fid, field=fid, value=value)
 
             if hasattr(widget, "entriesChanged"):

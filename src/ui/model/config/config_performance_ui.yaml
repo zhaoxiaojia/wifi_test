@@ -15,6 +15,10 @@ panels:
         label: "RF Attenuator"
         position: 1
         fields:
+          - key: Turntable.target_rssi
+            widget: line_edit
+            label: "Target RSSI"
+            placeholder: "Target RSSI (dBm)"
           - key: atte.model
             widget: read_only_text
             label: "Attenuator Model"
@@ -68,10 +72,6 @@ panels:
             widget: line_edit
             label: "Static dB"
             placeholder: "Static attenuation (dB)"
-          - key: Turntable.target_rssi
-            widget: line_edit
-            label: "Target RSSI"
-            placeholder: "Target RSSI (dBm)"
 
       - id: text_case
         label: "Selected Test Case"

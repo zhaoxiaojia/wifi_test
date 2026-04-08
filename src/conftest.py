@@ -23,7 +23,6 @@ from pathlib import Path
 from typing import Annotated
 import pandas as pd
 from openpyxl.styles import Font
-import yaml
 
 import pytest
 import csv  # noqa: F401  (kept for potential future CSV export)
@@ -52,57 +51,6 @@ if not logging.getLogger().handlers:
 # Step_Result：{ test_case_id -> [ (step_desc, status, details), ... ] }
 if not hasattr(pytest, "test_step_results"):
     pytest.test_step_results = defaultdict(list)
-
-# ----------------------------------------------------------------------------
-# Xiaomi presets (early config enforcement)
-# ----------------------------------------------------------------------------
-
-def _maybe_apply_xiaomi_presets(pytest_config: pytest.Config) -> None:
-    args = getattr(pytest_config, "args", None) or []
-    normalized_args = [str(item).replace("\\", "/") for item in args]
-    selected = next((item for item in normalized_args if "test/test_xiaomi_" in item), "")
-    if not selected:
-        return
-
-    basename = Path(selected).name
-    if not basename.startswith("test_xiaomi_"):
-        return
-
-    cfg_base = Path(__file__).resolve().parents[1] / "config"
-    basic_path = cfg_base / "config_basic.yaml"
-    perf_path = cfg_base / "config_performance.yaml"
-
-    basic_cfg = yaml.safe_load(basic_path.read_text(encoding="utf-8")) or {}
-    perf_cfg = yaml.safe_load(perf_path.read_text(encoding="utf-8")) or {}
-
-    basic_cfg.setdefault("rvr", {})
-
-    if basename in {"test_xiaomi_peak_throughput.py", "test_xiaomi_peak_throughput_wifi6.py"}:
-        perf_cfg["csv_path"] = "performance_test_csv/xiaomi_peak_T-put_wifi6.csv"
-        basic_cfg["rvr"]["repeat"] = "3"
-    elif basename in {"test_xiaomi_rvr.py", "test_xiaomi_rvr_wifi6.py"}:
-        perf_cfg["csv_path"] = "performance_test_csv/xiaomi_rvr_wifi6.csv"
-        perf_cfg.setdefault("rf_solution", {})
-        perf_cfg["rf_solution"]["step"] = "0,75:3"
-        basic_cfg["rvr"]["repeat"] = "0"
-    elif basename in {"test_xiaomi_rvo.py", "test_xiaomi_rvo_wifi6.py"}:
-        perf_cfg["csv_path"] = "performance_test_csv/xiaomi_rvr_wifi6.csv"
-        perf_cfg.setdefault("Turntable", {})
-        perf_cfg["Turntable"]["Step"] = "0,360:45"
-        perf_cfg["Turntable"]["step"] = "0,360:45"
-        perf_cfg["Turntable"]["Static dB"] = ""
-        perf_cfg["Turntable"]["static_db"] = ""
-        perf_cfg["Turntable"]["Target RSSI"] = ""
-        perf_cfg["Turntable"]["target_rssi"] = ""
-        basic_cfg["rvr"]["repeat"] = "0"
-
-    basic_path.write_text(yaml.safe_dump(basic_cfg, sort_keys=False, allow_unicode=True), encoding="utf-8")
-    perf_path.write_text(yaml.safe_dump(perf_cfg, sort_keys=False, allow_unicode=True), encoding="utf-8")
-
-
-def pytest_configure(config: pytest.Config) -> None:
-    _maybe_apply_xiaomi_presets(config)
-
 # ------------------------------------# Helpers# -----------------------------
 def get_resource_path(relative_path: str) -> Path:
     """获取资源绝对路径（兼容开发环境和 PyInstaller 打包）"""

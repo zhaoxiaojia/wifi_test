@@ -428,6 +428,10 @@ def get_rvo_static_db_list():
 
 
 def get_rvo_target_rssi_list():
+    return get_target_rssi_list()
+
+
+def get_target_rssi_list():
     cfg = load_config(refresh=True)
     turntable_cfg = _turntable_section_from_config(cfg)
     raw_value = turntable_cfg.get(TURN_TABLE_FIELD_TARGET_RSSI, "")
@@ -460,6 +464,150 @@ def get_rvo_target_rssi_list():
             parsed_values.append(normalized)
 
     return parsed_values if parsed_values else [None]
+
+
+def _safe_int(value: Any) -> Optional[int]:
+    if isinstance(value, str):
+        value = value.strip()
+        if not value:
+            return None
+        try:
+            return int(float(value))
+        except ValueError:
+            return None
+    if isinstance(value, (list, tuple, set)):
+        for item in value:
+            parsed = _safe_int(item)
+            if parsed is not None:
+                return parsed
+        return None
+    if isinstance(value, (int, float)):
+        return int(value)
+    return None
+
+
+def _get_current_attenuation(rf_tool: Any) -> int:
+    try:
+        value = rf_tool.get_rf_current_value()
+    except Exception as exc:
+        logging.warning("Failed to get rf current value: %s", exc)
+        return 0
+    parsed = _safe_int(value)
+    return parsed if parsed is not None else 0
+
+
+def _clamp_db(value: Optional[int]) -> int:
+    parsed = _safe_int(value)
+    if parsed is None:
+        return 0
+    return max(0, min(RF_ATTENUATION_MAX_DB, parsed))
+
+
+def _initial_rssi_adjust_step() -> int:
+    try:
+        candidates = sorted(set(get_rf_step_list()))
+    except Exception as exc:
+        logging.warning("Failed to load RF step list: %s; fallback to step=1", exc)
+        return 1
+
+    max_gap = 0
+    previous = None
+    for value in candidates:
+        if previous is not None and value > previous:
+            gap = value - previous
+            if gap > max_gap:
+                max_gap = gap
+        previous = value
+
+    return max_gap or 1
+
+
+def adjust_rssi_to_target(
+    rf_tool: Any,
+    target_rssi: int,
+    base_db: Optional[int] = None,
+) -> tuple[int, Optional[int]]:
+    flags = get_debug_flags()
+    if flags.skip_corner_rf:
+        simulated_rssi = pytest.dut.get_rssi()
+        reason = describe_debug_reason("skip_corner_rf")
+        logging.info(
+            "Debug flag (%s) enabled, skip RSSI adjustment and return simulated RSSI %s dBm",
+            reason,
+            simulated_rssi,
+        )
+        return simulated_rssi, _clamp_db(
+            base_db if base_db is not None else _get_current_attenuation(rf_tool)
+        )
+
+    applied_db = _clamp_db(
+        base_db if base_db is not None else _get_current_attenuation(rf_tool)
+    )
+    step = _initial_rssi_adjust_step()
+    current_rssi = pytest.dut.get_rssi()
+    logging.info(
+        "Start adjusting attenuation to %s dB for target RSSI %s dBm",
+        applied_db,
+        target_rssi,
+    )
+    if current_rssi == -1:
+        return current_rssi, applied_db
+
+    for attempt in range(30):
+        diff = current_rssi - target_rssi
+        logging.info("current rssi %s target rssi %s", current_rssi, target_rssi)
+        if diff == 0:
+            break
+
+        direction = 1 if diff > 0 else -1
+        next_db = max(0, min(RF_ATTENUATION_MAX_DB, applied_db + direction * step))
+        if next_db == applied_db:
+            if step > 1:
+                step = 1
+                continue
+            logging.info(
+                "Attenuation locked at %s dB while RSSI diff=%s dB; boundary reached.",
+                applied_db,
+                diff,
+            )
+            break
+
+        logging.info(
+            "Adjust attenuation to %s dB (attempt %s) for RSSI diff=%s dB (target %s dBm)",
+            next_db,
+            attempt + 1,
+            diff,
+            target_rssi,
+        )
+        try:
+            rf_tool.execute_rf_cmd(next_db)
+        except Exception as exc:
+            logging.warning("Failed to execute rf command %s: %s", next_db, exc)
+            break
+
+        time.sleep(3)
+        measured = pytest.dut.get_rssi()
+        applied_db = next_db
+        current_rssi = measured
+        if measured == -1:
+            break
+
+        new_diff = measured - target_rssi
+        logging.info(
+            "Measured RSSI %s dBm (diff %s dB) after attenuation %s dB",
+            measured,
+            new_diff,
+            next_db,
+        )
+        if new_diff == 0:
+            break
+        if abs(new_diff) >= abs(diff) and step > 1:
+            step = max(1, step // 2)
+        elif step > 1 and abs(new_diff) <= 1:
+            step = 1
+
+    logging.info("Final RSSI %s dBm with attenuation %s dB", current_rssi, applied_db)
+    return current_rssi, applied_db
 
 
 def _merge_rf_step_defaults(raw_value: Any) -> str:
@@ -501,12 +649,14 @@ __all__ = [
     "build_scenario_group_key",
     "collect_rf_step_segments",
     "common_setup",
+    "adjust_rssi_to_target",
     "ensure_performance_result",
     "expand_rf_step_segments",
     "get_cfg",
     "get_corner_step_list",
     "get_rf_step_list",
     "get_rf_step_segments",
+    "get_target_rssi_list",
     "get_rvo_static_db_list",
     "get_rvo_target_rssi_list",
     "get_testdata",

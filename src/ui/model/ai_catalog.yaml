@@ -146,18 +146,3 @@ csv_templates:
       security_modes: ["Open System"]
     synonyms: ["默认", "demo", "通用", "coco"]
 
-  - path: performance_test_csv/xiaomi_peak_T-put_wifi6.csv
-    tags:
-      bands: ["5G", "2.4G"]
-      wireless_modes: ["11ax", "11ac"]
-      bandwidths_mhz: [20, 40, 80]
-      security_modes: ["Open System"]
-    synonyms: ["xiaomi", "小米", "wifi6", "peak"]
-
-  - path: performance_test_csv/xiaomi_peak_T-put_wifi5.csv
-    tags:
-      bands: ["5G", "2.4G"]
-      wireless_modes: ["11ax", "11ac"]
-      bandwidths_mhz: [20, 40, 80]
-      security_modes: ["Open System"]
-    synonyms: ["xiaomi", "小米", "wifi5", "peak"]

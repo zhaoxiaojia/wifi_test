@@ -2,8 +2,8 @@ Turntable:
   Turntable: other
   IP address: 192.168.5.156
   Step: 0,360:45
-  Static dB: ''
-  Target RSSI: ''
+  Static dB: 25,
+  Target RSSI: '20'
 rf_solution:
   RADIORACK-4-220:
     ip_address: 192.168.50.245

@@ -1033,7 +1033,9 @@ CUSTOM_TESTCASE_UI_RULES.append(
             SimpleFieldEffect(
                 target_field="Turntable.target_rssi",
                 action="enable",
-                condition=lambda values: bool(values.get("testcase.is_rvo")),
+                condition=lambda values: bool(
+                    values.get("testcase.is_rvo") or values.get("testcase.is_rvr")
+                ),
             ),
             SimpleFieldEffect(
                 target_field="Turntable.model",
@@ -1058,7 +1060,9 @@ CUSTOM_TESTCASE_UI_RULES.append(
             SimpleFieldEffect(
                 target_field="Turntable.target_rssi",
                 action="disable",
-                condition=lambda values: not bool(values.get("testcase.is_rvo")),
+                condition=lambda values: not bool(
+                    values.get("testcase.is_rvo") or values.get("testcase.is_rvr")
+                ),
             ),
             # RF solution fields: RvO and RvR cases.
             SimpleFieldEffect(
@@ -1168,179 +1172,6 @@ CUSTOM_TESTCASE_UI_RULES.append(
                 condition=lambda values: not bool(
                     values.get("testcase.is_rvo") or values.get("testcase.is_rvr")
                 ),
-            ),
-            # ------------------------------------------------------------------
-            # Xiaomi fixed presets (Wi-Fi 6).
-            # ------------------------------------------------------------------
-            SimpleFieldEffect(
-                target_field="rvr.repeat",
-                action="set_value",
-                value=lambda values: "3",
-                condition=lambda values: values.get("testcase.basename")
-                in {
-                    "test_xiaomi_peak_throughput.py",
-                    "test_xiaomi_peak_throughput_wifi6.py",
-                },
-            ),
-            SimpleFieldEffect(
-                target_field="rvr.repeat",
-                action="set_value",
-                value=lambda values: "0",
-                condition=lambda values: values.get("testcase.basename")
-                in {
-                    "test_xiaomi_rvr.py",
-                    "test_xiaomi_rvr_wifi6.py",
-                    "test_xiaomi_rvo.py",
-                    "test_xiaomi_rvo_wifi6.py",
-                },
-            ),
-            SimpleFieldEffect(
-                target_field="csv_path",
-                action="set_value",
-                value=lambda values: "performance_test_csv/xiaomi_peak_T-put_wifi6.csv",
-                condition=lambda values: values.get("testcase.basename")
-                in {
-                    "test_xiaomi_peak_throughput.py",
-                    "test_xiaomi_peak_throughput_wifi6.py",
-                },
-            ),
-            SimpleFieldEffect(
-                target_field="csv_path",
-                action="set_value",
-                value=lambda values: "performance_test_csv/xiaomi_rvr_wifi6.csv",
-                condition=lambda values: values.get("testcase.basename")
-                in {
-                    "test_xiaomi_rvr.py",
-                    "test_xiaomi_rvr_wifi6.py",
-                    "test_xiaomi_rvo.py",
-                    "test_xiaomi_rvo_wifi6.py",
-                },
-            ),
-            SimpleFieldEffect(
-                target_field="rf_solution.step",
-                action="set_value",
-                value=lambda values: "0,75:3",
-                condition=lambda values: values.get("testcase.basename")
-                in {"test_xiaomi_rvr.py", "test_xiaomi_rvr_wifi6.py"},
-            ),
-            SimpleFieldEffect(
-                target_field="Turntable.step",
-                action="set_value",
-                value=lambda values: "0,360:45",
-                condition=lambda values: values.get("testcase.basename")
-                in {"test_xiaomi_rvo.py", "test_xiaomi_rvo_wifi6.py"},
-            ),
-            SimpleFieldEffect(
-                target_field="Turntable.static_db",
-                action="set_value",
-                value=lambda values: "",
-                condition=lambda values: values.get("testcase.basename")
-                in {"test_xiaomi_rvo.py", "test_xiaomi_rvo_wifi6.py"},
-            ),
-            SimpleFieldEffect(
-                target_field="Turntable.target_rssi",
-                action="set_value",
-                value=lambda values: "",
-                condition=lambda values: values.get("testcase.basename")
-                in {"test_xiaomi_rvo.py", "test_xiaomi_rvo_wifi6.py"},
-            ),
-            SimpleFieldEffect(
-                target_field="csv_path",
-                action="disable",
-                condition=lambda values: str(values.get("testcase.basename") or "").startswith(
-                    "test_xiaomi_"
-                ),
-            ),
-            SimpleFieldEffect(
-                target_field="rvr.repeat",
-                action="disable",
-                condition=lambda values: str(values.get("testcase.basename") or "").startswith(
-                    "test_xiaomi_"
-                ),
-            ),
-            SimpleFieldEffect(
-                target_field="Turntable.step",
-                action="disable",
-                condition=lambda values: values.get("testcase.basename")
-                in {"test_xiaomi_rvo.py", "test_xiaomi_rvo_wifi6.py"},
-            ),
-            SimpleFieldEffect(
-                target_field="rf_solution.RC4DAT-8G-95.idVendor",
-                action="disable",
-                condition=lambda values: values.get("testcase.basename")
-                == "test_xiaomi_rvr_wifi6.py",
-            ),
-            SimpleFieldEffect(
-                target_field="rf_solution.RC4DAT-8G-95.idProduct",
-                action="disable",
-                condition=lambda values: values.get("testcase.basename")
-                == "test_xiaomi_rvr_wifi6.py",
-            ),
-            SimpleFieldEffect(
-                target_field="rf_solution.RC4DAT-8G-95.ip_address",
-                action="disable",
-                condition=lambda values: values.get("testcase.basename")
-                == "test_xiaomi_rvr_wifi6.py",
-            ),
-            SimpleFieldEffect(
-                target_field="rf_solution.RADIORACK-4-220.ip_address",
-                action="disable",
-                condition=lambda values: values.get("testcase.basename")
-                == "test_xiaomi_rvr_wifi6.py",
-            ),
-            SimpleFieldEffect(
-                target_field="rf_solution.LDA-908V-8.ip_address",
-                action="disable",
-                condition=lambda values: values.get("testcase.basename")
-                == "test_xiaomi_rvr_wifi6.py",
-            ),
-            SimpleFieldEffect(
-                target_field="rf_solution.LDA-908V-8.channels",
-                action="disable",
-                condition=lambda values: values.get("testcase.basename")
-                == "test_xiaomi_rvr_wifi6.py",
-            ),
-            SimpleFieldEffect(
-                target_field="Turntable.ip_address",
-                action="disable",
-                condition=lambda values: values.get("testcase.basename")
-                in {"test_xiaomi_rvo.py", "test_xiaomi_rvo_wifi6.py"},
-            ),
-            SimpleFieldEffect(
-                target_field="Turntable.static_db",
-                action="disable",
-                condition=lambda values: values.get("testcase.basename")
-                in {"test_xiaomi_rvo.py", "test_xiaomi_rvo_wifi6.py"},
-            ),
-            SimpleFieldEffect(
-                target_field="Turntable.target_rssi",
-                action="disable",
-                condition=lambda values: values.get("testcase.basename")
-                in {"test_xiaomi_rvo.py", "test_xiaomi_rvo_wifi6.py"},
-            ),
-            SimpleFieldEffect(
-                target_field="Turntable.step",
-                action="disable",
-                condition=lambda values: values.get("testcase.basename")
-                in {"test_xiaomi_peak_throughput.py", "test_xiaomi_peak_throughput_wifi6.py"},
-            ),
-            SimpleFieldEffect(
-                target_field="Turntable.static_db",
-                action="disable",
-                condition=lambda values: values.get("testcase.basename")
-                in {"test_xiaomi_peak_throughput.py", "test_xiaomi_peak_throughput_wifi6.py"},
-            ),
-            SimpleFieldEffect(
-                target_field="Turntable.target_rssi",
-                action="disable",
-                condition=lambda values: values.get("testcase.basename")
-                in {"test_xiaomi_peak_throughput.py", "test_xiaomi_peak_throughput_wifi6.py"},
-            ),
-            SimpleFieldEffect(
-                target_field="rf_solution.step",
-                action="disable",
-                condition=lambda values: values.get("testcase.basename")
-                in {"test_xiaomi_peak_throughput.py", "test_xiaomi_peak_throughput_wifi6.py"},
             ),
             # ------------------------------------------------------------------
             # Stability base fields (Duration Control & Check Point).

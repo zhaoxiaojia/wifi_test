@@ -298,7 +298,7 @@ class _StabilityControllerMixin:
                 test_idx = -1
             if 0 <= test_idx < len(parts) - 1:
                 leaf = parts[test_idx + 1]
-                if leaf.endswith(".py") and leaf.startswith(("test_wifi_", "test_xiaomi_")):
+                if leaf.endswith(".py") and leaf.startswith("test_wifi_"):
                     return True
         return False
 
@@ -585,6 +585,11 @@ class ConfigController(
 
         page = self.page
         field = str(event.payload["field"]).strip()
+        if field in {"Turntable.target_rssi", "rf_solution.step"}:
+            print(
+                f"[TRACE_CONFIG_CTL] _on_field_change field={field} "
+                f"value={event.payload.get('value')!r} refreshing={getattr(page, '_refreshing', None)!r}"
+            )
 
         if field in {"connect_type.type", "connect_type.Android.device"} and not page._refreshing:
             self.sync_widgets_to_config()
@@ -595,6 +600,15 @@ class ConfigController(
             self.save_config()
 
         trigger = field or None
+        if field in {"Turntable.target_rssi", "rf_solution.step"}:
+            target_widget = page.field_widgets.get("Turntable.target_rssi")
+            step_widget = page.field_widgets.get("rf_solution.step")
+            target_value = target_widget.text() if hasattr(target_widget, "text") else None
+            step_enabled = step_widget.isEnabled() if hasattr(step_widget, "isEnabled") else None
+            print(
+                f"[TRACE_CONFIG_CTL] before evaluate_all_rules trigger={trigger!r} "
+                f"target_rssi={target_value!r} step_enabled={step_enabled!r}"
+            )
         evaluate_all_rules(page, trigger)
 
     def _on_case_select(self, event: UiEvent) -> None:
@@ -1288,7 +1302,7 @@ class ConfigController(
                 test_idx = -1
             if 0 <= test_idx < len(parts) - 1:
                 leaf = parts[test_idx + 1]
-                if leaf.endswith(".py") and leaf.startswith(("test_wifi_", "test_xiaomi_")):
+                if leaf.endswith(".py") and leaf.startswith("test_wifi_"):
                     return True
         return False
 

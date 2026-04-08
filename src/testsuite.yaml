@@ -2,6 +2,3 @@ performance:
 - src/test/test_wifi_peak_throughput.py
 - src/test/test_wifi_rvo.py
 - src/test/test_wifi_rvr.py
-- src/test/test_xiaomi_peak_throughput.py
-- src/test/test_xiaomi_rvo.py
-- src/test/test_xiaomi_rvr.py

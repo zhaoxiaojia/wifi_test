@@ -19,6 +19,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib.backends.backend_pdf import PdfPages
+from src.util.constants import load_config
 
 plt.rcParams["font.family"] = ["SimHei"]
 
@@ -66,6 +67,9 @@ class PerformanceResult:
         "Profile_Mode",
         "Profile_Value",
         "Scenario_Group_Key",
+        "BT_Coex_Mode",
+        "BT_BLE_Alias",
+        "BT_Classic_Alias",
     )
 
     def __init__(self, logdir: str, step: List[Any], repeat_times: int = 0) -> None:
@@ -207,7 +211,11 @@ class PerformanceResult:
         logging.info("Writing to csv")
         mode, value = self._get_active_profile_columns()
         scenario_key = self._get_scenario_group_key()
-        line = f"{result},{mode},{value},{scenario_key}"
+        bt_mode, ble_alias, classic_alias = self._get_bt_report_columns()
+        line = (
+            f"{result},{mode},{value},{scenario_key},"
+            f"{bt_mode},{ble_alias},{classic_alias}"
+        )
         with open(self.log_file, "a", encoding="utf-8-sig") as f:
             f.write(line)
             f.write("\n")
@@ -257,6 +265,35 @@ class PerformanceResult:
     def _get_scenario_group_key(self) -> str:
         """Return the current scenario group key."""
         return self._scenario_group_key
+
+    @staticmethod
+    def _csv_safe_text(value: Any) -> str:
+        text = "" if value is None else str(value).strip()
+        if not text:
+            return ""
+        if any(ch in text for ch in [",", '"', "\n", "\r"]):
+            return '"' + text.replace('"', '""') + '"'
+        return text
+
+    def _get_bt_report_columns(self) -> Tuple[str, str, str]:
+        """Return BT-related configuration values exactly as entered in the UI."""
+        try:
+            cfg = load_config(refresh=True) or {}
+        except Exception as exc:
+            logging.warning("Failed to load config for BT report columns: %s", exc)
+            cfg = {}
+
+        mode = cfg.get("mode", "") if isinstance(cfg, dict) else ""
+        bt_cfg = cfg.get("bt", {}) if isinstance(cfg, dict) else {}
+        if not isinstance(bt_cfg, dict):
+            bt_cfg = {}
+        ble_alias = bt_cfg.get("ble_alias", "")
+        classic_alias = bt_cfg.get("classic_alias", "")
+        return (
+            self._csv_safe_text(mode),
+            self._csv_safe_text(ble_alias),
+            self._csv_safe_text(classic_alias),
+        )
 
     @staticmethod
     def _normalize_profile_mode(mode: Optional[str]) -> str:
