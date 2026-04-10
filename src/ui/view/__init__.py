@@ -109,10 +109,6 @@ def bind_view_events(page: Any, view_key: str, event_handler: Any) -> None:
                     elif source == "bool_text":
                         if isinstance(w, QCheckBox):
                             data[key] = "True" if w.isChecked() else "False"
-                if data.get("field") in {"Turntable.target_rssi", "rf_solution.step"}:
-                    print(
-                        f"[TRACE_BIND_VIEW_EVENTS] name={name} payload={data!r} widget={type(w).__name__}"
-                    )
                 event_handler(page, name, **data)
 
             return _handler

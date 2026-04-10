@@ -101,7 +101,6 @@ class LabDeviceController:
         if int(value) < RF_ATTENUATION_MIN_DB or int(value) > RF_ATTENUATION_MAX_DB:
             assert 0, f'value must be in range {RF_ATTENUATION_MIN_DB}-{RF_ATTENUATION_MAX_DB}'
         logging.info("Set rf value to %s", value)
-        print(f"[DEBUG_RF] execute_rf_cmd model={self.model} value={value}")
         action = self._schedule_action(value)
         action()
         self._perform_cleanup()
@@ -146,9 +145,7 @@ class LabDeviceController:
                 self._ensure_telnet()
             self.tn.write("ATT?;".encode('ascii') + b'\r')
             res = self.tn.read_some().decode('ascii')
-            print(f"[DEBUG_RF] RC4DAT ATT? raw={res!r}")
             parsed = res.split()[0] if res.split() else ""
-            print(f"[DEBUG_RF] RC4DAT ATT? parsed={parsed!r}")
             return parsed
         else:
             if not self.tn:
@@ -157,9 +154,7 @@ class LabDeviceController:
                 raise RuntimeError("Telnet connection not initialized")
             self.tn.write("ATT".encode('ascii') + b'\r\n')
             res = self.tn.read_some().decode('utf-8')
-            print(f"[DEBUG_RF] ATT raw={res!r}")
             parsed = list(map(int, re.findall(r'\s(\d+);', res)))
-            print(f"[DEBUG_RF] ATT parsed={parsed!r}")
             return parsed
 
     def _run_curl_command(self, endpoint, params):
@@ -350,7 +345,6 @@ class LabDeviceController:
                 response = self.tn.read_some(timeout=2.0).decode('ascii', errors='ignore')
             except EOFError:
                 response = ""
-            print(f"[DEBUG_RF] TELNET_ECHO raw={response!r}")
 
     def _perform_cleanup(self) -> None:
         """Allow hardware state to settle after issuing commands."""

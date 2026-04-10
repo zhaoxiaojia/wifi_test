@@ -425,7 +425,6 @@ class FunctionConfigForm(QWidget):
             suites_set = {suite_name} if suite_name else set()
             # ✅ 增加路径有效性检查
             if not path or not path.endswith(".py") or not path.startswith("stb/"):
-                print(f"Skip invalid path: {path}")
                 continue
 
             clean_path = path.replace("\\", '/')
@@ -546,11 +545,9 @@ class FunctionConfigForm(QWidget):
                 f"Test Type: {test_type_from_file}\n"
                 f"From: {file_path}"
             )
-            print(f"Test plan loaded from: {file_path}")
 
         except Exception as e:
             error_msg = f"Failed to load test plan: {e}"
-            print(f"{error_msg}")
             QMessageBox.critical(self, "Load Error", error_msg)
 
     def apply_filters(self):
@@ -602,7 +599,6 @@ class FunctionConfigForm(QWidget):
                 })
 
         if not selected_rows:
-            print("No test cases are selected to save.")
             return
 
         # 2. 打开文件保存对话框
@@ -638,7 +634,6 @@ class FunctionConfigForm(QWidget):
                 PLAN_COLS.SCRIPT_PATH,
             ]
             write_plan(file_path, rows=selected_rows, column_order=column_order)
-            print(f"Test plan saved successfully to: {file_path}")
 
             # 保存最后路径
             config_base = get_config_base()
@@ -646,14 +641,12 @@ class FunctionConfigForm(QWidget):
             last_plan_file = config_base / "last_function_plan.txt"
             with open(last_plan_file, 'w', encoding='utf-8') as f:
                 f.write(str(Path(file_path).resolve()))
-            print(f"Last function plan path saved to: {last_plan_file}")
 
             # 可选：弹出成功提示
             QMessageBox.information(self, "Save Successful", f"Test plan saved to:\n{file_path}")
 
         except Exception as e:
             error_msg = f"Failed to save test plan: {e}"
-            print(f"{error_msg}")
             QMessageBox.critical(self, "Save Error", error_msg)
 
     def _on_select_all_changed(self, state):

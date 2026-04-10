@@ -367,7 +367,6 @@ class CaseConfigPage(ConfigView):
         super().__init__(parent=None)
         self.setObjectName("caseConfigPage")
         self.on_run_callback = on_run_callback
-        print(f"[STARTUP_TIME] CaseConfigPage.__init__ start: 0.000s")
 
         # Backward-compatible attribute: older helpers expect a page.view
         # pointing at the ConfigView instance used for tab switching.
@@ -376,14 +375,12 @@ class CaseConfigPage(ConfigView):
         # Controller responsible for config lifecycle/normalisation.
         _t = time.perf_counter()
         self.config_ctl = ConfigController(self)
-        print(f"[STARTUP_TIME] CaseConfigPage.ConfigController: {time.perf_counter() - _t:.3f}s")
 
         # Load the persisted tool configuration and restore CSV selection.
         # load_initial_config populates ``self.config`` and, when possible,
         # initialises ``self.selected_csv_path`` from the stored csv_path.
         _t = time.perf_counter()
         self.config: dict[str, Any] = self.config_ctl.load_initial_config()
-        print(f"[STARTUP_TIME] CaseConfigPage.load_initial_config: {time.perf_counter() - _t:.3f}s")
 
         # Transient state flags used during refreshes and selections.
         # Do not clobber selected_csv_path here so that any value restored
@@ -435,14 +432,12 @@ class CaseConfigPage(ConfigView):
         refresh_config_page_controls(self, panel_keys=("basic", "execution"), clear_existing=True)
         self._lazy_panels_built: set[str] = {"basic", "execution"}
         self._script_groups_initialized = False
-        print(f"[STARTUP_TIME] CaseConfigPage.refresh_controls: {time.perf_counter() - _t:.3f}s")
         # Bind UI events via the adapter so that all interactions flow
         # into a unified UiEvent pipeline handled by the controller.
         self._ui_adapter = UiAdapter(self, self._emit_ui_event)
         try:
             _t = time.perf_counter()
             self._ui_adapter.bind_all()
-            print(f"[STARTUP_TIME] CaseConfigPage.UiAdapter.bind_all: {time.perf_counter() - _t:.3f}s")
         except Exception:
             self._ui_adapter = None
 
@@ -469,7 +464,6 @@ class CaseConfigPage(ConfigView):
             test_root = base / "test"
             if test_root.exists():
                 self.config_ctl.init_case_tree(test_root)
-            print(f"[STARTUP_TIME] CaseConfigPage.init_case_tree: {time.perf_counter() - _t:.3f}s")
         except Exception:
             pass
 
@@ -479,7 +473,6 @@ class CaseConfigPage(ConfigView):
 
             _t = time.perf_counter()
             evaluate_all_rules(self, None)
-            print(f"[STARTUP_TIME] CaseConfigPage.evaluate_all_rules: {time.perf_counter() - _t:.3f}s")
         except Exception:
             pass
 
@@ -494,7 +487,6 @@ class CaseConfigPage(ConfigView):
         # CSV/router updates.
         _t = time.perf_counter()
         self.config_ctl.update_csv_options()
-        print(f"[STARTUP_TIME] CaseConfigPage.update_csv_options: {time.perf_counter() - _t:.3f}s")
 
         # Connect signals after UI ready.
         self.case_tree.setFocusPolicy(Qt.FocusPolicy.NoFocus)
@@ -502,7 +494,6 @@ class CaseConfigPage(ConfigView):
             0,
             lambda: apply_ui(self, getattr(self, "_current_case_path", "") or ""),
         )
-        print(f"[STARTUP_TIME] CaseConfigPage.__init__ end: {time.perf_counter() - _t0:.3f}s")
 
     def _on_config_tab_changed(self, index: int) -> None:
         keys = getattr(self, "_current_page_keys", []) or []
@@ -654,17 +645,7 @@ class CaseConfigPage(ConfigView):
         if widget is None:
             return
         try:
-            if field_id == "rf_solution.step":
-                print(
-                    f"[TRACE_PAGE_ADAPTER] enable field={field_id} widget={type(widget).__name__} "
-                    f"before={widget.isEnabled() if hasattr(widget, 'isEnabled') else None!r}"
-                )
             widget.setEnabled(True)
-            if field_id == "rf_solution.step":
-                print(
-                    f"[TRACE_PAGE_ADAPTER] enable field={field_id} "
-                    f"after={widget.isEnabled() if hasattr(widget, 'isEnabled') else None!r}"
-                )
         except Exception:
             pass
 
@@ -673,17 +654,7 @@ class CaseConfigPage(ConfigView):
         if widget is None:
             return
         try:
-            if field_id == "rf_solution.step":
-                print(
-                    f"[TRACE_PAGE_ADAPTER] disable field={field_id} widget={type(widget).__name__} "
-                    f"before={widget.isEnabled() if hasattr(widget, 'isEnabled') else None!r}"
-                )
             widget.setEnabled(False)
-            if field_id == "rf_solution.step":
-                print(
-                    f"[TRACE_PAGE_ADAPTER] disable field={field_id} "
-                    f"after={widget.isEnabled() if hasattr(widget, 'isEnabled') else None!r}"
-                )
         except Exception:
             pass
 

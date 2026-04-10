@@ -160,7 +160,6 @@ def _generate_allure_report(session: pytest.Session, destination_dir: Path | Non
 
         json_files = list(input_dir.glob("*.json"))
         logging.debug(f"[Attempt {attempt + 1}] Found {len(json_files)} .json files: {[f.name for f in json_files]}")
-        print(f"[DEBUG] Found json files in : {json_files}")
         if json_files:
             logging.info("Allure result files found. Proceeding to generate report.")
             break  # 找到文件，跳出循环

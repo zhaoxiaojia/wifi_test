@@ -20,7 +20,7 @@ from pathlib import Path
 import logging
 import os
 import multiprocessing
-import time
+import ctypes
 
 from PyQt5.QtWidgets import QApplication
 from qfluentwidgets import setTheme, Theme
@@ -37,24 +37,39 @@ os.chdir(Paths.BASE_DIR)
 sys.excepthook = log_exception
 #multiprocessing.freeze_support()
 
-if __name__ == "__main__":
+
+def _hide_console_window() -> None:
+    """Hide the Windows console window when the app is launched via python.exe."""
+
+    if os.name != "nt":
+        return
+    try:
+        kernel32 = ctypes.windll.kernel32
+        user32 = ctypes.windll.user32
+        hwnd = kernel32.GetConsoleWindow()
+        if hwnd:
+            user32.ShowWindow(hwnd, 0)
+    except Exception:
+        pass
+
+
+def main() -> int:
     multiprocessing.freeze_support()
-    _t0 = time.perf_counter()
+    _hide_console_window()
     logging.basicConfig(
         level=logging.WARNING,
         format="%(asctime)s - %(levelname)s - %(message)s",
     )
     try:
-        print(f"[STARTUP_TIME] start: 0.000s")
         app = QApplication(sys.argv)
-        print(f"[STARTUP_TIME] QApplication: {time.perf_counter() - _t0:.3f}s")
         setTheme(Theme.DARK)
-        print(f"[STARTUP_TIME] setTheme: {time.perf_counter() - _t0:.3f}s")
         window = MainWindow()
-        print(f"[STARTUP_TIME] MainWindow(): {time.perf_counter() - _t0:.3f}s")
         window.show()
-        print(f"[STARTUP_TIME] show(): {time.perf_counter() - _t0:.3f}s")
-        sys.exit(app.exec())
+        return app.exec()
     finally:
         cleanup_temp_dir()
+
+
+if __name__ == "__main__":
+    sys.exit(main())
 

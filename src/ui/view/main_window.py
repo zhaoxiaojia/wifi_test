@@ -78,7 +78,6 @@ class MainWindow(FluentWindow):
     def __init__(self) -> None:
         self._startup_t0 = time.perf_counter()
         super().__init__()
-        print(f"[STARTUP_TIME] MainWindow.__init__ start: 0.000s")
         self._deferred_init_done = False
         self.setTitleBar(MenuTitleBar(self))
         self.setWindowIcon(QIcon("res/logo/wifi.ico"))
@@ -89,7 +88,6 @@ class MainWindow(FluentWindow):
         self.resize(width, height)
         self.setMinimumSize(width, height)
         self.center_window()
-        print(f"[STARTUP_TIME] MainWindow.geometry: {time.perf_counter() - self._startup_t0:.3f}s")
 
         self._loading_page = QWidget(self)
         loading_layout = QVBoxLayout(self._loading_page)
@@ -99,7 +97,6 @@ class MainWindow(FluentWindow):
         loading_layout.addStretch(1)
         self.stackedWidget.addWidget(self._loading_page)
         self.stackedWidget.setCurrentWidget(self._loading_page)
-        print(f"[STARTUP_TIME] MainWindow.loading_page: {time.perf_counter() - self._startup_t0:.3f}s")
 
         final_rect = self.geometry()
         start_rect = final_rect.adjusted(
@@ -133,7 +130,6 @@ class MainWindow(FluentWindow):
 
         self._show_group.finished.connect(_restore)
         # Start the animation once the window is shown (see showEvent).
-        print(f"[STARTUP_TIME] MainWindow.__init__ end: {time.perf_counter() - self._startup_t0:.3f}s")
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
@@ -141,7 +137,6 @@ class MainWindow(FluentWindow):
             return
         self._deferred_init_done = True
         self._show_group.start()
-        print(f"[STARTUP_TIME] MainWindow.showEvent: {time.perf_counter() - self._startup_t0:.3f}s")
         QTimer.singleShot(0, self._deferred_init)
 
     def _deferred_init(self) -> None:
@@ -149,10 +144,8 @@ class MainWindow(FluentWindow):
         t_step = time.perf_counter()
         # Global tools (toolbar + side panel)
         tool_specs = load_tools_registry()
-        print(f"[STARTUP_TIME] load_tools_registry: {time.perf_counter() - t_step:.3f}s")
         t_step = time.perf_counter()
         self._tools_chrome = GlobalToolsChrome(self.stackedWidget, tool_specs)
-        print(f"[STARTUP_TIME] GlobalToolsChrome: {time.perf_counter() - t_step:.3f}s")
         self.global_tools_bar_frame = self._tools_chrome.bar_frame
         self.global_tools_bar = self._tools_chrome.bar
         self.global_tools_panel = self._tools_chrome.panel
@@ -168,13 +161,11 @@ class MainWindow(FluentWindow):
             self.global_tools_controller = GlobalToolsController(
                 self, self.global_tools_bar, self.global_tools_panel, tool_specs
             )
-            print(f"[STARTUP_TIME] GlobalToolsController: {time.perf_counter() - t_step:.3f}s")
 
         # Pages
         t_step = time.perf_counter()
         self.caseConfigPage = CaseConfigPage(self.on_run)
         self.rvr_wifi_config_page = RvrWifiConfigPage()
-        print(f"[STARTUP_TIME] CaseConfigPage+RvrWifiConfigPage: {time.perf_counter() - t_step:.3f}s")
 
         # Keep RvR Wi‑Fi Case page in sync with the selected CSV from
         # the Config page.
@@ -190,7 +181,6 @@ class MainWindow(FluentWindow):
         # Report page (disabled until report_dir created)
         self.report_view = ReportView(self)
         self.report_ctl = ReportController(self.report_view)
-        print(f"[STARTUP_TIME] Pages (run+report): {time.perf_counter() - self._startup_t0:.3f}s")
 
         # Navigation buttons
         # Logical sidebar keys (top -> bottom): config, case, run, report, about
@@ -285,7 +275,6 @@ class MainWindow(FluentWindow):
         self.setMicaEffectEnabled(True)
         # Position global tools after initial layout
         self._update_global_tools_geometry()
-        print(f"[STARTUP_TIME] MainWindow.deferred_init done: {time.perf_counter() - self._startup_t0:.3f}s")
 
     def _init_menu_bar(self) -> None:
         menu_bar = self.titleBar.menu_bar
@@ -356,9 +345,6 @@ class MainWindow(FluentWindow):
 
         self._add_menu_action(help_menu, "help.about", "About")
 
-        # DEBUG_MENU: remove later
-        print("[DEBUG_MENU] MenuBar initialized")
-
     def _add_menu_action(
         self,
         menu: QMenu,
@@ -385,8 +371,6 @@ class MainWindow(FluentWindow):
         return action
 
     def _on_menu_command(self, command_id: str) -> None:
-        # DEBUG_MENU: remove later
-        print("[DEBUG_MENU] command:", command_id)
         if command_id == "file.import":
             if self.import_ctl is None:
                 from src.ui.controller.titlebar.import_ctl import ImportController
@@ -395,8 +379,6 @@ class MainWindow(FluentWindow):
             self.import_ctl.run_import()
             return
         if command_id == "file.export":
-            # DEBUG_MENU: remove later
-            print("[DEBUG_MENU] file.export not implemented")
             return
         if command_id == "view.toggle_tools_panel":
             visible = not self.global_tools_panel.isVisible()

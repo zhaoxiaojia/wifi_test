@@ -574,7 +574,7 @@ class UiAutomationMixin:
             dut.u().screenshot(str(img_path))
             return img_path
         except Exception as e:
-            print(f"Failed to capture screenshot for '{step_name}': {e}")
+            logging.warning("Failed to capture screenshot for '%s': %s", step_name, e)
             return None
 
     def is_wired_connection_active(self, serial: str, timeout: int = 8) -> Tuple[bool, str]:

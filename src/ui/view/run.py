@@ -296,8 +296,7 @@ class RunPage(CardWidget):
                 with open(context_file, 'r', encoding='utf-8') as f:
                     excel_path = f.read().strip()
                 # ↑↑↑ 文件 f 在此处已明确超出作用域并应被关闭 ↑↑↑
-            except Exception as read_error:
-                #print(f"[ERROR] Failed to read last_function_plan.txt: {read_error}")
+            except Exception:
                 excel_path = None
 
                 # --- Step 2: 验证并设置路径 ---
@@ -311,25 +310,23 @@ class RunPage(CardWidget):
                     time.sleep(0.01)  # 10毫秒，通常足够
 
                     context_file.unlink()
-                    print(f"[DEBUG] Deleted last_function_plan.txt in __init__ for safety.")
 
                 except PermissionError as pe:
                     # 捕获特定的权限错误
-                    print(f"[WARNING] Permission denied when deleting file: {pe}")
+                    logging.warning("Permission denied when deleting file: %s", pe)
                     # 降级方案：重命名文件
                     try:
                         bak_file = context_file.with_suffix('.txt.bak')
                         if bak_file.exists():
                             bak_file.unlink()  # 先清理旧的 .bak
                         context_file.rename(bak_file)
-                        print(f"[DEBUG] Renamed to {bak_file.name} as fallback.")
                     except Exception as rename_error:
-                        print(f"[ERROR] Fallback rename also failed: {rename_error}")
+                        logging.warning("Fallback rename also failed: %s", rename_error)
 
                 except Exception as e:
-                    print(f"[WARNING] Unexpected error when deleting file: {e}")
+                    logging.warning("Unexpected error when deleting file: %s", e)
         except Exception as e:
-            print(f"[DEBUG] Warning: Could not auto-load last function plan: {e}")
+            logging.debug("Could not auto-load last function plan: %s", e)
         # End of auto-load block
 
         self.reset()
@@ -550,8 +547,6 @@ class RunPage(CardWidget):
         self._last_report_dir = None
 
     def run_case(self) -> None:
-        print(f"[DEBUG] run_case() called.")
-
         self.reset()
         self._set_action_button("stop")
         self.excel_plan_path = None
@@ -581,7 +576,6 @@ class RunPage(CardWidget):
                     # --- Step 2: 验证路径并设置 ---
                     if excel_path and Path(excel_path).exists():
                         self.set_excel_plan_path(excel_path)
-                        print(f"[DEBUG] Auto-switched to Excel plan: {excel_path}")
 
                         # --- Step 3: 尝试删除（关键修复）---
                         try:
@@ -589,7 +583,6 @@ class RunPage(CardWidget):
                             time.sleep(0.01)  # 增加10毫秒延迟，让OS释放句柄
 
                             last_plan_file.unlink()
-                            print(f"[DEBUG] Deleted last_function_plan.txt for safety.")
 
                         except PermissionError:
                             # --- 降级策略：重命名文件 ---
@@ -598,24 +591,20 @@ class RunPage(CardWidget):
                                 if bak_path.exists():
                                     bak_path.unlink()  # 清理旧备份
                                 last_plan_file.rename(bak_path)
-                                print(f"[DEBUG] Renamed to {bak_path.name} as fallback.")
                             except Exception as rename_e:
-                                print(f"[ERROR] Rename fallback failed: {rename_e}")
+                                logging.warning("Rename fallback failed: %s", rename_e)
 
                         except Exception as delete_error:
-                            print(f"[WARNING] Unexpected delete error: {delete_error}")
+                            logging.warning("Unexpected delete error: %s", delete_error)
 
             except Exception as e:
-                print(f"[DEBUG] Warning: Failed to auto-switch to Excel plan: {e}")
-
-            print(f"[DEBUG] Current state - case_path: '{self.case_path}', excel_plan_path: '{self.excel_plan_path}'")
+                logging.debug("Failed to auto-switch to Excel plan: %s", e)
 
             # --- 260105 新增：弹出提醒对话框（仅当在 project/ 下且未加载到计划时）---
             # 判断当前 case 是否属于 project 目录
             is_project_case = self.view._is_project_test_script(self.case_path)
             # 判断是否成功加载了 Excel 计划
             has_excel_plan = self.excel_plan_path is not None and self.excel_plan_path != "None"
-            print(f"[DEBUG] is_project_case check: 'function' in {Path(self.case_path).parts} -> {is_project_case}")
 
             if is_project_case and not has_excel_plan:
                 from qfluentwidgets import MessageBox
@@ -634,17 +623,14 @@ class RunPage(CardWidget):
                 message_box.cancelButton.hide()
 
                 message_box.exec()
-                print("[INFO] User confirmed to run single script.")
 
             # --- End of new dialog block ---
 
         # Determine which runner to use 260104 For function test;
         if self.excel_plan_path is not None:
             # --- Mode 1: Run Excel Plan ---
-            print(f"[DEBUG] Branch taken: Creating ExcelPlanRunner for '{self.excel_plan_path}'")
             try:
                 self.runner = ExcelPlanRunner(self.excel_plan_path)
-                print(f"[DEBUG] ExcelPlanRunner created successfully.")
             except Exception as e:
                 self._append_log(f"<b style='color:red;'>Failed to create ExcelPlanRunner: {e}</b>")
                 self._set_action_button("run")
@@ -662,7 +648,6 @@ class RunPage(CardWidget):
             self.runner.finished_signal.connect(self._finalize_runner)
         else:
             # --- Mode 2: Run Single Case (Original Logic) ---
-            print(f"[DEBUG] Branch taken: Creating CaseRunner for '{self.case_path}'")
             self.runner = CaseRunner(
                 self.case_path,
                 account_name=account_name,
@@ -681,7 +666,6 @@ class RunPage(CardWidget):
             self.runner.finished.connect(self._finalize_runner)
         else:
             raise TypeError(f"Unknown runner type: {type(self.runner)}")
-        print(f"[DEBUG] Starting runner: {type(self.runner).__name__}")
         self.runner.start()
 
     def _on_excel_case_report_ready(self, report_dir: str):
