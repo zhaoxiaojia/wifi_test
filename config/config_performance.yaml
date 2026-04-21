@@ -15,8 +15,11 @@ rf_solution:
     ip_address: 192.168.10.43
     channels: 1,2,3,8
   model: SY-RS232Board5
-  step: 0,75:3
-text_case: test/performance/test_wifi_peak_throughput.py
+  step:
+    Dual: 0,75:3
+    2.4G: 0,75:3
+    5G: 0,75:3
+text_case: test/performance/test_wifi_rvo.py
 debug:
   database_mode: true
   skip_router: false

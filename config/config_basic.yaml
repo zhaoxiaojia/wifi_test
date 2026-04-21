@@ -39,7 +39,7 @@ dut:
   Android:
     device: No devices
   Linux:
-    ip: 192.168.1.10
+    ip: 10.28.38.10
     wildcard: ''
   third_party:
     enabled: false

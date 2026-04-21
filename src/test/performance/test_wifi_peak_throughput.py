@@ -42,6 +42,41 @@ def setup_router(request):
 def test_rvr(setup_router, performance_sync_manager):
     connect_status, router_info = setup_router
     test_result = ensure_performance_result()
+
+    # === Add the following block here to generate new_log_message ===
+    band = router_info.band
+    mode = router_info.wireless_mode
+    bandwidth = router_info.bandwidth
+    channel = getattr(router_info, 'channel', '1')
+    if '2.4G' in band:
+        band_name = '2G'
+        if '11n' in mode:
+            phy_mode = 'HT20' if '20M' in bandwidth else 'HT40'
+        else:  # Assume 11ax or others
+            phy_mode = 'HE20' if '20M' in bandwidth else 'HE40'
+    elif '5G' in band:
+        band_name = band
+        if '11ac' in mode:
+            phy_mode = 'VHT80'
+        elif '11ax' in mode:
+            phy_mode = 'HE80'
+        else:
+            # Fallback for unknown modes
+            phy_mode = 'HE80'
+    else:
+        phy_mode = 'UNKNOWN'
+
+    if int(channel) <= 6:
+        channel_name = f"{channel}l"
+    elif int(channel) <= 13:
+        channel_name = f"{channel}u"
+    else:
+        channel_name = channel
+
+    # For peak throughput test, Att is set to 0db by default
+    new_log_message = f"{band_name}_{phy_mode}_CH{channel_name}_RX_Angle:0° Att:0db"
+    # === End of the added code block ===
+
     with scenario_group(router_info):
         if not connect_status:
             logging.info("Can't connect wifi ,input 0")
@@ -56,9 +91,12 @@ def test_rvr(setup_router, performance_sync_manager):
                 getattr(router_info, "ssid", "<unknown>"),
             )
         if int(router_info.tx):
+            tx_log_message = f"{new_log_message.replace('_RX', '_TX')}"
+            logging.info("Starting Peak Throughput test %s", tx_log_message)  # Modified log prefix
             logging.info(f'rssi : {rssi_num}')
             pytest.dut.get_tx_rate(router_info, 'TCP', debug=debug_flags.database_mode)
         if int(router_info.rx):
+            logging.info("Starting Peak Throughput test %s", new_log_message)
             logging.info(f'rssi : {rssi_num}')
             pytest.dut.get_rx_rate(router_info, 'TCP', debug=debug_flags.database_mode)
 

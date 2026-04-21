@@ -305,7 +305,7 @@ a.set_info("192.168.200.7", '2', 'TENDA', 'BE6L-PRO',
            {'2.4G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '40MHz'},
             '5G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 
-a.set_info("192.168.200.7", '3', 'ARRIS', 'W21',
+a.set_info("192.168.200.7", '3', 'ARRIS', 'TG3442',
            {'2.4G': {'mode': '11N', 'security_mode': 'wpa2', 'bandwidth': '20MHz'},
             '5G': {'mode': '11AX', 'security_mode': 'wpa2', 'bandwidth': '80MHz'}})
 

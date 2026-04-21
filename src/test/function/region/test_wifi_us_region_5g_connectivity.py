@@ -174,6 +174,10 @@ def test_wifi_us_5g_region_connectivity(wifi_adb_device):
 
                         record_test_step(TCID, f"Step5.{num}. Verify outgoing data access via ping 8.8.8.8",
                                          "PASS" if network_works else "FAIL", "")
+                        if ping_ok:
+                            test_result = "Pass"
+                collector.add_result(channel=ch, band="5G", country=TEST_REGION_CODE, result=test_result)
+                logging.info(f"✅ 收集: Ch{ch} = {test_result}")
 
     finally:
         # === Step 5: 恢复 AP 默认设置 ===

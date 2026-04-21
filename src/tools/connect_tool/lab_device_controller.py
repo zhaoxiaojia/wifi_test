@@ -11,10 +11,10 @@ import pytest
 
 from src.tools.connect_tool.transports.telnet_tool import TelnetSession
 from src.util.constants import (
-    ATTENUATOR_SWD_RC4DAT_8G_95,
-    ATTENUATOR_VAUNIX_LDA_908V_8,
     RF_ATTENUATION_MAX_DB,
     RF_ATTENUATION_MIN_DB,
+    ATTENUATOR_VAUNIX_LDA_908V_8 as RF_MODEL_LDA_908V_8,
+    ATTENUATOR_SWD_RC4DAT_8G_95 as RF_MODEL_RC4DAT_8G_95,
 )
 
 
@@ -99,10 +99,15 @@ class LabDeviceController:
             value = str(value)
         if int(value) < RF_ATTENUATION_MIN_DB or int(value) > RF_ATTENUATION_MAX_DB:
             assert 0, f'value must be in range {RF_ATTENUATION_MIN_DB}-{RF_ATTENUATION_MAX_DB}'
-        logging.info(f'Set rf value to {value}')
-        print(f"[DEBUG_RF] execute_rf_cmd model={self.model} value={value}")
-        action = self._schedule_action(value)
-        action()
+
+        logging.info(f"[DEBUG_RF] execute_rf_cmd called with model={self.model}, value={value} (type: {type(value).__name__}).")
+
+        try:
+            action = self._schedule_action(value)
+            action()
+        except Exception as e:
+            logging.exception(f"Failed to execute RF command '{value}'. Error: {e}")
+            raise
         self._perform_cleanup()
 
     def get_rf_current_value(self):
@@ -118,7 +123,7 @@ class LabDeviceController:
         Any
             The result produced by the function.
         """
-        if self.model == ATTENUATOR_VAUNIX_LDA_908V_8:
+        if self.model == RF_MODEL_LDA_908V_8:
             channels_to_query = self._last_used_channels or self.lda_channels
             results = {}
             for channel in channels_to_query:
@@ -139,22 +144,18 @@ class LabDeviceController:
                 results[channel] = int(match.group(1)) if match else response
             if len(results) == 1:
                 return next(iter(results.values()))
-            return results
-        if self.model == ATTENUATOR_SWD_RC4DAT_8G_95:
+            return True
+        if self.model == RF_MODEL_RC4DAT_8G_95:
             self.tn.write("ATT?;".encode('ascii') + b'\r')
             res = self.tn.read_some().decode('ascii')
-            print(f"[DEBUG_RF] RC4DAT ATT? raw={res!r}")
             parsed = res.split()[0] if res.split() else ""
-            print(f"[DEBUG_RF] RC4DAT ATT? parsed={parsed!r}")
             return parsed
         else:
             if not self.tn:
                 raise RuntimeError('Telnet connection not initialized')
             self.tn.write("ATT".encode('ascii') + b'\r\n')
             res = self.tn.read_some().decode('utf-8')
-            print(f"[DEBUG_RF] ATT raw={res!r}")
             parsed = list(map(int, re.findall(r'\s(\d+);', res)))
-            print(f"[DEBUG_RF] ATT parsed={parsed!r}")
             return parsed
 
     def _run_curl_command(self, endpoint, params):
@@ -253,8 +254,9 @@ class LabDeviceController:
 
     def _select_device(self) -> None:
         """Initialise telnet or HTTP controllers based on the configured model."""
-        if self.model == ATTENUATOR_VAUNIX_LDA_908V_8:
-            lda_config = pytest.config['rf_solution'].get('Vaunix-LDA-908V-8', {})
+        if self.model == RF_MODEL_LDA_908V_8:
+            #lda_config = pytest.config['rf_solution'].get('Vaunix-LDA-908V-8', {})
+            lda_config = pytest.config['rf_solution'].get(self.model, {})
             raw_channels = lda_config.get('channels')
             if raw_channels is None and 'ports' in lda_config:
                 logging.warning(
@@ -281,9 +283,9 @@ class LabDeviceController:
 
     def _schedule_action(self, value: str):
         """Return a callable that applies attenuation for the current model."""
-        if self.model == ATTENUATOR_VAUNIX_LDA_908V_8:
+        if self.model == RF_MODEL_LDA_908V_8:
             return lambda: self._apply_lda_attenuation(value)
-        if self.model == ATTENUATOR_SWD_RC4DAT_8G_95:
+        if self.model == RF_MODEL_RC4DAT_8G_95:
             return lambda: self._write_telnet(f":CHAN:1:2:3:4:SETATT:{value};", read_response=True)
         return lambda: self._write_telnet(f"ATT 1 {value};2 {value};3 {value};4 {value};")
 
@@ -419,10 +421,6 @@ class LabDeviceController:
         self.angle = int(current_angle)
         logging.info(f'Current angle {self.angle}')
         return self.angle
-
-
-
-
 
 
 

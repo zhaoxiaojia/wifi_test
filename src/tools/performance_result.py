@@ -48,7 +48,7 @@ class PerformanceResult:
         "Freq_Band",
         "BW",
         "Data_Rate",
-        "CH_Freq_MHz",
+        "Channel",
         "Angel",
         "Protocol",
         "Direction",

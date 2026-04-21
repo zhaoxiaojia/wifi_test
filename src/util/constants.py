@@ -116,7 +116,7 @@ BASIC_SECTION_KEYS: Final[frozenset[str]] = frozenset(
     {
         "connect_type",
         "dut",
-        # Project / Wi?Fi chipset configuration (formerly "fpga").
+        # Project / WiFi chipset configuration (formerly "fpga").
         "project",
         "serial_port",
         "software_info",
@@ -287,6 +287,8 @@ ATTENUATOR_CHOICES: Final[tuple[str, ...]] = (
     ATTENUATOR_SY_RS232BOARD5,
     ATTENUATOR_VAUNIX_LDA_908V_8,
 )
+RF_MODEL_CHOICES: Final[tuple[str, ...]] = ATTENUATOR_CHOICES
+RF_MODEL_RS232: Final[str] = ATTENUATOR_SY_RS232BOARD5
 RF_ATTENUATION_MIN_DB: Final[int] = 0
 RF_ATTENUATION_MAX_DB: Final[int] = 110
 
@@ -1267,9 +1269,28 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
         "XIAOMI": {
             "Vodka424": {
                 "ProjectID": "BU30A1-T966D5",
-                "ProjectName":"MI+T966D5-S9+AOSP U",
+                "ProjectName":"MI+T966D5+W265U1",
                 "ODM": "-",
                 "main_chip": "T966D5",
+                "wifi_module": "W265U1",
+                "wifi_sn": " ",
+                "interface": "USB",
+                "ecosystem": "Android",},
+
+            "TV_W2_XiWei": {
+                "ProjectID": "TV_W2_XiWei",
+                "ProjectName":"W265S1_vs_XiWei_in_TV",
+                "ODM": "-",
+                "main_chip": "T966D5",
+                "wifi_module": "W265S1",
+                "wifi_sn": " ",
+                "interface": "USB",
+                "ecosystem": "Android",},
+            "XIAOMI": {
+                "ProjectID": "AY30AE-T963D4",
+                "ProjectName":"MI+T963D4+W265U1",
+                "ODM": "Xiaomi",
+                "main_chip": "T963D4",
                 "wifi_module": "W265U1",
                 "wifi_sn": " ",
                 "interface": "USB",
@@ -1278,10 +1299,20 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
         "Roku": {
             "Latte829": {
                 "ProjectID": "AT308F-TR964",
-                "ProjectName":"",
+                "ProjectName":"Sandia+TR964+W265S2M",
                 "ODM": "Roku",
                 "main_chip": "TR964",
                 "wifi_module": "W265S2-M",
+                "wifi_sn": " ",
+                "interface": "USB",
+                "ecosystem": "Linux",
+            },
+            "Roxton": {
+                "ProjectID": "Roxton-W1U",
+                "ProjectName": "Roxton+T950R4+W155U1",
+                "ODM": "Roku",
+                "main_chip": "T950R4",
+                "wifi_module": "W155U1",
                 "wifi_sn": " ",
                 "interface": "USB",
                 "ecosystem": "Linux",
@@ -1290,7 +1321,7 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
         "Hisense": {
             "65D50S": {
                 "ProjectID": "None",
-                "ProjectName":"-",
+                "ProjectName":"Hisense+T963D4+XW_EA6621",
                 "ODM": "Hisense",
                 "main_chip": "T963D4",
                 "wifi_module": "XW EA6621",
@@ -1299,7 +1330,7 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
                 "ecosystem": "Android",},
             "55A6Q": {
                 "ProjectID": "None",
-                "ProjectName":"-",
+                "ProjectName":"Hisense+T963D4+XW_EA6621",
                 "ODM": "Hisense",
                 "main_chip": "T963D4",
                 "wifi_module": "XW EA6652",
@@ -1310,7 +1341,7 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
         "TCL": {
             "Espresso115": {
                 "ProjectID": "AY30AD-TC8000",
-                "ProjectName":"",
+                "ProjectName":"TCL+T963D4+W265U1",
                 "ODM": "TCL",
                 "main_chip": "T963D4",
                 "wifi_module": "W265U1",
@@ -1323,18 +1354,27 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
         "XIAOMI": {
             "Cedar228": {
                 "ProjectID": "BP20A8-S805X3",
-                "ProjectName": "MI+S805X3-H+W155S2W+Android U",
+                "ProjectName": "MI+S805X3+W155S2W",
                 "ODM": "XIAOMI",
                 "main_chip": "S805X3",
                 "wifi_module": "W155S2",
                 "wifi_sn": " ",
                 "interface": "SDIO",
                 "ecosystem": "Android",},
+            "Adastra": {
+                "ProjectID": "BM20BD-S905X5M",
+                "ProjectName": "MI+S905X5M+W265U1",
+                "ODM": "XIAOMI",
+                "main_chip": "S905X5M",
+                "wifi_module": "W265U1",
+                "wifi_sn": " ",
+                "interface": "USB",
+                "ecosystem": "Android", },
         },
         "Vantiva": {
             "Rosemary607": {
                 "ProjectID": "BH20AD-S905YT",
-                "ProjectName":"-",
+                "ProjectName":"Vantiva+S905Y5+W265S1",
                 "ODM": "SDMC",
                 "main_chip": "S905Y5",
                 "wifi_module": "W265S1",
@@ -1345,7 +1385,7 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
         "JIO": {
             "Oak528": {
                 "ProjectID": "BL20BN-S905X5",
-                "ProjectName": "SEI+S905X5+AOSP U",
+                "ProjectName": "SEI+S905X5+W265S1",
                 "ODM": "SEI",
                 "main_chip": "S905X5",
                 "wifi_module": "W265S1",
@@ -1354,18 +1394,27 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
                 "ecosystem": "Android",},
             "Oak401": {
                 "ProjectID": "BL20B9-S905X5",
-                "ProjectName": "SEI+S905X5-JU+AOSP U",
+                "ProjectName": "SEI+S905X5+W265S1",
                 "ODM": "SEI",
                 "main_chip": "S905X5",
                 "wifi_module": "W265S1",
                 "wifi_sn": "05:33",
                 "interface": "SDIO",
                 "ecosystem": "Android",},
+            "JIO": {
+                "ProjectID": "JIO",
+                "ProjectName": "JIO+W265S1",
+                "ODM": "SDMC",
+                "main_chip": "S905X5",
+                "wifi_module": "W265S1",
+                "wifi_sn": "07:33",
+                "interface": "SDIO",
+                "ecosystem": "Android",},
         },
         "ZTE": {
             "Rosemary904": {
                 "ProjectID": "BH20BJ-S905Y5",
-                "ProjectName": "ZTE+Viettel+S905Y5+W265S2-M+ATV U",
+                "ProjectName": "ZTE+S905Y5+W265S2M",
                 "ODM": "ZTE",
                 "main_chip": "S905Y5",
                 "wifi_module": "W265S2-M",
@@ -1375,12 +1424,60 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
         "A": {
             "Plam811": {
                 "ProjectID": "BM20CQ-S905X5M",
-                "ProjectName": "SEI+S905X5+W265S1+",
+                "ProjectName": "SEI+S905X5+W265S1",
                 "ODM": "SEI",
                 "main_chip": "S905X5M",
                 "wifi_module": "W265S1",
                 "interface": "SDIO",
                 "ecosystem": "Android",},
+            "Coffey": {
+                "ProjectID": "Coffey",
+                "ProjectName": "Coffey+W2",
+                "ODM": "SDMC",
+                "main_chip": "S905Y5",
+                "wifi_module": "W265S1",
+                "interface": "SDIO",
+                "ecosystem": "Android",},
+            "SEI_S905Y5_W2": {
+                "ProjectID": "BH20AJ-S905Y5",
+                "ProjectName": "SEI+S905Y5+W265S1",
+                "ODM": "SEI",
+                "main_chip": "S905Y5",
+                "wifi_module": "W265S1",
+                "interface": "SDIO",
+                "ecosystem": "Android",},
+            "Oak216": {
+                "ProjectID": "BL20AY-S905X5",
+                "ProjectName": "SEI+S905X5+W265S2M",
+                "ODM": "SEI",
+                "main_chip": "S905X5",
+                "wifi_module": "W265S2-M",
+                "interface": "USB",
+                "ecosystem": "Android",},
+            "Cedar215": {
+                "ProjectID": "BP20A7-S805X3",
+                "ProjectName": "SEI+S805X3+W155S2",
+                "ODM": "SEI",
+                "main_chip": "S905X3",
+                "wifi_module": "W155S2",
+                "interface": "SDIO",
+                "ecosystem": "Android",},
+            "Partner": {
+                "ProjectID": "AH21FM-S905X4",
+                "ProjectName": "SEI+S905X4+W265S1",
+                "ODM": "SEI",
+                "main_chip": "S905X4",
+                "wifi_module": "W265S1",
+                "interface": "SDIO",
+                "ecosystem": "Android", },
+            "Qianhong": {
+                "ProjectID": "U23B3-S905L3A",
+                "ProjectName": "Qianhong+S905L3Y+W265S1",
+                "ODM": "Qianhong",
+                "main_chip": "S905L3Y",
+                "wifi_module": "W265S1",
+                "interface": "SDIO",
+                "ecosystem": "Android", },
         },
         "Roku": {
             "Seabrook": {
@@ -1395,10 +1492,43 @@ WIFI_PRODUCT_PROJECT_MAP: Final[dict[str, dict[str, dict[str, dict[str, Any]]]]]
         "W": {
             "Palm825": {
                 "ProjectID": "BM20CS-S905X5M",
-                "ProjectName": "SDMC+S905X5M-J+ATV U",
+                "ProjectName": "SDMC+S905X5M+W265S2M",
                 "ODM": "SDMC",
                 "main_chip": "S905X5M",
                 "wifi_module": "W265S2-M",
+                "interface": "SDIO",
+                "ecosystem": "Android",},
+        },
+        "Airtel": {
+            "SEI": {
+                "ProjectID": "BH20AF-S905Y5",
+                "ProjectName": "SEI+S905Y5+W265S1",
+                "ODM": "SDMC",
+                "main_chip": "S905Y5",
+                "wifi_module": "W265S1",
+                "interface": "SDIO",
+                "ecosystem": "Android",},
+        },
+        "QPL": {
+            "QPL": {
+                "ProjectID": "QPL",
+                "ProjectName": "SDMC+S905X4+W265S1",
+                "ODM": "SDMC",
+                "main_chip": "S905X4",
+                "wifi_module": "W265S1",
+                "interface": "SDIO",
+                "ecosystem": "Android",},
+        },
+    },
+    "SH": {
+        "Fenda": {
+            "Vodka424": {
+                "ProjectID": "BQ20A3-S905D5",
+                "ProjectName":"Fenda+S905D5+W265S2M",
+                "ODM": "Fenda",
+                "main_chip": "S905D5",
+                "wifi_module": "W265S2-M",
+                "wifi_sn": "0x0133",
                 "interface": "SDIO",
                 "ecosystem": "Android",},
         },

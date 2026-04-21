@@ -32,14 +32,15 @@ power_ctrl = power_delay.ctrl
 router = ''
 
 ssid = {
-    '2.4G': 'Aml_AP_Comp_2.4G',
-    '5G': 'Aml_AP_Comp_5G'
+     '2.4G': 'Aml_AP_Comp_2.4G',
+     '5G': 'Aml_AP_Comp_5G'
     #  '2.4G': 'AX86U-2.4G',
     #  '5G': 'AX86U-5G'
 }
 ssid_6g = 'Aml_AP_Comp_6G'
 passwd = '@Aml#*st271'
 #passwd = '88888881'
+DUT_Power_Delay = "192.168.200.8:1"
 
 DUT_REBOOT_ROUNDS = 2  # 可设为 1, 2, 3...
 _rvr_tool_initialized = False
@@ -77,7 +78,11 @@ def initialize_all_relays():
 def power_setting(request):
     ip, port = request.param
     try:
+        #AP power ON
         power_delay.switch(ip, port, 1)
+        #DUT Power ON
+        dut_relay_ip, dut_relay_port = DUT_Power_Delay.split(':')
+        power_delay.switch(dut_relay_ip, int(dut_relay_port), 1)
         time.sleep(30)
         info = [
             x for x in filter(
@@ -337,20 +342,18 @@ def test_wifi_reconnect_full_flow(power_setting):
 
                         _rvr_tool_initialized = True
                 else:
-                    ##Reboot DUT
-                    logging.info(f"→ Round {round_index}: Reboot DUT Using CMD")
-                    # 调用复用的方法
+                    # --- Round N (N>0): Power重启 DUT 并等待重连 ---
+                    logging.info(f"→ Round {round_index}: Reboot AP and wait for auto-reconnect")
+                    # 重启 DUT
+                    dut_relay_ip, dut_relay_port = DUT_Power_Delay.split(':')
+                    power_delay.switch(dut_relay_ip, int(dut_relay_port), 2)
+                    time.sleep(10)
                     power_on_time = time.time()
-                    reboot_success, _ = pytest.dut.wait_for_device_boot(serial=dut_serial, timeout=120)
-                    if not reboot_success:
-                        logging.error("DUT failed to reboot or boot up in time!")
-                        any_fatal_error = True
-                        reconnection_time = "Fail"
-                    else:
-                        # === DUT 重启后，重新获取 root 权限 ===
-                        logging.info("→ Re-acquiring root privileges after DUT reboot...")
-                        pytest.dut.root()  # 重新执行 adb root
-                        pytest.dut.remount()  # 重新执行 adb remount
+                    power_delay.switch(dut_relay_ip, int(dut_relay_port), 1)
+                    time.sleep(20)
+                    logging.info("→ Re-acquiring root privileges after DUT reboot...")
+                    pytest.dut.root()  # 重新执行 adb root
+                    pytest.dut.remount()  # 重新执行 adb remount
 
                     # --- 等待 DUT 自动重连 ---
                     logging.info("→ Waiting for DUT to reconnect automatically...")
@@ -637,7 +640,7 @@ def _write_dut_reboot_str_csv(report_dir: str):
             rows.append(row)
     # 排序：按 IP, Port, Band, Round
     rows.sort(key=lambda x: (x[0], x[1], x[3], x[4]))
-    csv_path = Path(report_dir) / "DUT_Soft_Reboot_STR.csv"
+    csv_path = Path(report_dir) / "DUT_Power_Reboot_STR.csv"
     with open(csv_path, 'w', newline='', encoding='utf-8') as f:
         writer = csv.writer(f)
         writer.writerow([

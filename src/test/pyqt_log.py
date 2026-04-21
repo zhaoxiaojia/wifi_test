@@ -118,39 +118,74 @@ def emit_pyqt_message(tag: str, payload: str) -> None:
     logging.info("[PYQT_%s]%s", tag, payload)
 
 
+# def log_fixture_params(tag="FIX", name=None):
+#     def decorator(func):
+#         @functools.wraps(func)
+#         def wrapper(*args, **kwargs):
+#             # ——拿 request（尽量简单，不花哨）——
+#             request = kwargs.get("request")
+#             if request is None and args:
+#                 # 大多数 fixture 的第一个参数就是 request
+#                 candidate = args[0]
+#                 if hasattr(candidate, "param"):
+#                     request = candidate
+#
+#             # ——记录日志（容错即可）——
+#             fixture_name = name or getattr(request, "fixturename", func.__name__)
+#
+#             try:
+#                 raw_param = getattr(request, "param", "<NO_PARAM>")
+#             except Exception:
+#                 raw_param = "<PARAM_ERROR>"
+#
+#             params_to_log = get_fixture_actual_params(request, fixture_name, raw_param)
+#             _emit_log_line(tag, fixture_name, params_to_log)
+#
+#             # ——调用原函数，并保持其生成器/返回值语义——
+#             result = func(*args, **kwargs)
+#
+#             # 情况 A：yield-style fixture（生成器）
+#             if inspect.isgenerator(result):
+#                 # 直接把产物与 teardown 交还给 pytest
+#                 yield from result
+#                 return
+#
+#             # 情况 B：return-style fixture
+#             yield result
+#
+#         return wrapper
+#     return decorator
+
 def log_fixture_params(tag="FIX", name=None):
     def decorator(func):
+        sig = inspect.signature(func)
+
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             # ——拿 request（尽量简单，不花哨）——
             request = kwargs.get("request")
             if request is None and args:
-                # 大多数 fixture 的第一个参数就是 request
                 candidate = args[0]
                 if hasattr(candidate, "param"):
                     request = candidate
 
-            # ——记录日志（容错即可）——
+            bound_args = sig.bind(*args, **kwargs)
+            bound_args.apply_defaults()
+            all_params_dict = bound_args.arguments.copy()
+
+            all_params_dict.pop('request', None)
+
+            params_to_log = all_params_dict if all_params_dict else "--"
+
             fixture_name = name or getattr(request, "fixturename", func.__name__)
-
-            try:
-                raw_param = getattr(request, "param", "<NO_PARAM>")
-            except Exception:
-                raw_param = "<PARAM_ERROR>"
-
-            params_to_log = get_fixture_actual_params(request, fixture_name, raw_param)
             _emit_log_line(tag, fixture_name, params_to_log)
 
-            # ——调用原函数，并保持其生成器/返回值语义——
             result = func(*args, **kwargs)
 
-            # 情况 A：yield-style fixture（生成器）
             if inspect.isgenerator(result):
-                # 直接把产物与 teardown 交还给 pytest
                 yield from result
                 return
 
-            # 情况 B：return-style fixture
             yield result
 
         return wrapper
