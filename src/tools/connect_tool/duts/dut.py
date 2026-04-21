@@ -409,11 +409,6 @@ class dut(WifiMixin, PerfMixin, SystemMixin, InputMixin, AppMixin, UiAutomationM
             daemon=True
         )
         rssi_thread.start()
-        logging.info(f"[DEBUG] About to call super().get_tx_rate with:")
-        logging.info(f"  - router_info: {router_info}")
-        logging.info(f"  - type: {type}")
-        logging.info(f"  - self.iperf_client_cmd: {getattr(self, 'iperf_client_cmd', 'N/A')}")
-        logging.info(f"  - self.dut_ip: {getattr(self, 'dut_ip', 'N/A')}")
 
         return super().get_rx_rate(
             router_info,
@@ -615,29 +610,29 @@ class dut(WifiMixin, PerfMixin, SystemMixin, InputMixin, AppMixin, UiAutomationM
         """
         try:
             time.sleep(delay_seconds)
-            logging.info(f"📢 Sampling extended RSSI after {delay_seconds}s...")
+            logging.info(f"Get sampling extended RSSI after {delay_seconds}s...")
 
             #Get Beacon RSSI
             rssi_result = self.get_extended_rssi()
             self._extended_rssi_result = rssi_result
-            logging.info(f"✅ Extended RSSI sampled: {rssi_result}")
+            logging.info(f"Extended RSSI sampled: {rssi_result}")
 
             #Get realtime MCS
             try:
                 # 直接调用方法，不依赖 @step 捕获
                 mcs_tx = self.get_mcs_tx()
                 self._mcs_tx_result = mcs_tx
-                logging.info(f"✅ MCS TX: {mcs_tx}")
+                logging.info(f"Get MCS TX: {mcs_tx}")
             except Exception as e:
-                logging.error(f"❌ MCS TX failed: {e}")
+                logging.error(f"Get MCS TX failed: {e}")
                 self._mcs_tx_result = "N/A"
 
             try:
                 mcs_rx = self.get_mcs_rx()
                 self._mcs_rx_result = mcs_rx
-                logging.info(f"✅ MCS RX: {mcs_rx}")
+                logging.info(f"Get MCS RX: {mcs_rx}")
             except Exception as e:
-                logging.error(f"❌ MCS RX failed: {e}")
+                logging.error(f"MCS RX failed: {e}")
                 self._mcs_rx_result = "N/A"
 
             self._rssi_sampled_event.set()
@@ -653,7 +648,7 @@ class dut(WifiMixin, PerfMixin, SystemMixin, InputMixin, AppMixin, UiAutomationM
             self._rssi_sampled_event.set()
 
         except Exception as e:
-            logging.error(f"❌ Failed to sample extended RSSI: {e}")
+            logging.error(f"Failed to sample extended RSSI: {e}")
             self._extended_rssi_result = ("N/A", "N/A", "N/A")
             self._mcs_tx_result = "N/A"
             self._mcs_rx_result = "N/A"

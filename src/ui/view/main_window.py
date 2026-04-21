@@ -23,6 +23,7 @@ from PyQt5.QtWidgets import (
     QGraphicsOpacityEffect,
     QMenu,
     QMessageBox,
+    QPushButton,
     QVBoxLayout,
     QWidget,
 )
@@ -76,7 +77,7 @@ def log_exception(exc_type, exc_value, exc_tb) -> None:
 
 
 class MainWindow(FluentWindow):
-    """Main application window for the Wi‑Fi Test Tool.
+    """Main application window for the Wi-Fi Test Tool.
 
     This class is moved from ``main.py`` into the view layer without
     behavioural changes.  It owns creation of all top-level pages,
@@ -187,7 +188,7 @@ class MainWindow(FluentWindow):
         self.rvr_wifi_config_page = RvrWifiConfigPage()
         print(f"[STARTUP_TIME] CaseConfigPage+RvrWifiConfigPage: {time.perf_counter() - t_step:.3f}s")
 
-        # Keep RvR Wi‑Fi Case page in sync with the selected CSV from
+        # Keep RvR Wi-Fi Case page in sync with the selected CSV from
         # the Config page.
         self.caseConfigPage.csvFileChanged.connect(
             self.rvr_wifi_config_page.on_csv_file_changed
@@ -226,11 +227,11 @@ class MainWindow(FluentWindow):
         )
         self.case_nav_button.setVisible(True)
 
-        # RVR Wi‑Fi / scenario configuration
+        # RVR Wi-Fi / scenario configuration
         self.rvr_nav_button = self._create_sidebar_button(
             "case",
             self.rvr_wifi_config_page,
-            FluentIcon.LIBRARY #WiFi
+            FluentIcon.LIBRARY  # WiFi
         )
 
         # Run / execution page
@@ -238,7 +239,7 @@ class MainWindow(FluentWindow):
             "run",
             self.run_page,
             FluentIcon.PLAY,
-            #position=NavigationItemPosition.BOTTOM,
+            # position=NavigationItemPosition.BOTTOM,
         )
         self.run_nav_button.setVisible(True)
 
@@ -247,7 +248,7 @@ class MainWindow(FluentWindow):
             "report",
             self.report_view,
             FluentIcon.DOCUMENT,
-            #position=NavigationItemPosition.BOTTOM,
+            # position=NavigationItemPosition.BOTTOM,
         )
         self.report_nav_button.setVisible(True)
 
@@ -260,7 +261,7 @@ class MainWindow(FluentWindow):
             "about",
             self.about_page,
             FluentIcon.INFO,
-            #position=NavigationItemPosition.BOTTOM,
+            # position=NavigationItemPosition.BOTTOM,
         )
         self.about_nav_button.setVisible(True)
 
@@ -325,34 +326,40 @@ class MainWindow(FluentWindow):
     def _init_menu_bar(self) -> None:
         menu_bar = self.titleBar.menu_bar
         file_menu = menu_bar.addMenu("File")
-        theme_menu = menu_bar.addMenu("Theme")
+        tools_menu = menu_bar.addMenu("Tools")  # 原来的 Theme 菜单改为 Tools
         view_menu = menu_bar.addMenu("View")
         settings_menu = menu_bar.addMenu("Settings")
         help_menu = menu_bar.addMenu("Help")
 
-        self._add_menu_action(file_menu, "file.import", "Import...", shortcut="Ctrl+O")
-        self._add_menu_action(file_menu, "file.export", "Export...", shortcut="Ctrl+S")
+        self._add_menu_action(file_menu, "file.import", "Import Report...", shortcut="Ctrl+O")
+        self._add_menu_action(file_menu, "file.export", "Export Report...", shortcut="Ctrl+S")
+        self._add_menu_action(file_menu, "file.link", "Data WebSite...", shortcut="Ctrl+D")
         file_menu.addSeparator()
         self._add_menu_action(file_menu, "file.exit", "Exit", shortcut="Alt+F4")
 
+        # 在 Tools 菜单中添加 Data Normalization 选项
+        self._add_menu_action(tools_menu, "tools.data_normalization", "Test Report Generator", shortcut="Ctrl+N")
+
+        # 如果还需要保留主题选项，可以添加分隔符后再添加
+        tools_menu.addSeparator()
         theme_group = QActionGroup(self)
         theme_group.setExclusive(True)
-        self._add_menu_action(
-            theme_menu,
-            "theme.dark",
-            "Dark",
-            checkable=True,
-            checked=(self._theme_key == "dark"),
-            group=theme_group,
-        )
-        self._add_menu_action(
-            theme_menu,
-            "theme.light",
-            "Light",
-            checkable=True,
-            checked=(self._theme_key == "light"),
-            group=theme_group,
-        )
+        # self._add_menu_action(
+        #     tools_menu,
+        #     "theme.dark",
+        #     "Dark",
+        #     checkable=True,
+        #     checked=(self._theme_key == "dark"),
+        #     group=theme_group,
+        # )
+        # self._add_menu_action(
+        #     tools_menu,
+        #     "theme.light",
+        #     "Light",
+        #     checkable=True,
+        #     checked=(self._theme_key == "light"),
+        #     group=theme_group,
+        # )
 
         self._add_menu_action(
             view_menu,
@@ -395,15 +402,15 @@ class MainWindow(FluentWindow):
         print("[DEBUG_MENU] MenuBar initialized")
 
     def _add_menu_action(
-        self,
-        menu: QMenu,
-        command_id: str,
-        title: str,
-        *,
-        shortcut: str | None = None,
-        checkable: bool = False,
-        checked: bool = False,
-        group: QActionGroup | None = None,
+            self,
+            menu: QMenu,
+            command_id: str,
+            title: str,
+            *,
+            shortcut: str | None = None,
+            checkable: bool = False,
+            checked: bool = False,
+            group: QActionGroup | None = None,
     ) -> QAction:
         action = QAction(title, self)
         action.setObjectName(command_id.replace(".", "_"))
@@ -432,6 +439,36 @@ class MainWindow(FluentWindow):
         if command_id == "file.export":
             # DEBUG_MENU: remove later
             print("[DEBUG_MENU] file.export not implemented")
+            return
+        if command_id == "file.link":
+            web_url = "http://10.28.11.79:3000/wifi-dashboard.html"
+            from PyQt5.QtGui import QDesktopServices
+            from PyQt5.QtCore import QUrl
+            QDesktopServices.openUrl(QUrl(web_url))
+            print("[DEBUG_MENU] Open Data website")
+            return
+        if command_id == "tools.data_normalization":
+            # 启动 Data Normalization 独立 EXE 程序
+            try:
+                import subprocess
+                import sys
+                if getattr(sys, 'frozen', False):
+                    project_root = os.path.dirname(sys.executable)
+                    print(f"[DEBUG] tool dir {project_root}")
+                else:
+                    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+
+                # 假设 EXE 文件在主程序同目录下的 tools 文件夹中
+                exe_path = os.path.join(project_root, "config", "Test_Report_Generator.exe")
+
+                if os.path.exists(exe_path):
+                    subprocess.Popen([exe_path])
+                else:
+                    QMessageBox.warning(self, "Error",
+                                        "Report Generator tool not found!\nPlease ensure Test_Report_Generator.exe is in the config folder.")
+
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to launch Data Normalization tool:\n{str(e)}")
             return
         if command_id == "view.toggle_tools_panel":
             visible = not self.global_tools_panel.isVisible()
@@ -477,17 +514,18 @@ class MainWindow(FluentWindow):
             logging.exception("MySQL init: failed")
             return
         logging.info("MySQL init: done")
+
     # ------------------------------------------------------------------
     # Navigation button helpers
     # ------------------------------------------------------------------
 
     def _create_sidebar_button(
-        self,
-        key: str,
-        page,
-        icon,
-        *,
-        position: NavigationItemPosition | None = None,
+            self,
+            key: str,
+            page,
+            icon,
+            *,
+            position: NavigationItemPosition | None = None,
     ):
         """Create a navigation button based on a logical sidebar key."""
         text, subtext = SIDEBAR_PAGE_LABELS.get(key, (key.title(), None))
@@ -516,9 +554,9 @@ class MainWindow(FluentWindow):
         """Restore navigation and initial page based on persisted auth state."""
         auth_state = load_auth_state()
         if (
-            isinstance(auth_state, dict)
-            and auth_state.get("authenticated")
-            and auth_state.get("username")
+                isinstance(auth_state, dict)
+                and auth_state.get("authenticated")
+                and auth_state.get("username")
         ):
             # Treat as already authenticated: enable all features and go to Config page.
             username = str(auth_state.get("username", "") or "").strip()
@@ -597,7 +635,7 @@ class MainWindow(FluentWindow):
             logging.warning("show_rvr_wifi_config animation failed: %s", exc)
 
     def hide_rvr_wifi_config(self):
-        """Slide the RVR Wi‑Fi configuration page out of view."""
+        """Slide the RVR Wi-Fi configuration page out of view."""
         if not self._rvr_visible:
             return
         logging.debug(
@@ -683,7 +721,7 @@ class MainWindow(FluentWindow):
             )
             return None
         self._rvr_route_key = (
-            self._rvr_nav_button.property("routeKey") or page.objectName()
+                self._rvr_nav_button.property("routeKey") or page.objectName()
         )
         logging.debug("show_rvr_wifi_config: routeKey=%s", self._rvr_route_key)
         self._rvr_nav_button.setVisible(True)
@@ -708,10 +746,10 @@ class MainWindow(FluentWindow):
 
         # Prefer official APIs (try in order, finally removeWidget(page))
         for func in (
-            nav.removeSubInterface,
-            nav.removeInterface,
-            nav.removeItem,
-            nav.removeWidget,
+                nav.removeSubInterface,
+                nav.removeInterface,
+                nav.removeItem,
+                nav.removeWidget,
         ):
             try:
                 func(page)

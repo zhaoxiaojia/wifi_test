@@ -678,14 +678,41 @@ class RfStepSegmentsWidget(QWidget):
     """
 
     DEFAULT_SEGMENT = (0, 75, 3)
+    BAND_2G = "2.4G"
+    BAND_5G = "5G"
+    BAND_DUAL = "Dual"
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._segments: list[tuple[int, int, int]] = []
+        self._segments_data = {
+            self.BAND_DUAL: [],
+            #self.BAND_2G: [],
+            #self.BAND_5G: [],
+        }
+        self._current_band = self.BAND_DUAL
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(6)
+
+        #Band list
+        from qfluentwidgets import ComboBox
+        band_layout = QHBoxLayout()
+        band_layout.setContentsMargins(0, 0, 0, 0)
+        band_layout.addWidget(QLabel("Band:"))
+        spacer = QWidget()
+        spacer.setFixedWidth(33)  # 调整此值直到对齐
+        band_layout.addWidget(spacer)
+        self.band_combo = ComboBox(self)
+        self.band_combo.addItems([self.BAND_DUAL, self.BAND_2G, self.BAND_5G])
+        self.band_combo.currentTextChanged.connect(self._on_band_changed)
+        self.band_combo.setMinimumWidth(120)
+
+        band_layout.addWidget(self.band_combo)
+        band_layout.addStretch()
+        layout.addLayout(band_layout)
+
 
         form = QGridLayout()
         form.setContentsMargins(0, 0, 0, 0)
@@ -709,7 +736,7 @@ class RfStepSegmentsWidget(QWidget):
         self.step_edit.setValidator(QIntValidator(1, 9999, self))
         self.step_edit.setText(str(self.DEFAULT_SEGMENT[2]))
 
-        # 在Perormance UI生成
+        # Perormance UI
         form.addWidget(QLabel("Start Atten"), 0, 0)
         form.addWidget(self.start_edit, 0, 1)
         form.addWidget(QLabel("Stop Atten"), 1, 0)
@@ -779,69 +806,94 @@ class RfStepSegmentsWidget(QWidget):
         self.segment_stack.setMaximumHeight(120)
         self._refresh_segment_list()
 
-    def segments(self) -> list[tuple[int, int, int]]:
-        """Return current RF step segments."""
-        return list(self._segments)
+    def _on_band_changed(self, band):
+        """band switching"""
+        self._current_band = band
+        self._refresh_segment_list()
 
-    def set_segments(self, segments: Sequence[tuple[int, int, int]]) -> None:
-        """Replace the current segments and refresh the list."""
-        self._segments = [(int(a), int(b), int(c)) for a, b, c in segments]
+    def segments(self) -> dict[str, list[tuple[int, int, int]]]:
+        """Return current RF step segments for all bands."""
+        return {band: list(segments) for band, segments in self._segments_data.items()}
+
+    def set_segments(self, segments_data: dict[str, Sequence[tuple[int, int, int]]]) -> None:
+        """Replace the current segments for all bands and refresh the list."""
+        for band, segments in segments_data.items():
+            if band in self._segments_data:
+                self._segments_data[band] = [(int(a), int(b), int(c)) for a, b, c in segments]
         self._refresh_segment_list()
 
     # ------------------------------------------------------------------
     # Serialization helpers used by the Config controller.
     # ------------------------------------------------------------------
 
-    def serialize(self) -> str:
+    def serialize(self) -> dict[str, str]:
         """
-        Return the current segments encoded as an rf_solution.step string.
+        Return the current segments encoded as rf_solution.step strings for each band.
 
         The format matches the performance helper expectations:
         ``start,stop:step`` segments separated by ``;``.  When no segments
         are defined, an empty string is returned so that downstream logic
         falls back to the default ``0,75:3`` specification.
         """
-        if not self._segments:
-            # No explicit range has been added; leave the config empty
-            # so that performance helpers apply the built-in 0-75 step 3
-            # default instead of any transient edit values.
-            return ""
-        parts = []
-        for start, stop, step in self._segments:
-            parts.append(f"{int(start)},{int(stop)}:{int(step)}")
-        return ";".join(parts)
+        result = {}
+        for band, segments in self._segments_data.items():
+            if not segments:
+                # No explicit range has been added; leave the config empty
+                # so that performance helpers apply the built-in 0-75 step 3
+                # default instead of any transient edit values.
+                result[band] = ""
+            else:
+                parts = []
+                for start, stop, step in segments:
+                    parts.append(f"{int(start)},{int(stop)}:{int(step)}")
+                result[band] = ";".join(parts)
+        return result
 
     def load_from_raw(self, raw: Any) -> None:
-        """Populate segments from an existing rf_solution.step value."""
-        segments: list[tuple[int, int, int]] = []
+        """Populate segments from existing rf_solution.step values for each band."""
+        # 兼容旧格式（单个字符串）
+        if isinstance(raw, str):
+            raw = {
+                self.BAND_2G: raw,
+                self.BAND_5G: raw,
+                self.BAND_DUAL: raw
+            }
 
-        def _collect(value: Any) -> None:
-            if value is None:
-                return
-            if isinstance(value, str):
-                text = value.strip()
-                if not text:
+        if not isinstance(raw, dict):
+            return
+
+        for band in [self.BAND_2G, self.BAND_5G, self.BAND_DUAL]:
+            band_data = raw.get(band, "")
+            segments = []
+
+            def _collect(value: Any) -> None:
+                if value is None:
                     return
-                for part in re.split(r"[;\n\r]+", text):
-                    part = part.strip()
-                    if not part:
-                        continue
-                    seg = self._parse_segment(part)
-                    if seg is not None:
-                        segments.append(seg)
-                return
-            if isinstance(value, (list, tuple, set)):
-                for item in value:
-                    _collect(item)
-                return
-            # Fallback: treat any other scalar as a single segment token.
-            seg = self._parse_segment(str(value))
-            if seg is not None:
-                segments.append(seg)
+                if isinstance(value, str):
+                    text = value.strip()
+                    if not text:
+                        return
+                    for part in re.split(r"[;\n\r]+", text):
+                        part = part.strip()
+                        if not part:
+                            continue
+                        seg = self._parse_segment(part)
+                        if seg is not None:
+                            segments.append(seg)
+                    return
+                if isinstance(value, (list, tuple, set)):
+                    for item in value:
+                        _collect(item)
+                    return
+                # Fallback: treat any other scalar as a single segment token.
+                seg = self._parse_segment(str(value))
+                if seg is not None:
+                    segments.append(seg)
 
-        _collect(raw)
-        if segments:
-            self.set_segments(segments)
+            _collect(band_data)
+            self._segments_data[band] = segments
+
+        self._refresh_segment_list()
 
     @staticmethod
     def _parse_segment(spec: str) -> tuple[int, int, int] | None:
@@ -879,27 +931,61 @@ class RfStepSegmentsWidget(QWidget):
         return (start, stop, step)
 
     def _refresh_segment_list(self) -> None:
-        """Refresh the visual list of segments."""
+        """Refresh the visual list of ALL segments (across all bands)."""
         self.segment_list.clear()
-        for start, stop, step in self._segments:
-            item_text = f"{start} - {stop} (step {step})"
+
+        # 收集所有频段的所有段
+        all_segments = []
+        for band, segments in self._segments_data.items():
+            for start, stop, step in segments:
+                all_segments.append((start, stop, step, band))
+
+        all_segments.sort(key=lambda x: (x[3], x[0]))
+
+        for start, stop, step, band in all_segments:
+            item_text = f"{start} - {stop} (step {step}) ({band})"
             item = QListWidgetItem(item_text)
-            item.setData(Qt.UserRole, (start, stop, step))
+            item.setData(Qt.UserRole, (start, stop, step, band))
             self.segment_list.addItem(item)
-        if self._segments:
+
+        if all_segments:
             self.segment_stack.setCurrentWidget(self.segment_list)
             self.segment_list.setCurrentRow(0)
         else:
             self.segment_stack.setCurrentWidget(self.segment_hint)
 
     def _on_segment_selected(self, index: int) -> None:
-        if 0 <= index < len(self._segments):
-            start, stop, step = self._segments[index]
+        if 0 <= index < len(self._segments_data[self._current_band]):
+            start, stop, step = self._segments_data[self._current_band][index]
             self.start_edit.setText(str(start))
             self.stop_edit.setText(str(stop))
             self.step_edit.setText(str(step))
 
     def _on_add_segment(self) -> None:
+        # Check mutual exclusion conditions
+        if self._current_band in [self.BAND_2G, self.BAND_5G]:
+            # If adding 2.4G or 5G, check if Dual entries exist
+            if self._segments_data[self.BAND_DUAL]:
+                from qfluentwidgets import MessageBox
+                msg_box = MessageBox(
+                    "Add Failed",
+                    f"Dual band entries already exist. Cannot add {self._current_band} band entries simultaneously.",
+                    self.window()
+                )
+                msg_box.exec_()
+                return
+        elif self._current_band == self.BAND_DUAL:
+            # If adding Dual, check if 2.4G or 5G entries exist
+            if self._segments_data[self.BAND_2G] or self._segments_data[self.BAND_5G]:
+                from qfluentwidgets import MessageBox
+                msg_box = MessageBox(
+                    "Add Failed",
+                    "2.4G/5G band entries already exist. Cannot add Dual band entries simultaneously.",
+                    self.window()
+                )
+                msg_box.exec_()
+                return
+
         start = self._coerce_int(self.start_edit.text(), self.DEFAULT_SEGMENT[0])
         stop = self._coerce_int(self.stop_edit.text(), self.DEFAULT_SEGMENT[1])
         step = self._coerce_int(self.step_edit.text(), self.DEFAULT_SEGMENT[2])
@@ -907,14 +993,39 @@ class RfStepSegmentsWidget(QWidget):
             step = self.DEFAULT_SEGMENT[2]
         if stop < start:
             start, stop = stop, start
-        self._segments.append((start, stop, step))
+
+        # Check for duplicate entry
+        new_segment = (start, stop, step)
+        if new_segment in self._segments_data[self._current_band]:
+            from qfluentwidgets import MessageBox
+            msg_box = MessageBox(
+                "Add Failed",
+                "Setting Existed",
+                self.window()
+            )
+            msg_box.exec_()
+            return
+
+        self._segments_data[self._current_band].append((start, stop, step))
         self._refresh_segment_list()
 
     def _on_delete_segment(self) -> None:
-        row = self.segment_list.currentRow()
-        if 0 <= row < len(self._segments):
-            del self._segments[row]
-            self._refresh_segment_list()
+        """Remove the currently selected segment."""
+        current_item = self.segment_list.currentItem()
+        if not current_item:
+            return
+
+        segment_data = current_item.data(Qt.UserRole)
+        if len(segment_data) == 4:
+            start, stop, step, band = segment_data
+        else:
+            start, stop, step = segment_data
+            band = self._current_band
+
+        if (start, stop, step) in self._segments_data[band]:
+            self._segments_data[band].remove((start, stop, step))
+
+        self._refresh_segment_list()
 
     def _coerce_int(self, text: str, default: int) -> int:
         try:

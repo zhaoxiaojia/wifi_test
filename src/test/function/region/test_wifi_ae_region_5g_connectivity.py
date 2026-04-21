@@ -33,7 +33,7 @@ TEST_REGION_CODE2 = "AE(阿联酋)"
 1. Set AP region to {TEST_REGION_CODE2} and verify.
 2.For 5G: Test channels [36, 64, 100, 165]. Connect, verify internet, then change channel and check reconnection.
 """)
-def test_wifi_ae_24g_region_connectivity(wifi_adb_device):
+def test_wifi_ae_5g_region_connectivity(wifi_adb_device):
     dut, serial, logdir, cfg = wifi_adb_device
     test_channel_list = TEST_CHANNELS_5G
     test_type = os.environ.get("TEST_TYPE", "Typical Channels")

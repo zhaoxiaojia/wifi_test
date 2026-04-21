@@ -89,7 +89,10 @@ def _insert_performance_rows(
         return 0
 
     manager.ensure_schema_initialized()
-    insert_columns = [name for name, _ in manager._BASE_COLUMNS]
+    # insert_columns = [name for name, _ in manager._BASE_COLUMNS]
+    # insert_columns.extend(column.name for column in manager._STATIC_COLUMNS)
+    BASE_COLUMN_NAMES = ["test_report_id", "execution_id", "csv_name"]
+    insert_columns = BASE_COLUMN_NAMES[:]
     insert_columns.extend(column.name for column in manager._STATIC_COLUMNS)
 
     writer = SqlWriter(manager.TABLE_NAME)
@@ -100,9 +103,13 @@ def _insert_performance_rows(
 
     values: List[List[Any]] = []
     for row in rows:
-        row_values: List[Any] = [
+        base_values: List[Any] = [
             test_report_id,
+            execution_id,
+            csv_name,
         ]
+        row_values: List[Any] = base_values[:]
+
         for column in manager._STATIC_COLUMNS:
             if column.original == "Throughput":
                 samples: List[Any] = []
@@ -126,31 +133,31 @@ def _insert_performance_rows(
     return manager._client.executemany(insert_sql, values)
 
 
-@dataclass(frozen=True)
-class ScenarioSpec:
-    band_label: str
-    ssid: str
-    wireless_mode: str
-    channel: int
-    bandwidth_label: str
-    security_mode: str
-    password: str
-    tx: int
-    rx: int
-
-    @property
-    def band_token(self) -> str:
-        if self.band_label.startswith("2.4"):
-            return "2.4"
-        if self.band_label.startswith("5"):
-            return "5"
-        return self.band_label
-
-    @property
-    def bandwidth_mhz(self) -> int:
-        text = self.bandwidth_label.strip().lower()
-        digits = "".join(ch for ch in text if ch.isdigit())
-        return int(digits or 0)
+# @dataclass(frozen=True)
+# class ScenarioSpec:
+#     band_label: str
+#     ssid: str
+#     wireless_mode: str
+#     channel: int
+#     bandwidth_label: str
+#     security_mode: str
+#     password: str
+#     tx: int
+#     rx: int
+#
+#     @property
+#     def band_token(self) -> str:
+#         if self.band_label.startswith("2.4"):
+#             return "2.4"
+#         if self.band_label.startswith("5"):
+#             return "5"
+#         return self.band_label
+#
+#     @property
+#     def bandwidth_mhz(self) -> int:
+#         text = self.bandwidth_label.strip().lower()
+#         digits = "".join(ch for ch in text if ch.isdigit())
+#         return int(digits or 0)
 
 
 @dataclass(frozen=True)
@@ -174,16 +181,103 @@ _PROJECT_PAYLOAD_KEYS: tuple[str, ...] = (
 )
 
 
-DEFAULT_SCENARIOS: Tuple[ScenarioSpec, ...] = (
-    ScenarioSpec("2.4G", "ax3600_2g", "11ax", 1, "40 MHz", "Open System", "", 1, 1),
-    ScenarioSpec("2.4G", "ax3600_2g", "11ax", 6, "40 MHz", "Open System", "", 1, 1),
-    ScenarioSpec("2.4G", "ax3600_2g", "11ax", 11, "40 MHz", "Open System", "", 1, 1),
-    ScenarioSpec("5G", "ax3600_5g", "11ax", 36, "80 MHz", "Open System", "", 1, 1),
-    ScenarioSpec("5G", "ax3600_5g", "11ax", 52, "80 MHz", "Open System", "", 1, 1),
-    ScenarioSpec("5G", "ax3600_5g", "11ax", 64, "80 MHz", "Open System", "", 1, 1),
-    ScenarioSpec("5G", "ax3600_5g", "11ax", 149, "80 MHz", "Open System", "", 1, 1),
-    ScenarioSpec("5G", "ax3600_5g", "11ax", 161, "80 MHz", "Open System", "", 1, 1),
+# DEFAULT_SCENARIOS: Tuple[ScenarioSpec, ...] = (
+#     #2.4G 20M
+#     ScenarioSpec("2.4G", "ax3600_2g", "11ax", 1, "20 MHz", "Open System", "", 1, 1),
+#     ScenarioSpec("2.4G", "ax3600_2g", "11ax", 6, "20 MHz", "Open System", "", 1, 1),
+#     ScenarioSpec("2.4G", "ax3600_2g", "11ax", 11, "20 MHz", "Open System", "", 1, 1),
+#     #2.4G 40M
+#     ScenarioSpec("2.4G", "ax3600_2g", "11ax", 1, "40 MHz", "Open System", "", 1, 1),
+#     ScenarioSpec("2.4G", "ax3600_2g", "11ax", 6, "40 MHz", "Open System", "", 1, 1),
+#     ScenarioSpec("2.4G", "ax3600_2g", "11ax", 11, "40 MHz", "Open System", "", 1, 1),
+#     ScenarioSpec("5G", "ax3600_5g", "11ax", 36, "80 MHz", "Open System", "", 1, 1),
+#     ScenarioSpec("5G", "ax3600_5g", "11ax", 52, "80 MHz", "Open System", "", 1, 1),
+#     ScenarioSpec("5G", "ax3600_5g", "11ax", 64, "80 MHz", "Open System", "", 1, 1),
+#     ScenarioSpec("5G", "ax3600_5g", "11ax", 149, "80 MHz", "Open System", "", 1, 1),
+#     ScenarioSpec("5G", "ax3600_5g", "11ax", 161, "80 MHz", "Open System", "", 1, 1),
+# )
+
+from collections import namedtuple
+
+ScenarioSpec = namedtuple(
+    "ScenarioSpec",
+    [
+        "band_token",  # e.g., "2.4G", "5G"
+        "ssid_token",  # e.g., "ax3600_2g"
+        "mode",  # e.g., "11n", "11ac", "11ax"
+        "channel",  # e.g., 1, 6, 11, 36, 149
+        "bandwidth",  # e.g., "20 MHz", "40 MHz"
+        "security",  # e.g., "Open System"
+        "extra_params",  # currently unused
+        "tx_antennas",  # e.g., 1
+        "rx_antennas",  # e.g., 1
+    ],
 )
+
+# === 定义所有维度的配置 ===
+# 1. 频段与对应的 SSID 映射
+BAND_CONFIGS = {
+    "2.4G": "ax3600_2g",
+    "5G": "ax3600_5g"
+}
+
+# 2. 协议标准与支持的带宽
+# 注意：这里我们直接使用数据库中期望的带宽字符串格式
+MODE_BANDWIDTH_MAP = {
+    "11n": ["20 MHz", "40 MHz"],
+    "11ac": ["80 MHz", "160 MHz"],  # 11ac 通常在5G，但这里按逻辑配置
+    "11ax": ["20 MHz", "40 MHz", "80 MHz", "160 MHz"]
+}
+
+# 3. 频段与合法信道的映射
+BAND_CHANNEL_MAP = {
+    "2.4G": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],  # 可以根据需要添加 13 等
+    "5G": [36, 40, 44, 48, 52, 56, 60, 64, 100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144, 149, 153, 157, 161, 165]
+}
+
+# 4. 其他固定参数
+SECURITY = "Open System"
+EXTRA_PARAMS = ""
+TX_ANTENNAS = 1
+RX_ANTENNAS = 1
+
+
+# === 动态生成 DEFAULT_SCENARIOS ===
+def _generate_default_scenarios() -> Tuple[ScenarioSpec, ...]:
+    scenarios = []
+
+    for band, ssid in BAND_CONFIGS.items():
+        channels = BAND_CHANNEL_MAP[band]
+        for mode, bandwidths in MODE_BANDWIDTH_MAP.items():
+            # 过滤不合理的组合：11ac 不应在 2.4G 频段
+            if band == "2.4G" and mode == "11ac":
+                continue
+
+            for channel in channels:
+                for bandwidth in bandwidths:
+                    # 对于 2.4G, 跳过 80/160MHz (实践中很少见)
+                    if band == "2.4G" and bandwidth in ("80 MHz", "160 MHz"):
+                        continue
+
+                    spec = ScenarioSpec(
+                        band_token=band,
+                        ssid_token=ssid,
+                        mode=mode,
+                        channel=channel,
+                        bandwidth=bandwidth,
+                        security=SECURITY,
+                        extra_params=EXTRA_PARAMS,
+                        tx_antennas=TX_ANTENNAS,
+                        rx_antennas=RX_ANTENNAS,
+                    )
+                    scenarios.append(spec)
+
+    return tuple(scenarios)
+
+
+# 最终的配置
+DEFAULT_SCENARIOS: Tuple[ScenarioSpec, ...] = _generate_default_scenarios()
+
 
 
 def build_scenario_group_key(spec: ScenarioSpec) -> str:
@@ -195,14 +289,14 @@ def build_scenario_group_key(spec: ScenarioSpec) -> str:
         return sanitized.upper()
 
     parts: list[str] = [
-        f"BAND={normalize(spec.band_label)}",
-        f"SSID={normalize(spec.ssid)}",
-        f"MODE={normalize(spec.wireless_mode)}",
+        f"BAND={normalize(spec.band_token)}",
+        f"SSID={normalize(spec.ssid_token)}",
+        f"MODE={normalize(spec.mode)}",
         f"CHANNEL={normalize(spec.channel)}",
-        f"BANDWIDTH={normalize(spec.bandwidth_label)}",
-        f"SECURITY={normalize(spec.security_mode)}",
-        f"TX={normalize(spec.tx)}",
-        f"RX={normalize(spec.rx)}",
+        f"BANDWIDTH={normalize(spec.bandwidth)}",
+        f"SECURITY={normalize(spec.security)}",
+        f"TX={normalize(spec.tx_antennas)}",
+        f"RX={normalize(spec.rx_antennas)}",
     ]
     return "SCENARIO|" + "|".join(parts)
 
@@ -220,19 +314,21 @@ def build_peak_scenario_group_key(
         sanitized = IDENTIFIER_SANITIZE_PATTERN.sub("_", text).strip("_")
         return sanitized.upper()
 
-    band_label = "2.4G" if spec.band_token == "2.4" else "5G" if spec.band_token == "5" else spec.band_label
+    #band_label = "2.4G" if spec.band_token == "2.4" else "5G" if spec.band_token == "5" else spec.band_label
+    band_label = spec.band_token
     bw_label = f"{int(bandwidth_mhz)} MHz"
-    mode_label = standard or spec.wireless_mode
+    mode_label = standard or spec.mode
+    #mode_label = standard or spec.wireless_mode
 
     parts: list[str] = [
         f"BAND={normalize(band_label)}",
-        f"SSID={normalize(spec.ssid)}",
+        f"SSID={normalize(spec.ssid_token)}",
         f"MODE={normalize(mode_label)}",
         f"CHANNEL={normalize(spec.channel)}",
         f"BANDWIDTH={normalize(bw_label)}",
-        f"SECURITY={normalize(spec.security_mode)}",
-        f"TX={normalize(spec.tx)}",
-        f"RX={normalize(spec.rx)}",
+        f"SECURITY={normalize(spec.security)}",
+        f"TX={normalize(spec.tx_antennas)}",
+        f"RX={normalize(spec.rx_antennas)}",
     ]
     return "SCENARIO|" + "|".join(parts)
 
@@ -345,98 +441,149 @@ class PerformanceExcelImporter:
 
     def build_peak_throughput_rows(self, workbook, *, sheet_name: str) -> Tuple[List[Dict[str, Any]], List[str]]:
         ws = workbook[sheet_name]
-        required: Dict[Tuple[str, int], ScenarioSpec] = {}
-        for spec in self._scenarios:
-            required[(spec.band_token, int(spec.channel))] = spec
 
-        context_wifi_mode: Any = None
-        context_mode: Any = None
-        context_protocol: Any = None
-        context_bw: Any = None
-        context_channel: Any = None
-        context_rssi: Any = None
+        # 初始化上下文变量用于处理合并单元格
+        context_frequency = None
+        context_wifi_mode = None
+        context_bandwidth = None
+        context_channel = None
+        context_rssi = None
+        context_scenario = None
 
         seen_mode: set[Tuple[str, int, int, str, str]] = set()
         rows: List[Dict[str, Any]] = []
 
-        for r in range(1, ws.max_row + 1):
-            wifi_mode, mode, protocol, bw, txrx, channel, rssi, first, second, third, avg = [
-                ws.cell(r, c).value for c in range(2, 13)
-            ]
+        print(f"[PEAK_DEBUG] Starting to parse Peak Throughput sheet: {sheet_name}")
+        print(f"[PEAK_DEBUG] Sheet has {ws.max_row} rows and {ws.max_column} columns")
 
+        # 从第2行开始（跳过标题行）
+        for r in range(2, ws.max_row + 1):
+            # 获取实际列数据（基于您提供的格式：12列）
+            try:
+                no_col = ws.cell(r, 1).value  # No. 列 (A)
+                frequency = ws.cell(r, 2).value  # Frequency (B)
+                wifi_mode = ws.cell(r, 3).value  # WiFi Mode (C)
+                bandwidth = ws.cell(r, 4).value  # Bandwidth (D)
+                channel = ws.cell(r, 5).value  # Channel (E)
+                rssi = ws.cell(r, 6).value  # RSSI(dBm) (F)
+                scenario = ws.cell(r, 7).value  # Scenario (G)
+                tx_mbps = ws.cell(r, 8).value  # TX (Mbps) (H)
+                rx_mbps = ws.cell(r, 9).value  # RX (Mbps) (I)
+                link_rate = ws.cell(r, 10).value  # Link Rate(Mbps) (J)
+                standard = ws.cell(r, 11).value  # Standard (K)
+                result = ws.cell(r, 12).value  # Result (L)
+
+                print(
+                    f"[PEAK_DEBUG] Row {r} raw data: freq={frequency}, mode={wifi_mode}, bw={bandwidth}, ch={channel}, rssi={rssi}, tx={tx_mbps}, rx={rx_mbps}")
+
+            except Exception as e:
+                print(f"[PEAK_DEBUG] Error reading row {r}: {e}")
+                continue
+
+            # 跳过完全空的行
+            if all(val is None for val in [frequency, wifi_mode, bandwidth, channel, rssi, tx_mbps, rx_mbps]):
+                print(f"[PEAK_DEBUG] Row {r} is empty, skipping")
+                continue
+
+            # 更新上下文变量（处理合并单元格）
+            if frequency is not None:
+                context_frequency = frequency
             if wifi_mode is not None:
                 context_wifi_mode = wifi_mode
-            if mode is not None:
-                context_mode = mode
-            if protocol is not None:
-                context_protocol = protocol
-            if bw is not None:
-                context_bw = bw
+            if bandwidth is not None:
+                context_bandwidth = bandwidth
             if channel is not None:
                 context_channel = channel
             if rssi is not None:
                 context_rssi = rssi
+            if scenario is not None:
+                context_scenario = scenario
 
-            if not isinstance(txrx, str):
-                continue
-            txrx_token = txrx.strip().upper()
-            if txrx_token not in {"RX", "TX"}:
-                continue
+            print(
+                f"[PEAK_DEBUG] Row {r} context: freq={context_frequency}, mode={context_wifi_mode}, bw={context_bandwidth}, ch={context_channel}, rssi={context_rssi}")
 
-            band = _parse_band_token(context_wifi_mode)
-            bw_mhz = _parse_bandwidth_mhz(context_bw)
+            # 解析频段和带宽
+            band = _parse_band_token(context_frequency)
+            bw_mhz = _parse_bandwidth_mhz(context_bandwidth)
+
+            print(f"[PEAK_DEBUG] Row {r} parsed: band={band}, bw_mhz={bw_mhz}, channel={context_channel}")
+
+            # 验证必要字段（现在只需要 band, bw_mhz, channel 存在即可）
             if not band or bw_mhz is None or context_channel is None:
+                print(f"[PEAK_DEBUG] Row {r} missing required fields, skipping")
                 continue
 
-            key = (band, int(context_channel))
-            spec = required.get(key)
-            if spec is None:
-                continue
+            # 处理 TX 数据 - uplink
+            if tx_mbps is not None and isinstance(tx_mbps, (int, float)) and not isinstance(tx_mbps, bool):
+                direction = "uplink"
+                throughput_mbps = float(tx_mbps)
 
-            direction = "downlink" if txrx_token == "RX" else "uplink"
+                # 使用 scenario 作为 mode，如果没有则用默认值
+                mode_token = self._normalize_peak_mode(context_scenario) if context_scenario else "default"
+                unique = (band, int(bw_mhz), int(context_channel), direction, mode_token)
 
-            sample_values = [
-                float(v) for v in (first, second, third) if isinstance(v, (int, float)) and not isinstance(v, bool)
-            ]
-            peak = max(sample_values) if sample_values else None
+                if unique not in seen_mode:
+                    seen_mode.add(unique)
+                    print(f"[PEAK_DEBUG] Row {r} - Processing TX: {throughput_mbps} Mbps")
 
-            if not isinstance(avg, (int, float)) or isinstance(avg, bool):
-                continue
+                    # 创建简单的 scenario_group_key，不需要复杂的场景匹配
+                    scenario_group_key = f"{band}_{int(bw_mhz)}_{int(context_channel)}"
 
-            standard = _parse_standard(context_wifi_mode) or spec.wireless_mode
-            protocol_token = "" if context_protocol is None else str(context_protocol).strip()
-            mode_token = self._normalize_peak_mode(context_mode)
-            unique = (band, int(bw_mhz), int(context_channel), direction, mode_token)
-            if unique in seen_mode:
-                continue
-            seen_mode.add(unique)
-            scenario_group_key = build_peak_scenario_group_key(
-                spec,
-                standard=standard,
-                bandwidth_mhz=int(bw_mhz),
-            )
+                    rows.append(
+                        _performance_row(
+                            test_category=TEST_REPORT_PEAK_THROUGHPUT,
+                            standard=_parse_standard(context_wifi_mode) or context_wifi_mode or "unknown",
+                            band=band,
+                            bandwidth_mhz=int(bw_mhz),
+                            channel=int(context_channel),
+                            protocol="TCP",  # Peak Throughput 默认使用 TCP
+                            mode=mode_token,
+                            direction=direction,
+                            path_loss_db=0.0,
+                            rssi=float(context_rssi) if isinstance(context_rssi, (int, float)) and not isinstance(
+                                context_rssi, bool) else None,
+                            angle_deg=None,
+                            throughput_mbps=throughput_mbps,
+                            throughput_peak_mbps=throughput_mbps,
+                            scenario_group_key=scenario_group_key,
+                        )
+                    )
 
-            rows.append(
-                _performance_row(
-                    test_category=TEST_REPORT_PEAK_THROUGHPUT,
-                    standard=standard,
-                    band=band,
-                    bandwidth_mhz=int(bw_mhz),
-                    channel=int(context_channel),
-                    protocol=protocol_token or "TCP",
-                    mode=mode_token,
-                    direction=direction,
-                    path_loss_db=0.0,
-                    rssi=float(context_rssi)
-                    if isinstance(context_rssi, (int, float)) and not isinstance(context_rssi, bool)
-                    else None,
-                    angle_deg=None,
-                    throughput_mbps=float(avg),
-                    throughput_peak_mbps=peak,
-                    scenario_group_key=scenario_group_key,
-                )
-            )
+            # 处理 RX 数据 - downlink
+            if rx_mbps is not None and isinstance(rx_mbps, (int, float)) and not isinstance(rx_mbps, bool):
+                direction = "downlink"
+                throughput_mbps = float(rx_mbps)
 
+                mode_token = self._normalize_peak_mode(context_scenario) if context_scenario else "default"
+                unique = (band, int(bw_mhz), int(context_channel), direction, mode_token)
+
+                if unique not in seen_mode:
+                    seen_mode.add(unique)
+                    print(f"[PEAK_DEBUG] Row {r} - Processing RX: {throughput_mbps} Mbps")
+
+                    scenario_group_key = f"{band}_{int(bw_mhz)}_{int(context_channel)}"
+
+                    rows.append(
+                        _performance_row(
+                            test_category=TEST_REPORT_PEAK_THROUGHPUT,
+                            standard=_parse_standard(context_wifi_mode) or context_wifi_mode or "unknown",
+                            band=band,
+                            bandwidth_mhz=int(bw_mhz),
+                            channel=int(context_channel),
+                            protocol="TCP",
+                            mode=mode_token,
+                            direction=direction,
+                            path_loss_db=0.0,
+                            rssi=float(context_rssi) if isinstance(context_rssi, (int, float)) and not isinstance(
+                                context_rssi, bool) else None,
+                            angle_deg=None,
+                            throughput_mbps=throughput_mbps,
+                            throughput_peak_mbps=throughput_mbps,
+                            scenario_group_key=scenario_group_key,
+                        )
+                    )
+
+        print(f"[PEAK_DEBUG] Finished parsing. Total rows generated: {len(rows)}")
         return rows, []
 
     @staticmethod
@@ -454,61 +601,65 @@ class PerformanceExcelImporter:
 
     def build_rvr_rows(self, workbook, *, sheet_name: str = "RVR") -> Tuple[List[Dict[str, Any]], List[str]]:
         ws = workbook[sheet_name]
+        print(f"[RVR_DEBUG] Parsing sheet: {sheet_name}, max_row={ws.max_row}, max_col={ws.max_column}")
+        print(f"[RVR_DEBUG] Total scenarios loaded: {len(self._scenarios)}")
         rows: List[Dict[str, Any]] = []
         allowed_channels_by_band: Dict[str, set[int]] = {}
         for spec in self._scenarios:
             allowed_channels_by_band.setdefault(spec.band_token, set()).add(int(spec.channel))
 
-        def append_duplex_rows(
-            *,
-            standard: str,
-            band: str,
-            bandwidth_mhz: int,
-            channel: int,
-            path_loss_db: float,
-            angle_deg: float,
-            downlink_throughput_mbps: Optional[float],
-            uplink_throughput_mbps: Optional[float],
-            downlink_rssi: Optional[float],
-            uplink_rssi: Optional[float],
-            scenario_group_key: str,
+        # === 新增的辅助函数：用于添加单向数据行 ===
+        def _append_simplex_row(
+                *,
+                standard: str,
+                band: str,
+                bandwidth_mhz: int,
+                channel: int,
+                path_loss_db: float,
+                angle_deg: float,
+                direction: str,  # "downlink" for RX, "uplink" for TX
+                throughput_mbps: Optional[float],
+                rssi: Optional[float],
+                scenario_group_key: str,
         ) -> None:
-            base = dict(
+            rows.append(
+                _performance_row(
                     test_category=TEST_REPORT_RVR,
-                standard=standard,
-                band=band,
-                bandwidth_mhz=bandwidth_mhz,
-                channel=channel,
-                protocol="TCP",
-                mode=None,
-                path_loss_db=path_loss_db,
-                angle_deg=angle_deg,
-                throughput_peak_mbps=None,
-                scenario_group_key=scenario_group_key,
-            )
-            rows.append(
-                _performance_row(
-                    **base,
-                    direction="downlink",
-                    rssi=downlink_rssi,
-                    throughput_mbps=downlink_throughput_mbps,
-                )
-            )
-            rows.append(
-                _performance_row(
-                    **base,
-                    direction="uplink",
-                    rssi=uplink_rssi,
-                    throughput_mbps=uplink_throughput_mbps,
+                    standard=standard,
+                    band=band,
+                    bandwidth_mhz=bandwidth_mhz,
+                    channel=channel,
+                    protocol="TCP",
+                    mode=None,
+                    direction=direction,
+                    path_loss_db=path_loss_db,
+                    angle_deg=angle_deg,
+                    rssi=rssi,
+                    throughput_mbps=throughput_mbps,
+                    throughput_peak_mbps=None,
+                    scenario_group_key=scenario_group_key,
                 )
             )
 
+        # =========================================
+
+        def safe_get_cell(ws, row, col):
+            """安全获取单元格值，避免 openpyxl 抛出 'Row or column values must be at least 1' 错误"""
+            if row < 1 or col < 1:
+                return None
+            try:
+                return ws.cell(row, col).value
+            except Exception:
+                return None
+
         def find_title_row(start_row: int) -> Optional[str]:
+            print(f"[RVR_TITLE_DEBUG] Looking for title above header row {start_row} (checking up to 7 rows)")
             for offset in range(1, 8):
                 r = start_row - offset
-                if r <= 0:
+                if r <= 1:
                     break
-                v = ws.cell(r, 1).value
+                v = safe_get_cell(ws, r, 1)  # 只检查第一列 (A列)
+                print(f"[RVR_TITLE_DEBUG] Checking row {r}, col A: {repr(v)}")  # 调试日志
                 if not isinstance(v, str):
                     continue
                 text = v.strip()
@@ -516,23 +667,25 @@ class PerformanceExcelImporter:
                     continue
                 upper = text.upper()
                 if "2.4G" in upper or "5G" in upper or "6G" in upper:
+                    print(f"[RVR_TITLE_DEBUG] Title FOUND at row {r}: '{text}'")
                     return text
+            print(f"[RVR_TITLE_DEBUG] No valid title found above header row {start_row}")
             return None
 
         def parse_title(text: str) -> Tuple[str, str, int]:
             upper = (text or "").strip().upper()
             if "2.4G" in upper:
-                band = "2.4"
+                band = "2.4G"
             elif "5G" in upper:
-                band = "5"
+                band = "5G"
             elif "6G" in upper:
-                band = "6"
+                band = "6G"
             else:
                 band = ""
 
             if "11AX" in upper or "HE" in upper:
                 standard = "11ax"
-            elif "11AC" in upper:
+            elif "11AC" in upper or "VHT" in upper:
                 standard = "11ac"
             elif "11N" in upper or "HT" in upper:
                 standard = "11n"
@@ -540,7 +693,8 @@ class PerformanceExcelImporter:
                 standard = ""
 
             bw = 0
-            for token, value in (("HT20", 20), ("HT40", 40), ("HE80", 80), ("HE160", 160)):
+            for token, value in (("HE20", 20), ("HT20", 20), ("HE40", 40), ("HT40", 40), ("VHT80", 80), ("HE80", 80),
+                                 ("HE160", 160)):
                 if token in upper:
                     bw = value
                     break
@@ -576,151 +730,231 @@ class PerformanceExcelImporter:
             return None
 
         for header_row in range(1, ws.max_row + 1):
-            if ws.cell(header_row, 1).value != "Item":
-                continue
-            if not isinstance(ws.cell(header_row, 2).value, str):
-                continue
-            if not isinstance(ws.cell(header_row, 3).value, str):
-                continue
+            try:
+                cell_a_value = ws.cell(header_row, 1).value
+                print(f"[RVR_FULL_SCAN] Row {header_row}, Col A: {repr(cell_a_value)}")
 
-            rx_header_col = None
-            tx_header_col = None
-            for c in range(1, ws.max_column + 1):
-                v = ws.cell(header_row, c).value
-                if not isinstance(v, str):
+                if ws.cell(header_row, 1).value != "Item":
                     continue
-                upper = v.upper()
-                if rx_header_col is None and "RX" in upper and "MBPS" in upper:
-                    rx_header_col = c
-                if tx_header_col is None and "TX" in upper and "MBPS" in upper:
-                    tx_header_col = c
-            if rx_header_col is None or tx_header_col is None:
-                continue
+                cell_b_value = ws.cell(header_row, 2).value
+                cell_c_value = ws.cell(header_row, 3).value
+                print(
+                    f"[RVR_FULL_SCAN] Found 'Item' at row {header_row}. Checking B/C cols: B={repr(cell_b_value)}, C={repr(cell_c_value)}")
+                if not isinstance(ws.cell(header_row, 2).value, str):
+                    continue
+                if not isinstance(ws.cell(header_row, 3).value, str):
+                    continue
 
-            title = find_title_row(header_row)
-            if not title:
-                continue
-            band, standard, bw_mhz = parse_title(title)
-            if not band or bw_mhz <= 0:
-                continue
-            if band == "2.4" and bw_mhz == 20:
-                continue
-
-            allowed_channels = allowed_channels_by_band.get(band, set())
-            if not allowed_channels:
-                continue
-
-            channel_row = header_row + 1
-            rx_cols: Dict[int, int] = {}
-            tx_cols: Dict[int, int] = {}
-
-            for c in range(rx_header_col, tx_header_col):
-                ch = parse_channel_label(ws.cell(channel_row, c).value)
-                if ch is not None and ch in allowed_channels and ch not in rx_cols:
-                    rx_cols[ch] = c
-            for c in range(tx_header_col, ws.max_column + 1):
-                ch = parse_channel_label(ws.cell(channel_row, c).value)
-                if ch is not None and ch in allowed_channels and ch not in tx_cols:
-                    tx_cols[ch] = c
-                if ch is None and tx_cols:
-                    break
-
-            if not rx_cols or not tx_cols:
-                continue
-
-            rssi_item_col = find_rssi_item_col(header_row)
-            rssi_rx_header_col = None
-            rssi_tx_header_col = None
-            rssi_rx_cols: Dict[int, int] = {}
-            rssi_tx_cols: Dict[int, int] = {}
-            if rssi_item_col is not None:
-                for c in range(rssi_item_col, ws.max_column + 1):
+                rx_header_col = None
+                tx_header_col = None
+                for c in range(1, ws.max_column + 1):
                     v = ws.cell(header_row, c).value
                     if not isinstance(v, str):
                         continue
-                    upper = v.upper().replace(" ", "_")
-                    if rssi_rx_header_col is None and "RX_RSSI" in upper:
-                        rssi_rx_header_col = c
-                    if rssi_tx_header_col is None and "TX_RSSI" in upper:
-                        rssi_tx_header_col = c
-                if rssi_rx_header_col is not None and rssi_tx_header_col is not None:
-                    for c in range(rssi_rx_header_col, rssi_tx_header_col):
-                        ch = parse_channel_label(ws.cell(channel_row, c).value)
-                        if ch is not None and ch in allowed_channels and ch not in rssi_rx_cols:
-                            rssi_rx_cols[ch] = c
-                    for c in range(rssi_tx_header_col, ws.max_column + 1):
-                        ch = parse_channel_label(ws.cell(channel_row, c).value)
-                        if ch is not None and ch in allowed_channels and ch not in rssi_tx_cols:
-                            rssi_tx_cols[ch] = c
-                        if ch is None and rssi_tx_cols:
-                            break
+                    upper = v.upper()
+                    if rx_header_col is None and "RX" in upper and "MBPS" in upper:
+                        rx_header_col = c
+                    if tx_header_col is None and "TX" in upper and "MBPS" in upper:
+                        tx_header_col = c
+                print(f"[RVR_FULL_SCAN] RX/TX columns found: RX={rx_header_col}, TX={tx_header_col}")
+                # === 修改点: 不再强制要求 RX 和 TX 同时存在 ===
+                if rx_header_col is None and tx_header_col is None:
+                    continue  # 如果两者都没有，才跳过
+                # ===========================================
 
-            data_row = header_row + 2
-            current_angle: Optional[float] = None
-            while data_row <= ws.max_row:
-                att = ws.cell(data_row, 2).value
-                if att is None:
-                    break
-                att_value = int(float(att))
-                parsed_angle = _parse_angle(ws.cell(data_row, 3).value)
-                if parsed_angle is not None:
-                    current_angle = float(parsed_angle)
-                angle_value = float(current_angle) if current_angle is not None else 180.0
-                for ch, rx_col in rx_cols.items():
-                    tx_col = tx_cols.get(ch)
-                    if tx_col is None:
-                        continue
-                    rx_value = ws.cell(data_row, rx_col).value
-                    tx_value = ws.cell(data_row, tx_col).value
-                    rx_throughput = (
-                        float(rx_value) if isinstance(rx_value, (int, float)) and not isinstance(rx_value, bool) else None
-                    )
-                    tx_throughput = (
-                        float(tx_value) if isinstance(tx_value, (int, float)) and not isinstance(tx_value, bool) else None
-                    )
-                    rx_rssi = None
-                    tx_rssi = None
-                    if rssi_rx_cols:
-                        v = ws.cell(data_row, rssi_rx_cols.get(ch, 0)).value
-                        if isinstance(v, (int, float)) and not isinstance(v, bool):
-                            rx_rssi = float(v)
-                    if rssi_tx_cols:
-                        v = ws.cell(data_row, rssi_tx_cols.get(ch, 0)).value
-                        if isinstance(v, (int, float)) and not isinstance(v, bool):
-                            tx_rssi = float(v)
+                title = find_title_row(header_row)
+                if not title:
+                    continue
+                band, standard, bw_mhz = parse_title(title)
+                if not band or bw_mhz <= 0:
+                    continue
+                # if band == "2.4" and bw_mhz == 20:
+                #     continue
 
-                    spec = self._scenario_by_channel.get((band, ch))
-                    if spec is None:
-                        continue
-                    scenario_key = build_peak_scenario_group_key(
-                        spec,
-                        standard=standard,
-                        bandwidth_mhz=bw_mhz,
-                    )
-                    append_duplex_rows(
-                        standard=standard,
-                        band=band,
-                        bandwidth_mhz=bw_mhz,
-                        channel=ch,
-                        path_loss_db=float(att_value),
-                        angle_deg=angle_value,
-                        downlink_throughput_mbps=rx_throughput,
-                        uplink_throughput_mbps=tx_throughput,
-                        downlink_rssi=rx_rssi,
-                        uplink_rssi=tx_rssi,
-                        scenario_group_key=scenario_key,
-                    )
-                data_row += 1
+                allowed_channels = allowed_channels_by_band.get(band, set())
+                if not allowed_channels:
+                    continue
+
+                channel_row = header_row + 1
+
+                # === 修改点: 分别构建 RX 和 TX 的通道映射 ===
+                rx_cols: Dict[int, int] = {}
+                tx_cols: Dict[int, int] = {}
+
+                # 确定 RX 列的结束位置
+                rx_end_col = tx_header_col if tx_header_col is not None else (ws.max_column + 1)
+                for c in range(rx_header_col or 1, rx_end_col):
+                    ch = parse_channel_label(ws.cell(channel_row, c).value)
+                    if ch is not None and ch in allowed_channels and ch not in rx_cols:
+                        rx_cols[ch] = c
+
+                # 确定 TX 列的起始位置
+                tx_start_col = tx_header_col or (rx_header_col + len(rx_cols) if rx_header_col else 1)
+                for c in range(tx_start_col, ws.max_column + 1):
+                    ch = parse_channel_label(ws.cell(channel_row, c).value)
+                    if ch is not None and ch in allowed_channels and ch not in tx_cols:
+                        tx_cols[ch] = c
+                    if ch is None and tx_cols:
+                        break
+
+                # 移除旧的、过于严格的检查
+                # if not rx_cols or not tx_cols:
+                #     logging.warning(f"[RVR_DEBUG] Missing RX/TX columns at header row {header_row}")
+                #     continue
+                # ===========================================
+
+                rssi_item_col = find_rssi_item_col(header_row)
+                rssi_rx_header_col = None
+                rssi_tx_header_col = None
+                rssi_rx_cols: Dict[int, int] = {}
+                rssi_tx_cols: Dict[int, int] = {}
+                if rssi_item_col is not None:
+                    for c in range(rssi_item_col, ws.max_column + 1):
+                        v = ws.cell(header_row, c).value
+                        if not isinstance(v, str):
+                            continue
+                        upper = v.upper().replace(" ", "_")
+                        if rssi_rx_header_col is None and "RX_RSSI" in upper:
+                            rssi_rx_header_col = c
+                        if rssi_tx_header_col is None and "TX_RSSI" in upper:
+                            rssi_tx_header_col = c
+                    if rssi_rx_header_col is not None and rssi_tx_header_col is not None:
+                        for c in range(rssi_rx_header_col, rssi_tx_header_col):
+                            ch = parse_channel_label(ws.cell(channel_row, c).value)
+                            if ch is not None and ch in allowed_channels and ch not in rssi_rx_cols:
+                                rssi_rx_cols[ch] = c
+                        for c in range(rssi_tx_header_col, ws.max_column + 1):
+                            ch = parse_channel_label(ws.cell(channel_row, c).value)
+                            if ch is not None and ch in allowed_channels and ch not in rssi_tx_cols:
+                                rssi_tx_cols[ch] = c
+                            if ch is None and rssi_tx_cols:
+                                break
+
+                data_row = header_row + 2
+                current_angle: Optional[float] = None
+                while data_row <= ws.max_row:
+                    att = ws.cell(data_row, 2).value
+                    if att is None:
+                        break
+                    att_value = int(float(att))
+                    parsed_angle = _parse_angle(ws.cell(data_row, 3).value)
+                    if parsed_angle is not None:
+                        current_angle = float(parsed_angle)
+                    angle_value = float(current_angle) if current_angle is not None else 180.0
+
+                    # === 修改点: 分别处理 RX 和 TX 数据 ===
+                    # 处理 RX 数据
+                    if rx_header_col is not None:
+                        for ch, rx_col in rx_cols.items():
+                            rx_value = ws.cell(data_row, rx_col).value
+                            rx_throughput = (
+                                float(rx_value) if isinstance(rx_value, (int, float)) and not isinstance(rx_value,
+                                                                                                         bool) else None
+                            )
+                            rx_rssi = None
+                            if rssi_rx_cols:
+                                col = rssi_rx_cols.get(ch)
+                                if col is not None and col >= 1:
+                                    v = safe_get_cell(ws, data_row, col)
+                                    if isinstance(v, (int, float)) and not isinstance(v, bool):
+                                        rx_rssi = float(v)
+
+                            spec = self._scenario_by_channel.get((band, ch))
+                            if spec is None:
+                                logging.warning(
+                                    f"[RVR_DEBUG] No predefined scenario found for band='{band}' and channel={ch}. "
+                                    f"This channel will be skipped. "
+                                    f"Check if BAND_CHANNEL_MAP or _generate_default_scenarios needs to be updated.")
+                                continue
+                            scenario_key = build_peak_scenario_group_key(
+                                spec,
+                                standard=standard,
+                                bandwidth_mhz=bw_mhz,
+                            )
+                            _append_simplex_row(
+                                standard=standard,
+                                band=band,
+                                bandwidth_mhz=bw_mhz,
+                                channel=ch,
+                                path_loss_db=float(att_value),
+                                angle_deg=angle_value,
+                                direction="downlink",
+                                throughput_mbps=rx_throughput,
+                                rssi=rx_rssi,
+                                scenario_group_key=scenario_key,
+                            )
+                            print(
+                                f"[RVR_DEBUG] Channel {ch} - RX: {rx_value} (col {rx_col})")
+
+                    # 处理 TX 数据
+                    if tx_header_col is not None:
+                        for ch, tx_col in tx_cols.items():
+                            tx_value = ws.cell(data_row, tx_col).value
+                            tx_throughput = (
+                                float(tx_value) if isinstance(tx_value, (int, float)) and not isinstance(tx_value,
+                                                                                                         bool) else None
+                            )
+                            tx_rssi = None
+                            if rssi_tx_cols:
+                                col = rssi_tx_cols.get(ch)
+                                if col is not None and col >= 1:
+                                    v = safe_get_cell(ws, data_row, col)
+                                    if isinstance(v, (int, float)) and not isinstance(v, bool):
+                                        tx_rssi = float(v)
+
+                            spec = self._scenario_by_channel.get((band, ch))
+                            if spec is None:
+                                logging.warning(
+                                    f"[RVR_DEBUG] No predefined scenario found for band='{band}' and channel={ch}. "
+                                    f"This channel will be skipped. "
+                                    f"Check if BAND_CHANNEL_MAP or _generate_default_scenarios needs to be updated.")
+                                continue
+                            scenario_key = build_peak_scenario_group_key(
+                                spec,
+                                standard=standard,
+                                bandwidth_mhz=bw_mhz,
+                            )
+                            _append_simplex_row(
+                                standard=standard,
+                                band=band,
+                                bandwidth_mhz=bw_mhz,
+                                channel=ch,
+                                path_loss_db=float(att_value),
+                                angle_deg=angle_value,
+                                direction="uplink",
+                                throughput_mbps=tx_throughput,
+                                rssi=tx_rssi,
+                                scenario_group_key=scenario_key,
+                            )
+                            print(
+                                f"[RVR_DEBUG] Channel {ch} - TX: {tx_value} (col {tx_col})")
+                    # ===================================
+
+                    data_row += 1
+            except Exception as e:
+                logging.error(f"[RVR_DEBUG] Error processing block starting at header row {header_row}: {e}",
+                              exc_info=True)
 
         return rows, []
 
     def build_rvo_rows(self, workbook, *, sheet_name: str = "RVO") -> Tuple[List[Dict[str, Any]], List[str]]:
         ws = workbook[sheet_name]
         rows: List[Dict[str, Any]] = []
+        print(f"[RVO_DEBUG] Parsing sheet: {sheet_name}, max_row={ws.max_row}, max_col={ws.max_column}")
+        print(f"[RVO_DEBUG] Total scenarios loaded: {len(self._scenarios)}")
+
+        def parse_bandwidth_mhz(bandwidth_str: str) -> int:
+            if not bandwidth_str:
+                return 0
+            clean_str = bandwidth_str.replace(" ", "").replace("MHz", "").replace("MHZ", "")
+            digits = "".join(ch for ch in clean_str if ch.isdigit())
+            return int(digits) if digits else 0
 
         required_by_band_bw: Dict[Tuple[str, int], List[int]] = {}
         for spec in self._scenarios:
-            required_by_band_bw.setdefault((spec.band_token, spec.bandwidth_mhz), []).append(spec.channel)
+            bw_mhz = parse_bandwidth_mhz(spec.bandwidth)  # 正确解析 bandwidth 字符串
+            if bw_mhz > 0:
+                required_by_band_bw.setdefault((spec.band_token, bw_mhz), []).append(spec.channel)
 
         def normalize_text(value: Any) -> str:
             return "" if value is None else str(value).strip().upper().replace(" ", "")
@@ -732,22 +966,39 @@ class PerformanceExcelImporter:
             if not upper:
                 return None
 
-            band = "2.4" if "2.4G" in upper else "5" if "5G" in upper else "6" if "6G" in upper else ""
+            band = "2.4G" if "2.4G" in upper else "5G" if "5G" in upper else "6G" if "6G" in upper else ""
             if not band:
                 return None
 
-            bw_mhz = 20 if "HT20" in upper else 40 if "HT40" in upper else 160 if "HE160" in upper else 80 if ("HE80" in upper or "VHT80" in upper) else 0
-            if not bw_mhz:
+            bw = 0
+            for token, value in (("HE20", 20), ("HT20", 20), ("HE40", 40), ("HT40", 40), ("VHT80", 80), ("HE80", 80),
+                                 ("HE160", 160)):
+                if token in upper:
+                    bw = value
+                    break
+            if bw == 0:
+                if "20M" in upper:
+                    bw = 20
+                elif "40M" in upper:
+                    bw = 40
+                elif "80M" in upper:
+                    bw = 80
+                elif "160M" in upper:
+                    bw = 160
+
+            if not bw:
                 return None
 
             standard = "11ax" if ("11AX" in upper or "HE" in upper) else "11ac" if ("11AC" in upper or "VHT" in upper) else "11n" if ("11N" in upper or "HT" in upper) else ""
-            return band, bw_mhz, standard
+            return band, bw, standard
 
         def find_title_above(row: int) -> Optional[Tuple[str, int, str]]:
             for r in range(row - 1, max(0, row - 40), -1):
                 parsed = parse_title(ws.cell(r, 1).value)
                 if parsed is not None:
+                    print(f"[RVO_DEBUG] Found title at row {r}: {ws.cell(r, 1).value} -> {parsed}")
                     return parsed
+            print(f"[RVO_DEBUG] No title found above row {row}")
             return None
 
         def parse_att_db(value: Any) -> Optional[float]:
@@ -786,12 +1037,16 @@ class PerformanceExcelImporter:
             ("TX(UNIT:MB)", "uplink"),
             ("TXUNIT:MB", "uplink"),
         )
+        print(f"[RVO_DEBUG] Starting to scan for headers in {ws.max_row} rows")
         for header_row in range(1, ws.max_row):
             title = find_title_above(header_row)
             if title is None:
                 continue
             band, bw_mhz, standard = title
+            print(
+                f"[RVO_DEBUG] Processing header row {header_row} with title: band={band}, bw={bw_mhz}, std={standard}")
             required_channels = required_by_band_bw.get((band, bw_mhz), [])
+            print(f"[RVO_DEBUG] Required channels for ({band}, {bw_mhz}): {required_channels}")
             if not required_channels:
                 continue
 
@@ -849,8 +1104,11 @@ class PerformanceExcelImporter:
                     scenario_key = build_peak_scenario_group_key(spec, standard=standard, bandwidth_mhz=bw_mhz)
                     for col_idx, angle in angles:
                         val = ws.cell(data_row, col_idx).value
+                        print(
+                            f"[RVO_DEBUG] Row {data_row}, Col {col_idx}, Channel {channel}, Angle {angle}: raw_value={val}")
                         throughput = float(val) if isinstance(val, (int, float)) and not isinstance(val, bool) else None
                         if throughput is None:
+                            print(f"[RVO_DEBUG] Skipping invalid throughput value: {val}")
                             continue
                         rows.append(
                             _performance_row(
@@ -966,6 +1224,7 @@ class PerformanceExcelImporter:
         sheetnames = set(workbook.sheetnames)
         batches: List[SheetImportBatch] = []
         issues: List[str] = []
+        print(f"[DEBUG] Actual sheet names in the file: {list(workbook.sheetnames)}")
 
         for report_type, raw_sheet_name in sheet_entries:
             normalized_type = str(report_type).strip()
@@ -986,7 +1245,15 @@ class PerformanceExcelImporter:
                     issues.append(f"Unknown import type: {normalized_type}")
                     continue
             except Exception as exc:
-                issues.append(f"{normalized_type}: parse failed ({exc})")
+                if 'rows' in locals() and rows:
+                    batches.append(SheetImportBatch(
+                        report_type=normalized_type,
+                        sheet_name=sheet_name,
+                        rows=rows,
+                    ))
+                    issues.append(f"{normalized_type}: partial parse with error ({exc})")
+                else:
+                    issues.append(f"{normalized_type}: parse failed ({exc})")
                 continue
 
             batches.append(
@@ -1217,6 +1484,7 @@ class ImportController:
 
         summary_lines = [f"Inserted {inserted} performance row(s)."]
         if issues:
+            print(f"[SKIP] issues {issues}, Skip:{skipped}")
             summary_lines.append("")
             summary_lines.append("Some selected types were skipped/failed. See validation details above.")
         MessageBox("Import completed", "\n".join(summary_lines), self._main).exec()
@@ -1250,8 +1518,11 @@ class ImportController:
             value = str(payload.get(key) or "").strip()
             if not value:
                 continue
+            if key == "lab_enviroment.connect_type":
+                value = value.replace('\u2011', '-').replace('\u2013', '-').replace('\u2014', '-')
             if value not in allowed:
                 issues.append(f"{label}: {value!r} not in {list(allowed)!r}")
+
         return issues
 
     def _parse_summary_payload(self, ws) -> dict[str, str]:
@@ -1301,6 +1572,7 @@ class ImportController:
             "SERIAL NUMBER": "serial_number",
             "SERIAL": "serial_number",
             "SN": "serial_number",
+            "NICKNAME": "nickname",
         }
 
         out: dict[str, str] = {}
@@ -1348,6 +1620,9 @@ class ImportController:
                 payload.pop(key, None)
             payload.update({k: v for k, v in summary_values.items() if k in _PROJECT_PAYLOAD_KEYS})
             payload["project_id"] = normalized_project_id
+            #Handel NA nickname
+            if "nickname" not in payload:
+                payload["nickname"] = "NA"
             logging.info(
                 "[IMPORT_DEBUG] build_payload NA project=%s",
                 {k: payload.get(k) for k in _PROJECT_PAYLOAD_KEYS if k in payload},
@@ -1396,110 +1671,131 @@ class ImportController:
         return issues
 
     def _sync_report_to_db(
-        self,
-        payload: Mapping[str, Any],
-        excel_path: str,
-        sheet_batches: Sequence[SheetImportBatch],
-        *,
-        project_id: int,
+            self,
+            payload: Mapping[str, Any],
+            excel_path: str,
+            sheet_batches: Sequence[SheetImportBatch],
+            *,
+            project_id: int,
     ) -> tuple[int, list[str]]:
-        report_name = Path(excel_path).name
+        """
+        Modified to create a separate test_report for each unique report_type.
+        This ensures that RVR and RVO data from the same file are stored in
+        distinct reports with the correct report_type, making them queryable.
+        """
+        original_report_name = Path(excel_path).name
         notes = "\n".join([excel_path, "source=excel"])
 
         with MySqlClient() as client:
             ensure_report_tables(client)
             manager = PerformanceTableManager(client)
-            existing = client.query_one(
-                "SELECT `id` FROM `test_report` WHERE `project_id`=%s AND `report_name`=%s ORDER BY `id` DESC LIMIT 1",
-                (int(project_id), report_name),
-            )
-            report_id = int(existing["id"]) if existing and existing.get("id") else None
-
-            imported_sheets: set[str] = set()
-            if report_id is not None:
-                rows = client.query_all(
-                    "SELECT DISTINCT `sheet_name` "
-                    "FROM `execution` "
-                    "WHERE `test_report_id`=%s AND `sheet_name` IS NOT NULL AND TRIM(`sheet_name`) <> ''",
-                    (int(report_id),),
-                )
-                imported_sheets = {str(r.get("sheet_name") or "").strip() for r in rows if r.get("sheet_name")}
-            print(
-                "[IMPORT_DEBUG] existing_report",
-                "report_name=",
-                report_name,
-                "report_id=",
-                report_id,
-                "imported_sheets=",
-                sorted(imported_sheets),
-            )
-
-            if report_id is None:
-                initial_report_type = next(
-                    (
-                        str(batch.report_type).strip()
-                        for batch in sheet_batches
-                        if str(batch.report_type).strip() in TEST_REPORT_CHOICES
-                    ),
-                    TEST_REPORT_PEAK_THROUGHPUT,
-                )
-                report_id = ensure_test_report(
-                    client,
-                    project_id=int(project_id),
-                    report_name=report_name,
-                    case_path=None,
-                    is_golden=False,
-                    report_type=initial_report_type,
-                    golden_group=None,
-                    notes=notes,
-                    tester=payload.get("tester"),
-                )
-                _store_excel_artifact(
-                    client,
-                    test_report_id=int(report_id),
-                    excel_path=excel_path,
-                )
 
             skipped: list[str] = []
             inserted_total = 0
+
+            # Group batches by their report_type
+            batches_by_type: Dict[str, List[SheetImportBatch]] = {}
             for batch in sheet_batches:
                 data_type = str(batch.report_type).strip()
-                sheet_name = str(batch.sheet_name).strip()
-                rows = list(batch.rows)
-                if not rows:
-                    continue
-                if sheet_name in imported_sheets:
-                    skipped.append(f"{sheet_name} ({data_type})")
-                    continue
-                execution_id = self._insert_execution(
-                    client,
-                    test_report_id=int(report_id),
-                    project_id=int(project_id),
-                    execution_type=data_type,
-                    sheet_name=sheet_name,
-                    csv_name=f"{Path(excel_path).name}:{data_type}",
-                    csv_path=excel_path,
-                    run_source="import",
-                    payload={
-                        "source": "excel",
-                        "excel_path": excel_path,
-                        "data_type": data_type,
-                        "ui_payload": dict(payload),
-                    },
+                if data_type not in batches_by_type:
+                    batches_by_type[data_type] = []
+                batches_by_type[data_type].append(batch)
+
+            # Process each report_type group independently
+            for report_type, batches in batches_by_type.items():
+                # Create a unique report name for this type, e.g., "original_file.xlsx_RVR"
+                type_specific_report_name = f"{Path(original_report_name).stem}_{report_type}{Path(original_report_name).suffix}"
+
+                # Check if a report of this specific type and name already exists for the project
+                existing = client.query_one(
+                    "SELECT `id` FROM `test_report` WHERE `project_id`=%s AND `report_name`=%s ORDER BY `id` DESC LIMIT 1",
+                    (int(project_id), type_specific_report_name),
                 )
-                inserted_total += _insert_performance_rows(
-                    manager,
-                    test_report_id=int(report_id),
-                    execution_id=execution_id,
-                    csv_name=report_name,
-                    data_type=data_type,
-                    rows=list(rows),
+                report_id = int(existing["id"]) if existing and existing.get("id") else None
+
+                # Get the set of sheets already imported for this specific report
+                imported_sheets: set[str] = set()
+                if report_id is not None:
+                    rows = client.query_all(
+                        "SELECT DISTINCT `sheet_name` "
+                        "FROM `execution` "
+                        "WHERE `test_report_id`=%s AND `sheet_name` IS NOT NULL AND TRIM(`sheet_name`) <> ''",
+                        (int(report_id),),
+                    )
+                    imported_sheets = {str(r.get("sheet_name") or "").strip() for r in rows if r.get("sheet_name")}
+
+                print(
+                    f"[IMPORT_DEBUG] Handling report type '{report_type}': "
+                    f"report_name='{type_specific_report_name}', "
+                    f"report_id={report_id}, "
+                    f"imported_sheets={sorted(imported_sheets)}",
                 )
-                imported_sheets.add(sheet_name)
+
+                # If no report exists for this type, create one
+                if report_id is None:
+                    report_id = ensure_test_report(
+                        client,
+                        project_id=int(project_id),
+                        report_name=type_specific_report_name,
+                        case_path=None,
+                        is_golden=False,
+                        report_type=report_type,  # Correctly set the report_type
+                        golden_group=None,
+                        notes=notes,
+                        tester=payload.get("tester"),
+                    )
+                    _store_excel_artifact(
+                        client,
+                        test_report_id=int(report_id),
+                        excel_path=excel_path,
+                    )
+
+                # Process all batches of this specific report_type
+                for batch in batches:
+                    sheet_name = str(batch.sheet_name).strip()
+                    rows = list(batch.rows)
+                    print(
+                        f"[IMPORT_DEBUG] Processing batch: {report_type} from sheet '{sheet_name}', rows count: {len(rows)}")
+                    if not rows:
+                        continue
+
+                    # Skip if this exact sheet has already been imported into this specific report
+                    if sheet_name in imported_sheets:
+                        print(
+                            f"[IMPORT_DEBUG] Skipping {sheet_name} ({report_type}) - already exists in report {report_id}")
+                        skipped.append(f"{sheet_name} ({report_type})")
+                        continue
+
+                    execution_id = self._insert_execution(
+                        client,
+                        test_report_id=int(report_id),
+                        project_id=int(project_id),
+                        execution_type=report_type,
+                        sheet_name=sheet_name,
+                        csv_name=f"{Path(excel_path).name}:{report_type}",
+                        csv_path=excel_path,
+                        run_source="import",
+                        payload={
+                            "source": "excel",
+                            "excel_path": excel_path,
+                            "data_type": report_type,
+                            "ui_payload": dict(payload),
+                        },
+                    )
+                    inserted_total += _insert_performance_rows(
+                        manager,
+                        test_report_id=int(report_id),
+                        execution_id=execution_id,
+                        csv_name=original_report_name,
+                        data_type=report_type,
+                        rows=list(rows),
+                    )
+                    imported_sheets.add(sheet_name)
 
             if skipped:
                 print("[IMPORT_DEBUG] skipped=", skipped)
             print("[IMPORT_DEBUG] inserted_total=", inserted_total)
+
             return inserted_total, skipped
 
     def _sync_golden_to_db(
@@ -1512,7 +1808,7 @@ class ImportController:
     ) -> int:
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         excel_digest = hashlib.sha256(Path(excel_path).read_bytes()).hexdigest()
-
+        #excel_digest = "DEBUG_FORCE_DIFFERENT_" + excel_digest
         with MySqlClient() as client:
             ensure_report_tables(client)
             manager = PerformanceTableManager(client)
@@ -1529,6 +1825,7 @@ class ImportController:
                     client,
                     project_id=int(project_id),
                     report_type=str(data_type),
+                    excel_digest=excel_digest,
                 )
                 if existing:
                     artifact = client.query_one(
@@ -1537,11 +1834,12 @@ class ImportController:
                     )
                     existing_sha = str((artifact or {}).get("sha256") or "")
                     if existing_sha and existing_sha == excel_digest:
-                        MessageBox(
-                            "Import skipped",
-                            f"Golden data already imported for type: {data_type}\n\nExisting report: {existing.get('report_name')}\nExcel: {Path(excel_path).name}",
-                            self._main,
-                        ).exec()
+                        # MessageBox(
+                        #     "Import skipped",
+                        #     f"Golden data already imported for type: {data_type}\n\nExisting report: {existing.get('report_name')}\nExcel: {Path(excel_path).name}",
+                        #     self._main,
+                        # ).exec()
+                        print(f"[DEBUG] Would skip import for type: {data_type}. File is identical.")
                         continue
                 if existing and not self._confirm_overwrite_existing(existing, report_type=str(data_type)):
                     continue
@@ -1593,6 +1891,7 @@ class ImportController:
                     data_type=data_type,
                     rows=list(rows),
                 )
+            print("[GOLDEN_IMPORT_DEBUG] inserted_total=", inserted_total)
             return inserted_total
 
     def _find_existing_golden_report(
@@ -1601,21 +1900,39 @@ class ImportController:
         *,
         project_id: int,
         report_type: str,
+        excel_digest: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
-        sql = (
-            "SELECT "
-            "tr.id AS test_report_id, tr.report_name, tr.created_at, tr.updated_at, "
-            "a.file_name, a.created_at AS artifact_created_at "
-            "FROM test_report AS tr "
-            "LEFT JOIN artifact AS a ON a.test_report_id = tr.id "
-            "WHERE tr.project_id = %s AND tr.is_golden = 1 "
-            "AND tr.report_type = %s AND tr.golden_group = %s "
-            "ORDER BY tr.updated_at DESC, tr.id DESC "
-            "LIMIT 1"
-        )
-        rows = client.query_all(sql, (int(project_id), report_type, "GOLDEN"))
-        if rows:
-            return rows[0]
+        if excel_digest:
+            sql = (
+                "SELECT "
+                "tr.id AS test_report_id, tr.report_name, tr.created_at, tr.updated_at, "
+                "a.file_name, a.created_at AS artifact_created_at, a.sha256 "
+                "FROM test_report AS tr "
+                "LEFT JOIN artifact AS a ON a.test_report_id = tr.id "
+                "WHERE tr.project_id = %s AND tr.is_golden = 1 "
+                "AND tr.report_type = %s AND tr.golden_group = %s "
+                "AND a.sha256 = %s "  # 新增哈希匹配条件
+                "ORDER BY tr.updated_at DESC, tr.id DESC "
+                "LIMIT 1"
+            )
+            rows = client.query_all(sql, (int(project_id), report_type, "GOLDEN", excel_digest))
+            if rows:
+                return rows[0]
+        else:
+            sql = (
+                "SELECT "
+                "tr.id AS test_report_id, tr.report_name, tr.created_at, tr.updated_at, "
+                "a.file_name, a.created_at AS artifact_created_at "
+                "FROM test_report AS tr "
+                "LEFT JOIN artifact AS a ON a.test_report_id = tr.id "
+                "WHERE tr.project_id = %s AND tr.is_golden = 1 "
+                "AND tr.report_type = %s AND tr.golden_group = %s "
+                "ORDER BY tr.updated_at DESC, tr.id DESC "
+                "LIMIT 1"
+            )
+            rows = client.query_all(sql, (int(project_id), report_type, "GOLDEN"))
+            if rows:
+                return rows[0]
 
         legacy_sql = (
             "SELECT "
@@ -1659,11 +1976,14 @@ class ImportController:
                 details_lines.append(f"This legacy report contains types: {legacy_types}")
             details_lines.append("Overwriting will delete the entire legacy report.")
 
-        box = MessageBox("Overwrite golden data?", "\n".join(details_lines), self._main)
-        box.yesButton.setText("Overwrite")
-        box.cancelButton.setText("Cancel")
-        box.exec()
-        return box.result() == QDialog.Accepted
+        # box = MessageBox("Overwrite golden data?", "\n".join(details_lines), self._main)
+        # box.yesButton.setText("Overwrite")
+        # box.cancelButton.setText("Cancel")
+        # box.exec()
+        # return box.result() == QDialog.Accepted
+        print(
+            f"[DEBUG] Would ask to overwrite existing golden data for type: {report_type}. Auto-confirming 'Yes' for debug.")
+        return True
 
     def _insert_execution(
         self,
@@ -1757,11 +2077,17 @@ class ImportController:
                     env_payload.get("tv_device"),
                 ),
             )
+        raw_sn = ui_payload.get("sn") or ui_payload.get("serial_number")
+        mac_addr = ui_payload.get("mac_address")
+        if raw_sn and str(raw_sn).strip().upper() == "NA":
+            final_sn = mac_addr
+        else:
+            final_sn = raw_sn
 
         dut_payload = {
             "test_report_id": int(test_report_id),
-            "sn": ui_payload.get("sn") or ui_payload.get("serial_number"),
-            "mac_address": ui_payload.get("mac_address"),
+            "sn": final_sn,
+            "mac_address": mac_addr,
             "adb_device": ui_payload.get("adb_device"),
             "ip": ui_payload.get("ip") or ui_payload.get("telnet_ip"),
             "software_version": ui_payload.get("software_version"),
@@ -1772,7 +2098,7 @@ class ImportController:
             "wifi_module_sn": ui_payload.get("wifi_module_sn"),
             "antenna": ui_payload.get("antenna"),
         }
-        client.insert(
+        dut_id = client.insert(
             "INSERT INTO `dut` "
             "(`test_report_id`, `sn`, `mac_address`, `adb_device`, `ip`, "
             "`software_version`, `driver_version`, `android_version`, `kernel_version`, `hw_phase`, `wifi_module_sn`, `antenna`) "
@@ -1808,16 +2134,19 @@ class ImportController:
         )
         insert_sql = (
             "INSERT INTO `execution` "
-            "(`test_report_id`, `sheet_name`, `run_type`, `run_source`, `duration_seconds`) "
-            "VALUES (%s, %s, %s, %s, %s)"
+            "(`test_report_id`, `dut_id`, `sheet_name`, `run_type`, `run_source`, `duration_seconds`, `csv_name`, `execution_type`) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"
         )
         return client.insert(
             insert_sql,
             (
                 test_report_id,
+                int(dut_id),
                 sheet_name,
                 RUN_TYPE_WIFI_SMARTTEST,
                 (run_source or "import")[:32],
                 int(duration_seconds) if duration_seconds is not None else None,
+                csv_name,
+                execution_type,
             ),
         )

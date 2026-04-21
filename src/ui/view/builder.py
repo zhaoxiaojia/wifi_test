@@ -866,7 +866,7 @@ def build_groups_from_schema(
             if i == len(right_sections) - 1:
                 #调整不同面板UI(Basic/Performanc等)向下拉升的长度，
                 if is_basic_panel:
-                    right_layout.addSpacing(200)
+                    right_layout.addSpacing(180)
                 else:
                     right_layout.addSpacing(0)
                     print(f"[DEBUG] {section}{section_id} sizeHint: {widget.sizeHint()}")

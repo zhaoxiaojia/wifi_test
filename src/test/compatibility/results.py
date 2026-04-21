@@ -210,11 +210,21 @@ def update_compat_test_result(
 
     key = (ip, port, band)
 
+    ap_brand_str = meta.get("ap_brand", "Unknown")
+    if ap_brand_str and ap_brand_str != "Unknown":
+        brand_parts = ap_brand_str.split(" ", 1)  # 只分割第一个空格
+        brand = brand_parts[0]
+        modem2 = brand_parts[1] if len(brand_parts) > 1 else ""
+    else:
+        brand = "Unknown"
+        modem2 = ""
+
     # 初始化 AP 状态
     with _ap_lock:
         if key not in _ap_test_state:
             _ap_test_state[key] = {
-                "ap_brand": meta.get("ap_brand", "Unknown"),
+                "brand": brand,
+                "modem2": modem2,
                 "ssid": meta.get("ssid", "N/A"),
                 "wifi_mode": meta.get("wifi_mode", "N/A"),
                 "bandwidth": meta.get("bandwidth", "N/A"),
@@ -266,6 +276,20 @@ def update_compat_test_result(
 def write_realtime_compat_csv(csv_path: str):
     """Write full compatibility_result.csv based on current _ap_test_state."""
     rows = []
+
+    def evaluate_pass_fail(throughput_val, criteria_val):
+        """判断吞吐量是否达标"""
+        if throughput_val in ("N/A", "SKIP") or criteria_val == "N/A":
+            return "N/A"
+        try:
+            # 处理多值情况（如 "100,120,95"）
+            throughput_vals = [float(x) for x in str(throughput_val).split(',') if x.strip()]
+            criteria = float(criteria_val)
+            return "PASS" if all(v >= criteria for v in throughput_vals) else "FAIL"
+        except (ValueError, TypeError):
+            return "N/A"
+
+
     with _ap_lock:
         for key, state in _ap_test_state.items():
             ip, port, band = key
@@ -285,11 +309,14 @@ def write_realtime_compat_csv(csv_path: str):
             # 显示 SKIP 而非 N/A
             tx_display = "SKIP" if tx_val == "N/A" else tx_val
             rx_display = "SKIP" if rx_val == "N/A" else rx_val
+            tx_result = evaluate_pass_fail(tx_display, state["tx_criteria"])
+            rx_result = evaluate_pass_fail(rx_display, state["rx_criteria"])
 
             row = [
                 ip,
                 port,
-                state["ap_brand"],
+                state["brand"],
+                state["modem2"],
                 band,
                 state["ssid"],
                 state["wifi_mode"],
@@ -302,8 +329,10 @@ def write_realtime_compat_csv(csv_path: str):
                 state["tx_rssi"],  # RSSI
                 tx_display,  # TX Throughtput(Mbps)
                 state["tx_criteria"],  # TX Criteria rx_display,  # RX Result state["rx_channel"],  # Channe state["rx_rssi"],  # RSSI
+                tx_result,
                 rx_display,  # RX Throughtput(Mbps)
                 state["rx_criteria"],  # RX Criteria
+                rx_result
             ]
             rows.append(row)
 
@@ -314,10 +343,10 @@ def write_realtime_compat_csv(csv_path: str):
     with open(csv_path, 'w', newline='', encoding='utf-8') as f:
         writer = csv.writer(f)
         writer.writerow([
-            "PDU IP", "PDU Port", "AP Brand", "Band", "Ssid",
+            "PDU IP", "PDU Port", "AP Brand", "AP Model", "Band", "Ssid",
             "WiFi Mode", "Bandwidth", "Security",
             "Scan", "Connect", "Ping",
-            "Channel", "RSSI",  "TX Throughtput(Mbps)","TX Criteria",
-            "RX Throughtput(Mbps)", "RX Criteria"
+            "Channel", "RSSI",  "TX Throughtput(Mbps)","TX Criteria", "TX Result",
+            "RX Throughtput(Mbps)", "RX Criteria", "RX Result",
         ])
         writer.writerows(rows)

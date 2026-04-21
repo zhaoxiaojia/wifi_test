@@ -36,12 +36,7 @@ from src.tools.connect_tool.transports.serial_tool import serial_tool
 from src.tools.connect_tool.transports.telnet_tool import telnet_tool
 from src.tools.connect_tool.local_os import LocalOS
 from src.tools.performance_result import PerformanceResult
-from src.util.constants import (
-    TEST_REPORT_PEAK_THROUGHPUT,
-    TEST_REPORT_RVO,
-    TEST_REPORT_RVR,
-    load_config,
-)
+from src.util.constants import load_config
 from src.tools.router_tool.Router import Router
 from src.tools.reporting import generate_project_report
 from src.test.pyqt_log import emit_pyqt_message
@@ -339,12 +334,12 @@ def _generate_allure_report_offline(input_dir: Path, output_dir: Path) -> None:
     output_dir = output_dir.resolve()
 
     if not input_dir.exists():
-        logger.error("❌ Allure input directory does NOT exist: %s", input_dir)
+        logger.error("Allure input directory does NOT exist: %s", input_dir)
         return
 
     json_files = sorted(input_dir.glob("*.json"))
     if not json_files:
-        logger.warning("⚠️ No .json files found in Allure input directory: %s", input_dir)
+        logger.warning("No .json files found in Allure input directory: %s", input_dir)
         return
 
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -356,7 +351,7 @@ def _generate_allure_report_offline(input_dir: Path, output_dir: Path) -> None:
         jre_home = Path(meipass) / "jre"
 
         if allure_exe.exists() and (jre_home / "bin" / "java.exe").exists():
-            logger.info("🔧 Using embedded Allure from PyInstaller bundle...")
+            logger.info("Using embedded Allure from PyInstaller bundle...")
             cmd = [str(allure_exe), "generate", str(input_dir), "-o", str(output_dir), "--clean"]
             env = os.environ.copy()
             env["JAVA_HOME"] = str(jre_home)
@@ -364,31 +359,31 @@ def _generate_allure_report_offline(input_dir: Path, output_dir: Path) -> None:
             try:
                 result = subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=60)
                 if result.returncode == 0:
-                    logger.info("✅ Embedded Allure report generated successfully at: %s", output_dir)
+                    logger.info("Embedded Allure report generated successfully at: %s", output_dir)
                     return  # 成功，直接返回
                 else:
-                    logger.warning("⚠️ Embedded Allure failed, falling back to system 'allure'...")
+                    logger.warning("Embedded Allure report generated failed, falling back to system 'allure'...")
             except Exception as e:
-                logger.warning("⚠️ Embedded Allure execution error, falling back: %s", e)
+                logger.warning("Embedded Allure execution error, falling back: %s", e)
 
     # --- 尝试 2: 回退到系统 PATH 中的 'allure' ---
-    logger.info("🔄 Falling back to system-installed 'allure' command...")
+    logger.info("Falling back to system-installed 'allure' command...")
     allure_cmd = shutil.which("allure")
     if not allure_cmd:
-        logger.error("❌ Allure CLI not found in system PATH and no embedded version available.")
+        logger.error("Allure CLI not found in system PATH and no embedded version available.")
         return
 
     cmd = [allure_cmd, "generate", str(input_dir), "-o", str(output_dir), "--clean"]
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
         if result.returncode == 0:
-            logger.info("✅ System Allure report generated successfully at: %s", output_dir)
+            logger.info("System Allure report generated successfully at: %s", output_dir)
         else:
-            logger.error("❌ System Allure failed. Stderr: %s", result.stderr)
+            logger.error("System Allure failed. Stderr: %s", result.stderr)
     except subprocess.TimeoutExpired:
-        logger.error("⏰ Allure command timed out after 60 seconds.")
+        logger.error("Allure command timed out after 60 seconds.")
     except Exception as e:
-        logger.exception("💥 Unexpected error during system Allure report generation: %s", e)
+        logger.exception("Unexpected error during system Allure report generation: %s", e)
 
 # ----------------------------------------------------------------------------#
 # Public API for external report generation (e.g., ExcelPlanRunner)
@@ -457,15 +452,15 @@ def _maybe_generate_project_report() -> None:
     forced_type = None
     if isinstance(selected_types, set) and selected_types:
         preferred = None
-        if TEST_REPORT_PEAK_THROUGHPUT in selected_types:
-            preferred = TEST_REPORT_PEAK_THROUGHPUT
-        elif TEST_REPORT_RVO in selected_types:
-            preferred = TEST_REPORT_RVO
-        elif TEST_REPORT_RVR in selected_types:
-            preferred = TEST_REPORT_RVR
+        if "PEAK_THROUGHPUT" in selected_types:
+            preferred = "PEAK_THROUGHPUT"
+        elif "RVO" in selected_types:
+            preferred = "RVO"
+        elif "RVR" in selected_types:
+            preferred = "RVR"
         if len(selected_types) == 1:
             forced_type = next(iter(selected_types))
-        elif preferred is not None and selected_types.issubset({preferred}):
+        elif preferred is not None and selected_types.issubset({"PERFORMANCE", preferred}):
             forced_type = preferred
         if forced_type:
             logging.info("Using selected Wi-Fi test type for project report: %s (detected=%s)", forced_type, ", ".join(sorted(selected_types)))
@@ -640,12 +635,14 @@ def pytest_collection_finish(session):
         path_text = str(getattr(item, "fspath", "")).replace("\\", "/").lower()
         if not path_text:
             continue
+        if "test/performance/" in path_text:
+            selected_types.add("PERFORMANCE")
         if "test_wifi_peak_throughput" in path_text:
-            selected_types.add(TEST_REPORT_PEAK_THROUGHPUT)
+            selected_types.add("PEAK_THROUGHPUT")
         if "test_wifi_rvr" in path_text:
-            selected_types.add(TEST_REPORT_RVR)
+            selected_types.add("RVR")
         elif "test_wifi_rvo" in path_text:
-            selected_types.add(TEST_REPORT_RVO)
+            selected_types.add("RVO")
         elif "test/stability/" in path_text:
             selected_types.add("STABILITY")
 
@@ -817,13 +814,13 @@ def pytest_sessionfinish(session, exitstatus):
         if "router_setting" in fixtures or "power_setting" in fixtures:
             compatibility_results.append(record)
 
-    logging.info(f"✅ Final compatibility_results count: {len(compatibility_results)}")
+    logging.info(f"Final compatibility_results count: {len(compatibility_results)}")
 
     if compatibility_results:
         write_compatibility_results(compatibility_results, csv_file)
-        logging.info(f"✅ Wrote test_results.csv with {len(compatibility_results)} records")
+        logging.info(f"Wrote test_results.csv with {len(compatibility_results)} records")
     else:
-        logging.warning("⚠️ No compatibility results found! Skipping test_results.csv")
+        logging.warning("No compatibility results found! Skipping test_results.csv")
 
     if result_path:
         destination_dir = Path(result_path)
@@ -900,7 +897,7 @@ def pytest_sessionfinish(session, exitstatus):
             input_dir_for_allure = destination_dir / "allure_report"
             # 输出：在同一个 Case 报告目录下生成 allure-report
             output_dir_for_allure = destination_dir / "allure_results"
-            logging.info("✅ [Single Case] Mode detected. Input: %s", input_dir_for_allure)
+            logging.info("[Single Case] Mode detected. Input: %s", input_dir_for_allure)
 
     # 调用通用的报告生成函数
     if input_dir_for_allure is not None and output_dir_for_allure is not None:
@@ -1000,10 +997,10 @@ def _update_excel_with_tcid_result(tcid: str, final_status: str, step_details: s
         if not updated:
             logging.warning(f"TCID '{tcid}' not found in Excel.")
             return
-        logging.info(f"✅ Updated Excel for TCID={tcid}: {final_status}")
+        logging.info(f"Updated Excel for TCID={tcid}: {final_status}")
 
     except Exception as e:
-        logging.error(f"❌ Failed to update Excel for TCID={tcid}: {e}")
+        logging.error(f"Failed to update Excel for TCID={tcid}: {e}")
 
     # ✅【新增】删除 report_dir 下所有 ui_dump_*.xml 临时文件
     try:

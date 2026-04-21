@@ -48,6 +48,14 @@ panels:
           - key: rf_solution.model
             widget: line_edit
             label: "RF Model"
+          - key: Turntable.24g_target_rssi #Turntable.target_rssi
+            widget: line_edit
+            label: "2.4G Target RSSI"
+            placeholder: "Target RSSI (-70)"
+          - key: Turntable.5g_target_rssi
+            widget: line_edit
+            label: "5G Target RSSI"
+            placeholder: "Target RSSI (-70)"
 
 
       - id: Turntable
@@ -64,22 +72,10 @@ panels:
             widget: line_edit
             label: "Angle Step"
             placeholder: "0,360:30"
-          - key: Turntable.atte_24g_step
-            widget: line_edit
-            label: "2.4G Atten Step"
-            placeholder: "0,75:3"
-          - key: Turntable.atte_5g_step
-            widget: line_edit
-            label: "5G Atten Step"
-            placeholder: "0,75:3"
-          - key: Turntable.static_db
-            widget: line_edit
-            label: "Static dB"
-            placeholder: "Static attenuation (dB)"
-          - key: Turntable.target_rssi
-            widget: line_edit
-            label: "Target RSSI"
-            placeholder: "Target RSSI (dBm)"
+#          - key: Turntable.static_db
+#            widget: line_edit
+#            label: "Static dB"
+#            placeholder: "Static attenuation (dB)"
 
       - id: text_case
         label: "Selected Test Case"
@@ -99,9 +95,10 @@ panels:
       - id: mode
         label: "Wi-Fi BT Coex"
         fields:
-          - key: lab_enviroment.coex_mode
+          - key: mode
             widget: combo_box
             label: "Coex Mode"
+            choices: ["Wi-Fi Only", "Wi-Fi BLE", "Wi-Fi BLE CLASSIC"]
           - key: bt.ble_alias
             widget: line_edit
             label: "BLE alias"

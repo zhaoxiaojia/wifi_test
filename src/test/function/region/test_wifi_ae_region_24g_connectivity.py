@@ -33,9 +33,9 @@ TEST_REGION_CODE2 = "AE(阿联酋)"
 @allure.title("Wi-Fi {TEST_REGION_CODE2} Region and 2.4G Channel Connectivity Test")
 @allure.description("""
 1. Set AP region to {TEST_REGION_CODE2} and verify.
-2.For 2.4G: Test channels [1, 6, 11]. Connect, verify internet, then change channel and check reconnection.
+2.For 2.4G: Test channels [1, 6, 11, 13]. Connect, verify internet, then change channel and check reconnection.
 """)
-def test_wifi_ae_5g_region_connectivity(wifi_adb_device):
+def test_wifi_ae_24g_region_connectivity(wifi_adb_device):
     dut, serial, logdir, cfg = wifi_adb_device
     test_channel_list = TEST_CHANNELS_2G
     test_type = os.environ.get("TEST_TYPE", "Typical Channels")

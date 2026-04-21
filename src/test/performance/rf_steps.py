@@ -173,8 +173,29 @@ def expand_rf_step_segments(segment_specs: list[str]) -> list[int]:
     return values
 
 
-def parse_rf_step_spec(raw_step: Any) -> list[int]:
+def parse_rf_step_spec(raw_step: Any, band: Optional[str] = None) -> list[int]:
     """Return the expanded RF step list, falling back to the default spec."""
+
+    if band is not None and isinstance(raw_step, dict):
+        # band setting
+        band_mapping = {
+            'dual': 'Dual',
+            '2.4g': '2.4G',
+            '5g': '5G'
+        }
+        normalized_band = band_mapping.get(band.lower(), band)
+
+        if normalized_band in raw_step:
+            # Specific  setting
+            band_config = raw_step[normalized_band]
+            segments = collect_rf_step_segments(band_config)
+            values = expand_rf_step_segments(segments)
+            if values:
+                return values
+
+        # return empty
+        return []
+
     segments = collect_rf_step_segments(raw_step)
     values = expand_rf_step_segments(segments)
     if values:

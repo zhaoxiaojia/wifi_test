@@ -20,12 +20,12 @@ from src.tools.router_tool.router_factory import get_router
 from src.tools.connect_tool.lab_device_controller import LabDeviceController
 from src.tools.rs_test import rs
 from src.util.constants import (
-    ATTENUATOR_CHOICES,
-    ATTENUATOR_SY_RS232BOARD5,
     DEFAULT_RF_STEP_SPEC,
     IDENTIFIER_SANITIZE_PATTERN,
     RF_ATTENUATION_MAX_DB,
     RF_ATTENUATION_MIN_DB,
+    RF_MODEL_CHOICES,
+    RF_MODEL_RS232,
     get_debug_flags,
     TURN_TABLE_FIELD_IP_ADDRESS,
     TURN_TABLE_FIELD_MODEL,
@@ -199,9 +199,9 @@ def init_rf():
     cfg = get_cfg()
     rf_solution = cfg['rf_solution']
     model = rf_solution['model']
-    if model not in ATTENUATOR_CHOICES:
+    if model not in RF_MODEL_CHOICES:
         raise EnvironmentError("Doesn't support this model")
-    if model == ATTENUATOR_SY_RS232BOARD5:
+    if model == RF_MODEL_RS232:
         rf_tool = rs()
     else:
         rf_ip = rf_solution[model]['ip_address']
@@ -342,12 +342,57 @@ def wait_connect(router_info: Router):
 
 
 @lru_cache(maxsize=1)
-def get_rf_step_list():
-    cfg = get_cfg()
-    rf_solution = cfg.get('rf_solution', {}) if isinstance(cfg, dict) else {}
-    raw_step = rf_solution.get('step') if isinstance(rf_solution, dict) else None
-    return parse_rf_step_spec(raw_step)
+def get_rf_step_list(band: Optional[str] = None) -> list[int]:
+    """
+    Retrieve RF attenuation steps for the specified band.
 
+    Supports two configuration modes:
+    1. Dual-band mode: If 'Dual' is present and non-empty, it is used for both '2.4G' and '5G'.
+    2. Per-band mode: If 'Dual' is empty or missing, use band-specific config ('2.4G' or '5G').
+
+    The function does NOT modify the original config. It resolves the effective value
+    based on the above priority rules and passes it to the parser.
+    """
+    from src.test.performance.rf_steps import parse_rf_step_spec
+    cfg = get_cfg()
+    rf_step_config = cfg.get('rf_solution', {}).get('step', {})
+
+    # Handle legacy non-dict format directly
+    if not isinstance(rf_step_config, dict):
+        rf_steps_result = parse_rf_step_spec(rf_step_config, band=band)
+        logging.info("[DEBUG_RF] get_rf_step_list result for band=%s: %s", band, rf_steps_result)
+        return rf_steps_result
+
+    # Determine effective config for the requested band
+    effective_config = {}
+
+    # First, check if Dual mode is active (Dual exists and is non-empty)
+    dual_value = rf_step_config.get('Dual')
+    if dual_value is not None:
+        # Parse Dual to check if it yields actual steps (not just whitespace or invalid)
+        dual_steps = parse_rf_step_spec({'Dual': dual_value}, band='Dual')
+        if dual_steps:
+            # Dual mode: treat both bands as having the Dual value
+            logging.info("[DEBUG_RF] Dual mode active. Using Dual value for all bands.")
+            effective_config = {'2.4G': dual_value, '5G': dual_value}
+        else:
+            # Dual key exists but is logically empty → fall back to per-band mode
+            logging.info("[DEBUG_RF] Dual key exists but is empty. Using per-band mode.")
+            effective_config = rf_step_config
+    else:
+        # No Dual key → per-band mode
+        logging.info("[DEBUG_RF] No Dual key. Using per-band mode.")
+        effective_config = rf_step_config
+
+    # Now resolve steps for the requested band using effective config
+    if band is not None:
+        rf_steps_result = parse_rf_step_spec(effective_config, band=band)
+    else:
+        rf_steps_result = []
+
+    rf_steps_result = sorted(rf_steps_result)
+    logging.info("[DEBUG_RF] get_rf_step_list result for band=%s: %s", band, rf_steps_result)
+    return rf_steps_result
 
 @lru_cache(maxsize=1)
 def get_corner_step_list():
@@ -383,7 +428,6 @@ def get_rvo_static_db_list():
         candidates.append(raw_value)
 
     parsed_values = []
-    has_invalid = False
     for item in candidates:
         parsed = _parse_optional_int(
             item,
@@ -391,51 +435,106 @@ def get_rvo_static_db_list():
             min_value=0,
             max_value=RF_ATTENUATION_MAX_DB,
         )
-        if parsed is None:
-            has_invalid = True
-            break
-        parsed_values.append(parsed)
+        if parsed is not None:
+            parsed_values.append(parsed)
 
-    if has_invalid:
-        return [None]
     return parsed_values if parsed_values else [None]
 
 
-def get_rvo_target_rssi_list():
-    cfg = load_config(refresh=True)
-    turntable_cfg = _turntable_section_from_config(cfg)
-    raw_value = turntable_cfg.get(TURN_TABLE_FIELD_TARGET_RSSI, '')
-    candidates = []
+# def get_rvo_target_rssi_list():
+#     cfg = load_config(refresh=True)
+#     turntable_cfg = _turntable_section_from_config(cfg)
+#     raw_value = turntable_cfg.get(TURN_TABLE_FIELD_TARGET_RSSI, '')
+#     candidates = []
+#
+#     if isinstance(raw_value, str):
+#         segments = [segment.strip() for segment in re.split(r'[,，]', raw_value)]
+#         candidates.extend(segment for segment in segments if segment)
+#     elif isinstance(raw_value, (list, tuple, set)):
+#         candidates.extend(raw_value)
+#     else:
+#         candidates.append(raw_value)
+#
+#     parsed_values = []
+#     for item in candidates:
+#         parsed = _parse_optional_int(
+#             item,
+#             field_name=f'{TURN_TABLE_SECTION_KEY}.{TURN_TABLE_FIELD_TARGET_RSSI}',
+#         )
+#         if parsed is not None:
+#             normalized = parsed if parsed <= 0 else -abs(parsed)
+#             if normalized != parsed:
+#                 logging.debug(
+#                     "%s.%s %s converted to %s dBm to match RSSI sign convention",
+#                     TURN_TABLE_SECTION_KEY,
+#                     TURN_TABLE_FIELD_TARGET_RSSI,
+#                     parsed,
+#                     normalized,
+#                 )
+#             parsed_values.append(normalized)
+#
+#     return parsed_values if parsed_values else [None]
+# --- 新增带频段参数的 get_rvo_target_rssi_list 函数 ---
 
+@lru_cache(maxsize=None)  # 注意：maxsize=None 表示无限制缓存，因为参数不同
+def get_rvo_target_rssi_list(band: str) -> list[int]:
+    """
+    Retrieve target RSSI values for the specified band (e.g., '2.4G' or '5G').
+
+    The configuration is expected to be under the turntable section as separate fields:
+        Turntable:
+            2.4G Target RSSI: '-60,-70'
+            5G Target RSSI: '-65,-75'
+
+    This function does not support a 'Dual' mode.
+    """
+    from src.util.constants import (
+        TURN_TABLE_SECTION_KEY,
+        TURN_TABLE_FIELD_24G_TARGET_RSSI,
+        TURN_TABLE_FIELD_5G_TARGET_RSSI,
+    )
+
+    cfg = get_cfg()
+    turntable_cfg = _turntable_section_from_config(cfg)
+
+    # --- 关键修改：直接根据频段读取对应的字段 ---
+    if band == "2.4G":
+        raw_value = turntable_cfg.get(TURN_TABLE_FIELD_24G_TARGET_RSSI, '')
+    elif band == "5G":
+        raw_value = turntable_cfg.get(TURN_TABLE_FIELD_5G_TARGET_RSSI, '')
+    else:
+        logging.warning(f"[RVO] Unsupported band: {band}. Returning empty list.")
+        return []
+
+    # 移除 Legacy 警告和回退逻辑，因为我们现在有明确的字段
+    candidates = []
     if isinstance(raw_value, str):
         segments = [segment.strip() for segment in re.split(r'[,，]', raw_value)]
         candidates.extend(segment for segment in segments if segment)
     elif isinstance(raw_value, (list, tuple, set)):
         candidates.extend(raw_value)
     else:
+        # 如果是单个数字，也加入候选列表
         candidates.append(raw_value)
 
     parsed_values = []
-    has_invalid = False
     for item in candidates:
+        # 根据实际字段名调整日志信息
+        field_name = TURN_TABLE_FIELD_24G_TARGET_RSSI if band == "2.4G" else TURN_TABLE_FIELD_5G_TARGET_RSSI
         parsed = _parse_optional_int(
             item,
-            field_name=f'{TURN_TABLE_SECTION_KEY}.{TURN_TABLE_FIELD_TARGET_RSSI}',
+            field_name=f'{TURN_TABLE_SECTION_KEY}.{field_name}',
         )
-        if parsed is None:
-            has_invalid = True
-            break
-        normalized = parsed if parsed <= 0 else -abs(parsed)
-        if normalized != parsed:
-            logging.debug(
-                "%s.%s %s converted to %s dBm to match RSSI sign convention",
-                TURN_TABLE_SECTION_KEY,
-                TURN_TABLE_FIELD_TARGET_RSSI,
-                parsed,
-                normalized,
-            )
-        parsed_values.append(normalized)
+        if parsed is not None:
+            normalized = parsed if parsed <= 0 else -abs(parsed)
+            if normalized != parsed:
+                logging.debug(
+                    "%s.%s %s converted to %s dBm to match RSSI sign convention",
+                    TURN_TABLE_SECTION_KEY,
+                    field_name,
+                    parsed,
+                    normalized,
+                )
+            parsed_values.append(normalized)
 
-    if has_invalid:
-        return [None]
-    return parsed_values if parsed_values else [None]
+    return parsed_values
