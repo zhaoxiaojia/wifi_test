@@ -479,7 +479,14 @@ class RouterConfigForm(CardWidget):
 
     def set_router(self, router: Any | None) -> None:
         self.router = router
-        # Re-populate mode/channel/bandwidth combos for the current band.
+        current_band = self.band_combo.currentText()
+        with QSignalBlocker(self.band_combo):
+            self.band_combo.clear()
+            if self.router is not None:
+                self.band_combo.addItems(self.router.BAND_LIST)
+                if current_band in self.router.BAND_LIST:
+                    self.band_combo.setCurrentText(current_band)
+        # Re-populate mode/channel/bandwidth combos for the selected router and band.
         self._update_band_options(self.band_combo.currentText())
 
     def load_row(self, data: Mapping[str, Any] | None) -> None:
@@ -499,9 +506,9 @@ class RouterConfigForm(CardWidget):
                     self.ssid_edit,
                 ):
                     stack.enter_context(QSignalBlocker(w))
-                self._update_band_options(band)
-                if band:
+                if band and self.band_combo.findText(band) >= 0:
                     self.band_combo.setCurrentText(band)
+                self._update_band_options(self.band_combo.currentText())
 
             with QSignalBlocker(self.wireless_combo):
                 self.wireless_combo.setCurrentText(str(data.get("wireless_mode", "") or ""))
@@ -580,12 +587,15 @@ class RouterConfigForm(CardWidget):
     def _update_band_options(self, band: str) -> None:
         from src.util.constants import RouterConst  # local import to avoid heavy deps at module import time
 
-        wireless = RouterConst.DEFAULT_WIRELESS_MODES.get(band, [])
-        if band == "2.4G":
+        settings_band = "5G" if band == "5G Game" else band
+        wireless = RouterConst.DEFAULT_WIRELESS_MODES.get(settings_band, [])
+        if self.router is not None and self.router.router_info == "xiaomi_be10000pro":
+            wireless = ["auto"]
+        if settings_band == "2.4G":
             channel = self.router.CHANNEL_2
             bandwidth = self.router.BANDWIDTH_2
-        elif band == "5G":
-            channel = self.router.CHANNEL_5
+        elif settings_band == "5G":
+            channel = self.router.CHANNEL_5_GAME if band == "5G Game" else self.router.CHANNEL_5
             bandwidth = self.router.BANDWIDTH_5
         else:
             channel = []

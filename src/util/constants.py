@@ -326,6 +326,7 @@ AP_MODEL_CHOICES: Final[tuple[str, ...]] = (
     "ASUS-AX88U Pro",
     "Xiaomi AX3600",
     "Xiaomi AX7000",
+    "Xiaomi BE 10000 Pro",
     "Glmt3000",
 )
 

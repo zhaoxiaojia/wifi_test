@@ -107,7 +107,7 @@ class XiaomiBaseControl(RouterTools):
                 None
                     This function does not return a value.
         """
-        super()._init()
+        self._init()
 
         self.driver.get(f"http://{self.address}")
 
