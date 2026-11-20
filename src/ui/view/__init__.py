@@ -590,7 +590,7 @@ class RouterConfigForm(CardWidget):
         settings_band = "5G" if band == "5G Game" else band
         wireless = RouterConst.DEFAULT_WIRELESS_MODES.get(settings_band, [])
         if self.router is not None and self.router.router_info == "xiaomi_be10000pro":
-            wireless = ["auto"]
+            wireless = self.router.WIRELESS_2 if settings_band == "2.4G" else self.router.WIRELESS_5
         if settings_band == "2.4G":
             channel = self.router.CHANNEL_2
             bandwidth = self.router.BANDWIDTH_2

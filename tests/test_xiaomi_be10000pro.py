@@ -27,7 +27,7 @@ def test_game_channel_uses_firmware_choices():
     with pytest.raises(ConfigError):
         control._changes(Router(band="5G Game", channel=149), choices)
     with pytest.raises(ConfigError):
-        control._changes(Router(band="5G Game", wireless_mode="11ac"), choices)
+        control._changes(Router(band="5G Game", wireless_mode="11be"), choices)
 
 
 @pytest.fixture(scope="module")
@@ -96,7 +96,7 @@ def test_be_frontend_only_offers_supported_settings(qt_app):
     form = RouterConfigForm(control)
     for band in control.BAND_LIST:
         form.band_combo.setCurrentText(band)
-        assert [form.wireless_combo.itemText(i) for i in range(form.wireless_combo.count())] == ['auto']
+        assert [form.wireless_combo.itemText(i) for i in range(form.wireless_combo.count())] == (['auto', '11n', '11ax'] if band == '2.4G' else ['auto', '11ac', '11ax'])
         control._changes(Router(**{k:v for k,v in form.current_row_data().items() if k in Router._fields}), {})
     form.band_combo.setCurrentText('5G')
     assert [form.channel_combo.itemText(i) for i in range(form.channel_combo.count())] == ['auto','149','153','157','161','165']
@@ -108,3 +108,24 @@ def test_form_can_clear_router(qt_app):
     assert form.band_combo.count() == 0
     assert form.wireless_combo.count() == 0
     form.close()
+
+
+@pytest.mark.parametrize("mode,before,after,ax", [("11ac", "0", "1", "0"), ("11ax", "1", "0", "1")])
+def test_global_compatibility_mode_is_saved_even_without_radio_changes(monkeypatch, mode, before, after, ax):
+    from unittest.mock import MagicMock
+    control = get_router(MODEL)
+    control.driver = MagicMock()
+    monkeypatch.setattr(control, "login", lambda: None)
+    state = {radio: {"fields": {"on": "1", "ssid": radio, "encryption": "none",
+             "channel": "36", "bandwidth": "80", "hidden": "0", "txpwr": "max", "pwd": ""},
+             "choices": {}} for radio in control.RADIOS.values()}
+    monkeypatch.setattr(control, "_settings", lambda: state)
+    control.driver.execute_script.side_effect = [before, after]
+    control.driver.execute_async_script.return_value = 0
+    assert control.change_setting(Router(band="5G Game", wireless_mode=mode)) is True
+    assert control.driver.execute_async_script.call_count == 1
+    script, payload = control.driver.execute_async_script.call_args.args
+    assert "set_wifi_ax" in script
+    assert payload == {"ax": ax, "isDFS": 0}
+    control.driver.refresh.assert_called()
+    control.driver.quit.assert_called_once()

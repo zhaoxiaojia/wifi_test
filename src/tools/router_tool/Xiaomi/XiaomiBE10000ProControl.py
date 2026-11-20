@@ -14,6 +14,8 @@ from src.tools.router_tool.Xiaomi.XiaomiBaseControl import XiaomiBaseControl
 class XiaomiBE10000ProControl(XiaomiBaseControl):
     RADIOS = {"2.4G": "wifiset24", "5G": "wifiset50", "5G Game": "wifiset5g2"}
     BAND_LIST = list(RADIOS)
+    WIRELESS_2 = ["auto", "11n", "11ax"]
+    WIRELESS_5 = ["auto", "11ac", "11ax"]
     CHANNEL_5 = ("auto", "149", "153", "157", "161", "165")
     CHANNEL_5_GAME = ("auto", "36", "40", "44", "48", "52", "56", "60", "64")
     SECURITY = {
@@ -60,8 +62,9 @@ class XiaomiBE10000ProControl(XiaomiBaseControl):
 
     def _changes(self, router, choices):
         changes = {}
-        if router.wireless_mode not in (None, "", "auto"):
-            raise ConfigError("Firmware exposes only a global Wi-Fi compatibility switch")
+        modes = self.WIRELESS_2 if router.band == self.BAND_2 else self.WIRELESS_5
+        if router.wireless_mode not in (None, "", *modes):
+            raise ConfigError("Unsupported wireless mode")
         if router.ssid:
             if len(router.ssid.encode("utf-8")) > 32:
                 raise ConfigError("SSID exceeds 32 bytes")
@@ -99,6 +102,33 @@ class XiaomiBE10000ProControl(XiaomiBaseControl):
             state = wait.until(lambda _: self._settings())
             expected = {key: value["fields"].copy() for key, value in state.items()}
             expected[target].update(self._changes(router, state[target]["choices"]))
+            if router.wireless_mode not in (None, "", "auto"):
+                compatibility = "0" if router.wireless_mode == "11ax" else "1"
+                if self.driver.execute_script(
+                    "return document.getElementById('WIFI6switch').dataset.on"
+                ) != compatibility:
+                    game = state[self.RADIOS["5G Game"]]["fields"]
+                    self.driver.set_script_timeout(45)
+                    code = self.driver.execute_async_script("""
+                        const done = arguments[arguments.length - 1];
+                        $.ajax({url:'../../api/xqnetwork/set_wifi_ax', type:'POST',
+                            dataType:'json', timeout:40000, data:arguments[0]})
+                            .done(r => done(r.code)).fail(() => done(null));
+                    """, {"ax": "1" if compatibility == "0" else "0",
+                          "isDFS": int(52 <= int(game["channel"]) <= 64
+                                       or game["bandwidth"] == "0")})
+                    if code != 0:
+                        raise ConfigError(f"Wi-Fi compatibility save failed (status {code})")
+
+                    def mode_applied(_):
+                        self.driver.refresh()
+                        current = wait.until(lambda _: self._settings())
+                        return (current == state and self.driver.execute_script(
+                            "return document.getElementById('WIFI6switch').dataset.on"
+                        ) == compatibility)
+
+                    WebDriverWait(self.driver, 120, poll_frequency=3,
+                                  ignored_exceptions=(TimeoutException,)).until(mode_applied)
             if expected[target] == state[target]["fields"]:
                 return True
             fields = expected[target]

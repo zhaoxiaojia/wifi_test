@@ -1,2 +1,4 @@
 band,ssid,wireless_mode,channel,bandwidth,security_mode,password,tx,rx
-5G,OpenWrt,auto,auto,80 MHz,Open System,,1,1
+2.4G,coco2g,11n,6,40 MHz,Open System,,1,1
+5G,coco5g,11ac,153,40 MHz,Open System,,1,1
+5G Game,coco5ggame,11ac,44,20 MHz,Open System,,1,1
