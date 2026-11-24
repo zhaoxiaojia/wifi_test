@@ -69,6 +69,8 @@ a = Analysis(
         'selenium.webdriver.support.ui',
         'selenium.webdriver.support.ui.WebDriverWait',
         'selenium.webdriver.chrome',
+        'selenium.webdriver.chrome.options',
+        'selenium.webdriver.chrome.webdriver',
         *requirements,
         'src.ui.run',
         'xlrd'
