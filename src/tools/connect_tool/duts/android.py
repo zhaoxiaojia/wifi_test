@@ -15,6 +15,7 @@ import pytest
 from src.tools.connect_tool.mixins.dut_mixins import WifiConnectParams
 from src.tools.connect_tool.duts.linux import linux
 from src.tools.connect_tool.transports.uiautomator_tool import UiautomatorTool
+from src.util.constants import load_config
 
 
 def connect_again(func):
@@ -1914,9 +1915,12 @@ class android(linux):
             command += self.CMD_WIFI_HIDE
 
         connect_status = False
+        is_xiaomi = load_config(refresh=True)['project']['customer'] == 'XIAOMI'
         #260209 For DFS channle maybe need over 10 minutes to gets up, need more time to try.
         for _ in range(30):
             try:
+                if is_xiaomi:
+                    self.root()
                 self.checkoutput(command)
                 time.sleep(15)
                 if lan:
