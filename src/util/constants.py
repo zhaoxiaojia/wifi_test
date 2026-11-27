@@ -268,6 +268,8 @@ TURN_TABLE_FIELD_IP_ADDRESS: Final[str] = "IP address"
 TURN_TABLE_FIELD_STEP: Final[str] = "Step"
 TURN_TABLE_FIELD_STATIC_DB: Final[str] = "Static dB"
 TURN_TABLE_FIELD_TARGET_RSSI: Final[str] = "Target RSSI"
+TURN_TABLE_FIELD_24G_TARGET_RSSI: Final[str] = "2.4G Target RSSI"
+TURN_TABLE_FIELD_5G_TARGET_RSSI: Final[str] = "5G Target RSSI"
 TURN_TABLE_MODEL_RS232: Final[str] = "RS232Board5"
 TURN_TABLE_MODEL_OTHER: Final[str] = "other"
 TURN_TABLE_MODEL_CHOICES: Final[tuple[str, ...]] = (
@@ -523,6 +525,14 @@ def _normalize_turntable_section(data: Mapping[str, Any] | None) -> dict[str, An
         "static_db": static_text,
         "target_rssi": target_text,
     }
+    for ui_key, field_name in (
+        ("24g_target_rssi", TURN_TABLE_FIELD_24G_TARGET_RSSI),
+        ("5g_target_rssi", TURN_TABLE_FIELD_5G_TARGET_RSSI),
+    ):
+        value = source[ui_key] if ui_key in source else source.get(field_name, "")
+        text = _stringify_turntable_value(value)
+        normalized[field_name] = text
+        normalized[ui_key] = text
     return normalized
 
 
@@ -584,7 +594,10 @@ def _normalize_config_keys_for_save(data: Mapping[str, Any] | None) -> dict[str,
         # Drop the internal lower-case duplicates so that only the
         # display-name keys are written into YAML.
         cleaned = dict(turntable)
-        for extra_key in ("model", "ip_address", "step", "static_db", "target_rssi"):
+        for extra_key in (
+            "model", "ip_address", "step", "static_db", "target_rssi",
+            "24g_target_rssi", "5g_target_rssi",
+        ):
             cleaned.pop(extra_key, None)
         normalised[TURN_TABLE_SECTION_KEY] = cleaned
 
